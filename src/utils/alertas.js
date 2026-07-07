@@ -1,0 +1,65 @@
+// Cálculo centralizado de alertas del negocio sobre la factura/periodo activo.
+import { calcularPagos, buscarDriver, alertasCambioPrecio } from './calc'
+import { money } from './format'
+
+// Devuelve un arreglo de alertas: { id, tipo:'red'|'yellow'|'blue', icon, titulo, detalle, link }
+export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes }) {
+  const alertas = []
+  if (!inv) return alertas
+
+  // 1) Chofer con más de 2 claims en el periodo (grave)
+  const claimsPorChofer = {}
+  for (const c of claims || []) claimsPorChofer[c.courier] = (claimsPorChofer[c.courier] || 0) + 1
+  Object.entries(claimsPorChofer)
+    .filter(([, n]) => n > 2)
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([courier, n]) =>
+      alertas.push({ id: `claims:${courier}`, tipo: 'red', icon: '⚠️', titulo: `${courier} tiene ${n} claims`, detalle: 'Más de 2 claims en el periodo — conviene revisar.', link: '/claims' })
+    )
+
+  // 2) Factura que no cuadra con Gofo (grave)
+  if (inv.verificacion?.cuadra === false) {
+    alertas.push({ id: 'cuadre', tipo: 'red', icon: '🧮', titulo: 'La factura no cuadra con Gofo', detalle: `Diferencia de ${money(inv.verificacion.diferencia)} entre nuestro neto y el total de Gofo.`, link: '/financiero' })
+  }
+
+  const pagos = calcularPagos(inv, claims, drivers, 'todas')
+
+  // 3) Chofer que genera pérdida (aviso)
+  pagos
+    .filter((p) => p.totalPagar > p.ingreso)
+    .forEach((p) =>
+      alertas.push({ id: `perdida:${p.nombre}`, tipo: 'yellow', icon: '📉', titulo: `${p.nombre} te cuesta más de lo que produce`, detalle: `Pago ${money(p.totalPagar)} vs ingreso ${money(p.ingreso)}.`, link: '/pagos' })
+    )
+
+  // 4) Ruta no rentable (aviso) — costo estimado con tarifa promedio
+  const act = (drivers || []).filter((d) => d.activo !== false)
+  const avgInd = act.reduce((a, d) => a + (Number(d.precioIndividual) || 0), 0) / (act.length || 1)
+  const avgDob = act.reduce((a, d) => a + (Number(d.precioDoble) || 0), 0) / (act.length || 1)
+  ;(inv.resumenRutas || []).forEach((r) => {
+    const costo = r.individuales * avgInd + r.dobles * avgDob
+    if (r.ingreso - costo < 0)
+      alertas.push({ id: `ruta:${r.ruta}`, tipo: 'yellow', icon: '🛣️', titulo: `Ruta ${r.ruta} no es rentable`, detalle: `Ingreso ${money(r.ingreso)} < costo estimado ${money(costo)}.`, link: '/financiero' })
+  })
+
+  // 5) Cambio de precio de Gofo vs. semana anterior (info)
+  alertasCambioPrecio(inv, invAnterior).forEach((a) =>
+    alertas.push({ id: `precio:${a.ruta}`, tipo: 'blue', icon: '💲', titulo: `Gofo cambió el precio en ${a.ruta}`, detalle: `Antes $${a.antesLb.toFixed(3)}/lb, ahora $${a.ahoraLb.toFixed(3)}/lb (${a.cambioLb >= 0 ? '+' : ''}${(a.cambioLb * 100).toFixed(1)}%).`, link: '/financiero' })
+  )
+
+  // 6) Chofer nuevo / sin tarifa (aviso)
+  const sinTarifa = new Set()
+  ;(inv.resumenChoferes || []).forEach((c) => { if (!buscarDriver(drivers, c.nombre)) sinTarifa.add(c.nombre) })
+  ;(drivers || []).forEach((d) => { if (!(Number(d.precioIndividual) > 0) || !(Number(d.precioDoble) > 0)) sinTarifa.add(d.nombre) })
+  ;[...sinTarifa].forEach((n) =>
+    alertas.push({ id: `tarifa:${n}`, tipo: 'yellow', icon: '🚚', titulo: `${n} sin tarifa`, detalle: 'Asígnale precio individual y doble en Choferes.', link: '/choferes' })
+  )
+
+  // 7) Pagos pendientes sin marcar (info) — solo si se provee el conteo
+  if (pendientes != null && pendientes > 0) {
+    alertas.push({ id: 'pagos', tipo: 'blue', icon: '🧾', titulo: `Tienes ${pendientes} pago(s) pendiente(s) por marcar`, detalle: 'Revisa Pagos y marca los ya realizados.', link: '/pagos' })
+  }
+
+  return alertas
+}
+
+export const SEVERIDAD_ORDEN = { red: 0, yellow: 1, blue: 2 }

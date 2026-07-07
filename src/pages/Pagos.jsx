@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { calcularPagos, porCiudad } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
+import { exportarPDF } from '../utils/exportar'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
@@ -114,6 +115,16 @@ export default function Pagos() {
     XLSX.writeFile(wb, `pagos_${selectedInvoice?.semana || 'factura'}.xlsx`)
   }
 
+  const exportarPdf = () => {
+    exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
+      {
+        titulo: 'Pagos por chofer',
+        head: ['Chofer', 'Ciudad', 'Ind.', 'Dobles', 'Ingreso', 'Total a pagar', 'Ganancia', 'Estado'],
+        body: pagosConEstado.map((p) => [p.nombre, p.nombreCiudad, p.individuales, p.dobles, money(p.ingreso), money(p.totalPagar), money(p.ganancia), p.estado]),
+      },
+    ])
+  }
+
   return (
     <div>
       <PageTitle right={<><RangeSelector /><CitySelector /></>}>Pagos a Choferes</PageTitle>
@@ -145,7 +156,10 @@ export default function Pagos() {
                     <option value="pendiente">Solo pendientes</option>
                     <option value="pagado">Solo pagados</option>
                   </Select>
-                  <Boton variant="gold" onClick={exportar} className="ml-auto">📤 Exportar a Excel</Boton>
+                  <div className="ml-auto flex gap-2">
+                    <Boton variant="ghost" onClick={exportar}>📊 Excel</Boton>
+                    <Boton variant="gold" onClick={exportarPdf}>📄 PDF</Boton>
+                  </div>
                 </div>
               </Card>
 

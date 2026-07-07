@@ -11,6 +11,8 @@ import Claims from './pages/Claims'
 import Choferes from './pages/Choferes'
 import Pagos from './pages/Pagos'
 import Performance from './pages/Performance'
+import Alertas from './pages/Alertas'
+import Comparar from './pages/Comparar'
 import Usuarios from './pages/Usuarios'
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
@@ -36,6 +38,8 @@ export default function App() {
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
               <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
               <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
+              <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />
+              <Route path="/comparar" element={<Page filtro="verDashboard"><Comparar /></Page>} />
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>

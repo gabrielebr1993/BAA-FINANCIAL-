@@ -3,7 +3,8 @@ import { useData } from '../DataContext'
 import { calcularPagos, porCiudad } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, PageTitle, Tabla, Cargando, EstadoVacio } from '../components/ui'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
+import { Card, KPI, PageTitle, Tabla, Boton, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import CitySelector from '../components/CitySelector'
@@ -44,6 +45,18 @@ export default function Financiero() {
   const lbPorRuta = topRutas.map((r) => ({ name: r.ruta, valor: Number((r.precioPorLb || 0).toFixed(3)) }))
   const ingresoPorCiudad = porCiudad(selectedInvoice?.resumenCiudades || [], selectedCity).map((c) => ({ name: nombreCiudad(c.ubicacion), valor: Math.round(c.ingreso) }))
 
+  const nombreArch = `financiero_${selectedInvoice?.semana || 'periodo'}`
+  const exportarE = () =>
+    exportarExcel(nombreArch, [
+      { nombre: 'Resumen', rows: [{ Ingreso: ingresoTotal, Costo: costoTotal, Descuentos: descuentos, Ganancia: gananciaReal, Margen: pct(margen) }] },
+      { nombre: 'Rutas', rows: rutas.map((r) => ({ Ruta: r.ruta, Ciudad: r.nombreCiudad, Paquetes: r.paquetes, Ingreso: r.ingreso, '$/lb': r.precioPorLb, CostoEst: r.costoEst, Ganancia: r.ganancia, Margen: r.margen })) },
+    ])
+  const exportarP = () =>
+    exportarPDF(nombreArch, 'Resumen Financiero', selectedInvoice?.semana || '', [
+      { titulo: 'Totales', head: ['Ingreso', 'Costo', 'Descuentos', 'Ganancia', 'Margen'], body: [[money(ingresoTotal), money(costoTotal), money(descuentos), money(gananciaReal), pct(margen)]] },
+      { titulo: 'Rentabilidad por ruta', head: ['Ruta', 'Ciudad', 'Paquetes', 'Ingreso', '$/lb', 'Costo est.', 'Ganancia', 'Margen'], body: rutas.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), money(r.ingreso), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoEst), money(r.ganancia), pct(r.margen)]) },
+    ])
+
   return (
     <div>
       <PageTitle right={<><RangeSelector /><CitySelector /></>}>Financiero</PageTitle>
@@ -81,7 +94,13 @@ export default function Financiero() {
               </div>
 
               <Card className="p-4">
-                <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Rentabilidad por ruta (ordenado por $/lb)</h3>
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Rentabilidad por ruta (ordenado por $/lb)</h3>
+                  <div className="ml-auto flex gap-2">
+                    <Boton variant="ghost" onClick={exportarE}>📊 Excel</Boton>
+                    <Boton variant="gold" onClick={exportarP}>📄 PDF</Boton>
+                  </div>
+                </div>
                 <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                   Costo por ruta estimado con la tarifa promedio de los choferes ({money(avg.ind)} ind. / {money(avg.dob)} doble).
                 </p>

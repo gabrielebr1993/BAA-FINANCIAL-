@@ -68,6 +68,8 @@ export const SECCIONES = [
   { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: '🚚' },
   { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: '🧾' },
   { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: '🏆' },
+  { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: '🔔' },
+  { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: '🔀' },
   { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: '👥' },
 ]
 

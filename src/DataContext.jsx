@@ -8,6 +8,7 @@ import { db } from './firebase'
 import { useAuth } from './AuthContext'
 import { TODAS } from './utils/calc'
 import { conFechas, invoicesEnRango, combinarFacturas } from './utils/rango'
+import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 
 const DataContext = createContext()
 export const useData = () => useContext(DataContext)
@@ -21,6 +22,7 @@ export function DataProvider({ children }) {
   const [selectedCity, setSelectedCity] = useState(TODAS)
   const [rango, setRango] = useState({ preset: 'ultima', desde: '', hasta: '' })
   const [vista, setVista] = useState('combinado') // 'combinado' | 'porSemana'
+  const [alertasDescartadas, setAlertasDescartadas] = useState(() => new Set())
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
@@ -100,7 +102,32 @@ export function DataProvider({ children }) {
 
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null
 
+  // factura inmediatamente anterior al rango (para cambios de precio), si es una sola semana
+  const invAnterior = useMemo(() => {
+    if (!facturaRango || facturaRango.esRango) return null
+    const idx = invoices.findIndex((i) => i.id === facturaRango.id)
+    return idx >= 0 ? invoices[idx + 1] : null
+  }, [facturaRango, invoices])
+
+  // alertas base (sin pagos pendientes, que dependen de payroll)
+  const alertasBase = useMemo(
+    () => calcularAlertas({ inv: facturaRango, claims, drivers, invAnterior }),
+    [facturaRango, claims, drivers, invAnterior]
+  )
+  const alertasVisibles = useMemo(
+    () => alertasBase.filter((a) => !alertasDescartadas.has(a.id)).sort((a, b) => SEVERIDAD_ORDEN[a.tipo] - SEVERIDAD_ORDEN[b.tipo]),
+    [alertasBase, alertasDescartadas]
+  )
+  const descartarAlerta = useCallback((id) => setAlertasDescartadas((s) => new Set(s).add(id)), [])
+  const restaurarAlertas = useCallback(() => setAlertasDescartadas(new Set()), [])
+
   const value = {
+    invAnterior,
+    alertasVisibles,
+    numAlertas: alertasVisibles.length,
+    alertasDescartadas,
+    descartarAlerta,
+    restaurarAlertas,
     invoices,
     drivers,
     claims,
