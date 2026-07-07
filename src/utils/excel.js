@@ -27,11 +27,36 @@ function buscarHoja(wb, objetivoNorm) {
   return nombre ? wb.Sheets[nombre] : null
 }
 
+// Recalcula el rango REAL de la hoja escaneando todas las celdas, porque algunos
+// .xlsx de Gofo traen un "!ref" (dimensión) TRUNCADO que declara solo 1-2 filas
+// aunque las celdas lleguen a ~101.024. Si no se corrige, sheet_to_json respeta
+// ese "!ref" y devuelve solo la primera fila → "detecta 1 chofer". ESTE era el bug.
+export function rangoRealDeHoja(sheet) {
+  let maxR = -1
+  let maxC = -1
+  for (const k of Object.keys(sheet)) {
+    if (k.charCodeAt(0) === 33) continue // ignora claves '!ref', '!merges', etc.
+    const cell = XLSX.utils.decode_cell(k)
+    if (!cell || Number.isNaN(cell.r)) continue
+    if (cell.r > maxR) maxR = cell.r
+    if (cell.c > maxC) maxC = cell.c
+  }
+  if (maxR < 0) return null
+  const rango = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: Math.max(0, maxC) } })
+  // Sobreescribe el "!ref" malo con el real (doble seguro: además se pasa `range`).
+  sheet['!ref'] = rango
+  return rango
+}
+
 // Lee la hoja como MATRIZ (array de arrays), garantizando que se recorren TODAS
-// las filas (no solo la primera). Cada fila es un array de celdas por columna.
-function filasMatriz(sheet) {
+// las filas reales (no solo la primera). Cada fila es un array de celdas por columna.
+export function filasMatriz(sheet) {
   if (!sheet) return []
-  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false })
+  const rangoReal = rangoRealDeHoja(sheet)
+  // pasar el rango REAL evita que un "!ref" truncado limite la lectura a 1 fila
+  const opts = { header: 1, defval: null, blankrows: false }
+  if (rangoReal) opts.range = rangoReal
+  return XLSX.utils.sheet_to_json(sheet, opts)
 }
 
 // Detecta la fila de encabezados buscando, en las primeras filas, alguna que
@@ -253,10 +278,12 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
 
   const ciudadesDetectadas = Object.keys(conteoCiudad).filter(Boolean).sort()
 
-  // Diagnóstico: cuántas filas y choferes únicos se leyeron (debe ser ~101024 y ~139).
+  // Diagnóstico (visible en la consola del navegador, F12): debe dar ~101024 y ~139.
   const choferesUnicos = [...new Set(detalles.map((d) => d.courier))]
-  // eslint-disable-next-line no-console
-  console.log(`[Gofo] "${nombreArchivo}" — Filas leídas (Details): ${detalles.length} | Choferes únicos: ${choferesUnicos.length} | Claims: ${claims.length}`)
+  /* eslint-disable no-console */
+  console.log('[Gofo] Filas leídas:', detalles.length, `("${nombreArchivo}")`)
+  console.log('[Gofo] Choferes únicos:', choferesUnicos.length)
+  /* eslint-enable no-console */
 
   return {
     archivoNombre: nombreArchivo,
