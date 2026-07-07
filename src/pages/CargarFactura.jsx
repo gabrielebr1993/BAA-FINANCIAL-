@@ -431,7 +431,7 @@ export default function CargarFactura() {
                 { key: 'paquetes', label: 'Paquetes', align: 'right' },
                 { key: 'individuales', label: 'Ind.', align: 'right' },
                 { key: 'dobles', label: 'Dobles', align: 'right' },
-                { key: 'ingreso', label: 'Ingreso', align: 'right' },
+                { key: 'ingreso', label: 'Ingreso (bruto)', align: 'right' },
                 { key: 'numChoferes', label: 'Choferes', align: 'right' },
                 { key: 'numRutas', label: 'Rutas', align: 'right' },
                 { key: 'numClaims', label: 'Claims', align: 'right' },
