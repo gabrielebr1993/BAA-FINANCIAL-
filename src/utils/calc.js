@@ -3,7 +3,7 @@
 // Reglas fijas: doble = monto 0.5 ; CLAIM_FEE = $100 por claim no perdonado ;
 // pago = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*100.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
+import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
 
@@ -21,6 +21,13 @@ export function promediosFlota(pagos) {
 
 const nivelSub = (s) => (s >= 80 ? 'excelente' : s >= 60 ? 'alta' : s >= 40 ? 'media' : 'baja')
 
+// Estrellas 1-5 a partir del puntaje (bandas en constants).
+export function estrellasDe(puntaje) {
+  const p = Number(puntaje) || 0
+  for (const u of UMBRALES_ESTRELLAS) if (p >= u.min) return u.estrellas
+  return 1
+}
+
 // Calcula la calificación 0-100 de un chofer combinando calidad, productividad
 // y rentabilidad (pesos en constants). Devuelve subpuntajes, nivel y desglose.
 export function calificarChofer(pago, prom) {
@@ -36,7 +43,7 @@ export function calificarChofer(pago, prom) {
   const etiqueta = nivel === 'bueno' ? 'Bueno' : nivel === 'regular' ? 'Regular' : 'Malo'
   return {
     puntaje,
-    estrellas: Math.max(1, Math.round(puntaje / 20)),
+    estrellas: estrellasDe(puntaje),
     calidad, productividad, rentabilidad,
     nivel, etiqueta,
     desglose: `Calidad: ${nivelSub(calidad)} · Productividad: ${nivelSub(productividad)} · Rentabilidad: ${nivelSub(rentabilidad)}`,

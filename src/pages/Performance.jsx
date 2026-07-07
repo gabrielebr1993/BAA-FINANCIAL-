@@ -11,6 +11,7 @@ import { BarCard, DonutCard, Widget } from '../components/charts'
 import KpiPro from '../components/KpiPro'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
+import RankingCalificacion from '../components/RankingCalificacion'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -371,6 +372,11 @@ export default function Performance() {
             )}
             <p className="mt-2 text-xs text-slate-400">“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.</p>
           </Card>
+
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking general de choferes (calificación)</h2>
+          <div className="mb-4">
+            <RankingCalificacion />
+          </div>
 
           <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
           <div className="mb-4">

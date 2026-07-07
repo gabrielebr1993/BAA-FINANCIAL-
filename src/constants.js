@@ -35,6 +35,14 @@ export const DOBLE_MONTO = 0.5
 // ---------------------------------------------------------------------------
 export const PESOS_CALIF_CHOFER = { calidad: 0.4, productividad: 0.3, rentabilidad: 0.3 }
 export const UMBRALES_CALIF = { bueno: 75, regular: 50 }
+// Estrellas 1-5 según el puntaje 0-100 (ajustable).
+export const UMBRALES_ESTRELLAS = [
+  { min: 90, estrellas: 5 },
+  { min: 75, estrellas: 4 },
+  { min: 60, estrellas: 3 },
+  { min: 40, estrellas: 2 },
+  { min: 0, estrellas: 1 },
+]
 // Penalización de calidad por cada claim por cada 100 entregas.
 export const CALIDAD_FACTOR = 25
 // Puntaje base (=50) para quien está justo en el promedio de la flota.

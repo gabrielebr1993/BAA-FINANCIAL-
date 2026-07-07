@@ -16,6 +16,7 @@ import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
+import RankingCalificacion from '../components/RankingCalificacion'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -213,6 +214,10 @@ export default function Dashboard() {
                   />
                 </Card>
               )}
+
+              <div className="mb-4">
+                <RankingCalificacion compacto limite={5} />
+              </div>
 
               <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Rankings de choferes</h2>
               <p className="-mt-2 mb-3 text-xs text-slate-400">Haz clic en un chofer para ver su detalle en Performance.</p>
