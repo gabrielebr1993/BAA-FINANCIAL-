@@ -1,35 +1,40 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver } from '../utils/calc'
-import { nombreCiudad } from '../constants'
+import { buscarDriver, nombreCiudadDe } from '../utils/calc'
+import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../components/ui'
+import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { drivers, reloadInvoices, reloadDrivers, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
-  const [combinado, setCombinado] = useState(null)
-  const [detalleArchivos, setDetalleArchivos] = useState([])
+  const [procesados, setProcesados] = useState([]) // resultados crudos por archivo
+  const [ciudadPorArchivo, setCiudadPorArchivo] = useState([]) // código de ciudad manual por archivo
+  const [ciudadesExtra, setCiudadesExtra] = useState([]) // [{codigo, nombre}] añadidas por el usuario
   const [semana, setSemana] = useState('')
   const [avisos, setAvisos] = useState([])
   const [errores, setErrores] = useState([])
   const [guardado, setGuardado] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [precios, setPrecios] = useState({}) // courier -> { ind, doble }
+  const [precios, setPrecios] = useState({})
   const [busqueda, setBusqueda] = useState('')
   const [bulk, setBulk] = useState({ ind: '', doble: '' })
+  const [nuevaCiudad, setNuevaCiudad] = useState({ codigo: '', nombre: '' })
+  const [porEliminar, setPorEliminar] = useState(null)
+  const [eliminando, setEliminando] = useState(false)
   const inputRef = useRef(null)
 
   const reset = () => {
-    setCombinado(null)
-    setDetalleArchivos([])
+    setProcesados([])
+    setCiudadPorArchivo([])
     setSemana('')
     setAvisos([])
     setErrores([])
@@ -39,6 +44,31 @@ export default function CargarFactura() {
     setBulk({ ind: '', doble: '' })
   }
 
+  const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
+
+  // Opciones del selector de ciudad: estándar + personalizadas + detectadas.
+  const opcionesCiudad = useMemo(() => {
+    const map = new Map()
+    Object.entries(CIUDADES).forEach(([codigo, nombre]) => map.set(codigo, nombre))
+    ciudadesExtra.forEach((c) => map.set(c.codigo, c.nombre))
+    procesados.forEach((p) => p.ciudadesDetectadas.forEach((code) => { if (!map.has(code)) map.set(code, nombreCiudad(code)) }))
+    return [...map.entries()].map(([codigo, nombre]) => ({ codigo, nombre }))
+  }, [ciudadesExtra, procesados])
+
+  // Combinado recalculado con la ciudad MANUAL de cada archivo.
+  const combinado = useMemo(() => {
+    if (procesados.length === 0) return null
+    const overridden = procesados.map((p, i) => {
+      const code = ciudadPorArchivo[i] || ''
+      return {
+        ...p,
+        detalles: p.detalles.map((d) => ({ ...d, ciudad: code })),
+        claims: p.claims.map((c) => ({ ...c, ciudad: code })),
+      }
+    })
+    return combinarArchivos(overridden, nombreMap)
+  }, [procesados, ciudadPorArchivo, nombreMap])
+
   const manejarArchivos = async (fileList) => {
     const files = Array.from(fileList).filter((f) => /\.xlsx?$/i.test(f.name))
     if (files.length === 0) return setErrores(['No se detectaron archivos .xlsx.'])
@@ -47,43 +77,30 @@ export default function CargarFactura() {
     const nuevosAvisos = []
     const nuevosErrores = []
     try {
-      const procesados = []
+      const procs = []
       for (const f of files) {
         const buf = await f.arrayBuffer()
         const p = procesarArchivo(buf, f.name)
         if (p.errores.length) p.errores.forEach((e) => nuevosErrores.push(`${f.name}: ${e}`))
-        procesados.push(p)
+        procs.push(p)
       }
-      const semanas = [...new Set(procesados.map((p) => p.semana).filter(Boolean))]
+      const semanas = [...new Set(procs.map((p) => p.semana).filter(Boolean))]
       let semanaFinal = semanas[0] || ''
       if (semanas.length > 1) nuevosAvisos.push(`⚠️ Los archivos tienen semanas distintas (${semanas.join(', ')}). Se usará "${semanaFinal}". Revisa que correspondan a la misma semana.`)
       if (!semanaFinal) nuevosAvisos.push('No se detectó la semana en el nombre de los archivos. Escríbela manualmente antes de guardar.')
 
-      const comb = combinarArchivos(procesados)
-
-      // choferes únicos detectados (log de diagnóstico)
-      const couriersUnicos = [...new Set(comb.resumenChoferes.map((c) => c.nombre))]
+      // choferes únicos (log de diagnóstico) — no dependen de la ciudad
+      const couriersUnicos = [...new Set(procs.flatMap((p) => p.detalles.map((d) => d.courier)))]
       // eslint-disable-next-line no-console
       console.log(`[Gofo] Choferes únicos detectados en "Details of Delivery Fees": ${couriersUnicos.length}`, couriersUnicos)
-
-      // inicializar precios de los choferes NUEVOS (no existentes en drivers)
       const nuevos = couriersUnicos.filter((n) => !buscarDriver(drivers, n))
       const p0 = {}
       nuevos.forEach((n) => (p0[n] = { ind: '', doble: '' }))
       setPrecios(p0)
 
-      setCombinado(comb)
+      setProcesados(procs)
+      setCiudadPorArchivo(procs.map((p) => p.ciudadesDetectadas[0] || '')) // sugerencia por defecto
       setSemana(semanaFinal)
-      setDetalleArchivos(
-        procesados.map((p) => ({
-          _key: p.archivoNombre,
-          archivo: p.archivoNombre,
-          semana: p.semana || '—',
-          ciudades: p.ciudadesDetectadas.map(nombreCiudad).join(', ') || '—',
-          paquetes: p.detalles.length,
-          claims: p.claims.length,
-        }))
-      )
       setAvisos(nuevosAvisos)
       setErrores(nuevosErrores)
     } catch (e) {
@@ -93,13 +110,22 @@ export default function CargarFactura() {
     }
   }
 
+  const setCiudad = (i, code) => setCiudadPorArchivo((arr) => arr.map((c, j) => (j === i ? code : c)))
+
+  const agregarCiudad = () => {
+    const codigo = nuevaCiudad.codigo.trim().toUpperCase()
+    const nombre = nuevaCiudad.nombre.trim()
+    if (!codigo || !nombre) return
+    setCiudadesExtra((arr) => (arr.some((c) => c.codigo === codigo) ? arr : [...arr, { codigo, nombre }]))
+    setNuevaCiudad({ codigo: '', nombre: '' })
+  }
+
+  // ---- choferes nuevos / precios ----
   const choferesNuevos = useMemo(
     () => (combinado ? [...new Set(combinado.resumenChoferes.map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n)).sort() : []),
     [combinado, drivers]
   )
-
   const setPrecio = (courier, campo, valor) => setPrecios((p) => ({ ...p, [courier]: { ...(p[courier] || { ind: '', doble: '' }), [campo]: valor } }))
-
   const aplicarBulk = () => {
     setPrecios((p) => {
       const np = { ...p }
@@ -112,19 +138,20 @@ export default function CargarFactura() {
       return np
     })
   }
-
   const todosConPrecio = choferesNuevos.every((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0)
   const nuevosFiltrados = choferesNuevos.filter((n) => n.toLowerCase().includes(busqueda.trim().toLowerCase()))
   const nConPrecio = choferesNuevos.filter((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0).length
 
+  const todasCiudadesAsignadas = ciudadPorArchivo.length > 0 && ciudadPorArchivo.every((c) => !!c)
+
   const guardar = async () => {
     if (!combinado) return
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
+    if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
     if (choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
     setGuardando(true)
     setErrores([])
     try {
-      // 1) crear los choferes nuevos en `drivers` (en lotes)
       if (choferesNuevos.length > 0) {
         const chunk = 450
         for (let i = 0; i < choferesNuevos.length; i += chunk) {
@@ -145,12 +172,16 @@ export default function CargarFactura() {
         await reloadDrivers()
       }
 
-      // 2) guardar la factura (solo resumen) + claims
       const { detalles, claims, ...resumen } = combinado
+      const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
+      const ciudadPrincipal = combinado.ciudades[0] || ''
       const invoicePayload = {
         semana: semana.trim(),
-        archivoNombre: detalleArchivos.map((d) => d.archivo).join(', '),
+        archivoNombre: procesados.map((p) => p.archivoNombre).join(', '),
         fechaCarga: serverTimestamp(),
+        ciudad: ciudadPrincipal,
+        ciudadNombre: ciudadesMap[ciudadPrincipal] || nombreCiudad(ciudadPrincipal),
+        ciudadesMap,
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
@@ -180,6 +211,7 @@ export default function CargarFactura() {
       await reloadInvoices()
       setSelectedInvoiceId(ref.id)
       setGuardado(true)
+      reset()
     } catch (e) {
       setErrores(['Error al guardar: ' + e.message])
     } finally {
@@ -187,7 +219,42 @@ export default function CargarFactura() {
     }
   }
 
-  const puedeGuardar = !guardando && !!semana.trim() && (choferesNuevos.length === 0 || todosConPrecio)
+  // ---- eliminar factura (cascada) ----
+  const eliminarFactura = async () => {
+    if (!porEliminar) return
+    setEliminando(true)
+    try {
+      const cs = await getDocs(query(collection(db, 'claims'), where('invoiceId', '==', porEliminar.id)))
+      const ps = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', porEliminar.id)))
+      const refs = [...cs.docs.map((d) => d.ref), ...ps.docs.map((d) => d.ref), doc(db, 'invoices', porEliminar.id)]
+      const chunk = 450
+      for (let i = 0; i < refs.length; i += chunk) {
+        const batch = writeBatch(db)
+        refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
+        await batch.commit()
+      }
+      const eraSeleccionada = selectedInvoiceId === porEliminar.id
+      const restantes = await reloadInvoices()
+      if (eraSeleccionada) setSelectedInvoiceId(restantes && restantes[0] ? restantes[0].id : null)
+      await reloadClaims()
+      setPorEliminar(null)
+    } catch (e) {
+      setErrores(['Error al eliminar: ' + e.message])
+    } finally {
+      setEliminando(false)
+    }
+  }
+
+  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (choferesNuevos.length === 0 || todosConPrecio)
+
+  const fmtFecha = (ts) => {
+    try {
+      const d = ts?.toDate ? ts.toDate() : null
+      return d ? d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+    } catch {
+      return '—'
+    }
+  }
 
   return (
     <div>
@@ -210,17 +277,64 @@ export default function CargarFactura() {
 
       {procesando && (
         <Aviso tipo="info">
-          <span className="inline-flex items-center gap-2">
-            <Spinner className="text-sky-600" /> Procesando archivo(s)… puede tardar si tienen 100.000+ filas.
-          </span>
+          <span className="inline-flex items-center gap-2"><Spinner className="text-sky-600" /> Procesando archivo(s)…</span>
         </Aviso>
       )}
       {errores.map((e, i) => <Aviso key={i} tipo="error">{e}</Aviso>)}
       {avisos.map((a, i) => <Aviso key={i} tipo="warn">{a}</Aviso>)}
       {guardado && <Aviso tipo="ok">✅ Factura guardada correctamente en la base de datos.</Aviso>}
 
-      {combinado && !guardado && (
+      {combinado && (
         <>
+          {/* Asignación MANUAL de ciudad por archivo */}
+          <Card className="mb-4 p-4">
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Asigna la ciudad de cada archivo</h3>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              Elige (o confirma) la ciudad de cada archivo. Es obligatorio y es la ciudad que se guardará (no la auto-detectada).
+            </p>
+            <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
+              <table className="w-full min-w-[560px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <th className="px-3 py-2 text-left font-semibold">Archivo</th>
+                    <th className="px-3 py-2 text-left font-semibold">Semana</th>
+                    <th className="px-3 py-2 text-left font-semibold">Detectada</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ciudad (manual) *</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {procesados.map((p, i) => (
+                    <tr key={p.archivoNombre + i} className="border-t border-slate-100 dark:border-slate-700/50">
+                      <td className="px-3 py-2">{p.archivoNombre}</td>
+                      <td className="px-3 py-2">{p.semana || '—'}</td>
+                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{p.ciudadesDetectadas.map(nombreCiudad).join(', ') || '—'}</td>
+                      <td className="px-3 py-2">
+                        <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
+                          <option value="">— Elegir ciudad —</option>
+                          {opcionesCiudad.map((c) => (
+                            <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
+                          ))}
+                        </Select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Agregar ciudad — código</div>
+                <Input className="w-32" placeholder="Ej. PHX01" value={nuevaCiudad.codigo} onChange={(e) => setNuevaCiudad((c) => ({ ...c, codigo: e.target.value }))} />
+              </div>
+              <div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">nombre</div>
+                <Input className="w-40" placeholder="Ej. Phoenix" value={nuevaCiudad.nombre} onChange={(e) => setNuevaCiudad((c) => ({ ...c, nombre: e.target.value }))} />
+              </div>
+              <Boton variant="ghost" onClick={agregarCiudad}>+ Agregar ciudad</Boton>
+              {!todasCiudadesAsignadas && <span className="text-xs text-amber-600 dark:text-amber-400">Falta asignar ciudad a algún archivo.</span>}
+            </div>
+          </Card>
+
           <Verificacion v={combinado.verificacion} />
 
           <div className="mb-4 flex flex-wrap gap-3">
@@ -233,7 +347,6 @@ export default function CargarFactura() {
             <KPI label="Claims" value={num(combinado.totalClaims)} icon="⚠️" accent="red" />
           </div>
 
-          {/* Pantalla previa OBLIGATORIA: tarifas de choferes nuevos */}
           {choferesNuevos.length > 0 && (
             <Card className="mb-4 border-2 border-brand-gold/60 p-4">
               <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -242,24 +355,22 @@ export default function CargarFactura() {
                 <Badge color={nConPrecio === choferesNuevos.length ? 'green' : 'slate'}>{nConPrecio}/{choferesNuevos.length} con precio</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Cada chofer tiene su propia tarifa. Debes asignar precio individual y doble (mayores que 0) a todos antes de guardar.
+                Cada chofer tiene su propia tarifa. Asigna precio individual y doble (&gt; 0) a todos antes de guardar.
               </p>
-
               <div className="mb-3 flex flex-wrap items-end gap-2">
                 <Input className="w-56" placeholder="🔎 Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <div className="ml-auto flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
                   <div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar todos: individual</div>
-                    <Input className="w-28" type="number" step="0.01" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar: individual</div>
+                    <Input className="w-24" type="number" step="0.01" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
                   </div>
                   <div>
                     <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">doble</div>
-                    <Input className="w-28" type="number" step="0.01" value={bulk.doble} onChange={(e) => setBulk((b) => ({ ...b, doble: e.target.value }))} />
+                    <Input className="w-24" type="number" step="0.01" value={bulk.doble} onChange={(e) => setBulk((b) => ({ ...b, doble: e.target.value }))} />
                   </div>
                   <Boton variant="ghost" onClick={aplicarBulk}>Aplicar a vacíos</Boton>
                 </div>
               </div>
-
               <div className="scroll-thin max-h-96 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-sm">
                   <thead className="sticky top-0">
@@ -274,9 +385,7 @@ export default function CargarFactura() {
                       const ok = Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0
                       return (
                         <tr key={n} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
-                          <td className="px-3 py-1.5">
-                            {ok ? '✅ ' : '• '}{n}
-                          </td>
+                          <td className="px-3 py-1.5">{ok ? '✅ ' : '• '}{n}</td>
                           <td className="px-3 py-1.5 text-right">
                             <Input className="w-28 text-right" type="number" step="0.01" min="0" value={precios[n]?.ind ?? ''} onChange={(e) => setPrecio(n, 'ind', e.target.value)} />
                           </td>
@@ -287,28 +396,13 @@ export default function CargarFactura() {
                       )
                     })}
                     {nuevosFiltrados.length === 0 && (
-                      <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">Sin choferes que coincidan con "{busqueda}".</td></tr>
+                      <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">Sin choferes que coincidan.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </Card>
           )}
-
-          <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Archivos procesados</h3>
-            <Tabla
-              columns={[
-                { key: 'archivo', label: 'Archivo' },
-                { key: 'semana', label: 'Semana' },
-                { key: 'ciudades', label: 'Ciudad(es) detectada(s)' },
-                { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                { key: 'claims', label: 'Claims', align: 'right' },
-              ]}
-              rows={detalleArchivos}
-              renderCell={(row, key) => (typeof row[key] === 'number' ? num(row[key]) : row[key])}
-            />
-          </Card>
 
           <Card className="mb-4 p-4">
             <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Resumen por ciudad</h3>
@@ -337,14 +431,54 @@ export default function CargarFactura() {
               </Boton>
               <Boton onClick={reset} variant="ghost">Descartar</Boton>
             </div>
-            {choferesNuevos.length > 0 && !todosConPrecio && (
-              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Faltan {choferesNuevos.length - nConPrecio} chofer(es) por asignarles precio individual y doble.</p>
-            )}
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Se crean {num(choferesNuevos.length)} chofer(es) nuevo(s) y se guarda el resumen (no los {num(combinado.totalPaquetes)} paquetes) + {num(combinado.totalClaims)} claims. Cargado por {perfil?.nombre}.
-            </p>
           </Card>
         </>
+      )}
+
+      {/* Listado de facturas cargadas + eliminar */}
+      <Card className="mt-6 p-4">
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({invoices.length})</h3>
+        <Tabla
+          columns={[
+            { key: 'semana', label: 'Semana' },
+            { key: 'ciudades', label: 'Ciudad(es)' },
+            { key: 'fechaCarga', label: 'Cargada' },
+            { key: 'archivoNombre', label: 'Archivo', wrap: true },
+            { key: 'ingresoTotal', label: 'Total', align: 'right' },
+            { key: 'acciones', label: '', align: 'right' },
+          ]}
+          rows={invoices.map((inv) => ({ ...inv, _key: inv.id }))}
+          emptyText="No hay facturas cargadas."
+          renderCell={(row, key) => {
+            if (key === 'ingresoTotal') return money(row.ingresoTotal)
+            if (key === 'fechaCarga') return fmtFecha(row.fechaCarga)
+            if (key === 'ciudades')
+              return (row.resumenCiudades || []).map((c) => nombreCiudadDe(row, c.ubicacion)).join(', ') || row.ciudadNombre || '—'
+            if (key === 'archivoNombre') return <span className="text-xs text-slate-500 dark:text-slate-400">{row.archivoNombre}</span>
+            if (key === 'acciones')
+              return <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs">Eliminar</Boton>
+            return row[key]
+          }}
+        />
+      </Card>
+
+      {/* Modal de confirmación de borrado */}
+      {porEliminar && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
+          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="m-0 mb-2 text-lg font-bold text-brand-navy dark:text-slate-100">Eliminar factura</h3>
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              ¿Seguro que quieres eliminar la factura de <b>{porEliminar.ciudadNombre || (porEliminar.resumenCiudades || []).map((c) => nombreCiudadDe(porEliminar, c.ubicacion)).join(', ')}</b> — <b>{porEliminar.semana}</b>?
+              Se borrarán también sus <b>claims</b> y <b>pagos</b> asociados. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
+              <Boton variant="danger" onClick={eliminarFactura} disabled={eliminando}>
+                {eliminando ? <><Spinner /> Eliminando…</> : 'Sí, eliminar'}
+              </Boton>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   )

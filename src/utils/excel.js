@@ -217,9 +217,16 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
 
 // ---- construcción del resumen agregado ---------------------------------------
 
+// Resuelve el nombre de una ciudad usando primero un mapa personalizado
+// (códigos añadidos manualmente) y si no, la tabla estándar.
+function nombreDe(code, nombreMap) {
+  if (nombreMap && nombreMap[code]) return nombreMap[code]
+  return nombreCiudad(code)
+}
+
 // A partir de una lista de detalles + claims (posiblemente de varios archivos),
 // construye todo el resumen que se guarda/usa en la app.
-export function construirResumen(detalles, claims) {
+export function construirResumen(detalles, claims, nombreMap) {
   const porChofer = {}
   const porRuta = {}
   const porCiudad = {}
@@ -297,7 +304,7 @@ export function construirResumen(detalles, claims) {
 
   const resumenCiudades = Object.values(porCiudad).map((c) => ({
     ubicacion: c.ubicacion,
-    nombreCiudad: nombreCiudad(c.ubicacion),
+    nombreCiudad: nombreDe(c.ubicacion, nombreMap),
     paquetes: c.paquetes,
     individuales: c.individuales,
     dobles: c.dobles,
@@ -307,7 +314,7 @@ export function construirResumen(detalles, claims) {
     numRutas: c._rutas.size,
   }))
 
-  const resumenChoferes = Object.values(porChofer).map((c) => ({ ...c, nombreCiudad: nombreCiudad(c.ciudad) }))
+  const resumenChoferes = Object.values(porChofer).map((c) => ({ ...c, nombreCiudad: nombreDe(c.ciudad, nombreMap) }))
 
   const totalClaims = claims.length
   const totalDescuentoGofo = claims.reduce((a, c) => a + c.montoGofo, 0)
@@ -328,10 +335,11 @@ export function construirResumen(detalles, claims) {
 }
 
 // Combina varios archivos procesados bajo una misma semana.
-export function combinarArchivos(procesados) {
+// `nombreMap` (opcional) resuelve nombres de ciudades personalizadas.
+export function combinarArchivos(procesados, nombreMap) {
   const detalles = procesados.flatMap((p) => p.detalles)
   const claims = procesados.flatMap((p) => p.claims)
-  const resumen = construirResumen(detalles, claims)
+  const resumen = construirResumen(detalles, claims, nombreMap)
 
   const sumaEntregas = procesados.reduce((a, p) => a + p.sumaEntregas, 0)
   const sumaOffset = procesados.reduce((a, p) => a + p.sumaOffset, 0)

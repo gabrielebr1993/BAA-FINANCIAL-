@@ -1,7 +1,6 @@
 // Selectores de ciudad y de factura/semana (siempre visibles).
 import { useData } from '../DataContext'
-import { TODAS, ciudadesDeFactura } from '../utils/calc'
-import { nombreCiudad } from '../constants'
+import { TODAS, ciudadesDeFactura, nombreCiudadDe } from '../utils/calc'
 import { Select } from './ui'
 
 export default function CitySelector() {
@@ -12,7 +11,7 @@ export default function CitySelector() {
       <option value={TODAS}>🌎 Todas las ciudades</option>
       {ciudades.map((c) => (
         <option key={c} value={c}>
-          {nombreCiudad(c)}
+          {nombreCiudadDe(selectedInvoice, c)}
         </option>
       ))}
     </Select>

@@ -22,6 +22,15 @@ export function ciudadesDeFactura(inv) {
   return [...set].filter(Boolean).sort()
 }
 
+// Nombre legible de una ciudad para una factura concreta: primero el mapa
+// guardado (ciudades personalizadas), luego el resumen, luego la tabla estándar.
+export function nombreCiudadDe(inv, code) {
+  if (inv?.ciudadesMap && inv.ciudadesMap[code]) return inv.ciudadesMap[code]
+  const r = (inv?.resumenCiudades || []).find((c) => c.ubicacion === code)
+  if (r?.nombreCiudad) return r.nombreCiudad
+  return nombreCiudad(code)
+}
+
 // Totales globales respetando el filtro de ciudad, calculados desde resumenChoferes/Rutas.
 export function totalesFiltrados(inv, ciudad) {
   const choferes = porCiudad(inv?.resumenChoferes || [], ciudad)
