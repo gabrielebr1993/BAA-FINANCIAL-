@@ -169,12 +169,15 @@ export function TrendCard({ title, subtitle, data, series, fmt = (v) => v, heigh
 }
 
 // Medidor / gauge semicircular con valor al centro.
-export function GaugeCard({ title, subtitle, value, color, height = 200, formato }) {
+// `nota` (opcional) se muestra en pequeño bajo el número (ej. "28 claims de 101,024").
+export function GaugeCard({ title, subtitle, value, color, height = 200, formato, nota }) {
   const t = useChartTheme()
   const pct = Math.max(0, Math.min(100, (Number(value) || 0) * 100))
   const fill = color || t.gold
   const data = [{ name: title, value: pct, fill }]
-  const texto = formato ? formato(value) : `${pct.toFixed(1)}%`
+  // 2 decimales para no “redondear a 100%” cuando en realidad hay algún claim;
+  // solo muestra 100% cuando es exactamente perfecto.
+  const texto = formato ? formato(value) : pct >= 100 ? '100%' : `${pct.toFixed(2)}%`
   return (
     <Widget title={title} subtitle={subtitle}>
       <div className="relative" style={{ height }}>
@@ -184,10 +187,11 @@ export function GaugeCard({ title, subtitle, value, color, height = 200, formato
             <RadialBar background={{ fill: t.oscuro ? '#26374f' : '#eef1f6' }} dataKey="value" cornerRadius={10} angleAxisId={0} />
           </RadialBarChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center">
           <span className="text-3xl font-bold" style={{ color: fill }}>
             {texto}
           </span>
+          {nota && <span className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{nota}</span>}
         </div>
       </div>
     </Widget>

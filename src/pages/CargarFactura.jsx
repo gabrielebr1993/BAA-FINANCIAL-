@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -78,6 +78,17 @@ export default function CargarFactura() {
   const casosRepetidos = useMemo(() => detectarClaimsRepetidos(combinado?.claims || []), [combinado])
   const todosRepetidosResueltos = casosRepetidos.every((c) => decisiones[c.waybill])
   const setDecision = (waybill, decision) => setDecisiones((d) => ({ ...d, [waybill]: decision }))
+
+  // Vista previa del conteo oficial de claims válidos según las decisiones actuales.
+  const claimsValidosPreview = useMemo(() => {
+    if (!combinado) return 0
+    const conDecision = combinado.claims.map((c) => {
+      const wb = (c.waybill || '').trim()
+      const esRep = casosRepetidos.some((k) => k.waybill === wb)
+      return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado' }
+    })
+    return contarClaimsValidos(conDecision)
+  }, [combinado, casosRepetidos, decisiones])
 
   const manejarArchivos = async (fileList) => {
     const files = Array.from(fileList).filter((f) => /\.xlsx?$/i.test(f.name))
@@ -427,7 +438,7 @@ export default function CargarFactura() {
             <KPI label="Ingreso total" value={money(combinado.ingresoTotal)} icon={DollarSign} accent="green" />
             <KPI label="Choferes" value={num(combinado.numChoferes)} icon={Truck} accent="slate" />
             <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
-            <KPI label="Claims" value={num(combinado.totalClaims)} icon={AlertTriangle} accent="red" />
+            <KPI label="Claims válidos" value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} filas · ${casosRepetidos.length} repetido(s)` : `${combinado.totalClaims} filas`} />
           </div>
 
           {choferesNuevos.length > 0 && (

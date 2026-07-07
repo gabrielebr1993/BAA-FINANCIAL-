@@ -5,7 +5,7 @@ import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
-  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, nombreCiudadDe, TODAS,
+  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, nombreCiudadDe, contarClaimsValidos, TODAS,
 } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
@@ -63,7 +63,12 @@ export default function Dashboard() {
   const costoTotal = pagos.reduce((a, p) => a + p.totalPagar, 0)
   const gananciaTotal = tot.ingreso - costoTotal
   const margen = tot.ingreso > 0 ? gananciaTotal / tot.ingreso : 0
-  const calidad = tot.paquetes > 0 ? 1 - tot.numClaims / tot.paquetes : 1
+  // Conteo CANÓNICO de claims válidos (mismo en todas las pantallas).
+  const claimsCiudad = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
+  const numClaims = useMemo(() => contarClaimsValidos(claimsCiudad), [claimsCiudad])
+  const calidad = tot.paquetes > 0 ? 1 - numClaims / tot.paquetes : 1
+  // eslint-disable-next-line no-console
+  console.log('[Gofo] Claims usados en dashboard:', numClaims)
 
   const ciudades = porCiudad(inv?.resumenCiudades || [], selectedCity)
   const ingresoPorCiudad = ciudades.map((c) => ({ name: nombreCiudadDe(inv, c.ubicacion), valor: Math.round(c.ingreso) }))
@@ -106,7 +111,7 @@ export default function Dashboard() {
             <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
             <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
             <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
-            <KPI label="Claims" value={num(tot.numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
+            <KPI label="Claims" value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
           </div>
 
           {!inv ? (
@@ -163,7 +168,7 @@ export default function Dashboard() {
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
                 <GaugeCard title="% de dobles" value={tot.pctDobles} color="#3b6ea5" />
-                <GaugeCard title="Calidad (entregas sin claim)" value={calidad} color="#4a9c8c" />
+                <GaugeCard title="Calidad (entregas sin claim)" value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
               </div>
 
               {variasSemanas && (
