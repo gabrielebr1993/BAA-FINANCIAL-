@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  body {
+    @apply bg-surface-light text-brand-navy antialiased;
+  }
+  .dark body {
+    @apply bg-surface-dark text-slate-100;
+  }
+}
+
+@layer utilities {
+  /* Spinner giratorio (por si se usa fuera de animate-spin) */
+  @keyframes gofofloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .animate-float {
+    animation: gofofloat 5s ease-in-out infinite;
+  }
+  /* Scrollbar sutil para contenedores con overflow */
+  .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-600 rounded-full; }
+}

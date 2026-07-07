@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useData } from '../DataContext'
 import { calcularPagos, porCiudad } from '../utils/calc'
-import { COLORS } from '../constants'
+import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
-import { Card, Stat, PageTitle, Tabla, Cargando, EstadoVacio } from '../components/ui'
+import { Card, KPI, PageTitle, Tabla, Cargando, EstadoVacio } from '../components/ui'
+import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import CitySelector, { InvoiceSelector } from '../components/CitySelector'
 
@@ -18,10 +18,7 @@ export default function Financiero() {
     return { ind, dob }
   }, [drivers])
 
-  const pagos = useMemo(
-    () => calcularPagos(selectedInvoice, claims, drivers, selectedCity),
-    [selectedInvoice, claims, drivers, selectedCity]
-  )
+  const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
 
   const rutas = useMemo(() => {
     const base = porCiudad(selectedInvoice?.resumenRutas || [], selectedCity)
@@ -38,11 +35,13 @@ export default function Financiero() {
   const costoTotal = pagos.reduce((a, p) => a + p.totalPagar, 0)
   const descuentos = pagos.reduce((a, p) => a + p.descuentoClaims, 0)
   const gananciaReal = ingresoTotal - costoTotal
+  const margen = ingresoTotal > 0 ? gananciaReal / ingresoTotal : 0
 
   const topRutas = [...rutas].sort((a, b) => b.ingreso - a.ingreso).slice(0, 10)
-  const chartIngreso = topRutas.map((r) => ({ name: r.ruta, valor: Math.round(r.ingreso) }))
-  const chartGanancia = [...rutas].sort((a, b) => b.ganancia - a.ganancia).slice(0, 10).map((r) => ({ name: r.ruta, valor: Math.round(r.ganancia) }))
-  const chartLb = topRutas.map((r) => ({ name: r.ruta, valor: Number((r.precioPorLb || 0).toFixed(3)) }))
+  const ingresoPorRuta = topRutas.map((r) => ({ name: r.ruta, valor: Math.round(r.ingreso) }))
+  const gananciaPorRuta = [...rutas].sort((a, b) => b.ganancia - a.ganancia).slice(0, 10).map((r) => ({ name: r.ruta, valor: Math.round(r.ganancia) }))
+  const lbPorRuta = topRutas.map((r) => ({ name: r.ruta, valor: Number((r.precioPorLb || 0).toFixed(3)) }))
+  const ingresoPorCiudad = porCiudad(selectedInvoice?.resumenCiudades || [], selectedCity).map((c) => ({ name: nombreCiudad(c.ubicacion), valor: Math.round(c.ingreso) }))
 
   return (
     <div>
@@ -54,28 +53,37 @@ export default function Financiero() {
         <>
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-            <Stat label="Ingreso (Gofo)" value={money(ingresoTotal)} color={COLORS.green} />
-            <Stat label="Costo (pagos choferes)" value={money(costoTotal)} color={COLORS.navy} />
-            <Stat label="Descuentos claims" value={money(descuentos)} color={COLORS.red} />
-            <Stat label="Ganancia real" value={money(gananciaReal)} color={COLORS.gold} sub={pct(ingresoTotal > 0 ? gananciaReal / ingresoTotal : 0)} />
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon="💵" accent="green" />
+            <KPI label="Costo (choferes)" value={money(costoTotal)} icon="🧾" accent="navy" />
+            <KPI label="Descuentos claims" value={money(descuentos)} icon="⚠️" accent="red" />
+            <KPI label="Ganancia real" value={money(gananciaReal)} icon="📈" accent="gold" />
+            <KPI label="Margen" value={pct(margen)} icon="🎯" accent="blue" />
           </div>
 
           {!selectedInvoice ? (
             <EstadoVacio />
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 18 }}>
-                <ChartCard title="Ingreso por ruta (top 10)" data={chartIngreso} color={COLORS.navy} formato={money} />
-                <ChartCard title="Ganancia por ruta (top 10)" data={chartGanancia} color={COLORS.gold} formato={money} />
-                <ChartCard title="$ por libra por ruta (top 10)" data={chartLb} color={COLORS.green} formato={(v) => `$${Number(v).toFixed(3)}`} />
+              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
+                <div className="lg:col-span-2">
+                  <DonutCard title="Distribución de ingreso por ciudad" data={ingresoPorCiudad} fmt={money} height={200} />
+                </div>
               </div>
 
-              <Card>
-                <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>Rentabilidad por ruta (ordenado por $/lb)</h3>
-                <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 10 }}>
+              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <BarCard title="Ingreso por ruta (top 10)" data={ingresoPorRuta} color="#13233f" fmt={money} />
+                <BarCard title="Ganancia por ruta (top 10)" data={gananciaPorRuta} color="#c9a24b" fmt={money} />
+                <BarCard title="$ por libra por ruta (top 10)" data={lbPorRuta} color="#4a9c8c" fmt={(v) => `$${Number(v).toFixed(3)}`} />
+                <BarCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} horizontal />
+              </div>
+
+              <Card className="p-4">
+                <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Rentabilidad por ruta (ordenado por $/lb)</h3>
+                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                   Costo por ruta estimado con la tarifa promedio de los choferes ({money(avg.ind)} ind. / {money(avg.dob)} doble).
-                </div>
+                </p>
                 <Tabla
                   columns={[
                     { key: 'ruta', label: 'Ruta' },
@@ -94,7 +102,7 @@ export default function Financiero() {
                     if (['ingreso', 'costoEst', 'ganancia', 'precioPorPaquete'].includes(key)) return money(row[key])
                     if (key === 'precioPorLb') return `$${(row[key] || 0).toFixed(3)}`
                     if (key === 'pesoTotalLb') return num(row[key], 1)
-                    if (key === 'margen') return <span style={{ color: row.margen >= 0 ? COLORS.green : COLORS.red }}>{pct(row.margen)}</span>
+                    if (key === 'margen') return <span className={row.margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{pct(row.margen)}</span>
                     if (key === 'paquetes') return num(row[key])
                     return row[key]
                   }}
@@ -105,22 +113,5 @@ export default function Financiero() {
         </>
       )}
     </div>
-  )
-}
-
-function ChartCard({ title, data, color, formato }) {
-  return (
-    <Card>
-      <h4 style={{ margin: '0 0 10px', color: COLORS.navy, fontSize: 15 }}>{title}</h4>
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={54} interval={0} />
-          <YAxis tick={{ fontSize: 11 }} width={48} />
-          <Tooltip formatter={(v) => formato(v)} />
-          <Bar dataKey="valor" fill={color} radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </Card>
   )
 }

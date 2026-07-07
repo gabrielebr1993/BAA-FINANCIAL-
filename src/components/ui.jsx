@@ -1,114 +1,177 @@
-// Componentes de interfaz reutilizables (estilo minimalista navy/dorado).
+// Primitivos de interfaz en Tailwind (claros/oscuros, navy/dorado).
 import { Link } from 'react-router-dom'
-import { COLORS } from '../constants'
 import Ilustracion from './Ilustracion'
 
-// Spinner CSS animado (usa @keyframes gofospin definido en index.html).
-export function Spinner({ size = 18, color = '#fff', grosor = 2.5, style }) {
+// --- Card -------------------------------------------------------------------
+export function Card({ children, className = '', ...rest }) {
   return (
-    <span
-      className="gofo-spin"
-      style={{
-        display: 'inline-block',
-        width: size,
-        height: size,
-        border: `${grosor}px solid ${color}44`,
-        borderTopColor: color,
-        borderRadius: '50%',
-        verticalAlign: 'middle',
-        ...style,
-      }}
-    />
-  )
-}
-
-// Estado de carga centrado (Firestore, etc.).
-export function Cargando({ texto = 'Cargando…' }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 60, color: COLORS.muted }}>
-      <Spinner size={26} color={COLORS.navy} grosor={3} />
-      <span style={{ fontSize: 15 }}>{texto}</span>
+    <div
+      className={`rounded-xl border border-slate-200 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
+      {...rest}
+    >
+      {children}
     </div>
   )
 }
 
-// Estado vacío amable con ilustración y botón hacia Cargar Factura.
-export function EstadoVacio({ titulo = 'Aún no has cargado ninguna factura', texto = 'Ve a Cargar Factura para empezar a ver tus métricas aquí.', mostrarBoton = true }) {
+// --- KPI / tarjeta de métrica (estilo Power BI) -----------------------------
+const ACCENTS = {
+  navy: { bar: 'bg-brand-navy', text: 'text-brand-navy dark:text-slate-100', chip: 'bg-brand-navy/10 text-brand-navy dark:bg-white/10 dark:text-slate-100' },
+  gold: { bar: 'bg-brand-gold', text: 'text-brand-gold', chip: 'bg-brand-gold/15 text-yellow-700 dark:text-brand-gold' },
+  green: { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+  red: { bar: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', chip: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
+  blue: { bar: 'bg-sky-500', text: 'text-sky-600 dark:text-sky-400', chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' },
+  slate: { bar: 'bg-slate-400', text: 'text-slate-700 dark:text-slate-200', chip: 'bg-slate-400/10 text-slate-600 dark:text-slate-300' },
+}
+
+export function KPI({ label, value, icon, accent = 'navy', trend, sub }) {
+  const a = ACCENTS[accent] || ACCENTS.navy
+  const tendencia =
+    trend == null || !isFinite(trend) ? null : (
+      <span className={`text-xs font-semibold ${trend >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+        {trend >= 0 ? '▲' : '▼'} {Math.abs(trend * 100).toFixed(1)}%
+      </span>
+    )
   return (
-    <Card style={{ textAlign: 'center', padding: '32px 24px' }}>
-      <Ilustracion height={200} style={{ margin: '0 auto 8px' }} />
-      <h3 style={{ margin: '0 0 6px', color: COLORS.navy }}>{titulo}</h3>
-      <p style={{ margin: '0 auto 16px', color: COLORS.muted, maxWidth: 440 }}>{texto}</p>
+    <div className="relative flex-1 min-w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-surface-card p-4 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card">
+      <span className={`absolute left-0 top-0 h-full w-1 ${a.bar}`} />
+      <div className="flex items-start justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+        {icon && <span className={`grid h-7 w-7 place-items-center rounded-lg text-sm ${a.chip}`}>{icon}</span>}
+      </div>
+      <div className={`mt-1 text-2xl font-bold ${a.text}`}>{value}</div>
+      <div className="mt-1 flex items-center gap-2">
+        {tendencia}
+        {sub != null && <span className="text-xs text-slate-500 dark:text-slate-400">{sub}</span>}
+      </div>
+    </div>
+  )
+}
+
+// Alias retro-compatible (algunas páginas usan <Stat/>).
+export function Stat({ label, value, accent = 'navy', sub, icon, trend }) {
+  return <KPI label={label} value={value} accent={accent} sub={sub} icon={icon} trend={trend} />
+}
+
+// --- Título de página -------------------------------------------------------
+export function PageTitle({ children, right }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-3">
+      <h1 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{children}</h1>
+      <div className="ml-auto flex flex-wrap items-center gap-2">{right}</div>
+    </div>
+  )
+}
+
+// --- Botón ------------------------------------------------------------------
+const BTN = {
+  primary: 'bg-brand-navy text-white hover:bg-brand-navy-700',
+  gold: 'bg-brand-gold text-brand-navy hover:brightness-105',
+  ghost: 'border border-slate-300 bg-transparent text-brand-navy hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50',
+  danger: 'bg-rose-500 text-white hover:bg-rose-600',
+  success: 'bg-emerald-500 text-white hover:bg-emerald-600',
+}
+export function Boton({ children, onClick, variant = 'primary', disabled, className = '', type = 'button' }) {
+  return (
+    <button
+      type={type}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${BTN[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+// --- Inputs -----------------------------------------------------------------
+const FIELD =
+  'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+
+export function Input({ className = '', ...rest }) {
+  return <input className={`${FIELD} ${className}`} {...rest} />
+}
+export function Select({ className = '', children, ...rest }) {
+  return (
+    <select className={`${FIELD} ${className}`} {...rest}>
+      {children}
+    </select>
+  )
+}
+
+// --- Badge ------------------------------------------------------------------
+const BADGE = {
+  navy: 'bg-brand-navy/10 text-brand-navy dark:bg-white/10 dark:text-slate-100',
+  gold: 'bg-brand-gold/15 text-yellow-700 dark:text-brand-gold',
+  green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  red: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  slate: 'bg-slate-400/15 text-slate-600 dark:text-slate-300',
+}
+export function Badge({ children, color = 'navy', title }) {
+  return (
+    <span title={title} className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${BADGE[color] || BADGE.navy}`}>
+      {children}
+    </span>
+  )
+}
+
+// --- Aviso ------------------------------------------------------------------
+const AVISO = {
+  info: 'bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300',
+  warn: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300',
+  error: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
+  ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+}
+export function Aviso({ tipo = 'info', children, className = '' }) {
+  return <div className={`mb-3 rounded-lg px-4 py-3 text-sm ${AVISO[tipo]} ${className}`}>{children}</div>
+}
+
+// --- Spinner ----------------------------------------------------------------
+export function Spinner({ className = '', tamano = 'h-4 w-4' }) {
+  return <span className={`inline-block ${tamano} animate-spin rounded-full border-2 border-current border-t-transparent align-middle ${className}`} />
+}
+
+export function Cargando({ texto = 'Cargando…' }) {
+  return (
+    <div className="flex items-center justify-center gap-3 py-16 text-slate-500 dark:text-slate-400">
+      <Spinner tamano="h-6 w-6" className="text-brand-gold" />
+      <span className="text-sm">{texto}</span>
+    </div>
+  )
+}
+
+// --- Estado vacío -----------------------------------------------------------
+export function EstadoVacio({
+  titulo = 'Aún no has cargado ninguna factura',
+  texto = 'Ve a Cargar Factura para empezar a ver tus métricas aquí.',
+  mostrarBoton = true,
+}) {
+  return (
+    <Card className="px-6 py-8 text-center">
+      <Ilustracion height={200} className="mx-auto mb-2" />
+      <h3 className="m-0 mb-1 text-lg font-bold text-brand-navy dark:text-slate-100">{titulo}</h3>
+      <p className="mx-auto mb-4 max-w-md text-slate-500 dark:text-slate-400">{texto}</p>
       {mostrarBoton && (
-        <Link to="/facturas" style={{ textDecoration: 'none' }}>
-          <span style={{ display: 'inline-block', padding: '10px 20px', borderRadius: 8, background: COLORS.gold, color: COLORS.navy, fontWeight: 700 }}>
-            ⬆️ Cargar Factura
-          </span>
+        <Link
+          to="/facturas"
+          className="inline-block rounded-lg bg-brand-gold px-5 py-2.5 font-bold text-brand-navy no-underline transition hover:brightness-105"
+        >
+          ⬆️ Cargar Factura
         </Link>
       )}
     </Card>
   )
 }
 
-export function Card({ children, style }) {
+// --- Tabla ------------------------------------------------------------------
+export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.', minWidth = 'min-w-[640px]' }) {
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 18, ...style }}>
-      {children}
-    </div>
-  )
-}
-
-export function Stat({ label, value, color, sub }) {
-  return (
-    <Card style={{ minWidth: 160, flex: 1 }}>
-      <div style={{ fontSize: 12, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: color || COLORS.navy, marginTop: 4 }}>{value}</div>
-      {sub != null && <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 2 }}>{sub}</div>}
-    </Card>
-  )
-}
-
-export function PageTitle({ children, right }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
-      <h1 style={{ margin: 0, fontSize: 24, color: COLORS.navy }}>{children}</h1>
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{right}</div>
-    </div>
-  )
-}
-
-export function Boton({ children, onClick, variant = 'primary', disabled, style }) {
-  const base = {
-    padding: '9px 16px',
-    borderRadius: 8,
-    border: 'none',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontWeight: 600,
-    fontSize: 14,
-    opacity: disabled ? 0.5 : 1,
-  }
-  const variants = {
-    primary: { background: COLORS.navy, color: '#fff' },
-    gold: { background: COLORS.gold, color: COLORS.navy },
-    ghost: { background: 'transparent', color: COLORS.navy, border: `1px solid ${COLORS.border}` },
-    danger: { background: COLORS.red, color: '#fff' },
-    success: { background: COLORS.green, color: '#fff' },
-  }
-  return (
-    <button onClick={disabled ? undefined : onClick} disabled={disabled} style={{ ...base, ...variants[variant], ...style }}>
-      {children}
-    </button>
-  )
-}
-
-export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.' }) {
-  return (
-    <div style={{ overflowX: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14, minWidth: 640 }}>
+    <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+      <table className={`w-full border-collapse text-sm ${minWidth}`}>
         <thead>
-          <tr style={{ background: COLORS.navy, color: '#fff' }}>
+          <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
             {columns.map((c) => (
-              <th key={c.key} style={{ textAlign: c.align || 'left', padding: '10px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <th key={c.key} className={`px-3 py-2.5 font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'}`}>
                 {c.label}
               </th>
             ))}
@@ -117,15 +180,15 @@ export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.' }) {
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} style={{ padding: 20, textAlign: 'center', color: COLORS.muted }}>
+              <td colSpan={columns.length} className="px-4 py-6 text-center text-slate-400">
                 {emptyText}
               </td>
             </tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={row._key || i} style={{ borderTop: `1px solid ${COLORS.border}`, background: i % 2 ? '#fafbfc' : '#fff' }}>
+              <tr key={row._key || i} className="border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
                 {columns.map((c) => (
-                  <td key={c.key} style={{ textAlign: c.align || 'left', padding: '9px 12px', whiteSpace: c.wrap ? 'normal' : 'nowrap' }}>
+                  <td key={c.key} className={`px-3 py-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'} ${c.wrap ? '' : 'whitespace-nowrap'}`}>
                     {renderCell(row, c.key, i)}
                   </td>
                 ))}
@@ -134,29 +197,6 @@ export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.' }) {
           )}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-export function Badge({ children, color }) {
-  return (
-    <span style={{ background: (color || COLORS.navy) + '22', color: color || COLORS.navy, padding: '2px 8px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-      {children}
-    </span>
-  )
-}
-
-export function Aviso({ tipo = 'info', children }) {
-  const map = {
-    info: { bg: '#eef2f8', color: COLORS.navy },
-    warn: { bg: '#fff4e0', color: '#8a5a00' },
-    error: { bg: '#fde8e6', color: COLORS.red },
-    ok: { bg: '#e6f4ec', color: COLORS.green },
-  }
-  const s = map[tipo]
-  return (
-    <div style={{ background: s.bg, color: s.color, padding: '10px 14px', borderRadius: 8, fontSize: 14, marginBottom: 12 }}>
-      {children}
     </div>
   )
 }

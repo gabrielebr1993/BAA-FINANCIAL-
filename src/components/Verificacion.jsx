@@ -1,33 +1,34 @@
-// Panel de verificación "cuadra con Gofo" reutilizable (Financiero, Dashboard).
-import { COLORS } from '../constants'
+// Panel "cuadra con Gofo" (Financiero, Dashboard) en Tailwind.
 import { money } from '../utils/format'
-import { Card, Tabla, Aviso, Badge } from './ui'
+import { Card, Aviso, Badge, Tabla } from './ui'
 
 export default function Verificacion({ v, compacto }) {
   if (!v) return null
   if (!v.gofo || !v.gofo.disponible) {
     return (
-      <Card style={{ marginBottom: 18 }}>
-        <h3 style={{ margin: '0 0 8px', color: COLORS.navy }}>Verificación con Gofo</h3>
+      <Card className="mb-4 p-4">
+        <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">Verificación con Gofo</h3>
         <Aviso tipo="warn">Esta factura no incluyó la hoja "DSP Summary". Neto calculado: {money(v.netoCalculado)}.</Aviso>
       </Card>
     )
   }
+  const borde = v.cuadra ? 'border-emerald-400 dark:border-emerald-500/60' : 'border-rose-400 dark:border-rose-500/60'
   return (
-    <Card style={{ marginBottom: 18, borderColor: v.cuadra ? COLORS.green : COLORS.red, borderWidth: 2 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <h3 style={{ margin: 0, color: COLORS.navy }}>Verificación con Gofo</h3>
-        <span style={{ marginLeft: 'auto' }}>
-          {v.cuadra ? <Badge color={COLORS.green}>✅ Cuadra con Gofo</Badge> : <Badge color={COLORS.red}>⚠️ No cuadra — revisar</Badge>}
+    <Card className={`mb-4 border-2 p-4 ${borde}`}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Verificación con Gofo</h3>
+        <span className="ml-auto">
+          {v.cuadra ? <Badge color="green">✅ Cuadra con Gofo</Badge> : <Badge color="red">⚠️ No cuadra — revisar</Badge>}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: compacto ? 0 : 16 }}>
+      <div className={`flex flex-wrap gap-6 ${compacto ? '' : 'mb-4'}`}>
         <Bloque label="Nuestro neto calculado" value={money(v.netoCalculado)} />
         <Bloque label="Total oficial de Gofo" value={money(v.gofo.totalGofo)} />
-        <Bloque label="Diferencia" value={money(v.diferencia)} color={v.cuadra ? COLORS.green : COLORS.red} />
+        <Bloque label="Diferencia" value={money(v.diferencia)} clase={v.cuadra ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'} />
       </div>
       {!compacto && (
         <Tabla
+          minWidth="min-w-[420px]"
           columns={[
             { key: 'linea', label: 'Línea' },
             { key: 'nuestro', label: 'Nuestro cálculo', align: 'right' },
@@ -50,11 +51,11 @@ export default function Verificacion({ v, compacto }) {
   )
 }
 
-function Bloque({ label, value, color }) {
+function Bloque({ label, value, clase }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: COLORS.muted }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: color || COLORS.navy }}>{value}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+      <div className={`text-xl font-bold ${clase || 'text-brand-navy dark:text-slate-100'}`}>{value}</div>
     </div>
   )
 }

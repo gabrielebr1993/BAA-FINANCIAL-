@@ -1,125 +1,102 @@
-// Layout principal con menú lateral (sidebar). Muestra solo las secciones
-// permitidas para el usuario según sus permisos.
+// Layout principal: sidebar navy con secciones gated por permiso + toggle de tema.
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
-import { SECCIONES, COLORS } from '../constants'
+import { useTheme } from '../ThemeContext'
+import { SECCIONES } from '../constants'
 
-export default function Layout({ children }) {
+function ThemeToggle({ compact }) {
+  const { oscuro, alternar } = useTheme()
+  return (
+    <button
+      onClick={alternar}
+      title={oscuro ? 'Cambiar a claro' : 'Cambiar a oscuro'}
+      className={`inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10 ${compact ? '' : 'w-full justify-center'}`}
+    >
+      <span>{oscuro ? '☀️' : '🌙'}</span>
+      {!compact && <span>{oscuro ? 'Modo claro' : 'Modo oscuro'}</span>}
+    </button>
+  )
+}
+
+function SidebarContent({ onNavigate }) {
   const { perfil, puede, cerrarSesion } = useAuth()
   const location = useLocation()
-  const [abierto, setAbierto] = useState(false)
-
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
 
-  const linkStyle = (activo) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '11px 16px',
-    color: activo ? COLORS.navy : '#dfe4ee',
-    background: activo ? COLORS.gold : 'transparent',
-    borderRadius: 8,
-    textDecoration: 'none',
-    fontWeight: activo ? 700 : 500,
-    fontSize: 14.5,
-  })
-
-  const sidebar = (
-    <aside
-      style={{
-        width: 232,
-        background: COLORS.navy,
-        color: '#fff',
-        padding: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        minHeight: '100vh',
-        position: 'sticky',
-        top: 0,
-      }}
-    >
-      <div style={{ padding: '8px 8px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: COLORS.gold, color: COLORS.navy, display: 'grid', placeItems: 'center', fontWeight: 800 }}>
-          G
-        </div>
+  return (
+    <aside className="flex min-h-screen w-60 flex-col gap-1 bg-brand-navy p-4 text-white">
+      <div className="flex items-center gap-3 px-2 pb-4 pt-1">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-gold text-lg font-extrabold text-brand-navy">G</div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>Gofo</div>
-          <div style={{ fontSize: 11, color: '#9fb0cc' }}>Gestión de facturas</div>
+          <div className="text-lg font-extrabold leading-none">Gofo</div>
+          <div className="text-[11px] text-slate-400">Gestión de facturas</div>
         </div>
       </div>
-      {secciones.map((s) => (
-        <Link key={s.path} to={s.path} style={linkStyle(location.pathname === s.path)} onClick={() => setAbierto(false)}>
-          <span style={{ width: 20, textAlign: 'center' }}>{s.icon}</span>
-          {s.label}
-        </Link>
-      ))}
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid #24365a', fontSize: 13 }}>
-        <div style={{ color: '#dfe4ee', fontWeight: 600 }}>{perfil?.nombre || 'Usuario'}</div>
-        <div style={{ color: '#8ea3c6', fontSize: 12, marginBottom: 8 }}>
-          {perfil?.role || 'usuario'} · {perfil?.email}
+
+      {secciones.map((s) => {
+        const activo = location.pathname === s.path
+        return (
+          <Link
+            key={s.path}
+            to={s.path}
+            onClick={onNavigate}
+            className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm no-underline transition ${
+              activo ? 'bg-brand-gold font-bold text-brand-navy' : 'font-medium text-slate-300 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <span className="w-5 text-center">{s.icon}</span>
+            {s.label}
+          </Link>
+        )
+      })}
+
+      <div className="mt-auto space-y-3 border-t border-white/10 pt-4 text-sm">
+        <ThemeToggle />
+        <div>
+          <div className="font-semibold text-slate-200">{perfil?.nombre || 'Usuario'}</div>
+          <div className="truncate text-xs text-slate-400">
+            {perfil?.role || 'usuario'} · {perfil?.email}
+          </div>
         </div>
         <button
           onClick={cerrarSesion}
-          style={{ width: '100%', padding: 9, background: 'transparent', color: '#fff', border: '1px solid #3a4d73', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
+          className="w-full rounded-lg border border-white/15 py-2 font-semibold text-white transition hover:bg-white/10"
         >
           Cerrar sesión
         </button>
       </div>
     </aside>
   )
+}
 
+export default function Layout({ children }) {
+  const [abierto, setAbierto] = useState(false)
   return (
-    <div style={{ display: 'flex', background: COLORS.bg, minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', color: COLORS.text }}>
+    <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
       {/* barra superior móvil */}
-      <div
-        style={{
-          display: 'none',
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 20,
-          background: COLORS.navy,
-          color: '#fff',
-          padding: '10px 14px',
-          alignItems: 'center',
-          gap: 12,
-        }}
-        className="gofo-mobilebar"
-      >
-        <button onClick={() => setAbierto((v) => !v)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer' }}>
-          ☰
-        </button>
-        <span style={{ fontWeight: 800 }}>Gofo</span>
+      <div className="sticky top-0 z-20 flex items-center gap-3 bg-brand-navy px-4 py-2.5 text-white md:hidden">
+        <button onClick={() => setAbierto(true)} className="text-2xl leading-none">☰</button>
+        <span className="font-extrabold">Gofo</span>
       </div>
 
-      <div className="gofo-sidebar" style={{ display: 'block' }}>
-        {sidebar}
-      </div>
-
-      {/* drawer móvil */}
-      {abierto && (
-        <div
-          onClick={() => setAbierto(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 30 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 232 }}>
-            {sidebar}
-          </div>
+      <div className="flex">
+        {/* sidebar escritorio */}
+        <div className="sticky top-0 hidden h-screen md:block">
+          <SidebarContent />
         </div>
-      )}
 
-      <main style={{ flex: 1, padding: 24, maxWidth: '100%', overflowX: 'hidden' }}>{children}</main>
+        {/* drawer móvil */}
+        {abierto && (
+          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setAbierto(false)}>
+            <div onClick={(e) => e.stopPropagation()}>
+              <SidebarContent onNavigate={() => setAbierto(false)} />
+            </div>
+          </div>
+        )}
 
-      <style>{`
-        @media (max-width: 820px) {
-          .gofo-sidebar { display: none !important; }
-          .gofo-mobilebar { display: flex !important; }
-          main { padding-top: 60px !important; }
-        }
-      `}</style>
+        <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6">{children}</main>
+      </div>
     </div>
   )
 }

@@ -1,5 +1,4 @@
 import { useAuth } from './AuthContext'
-import { COLORS } from './constants'
 import { Spinner } from './components/ui'
 import Login from './Login'
 
@@ -7,18 +6,18 @@ export default function ProtectedRoute({ filtro, children }) {
   const { user, cargando, puede } = useAuth()
   if (cargando)
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: COLORS.muted, fontFamily: 'system-ui' }}>
-        <Spinner size={26} color={COLORS.navy} grosor={3} /> Cargando…
+      <div className="flex min-h-screen items-center justify-center gap-3 bg-surface-light text-slate-500 dark:bg-surface-dark dark:text-slate-400">
+        <Spinner tamano="h-6 w-6" className="text-brand-gold" /> Cargando…
       </div>
     )
   if (!user) return <Login />
   if (filtro && !puede(filtro))
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui', color: COLORS.navy, textAlign: 'center', padding: 24 }}>
+      <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
         <div>
-          <div style={{ fontSize: 40 }}>🔒</div>
-          <h3>No tienes acceso a esta sección</h3>
-          <p style={{ color: COLORS.muted }}>Pide a un administrador que te asigne el permiso correspondiente.</p>
+          <div className="text-4xl">🔒</div>
+          <h3 className="mt-2 text-lg font-bold">No tienes acceso a esta sección</h3>
+          <p className="text-slate-500 dark:text-slate-400">Pide a un administrador que te asigne el permiso correspondiente.</p>
         </div>
       </div>
     )
