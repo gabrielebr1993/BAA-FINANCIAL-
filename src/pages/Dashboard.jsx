@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
@@ -17,7 +18,12 @@ import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, selectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, selectedCity, setSelectedCity, vista, cargando } = useData()
+  const navigate = useNavigate()
+  // Navega a una sección y, opcionalmente, preselecciona la ciudad de destino.
+  const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
+  // Navega al detalle de un chofer en Performance (preselecciona su ficha).
+  const irAChofer = (nombre) => { if (nombre) navigate(`/performance?driver=${encodeURIComponent(nombre)}`) }
   const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)), [inv, claims, drivers, managers, selectedCity, invoicesRango])
   const esRango = !!inv?.esRango
   const variasSemanas = invoicesRango.length > 1
@@ -49,7 +55,7 @@ export default function Dashboard() {
     if (!inv) return []
     return (inv.resumenCiudades || []).map((c) => {
       const e = resumenEstimado(inv, drivers, c.ubicacion)
-      return { ciudad: nombreCiudadDe(inv, c.ubicacion), ingreso: e.ingreso, ganancia: e.ganancia, claims: c.numClaims, paquetes: c.paquetes }
+      return { code: c.ubicacion, ciudad: nombreCiudadDe(inv, c.ubicacion), ingreso: e.ingreso, ganancia: e.ganancia, claims: c.numClaims, paquetes: c.paquetes }
     })
   }, [inv, drivers])
 
@@ -93,13 +99,13 @@ export default function Dashboard() {
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label="Ingreso total" value={money(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
-            <KPI label="Costo total" value={money(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} />
-            <KPI label="Ganancia" value={money(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} />
-            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" />
-            <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} />
-            <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" />
-            <KPI label="Claims" value={num(tot.numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} />
+            <KPI label="Ingreso total" value={money(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
+            <KPI label="Costo total" value={money(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} />
+            <KPI label="Ganancia" value={money(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
+            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
+            <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
+            <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
+            <KPI label="Claims" value={num(tot.numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
           </div>
 
           {!inv ? (
@@ -141,11 +147,17 @@ export default function Dashboard() {
             /* -------- VISTA COMBINADA -------- */
             <>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <Verificacion v={inv.verificacion} compacto />
-                <GananciaReal g={gReal} />
+                <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
+                  <Verificacion v={inv.verificacion} compacto />
+                </ClickWrap>
+                <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
+                  <GananciaReal g={gReal} />
+                </ClickWrap>
               </div>
 
-              <PanelClaims claims={porCiudad(claims, selectedCity)} compacto />
+              <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
+                <PanelClaims claims={porCiudad(claims, selectedCity)} compacto />
+              </ClickWrap>
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
@@ -172,7 +184,8 @@ export default function Dashboard() {
 
               {selectedCity === TODAS && comparativoCiudades.length > 1 && (
                 <Card className="mb-4 p-4">
-                  <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Comparativo entre ciudades</h3>
+                  <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Comparativo entre ciudades</h3>
+                  <p className="mb-3 text-xs text-slate-400">Haz clic en una ciudad para filtrar el financiero por ella.</p>
                   <Tabla
                     columns={[
                       { key: 'ciudad', label: 'Ciudad' },
@@ -182,24 +195,26 @@ export default function Dashboard() {
                       { key: 'claims', label: 'Claims', align: 'right' },
                     ]}
                     rows={[...comparativoCiudades].sort((a, b) => b.ingreso - a.ingreso).map((c) => ({ ...c, _key: c.ciudad }))}
+                    onRowClick={(row) => irA('/financiero', row.code)}
                     renderCell={(row, key) => (['ingreso', 'ganancia'].includes(key) ? money(row[key]) : typeof row[key] === 'number' ? num(row[key]) : row[key])}
                   />
                 </Card>
               )}
 
               <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Rankings de choferes</h2>
+              <p className="-mt-2 mb-3 text-xs text-slate-400">Haz clic en un chofer para ver su detalle en Performance.</p>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <RankWidget title="Por productividad (ingreso)" data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} />
-                <RankWidget title="Por ganancia" data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa />
-                <RankWidget title="Por calidad (menos claims)" data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} />
+                <RankWidget title="Por productividad (ingreso)" data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
+                <RankWidget title="Por ganancia" data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
+                <RankWidget title="Por calidad (menos claims)" data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
               </div>
 
               <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Rankings de rutas</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <MiniLista titulo="Más reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio="Ninguna ruta con claims." />
-                <MiniLista titulo="Cero reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio="Todas tienen algún claim." />
-                <MiniLista titulo="Más ingreso" rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} />
-                <MiniLista titulo="Mejor $/lb" rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} />
+                <MiniLista titulo="Más reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio="Ninguna ruta con claims." onPick={() => irA('/performance')} />
+                <MiniLista titulo="Cero reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio="Todas tienen algún claim." onPick={() => irA('/performance')} />
+                <MiniLista titulo="Más ingreso" rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
+                <MiniLista titulo="Mejor $/lb" rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
               </div>
             </>
           )}
@@ -209,28 +224,44 @@ export default function Dashboard() {
   )
 }
 
-function RankWidget({ title, data, lista, fmt, valor, marcaSinTarifa }) {
+// Envoltura clicable con elevación al hacer hover (estilo Mercury).
+function ClickWrap({ onClick, titulo, children }) {
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      title={titulo}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      className="cursor-pointer rounded-2xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold"
+    >
+      {children}
+    </div>
+  )
+}
+
+function RankWidget({ title, data, lista, fmt, valor, marcaSinTarifa, onPick }) {
   const mejor = lista[0]
   const peor = lista[lista.length - 1]
   return (
     <Widget title={title}>
-      <BarCardInline data={data} fmt={fmt} />
+      <BarCardInline data={data} fmt={fmt} onPick={onPick} />
       {mejor && (
-        <div className="mt-2 text-xs">
+        <button onClick={() => onPick?.(mejor.nombre)} className="mt-2 block w-full text-left text-xs hover:underline">
           <Badge color="green">Mejor</Badge> {mejor?.nombre} · {fmt(valor(mejor) || 0)}
           {marcaSinTarifa && mejor?.sinTarifa ? ' (sin tarifa)' : ''}
-        </div>
+        </button>
       )}
       {peor && lista.length > 1 && (
-        <div className="mt-1 text-xs">
+        <button onClick={() => onPick?.(peor.nombre)} className="mt-1 block w-full text-left text-xs hover:underline">
           <Badge color="red">Peor</Badge> {peor?.nombre} · {fmt(valor(peor) || 0)}
-        </div>
+        </button>
       )}
     </Widget>
   )
 }
 
-function BarCardInline({ data, fmt }) {
+function BarCardInline({ data, fmt, onPick }) {
   const t = useChartTheme()
   return (
     <ResponsiveContainer width="100%" height={190}>
@@ -238,7 +269,7 @@ function BarCardInline({ data, fmt }) {
         <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickFormatter={fmt} />
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: t.axis }} width={92} />
         <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
-        <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
+        <Bar dataKey="valor" radius={[0, 4, 4, 0]} className={onPick ? 'cursor-pointer' : ''} onClick={(d) => onPick?.(d?.name)}>
           {data.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
           ))}
@@ -248,7 +279,7 @@ function BarCardInline({ data, fmt }) {
   )
 }
 
-function MiniLista({ titulo, rows, render, vacio }) {
+function MiniLista({ titulo, rows, render, vacio, onPick }) {
   return (
     <Widget title={titulo}>
       {rows.length === 0 ? (
@@ -256,7 +287,11 @@ function MiniLista({ titulo, rows, render, vacio }) {
       ) : (
         <ol className="m-0 list-decimal pl-5 text-sm leading-8">
           {rows.map((r, i) => (
-            <li key={r.ruta || i}>{render(r)}</li>
+            <li key={r.ruta || i}>
+              {onPick ? (
+                <button onClick={() => onPick(r)} className="text-left hover:underline">{render(r)}</button>
+              ) : render(r)}
+            </li>
           ))}
         </ol>
       )}

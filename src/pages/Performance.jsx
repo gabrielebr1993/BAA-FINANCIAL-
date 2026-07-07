@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { useData } from '../DataContext'
 import { calcularPagos, rankingsRutas } from '../utils/calc'
 import { money, num } from '../utils/format'
@@ -13,6 +15,10 @@ export default function Performance() {
   const { facturaRango: selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
   const [sortKey, setSortKey] = useState('ingreso')
   const [asc, setAsc] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Chofer preseleccionado desde el Dashboard (?driver=Nombre).
+  const driverSel = searchParams.get('driver') || ''
+  const limpiarDriver = () => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('driver'); return n })
 
   const pagos = useMemo(
     () => calcularPagos(selectedInvoice, claims, drivers, selectedCity).map((p) => ({ ...p, paquetes: p.individuales + p.dobles })),
@@ -77,8 +83,19 @@ export default function Performance() {
             <DonutCard title="Calidad: con vs sin claims" data={claimsDona} fmt={num} height={240} />
           </div>
 
+          {driverSel && (
+            <Aviso tipo="info" className="flex items-center gap-2">
+              <span>Mostrando el detalle de <b>{driverSel}</b>.</span>
+              <button onClick={limpiarDriver} className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-brand-navy hover:underline dark:text-brand-gold">
+                <X size={14} strokeWidth={2} /> Ver todos
+              </button>
+            </Aviso>
+          )}
+
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Tabla completa de choferes (clic en encabezado para ordenar)</h3>
+            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">
+              {driverSel ? `Detalle de ${driverSel}` : 'Tabla completa de choferes (clic en encabezado para ordenar)'}
+            </h3>
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[820px] border-collapse text-[13.5px]">
                 <thead>
@@ -91,7 +108,7 @@ export default function Performance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ordenados.map((p, i) => (
+                  {(driverSel ? ordenados.filter((p) => p.nombre === driverSel) : ordenados).map((p, i) => (
                     <tr key={p.nombre} className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
                       <td className="px-2.5 py-2">{p.nombre} {p.sinTarifa && <Badge color="red">sin tarifa</Badge>}</td>
                       <td className="px-2.5 py-2">{p.nombreCiudad}</td>

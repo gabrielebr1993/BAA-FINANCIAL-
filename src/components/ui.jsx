@@ -24,7 +24,7 @@ const ACCENTS = {
   slate: { bar: 'bg-slate-400', text: 'text-slate-700 dark:text-slate-200', chip: 'bg-slate-400/10 text-slate-600 dark:text-slate-300' },
 }
 
-export function KPI({ label, value, icon, accent = 'navy', trend, sub }) {
+export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick }) {
   const a = ACCENTS[accent] || ACCENTS.navy
   const tendencia =
     trend == null || !isFinite(trend) ? null : (
@@ -33,8 +33,17 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub }) {
       </span>
     )
   const Icon = typeof icon === 'function' ? icon : null
+  const clickable = typeof onClick === 'function'
   return (
-    <div className="flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card">
+    <div
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
+      className={`flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${
+        clickable ? 'cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold' : ''
+      }`}
+    >
       <div className="flex items-start justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
         {(Icon || (icon && typeof icon === 'string')) && (
@@ -169,7 +178,7 @@ export function EstadoVacio({
 }
 
 // --- Tabla ------------------------------------------------------------------
-export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.', minWidth = 'min-w-[640px]' }) {
+export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.', minWidth = 'min-w-[640px]', onRowClick }) {
   return (
     <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
       <table className={`w-full border-collapse text-sm ${minWidth}`}>
@@ -191,7 +200,11 @@ export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.', min
             </tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={row._key || i} className="border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
+              <tr
+                key={row._key || i}
+                onClick={onRowClick ? () => onRowClick(row, i) : undefined}
+                className={`border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30 ${onRowClick ? 'cursor-pointer' : ''}`}
+              >
                 {columns.map((c) => (
                   <td key={c.key} className={`px-3 py-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'} ${c.wrap ? '' : 'whitespace-nowrap'}`}>
                     {renderCell(row, c.key, i)}
