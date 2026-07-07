@@ -143,6 +143,40 @@ export function variacion(actual, anterior) {
   return (actual - anterior) / Math.abs(anterior)
 }
 
+// Costo semanal de los managers activos × número de semanas del periodo.
+export function costoManagers(managers, semanas = 1) {
+  const base = (managers || []).filter((m) => m.activo !== false).reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0)
+  return base * (semanas || 1)
+}
+
+// Ganancia real = ingresoNeto − costoChoferes − costoManagers.
+// ingresoNeto: si "Todas", el neto verificado (entregas+offset+claims+ajustes);
+// si una ciudad, se aproxima con entregas(ciudad) + claimsGofo(ciudad).
+// Los managers son costo fijo de empresa: solo se cuentan en "Todas las ciudades".
+export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas = 1) {
+  const pagos = calcularPagos(inv, claims, drivers, ciudad)
+  const costoChoferes = pagos.reduce((a, p) => a + p.totalPagar, 0)
+  const esTodas = !ciudad || ciudad === TODAS
+  let ingresoNeto
+  if (esTodas && inv?.verificacion) {
+    ingresoNeto = inv.verificacion.netoCalculado
+  } else {
+    const entregas = porCiudad(inv?.resumenCiudades || [], ciudad).reduce((a, c) => a + c.ingreso, 0)
+    const claimsGofo = porCiudad(claims || [], ciudad).reduce((a, c) => a + (c.montoGofo || 0), 0)
+    ingresoNeto = entregas + claimsGofo
+  }
+  const cMgr = esTodas ? costoManagers(managers, semanas) : 0
+  const ganancia = ingresoNeto - costoChoferes - cMgr
+  return {
+    ingresoNeto,
+    costoChoferes,
+    costoManagers: cMgr,
+    gananciaReal: ganancia,
+    margen: ingresoNeto > 0 ? ganancia / ingresoNeto : 0,
+    soloTodas: !esTodas,
+  }
+}
+
 // ---- rankings ----------------------------------------------------------------
 
 // Rankings de choferes (productividad, ganancia, calidad) con filtro de ciudad.

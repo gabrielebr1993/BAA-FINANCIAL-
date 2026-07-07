@@ -6,6 +6,7 @@ import { calcularPagos, buscarDriver } from '../utils/calc'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
+import ManagersPanel from '../components/ManagersPanel'
 
 const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
@@ -13,6 +14,7 @@ const key = (n) => (n || '').trim().toLowerCase()
 export default function Choferes() {
   const { drivers, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
 
+  const [tab, setTab] = useState('choferes')
   // ---- alta de chofer ----
   const [form, setForm] = useState(vacio)
   const [guardandoAlta, setGuardandoAlta] = useState(false)
@@ -205,6 +207,18 @@ export default function Choferes() {
     <div>
       <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">Semana: <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>Choferes y Tarifas</PageTitle>
 
+      <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+        {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Managers' }].map((t) => (
+          <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
+            {t.l}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'managers' ? (
+        <ManagersPanel />
+      ) : (
+       <>
       {error && <Aviso tipo="error">{error}</Aviso>}
       {sinTarifa.length > 0 && (
         <Aviso tipo="warn">
@@ -387,6 +401,8 @@ export default function Choferes() {
             </div>
           </Card>
         </div>
+      )}
+       </>
       )}
     </div>
   )

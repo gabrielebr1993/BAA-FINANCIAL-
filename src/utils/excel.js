@@ -316,6 +316,28 @@ export function construirResumen(detalles, claims, nombreMap) {
   const porRuta = {}
   const porCiudad = {}
 
+  // Arreglo "Sin ruta": los paquetes sin Region/route válido se asignan a la
+  // ruta MÁS COMÚN de ese chofer (moda). Si el chofer no tiene ninguna ruta
+  // válida, se dejan como "Sin ruta".
+  const rutasValidasPorChofer = {}
+  for (const d of detalles) {
+    if (d.ruta && d.ruta !== 'Sin ruta') {
+      const m = (rutasValidasPorChofer[d.courier] = rutasValidasPorChofer[d.courier] || {})
+      m[d.ruta] = (m[d.ruta] || 0) + 1
+    }
+  }
+  const modaRuta = {}
+  for (const courier of Object.keys(rutasValidasPorChofer)) {
+    const m = rutasValidasPorChofer[courier]
+    modaRuta[courier] = Object.keys(m).sort((a, b) => m[b] - m[a])[0]
+  }
+  for (const d of detalles) {
+    if ((!d.ruta || d.ruta === 'Sin ruta') && modaRuta[d.courier]) {
+      d.ruta = modaRuta[d.courier]
+      d.ciudad = codigoCiudad(d.ruta)
+    }
+  }
+
   let totalPaquetes = 0
   let totalIndividuales = 0
   let totalDobles = 0

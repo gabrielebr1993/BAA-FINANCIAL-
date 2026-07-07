@@ -20,6 +20,7 @@ export function DataProvider({ children }) {
   const [activeCompanyId, setActiveCompanyId] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [drivers, setDrivers] = useState([])
+  const [managers, setManagers] = useState([])
   const [claims, setClaims] = useState([])
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   const [selectedCity, setSelectedCity] = useState(TODAS)
@@ -80,6 +81,14 @@ export function DataProvider({ children }) {
     setDrivers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   }, [])
 
+  const cargarManagers = useCallback(async (cid) => {
+    if (!cid) { setManagers([]); return }
+    try {
+      const snap = await getDocs(query(collection(db, 'managers'), where('companyId', '==', cid)))
+      setManagers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    } catch { setManagers([]) }
+  }, [])
+
   // Claims por conjunto de facturas. Se filtra también por companyId para ser
   // compatible con las reglas de seguridad (una query lista debe acotar por empresa).
   const cargarClaimsDe = useCallback(async (ids, cid) => {
@@ -108,15 +117,15 @@ export function DataProvider({ children }) {
   // Cargar datos de la empresa activa.
   useEffect(() => {
     if (!user) {
-      setInvoices([]); setDrivers([]); setClaims([]); setSelectedInvoiceId(null); setCargando(false)
+      setInvoices([]); setDrivers([]); setManagers([]); setClaims([]); setSelectedInvoiceId(null); setCargando(false)
       return
     }
     ;(async () => {
       setCargando(true)
-      await Promise.all([cargarInvoices(activeCompanyId), cargarDrivers(activeCompanyId).catch(() => {})])
+      await Promise.all([cargarInvoices(activeCompanyId), cargarDrivers(activeCompanyId).catch(() => {}), cargarManagers(activeCompanyId).catch(() => {})])
       setCargando(false)
     })()
-  }, [user, activeCompanyId, cargarInvoices, cargarDrivers])
+  }, [user, activeCompanyId, cargarInvoices, cargarDrivers, cargarManagers])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoices, rango), [invoices, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
@@ -156,6 +165,7 @@ export function DataProvider({ children }) {
     // datos
     invoices,
     drivers,
+    managers,
     claims,
     selectedInvoice,
     selectedInvoiceId,
@@ -178,6 +188,7 @@ export function DataProvider({ children }) {
     error,
     reloadInvoices: () => cargarInvoices(activeCompanyId),
     reloadDrivers: () => cargarDrivers(activeCompanyId),
+    reloadManagers: () => cargarManagers(activeCompanyId),
     reloadClaims: () => cargarClaimsDe(rangoIds, activeCompanyId),
   }
 

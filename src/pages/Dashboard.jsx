@@ -4,18 +4,20 @@ import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
-  porCiudad, totalesFiltrados, resumenEstimado, variacion, nombreCiudadDe, TODAS,
+  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, nombreCiudadDe, TODAS,
 } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card } from '../components/ui'
 import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
+import GananciaReal from '../components/GananciaReal'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, selectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, selectedCity, vista, cargando } = useData()
+  const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)), [inv, claims, drivers, managers, selectedCity, invoicesRango])
   const esRango = !!inv?.esRango
   const variasSemanas = invoicesRango.length > 1
 
@@ -137,7 +139,10 @@ export default function Dashboard() {
           ) : (
             /* -------- VISTA COMBINADA -------- */
             <>
-              <Verificacion v={inv.verificacion} compacto />
+              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Verificacion v={inv.verificacion} compacto />
+                <GananciaReal g={gReal} />
+              </div>
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />

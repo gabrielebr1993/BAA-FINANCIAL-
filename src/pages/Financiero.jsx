@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad } from '../utils/calc'
+import { calcularPagos, porCiudad, gananciaRealDe } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -8,11 +8,16 @@ import { DollarSign, Receipt, AlertTriangle, TrendingUp, Target } from 'lucide-r
 import { Card, KPI, PageTitle, Tabla, Boton, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
+import GananciaReal from '../components/GananciaReal'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
 export default function Financiero() {
-  const { facturaRango: selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, cargando } = useData()
+  const gReal = useMemo(
+    () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)),
+    [selectedInvoice, claims, drivers, managers, selectedCity, invoicesRango]
+  )
 
   const avg = useMemo(() => {
     const act = (drivers || []).filter((d) => d.activo !== false)
@@ -67,6 +72,7 @@ export default function Financiero() {
       ) : (
         <>
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
+          {selectedInvoice && <GananciaReal g={gReal} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon={DollarSign} accent="green" />
