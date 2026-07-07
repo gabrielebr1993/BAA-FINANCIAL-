@@ -10,6 +10,7 @@ import { useAuth } from './AuthContext'
 import { TODAS } from './utils/calc'
 import { conFechas, invoicesEnRango, combinarFacturas } from './utils/rango'
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
+import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
 
 const DataContext = createContext()
 export const useData = () => useContext(DataContext)
@@ -26,7 +27,8 @@ export function DataProvider({ children }) {
   const [selectedCity, setSelectedCity] = useState(TODAS)
   const [rango, setRango] = useState({ preset: 'ultima', desde: '', hasta: '' })
   const [vista, setVista] = useState('combinado')
-  const [alertasDescartadas, setAlertasDescartadas] = useState(() => new Set())
+  // Estado persistido de cada alerta: { alertId: 'resuelta' | 'descartada' }.
+  const [estadosAlertas, setEstadosAlertas] = useState({})
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
@@ -122,7 +124,13 @@ export function DataProvider({ children }) {
     }
     ;(async () => {
       setCargando(true)
-      await Promise.all([cargarInvoices(activeCompanyId), cargarDrivers(activeCompanyId).catch(() => {}), cargarManagers(activeCompanyId).catch(() => {})])
+      const [, , , estados] = await Promise.all([
+        cargarInvoices(activeCompanyId),
+        cargarDrivers(activeCompanyId).catch(() => {}),
+        cargarManagers(activeCompanyId).catch(() => {}),
+        cargarEstadosAlertas(activeCompanyId),
+      ])
+      setEstadosAlertas(estados || {})
       setCargando(false)
     })()
   }, [user, activeCompanyId, cargarInvoices, cargarDrivers, cargarManagers])
@@ -146,12 +154,28 @@ export function DataProvider({ children }) {
   }, [facturaRango, invoices])
 
   const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRango, claims, drivers, invAnterior }), [facturaRango, claims, drivers, invAnterior])
-  const alertasVisibles = useMemo(
-    () => alertasBase.filter((a) => !alertasDescartadas.has(a.id)).sort((a, b) => SEVERIDAD_ORDEN[a.tipo] - SEVERIDAD_ORDEN[b.tipo]),
-    [alertasBase, alertasDescartadas]
+  // Todas las alertas con su estado persistido adjunto.
+  const alertasTodas = useMemo(
+    () => alertasBase
+      .map((a) => ({ ...a, estado: estadosAlertas[a.id] || 'activa' }))
+      .sort((a, b) => SEVERIDAD_ORDEN[a.tipo] - SEVERIDAD_ORDEN[b.tipo]),
+    [alertasBase, estadosAlertas]
   )
-  const descartarAlerta = useCallback((id) => setAlertasDescartadas((s) => new Set(s).add(id)), [])
-  const restaurarAlertas = useCallback(() => setAlertasDescartadas(new Set()), [])
+  // Visibles = ni descartadas ni resueltas (las que exigen atención).
+  const alertasVisibles = useMemo(() => alertasTodas.filter((a) => a.estado === 'activa'), [alertasTodas])
+
+  // Marca una alerta con un estado y lo persiste en Firestore.
+  const marcarAlerta = useCallback(async (id, estado) => {
+    setEstadosAlertas((s) => ({ ...s, [id]: estado }))
+    await guardarEstadoAlerta(activeCompanyId, id, estado).catch(() => {})
+  }, [activeCompanyId])
+  // Reactiva una alerta (borra su estado).
+  const reactivarAlerta = useCallback(async (id) => {
+    setEstadosAlertas((s) => { const n = { ...s }; delete n[id]; return n })
+    await borrarEstadoAlerta(activeCompanyId, id).catch(() => {})
+  }, [activeCompanyId])
+  // Compat: descartar = marcar como descartada.
+  const descartarAlerta = useCallback((id) => marcarAlerta(id, 'descartada'), [marcarAlerta])
 
   const empresaActiva = companies.find((c) => c.id === activeCompanyId) || null
 
@@ -177,11 +201,13 @@ export function DataProvider({ children }) {
     invoicesRango,
     facturaRango,
     invAnterior,
+    alertasTodas,
     alertasVisibles,
     numAlertas: alertasVisibles.length,
-    alertasDescartadas,
+    estadosAlertas,
+    marcarAlerta,
+    reactivarAlerta,
     descartarAlerta,
-    restaurarAlertas,
     selectedCity,
     setSelectedCity,
     cargando,

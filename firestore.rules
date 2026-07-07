@@ -66,5 +66,23 @@ service cloud.firestore {
       allow create: if inCompany(request.resource.data.companyId);
       allow update, delete: if inCompany(resource.data.companyId);
     }
+    // Managers (sueldo fijo semanal) — costo de empresa.
+    match /managers/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+    // Estado persistido de cada alerta (resuelta / descartada).
+    match /alertEstados/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+    // Configuración por empresa.
+    match /settings/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
   }
 }

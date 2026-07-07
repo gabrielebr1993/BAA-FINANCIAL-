@@ -7,6 +7,7 @@ import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
 import { SECCIONES } from '../constants'
+import CampanaAlertas from './CampanaAlertas'
 
 function ThemeToggle() {
   const { oscuro, alternar } = useTheme()
@@ -149,18 +150,9 @@ function SidebarContent({ onNavigate }) {
 }
 
 export default function Layout({ children }) {
-  const { numAlertas } = useData()
   const [abierto, setAbierto] = useState(false)
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 text-brand-navy dark:border-slate-700/60 dark:bg-surface-dark-card dark:text-white md:hidden">
-        <button onClick={() => setAbierto(true)} className="relative" aria-label="Abrir menú">
-          <Menu size={24} strokeWidth={1.8} />
-          {numAlertas > 0 && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500" />}
-        </button>
-        <span className="font-extrabold">Gofo</span>
-      </div>
-
       <div className="flex">
         <div className="sticky top-0 hidden h-screen md:block">
           <SidebarContent />
@@ -174,7 +166,20 @@ export default function Layout({ children }) {
           </div>
         )}
 
-        <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header global con campana de alertas en todas las páginas. */}
+          <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
+            <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white md:hidden" aria-label="Abrir menú">
+              <Menu size={24} strokeWidth={1.8} />
+            </button>
+            <span className="font-extrabold text-brand-navy dark:text-white md:hidden">Gofo</span>
+            <div className="ml-auto">
+              <CampanaAlertas />
+            </div>
+          </header>
+
+          <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+        </div>
       </div>
     </div>
   )

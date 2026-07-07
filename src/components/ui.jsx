@@ -109,6 +109,7 @@ const BADGE = {
   gold: 'bg-brand-gold/15 text-yellow-700 dark:text-brand-gold',
   green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   red: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  blue: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
   slate: 'bg-slate-400/15 text-slate-600 dark:text-slate-300',
 }
 export function Badge({ children, color = 'navy', title }) {
