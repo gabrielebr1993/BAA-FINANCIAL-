@@ -42,7 +42,10 @@ export function rangoRealDeHoja(sheet) {
     if (cell.c > maxC) maxC = cell.c
   }
   if (maxR < 0) return null
-  return XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: Math.max(0, maxC) } })
+  const rango = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: Math.max(0, maxC) } })
+  // Sobreescribe el "!ref" malo con el real (doble seguro: además se pasa `range`).
+  sheet['!ref'] = rango
+  return rango
 }
 
 // Lee la hoja como MATRIZ (array de arrays), garantizando que se recorren TODAS
