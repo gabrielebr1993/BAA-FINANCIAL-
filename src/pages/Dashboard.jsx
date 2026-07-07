@@ -17,11 +17,12 @@ import PanelClaims from '../components/PanelClaims'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
+import Onboarding from '../components/Onboarding'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, selectedCity, setSelectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, selectedCity, setSelectedCity, vista, cargando } = useData()
   const navigate = useNavigate()
   // Navega a una sección y, opcionalmente, preselecciona la ciudad de destino.
   const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
@@ -86,14 +87,23 @@ export default function Dashboard() {
 
   const porSemana = variasSemanas && vista === 'porSemana'
 
+  // Mostrar onboarding solo a empresas nuevas (sin flag y sin facturas) o si se
+  // reabrió explícitamente desde "primeros pasos" (onboardingCompleto === false).
+  // Nunca a empresas que ya operan (no molesta a las existentes).
+  const onbAbierto = !!ajustes && (ajustes.onboardingCompleto === false || (ajustes.onboardingCompleto === undefined && invoices.length === 0))
+
   return (
     <div>
       <PageTitle right={<><RangeSelector /><CitySelector /></>}>Dashboard</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />
+      ) : onbAbierto && invoices.length === 0 ? (
+        /* Empresa nueva / vacía: pantalla de bienvenida y guía. */
+        <Onboarding />
       ) : (
         <>
+          {onbAbierto && <Onboarding />}
           {alertas.length > 0 && (
             <Aviso tipo="warn">
               <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>

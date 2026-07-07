@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { Save, Info } from 'lucide-react'
+import { Save, Info, Compass } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, CIUDADES } from '../constants'
+import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO } from '../constants'
+import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
+import MisCiudades from '../components/MisCiudades'
 
 export default function Configuracion() {
-  const { activeCompanyId, empresaActiva } = useData()
+  const { activeCompanyId, empresaActiva, reloadAjustes } = useData()
+  const navigate = useNavigate()
   const [marca, setMarca] = useState('')
   const [notas, setNotas] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -29,7 +33,7 @@ export default function Configuracion() {
     setGuardando(true)
     setOk('')
     try {
-      await setDoc(doc(db, 'settings', activeCompanyId), { marca, notas, actualizadoEn: serverTimestamp() }, { merge: true })
+      await setDoc(doc(db, 'settings', activeCompanyId), { companyId: activeCompanyId, marca, notas, actualizadoEn: serverTimestamp() }, { merge: true })
       setOk('Configuración guardada.')
     } finally {
       setGuardando(false)
@@ -66,17 +70,16 @@ export default function Configuracion() {
           </div>
         </Card>
 
-        {/* Ciudades / almacenes */}
+        {/* Ciudades propias de la empresa */}
+        <MisCiudades />
+
+        {/* Primeros pasos / onboarding */}
         <Card className="p-5">
-          <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Ciudades / almacenes</h3>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(CIUDADES).map(([codigo, nombre]) => (
-              <span key={codigo} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 dark:bg-slate-700/50 dark:text-slate-200">
-                {nombre} <span className="text-slate-400">({codigo})</span>
-              </span>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-slate-400">Puedes agregar ciudades nuevas al cargar una factura (se detectan por el prefijo de la ruta).</p>
+          <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Compass size={18} strokeWidth={1.8} className="text-brand-gold" /> Primeros pasos</h3>
+          <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">¿Quieres volver a ver la guía de configuración inicial (agregar ciudades, cargar tu primera factura y revisar el dashboard)?</p>
+          <Boton variant="ghost" disabled={!activeCompanyId} onClick={async () => { await setOnboardingCompleto(activeCompanyId, false); await reloadAjustes(); navigate('/') }}>
+            <Compass size={16} strokeWidth={1.8} /> Ver guía de primeros pasos
+          </Boton>
         </Card>
 
         {/* Marca de la empresa (editable) */}

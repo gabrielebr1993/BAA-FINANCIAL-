@@ -1,20 +1,20 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
-import { CIUDADES, nombreCiudad } from '../constants'
+import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2 } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -33,6 +33,9 @@ export default function CargarFactura() {
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
   const [decisiones, setDecisiones] = useState({}) // { waybill: 'aprobado' | 'anulado' }
+  const [verExistentes, setVerExistentes] = useState(false)
+  const [editExist, setEditExist] = useState({}) // nombre -> { ind, doble }
+  const [guardandoExist, setGuardandoExist] = useState(false)
   const inputRef = useRef(null)
 
   const reset = () => {
@@ -50,14 +53,14 @@ export default function CargarFactura() {
 
   const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
 
-  // Opciones del selector de ciudad: estándar + personalizadas + detectadas.
+  // Opciones del selector de ciudad: las de ESTA empresa + personalizadas + detectadas.
   const opcionesCiudad = useMemo(() => {
     const map = new Map()
-    Object.entries(CIUDADES).forEach(([codigo, nombre]) => map.set(codigo, nombre))
+    ;(ciudadesEmpresa || []).forEach((c) => { if (c.codigo) map.set(c.codigo, c.nombre) })
     ciudadesExtra.forEach((c) => map.set(c.codigo, c.nombre))
     procesados.forEach((p) => p.ciudadesDetectadas.forEach((code) => { if (!map.has(code)) map.set(code, nombreCiudad(code)) }))
     return [...map.entries()].map(([codigo, nombre]) => ({ codigo, nombre }))
-  }, [ciudadesExtra, procesados])
+  }, [ciudadesEmpresa, ciudadesExtra, procesados])
 
   // Combinado recalculado con la ciudad MANUAL de cada archivo.
   const combinado = useMemo(() => {
@@ -141,11 +144,12 @@ export default function CargarFactura() {
     setNuevaCiudad({ codigo: '', nombre: '' })
   }
 
-  // ---- choferes nuevos / precios ----
-  const choferesNuevos = useMemo(
-    () => (combinado ? [...new Set(combinado.resumenChoferes.map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n)).sort() : []),
-    [combinado, drivers]
-  )
+  // ---- choferes: reconocidos (tarifa guardada) vs nuevos (sin precio) ----
+  const tienePrecio = (d) => d && Number(d.precioIndividual) > 0 && Number(d.precioDoble) > 0
+  const nombresFactura = useMemo(() => (combinado ? [...new Set(combinado.resumenChoferes.map((c) => c.nombre))] : []), [combinado])
+  // Nuevo = no existe en drivers, o existe pero sin precio (match por nombre normalizado).
+  const choferesNuevos = useMemo(() => nombresFactura.filter((n) => !tienePrecio(buscarDriver(drivers, n))).sort(), [nombresFactura, drivers])
+  const reconocidos = useMemo(() => nombresFactura.filter((n) => tienePrecio(buscarDriver(drivers, n))).sort(), [nombresFactura, drivers])
   const setPrecio = (courier, campo, valor) => setPrecios((p) => ({ ...p, [courier]: { ...(p[courier] || { ind: '', doble: '' }), [campo]: valor } }))
   const aplicarBulk = () => {
     setPrecios((p) => {
@@ -163,6 +167,33 @@ export default function CargarFactura() {
   const nuevosFiltrados = choferesNuevos.filter((n) => n.toLowerCase().includes(busqueda.trim().toLowerCase()))
   const nConPrecio = choferesNuevos.filter((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0).length
 
+  // Editar tarifas de choferes ya reconocidos (opcional).
+  const valorExist = (n, campo) => {
+    const e = editExist[n]
+    if (e && e[campo] !== undefined) return e[campo]
+    const d = buscarDriver(drivers, n)
+    return (campo === 'ind' ? d?.precioIndividual : d?.precioDoble) ?? ''
+  }
+  const setExist = (n, campo, val) => setEditExist((e) => ({ ...e, [n]: { ...(e[n] || {}), [campo]: val } }))
+  const guardarExistentes = async () => {
+    setGuardandoExist(true)
+    try {
+      for (const [n, v] of Object.entries(editExist)) {
+        const d = buscarDriver(drivers, n)
+        if (!d) continue
+        const ni = v.ind !== undefined && Number(v.ind) > 0 ? Number(v.ind) : Number(d.precioIndividual)
+        const nd = v.doble !== undefined && Number(v.doble) > 0 ? Number(v.doble) : Number(d.precioDoble)
+        if (ni !== Number(d.precioIndividual) || nd !== Number(d.precioDoble)) {
+          await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: ni, precioDoble: nd })
+        }
+      }
+      await reloadDrivers()
+      setEditExist({})
+    } finally {
+      setGuardandoExist(false)
+    }
+  }
+
   const todasCiudadesAsignadas = ciudadPorArchivo.length > 0 && ciudadPorArchivo.every((c) => !!c)
 
   const guardar = async () => {
@@ -176,10 +207,14 @@ export default function CargarFactura() {
     setErrores([])
     try {
       if (choferesNuevos.length > 0) {
+        // Un chofer "nuevo" puede ser inexistente (crear) o existente sin precio
+        // (actualizar), para no duplicarlo. Match por nombre normalizado.
+        const aCrear = choferesNuevos.filter((n) => !buscarDriver(drivers, n))
+        const aActualizar = choferesNuevos.filter((n) => buscarDriver(drivers, n))
         const chunk = 450
-        for (let i = 0; i < choferesNuevos.length; i += chunk) {
+        for (let i = 0; i < aCrear.length; i += chunk) {
           const batch = writeBatch(db)
-          for (const n of choferesNuevos.slice(i, i + chunk)) {
+          for (const n of aCrear.slice(i, i + chunk)) {
             const dref = doc(collection(db, 'drivers'))
             batch.set(dref, {
               nombre: n,
@@ -191,6 +226,10 @@ export default function CargarFactura() {
             })
           }
           await batch.commit()
+        }
+        for (const n of aActualizar) {
+          const d = buscarDriver(drivers, n)
+          await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: Number(precios[n].ind) || 0, precioDoble: Number(precios[n].doble) || 0, activo: true })
         }
         await reloadDrivers()
       }
@@ -312,6 +351,12 @@ export default function CargarFactura() {
 
       {!activeCompanyId && (
         <Aviso tipo="warn">No hay una empresa activa. Ve a <b>Empresas</b> (o pide a tu administrador que te asigne una) antes de cargar facturas.</Aviso>
+      )}
+
+      {activeCompanyId && ciudadesEmpresa.length === 0 && (
+        <Aviso tipo="warn">
+          <span className="inline-flex items-center gap-1.5"><MapPin size={15} strokeWidth={1.8} /> Aún no configuraste las ciudades de tu empresa. Agrégalas en <b>Configuración → Mis ciudades</b> (o al asignar la ciudad de cada archivo, abajo).</span>
+        </Aviso>
       )}
 
       <div
@@ -453,6 +498,52 @@ export default function CargarFactura() {
             <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
             <KPI label="Claims válidos" value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} filas · ${casosRepetidos.length} repetido(s)` : `${combinado.totalClaims} filas`} />
           </div>
+
+          {/* Resumen: reconocidos (tarifa guardada) vs nuevos */}
+          <Aviso tipo={choferesNuevos.length === 0 ? 'ok' : 'info'}>
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+              <Users size={15} strokeWidth={1.8} />
+              <b>{reconocidos.length}</b> chofer(es) reconocidos con su tarifa guardada · <b>{choferesNuevos.length}</b> nuevo(s)
+              {choferesNuevos.length === 0 ? '. Se procesa directo con las tarifas guardadas.' : ' que requieren precio.'}
+            </span>
+          </Aviso>
+
+          {/* Ver/editar choferes existentes (opcional) */}
+          {reconocidos.length > 0 && (
+            <Card className="mb-4 p-4">
+              <button onClick={() => setVerExistentes((v) => !v)} className="flex w-full items-center gap-2 text-left text-sm font-semibold text-brand-navy dark:text-slate-100">
+                <ChevronDown size={16} strokeWidth={2} className={`transition ${verExistentes ? 'rotate-180' : ''}`} /> Ver/editar choferes existentes ({reconocidos.length})
+              </button>
+              {verExistentes && (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Opcional: cambia una tarifa antes de procesar. Si no tocas nada, se usan las tarifas guardadas.</p>
+                  <div className="scroll-thin max-h-80 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="sticky top-0"><tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <th className="px-3 py-2 text-left font-semibold">Chofer</th>
+                        <th className="px-3 py-2 text-right font-semibold">Precio individual</th>
+                        <th className="px-3 py-2 text-right font-semibold">Precio doble</th>
+                      </tr></thead>
+                      <tbody>
+                        {reconocidos.map((n, i) => (
+                          <tr key={n} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
+                            <td className="px-3 py-1.5">{n}</td>
+                            <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'ind')} onChange={(e) => setExist(n, 'ind', e.target.value)} /></td>
+                            <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'doble')} onChange={(e) => setExist(n, 'doble', e.target.value)} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3">
+                    <Boton variant="gold" disabled={guardandoExist || Object.keys(editExist).length === 0} onClick={guardarExistentes}>
+                      {guardandoExist ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> Guardar cambios de tarifas</>}
+                    </Boton>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
 
           {choferesNuevos.length > 0 && (
             <Card className="mb-4 border-2 border-brand-gold/60 p-4">

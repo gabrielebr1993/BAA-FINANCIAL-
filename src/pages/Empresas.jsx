@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { collection, addDoc, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../firebase'
+import { Copy, Check, Building2, UserPlus } from 'lucide-react'
+import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { PERMISOS } from '../constants'
@@ -13,6 +14,10 @@ export default function Empresas() {
   const [creando, setCreando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [crearOwnerTambien, setCrearOwnerTambien] = useState(true)
+  const [ownerNuevo, setOwnerNuevo] = useState({ nombre: '', email: '', password: '' })
+  const [resumenAcceso, setResumenAcceso] = useState(null)
+  const [copiado, setCopiado] = useState(false)
   const [ownerForm, setOwnerForm] = useState({ uid: '', nombre: '', email: '', companyId: '' })
   const [guardandoOwner, setGuardandoOwner] = useState(false)
 
@@ -27,20 +32,46 @@ export default function Empresas() {
 
   const crearEmpresa = async () => {
     if (!nombre.trim()) return setError('Escribe el nombre de la empresa.')
-    setCreando(true)
-    setError('')
-    setOk('')
+    if (crearOwnerTambien) {
+      if (!ownerNuevo.nombre.trim() || !ownerNuevo.email.trim()) return setError('Completa nombre y email del dueño (o desmarca "crear también el usuario dueño").')
+      if (String(ownerNuevo.password).length < 6) return setError('La contraseña del dueño debe tener al menos 6 caracteres.')
+    }
+    setCreando(true); setError(''); setOk(''); setResumenAcceso(null)
     try {
       const ref = await addDoc(collection(db, 'companies'), { nombre: nombre.trim(), activo: true, creadaEn: serverTimestamp() })
       await reloadCompanies()
       setActiveCompanyId(ref.id)
+      if (crearOwnerTambien) {
+        const permissions = {}
+        PERMISOS.forEach((p) => (permissions[p.key] = true))
+        const token = await auth.currentUser.getIdToken()
+        const resp = await fetch('/api/crear-usuario', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ nombre: ownerNuevo.nombre.trim(), email: ownerNuevo.email.trim(), password: ownerNuevo.password, role: 'owner', permissions, companyId: ref.id }),
+        })
+        const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
+        if (!resp.ok || !data.ok) {
+          setError(`Empresa "${nombre.trim()}" creada, pero no se pudo crear el dueño: ${data.error || ''} Puedes crearlo abajo (modo manual con UID).`)
+          setNombre('')
+          return
+        }
+        setResumenAcceso({ empresa: nombre.trim(), email: ownerNuevo.email.trim(), password: ownerNuevo.password, link: window.location.origin })
+        setOwnerNuevo({ nombre: '', email: '', password: '' })
+      }
       setNombre('')
-      setOk('Empresa creada y activada.')
+      setOk(crearOwnerTambien ? 'Empresa y usuario dueño creados.' : 'Empresa creada y activada.')
     } catch (e) {
       setError('Error al crear la empresa: ' + e.message)
     } finally {
       setCreando(false)
     }
+  }
+
+  const copiarAcceso = async () => {
+    if (!resumenAcceso) return
+    const txt = `Empresa creada. Acceso del cliente:\nCorreo: ${resumenAcceso.email}\nContraseña: ${resumenAcceso.password}\nLink: ${resumenAcceso.link}`
+    try { await navigator.clipboard.writeText(txt); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { /* noop */ }
   }
 
   const toggleActivo = async (c) => {
@@ -83,15 +114,43 @@ export default function Empresas() {
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Crear empresa</h3>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre de la empresa</div>
-            <Input className="w-64" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Gofo / BAA Financial" />
-          </div>
-          <Boton variant="gold" onClick={crearEmpresa} disabled={creando}>{creando ? 'Creando…' : 'Crear empresa'}</Boton>
+        <h3 className="m-0 mb-3 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Building2 size={18} strokeWidth={1.8} className="text-brand-gold" /> Crear empresa cliente</h3>
+        <div className="mb-3">
+          <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre de la empresa</div>
+          <Input className="w-72" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. BAA Financial" />
         </div>
+
+        <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input type="checkbox" checked={crearOwnerTambien} onChange={(e) => setCrearOwnerTambien(e.target.checked)} />
+          <UserPlus size={15} strokeWidth={1.8} /> Crear también el usuario dueño (owner) de esta empresa
+        </label>
+
+        {crearOwnerTambien && (
+          <div className="mb-3 flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
+            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre del dueño</div><Input className="w-48" value={ownerNuevo.nombre} onChange={(e) => setOwnerNuevo((o) => ({ ...o, nombre: e.target.value }))} placeholder="Ej. Juan Pérez" /></div>
+            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Email</div><Input className="w-56" type="email" value={ownerNuevo.email} onChange={(e) => setOwnerNuevo((o) => ({ ...o, email: e.target.value }))} placeholder="cliente@correo.com" /></div>
+            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Contraseña (mín. 6)</div><Input className="w-44" value={ownerNuevo.password} onChange={(e) => setOwnerNuevo((o) => ({ ...o, password: e.target.value }))} placeholder="la que tú definas" /></div>
+          </div>
+        )}
+
+        <Boton variant="gold" onClick={crearEmpresa} disabled={creando}>{creando ? 'Creando…' : crearOwnerTambien ? 'Crear empresa y dueño' : 'Crear empresa'}</Boton>
+        <p className="mt-2 text-xs text-slate-400">El dueño se crea con acceso completo (Firebase Admin, sin UID manual) y solo verá su empresa. Requiere FIREBASE_SERVICE_ACCOUNT_BASE64 en el servidor.</p>
       </Card>
+
+      {resumenAcceso && (
+        <Card className="mb-4 border-2 border-emerald-400/60 p-4">
+          <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Check size={18} strokeWidth={2} className="text-emerald-500" /> Acceso del cliente — pásaselo</h3>
+          <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+            <div><span className="text-slate-400">Empresa:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.empresa}</b></div>
+            <div><span className="text-slate-400">Correo:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.email}</b></div>
+            <div><span className="text-slate-400">Contraseña:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.password}</b></div>
+            <div><span className="text-slate-400">Link:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.link}</b></div>
+          </div>
+          <Boton variant={copiado ? 'success' : 'primary'} onClick={copiarAcceso} className="mt-3">
+            {copiado ? <><Check size={16} strokeWidth={2} /> Copiado</> : <><Copy size={16} strokeWidth={1.8} /> Copiar datos de acceso</>}
+          </Boton>
+        </Card>
+      )}
 
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Empresas registradas ({companies.length})</h3>
