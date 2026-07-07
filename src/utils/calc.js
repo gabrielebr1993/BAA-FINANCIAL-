@@ -466,6 +466,51 @@ export function rankingsRutas(inv, drivers, ciudad) {
   }
 }
 
+// ---- análisis de rutas -------------------------------------------------------
+
+// Tarifa promedio (individual/doble) de los choferes que operan en una ciudad.
+// Si no hay datos de esa ciudad, cae al promedio de todos los choferes activos.
+// (La factura solo guarda el agregado por ruta, no el desglose chofer×ruta, por
+// eso el costo por ruta se estima con la tarifa promedio de su ciudad.)
+export function tarifaPromedio(drivers, resumenChoferes, ciudad) {
+  const media = (arr, f) => { const v = arr.map(f).filter((x) => x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 }
+  const chof = (resumenChoferes || []).filter((c) => !ciudad || c.ciudad === ciudad)
+  const tarifas = chof.map((c) => buscarDriver(drivers, c.nombre)).filter(Boolean)
+  let ind = media(tarifas, (d) => Number(d.precioIndividual) || 0)
+  let dob = media(tarifas, (d) => Number(d.precioDoble) || 0)
+  if (!ind || !dob) {
+    const act = (drivers || []).filter((d) => d.activo !== false)
+    if (!ind) ind = media(act, (d) => Number(d.precioIndividual) || 0)
+    if (!dob) dob = media(act, (d) => Number(d.precioDoble) || 0)
+  }
+  return { ind, dob }
+}
+
+// Rutas con costo de choferes estimado, ganancia, $/paquete, $/lb y calidad.
+export function rutasConGanancia(inv, drivers, ciudad) {
+  const rutas = porCiudad(inv?.resumenRutas || [], ciudad)
+  const rc = inv?.resumenChoferes || []
+  return rutas.map((r) => {
+    const paquetes = r.paquetes || (r.individuales + r.dobles)
+    const t = tarifaPromedio(drivers, rc, r.ciudad)
+    const costoChoferes = r.individuales * t.ind + r.dobles * t.dob
+    const ganancia = r.ingreso - costoChoferes
+    return {
+      ...r,
+      paquetes,
+      precioPorPaquete: r.precioPorPaquete != null ? r.precioPorPaquete : (paquetes > 0 ? r.ingreso / paquetes : 0),
+      precioPorLb: r.precioPorLb != null ? r.precioPorLb : (r.pesoTotalLb > 0 ? r.ingreso / r.pesoTotalLb : 0),
+      tarifaIndProm: t.ind,
+      tarifaDobleProm: t.dob,
+      costoChoferes,
+      ganancia,
+      margen: r.ingreso > 0 ? ganancia / r.ingreso : 0,
+      calidad: paquetes > 0 ? 1 - (r.numClaims || 0) / paquetes : 1,
+      nombreCiudad: r.nombreCiudad || nombreCiudad(r.ciudad),
+    }
+  })
+}
+
 // ---- alertas de cambio de precio ---------------------------------------------
 
 // Compara precios por ruta de la factura nueva vs la anterior. Devuelve las rutas

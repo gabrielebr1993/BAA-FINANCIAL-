@@ -15,6 +15,8 @@ import Choferes from './pages/Choferes'
 import PerfilChofer from './pages/PerfilChofer'
 import TrackingFicha from './pages/TrackingFicha'
 import Pagos from './pages/Pagos'
+import Rutas from './pages/Rutas'
+import RutaFicha from './pages/RutaFicha'
 import Performance from './pages/Performance'
 import Alertas from './pages/Alertas'
 import Comparar from './pages/Comparar'
@@ -48,6 +50,8 @@ export default function App() {
               <Route path="/choferes/:nombre" element={<Page filtro="verDashboard"><PerfilChofer /></Page>} />
               <Route path="/tracking/:waybill" element={<Page filtro="verDashboard"><TrackingFicha /></Page>} />
               <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
+              <Route path="/rutas" element={<Page filtro="verDashboard"><Rutas /></Page>} />
+              <Route path="/rutas/:ruta" element={<Page filtro="verDashboard"><RutaFicha /></Page>} />
               <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
               <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />
               <Route path="/comparar" element={<Page filtro="verDashboard"><Comparar /></Page>} />
