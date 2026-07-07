@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
 import { auth } from './firebase'
-import { COLORS } from './constants'
 import Ilustracion from './components/Ilustracion'
-import { Spinner } from './components/ui'
+import { Spinner, Input, Boton } from './components/ui'
 
-// Traduce códigos de error de Firebase a mensajes claros en español.
 function mensajeError(code) {
   const map = {
     'auth/invalid-email': 'El formato del correo no es válido.',
@@ -18,6 +16,24 @@ function mensajeError(code) {
   return map[code] || 'Ocurrió un error. Inténtalo de nuevo.'
 }
 
+// Íconos de ojo (SVG inline).
+function OjoAbierto() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+function OjoTachado() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  )
+}
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
@@ -25,7 +41,6 @@ export default function Login() {
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(false)
 
-  // recuperación de contraseña
   const [modoReset, setModoReset] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetMsg, setResetMsg] = useState('')
@@ -47,10 +62,7 @@ export default function Login() {
   const enviarReset = async () => {
     setResetMsg('')
     setError('')
-    if (!resetEmail.trim()) {
-      setError('Escribe tu correo para enviarte el enlace.')
-      return
-    }
+    if (!resetEmail.trim()) return setError('Escribe tu correo para enviarte el enlace.')
     setResetCargando(true)
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim())
@@ -62,146 +74,120 @@ export default function Login() {
     }
   }
 
-  const onKey = (e) => e.key === 'Enter' && entrar()
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif', background: COLORS.bg }}>
-      {/* Panel lateral con ilustración */}
-      <div
-        className="gofo-loginhero"
-        style={{
-          flex: 1,
-          background: `linear-gradient(160deg, ${COLORS.navy} 0%, #0d1930 100%)`,
-          color: '#fff',
-          padding: 48,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: COLORS.gold, color: COLORS.navy, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 24 }}>
-            G
-          </div>
-          <div style={{ fontWeight: 800, fontSize: 26 }}>Gofo</div>
+    <div className="flex min-h-screen bg-surface-light">
+      {/* panel ilustración */}
+      <div className="hidden flex-1 flex-col justify-center bg-gradient-to-br from-brand-navy to-brand-navy-900 p-12 text-white md:flex">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-gold text-2xl font-extrabold text-brand-navy">G</div>
+          <div className="text-2xl font-extrabold">Gofo</div>
         </div>
-        <h1 style={{ fontSize: 30, lineHeight: 1.2, margin: '0 0 12px', maxWidth: 420 }}>
-          Gestión de facturas de <span style={{ color: COLORS.gold }}>reparto</span>
+        <h1 className="m-0 mb-3 max-w-md text-3xl font-bold leading-tight">
+          Gestión de facturas de <span className="text-brand-gold">reparto</span>
         </h1>
-        <p style={{ color: '#aebbd4', maxWidth: 400, margin: '0 0 24px', fontSize: 15 }}>
+        <p className="m-0 mb-6 max-w-sm text-[15px] text-slate-300">
           Verifica tus totales con Gofo al centavo, controla pagos a choferes y mide el rendimiento por ciudad.
         </p>
         <Ilustracion height={280} />
       </div>
 
-      {/* Panel del formulario */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ width: '100%', maxWidth: 360 }}>
+      {/* panel formulario */}
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="w-full max-w-sm">
           {!modoReset ? (
             <>
-              <h2 style={{ color: COLORS.navy, margin: '0 0 4px' }}>Iniciar sesión</h2>
-              <p style={{ color: COLORS.muted, margin: '0 0 24px', fontSize: 14 }}>Entra para acceder a tu panel.</p>
+              <h2 className="m-0 mb-1 text-2xl font-bold text-brand-navy">Iniciar sesión</h2>
+              <p className="m-0 mb-6 text-sm text-slate-500">Entra para acceder a tu panel.</p>
 
-              <label style={labelStyle}>Correo</label>
-              <input
+              <label className="mb-1.5 block text-sm font-semibold text-slate-600">Correo</label>
+              <Input
+                className="mb-4 w-full"
                 placeholder="tucorreo@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={onKey}
-                style={inputStyle}
+                onKeyDown={(e) => e.key === 'Enter' && entrar()}
               />
 
-              <label style={labelStyle}>Contraseña</label>
-              <div style={{ position: 'relative', marginBottom: 8 }}>
-                <input
+              <label className="mb-1.5 block text-sm font-semibold text-slate-600">Contraseña</label>
+              <div className="relative mb-2">
+                <Input
+                  className="w-full pr-11"
                   placeholder="••••••••"
                   type={verPass ? 'text' : 'password'}
                   value={pass}
                   onChange={(e) => setPass(e.target.value)}
-                  onKeyDown={onKey}
-                  style={{ ...inputStyle, marginBottom: 0, paddingRight: 44 }}
+                  onKeyDown={(e) => e.key === 'Enter' && entrar()}
                 />
                 <button
                   type="button"
                   onClick={() => setVerPass((v) => !v)}
                   aria-label={verPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  title={verPass ? 'Ocultar' : 'Mostrar'}
-                  style={ojoStyle}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600"
                 >
-                  {verPass ? '🙈' : '👁️'}
+                  {verPass ? <OjoTachado /> : <OjoAbierto />}
                 </button>
               </div>
 
-              <div style={{ textAlign: 'right', marginBottom: 16 }}>
+              <div className="mb-4 text-right">
                 <button
                   type="button"
                   onClick={() => { setModoReset(true); setError(''); setResetEmail(email) }}
-                  style={linkBtnStyle}
+                  className="text-xs font-semibold text-brand-navy underline hover:text-brand-navy-700"
                 >
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
 
-              <button onClick={entrar} disabled={cargando} style={{ ...btnStyle, opacity: cargando ? 0.8 : 1, cursor: cargando ? 'default' : 'pointer' }}>
+              <Boton onClick={entrar} disabled={cargando} className="w-full">
                 {cargando ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <>
                     <Spinner /> Entrando…
-                  </span>
+                  </>
                 ) : (
                   'Entrar'
                 )}
-              </button>
+              </Boton>
 
-              {error && <p style={{ color: COLORS.red, marginTop: 12, fontSize: 14 }}>{error}</p>}
+              {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
             </>
           ) : (
             <>
-              <h2 style={{ color: COLORS.navy, margin: '0 0 4px' }}>Recuperar contraseña</h2>
-              <p style={{ color: COLORS.muted, margin: '0 0 24px', fontSize: 14 }}>
-                Te enviaremos un enlace para crear una nueva contraseña.
-              </p>
+              <h2 className="m-0 mb-1 text-2xl font-bold text-brand-navy">Recuperar contraseña</h2>
+              <p className="m-0 mb-6 text-sm text-slate-500">Te enviaremos un enlace para crear una nueva contraseña.</p>
 
-              <label style={labelStyle}>Correo</label>
-              <input
+              <label className="mb-1.5 block text-sm font-semibold text-slate-600">Correo</label>
+              <Input
+                className="mb-4 w-full"
                 placeholder="tucorreo@ejemplo.com"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && enviarReset()}
-                style={inputStyle}
               />
 
-              <button onClick={enviarReset} disabled={resetCargando} style={{ ...btnStyle, opacity: resetCargando ? 0.8 : 1, cursor: resetCargando ? 'default' : 'pointer' }}>
+              <Boton onClick={enviarReset} disabled={resetCargando} className="w-full">
                 {resetCargando ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <>
                     <Spinner /> Enviando…
-                  </span>
+                  </>
                 ) : (
                   'Enviar enlace'
                 )}
-              </button>
+              </Boton>
 
-              <button type="button" onClick={() => { setModoReset(false); setError(''); setResetMsg('') }} style={{ ...linkBtnStyle, display: 'block', marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => { setModoReset(false); setError(''); setResetMsg('') }}
+                className="mt-4 block text-xs font-semibold text-brand-navy underline hover:text-brand-navy-700"
+              >
                 ← Volver a iniciar sesión
               </button>
 
-              {resetMsg && <p style={{ color: COLORS.green, marginTop: 12, fontSize: 14 }}>{resetMsg}</p>}
-              {error && <p style={{ color: COLORS.red, marginTop: 12, fontSize: 14 }}>{error}</p>}
+              {resetMsg && <p className="mt-3 text-sm text-emerald-600">{resetMsg}</p>}
+              {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
             </>
           )}
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 780px) {
-          .gofo-loginhero { display: none !important; }
-        }
-      `}</style>
     </div>
   )
 }
-
-const labelStyle = { display: 'block', fontSize: 13, color: COLORS.muted, marginBottom: 6, fontWeight: 600 }
-const inputStyle = { width: '100%', padding: '11px 12px', marginBottom: 16, borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 15, outline: 'none' }
-const btnStyle = { width: '100%', padding: 12, background: COLORS.navy, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15 }
-const ojoStyle = { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4, lineHeight: 1 }
-const linkBtnStyle = { background: 'transparent', border: 'none', color: COLORS.navy, cursor: 'pointer', fontSize: 13, fontWeight: 600, textDecoration: 'underline', padding: 0 }

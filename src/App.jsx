@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './AuthContext'
+import { ThemeProvider } from './ThemeContext'
 import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
@@ -23,22 +24,24 @@ function Page({ filtro, children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
-            <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
-            <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
-            <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
-            <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
-            <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
-            <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
-            <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
-            <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
-          </Routes>
-        </BrowserRouter>
-      </DataProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <DataProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
+              <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
+              <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
+              <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
+              <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
+              <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
+              <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
+              <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
+              <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
+            </Routes>
+          </BrowserRouter>
+        </DataProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

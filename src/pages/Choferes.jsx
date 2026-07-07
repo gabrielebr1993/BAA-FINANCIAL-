@@ -3,9 +3,8 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { buscarDriver } from '../utils/calc'
-import { COLORS } from '../constants'
 import { money } from '../utils/format'
-import { Card, PageTitle, Boton, Tabla, Aviso, Badge } from '../components/ui'
+import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input } from '../components/ui'
 
 const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 
@@ -22,7 +21,6 @@ export default function Choferes() {
     setEditId(d.id)
     setForm({ nombre: d.nombre || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', activo: d.activo !== false })
   }
-
   const cancelar = () => {
     setEditId(null)
     setForm(vacio)
@@ -30,10 +28,7 @@ export default function Choferes() {
   }
 
   const guardar = async () => {
-    if (!form.nombre.trim()) {
-      setError('El nombre es obligatorio (debe coincidir con "Courier" del Excel).')
-      return
-    }
+    if (!form.nombre.trim()) return setError('El nombre es obligatorio (debe coincidir con "Courier" del Excel).')
     setGuardando(true)
     setError('')
     try {
@@ -65,7 +60,6 @@ export default function Choferes() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // choferes de la última factura que no tienen tarifa registrada
   const sinTarifa = selectedInvoice
     ? [...new Set((selectedInvoice.resumenChoferes || []).map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n))
     : []
@@ -77,9 +71,9 @@ export default function Choferes() {
       {sinTarifa.length > 0 && (
         <Aviso tipo="warn">
           🚚 Choferes sin tarifa en la última factura ({sinTarifa.length}):
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <div className="mt-2 flex flex-wrap gap-2">
             {sinTarifa.map((n) => (
-              <Boton key={n} variant="ghost" onClick={() => crearRapido(n)} style={{ padding: '5px 10px', fontSize: 13 }}>
+              <Boton key={n} variant="ghost" onClick={() => crearRapido(n)} className="px-2.5 py-1 text-xs">
                 + {n}
               </Boton>
             ))}
@@ -87,21 +81,21 @@ export default function Choferes() {
         </Aviso>
       )}
 
-      <Card style={{ marginBottom: 18 }}>
-        <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>{editId ? 'Editar chofer' : 'Agregar chofer'}</h3>
+      <Card className="mb-5 p-4">
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar chofer' : 'Agregar chofer'}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="flex flex-wrap items-end gap-3">
           <Campo label="Nombre (= Courier del Excel)">
-            <input value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} style={inputStyle} disabled={!!editId} />
+            <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} disabled={!!editId} />
           </Campo>
           <Campo label="Precio individual ($)">
-            <input type="number" step="0.01" value={form.precioIndividual} onChange={(e) => setF('precioIndividual', e.target.value)} style={inputStyle} />
+            <Input className="w-40" type="number" step="0.01" value={form.precioIndividual} onChange={(e) => setF('precioIndividual', e.target.value)} />
           </Campo>
           <Campo label="Precio doble ($)">
-            <input type="number" step="0.01" value={form.precioDoble} onChange={(e) => setF('precioDoble', e.target.value)} style={inputStyle} />
+            <Input className="w-40" type="number" step="0.01" value={form.precioDoble} onChange={(e) => setF('precioDoble', e.target.value)} />
           </Campo>
           <Campo label="Activo">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38 }}>
+            <label className="flex h-10 items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input type="checkbox" checked={form.activo} onChange={(e) => setF('activo', e.target.checked)} /> {form.activo ? 'Sí' : 'No'}
             </label>
           </Campo>
@@ -128,14 +122,14 @@ export default function Choferes() {
         emptyText="Aún no hay choferes registrados."
         renderCell={(row, key) => {
           if (key === 'precioIndividual' || key === 'precioDoble') return money(row[key])
-          if (key === 'activo') return row.activo !== false ? <Badge color={COLORS.green}>Activo</Badge> : <Badge color={COLORS.muted}>Inactivo</Badge>
+          if (key === 'activo') return row.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>
           if (key === 'acciones')
             return (
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <Boton variant="ghost" onClick={() => empezarEdicion(row)} style={{ padding: '5px 10px', fontSize: 13 }}>
+              <div className="flex justify-end gap-2">
+                <Boton variant="ghost" onClick={() => empezarEdicion(row)} className="px-2.5 py-1 text-xs">
                   Editar
                 </Boton>
-                <Boton variant="ghost" onClick={() => toggleActivo(row)} style={{ padding: '5px 10px', fontSize: 13 }}>
+                <Boton variant="ghost" onClick={() => toggleActivo(row)} className="px-2.5 py-1 text-xs">
                   {row.activo !== false ? 'Desactivar' : 'Activar'}
                 </Boton>
               </div>
@@ -147,12 +141,10 @@ export default function Choferes() {
   )
 }
 
-const inputStyle = { padding: '8px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, width: 160 }
-
 function Campo({ label, children }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 4 }}>{label}</div>
+      <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{label}</div>
       {children}
     </div>
   )

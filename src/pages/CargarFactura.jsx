@@ -5,9 +5,10 @@ import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { buscarDriver } from '../utils/calc'
-import { COLORS, nombreCiudad } from '../constants'
+import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, Stat, PageTitle, Boton, Tabla, Aviso, Badge, Spinner } from '../components/ui'
+import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../components/ui'
+import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
@@ -34,10 +35,7 @@ export default function CargarFactura() {
 
   const manejarArchivos = async (fileList) => {
     const files = Array.from(fileList).filter((f) => /\.xlsx?$/i.test(f.name))
-    if (files.length === 0) {
-      setErrores(['No se detectaron archivos .xlsx.'])
-      return
-    }
+    if (files.length === 0) return setErrores(['No se detectaron archivos .xlsx.'])
     reset()
     setProcesando(true)
     const nuevosAvisos = []
@@ -50,18 +48,10 @@ export default function CargarFactura() {
         if (p.errores.length) p.errores.forEach((e) => nuevosErrores.push(`${f.name}: ${e}`))
         procesados.push(p)
       }
-
-      // verificar que todas las semanas coincidan
       const semanas = [...new Set(procesados.map((p) => p.semana).filter(Boolean))]
       let semanaFinal = semanas[0] || ''
-      if (semanas.length > 1) {
-        nuevosAvisos.push(
-          `⚠️ Los archivos tienen semanas distintas (${semanas.join(', ')}). Se usará "${semanaFinal}". Revisa que correspondan a la misma semana.`
-        )
-      }
-      if (!semanaFinal) {
-        nuevosAvisos.push('No se detectó la semana en el nombre de los archivos. Escríbela manualmente antes de guardar.')
-      }
+      if (semanas.length > 1) nuevosAvisos.push(`⚠️ Los archivos tienen semanas distintas (${semanas.join(', ')}). Se usará "${semanaFinal}". Revisa que correspondan a la misma semana.`)
+      if (!semanaFinal) nuevosAvisos.push('No se detectó la semana en el nombre de los archivos. Escríbela manualmente antes de guardar.')
 
       const comb = combinarArchivos(procesados)
       setCombinado(comb)
@@ -91,10 +81,7 @@ export default function CargarFactura() {
 
   const guardar = async () => {
     if (!combinado) return
-    if (!semana.trim()) {
-      setErrores(['Debes indicar la semana antes de guardar.'])
-      return
-    }
+    if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     setGuardando(true)
     setErrores([])
     try {
@@ -106,8 +93,6 @@ export default function CargarFactura() {
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
-
-      // guardar claims en lotes (máx 450 por batch)
       const chunk = 450
       for (let i = 0; i < claims.length; i += chunk) {
         const batch = writeBatch(db)
@@ -131,7 +116,6 @@ export default function CargarFactura() {
         }
         await batch.commit()
       }
-
       await reloadInvoices()
       setSelectedInvoiceId(ref.id)
       setGuardado(true)
@@ -142,138 +126,52 @@ export default function CargarFactura() {
     }
   }
 
-  const v = combinado?.verificacion
-
   return (
     <div>
       <PageTitle>Cargar Factura</PageTitle>
 
-      {/* Zona drag & drop */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragOver(true)
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDragOver(false)
-          manejarArchivos(e.dataTransfer.files)
-        }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); manejarArchivos(e.dataTransfer.files) }}
         onClick={() => inputRef.current?.click()}
-        style={{
-          border: `2px dashed ${dragOver ? COLORS.gold : COLORS.border}`,
-          borderRadius: 12,
-          padding: 40,
-          textAlign: 'center',
-          background: dragOver ? '#fffaf0' : '#fff',
-          cursor: 'pointer',
-          marginBottom: 18,
-        }}
+        className={`mb-4 cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition ${
+          dragOver ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
+        }`}
       >
-        <div style={{ fontSize: 40 }}>⬆️</div>
-        <div style={{ fontWeight: 700, color: COLORS.navy, marginTop: 8 }}>Arrastra uno o varios .xlsx (uno por ciudad)</div>
-        <div style={{ color: COLORS.muted, fontSize: 13, marginTop: 4 }}>o haz clic para seleccionar archivos</div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => manejarArchivos(e.target.files)}
-        />
+        <div className="text-4xl">⬆️</div>
+        <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Arrastra uno o varios .xlsx (uno por ciudad)</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">o haz clic para seleccionar archivos</div>
+        <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
       </div>
 
       {procesando && (
         <Aviso tipo="info">
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            <Spinner size={16} color={COLORS.navy} /> Procesando archivo(s)… puede tardar si tienen 100.000+ filas.
+          <span className="inline-flex items-center gap-2">
+            <Spinner className="text-sky-600" /> Procesando archivo(s)… puede tardar si tienen 100.000+ filas.
           </span>
         </Aviso>
       )}
-      {errores.map((e, i) => (
-        <Aviso key={i} tipo="error">
-          {e}
-        </Aviso>
-      ))}
-      {avisos.map((a, i) => (
-        <Aviso key={i} tipo="warn">
-          {a}
-        </Aviso>
-      ))}
+      {errores.map((e, i) => <Aviso key={i} tipo="error">{e}</Aviso>)}
+      {avisos.map((a, i) => <Aviso key={i} tipo="warn">{a}</Aviso>)}
       {guardado && <Aviso tipo="ok">✅ Factura guardada correctamente en la base de datos.</Aviso>}
 
       {combinado && !guardado && (
         <>
-          {/* Panel de verificación con Gofo */}
-          {v && (
-            <Card style={{ marginBottom: 18, borderColor: v.cuadra === false ? COLORS.red : v.cuadra ? COLORS.green : COLORS.border, borderWidth: 2 }}>
-              <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>Verificación con Gofo</h3>
-              {v.gofo.disponible ? (
-                <>
-                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>Nuestro neto calculado</div>
-                      <div style={{ fontSize: 22, fontWeight: 700 }}>{money(v.netoCalculado)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>Total oficial de Gofo</div>
-                      <div style={{ fontSize: 22, fontWeight: 700 }}>{money(v.gofo.totalGofo)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>Diferencia</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: v.cuadra ? COLORS.green : COLORS.red }}>{money(v.diferencia)}</div>
-                    </div>
-                    <div style={{ marginLeft: 'auto' }}>
-                      {v.cuadra ? (
-                        <Badge color={COLORS.green}>✅ Cuadra con Gofo</Badge>
-                      ) : (
-                        <Badge color={COLORS.red}>⚠️ No cuadra — revisar</Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 16 }}>
-                    <Tabla
-                      columns={[
-                        { key: 'linea', label: 'Línea' },
-                        { key: 'nuestro', label: 'Nuestro cálculo', align: 'right' },
-                        { key: 'gofo', label: 'Gofo (DSP Summary)', align: 'right' },
-                      ]}
-                      rows={[
-                        { _key: 'e', linea: 'Entregas', nuestro: v.sumaEntregas, gofo: null },
-                        { _key: 'o', linea: 'Offset', nuestro: v.sumaOffset, gofo: -Math.abs(v.gofo.offset) },
-                        { _key: 'c', linea: 'Claims', nuestro: v.sumaClaims, gofo: -Math.abs(v.gofo.claim) },
-                        { _key: 'a', linea: 'Ajustes', nuestro: v.sumaAjustes, gofo: -Math.abs(v.gofo.ajuste) },
-                        { _key: 't', linea: 'NETO', nuestro: v.netoCalculado, gofo: v.gofo.totalGofo },
-                      ]}
-                      renderCell={(row, key) => {
-                        if (key === 'linea') return <b style={{ color: row.linea === 'NETO' ? COLORS.navy : undefined }}>{row.linea}</b>
-                        const val = row[key]
-                        return val == null ? '—' : money(val)
-                      }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <Aviso tipo="warn">No se encontró la hoja "DSP Summary" con el total oficial de Gofo. Se muestra solo nuestro neto: {money(v.netoCalculado)}.</Aviso>
-              )}
-            </Card>
-          )}
+          <Verificacion v={combinado.verificacion} />
 
-          {/* Resumen global */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-            <Stat label="Paquetes" value={num(combinado.totalPaquetes)} />
-            <Stat label="Individuales" value={num(combinado.totalIndividuales)} />
-            <Stat label="Dobles" value={num(combinado.totalDobles)} color={COLORS.gold} />
-            <Stat label="Ingreso total" value={money(combinado.ingresoTotal)} color={COLORS.green} />
-            <Stat label="Choferes" value={num(combinado.numChoferes)} />
-            <Stat label="Rutas" value={num(combinado.numRutas)} />
-            <Stat label="Claims" value={num(combinado.totalClaims)} color={COLORS.red} />
+          <div className="mb-4 flex flex-wrap gap-3">
+            <KPI label="Paquetes" value={num(combinado.totalPaquetes)} icon="📦" accent="navy" />
+            <KPI label="Individuales" value={num(combinado.totalIndividuales)} accent="blue" />
+            <KPI label="Dobles" value={num(combinado.totalDobles)} accent="gold" />
+            <KPI label="Ingreso total" value={money(combinado.ingresoTotal)} icon="💵" accent="green" />
+            <KPI label="Choferes" value={num(combinado.numChoferes)} accent="slate" />
+            <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
+            <KPI label="Claims" value={num(combinado.totalClaims)} icon="⚠️" accent="red" />
           </div>
 
-          {/* Resumen por archivo/ciudad */}
-          <Card style={{ marginBottom: 18 }}>
-            <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>Archivos procesados</h3>
+          <Card className="mb-4 p-4">
+            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Archivos procesados</h3>
             <Tabla
               columns={[
                 { key: 'archivo', label: 'Archivo' },
@@ -287,9 +185,8 @@ export default function CargarFactura() {
             />
           </Card>
 
-          {/* Resumen por ciudad */}
-          <Card style={{ marginBottom: 18 }}>
-            <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>Resumen por ciudad</h3>
+          <Card className="mb-4 p-4">
+            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Resumen por ciudad</h3>
             <Tabla
               columns={[
                 { key: 'nombreCiudad', label: 'Ciudad' },
@@ -313,25 +210,18 @@ export default function CargarFactura() {
             </Aviso>
           )}
 
-          <Card>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: 14, color: COLORS.muted }}>Semana:</label>
-              <input
-                value={semana}
-                onChange={(e) => setSemana(e.target.value)}
-                placeholder="ej. 22_06_2026-28_06_2026"
-                style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, minWidth: 240 }}
-              />
-              <Boton onClick={guardar} disabled={guardando} variant="gold" style={{ marginLeft: 'auto' }}>
-                {guardando ? 'Guardando…' : '💾 Guardar en base de datos'}
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm text-slate-500 dark:text-slate-400">Semana:</label>
+              <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder="ej. 22_06_2026-28_06_2026" />
+              <Boton onClick={guardar} disabled={guardando} variant="gold" className="ml-auto">
+                {guardando ? <><Spinner /> Guardando…</> : '💾 Guardar en base de datos'}
               </Boton>
-              <Boton onClick={reset} variant="ghost">
-                Descartar
-              </Boton>
+              <Boton onClick={reset} variant="ghost">Descartar</Boton>
             </div>
-            <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               Se guarda solo el resumen (no los {num(combinado.totalPaquetes)} paquetes) + {num(combinado.totalClaims)} claims individuales. Cargado por {perfil?.nombre}.
-            </div>
+            </p>
           </Card>
         </>
       )}

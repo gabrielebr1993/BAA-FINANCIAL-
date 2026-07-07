@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import { PERMISOS, ROLES, SECCIONES, COLORS } from '../constants'
-import { Card, PageTitle, Boton, Tabla, Aviso, Badge } from '../components/ui'
+import { PERMISOS, ROLES, SECCIONES } from '../constants'
+import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
 
 function permisosVacios() {
   const o = {}
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-
 const formVacio = { uid: '', nombre: '', email: '', role: 'manager', permissions: permisosVacios() }
 
 export default function Usuarios() {
@@ -24,7 +23,6 @@ export default function Usuarios() {
     const snap = await getDocs(collection(db, 'users'))
     setUsuarios(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   }, [])
-
   useEffect(() => {
     cargar()
   }, [cargar])
@@ -38,7 +36,6 @@ export default function Usuarios() {
     setError('')
     setOk('')
   }
-
   const editar = (u) => {
     setEditId(u.id)
     setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
@@ -66,11 +63,7 @@ export default function Usuarios() {
     }
   }
 
-  // resumen de qué podrá ver (owner ve todo)
-  const seccionesPermitidas =
-    form.role === 'owner'
-      ? SECCIONES
-      : SECCIONES.filter((s) => form.permissions[s.permiso])
+  const seccionesPermitidas = form.role === 'owner' ? SECCIONES : SECCIONES.filter((s) => form.permissions[s.permiso])
 
   return (
     <div>
@@ -79,52 +72,59 @@ export default function Usuarios() {
       {error && <Aviso tipo="error">{error}</Aviso>}
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
-      <Card style={{ marginBottom: 18 }}>
-        <h3 style={{ margin: '0 0 12px', color: COLORS.navy }}>{editId ? 'Editar usuario' : 'Crear usuario'}</h3>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+      <Card className="mb-5 p-4">
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar usuario' : 'Crear usuario'}</h3>
+        <div className="mb-4 flex flex-wrap gap-3">
           <Campo label="UID (Firebase Auth)">
-            <input value={form.uid} onChange={(e) => setF('uid', e.target.value)} disabled={!!editId} style={inputStyle} placeholder="uid del usuario" />
+            <Input className="w-52" value={form.uid} onChange={(e) => setF('uid', e.target.value)} disabled={!!editId} placeholder="uid del usuario" />
           </Campo>
           <Campo label="Nombre">
-            <input value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} style={inputStyle} />
+            <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} />
           </Campo>
           <Campo label="Email">
-            <input value={form.email} onChange={(e) => setF('email', e.target.value)} style={inputStyle} />
+            <Input className="w-52" value={form.email} onChange={(e) => setF('email', e.target.value)} />
           </Campo>
           <Campo label="Rol">
-            <select value={form.role} onChange={(e) => setF('role', e.target.value)} style={inputStyle}>
+            <Select className="w-40" value={form.role} onChange={(e) => setF('role', e.target.value)}>
               {ROLES.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
-            </select>
+            </Select>
           </Campo>
         </div>
 
-        <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 8 }}>
+        <div className="mb-2 text-sm text-slate-500 dark:text-slate-400">
           Permisos {form.role === 'owner' ? '(el owner ve todo automáticamente)' : '(elige qué puede ver)'}:
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8, marginBottom: 14, opacity: form.role === 'owner' ? 0.5 : 1 }}>
-          {PERMISOS.map((p) => (
-            <label key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: `1px solid ${COLORS.border}`, borderRadius: 8, cursor: 'pointer' }}>
-              <Switch on={form.role === 'owner' ? true : form.permissions[p.key]} onClick={() => form.role !== 'owner' && togglePermiso(p.key)} />
-              <span style={{ fontSize: 14 }}>{p.label}</span>
-            </label>
-          ))}
+        <div className={`mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 ${form.role === 'owner' ? 'opacity-50' : ''}`}>
+          {PERMISOS.map((p) => {
+            const on = form.role === 'owner' ? true : form.permissions[p.key]
+            return (
+              <label
+                key={p.key}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+                onClick={() => form.role !== 'owner' && togglePermiso(p.key)}
+              >
+                <Switch on={on} />
+                <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
+              </label>
+            )
+          })}
         </div>
 
         <Aviso tipo="info">
           Este usuario podrá ver: {seccionesPermitidas.length === 0 ? 'ninguna sección.' : seccionesPermitidas.map((s) => s.label).join(', ') + '.'}
         </Aviso>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="flex gap-2">
           <Boton onClick={guardar} disabled={guardando} variant="gold">
             {guardando ? 'Guardando…' : editId ? 'Guardar cambios' : 'Crear usuario'}
           </Boton>
           {editId && <Boton onClick={nuevo} variant="ghost">Cancelar</Boton>}
         </div>
-        <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 10 }}>
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
           Nota: el acceso en Firebase Auth (correo/contraseña) se crea aparte. Aquí se crea/edita el documento en la colección <code>users</code> con ese UID.
-        </div>
+        </p>
       </Card>
 
       <Tabla
@@ -138,15 +138,23 @@ export default function Usuarios() {
         rows={usuarios.map((u) => ({ ...u, _key: u.id }))}
         emptyText="No hay usuarios registrados."
         renderCell={(row, key) => {
-          if (key === 'role') return <Badge color={row.role === 'owner' ? COLORS.gold : COLORS.navy}>{row.role}</Badge>
+          if (key === 'role') return <Badge color={row.role === 'owner' ? 'gold' : 'navy'}>{row.role}</Badge>
           if (key === 'permisos') {
-            if (row.role === 'owner') return <Badge color={COLORS.gold}>Todo (owner)</Badge>
+            if (row.role === 'owner') return <Badge color="gold">Todo (owner)</Badge>
             const activos = PERMISOS.filter((p) => row.permissions?.[p.key])
-            return activos.length ? activos.map((p) => <Badge key={p.key}>{p.label}</Badge>) : <span style={{ color: COLORS.muted }}>Sin permisos</span>
+            return activos.length ? (
+              <div className="flex flex-wrap gap-1">
+                {activos.map((p) => (
+                  <Badge key={p.key}>{p.label}</Badge>
+                ))}
+              </div>
+            ) : (
+              <span className="text-slate-400">Sin permisos</span>
+            )
           }
           if (key === 'acciones')
             return (
-              <Boton variant="ghost" onClick={() => editar(row)} style={{ padding: '5px 10px', fontSize: 13 }}>
+              <Boton variant="ghost" onClick={() => editar(row)} className="px-2.5 py-1 text-xs">
                 Editar
               </Boton>
             )
@@ -157,33 +165,19 @@ export default function Usuarios() {
   )
 }
 
-const inputStyle = { padding: '8px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, width: 200 }
-
 function Campo({ label, children }) {
   return (
     <div>
-      <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 4 }}>{label}</div>
+      <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{label}</div>
       {children}
     </div>
   )
 }
 
-function Switch({ on, onClick }) {
+function Switch({ on }) {
   return (
-    <span
-      onClick={onClick}
-      style={{
-        width: 38,
-        height: 22,
-        borderRadius: 20,
-        background: on ? COLORS.green : '#cbd2dc',
-        position: 'relative',
-        display: 'inline-block',
-        transition: 'background .15s',
-        flexShrink: 0,
-      }}
-    >
-      <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+    <span className={`relative inline-block h-5 w-9 flex-shrink-0 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </span>
   )
 }

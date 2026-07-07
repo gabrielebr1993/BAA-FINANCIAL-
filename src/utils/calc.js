@@ -98,6 +98,42 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
   })
 }
 
+// Estimación rápida de totales de una factura (sin depender de la colección de
+// claims perdonados). Trata todos los claims como activos. Útil para comparar
+// tendencia semana-a-semana en los KPIs.
+export function resumenEstimado(inv, drivers, ciudad) {
+  const choferes = porCiudad(inv?.resumenChoferes || [], ciudad)
+  let ingreso = 0, costo = 0, individuales = 0, dobles = 0, claims = 0
+  for (const ch of choferes) {
+    const driver = buscarDriver(drivers, ch.nombre)
+    const tInd = driver ? Number(driver.precioIndividual) || 0 : 0
+    const tDob = driver ? Number(driver.precioDoble) || 0 : 0
+    ingreso += ch.ingreso
+    individuales += ch.individuales
+    dobles += ch.dobles
+    claims += ch.numClaims
+    costo += ch.individuales * tInd + ch.dobles * tDob - ch.numClaims * CLAIM_FEE
+  }
+  const paquetes = individuales + dobles
+  return {
+    ingreso,
+    costo,
+    ganancia: ingreso - costo,
+    individuales,
+    dobles,
+    paquetes,
+    claims,
+    pctDobles: paquetes > 0 ? dobles / paquetes : 0,
+    margen: ingreso > 0 ? (ingreso - costo) / ingreso : 0,
+  }
+}
+
+// Variación relativa (para flechas ▲▼). null si no hay base comparable.
+export function variacion(actual, anterior) {
+  if (anterior == null || anterior === 0) return null
+  return (actual - anterior) / Math.abs(anterior)
+}
+
 // ---- rankings ----------------------------------------------------------------
 
 // Rankings de choferes (productividad, ganancia, calidad) con filtro de ciudad.

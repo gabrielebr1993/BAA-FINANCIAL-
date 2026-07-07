@@ -3,9 +3,9 @@ import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { porCiudad } from '../utils/calc'
-import { CLAIM_FEE, COLORS, nombreCiudad } from '../constants'
+import { CLAIM_FEE, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, Stat, PageTitle, Boton, Tabla, Badge, Cargando, EstadoVacio } from '../components/ui'
+import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector, { InvoiceSelector } from '../components/CitySelector'
 
 export default function Claims() {
@@ -59,38 +59,38 @@ export default function Claims() {
         <Cargando texto="Cargando claims…" />
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-            <Stat label="Total claims" value={num(totalClaims)} />
-            <Stat label="Perdonados" value={num(perdonados)} color={COLORS.green} />
-            <Stat label="Activos" value={num(activos)} color={COLORS.red} />
-            <Stat label="Descuento a choferes" value={money(descuentoChoferes)} sub={`${num(activos)} × $${CLAIM_FEE}`} />
-            <Stat label="Te descontó Gofo" value={money(descuentoGofo)} color={COLORS.red} />
+          <div className="mb-5 flex flex-wrap gap-3">
+            <KPI label="Total claims" value={num(totalClaims)} icon="⚠️" accent="navy" />
+            <KPI label="Perdonados" value={num(perdonados)} icon="🤝" accent="green" />
+            <KPI label="Activos" value={num(activos)} icon="💢" accent="red" />
+            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} accent="gold" sub={`${num(activos)} × $${CLAIM_FEE}`} />
+            <KPI label="Te descontó Gofo" value={money(descuentoGofo)} accent="red" />
           </div>
 
           {!selectedInvoice ? (
             <EstadoVacio texto="Cuando cargues una factura verás aquí todos los claims para perdonarlos o cobrarlos." />
           ) : (
             <>
-              <Card style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select value={fCourier} onChange={(e) => setFCourier(e.target.value)} style={selStyle}>
+              <Card className="mb-4 p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Select value={fCourier} onChange={(e) => setFCourier(e.target.value)}>
                     <option value="">Todos los choferes</option>
                     {couriers.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
-                  </select>
-                  <select value={fTipo} onChange={(e) => setFTipo(e.target.value)} style={selStyle}>
+                  </Select>
+                  <Select value={fTipo} onChange={(e) => setFTipo(e.target.value)}>
                     <option value="">Todos los tipos</option>
                     {tipos.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
-                  </select>
-                  <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} style={selStyle}>
+                  </Select>
+                  <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
                     <option value="">Todos los estados</option>
                     <option value="activo">Solo activos</option>
                     <option value="perdonado">Solo perdonados</option>
-                  </select>
-                  <span style={{ marginLeft: 'auto', color: COLORS.muted, fontSize: 13 }}>{filtrados.length} claim(s)</span>
+                  </Select>
+                  <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{filtrados.length} claim(s)</span>
                 </div>
               </Card>
 
@@ -111,23 +111,23 @@ export default function Claims() {
                   if (key === 'montoGofo') return money(row.montoGofo)
                   if (key === 'ciudad') return nombreCiudad(row.ciudad)
                   if (key === 'estado')
-                    return row.perdonado ? <Badge color={COLORS.green}>Perdonado</Badge> : <Badge color={COLORS.red}>Activo</Badge>
+                    return row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
                   if (key === 'acciones') {
                     if (perdonandoId === row.id)
                       return (
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <input autoFocus placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} style={{ ...selStyle, width: 150 }} />
-                          <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(row)} style={{ padding: '5px 10px', fontSize: 13 }}>OK</Boton>
-                          <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} style={{ padding: '5px 10px', fontSize: 13 }}>✕</Boton>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Input autoFocus className="w-36" placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+                          <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(row)} className="px-2.5 py-1 text-xs">OK</Boton>
+                          <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2.5 py-1 text-xs">✕</Boton>
                         </div>
                       )
                     return row.perdonado ? (
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {row.motivo && <span style={{ fontSize: 12, color: COLORS.muted, alignSelf: 'center' }} title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
-                        <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} style={{ padding: '5px 10px', fontSize: 13 }}>Quitar perdón</Boton>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {row.motivo && <span className="self-center text-xs text-slate-400" title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
+                        <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} className="px-2.5 py-1 text-xs">Quitar perdón</Boton>
                       </div>
                     ) : (
-                      <Boton variant="ghost" onClick={() => { setPerdonandoId(row.id); setMotivo('') }} style={{ padding: '5px 10px', fontSize: 13 }}>Perdonar</Boton>
+                      <Boton variant="ghost" onClick={() => { setPerdonandoId(row.id); setMotivo('') }} className="px-2.5 py-1 text-xs">Perdonar</Boton>
                     )
                   }
                   return row[key] || '—'
@@ -140,5 +140,3 @@ export default function Claims() {
     </div>
   )
 }
-
-const selStyle = { padding: '8px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, background: '#fff' }
