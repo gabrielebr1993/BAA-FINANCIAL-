@@ -80,13 +80,12 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
   //    que Gofo ya te descontó y que absorbes al perdonar.
   const ec = economiaClaims(claims)
   if (ec.perdonados > 0) {
-    const costoPerdones = ec.perdonados * 100 + ec.perdidaAbsorbida
     alertas.push({
       id: 'claimsPerdonados',
       tipo: 'yellow',
       categoria: 'Dinero',
-      titulo: `Perdonaste ${ec.perdonados} claim(s): te costaron ${money(costoPerdones)}`,
-      detalle: `${money(ec.perdonados * 100)} que dejaste de cobrar a los choferes + ${money(ec.perdidaAbsorbida)} que Gofo ya te descontó.`,
+      titulo: `Perdonaste ${ec.perdonados} claim(s): te costaron ${money(ec.perdidaAbsorbida)}`,
+      detalle: `Tu única pérdida real es lo que Gofo te descontó por esos claims (monto variable): ${money(ec.perdidaAbsorbida)}. Los $100 por claim son una multa que dejas de cobrar, no una pérdida.`,
       link: '/claims',
     })
   }

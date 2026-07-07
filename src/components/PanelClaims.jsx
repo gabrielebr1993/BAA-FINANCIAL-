@@ -1,7 +1,8 @@
-// Panel "Ganancia por claims" (Orden 3).
-// El chofer paga $100 fijo por cada claim NO perdonado (cobradoChoferes).
-// Gofo descuenta un monto variable por cada claim (descontadoGofo, ya en el neto).
-// Perdonar = renunciar a los $100 y ABSORBER lo que Gofo cobró (perdidaAbsorbida).
+// Panel "Ganancia por claims".
+// Multa al chofer: $100 fijo por claim NO perdonado (cobradoChoferes).
+// Descuento de Gofo: monto VARIABLE por claim (descontadoGofo, ya en el neto).
+// Perdonar = no cobrar los $100 (multa que dejas de cobrar, NO pérdida) y solo
+// absorber el montoGofo REAL de ese claim (perdidaAbsorbida, variable por claim).
 // Ganancia neta por claims = cobradoChoferes − descontadoGofo.
 import { economiaClaims } from '../utils/calc'
 import { money, num } from '../utils/format'
@@ -32,21 +33,27 @@ export default function PanelClaims({ claims, compacto = false }) {
       </div>
 
       <div className="space-y-1.5 text-sm">
-        <Fila label={`Cobrado a choferes (${num(e.activos)} × $100)`} valor={e.cobradoChoferes} />
-        <Fila label="Descontado por Gofo" valor={e.descontadoGofo} negativo />
-        {e.perdonados > 0 && <Fila label={`Pérdida absorbida por perdones (${num(e.perdonados)})`} valor={e.perdidaAbsorbida} negativo />}
+        <Fila label={`Multas cobradas a choferes (${num(e.activos)} × $100)`} valor={e.cobradoChoferes} />
+        <Fila label="Descontado por Gofo (todos los claims, variable)" valor={e.descontadoGofo} negativo />
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
           <span className="font-bold text-brand-navy dark:text-slate-100">GANANCIA NETA POR CLAIMS</span>
           <span className={`text-xl font-extrabold ${e.gananciaNetaClaims >= 0 ? 'text-brand-gold' : 'text-rose-600 dark:text-rose-400'}`}>
             {money(e.gananciaNetaClaims)}
           </span>
         </div>
+        {e.perdonados > 0 && (
+          <div className="mt-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>De lo anterior, perdonar {num(e.perdonados)} claim(s) te costó (solo lo de Gofo)</span>
+            <span className="font-semibold text-rose-600 dark:text-rose-400">{money(e.perdidaAbsorbida)}</span>
+          </div>
+        )}
       </div>
 
       {!compacto && (
         <p className="mt-3 text-xs text-slate-400">
-          El descuento de Gofo ya está reflejado en el neto verificado. Perdonar un claim te cuesta los $100 que
-          dejas de cobrar más el monto que Gofo ya te descontó.
+          El descuento de Gofo ya está reflejado en el neto verificado. Perdonar un claim solo te cuesta el monto
+          que Gofo te descontó por ESE claim (variable, ej. $40 o $1); los $100 son una multa al chofer que dejas
+          de cobrar, no una pérdida de tu bolsillo.
         </p>
       )}
     </Card>
