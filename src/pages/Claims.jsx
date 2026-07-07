@@ -126,6 +126,9 @@ export default function Claims() {
                     return row.perdonado ? (
                       <div className="flex items-center justify-end gap-1.5">
                         {row.motivo && <span className="self-center text-xs text-slate-400" title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
+                        <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title="Los $100 que dejaste de cobrar más lo que Gofo ya te descontó">
+                          te costó {money(CLAIM_FEE + Math.abs(Number(row.montoGofo) || 0))}
+                        </span>
                         <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} className="px-2.5 py-1 text-xs">Quitar perdón</Boton>
                       </div>
                     ) : (

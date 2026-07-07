@@ -9,6 +9,7 @@ import { Card, KPI, PageTitle, Tabla, Boton, Cargando, EstadoVacio } from '../co
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
+import PanelClaims from '../components/PanelClaims'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -73,6 +74,7 @@ export default function Financiero() {
         <>
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
           {selectedInvoice && <GananciaReal g={gReal} />}
+          {selectedInvoice && <PanelClaims claims={porCiudad(claims, selectedCity)} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon={DollarSign} accent="green" />

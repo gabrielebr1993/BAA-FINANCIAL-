@@ -12,6 +12,7 @@ import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card } from
 import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
+import PanelClaims from '../components/PanelClaims'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -143,6 +144,8 @@ export default function Dashboard() {
                 <Verificacion v={inv.verificacion} compacto />
                 <GananciaReal g={gReal} />
               </div>
+
+              <PanelClaims claims={porCiudad(claims, selectedCity)} compacto />
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />

@@ -177,6 +177,28 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
   }
 }
 
+// Economía de claims. El chofer paga $100 fijo por cada claim NO perdonado.
+// Gofo descuenta un monto variable (montoGofo) por cada claim, ya incluido en el
+// neto. Perdonar = no cobrar los $100 y ABSORBER el monto que Gofo cobró.
+export function economiaClaims(claims) {
+  const lista = claims || []
+  const total = lista.length
+  const perdonados = lista.filter((c) => c.perdonado).length
+  const activos = total - perdonados
+  const cobradoChoferes = activos * CLAIM_FEE
+  const descontadoGofo = lista.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
+  const perdidaAbsorbida = lista.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
+  return {
+    total,
+    perdonados,
+    activos,
+    cobradoChoferes,
+    descontadoGofo,
+    perdidaAbsorbida,
+    gananciaNetaClaims: cobradoChoferes - descontadoGofo,
+  }
+}
+
 // ---- rankings ----------------------------------------------------------------
 
 // Rankings de choferes (productividad, ganancia, calidad) con filtro de ciudad.
