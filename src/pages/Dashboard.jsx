@@ -14,6 +14,7 @@ import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useCh
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
+import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -216,6 +217,14 @@ export default function Dashboard() {
                 <MiniLista titulo="Más ingreso" rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
                 <MiniLista titulo="Mejor $/lb" rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
               </div>
+
+              {porCiudad(claims, selectedCity).length > 0 && (
+                <>
+                  <h2 className="mb-1 mt-6 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h2>
+                  <p className="mb-3 text-xs text-slate-400">Choferes con más claims por tipo. Haz clic para ver su detalle.</p>
+                  <RankingClaimsTipo claims={porCiudad(claims, selectedCity)} compacto />
+                </>
+              )}
             </>
           )}
         </>

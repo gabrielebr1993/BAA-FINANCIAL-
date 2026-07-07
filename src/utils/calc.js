@@ -199,6 +199,54 @@ export function economiaClaims(claims) {
   }
 }
 
+// ---- ranking de claims por tipo ----------------------------------------------
+
+// Etiquetas en español para los tipos de claim conocidos (Claim Type de Gofo).
+// Se comparan en minúsculas; los tipos no listados se muestran tal cual.
+const ETIQUETAS_CLAIM = {
+  'tracking interruption': 'Interrupción de tracking',
+  'fake pod': 'POD falso',
+  'damaged item': 'Artículo dañado',
+  'lost': 'Perdido',
+}
+export function etiquetaTipoClaim(tipo) {
+  if (!tipo) return 'Sin tipo'
+  return ETIQUETAS_CLAIM[String(tipo).trim().toLowerCase()] || String(tipo).trim()
+}
+
+// Ranking de choferes por TIPO de claim, a partir del detalle de claims
+// (Claim Type + Courier). Detecta los tipos dinámicamente.
+// Devuelve:
+//   tipos  : [{ key, raw, label }]  tipos presentes (orden alfabético por etiqueta)
+//   matriz : [{ courier, total, porTipo: { [key]: n } }]  ordenado por total desc
+//   porTipo: { [key]: [{ courier, n }] }  ranking por cada tipo (desc)
+export function rankingClaimsPorTipo(claims) {
+  const lista = claims || []
+  const tiposMap = new Map() // key normalizado -> etiqueta cruda representativa
+  const porCourier = {}
+  for (const c of lista) {
+    const raw = (c.claimType || 'Sin tipo').trim() || 'Sin tipo'
+    const key = raw.toLowerCase()
+    if (!tiposMap.has(key)) tiposMap.set(key, raw)
+    const courier = c.courier || '—'
+    if (!porCourier[courier]) porCourier[courier] = { courier, total: 0, porTipo: {} }
+    porCourier[courier].porTipo[key] = (porCourier[courier].porTipo[key] || 0) + 1
+    porCourier[courier].total += 1
+  }
+  const tipos = [...tiposMap.entries()]
+    .map(([key, raw]) => ({ key, raw, label: etiquetaTipoClaim(raw) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+  const matriz = Object.values(porCourier).sort((a, b) => b.total - a.total || a.courier.localeCompare(b.courier))
+  const porTipo = {}
+  for (const t of tipos) {
+    porTipo[t.key] = matriz
+      .map((m) => ({ courier: m.courier, n: m.porTipo[t.key] || 0 }))
+      .filter((r) => r.n > 0)
+      .sort((a, b) => b.n - a.n || a.courier.localeCompare(b.courier))
+  }
+  return { tipos, matriz, porTipo }
+}
+
 // ---- rankings ----------------------------------------------------------------
 
 // Rankings de choferes (productividad, ganancia, calidad) con filtro de ciudad.

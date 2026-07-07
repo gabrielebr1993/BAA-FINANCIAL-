@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { useData } from '../DataContext'
-import { calcularPagos, rankingsRutas } from '../utils/calc'
+import { calcularPagos, rankingsRutas, porCiudad } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { Card, PageTitle, Aviso, Badge, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, Widget } from '../components/charts'
+import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -53,6 +54,7 @@ export default function Performance() {
     { key: 'claimsTotales', label: 'Claims' },
   ]
 
+  const claimsCiudad = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
   const conClaims = [...pagos].filter((p) => p.claimsTotales > 0).sort((a, b) => b.claimsTotales - a.claimsTotales)
   const ceroClaims = pagos.filter((p) => p.claimsTotales === 0)
 
@@ -125,6 +127,11 @@ export default function Performance() {
               </table>
             </div>
           </Card>
+
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h2>
+          <div className="mb-4">
+            <RankingClaimsTipo claims={claimsCiudad} />
+          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Lista titulo="🏆 Mejor productividad" rows={[...pagos].sort((a, b) => b.ingreso - a.ingreso).slice(0, 5)} render={(p) => `${p.nombre} — ${money(p.ingreso)} (${num(p.paquetes)} paq.)`} />
