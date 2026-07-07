@@ -21,37 +21,75 @@ export function toNum(v) {
   return isNaN(n) ? 0 : n
 }
 
-// Busca en una fila (objeto) el valor de la primera columna candidata que exista.
-// `candidatos` son textos ya normalizados (norm()).
-function campo(rowNorm, candidatos) {
-  for (const c of candidatos) {
-    if (c in rowNorm && rowNorm[c] !== '' && rowNorm[c] != null) return rowNorm[c]
-  }
-  // segundo intento: por "incluye" (encabezado contiene el candidato)
-  for (const c of candidatos) {
-    for (const k of Object.keys(rowNorm)) {
-      if (k.includes(c) && rowNorm[k] !== '' && rowNorm[k] != null) return rowNorm[k]
-    }
-  }
-  return undefined
-}
-
-// Reindexa una fila por claves normalizadas.
-function normalizarFila(row) {
-  const out = {}
-  for (const k of Object.keys(row)) out[norm(k)] = row[k]
-  return out
-}
-
 // Encuentra una hoja por nombre normalizado (por "incluye").
 function buscarHoja(wb, objetivoNorm) {
   const nombre = wb.SheetNames.find((n) => norm(n).includes(objetivoNorm))
   return nombre ? wb.Sheets[nombre] : null
 }
 
-function filasDeHoja(sheet) {
+// Lee la hoja como MATRIZ (array de arrays), garantizando que se recorren TODAS
+// las filas (no solo la primera). Cada fila es un array de celdas por columna.
+function filasMatriz(sheet) {
   if (!sheet) return []
-  return XLSX.utils.sheet_to_json(sheet, { defval: null })
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: false })
+}
+
+// Detecta la fila de encabezados buscando, en las primeras filas, alguna que
+// contenga alguna de las claves esperadas (por si hay filas de título arriba).
+function detectarFilaEncabezado(matriz, clavesEsperadas) {
+  const lim = Math.min(matriz.length, 15)
+  for (let i = 0; i < lim; i++) {
+    const norms = (matriz[i] || []).map(norm)
+    if (clavesEsperadas.some((k) => norms.includes(k) || norms.some((h) => h && h.includes(k)))) return i
+  }
+  return 0
+}
+
+// Resuelve el índice de columna de cada campo: primero por nombre de encabezado
+// (exacto, luego "incluye") y si falla, por POSICIÓN fija de respaldo.
+function resolverIndices(headerRow, defs) {
+  const norms = (headerRow || []).map(norm)
+  const out = {}
+  for (const [campoNombre, def] of Object.entries(defs)) {
+    let idx = -1
+    for (const c of def.cands) {
+      const i = norms.findIndex((h) => h === c)
+      if (i >= 0) { idx = i; break }
+    }
+    if (idx < 0) {
+      for (const c of def.cands) {
+        const i = norms.findIndex((h) => h && h.includes(c))
+        if (i >= 0) { idx = i; break }
+      }
+    }
+    if (idx < 0 && def.fallback != null) idx = def.fallback
+    out[campoNombre] = idx
+  }
+  return out
+}
+
+// Lee TODAS las filas de datos de una hoja y devuelve objetos {campo: valor}
+// según `defs` = { campo: { cands:[norms], fallback:idx } }.
+function leerObjetos(sheet, defs, clavesEncabezado) {
+  const matriz = filasMatriz(sheet)
+  if (matriz.length === 0) return []
+  const hIdx = detectarFilaEncabezado(matriz, clavesEncabezado)
+  const cols = resolverIndices(matriz[hIdx], defs)
+  const out = []
+  for (let i = hIdx + 1; i < matriz.length; i++) {
+    const row = matriz[i]
+    if (!row || row.length === 0) continue
+    const obj = {}
+    let algo = false
+    for (const campoNombre of Object.keys(defs)) {
+      const idx = cols[campoNombre]
+      const v = idx != null && idx >= 0 ? row[idx] : undefined
+      obj[campoNombre] = v
+      if (v != null && String(v).trim() !== '') algo = true
+    }
+    if (algo) out.push(obj)
+  }
+  return out
 }
 
 // ---- código de ciudad desde "Region/route" ----------------------------------
@@ -100,27 +138,34 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
 
   if (!hDetails) errores.push('Falta la hoja "Details of Delivery Fees" (obligatoria).')
 
-  // --- Details of Delivery Fees ---
+  // --- Details of Delivery Fees --- (recorre TODAS las filas por matriz)
+  // Mapa de columnas confirmado (0-based): Courier=8 (col I), Region/route=6 (G),
+  // The total expenses...=15 (P), Settlement weight lb=14 (O), Waybill No=0 (A).
   const detalles = []
   let sumaEntregas = 0
-  for (const raw of filasDeHoja(hDetails)) {
-    const r = normalizarFila(raw)
-    const courier = campo(r, ['courier'])
-    const ruta = campo(r, ['regionroute', 'region', 'route'])
-    if (courier == null && ruta == null) continue
-    const monto = toNum(campo(r, ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes']))
-    const peso = toNum(campo(r, ['settlementweightlb', 'settlementweight']))
-    const rango = campo(r, ['billingweightrange'])
-    const waybill = campo(r, ['waybillno', 'waybill'])
-    const ciudad = codigoCiudad(ruta)
+  const detRows = leerObjetos(
+    hDetails,
+    {
+      courier: { cands: ['courier'], fallback: 8 },
+      ruta: { cands: ['regionroute', 'region', 'route'], fallback: 6 },
+      monto: { cands: ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes'], fallback: 15 },
+      peso: { cands: ['settlementweightlb', 'settlementweight'], fallback: 14 },
+      rango: { cands: ['billingweightrange'], fallback: -1 },
+      waybill: { cands: ['waybillno', 'waybill'], fallback: 0 },
+    },
+    ['courier', 'regionroute']
+  )
+  for (const r of detRows) {
+    const monto = toNum(r.monto)
+    const ruta = (r.ruta == null ? '' : String(r.ruta)).trim() || 'Sin ruta'
     detalles.push({
-      courier: (courier ?? '').toString().trim() || 'Sin chofer',
-      ruta: (ruta ?? '').toString().trim() || 'Sin ruta',
-      ciudad,
+      courier: (r.courier == null ? '' : String(r.courier)).trim() || 'Sin chofer',
+      ruta,
+      ciudad: codigoCiudad(ruta),
       monto,
-      peso,
-      rango: rango == null ? '' : String(rango),
-      waybill: waybill == null ? '' : String(waybill),
+      peso: toNum(r.peso),
+      rango: r.rango == null ? '' : String(r.rango),
+      waybill: r.waybill == null ? '' : String(r.waybill),
       esDoble: monto === DOBLE_MONTO,
     })
     sumaEntregas += monto
@@ -129,27 +174,26 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
   // --- Claims Detail ---
   const claims = []
   let sumaClaims = 0
-  for (const raw of filasDeHoja(hClaims)) {
-    const r = normalizarFila(raw)
-    const waybill = campo(r, ['waybillno', 'waybill'])
-    const courier = campo(r, ['courier'])
-    if (waybill == null && courier == null) continue
-    const monto = toNum(campo(r, ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes']))
+  const claimRows = leerObjetos(
+    hClaims,
+    {
+      waybill: { cands: ['waybillno', 'waybill'], fallback: -1 },
+      courier: { cands: ['courier'], fallback: -1 },
+      date: { cands: ['date'], fallback: -1 },
+      postalCode: { cands: ['postalcode'], fallback: -1 },
+      claimType: { cands: ['claimtype'], fallback: -1 },
+      monto: { cands: ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes'], fallback: -1 },
+    },
+    ['waybillno', 'courier', 'claimtype']
+  )
+  for (const r of claimRows) {
+    const monto = toNum(r.monto)
     claims.push({
-      waybill: waybill == null ? '' : String(waybill),
-      courier: (courier ?? '').toString().trim() || 'Sin chofer',
-      date: (() => {
-        const d = campo(r, ['date'])
-        return d == null ? '' : String(d)
-      })(),
-      postalCode: (() => {
-        const p = campo(r, ['postalcode'])
-        return p == null ? '' : String(p)
-      })(),
-      claimType: (() => {
-        const t = campo(r, ['claimtype'])
-        return t == null ? '' : String(t)
-      })(),
+      waybill: r.waybill == null ? '' : String(r.waybill),
+      courier: (r.courier == null ? '' : String(r.courier)).trim() || 'Sin chofer',
+      date: r.date == null ? '' : String(r.date),
+      postalCode: r.postalCode == null ? '' : String(r.postalCode),
+      claimType: r.claimType == null ? '' : String(r.claimType),
       montoGofo: monto,
     })
     sumaClaims += monto
@@ -157,32 +201,41 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
 
   // --- Offset Details ---
   let sumaOffset = 0
-  for (const raw of filasDeHoja(hOffset)) {
-    const r = normalizarFila(raw)
-    sumaOffset += toNum(campo(r, ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes']))
+  for (const r of leerObjetos(hOffset, { monto: { cands: ['thetotalexpensesexclusiveoftaxes', 'totalexpensesexclusiveoftaxes'], fallback: -1 } }, ['thetotalexpensesexclusiveoftaxes'])) {
+    sumaOffset += toNum(r.monto)
   }
 
   // --- General Ledger Adjustment record ---
   let sumaAjustes = 0
-  for (const raw of filasDeHoja(hAdjust)) {
-    const r = normalizarFila(raw)
-    sumaAjustes += toNum(campo(r, ['adjustmentamountuntaxed', 'adjustmentamount']))
+  for (const r of leerObjetos(hAdjust, { monto: { cands: ['adjustmentamountuntaxed', 'adjustmentamount'], fallback: -1 } }, ['adjustmentamountuntaxed', 'adjustmentamount'])) {
+    sumaAjustes += toNum(r.monto)
   }
 
   // --- DSP Summary (total oficial de Gofo) ---
   const gofo = { totalGofo: 0, claim: 0, ajuste: 0, offset: 0, numDeliveries: 0, first: 0, subsequent: 0, disponible: false }
-  for (const raw of filasDeHoja(hDsp)) {
-    const r = normalizarFila(raw)
-    const total = campo(r, ['totalbillingamountuntaxed', 'totalbillingamount'])
-    if (total != null) {
+  const dspRows = leerObjetos(
+    hDsp,
+    {
+      total: { cands: ['totalbillingamountuntaxed', 'totalbillingamount'], fallback: -1 },
+      claim: { cands: ['claimamount'], fallback: -1 },
+      ajuste: { cands: ['adjustmentamount'], fallback: -1 },
+      offset: { cands: ['totaloffsetamount', 'offsetamount'], fallback: -1 },
+      numDeliveries: { cands: ['numberofdeliveries', 'numdeliveries'], fallback: -1 },
+      first: { cands: ['firstshipments', 'firstshipment'], fallback: -1 },
+      subsequent: { cands: ['subsequentshipments', 'subsequentshipment'], fallback: -1 },
+    },
+    ['totalbillingamountuntaxed', 'totalbillingamount']
+  )
+  for (const r of dspRows) {
+    if (r.total != null) {
       gofo.disponible = true
-      gofo.totalGofo += toNum(total)
-      gofo.claim += toNum(campo(r, ['claimamount']))
-      gofo.ajuste += toNum(campo(r, ['adjustmentamount']))
-      gofo.offset += toNum(campo(r, ['totaloffsetamount', 'offsetamount']))
-      gofo.numDeliveries += toNum(campo(r, ['numberofdeliveries', 'numdeliveries']))
-      gofo.first += toNum(campo(r, ['firstshipments', 'firstshipment']))
-      gofo.subsequent += toNum(campo(r, ['subsequentshipments', 'subsequentshipment']))
+      gofo.totalGofo += toNum(r.total)
+      gofo.claim += toNum(r.claim)
+      gofo.ajuste += toNum(r.ajuste)
+      gofo.offset += toNum(r.offset)
+      gofo.numDeliveries += toNum(r.numDeliveries)
+      gofo.first += toNum(r.first)
+      gofo.subsequent += toNum(r.subsequent)
     }
   }
 
@@ -199,6 +252,11 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
   for (const c of claims) c.ciudad = mayoria(ciudadPorChofer[c.courier]) || mayoria(conteoCiudad)
 
   const ciudadesDetectadas = Object.keys(conteoCiudad).filter(Boolean).sort()
+
+  // Diagnóstico: cuántas filas y choferes únicos se leyeron (debe ser ~101024 y ~139).
+  const choferesUnicos = [...new Set(detalles.map((d) => d.courier))]
+  // eslint-disable-next-line no-console
+  console.log(`[Gofo] "${nombreArchivo}" — Filas leídas (Details): ${detalles.length} | Choferes únicos: ${choferesUnicos.length} | Claims: ${claims.length}`)
 
   return {
     archivoNombre: nombreArchivo,
