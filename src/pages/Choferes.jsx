@@ -110,6 +110,10 @@ export default function Choferes() {
         </div>
       </Card>
 
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Choferes registrados</h3>
+        <span className="text-sm text-slate-500 dark:text-slate-400">Mostrando {drivers.length} de {drivers.length}</span>
+      </div>
       <Tabla
         columns={[
           { key: 'nombre', label: 'Chofer' },
