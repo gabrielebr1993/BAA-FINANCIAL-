@@ -9,6 +9,7 @@ import CargarFactura from './pages/CargarFactura'
 import Facturas from './pages/Facturas'
 import Configuracion from './pages/Configuracion'
 import Financiero from './pages/Financiero'
+import ReclamosGofo from './pages/ReclamosGofo'
 import Claims from './pages/Claims'
 import Choferes from './pages/Choferes'
 import PerfilChofer from './pages/PerfilChofer'
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
             <Route path="/configuracion" element={<Page filtro="gestionarUsuarios"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
+              <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
               <Route path="/choferes/:nombre" element={<Page filtro="verDashboard"><PerfilChofer /></Page>} />
