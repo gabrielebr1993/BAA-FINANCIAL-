@@ -4,12 +4,13 @@ import { calcularPagos, rankingsRutas } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { Card, PageTitle, Aviso, Badge, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, Widget } from '../components/charts'
-import CitySelector, { InvoiceSelector } from '../components/CitySelector'
+import CitySelector from '../components/CitySelector'
+import RangeSelector from '../components/RangeSelector'
 
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
 export default function Performance() {
-  const { selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
   const [sortKey, setSortKey] = useState('ingreso')
   const [asc, setAsc] = useState(false)
 
@@ -58,7 +59,7 @@ export default function Performance() {
 
   return (
     <div>
-      <PageTitle right={<><InvoiceSelector /><CitySelector /></>}>Performance</PageTitle>
+      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Performance</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />

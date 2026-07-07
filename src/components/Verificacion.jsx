@@ -47,6 +47,32 @@ export default function Verificacion({ v, compacto }) {
           }}
         />
       )}
+
+      {/* Cuadre por semana cuando el rango tiene varias facturas */}
+      {!compacto && Array.isArray(v.porFactura) && v.porFactura.length > 1 && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Cuadre por semana (cada factura tiene su propio Bill Number)</div>
+          <Tabla
+            minWidth="min-w-[420px]"
+            columns={[
+              { key: 'semana', label: 'Semana' },
+              { key: 'neto', label: 'Nuestro neto', align: 'right' },
+              { key: 'gofo', label: 'Gofo', align: 'right' },
+              { key: 'estado', label: 'Estado', align: 'center' },
+            ]}
+            rows={v.porFactura.map((f, i) => ({ _key: i, semana: f.semana, vv: f.v }))}
+            renderCell={(row, key) => {
+              const vv = row.vv || {}
+              if (key === 'semana') return row.semana
+              if (key === 'neto') return money(vv.netoCalculado)
+              if (key === 'gofo') return vv.gofo?.disponible ? money(vv.gofo.totalGofo) : '—'
+              if (key === 'estado')
+                return vv.cuadra == null ? <Badge color="slate">s/DSP</Badge> : vv.cuadra ? <Badge color="green">✅</Badge> : <Badge color="red">⚠️</Badge>
+              return null
+            }}
+          />
+        </div>
+      )}
     </Card>
   )
 }

@@ -6,11 +6,12 @@ import { porCiudad } from '../utils/calc'
 import { CLAIM_FEE, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
-import CitySelector, { InvoiceSelector } from '../components/CitySelector'
+import CitySelector from '../components/CitySelector'
+import RangeSelector from '../components/RangeSelector'
 
 export default function Claims() {
   const { perfil } = useAuth()
-  const { claims, selectedInvoice, selectedCity, reloadClaims, cargando } = useData()
+  const { claims, facturaRango: selectedInvoice, selectedCity, reloadClaims, cargando } = useData()
   const [fCourier, setFCourier] = useState('')
   const [fTipo, setFTipo] = useState('')
   const [fEstado, setFEstado] = useState('')
@@ -53,7 +54,7 @@ export default function Claims() {
 
   return (
     <div>
-      <PageTitle right={<><InvoiceSelector /><CitySelector /></>}>Claims</PageTitle>
+      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Claims</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando claims…" />

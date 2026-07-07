@@ -8,14 +8,15 @@ import { calcularPagos, porCiudad } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
-import CitySelector, { InvoiceSelector } from '../components/CitySelector'
+import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
+import CitySelector from '../components/CitySelector'
+import RangeSelector from '../components/RangeSelector'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
   const { perfil } = useAuth()
-  const { selectedInvoice, selectedInvoiceId, claims, drivers, selectedCity, reloadClaims, cargando } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, reloadClaims, cargando } = useData()
   const [payrollMap, setPayrollMap] = useState({})
   const [fEstado, setFEstado] = useState('')
   const [expandido, setExpandido] = useState(null)
@@ -23,15 +24,19 @@ export default function Pagos() {
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(false)
 
+  // Los pagos se marcan por factura individual: solo con una semana seleccionada.
+  const pagoInvoiceId = invoicesRango.length === 1 ? invoicesRango[0].id : null
+  const esRango = invoicesRango.length > 1
+
   const cargarPayroll = useCallback(async () => {
-    if (!selectedInvoiceId) return setPayrollMap({})
-    const snap = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', selectedInvoiceId)))
+    if (!pagoInvoiceId) return setPayrollMap({})
+    const snap = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', pagoInvoiceId)))
     const map = {}
     snap.docs.forEach((d) => {
       map[d.data().driverNombre] = { id: d.id, ...d.data() }
     })
     setPayrollMap(map)
-  }, [selectedInvoiceId])
+  }, [pagoInvoiceId])
 
   useEffect(() => {
     cargarPayroll()
@@ -52,9 +57,10 @@ export default function Pagos() {
   const nPag = pagosConEstado.filter((p) => p.estado === 'pagado').length
 
   const marcarEstado = async (p, estado) => {
+    if (!pagoInvoiceId) return
     const existente = payrollMap[p.nombre]
     const payload = {
-      invoiceId: selectedInvoiceId,
+      invoiceId: pagoInvoiceId,
       semana: selectedInvoice?.semana || '',
       driverNombre: p.nombre,
       individuales: p.individuales,
@@ -110,7 +116,7 @@ export default function Pagos() {
 
   return (
     <div>
-      <PageTitle right={<><InvoiceSelector /><CitySelector /></>}>Pagos a Choferes</PageTitle>
+      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Pagos a Choferes</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando pagos…" />
@@ -127,6 +133,11 @@ export default function Pagos() {
             <EstadoVacio texto="Cuando cargues una factura verás aquí el pago calculado de cada chofer." />
           ) : (
             <>
+              {esRango && (
+                <Aviso tipo="info">
+                  Estás viendo un <b>acumulado de {invoicesRango.length} semanas</b>. Los montos mostrados son la suma del periodo. Para <b>marcar pagos</b> (pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").
+                </Aviso>
+              )}
               <Card className="mb-4 p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
@@ -158,6 +169,7 @@ export default function Pagos() {
                         abierto={expandido === p.nombre}
                         onToggle={() => setExpandido(expandido === p.nombre ? null : p.nombre)}
                         onMarcar={marcarEstado}
+                        puedeMarcar={!esRango}
                         claimsChofer={expandido === p.nombre ? claimsDeChofer(p.nombre) : []}
                         perdonandoId={perdonandoId}
                         motivo={motivo}
@@ -193,7 +205,7 @@ export default function Pagos() {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado }) {
   return (
     <>
       <tr className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
@@ -214,7 +226,9 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, claimsChofer, perdonandoId
         <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(p.ganancia)}</td>
         <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
         <td className={TD}>
-          {p.estado === 'pagado' ? (
+          {!puedeMarcar ? (
+            <span className="text-xs text-slate-400">—</span>
+          ) : p.estado === 'pagado' ? (
             <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
           ) : (
             <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>

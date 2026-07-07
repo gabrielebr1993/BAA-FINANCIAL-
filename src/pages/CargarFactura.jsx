@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe } from '../utils/calc'
+import { parsearPeriodo } from '../utils/rango'
 import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
@@ -175,10 +176,13 @@ export default function CargarFactura() {
       const { detalles, claims, ...resumen } = combinado
       const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
       const ciudadPrincipal = combinado.ciudades[0] || ''
+      const periodo = parsearPeriodo(semana.trim())
       const invoicePayload = {
         semana: semana.trim(),
         archivoNombre: procesados.map((p) => p.archivoNombre).join(', '),
         fechaCarga: serverTimestamp(),
+        fechaInicio: periodo.fechaInicio || null,
+        fechaFin: periodo.fechaFin || null,
         ciudad: ciudadPrincipal,
         ciudadNombre: ciudadesMap[ciudadPrincipal] || nombreCiudad(ciudadPrincipal),
         ciudadesMap,

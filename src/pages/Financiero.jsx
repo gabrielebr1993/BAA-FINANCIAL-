@@ -6,10 +6,11 @@ import { money, num, pct } from '../utils/format'
 import { Card, KPI, PageTitle, Tabla, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
-import CitySelector, { InvoiceSelector } from '../components/CitySelector'
+import CitySelector from '../components/CitySelector'
+import RangeSelector from '../components/RangeSelector'
 
 export default function Financiero() {
-  const { selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
 
   const avg = useMemo(() => {
     const act = (drivers || []).filter((d) => d.activo !== false)
@@ -45,7 +46,7 @@ export default function Financiero() {
 
   return (
     <div>
-      <PageTitle right={<><InvoiceSelector /><CitySelector /></>}>Financiero</PageTitle>
+      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Financiero</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />
