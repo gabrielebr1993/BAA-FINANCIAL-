@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gofo</title>
+    <style>
+      @keyframes gofospin { to { transform: rotate(360deg); } }
+      @keyframes gofofloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+      .gofo-spin { animation: gofospin 0.7s linear infinite; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

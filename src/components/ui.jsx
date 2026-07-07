@@ -1,5 +1,54 @@
 // Componentes de interfaz reutilizables (estilo minimalista navy/dorado).
+import { Link } from 'react-router-dom'
 import { COLORS } from '../constants'
+import Ilustracion from './Ilustracion'
+
+// Spinner CSS animado (usa @keyframes gofospin definido en index.html).
+export function Spinner({ size = 18, color = '#fff', grosor = 2.5, style }) {
+  return (
+    <span
+      className="gofo-spin"
+      style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        border: `${grosor}px solid ${color}44`,
+        borderTopColor: color,
+        borderRadius: '50%',
+        verticalAlign: 'middle',
+        ...style,
+      }}
+    />
+  )
+}
+
+// Estado de carga centrado (Firestore, etc.).
+export function Cargando({ texto = 'Cargando…' }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 60, color: COLORS.muted }}>
+      <Spinner size={26} color={COLORS.navy} grosor={3} />
+      <span style={{ fontSize: 15 }}>{texto}</span>
+    </div>
+  )
+}
+
+// Estado vacío amable con ilustración y botón hacia Cargar Factura.
+export function EstadoVacio({ titulo = 'Aún no has cargado ninguna factura', texto = 'Ve a Cargar Factura para empezar a ver tus métricas aquí.', mostrarBoton = true }) {
+  return (
+    <Card style={{ textAlign: 'center', padding: '32px 24px' }}>
+      <Ilustracion height={200} style={{ margin: '0 auto 8px' }} />
+      <h3 style={{ margin: '0 0 6px', color: COLORS.navy }}>{titulo}</h3>
+      <p style={{ margin: '0 auto 16px', color: COLORS.muted, maxWidth: 440 }}>{texto}</p>
+      {mostrarBoton && (
+        <Link to="/facturas" style={{ textDecoration: 'none' }}>
+          <span style={{ display: 'inline-block', padding: '10px 20px', borderRadius: 8, background: COLORS.gold, color: COLORS.navy, fontWeight: 700 }}>
+            ⬆️ Cargar Factura
+          </span>
+        </Link>
+      )}
+    </Card>
+  )
+}
 
 export function Card({ children, style }) {
   return (

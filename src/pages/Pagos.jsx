@@ -8,12 +8,12 @@ import { calcularPagos, porCiudad } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { CLAIM_FEE, COLORS } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, Stat, PageTitle, Boton, Aviso, Badge } from '../components/ui'
+import { Card, Stat, PageTitle, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector, { InvoiceSelector } from '../components/CitySelector'
 
 export default function Pagos() {
   const { perfil } = useAuth()
-  const { selectedInvoice, selectedInvoiceId, claims, drivers, selectedCity, reloadClaims } = useData()
+  const { selectedInvoice, selectedInvoiceId, claims, drivers, selectedCity, reloadClaims, cargando } = useData()
   const [payrollMap, setPayrollMap] = useState({})
   const [fEstado, setFEstado] = useState('')
   const [expandido, setExpandido] = useState(null)
@@ -110,83 +110,91 @@ export default function Pagos() {
     XLSX.writeFile(wb, `pagos_${selectedInvoice?.semana || 'factura'}.xlsx`)
   }
 
-  if (!selectedInvoice) return <Vacio />
-
   return (
     <div>
       <PageTitle right={<><InvoiceSelector /><CitySelector /></>}>Pagos a Choferes</PageTitle>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-        <Stat label="Ingreso total" value={money(totIngreso)} color={COLORS.green} />
-        <Stat label="Total a pagar" value={money(totPagar)} color={COLORS.navy} />
-        <Stat label="Ganancia total" value={money(totGanancia)} color={COLORS.gold} />
-        <Stat label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} />
-      </div>
+      {cargando ? (
+        <Cargando texto="Cargando pagos…" />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+            <Stat label="Ingreso total" value={money(totIngreso)} color={COLORS.green} />
+            <Stat label="Total a pagar" value={money(totPagar)} color={COLORS.navy} />
+            <Stat label="Ganancia total" value={money(totGanancia)} color={COLORS.gold} />
+            <Stat label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} />
+          </div>
 
-      <Card style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} style={selStyle}>
-            <option value="">Ver todos</option>
-            <option value="pendiente">Solo pendientes</option>
-            <option value="pagado">Solo pagados</option>
-          </select>
-          <Boton variant="gold" onClick={exportar} style={{ marginLeft: 'auto' }}>
-            📤 Exportar a Excel
-          </Boton>
-        </div>
-      </Card>
+          {!selectedInvoice ? (
+            <EstadoVacio texto="Cuando cargues una factura verás aquí el pago calculado de cada chofer." />
+          ) : (
+            <>
+              <Card style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={fEstado} onChange={(e) => setFEstado(e.target.value)} style={selStyle}>
+                    <option value="">Ver todos</option>
+                    <option value="pendiente">Solo pendientes</option>
+                    <option value="pagado">Solo pagados</option>
+                  </select>
+                  <Boton variant="gold" onClick={exportar} style={{ marginLeft: 'auto' }}>📤 Exportar a Excel</Boton>
+                </div>
+              </Card>
 
-      <div style={{ overflowX: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13.5, minWidth: 980 }}>
-          <thead>
-            <tr style={{ background: COLORS.navy, color: '#fff' }}>
-              {['Chofer', 'Ind.', 'Dobles', 'Claims (act/tot)', 'Ingreso Gofo', 'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar', 'Ganancia', 'Estado', ''].map((h) => (
-                <th key={h} style={{ padding: '10px 10px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.length === 0 && (
-              <tr><td colSpan={12} style={{ padding: 20, textAlign: 'center', color: COLORS.muted }}>Sin choferes con este filtro.</td></tr>
-            )}
-            {filtrados.map((p, i) => {
-              const abierto = expandido === p.nombre
-              return (
-                <FilaChofer
-                  key={p.nombre}
-                  p={p}
-                  i={i}
-                  abierto={abierto}
-                  onToggle={() => setExpandido(abierto ? null : p.nombre)}
-                  onMarcar={marcarEstado}
-                  claimsChofer={abierto ? claimsDeChofer(p.nombre) : []}
-                  perdonandoId={perdonandoId}
-                  motivo={motivo}
-                  setMotivo={setMotivo}
-                  setPerdonandoId={setPerdonandoId}
-                  confirmarPerdon={confirmarPerdon}
-                  restaurar={restaurar}
-                  ocupado={ocupado}
-                />
-              )
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ background: '#eef1f6', fontWeight: 700 }}>
-              <td style={{ padding: '10px' }}>TOTAL ({filtrados.length})</td>
-              <td colSpan={3}></td>
-              <td style={{ padding: '10px' }}>{money(totIngreso)}</td>
-              <td colSpan={3}></td>
-              <td style={{ padding: '10px' }}>{money(totPagar)}</td>
-              <td style={{ padding: '10px', color: COLORS.gold }}>{money(totGanancia)}</td>
-              <td colSpan={2}></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 10 }}>
-        Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × ${CLAIM_FEE}. Perdonar un claim lo excluye del descuento y recalcula al instante.
-      </div>
+              <div style={{ overflowX: 'auto', border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13.5, minWidth: 980 }}>
+                  <thead>
+                    <tr style={{ background: COLORS.navy, color: '#fff' }}>
+                      {['Chofer', 'Ind.', 'Dobles', 'Claims (act/tot)', 'Ingreso Gofo', 'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar', 'Ganancia', 'Estado', ''].map((h) => (
+                        <th key={h} style={{ padding: '10px 10px', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtrados.length === 0 && (
+                      <tr><td colSpan={12} style={{ padding: 20, textAlign: 'center', color: COLORS.muted }}>Sin choferes con este filtro.</td></tr>
+                    )}
+                    {filtrados.map((p, i) => {
+                      const abierto = expandido === p.nombre
+                      return (
+                        <FilaChofer
+                          key={p.nombre}
+                          p={p}
+                          i={i}
+                          abierto={abierto}
+                          onToggle={() => setExpandido(abierto ? null : p.nombre)}
+                          onMarcar={marcarEstado}
+                          claimsChofer={abierto ? claimsDeChofer(p.nombre) : []}
+                          perdonandoId={perdonandoId}
+                          motivo={motivo}
+                          setMotivo={setMotivo}
+                          setPerdonandoId={setPerdonandoId}
+                          confirmarPerdon={confirmarPerdon}
+                          restaurar={restaurar}
+                          ocupado={ocupado}
+                        />
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: '#eef1f6', fontWeight: 700 }}>
+                      <td style={{ padding: '10px' }}>TOTAL ({filtrados.length})</td>
+                      <td colSpan={3}></td>
+                      <td style={{ padding: '10px' }}>{money(totIngreso)}</td>
+                      <td colSpan={3}></td>
+                      <td style={{ padding: '10px' }}>{money(totPagar)}</td>
+                      <td style={{ padding: '10px', color: COLORS.gold }}>{money(totGanancia)}</td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 10 }}>
+                Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × ${CLAIM_FEE}. Perdonar un claim lo excluye del descuento y recalcula al instante.
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -266,12 +274,3 @@ function FilaChofer({ p, i, abierto, onToggle, onMarcar, claimsChofer, perdonand
 }
 
 const selStyle = { padding: '8px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, background: '#fff' }
-
-function Vacio() {
-  return (
-    <div>
-      <PageTitle>Pagos a Choferes</PageTitle>
-      <Aviso tipo="info">No hay facturas cargadas todavía. Ve a <b>Cargar Factura</b>.</Aviso>
-    </div>
-  )
-}

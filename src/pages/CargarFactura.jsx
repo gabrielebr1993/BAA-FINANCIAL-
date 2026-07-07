@@ -7,7 +7,7 @@ import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { buscarDriver } from '../utils/calc'
 import { COLORS, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Card, Stat, PageTitle, Boton, Tabla, Aviso, Badge } from '../components/ui'
+import { Card, Stat, PageTitle, Boton, Tabla, Aviso, Badge, Spinner } from '../components/ui'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
@@ -184,7 +184,13 @@ export default function CargarFactura() {
         />
       </div>
 
-      {procesando && <Aviso tipo="info">⏳ Procesando archivo(s)… puede tardar si tienen 100.000+ filas.</Aviso>}
+      {procesando && (
+        <Aviso tipo="info">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <Spinner size={16} color={COLORS.navy} /> Procesando archivo(s)… puede tardar si tienen 100.000+ filas.
+          </span>
+        </Aviso>
+      )}
       {errores.map((e, i) => (
         <Aviso key={i} tipo="error">
           {e}
