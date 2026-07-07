@@ -2,8 +2,8 @@ import { useAuth } from './AuthContext'
 import { Spinner } from './components/ui'
 import Login from './Login'
 
-export default function ProtectedRoute({ filtro, children }) {
-  const { user, cargando, puede } = useAuth()
+export default function ProtectedRoute({ filtro, soloSuperAdmin, children }) {
+  const { user, cargando, puede, esSuperAdmin } = useAuth()
   if (cargando)
     return (
       <div className="flex min-h-screen items-center justify-center gap-3 bg-surface-light text-slate-500 dark:bg-surface-dark dark:text-slate-400">
@@ -11,6 +11,15 @@ export default function ProtectedRoute({ filtro, children }) {
       </div>
     )
   if (!user) return <Login />
+  if (soloSuperAdmin && !esSuperAdmin)
+    return (
+      <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
+        <div>
+          <div className="text-4xl">🔒</div>
+          <h3 className="mt-2 text-lg font-bold">Sección solo para súper-administradores</h3>
+        </div>
+      </div>
+    )
   if (filtro && !puede(filtro))
     return (
       <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">

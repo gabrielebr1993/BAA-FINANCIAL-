@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 // Estado compartido: facturas, choferes, claims + selección global
-// (rango de fechas, ciudad, factura). Se lee de Firestore.
+// (empresa activa, rango de fechas, ciudad, factura). Multi-empresa: todos los
+// datos se filtran por companyId (la empresa activa).
 // ---------------------------------------------------------------------------
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore'
+import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore'
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
 import { TODAS } from './utils/calc'
@@ -14,106 +15,128 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user } = useAuth()
+  const { user, companyId, esSuperAdmin } = useAuth()
+  const [companies, setCompanies] = useState([])
+  const [activeCompanyId, setActiveCompanyId] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [drivers, setDrivers] = useState([])
   const [claims, setClaims] = useState([])
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   const [selectedCity, setSelectedCity] = useState(TODAS)
   const [rango, setRango] = useState({ preset: 'ultima', desde: '', hasta: '' })
-  const [vista, setVista] = useState('combinado') // 'combinado' | 'porSemana'
+  const [vista, setVista] = useState('combinado')
   const [alertasDescartadas, setAlertasDescartadas] = useState(() => new Set())
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
-  const cargarInvoices = useCallback(async () => {
-    const mapear = (snap) => snap.docs.map((d) => conFechas({ id: d.id, ...d.data() }))
-    const ordenar = (list) =>
-      [...list].sort((a, b) => {
-        const ta = a.fechaInicio instanceof Date ? a.fechaInicio.getTime() : 0
-        const tb = b.fechaInicio instanceof Date ? b.fechaInicio.getTime() : 0
-        return tb - ta
-      })
+  const ordenar = (list) =>
+    [...list].sort((a, b) => {
+      const ta = a.fechaInicio instanceof Date ? a.fechaInicio.getTime() : 0
+      const tb = b.fechaInicio instanceof Date ? b.fechaInicio.getTime() : 0
+      return tb - ta
+    })
+
+  // El súper-admin ve todas las empresas; un usuario normal solo la suya
+  // (compatible con reglas de seguridad estrictas de Firestore).
+  const cargarCompanies = useCallback(async () => {
     try {
-      const snap = await getDocs(query(collection(db, 'invoices'), orderBy('fechaCarga', 'desc')))
-      const list = ordenar(mapear(snap))
-      setInvoices(list)
-      setSelectedInvoiceId((prev) => prev || (list[0] ? list[0].id : null))
-      return list
-    } catch {
-      try {
-        const snap = await getDocs(collection(db, 'invoices'))
-        const list = ordenar(mapear(snap))
-        setInvoices(list)
-        setSelectedInvoiceId((prev) => prev || (list[0] ? list[0].id : null))
+      if (esSuperAdmin) {
+        const snap = await getDocs(collection(db, 'companies'))
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        setCompanies(list)
         return list
-      } catch (e2) {
-        setError('No se pudieron cargar las facturas: ' + e2.message)
-        return []
       }
+      if (companyId) {
+        const s = await getDoc(doc(db, 'companies', companyId))
+        const list = s.exists() ? [{ id: s.id, ...s.data() }] : []
+        setCompanies(list)
+        return list
+      }
+      setCompanies([])
+      return []
+    } catch {
+      return []
+    }
+  }, [esSuperAdmin, companyId])
+
+  // Facturas de la empresa activa (sin orderBy para no requerir índice compuesto).
+  const cargarInvoices = useCallback(async (cid) => {
+    if (!cid) { setInvoices([]); setSelectedInvoiceId(null); return [] }
+    try {
+      const snap = await getDocs(query(collection(db, 'invoices'), where('companyId', '==', cid)))
+      const list = ordenar(snap.docs.map((d) => conFechas({ id: d.id, ...d.data() })))
+      setInvoices(list)
+      setSelectedInvoiceId((prev) => (list.some((i) => i.id === prev) ? prev : list[0] ? list[0].id : null))
+      return list
+    } catch (e) {
+      setError('No se pudieron cargar las facturas: ' + e.message)
+      return []
     }
   }, [])
 
-  const cargarDrivers = useCallback(async () => {
-    const snap = await getDocs(collection(db, 'drivers'))
+  const cargarDrivers = useCallback(async (cid) => {
+    if (!cid) { setDrivers([]); return }
+    const snap = await getDocs(query(collection(db, 'drivers'), where('companyId', '==', cid)))
     setDrivers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   }, [])
 
-  // carga de claims para un conjunto de facturas (una consulta por factura).
-  const cargarClaimsDe = useCallback(async (ids) => {
-    if (!ids || ids.length === 0) {
-      setClaims([])
-      return
-    }
+  // Claims por conjunto de facturas. Se filtra también por companyId para ser
+  // compatible con las reglas de seguridad (una query lista debe acotar por empresa).
+  const cargarClaimsDe = useCallback(async (ids, cid) => {
+    if (!ids || ids.length === 0 || !cid) { setClaims([]); return }
     const partes = await Promise.all(
-      ids.map((id) => getDocs(query(collection(db, 'claims'), where('invoiceId', '==', id))).then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))))
+      ids.map((id) =>
+        getDocs(query(collection(db, 'claims'), where('companyId', '==', cid), where('invoiceId', '==', id))).then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })))
+      )
     )
     setClaims(partes.flat())
   }, [])
 
-  // carga inicial (y al iniciar/cerrar sesión)
+  // Cargar empresas al iniciar sesión.
+  useEffect(() => {
+    if (!user) { setCompanies([]); return }
+    cargarCompanies()
+  }, [user, cargarCompanies])
+
+  // Determinar la empresa activa.
+  useEffect(() => {
+    if (!user) { setActiveCompanyId(null); return }
+    if (!esSuperAdmin) { setActiveCompanyId(companyId || null); return }
+    setActiveCompanyId((prev) => prev || companyId || (companies[0] ? companies[0].id : null))
+  }, [user, esSuperAdmin, companyId, companies])
+
+  // Cargar datos de la empresa activa.
   useEffect(() => {
     if (!user) {
-      setInvoices([])
-      setDrivers([])
-      setClaims([])
-      setSelectedInvoiceId(null)
-      setCargando(false)
+      setInvoices([]); setDrivers([]); setClaims([]); setSelectedInvoiceId(null); setCargando(false)
       return
     }
     ;(async () => {
       setCargando(true)
-      await Promise.all([cargarInvoices(), cargarDrivers().catch(() => {})])
+      await Promise.all([cargarInvoices(activeCompanyId), cargarDrivers(activeCompanyId).catch(() => {})])
       setCargando(false)
     })()
-  }, [user, cargarInvoices, cargarDrivers])
+  }, [user, activeCompanyId, cargarInvoices, cargarDrivers])
 
-  // facturas dentro del rango + factura efectiva (combinada si hay varias).
   const invoicesRango = useMemo(() => invoicesEnRango(invoices, rango), [invoices, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
-  // recargar claims cuando cambian las facturas del rango
   useEffect(() => {
-    cargarClaimsDe(rangoKey ? rangoKey.split(',') : []).catch((e) => setError('Error cargando claims: ' + e.message))
+    cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangoKey, cargarClaimsDe])
+  }, [rangoKey, activeCompanyId, cargarClaimsDe])
 
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null
 
-  // factura inmediatamente anterior al rango (para cambios de precio), si es una sola semana
   const invAnterior = useMemo(() => {
     if (!facturaRango || facturaRango.esRango) return null
     const idx = invoices.findIndex((i) => i.id === facturaRango.id)
     return idx >= 0 ? invoices[idx + 1] : null
   }, [facturaRango, invoices])
 
-  // alertas base (sin pagos pendientes, que dependen de payroll)
-  const alertasBase = useMemo(
-    () => calcularAlertas({ inv: facturaRango, claims, drivers, invAnterior }),
-    [facturaRango, claims, drivers, invAnterior]
-  )
+  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRango, claims, drivers, invAnterior }), [facturaRango, claims, drivers, invAnterior])
   const alertasVisibles = useMemo(
     () => alertasBase.filter((a) => !alertasDescartadas.has(a.id)).sort((a, b) => SEVERIDAD_ORDEN[a.tipo] - SEVERIDAD_ORDEN[b.tipo]),
     [alertasBase, alertasDescartadas]
@@ -121,35 +144,41 @@ export function DataProvider({ children }) {
   const descartarAlerta = useCallback((id) => setAlertasDescartadas((s) => new Set(s).add(id)), [])
   const restaurarAlertas = useCallback(() => setAlertasDescartadas(new Set()), [])
 
+  const empresaActiva = companies.find((c) => c.id === activeCompanyId) || null
+
   const value = {
-    invAnterior,
-    alertasVisibles,
-    numAlertas: alertasVisibles.length,
-    alertasDescartadas,
-    descartarAlerta,
-    restaurarAlertas,
+    // multi-empresa
+    companies,
+    activeCompanyId,
+    setActiveCompanyId,
+    empresaActiva,
+    reloadCompanies: cargarCompanies,
+    // datos
     invoices,
     drivers,
     claims,
-    // selección de factura individual (usada en Cargar Factura)
     selectedInvoice,
     selectedInvoiceId,
     setSelectedInvoiceId,
-    // rango de fechas + vista + factura efectiva
     rango,
     setRango,
     vista,
     setVista,
     invoicesRango,
     facturaRango,
-    // ciudad
+    invAnterior,
+    alertasVisibles,
+    numAlertas: alertasVisibles.length,
+    alertasDescartadas,
+    descartarAlerta,
+    restaurarAlertas,
     selectedCity,
     setSelectedCity,
     cargando,
     error,
-    reloadInvoices: cargarInvoices,
-    reloadDrivers: cargarDrivers,
-    reloadClaims: () => cargarClaimsDe(rangoIds),
+    reloadInvoices: () => cargarInvoices(activeCompanyId),
+    reloadDrivers: () => cargarDrivers(activeCompanyId),
+    reloadClaims: () => cargarClaimsDe(rangoIds, activeCompanyId),
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -13,7 +13,7 @@ import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -147,6 +147,7 @@ export default function CargarFactura() {
 
   const guardar = async () => {
     if (!combinado) return
+    if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
     if (choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
@@ -164,7 +165,7 @@ export default function CargarFactura() {
               precioIndividual: Number(precios[n].ind) || 0,
               precioDoble: Number(precios[n].doble) || 0,
               activo: true,
-              companyId: perfil?.companyId || 'default',
+              companyId: activeCompanyId,
               creadoEn: serverTimestamp(),
             })
           }
@@ -178,6 +179,7 @@ export default function CargarFactura() {
       const ciudadPrincipal = combinado.ciudades[0] || ''
       const periodo = parsearPeriodo(semana.trim())
       const invoicePayload = {
+        companyId: activeCompanyId,
         semana: semana.trim(),
         archivoNombre: procesados.map((p) => p.archivoNombre).join(', '),
         fechaCarga: serverTimestamp(),
@@ -195,6 +197,7 @@ export default function CargarFactura() {
         for (const c of claims.slice(i, i + chunk)) {
           const cref = doc(collection(db, 'claims'))
           batch.set(cref, {
+            companyId: activeCompanyId,
             invoiceId: ref.id,
             semana: semana.trim(),
             waybill: c.waybill,
@@ -262,7 +265,11 @@ export default function CargarFactura() {
 
   return (
     <div>
-      <PageTitle>Cargar Factura</PageTitle>
+      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>Cargar Factura</PageTitle>
+
+      {!activeCompanyId && (
+        <Aviso tipo="warn">No hay una empresa activa. Ve a <b>Empresas</b> (o pide a tu administrador que te asigne una) antes de cargar facturas.</Aviso>
+      )}
 
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}

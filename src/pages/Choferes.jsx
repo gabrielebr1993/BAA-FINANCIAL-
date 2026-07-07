@@ -9,7 +9,7 @@ import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../
 const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 
 export default function Choferes() {
-  const { drivers, reloadDrivers, selectedInvoice } = useData()
+  const { drivers, reloadDrivers, selectedInvoice, activeCompanyId } = useData()
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -27,7 +27,10 @@ export default function Choferes() {
     setCargandoDet(true)
     setHistorial([])
     try {
-      const snap = await getDocs(query(collection(db, 'payroll'), where('driverNombre', '==', d.nombre)))
+      const q = activeCompanyId
+        ? query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('driverNombre', '==', d.nombre))
+        : query(collection(db, 'payroll'), where('driverNombre', '==', d.nombre))
+      const snap = await getDocs(q)
       setHistorial(snap.docs.map((x) => ({ id: x.id, ...x.data() })))
     } catch { /* noop */ } finally {
       setCargandoDet(false)
@@ -70,7 +73,7 @@ export default function Choferes() {
         activo: !!form.activo,
       }
       if (editId) await updateDoc(doc(db, 'drivers', editId), payload)
-      else await addDoc(collection(db, 'drivers'), payload)
+      else await addDoc(collection(db, 'drivers'), { ...payload, companyId: activeCompanyId })
       await reloadDrivers()
       cancelar()
     } catch (e) {

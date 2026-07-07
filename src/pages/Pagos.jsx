@@ -17,7 +17,7 @@ const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
   const { perfil } = useAuth()
-  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, reloadClaims, cargando } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando } = useData()
   const [payrollMap, setPayrollMap] = useState({})
   const [fEstado, setFEstado] = useState('')
   const [expandido, setExpandido] = useState(null)
@@ -30,14 +30,14 @@ export default function Pagos() {
   const esRango = invoicesRango.length > 1
 
   const cargarPayroll = useCallback(async () => {
-    if (!pagoInvoiceId) return setPayrollMap({})
-    const snap = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', pagoInvoiceId)))
+    if (!pagoInvoiceId || !activeCompanyId) return setPayrollMap({})
+    const snap = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', pagoInvoiceId)))
     const map = {}
     snap.docs.forEach((d) => {
       map[d.data().driverNombre] = { id: d.id, ...d.data() }
     })
     setPayrollMap(map)
-  }, [pagoInvoiceId])
+  }, [pagoInvoiceId, activeCompanyId])
 
   useEffect(() => {
     cargarPayroll()
@@ -61,6 +61,7 @@ export default function Pagos() {
     if (!pagoInvoiceId) return
     const existente = payrollMap[p.nombre]
     const payload = {
+      companyId: activeCompanyId,
       invoiceId: pagoInvoiceId,
       semana: selectedInvoice?.semana || '',
       driverNombre: p.nombre,

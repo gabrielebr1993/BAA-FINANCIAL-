@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, getDocs, query, where, doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase'
+import { useData } from '../DataContext'
 import { PERMISOS, ROLES, SECCIONES } from '../constants'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
 
@@ -12,6 +13,7 @@ function permisosVacios() {
 const formVacio = { uid: '', nombre: '', email: '', role: 'manager', permissions: permisosVacios() }
 
 export default function Usuarios() {
+  const { activeCompanyId, empresaActiva } = useData()
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
@@ -20,9 +22,10 @@ export default function Usuarios() {
   const [ok, setOk] = useState('')
 
   const cargar = useCallback(async () => {
-    const snap = await getDocs(collection(db, 'users'))
+    if (!activeCompanyId) { setUsuarios([]); return }
+    const snap = await getDocs(query(collection(db, 'users'), where('companyId', '==', activeCompanyId)))
     setUsuarios(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  }, [])
+  }, [activeCompanyId])
   useEffect(() => {
     cargar()
   }, [cargar])
@@ -48,9 +51,10 @@ export default function Usuarios() {
     setOk('')
     if (!editId && !form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
     if (!form.nombre.trim() || !form.email.trim()) return setError('Nombre y email son obligatorios.')
+    if (!activeCompanyId) return setError('No hay una empresa activa. Selecciona una empresa primero.')
     setGuardando(true)
     try {
-      const payload = { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions }
+      const payload = { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId }
       if (editId) await updateDoc(doc(db, 'users', editId), payload)
       else await setDoc(doc(db, 'users', form.uid.trim()), payload)
       await cargar()
@@ -67,7 +71,7 @@ export default function Usuarios() {
 
   return (
     <div>
-      <PageTitle>Usuarios y Permisos</PageTitle>
+      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>Usuarios y Permisos</PageTitle>
 
       {error && <Aviso tipo="error">{error}</Aviso>}
       {ok && <Aviso tipo="ok">{ok}</Aviso>}

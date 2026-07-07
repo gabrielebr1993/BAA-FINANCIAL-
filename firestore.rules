@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// Reglas de seguridad multi-empresa para Gofo.
+// Aislamiento por companyId: un usuario solo accede a documentos cuya
+// companyId coincide con la de su documento en `users`. El súper-admin
+// (users/{uid}.superAdmin == true) accede a todo.
+//
+// Desplegar con:  firebase deploy --only firestore:rules
+// (o pegar en Firebase Console → Firestore → Reglas)
+// ---------------------------------------------------------------------------
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    function isSuper() {
+      return hasProfile() && userDoc().superAdmin == true;
+    }
+    function myCompany() {
+      return hasProfile() ? userDoc().companyId : null;
+    }
+    function inCompany(cid) {
+      return isSuper() || (hasProfile() && myCompany() == cid);
+    }
+
+    // Empresas: lectura para súper-admin (todas) o para el usuario de esa empresa;
+    // escritura solo súper-admin.
+    match /companies/{companyId} {
+      allow read: if isSuper() || (hasProfile() && myCompany() == companyId);
+      allow write: if isSuper();
+    }
+
+    // Usuarios: cada uno lee su propio doc; el owner/súper-admin de la empresa
+    // gestiona los usuarios de su empresa.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isSuper() || (hasProfile() && myCompany() == resource.data.companyId));
+      allow create, update, delete: if isSuper() || (hasProfile() && myCompany() == request.resource.data.companyId);
+    }
+
+    // Colecciones de datos: acceso solo dentro de la empresa.
+    match /invoices/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+    match /drivers/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+    match /claims/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+    match /payroll/{id} {
+      allow read: if inCompany(resource.data.companyId);
+      allow create: if inCompany(request.resource.data.companyId);
+      allow update, delete: if inCompany(resource.data.companyId);
+    }
+  }
+}

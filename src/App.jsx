@@ -13,12 +13,13 @@ import Pagos from './pages/Pagos'
 import Performance from './pages/Performance'
 import Alertas from './pages/Alertas'
 import Comparar from './pages/Comparar'
+import Empresas from './pages/Empresas'
 import Usuarios from './pages/Usuarios'
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
-function Page({ filtro, children }) {
+function Page({ filtro, soloSuperAdmin, children }) {
   return (
-    <ProtectedRoute filtro={filtro}>
+    <ProtectedRoute filtro={filtro} soloSuperAdmin={soloSuperAdmin}>
       <Layout>{children}</Layout>
     </ProtectedRoute>
   )
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
               <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />
               <Route path="/comparar" element={<Page filtro="verDashboard"><Comparar /></Page>} />
+              <Route path="/empresas" element={<Page soloSuperAdmin><Empresas /></Page>} />
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>

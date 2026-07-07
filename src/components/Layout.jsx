@@ -73,8 +73,33 @@ function BuscadorGlobal({ onNavigate }) {
   )
 }
 
+function CompanySwitcher() {
+  const { esSuperAdmin } = useAuth()
+  const { companies, activeCompanyId, setActiveCompanyId, empresaActiva } = useData()
+  if (esSuperAdmin && companies.length > 0) {
+    return (
+      <div className="mb-3">
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-slate-400">Empresa activa</div>
+        <select
+          value={activeCompanyId || ''}
+          onChange={(e) => setActiveCompanyId(e.target.value)}
+          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-gold"
+        >
+          {companies.map((c) => (
+            <option key={c.id} value={c.id} className="text-slate-800">{c.nombre}</option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+  if (empresaActiva) {
+    return <div className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">🏢 {empresaActiva.nombre}</div>
+  }
+  return null
+}
+
 function SidebarContent({ onNavigate }) {
-  const { perfil, puede, cerrarSesion } = useAuth()
+  const { perfil, puede, cerrarSesion, esSuperAdmin } = useAuth()
   const { numAlertas } = useData()
   const location = useLocation()
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
@@ -90,6 +115,7 @@ function SidebarContent({ onNavigate }) {
       </div>
 
       <BuscadorGlobal onNavigate={onNavigate} />
+      <CompanySwitcher />
 
       {secciones.map((s) => {
         const activo = location.pathname === s.path
@@ -115,6 +141,22 @@ function SidebarContent({ onNavigate }) {
           </Link>
         )
       })}
+
+      {esSuperAdmin && (
+        <Link
+          to="/empresas"
+          onClick={onNavigate}
+          className={`group relative flex items-center gap-3 rounded-lg border-l-2 py-2.5 pl-3 pr-3 text-sm no-underline transition-all duration-150 ${
+            location.pathname === '/empresas'
+              ? 'border-brand-gold bg-brand-gold font-bold text-brand-navy'
+              : 'border-transparent font-medium text-slate-300 hover:translate-x-0.5 hover:border-brand-gold/60 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <span className="w-5 text-center">🏢</span>
+          <span className="flex-1">Empresas</span>
+          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px]">admin</span>
+        </Link>
+      )}
 
       <div className="mt-auto space-y-3 border-t border-white/10 pt-4 text-sm">
         <ThemeToggle />

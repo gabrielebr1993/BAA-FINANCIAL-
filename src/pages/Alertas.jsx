@@ -17,22 +17,22 @@ const ESTILO = {
 const NOMBRE_TIPO = { red: 'Grave', yellow: 'Aviso', blue: 'Info' }
 
 export default function Alertas() {
-  const { facturaRango: inv, invoicesRango, claims, drivers, invAnterior, alertasDescartadas, descartarAlerta, restaurarAlertas, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, claims, drivers, invAnterior, activeCompanyId, alertasDescartadas, descartarAlerta, restaurarAlertas, cargando } = useData()
   const [pendientes, setPendientes] = useState(0)
 
   // pagos pendientes sin marcar (solo cuando el rango es una sola semana)
   useEffect(() => {
     let vivo = true
     ;(async () => {
-      if (invoicesRango.length !== 1) return setPendientes(0)
+      if (invoicesRango.length !== 1 || !activeCompanyId) return setPendientes(0)
       const id = invoicesRango[0].id
-      const snap = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', id)))
+      const snap = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', id)))
       const pagadas = new Set(snap.docs.filter((d) => d.data().estado === 'pagado').map((d) => d.data().driverNombre))
       const total = calcularPagos(inv, claims, drivers, 'todas').length
       if (vivo) setPendientes(Math.max(0, total - pagadas.size))
     })().catch(() => {})
     return () => { vivo = false }
-  }, [invoicesRango, inv, claims, drivers])
+  }, [invoicesRango, inv, claims, drivers, activeCompanyId])
 
   const todas = useMemo(
     () => calcularAlertas({ inv, claims, drivers, invAnterior, pendientes }).sort((a, b) => SEVERIDAD_ORDEN[a.tipo] - SEVERIDAD_ORDEN[b.tipo]),
