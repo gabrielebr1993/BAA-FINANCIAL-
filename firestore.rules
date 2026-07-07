@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ---------------------------------------------------------------------------
-// Reglas de seguridad multi-empresa para Gofo.
+// Reglas de seguridad multi-empresa para MilePay.
 // Aislamiento por companyId: un usuario solo accede a documentos cuya
 // companyId coincide con la de su documento en `users`. El súper-admin
 // (users/{uid}.superAdmin == true) accede a todo.

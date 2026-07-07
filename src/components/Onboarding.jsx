@@ -28,7 +28,7 @@ export default function Onboarding() {
     <Card className="mb-5 p-6">
       <div className="mb-1 flex items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-brand-gold"><Sparkles size={20} strokeWidth={1.8} /></span>
-        <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">¡Bienvenido a Gofo{empresaActiva?.nombre ? `, ${empresaActiva.nombre}` : ''}!</h2>
+        <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">¡Bienvenido a MilePay{empresaActiva?.nombre ? `, ${empresaActiva.nombre}` : ''}!</h2>
       </div>
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Vamos a configurar tu cuenta en 3 pasos ({completados}/3 listos).</p>
 

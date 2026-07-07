@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Constantes globales del sistema Gofo
+// Constantes globales del sistema MilePay
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,

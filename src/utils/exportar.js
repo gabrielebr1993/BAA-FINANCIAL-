@@ -1,4 +1,4 @@
-// Exportación de reportes a Excel (SheetJS) y PDF (jsPDF) con branding Gofo.
+// Exportación de reportes a Excel (SheetJS) y PDF (jsPDF) con branding MilePay.
 // jsPDF se carga bajo demanda (import dinámico) para no engordar el bundle inicial.
 import * as XLSX from 'xlsx'
 
@@ -29,7 +29,7 @@ export async function exportarPDF(nombreArchivo, titulo, subtitulo, tablas) {
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text('Gofo', 40, 34)
+  doc.text('MilePay', 40, 34)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'normal')
   doc.text(titulo, 100, 34)

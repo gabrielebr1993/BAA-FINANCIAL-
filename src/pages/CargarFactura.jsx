@@ -116,7 +116,7 @@ export default function CargarFactura() {
       // choferes únicos (log de diagnóstico) — no dependen de la ciudad
       const couriersUnicos = [...new Set(procs.flatMap((p) => p.detalles.map((d) => d.courier)))]
       // eslint-disable-next-line no-console
-      console.log(`[Gofo] Choferes únicos detectados en "Details of Delivery Fees": ${couriersUnicos.length}`, couriersUnicos)
+      console.log(`[MilePay] Choferes únicos detectados en "Details of Delivery Fees": ${couriersUnicos.length}`, couriersUnicos)
       const nuevos = couriersUnicos.filter((n) => !buscarDriver(drivers, n))
       const p0 = {}
       nuevos.forEach((n) => (p0[n] = { ind: '', doble: '' }))

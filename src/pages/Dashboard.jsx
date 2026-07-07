@@ -71,7 +71,7 @@ export default function Dashboard() {
   const numClaims = useMemo(() => contarClaimsValidos(claimsCiudad), [claimsCiudad])
   const calidad = tot.paquetes > 0 ? 1 - numClaims / tot.paquetes : 1
   // eslint-disable-next-line no-console
-  console.log('[Gofo] Claims usados en dashboard:', numClaims)
+  console.log('[MilePay] Claims usados en dashboard:', numClaims)
 
   const ciudades = porCiudad(inv?.resumenCiudades || [], selectedCity)
   const ingresoPorCiudad = ciudades.map((c) => ({ name: nombreCiudadDe(inv, c.ubicacion), valor: Math.round(c.ingreso) }))

@@ -88,7 +88,7 @@ export default function Configuracion() {
           <div className="flex flex-wrap gap-4">
             <div>
               <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre de marca</div>
-              <Input className="w-64" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder={empresaActiva?.nombre || 'Gofo'} />
+              <Input className="w-64" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder={empresaActiva?.nombre || 'MilePay'} />
             </div>
             <div className="flex-1 min-w-[240px]">
               <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Notas internas</div>

@@ -127,9 +127,9 @@ function SidebarContent({ onNavigate }) {
   return (
     <aside className="flex min-h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
       <div className="flex items-center gap-3 px-1 pb-4 pt-1">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">G</div>
+        <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
         <div>
-          <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">Gofo</div>
+          <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
           <div className="text-[11px] text-slate-400">Gestión de facturas</div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function Layout({ children }) {
             <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white md:hidden" aria-label="Abrir menú">
               <Menu size={24} strokeWidth={1.8} />
             </button>
-            <span className="font-extrabold text-brand-navy dark:text-white md:hidden">Gofo</span>
+            <span className="font-extrabold text-brand-navy dark:text-white md:hidden">MilePay</span>
             <div className="ml-auto">
               <CampanaAlertas />
             </div>

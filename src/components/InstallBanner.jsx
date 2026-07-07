@@ -1,4 +1,4 @@
-// Banner "Instala Gofo en tu teléfono" (solo móvil). Usa beforeinstallprompt
+// Banner "Instala MilePay en tu teléfono" (solo móvil). Usa beforeinstallprompt
 // en Android/Chrome; en iOS muestra instrucciones. Descartable (en memoria).
 import { useState, useEffect } from 'react'
 import { Share, X } from 'lucide-react'
@@ -42,9 +42,9 @@ export default function InstallBanner() {
 
   return (
     <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-800 md:hidden">
-      <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-brand-gold font-extrabold text-brand-navy">G</div>
+      <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-brand-gold font-extrabold text-brand-navy">M</div>
       <div className="flex-1 text-sm">
-        <div className="font-bold text-brand-navy dark:text-slate-100">Instala Gofo en tu teléfono</div>
+        <div className="font-bold text-brand-navy dark:text-slate-100">Instala MilePay en tu teléfono</div>
         {esIOS ? (
           <div className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">Toca Compartir <Share size={13} strokeWidth={1.8} /> y luego “Añadir a pantalla de inicio”.</div>
         ) : (

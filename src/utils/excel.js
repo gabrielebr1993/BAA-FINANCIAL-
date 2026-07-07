@@ -281,8 +281,8 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
   // Diagnóstico (visible en la consola del navegador, F12): debe dar ~101024 y ~139.
   const choferesUnicos = [...new Set(detalles.map((d) => d.courier))]
   /* eslint-disable no-console */
-  console.log('[Gofo] Filas leídas:', detalles.length, `("${nombreArchivo}")`)
-  console.log('[Gofo] Choferes únicos:', choferesUnicos.length)
+  console.log('[MilePay] Filas leídas:', detalles.length, `("${nombreArchivo}")`)
+  console.log('[MilePay] Choferes únicos:', choferesUnicos.length)
   /* eslint-enable no-console */
 
   return {

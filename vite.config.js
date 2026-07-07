@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Gofo — Gestión de facturas',
-        short_name: 'Gofo',
-        description: 'Gestión de facturas de reparto: verificación con Gofo, pagos a choferes y rendimiento por ciudad.',
+        name: 'MilePay — Gestión de facturas',
+        short_name: 'MilePay',
+        description: 'MilePay: gestión de facturas de reparto — verificación con Gofo, pagos a choferes y rendimiento por ciudad.',
         theme_color: '#13233f',
         background_color: '#ffffff',
         display: 'standalone',

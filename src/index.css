@@ -16,12 +16,12 @@
 
 @layer utilities {
   /* Spinner giratorio (por si se usa fuera de animate-spin) */
-  @keyframes gofofloat {
+  @keyframes milepayfloat {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-8px); }
   }
   .animate-float {
-    animation: gofofloat 5s ease-in-out infinite;
+    animation: milepayfloat 5s ease-in-out infinite;
   }
   /* Scrollbar sutil para contenedores con overflow */
   .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }

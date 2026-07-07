@@ -144,9 +144,9 @@ export async function descargarReporteReclamo(h, meta = {}) {
     doc.setFillColor(...NAVY); doc.rect(0, 0, ancho, 56, 'F')
     doc.setFillColor(...GOLD); doc.rect(0, 56, ancho, 4, 'F')
     doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
-    doc.text('Gofo', 40, 36)
+    doc.text('MilePay', 40, 36)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(12)
-    doc.text('Reclamo formal a Gofo', 96, 36)
+    doc.text('Reclamo formal a Gofo', 116, 36)
 
     let y = 88
     doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(13)

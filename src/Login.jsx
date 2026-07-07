@@ -62,8 +62,8 @@ export default function Login() {
       {/* panel ilustración */}
       <div className="hidden flex-1 flex-col justify-center bg-gradient-to-br from-brand-navy to-brand-navy-900 p-12 text-white md:flex">
         <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-gold text-2xl font-extrabold text-brand-navy">G</div>
-          <div className="text-2xl font-extrabold">Gofo</div>
+          <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-gold text-2xl font-extrabold text-brand-navy">M</div>
+          <div className="text-2xl font-extrabold">MilePay</div>
         </div>
         <h1 className="m-0 mb-3 max-w-md text-3xl font-bold leading-tight">
           Gestión de facturas de <span className="text-brand-gold">reparto</span>
@@ -79,8 +79,8 @@ export default function Login() {
         <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-7 shadow-card">
           {/* logo visible también en móvil */}
           <div className="mb-5 flex items-center gap-2.5 md:hidden">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-navy text-xl font-extrabold text-brand-gold">G</div>
-            <div className="text-xl font-extrabold text-brand-navy">Gofo</div>
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-navy text-xl font-extrabold text-brand-gold">M</div>
+            <div className="text-xl font-extrabold text-brand-navy">MilePay</div>
           </div>
           {!modoReset ? (
             <>
