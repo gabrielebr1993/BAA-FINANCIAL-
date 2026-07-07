@@ -1,35 +1,44 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
-import { AuthProvider, useAuth } from './AuthContext'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { AuthProvider } from './AuthContext'
+import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
+import CargarFactura from './pages/CargarFactura'
+import Financiero from './pages/Financiero'
+import Claims from './pages/Claims'
+import Choferes from './pages/Choferes'
+import Pagos from './pages/Pagos'
+import Performance from './pages/Performance'
+import Usuarios from './pages/Usuarios'
 
-function Navbar() {
-  const { perfil, cerrarSesion, puede } = useAuth()
-  if (!perfil) return null
+// Envuelve una página con verificación de permiso + layout de sidebar.
+function Page({ filtro, children }) {
   return (
-    <nav style={{ display: 'flex', gap: 16, padding: 12, background: '#13233f', color: '#fff', alignItems: 'center' }}>
-      {puede('verDashboard') && <Link to="/" style={{ color: '#fff' }}>Dashboard</Link>}
-      {puede('subirFacturas') && <Link to="/facturas" style={{ color: '#fff' }}>Facturas</Link>}
-      {puede('verPagos') && <Link to="/pagos" style={{ color: '#fff' }}>Pagos</Link>}
-      {puede('gestionarUsuarios') && <Link to="/usuarios" style={{ color: '#fff' }}>Usuarios</Link>}
-      <span style={{ marginLeft: 'auto' }}>
-        {perfil.nombre} · <button onClick={cerrarSesion}>Salir</button>
-      </span>
-    </nav>
+    <ProtectedRoute filtro={filtro}>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
   )
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<ProtectedRoute filtro="verDashboard"><h1 style={{padding:24}}>Dashboard (próximamente)</h1></ProtectedRoute>} />
-          <Route path="/facturas" element={<ProtectedRoute filtro="subirFacturas"><h1 style={{padding:24}}>Cargar factura (Fase 2)</h1></ProtectedRoute>} />
-          <Route path="/pagos" element={<ProtectedRoute filtro="verPagos"><h1 style={{padding:24}}>Pagos a choferes (Fase 3)</h1></ProtectedRoute>} />
-          <Route path="/usuarios" element={<ProtectedRoute filtro="gestionarUsuarios"><h1 style={{padding:24}}>Gestión de usuarios (Fase 1)</h1></ProtectedRoute>} />
-        </Routes>
-      </BrowserRouter>
+      <DataProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
+            <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
+            <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
+            <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
+            <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
+            <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
+            <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
+            <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
+            <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
+          </Routes>
+        </BrowserRouter>
+      </DataProvider>
     </AuthProvider>
   )
 }
