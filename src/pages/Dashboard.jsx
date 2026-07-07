@@ -15,6 +15,7 @@ import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
+import RankingCiudades from '../components/RankingCiudades'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -187,6 +188,12 @@ export default function Dashboard() {
                 {ingresoPorCiudad.length > 1 && <DonutCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} />}
                 <BarCard title="Claims por ruta" data={claimsPorRuta} color="#c47f5a" fmt={num} />
               </div>
+
+              {selectedCity === TODAS && (
+                <div className="mb-4">
+                  <RankingCiudades compacto />
+                </div>
+              )}
 
               {selectedCity === TODAS && comparativoCiudades.length > 1 && (
                 <Card className="mb-4 p-4">

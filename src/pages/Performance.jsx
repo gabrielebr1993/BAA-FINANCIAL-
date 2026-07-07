@@ -7,6 +7,7 @@ import { money, num } from '../utils/format'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, Widget } from '../components/charts'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
+import RankingCiudades from '../components/RankingCiudades'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
@@ -224,6 +225,11 @@ export default function Performance() {
             )}
             <p className="mt-2 text-xs text-slate-400">“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.</p>
           </Card>
+
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
+          <div className="mb-4">
+            <RankingCiudades />
+          </div>
 
           <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo{fTipo ? ` · ${etiquetaTipoClaim(fTipo)}` : ''}</h2>
           <div className="mb-4">

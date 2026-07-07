@@ -3,7 +3,7 @@
 // Reglas fijas: doble = monto 0.5 ; CLAIM_FEE = $100 por claim no perdonado ;
 // pago = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*100.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, UMBRALES_CALIF, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
+import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
 
@@ -316,6 +316,74 @@ export function economiaClaims(claims) {
     perdidaAbsorbida,
     gananciaNetaClaims: cobradoChoferes - descontadoGofo,
   }
+}
+
+// ---- ranking de ciudades -----------------------------------------------------
+// Calificación 0-100 por ciudad combinando ganancia, rentabilidad $/lb, calidad
+// (claims), % fallidos (proxy = claims por ahora) y volumen. Pesos en constants.
+// Funciona con una sola ciudad (los factores relativos quedan al 100%).
+export function rankingCiudades(inv, claims, drivers, managers, semanas = 1) {
+  const ciudades = inv?.resumenCiudades || []
+  if (!ciudades.length) return []
+
+  // Peso e ingreso por ciudad (desde rutas) para el $/lb.
+  const pesoPorCiudad = {}, ingresoRutaPorCiudad = {}
+  for (const r of inv?.resumenRutas || []) {
+    pesoPorCiudad[r.ciudad] = (pesoPorCiudad[r.ciudad] || 0) + (r.pesoTotalLb || 0)
+    ingresoRutaPorCiudad[r.ciudad] = (ingresoRutaPorCiudad[r.ciudad] || 0) + (r.ingreso || 0)
+  }
+
+  const base = ciudades.map((c) => {
+    const code = c.ubicacion
+    const claimsCiudad = porCiudad(claims, code)
+    const numClaims = contarClaimsValidos(claimsCiudad)
+    const g = gananciaRealDe(inv, claims, drivers, managers, code, semanas)
+    const peso = pesoPorCiudad[code] || 0
+    const precioLb = peso > 0 ? (ingresoRutaPorCiudad[code] || c.ingreso) / peso : 0
+    const paquetes = c.paquetes || 0
+    return {
+      code,
+      nombre: nombreCiudadDe(inv, code),
+      paquetes,
+      ingreso: c.ingreso,
+      ingresoNeto: g.ingresoNeto,
+      ganancia: g.gananciaReal,
+      precioLb,
+      numClaims,
+      // TODO: cuando la factura traiga fallidos reales, usarlos aquí en vez de claims.
+      fallidos: numClaims,
+      pctClaims: paquetes > 0 ? numClaims / paquetes : 0,
+    }
+  })
+
+  const maxGan = Math.max(...base.map((b) => b.ganancia), 0) || 1
+  const maxLb = Math.max(...base.map((b) => b.precioLb), 0) || 1
+  const maxPq = Math.max(...base.map((b) => b.paquetes), 0) || 1
+  const w = PESOS_CALIF_CIUDAD
+
+  return base
+    .map((b) => {
+      const gananciaScore = clamp(b.ganancia > 0 ? (b.ganancia / maxGan) * 100 : 0)
+      const rentabilidadScore = clamp((b.precioLb / maxLb) * 100)
+      const claimsPor100 = b.paquetes > 0 ? (b.numClaims / b.paquetes) * 100 : 0
+      const calidadScore = clamp(100 - claimsPor100 * CALIDAD_FACTOR)
+      const fallidosPor100 = b.paquetes > 0 ? (b.fallidos / b.paquetes) * 100 : 0
+      const fallidosScore = clamp(100 - fallidosPor100 * CALIDAD_FACTOR)
+      const volumenScore = clamp((b.paquetes / maxPq) * 100)
+      const puntaje = Math.round(
+        w.ganancia * gananciaScore + w.rentabilidad * rentabilidadScore + w.calidad * calidadScore + w.fallidos * fallidosScore + w.volumen * volumenScore
+      )
+      const nivel = puntaje >= UMBRALES_CALIF.bueno ? 'bueno' : puntaje >= UMBRALES_CALIF.regular ? 'regular' : 'malo'
+      return {
+        ...b,
+        gananciaScore, rentabilidadScore, calidadScore, fallidosScore, volumenScore,
+        puntaje,
+        nivel,
+        etiqueta: nivel === 'bueno' ? 'Buena' : nivel === 'regular' ? 'Regular' : 'Mala',
+        desglose: `Ganancia ${nivelSub(gananciaScore)} · Calidad ${nivelSub(calidadScore)} · $/lb ${nivelSub(rentabilidadScore)} · Volumen ${nivelSub(volumenScore)}`,
+      }
+    })
+    .sort((a, b) => b.puntaje - a.puntaje)
 }
 
 // ---- ranking de claims por tipo ----------------------------------------------
