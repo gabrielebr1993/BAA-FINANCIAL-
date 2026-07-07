@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
 import { SECCIONES } from '../constants'
+import InstallBanner from './InstallBanner'
 
 function ThemeToggle() {
   const { oscuro, alternar } = useTheme()
@@ -134,12 +135,13 @@ export default function Layout({ children }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
-      <div className="sticky top-0 z-20 flex items-center gap-3 bg-brand-navy px-4 py-2.5 text-white md:hidden">
-        <button onClick={() => setAbierto(true)} className="relative text-2xl leading-none">
+      <div className="sticky top-0 z-20 flex items-center gap-3 bg-brand-navy px-4 py-3 text-white md:hidden">
+        <button onClick={() => setAbierto(true)} className="relative text-2xl leading-none" aria-label="Abrir menú">
           ☰
           {numAlertas > 0 && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500" />}
         </button>
         <span className="font-extrabold">Gofo</span>
+        <button onClick={() => setAbierto(true)} className="ml-auto text-xl leading-none" aria-label="Buscar">🔎</button>
       </div>
 
       <div className="flex">
@@ -157,6 +159,8 @@ export default function Layout({ children }) {
 
         <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6">{children}</main>
       </div>
+
+      <InstallBanner />
     </div>
   )
 }

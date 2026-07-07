@@ -275,7 +275,14 @@ export default function CargarFactura() {
       >
         <div className="text-4xl">⬆️</div>
         <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Arrastra uno o varios .xlsx (uno por ciudad)</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">o haz clic para seleccionar archivos</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">o usa el botón para seleccionar desde tu dispositivo</div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
+          className="mt-3 inline-block min-h-[44px] rounded-lg bg-brand-navy px-5 py-2.5 font-semibold text-white"
+        >
+          📂 Seleccionar archivo
+        </button>
         <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
       </div>
 
