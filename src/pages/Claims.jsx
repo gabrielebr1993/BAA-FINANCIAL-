@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { perdonarClaim, quitarPerdon } from '../utils/claims'
-import { porCiudad } from '../utils/calc'
+import { perdonarClaim, quitarPerdon, decidirClaimRepetido } from '../utils/claims'
+import { porCiudad, claimsValidos, detectarClaimsRepetidos } from '../utils/calc'
 import { CLAIM_FEE, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { AlertTriangle, Handshake, Ban, Percent, TrendingDown } from 'lucide-react'
+import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -24,6 +24,22 @@ export default function Claims() {
   const couriers = useMemo(() => [...new Set(base.map((c) => c.courier))].sort(), [base])
   const tipos = useMemo(() => [...new Set(base.map((c) => c.claimType).filter(Boolean))].sort(), [base])
 
+  // Casos de claim repetido (mismo waybill) y su estado de revisión por waybill.
+  const casosRepetidos = useMemo(() => detectarClaimsRepetidos(base), [base])
+  const estadoPorWaybill = useMemo(() => {
+    const m = {}
+    for (const g of casosRepetidos) m[g.waybill] = g.estado
+    return m
+  }, [casosRepetidos])
+  const pendientesRepetidos = casosRepetidos.filter((g) => (g.estado || 'pendiente') === 'pendiente')
+
+  const resolverRepetido = async (caso, decision) => {
+    setOcupado(true)
+    await decidirClaimRepetido(caso.claims, decision, perfil)
+    await reloadClaims()
+    setOcupado(false)
+  }
+
   const filtrados = base.filter((c) => {
     if (fCourier && c.courier !== fCourier) return false
     if (fTipo && c.claimType !== fTipo) return false
@@ -32,8 +48,9 @@ export default function Claims() {
     return true
   })
 
-  const totalClaims = base.length
-  const perdonados = base.filter((c) => c.perdonado).length
+  const validos = useMemo(() => claimsValidos(base), [base])
+  const totalClaims = validos.length
+  const perdonados = validos.filter((c) => c.perdonado).length
   const activos = totalClaims - perdonados
   const descuentoChoferes = activos * CLAIM_FEE
   const descuentoGofo = base.reduce((a, c) => a + (c.montoGofo || 0), 0)
@@ -68,6 +85,40 @@ export default function Claims() {
             <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} × $${CLAIM_FEE}`} />
             <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />
           </div>
+
+          {pendientesRepetidos.length > 0 && (
+            <Card className="mb-4 border-2 border-amber-400/70 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Copy size={18} strokeWidth={1.8} className="text-amber-500" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Claims repetidos pendientes de aprobación</h3>
+                <Badge color="gold">{pendientesRepetidos.length}</Badge>
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Un mismo tracking aparece más de una vez (claim + reversión). Aprobar cuenta el claim y cobra $100 al chofer; anular no cuenta ni cobra. El neto de Gofo no cambia.
+              </p>
+              <div className="space-y-3">
+                {pendientesRepetidos.map((caso) => (
+                  <div key={caso.waybill} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-mono text-sm font-semibold text-brand-navy dark:text-slate-100">{caso.waybill}</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">· {caso.courier}</span>
+                      <div className="ml-auto flex gap-2">
+                        <Boton variant="success" disabled={ocupado} onClick={() => resolverRepetido(caso, 'aprobado')} className="px-3 py-1.5 text-xs"><Check size={14} strokeWidth={2} /> Aprobar</Boton>
+                        <Boton variant="danger" disabled={ocupado} onClick={() => resolverRepetido(caso, 'anulado')} className="px-3 py-1.5 text-xs"><X size={14} strokeWidth={2} /> Anular</Boton>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {caso.claims.map((c, i) => (
+                        <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${Number(c.montoGofo) < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'}`}>
+                          {money(c.montoGofo)} · {c.claimType || 'sin tipo'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {!selectedInvoice ? (
             <EstadoVacio texto="Cuando cargues una factura verás aquí todos los claims para perdonarlos o cobrarlos." />
@@ -104,6 +155,7 @@ export default function Claims() {
                   { key: 'claimType', label: 'Tipo' },
                   { key: 'ciudad', label: 'Ciudad' },
                   { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
+                  { key: 'revision', label: 'Revisión', align: 'center' },
                   { key: 'estado', label: 'Estado', align: 'center' },
                   { key: 'acciones', label: 'Acción', align: 'right' },
                 ]}
@@ -112,6 +164,13 @@ export default function Claims() {
                 renderCell={(row, key) => {
                   if (key === 'montoGofo') return money(row.montoGofo)
                   if (key === 'ciudad') return nombreCiudad(row.ciudad)
+                  if (key === 'revision') {
+                    const est = estadoPorWaybill[(row.waybill || '').trim()]
+                    if (!est) return <span className="text-slate-300 dark:text-slate-600">—</span>
+                    if (est === 'aprobado') return <Badge color="green">Repetido · aprobado</Badge>
+                    if (est === 'anulado') return <Badge color="slate">Repetido · anulado</Badge>
+                    return <Badge color="gold">Repetido · pendiente</Badge>
+                  }
                   if (key === 'estado')
                     return row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
                   if (key === 'acciones') {

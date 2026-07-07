@@ -1,5 +1,5 @@
 // Cálculo centralizado de alertas del negocio sobre la factura/periodo activo.
-import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims } from './calc'
+import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims, claimsRepetidosPendientes } from './calc'
 import { money } from './format'
 
 // Categorías para agrupar las alertas en el panel y la campana.
@@ -61,6 +61,19 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
   // 7) Pagos pendientes sin marcar (info) — solo si se provee el conteo
   if (pendientes != null && pendientes > 0) {
     alertas.push({ id: 'pagos', tipo: 'blue', categoria: 'Pagos', titulo: `Tienes ${pendientes} pago(s) pendiente(s) por marcar`, detalle: 'Revisa Pagos y marca los ya realizados.', link: '/pagos' })
+  }
+
+  // 9) Claims repetidos pendientes de aprobación (aviso importante)
+  const repetidos = claimsRepetidosPendientes(claims)
+  if (repetidos.length > 0) {
+    alertas.push({
+      id: 'claimsRepetidos',
+      tipo: 'yellow',
+      categoria: 'Dinero',
+      titulo: `Claims repetidos detectados: ${repetidos.length} — requieren tu aprobación`,
+      detalle: 'Un mismo tracking aparece más de una vez (claim + reversión). Aprueba o anula cada caso en Claims.',
+      link: '/claims',
+    })
   }
 
   // 8) Costo de claims perdonados (aviso) — dinero que dejas de cobrar + monto

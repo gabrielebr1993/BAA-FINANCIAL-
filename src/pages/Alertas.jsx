@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, AlertCircle, Info, Scale, TrendingDown, Route, DollarSign, Truck, Wallet, Handshake, FileSpreadsheet, FileText, X, Check, ArrowRight, CheckCircle2, RotateCcw } from 'lucide-react'
+import { AlertTriangle, AlertCircle, Info, Scale, TrendingDown, Route, DollarSign, Truck, Wallet, Handshake, Copy, FileSpreadsheet, FileText, X, Check, ArrowRight, CheckCircle2, RotateCcw } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { calcularAlertas, SEVERIDAD_ORDEN, NOMBRE_TIPO, CATEGORIAS } from '../utils/alertas'
@@ -22,6 +22,7 @@ function iconoDe(a) {
   const id = a.id || ''
   if (id.startsWith('claims:')) return AlertTriangle
   if (id === 'claimsPerdonados') return Handshake
+  if (id === 'claimsRepetidos') return Copy
   if (id === 'cuadre') return Scale
   if (id.startsWith('perdida')) return TrendingDown
   if (id.startsWith('ruta')) return Route

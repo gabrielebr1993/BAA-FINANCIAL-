@@ -4,11 +4,11 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -32,6 +32,7 @@ export default function CargarFactura() {
   const [nuevaCiudad, setNuevaCiudad] = useState({ codigo: '', nombre: '' })
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
+  const [decisiones, setDecisiones] = useState({}) // { waybill: 'aprobado' | 'anulado' }
   const inputRef = useRef(null)
 
   const reset = () => {
@@ -44,6 +45,7 @@ export default function CargarFactura() {
     setPrecios({})
     setBusqueda('')
     setBulk({ ind: '', doble: '' })
+    setDecisiones({})
   }
 
   const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
@@ -70,6 +72,12 @@ export default function CargarFactura() {
     })
     return combinarArchivos(overridden, nombreMap)
   }, [procesados, ciudadPorArchivo, nombreMap])
+
+  // Casos de claim repetido (mismo Waybill No. más de una vez) que requieren
+  // que el dueño apruebe o anule ANTES de guardar la factura.
+  const casosRepetidos = useMemo(() => detectarClaimsRepetidos(combinado?.claims || []), [combinado])
+  const todosRepetidosResueltos = casosRepetidos.every((c) => decisiones[c.waybill])
+  const setDecision = (waybill, decision) => setDecisiones((d) => ({ ...d, [waybill]: decision }))
 
   const manejarArchivos = async (fileList) => {
     const files = Array.from(fileList).filter((f) => /\.xlsx?$/i.test(f.name))
@@ -152,6 +160,7 @@ export default function CargarFactura() {
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
     if (choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
+    if (!todosRepetidosResueltos) return setErrores([`Hay ${casosRepetidos.filter((c) => !decisiones[c.waybill]).length} claim(s) repetido(s) sin resolver. Aprueba o anula cada uno antes de guardar.`])
     setGuardando(true)
     setErrores([])
     try {
@@ -197,6 +206,11 @@ export default function CargarFactura() {
         const batch = writeBatch(db)
         for (const c of claims.slice(i, i + chunk)) {
           const cref = doc(collection(db, 'claims'))
+          // Los claims repetidos guardan la decisión del dueño; el resto quedan
+          // 'aprobado' (cuentan como claim válido normal).
+          const wb = (c.waybill || '').trim()
+          const esRepetido = casosRepetidos.some((k) => k.waybill === wb)
+          const estadoRevision = esRepetido ? decisiones[wb] || 'pendiente' : 'aprobado'
           batch.set(cref, {
             companyId: activeCompanyId,
             invoiceId: ref.id,
@@ -208,6 +222,10 @@ export default function CargarFactura() {
             claimType: c.claimType,
             montoGofo: c.montoGofo,
             ciudad: c.ciudad || '',
+            estadoRevision,
+            esRepetido,
+            revisadoPor: esRepetido ? perfil?.nombre || perfil?.email || '' : '',
+            revisadoEn: null,
             perdonado: false,
             motivo: '',
             perdonadoPor: '',
@@ -253,7 +271,7 @@ export default function CargarFactura() {
     }
   }
 
-  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (choferesNuevos.length === 0 || todosConPrecio)
+  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos
 
   const fmtFecha = (ts) => {
     try {
@@ -355,6 +373,52 @@ export default function CargarFactura() {
           </Card>
 
           <Verificacion v={combinado.verificacion} />
+
+          {casosRepetidos.length > 0 && (
+            <Card className="mb-4 border-2 border-amber-400/70 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Copy size={18} strokeWidth={1.8} className="text-amber-500" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Claims repetidos — requieren tu aprobación</h3>
+                <Badge color={todosRepetidosResueltos ? 'green' : 'gold'}>
+                  {casosRepetidos.filter((c) => decisiones[c.waybill]).length}/{casosRepetidos.length} resueltos
+                </Badge>
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Estos trackings aparecen más de una vez en “Claims Detail” (normalmente un claim y su reversión).
+                Decide manualmente si cada uno se <b>aprueba</b> (cuenta como claim y se le cobran $100 al chofer) o se
+                <b> anula</b> (no cuenta, no se cobra). El monto que Gofo descuenta del neto no cambia.
+              </p>
+              <div className="space-y-3">
+                {casosRepetidos.map((caso) => {
+                  const d = decisiones[caso.waybill]
+                  return (
+                    <div key={caso.waybill} className={`rounded-xl border p-3 ${d === 'aprobado' ? 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-500/5' : d === 'anulado' ? 'border-rose-300 bg-rose-50/60 dark:border-rose-700/50 dark:bg-rose-500/5' : 'border-slate-200 dark:border-slate-700/60'}`}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="font-mono text-sm font-semibold text-brand-navy dark:text-slate-100">{caso.waybill}</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">· {caso.courier}</span>
+                        <div className="ml-auto flex gap-2">
+                          <Boton variant={d === 'aprobado' ? 'success' : 'ghost'} onClick={() => setDecision(caso.waybill, 'aprobado')} className="px-3 py-1.5 text-xs">
+                            <Check size={14} strokeWidth={2} /> Aprobar
+                          </Boton>
+                          <Boton variant={d === 'anulado' ? 'danger' : 'ghost'} onClick={() => setDecision(caso.waybill, 'anulado')} className="px-3 py-1.5 text-xs">
+                            <X size={14} strokeWidth={2} /> Anular
+                          </Boton>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {caso.claims.map((c, i) => (
+                          <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${Number(c.montoGofo) < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'}`}>
+                            {money(c.montoGofo)} · {c.claimType || 'sin tipo'}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-xs text-slate-400">Este claim parece anulado por una reversión. Tú decides si cuenta.</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
 
           <div className="mb-4 flex flex-wrap gap-3">
             <KPI label="Paquetes" value={num(combinado.totalPaquetes)} icon={Package} accent="navy" />

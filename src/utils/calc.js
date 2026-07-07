@@ -59,13 +59,91 @@ export function buscarDriver(drivers, nombre) {
   return drivers.find((d) => (d.nombre || '').trim().toLowerCase() === n) || null
 }
 
-// Claims activos (no perdonados) por chofer, a partir de la colección claims.
+// ---- claims repetidos y conteo canónico --------------------------------------
+// Un claim puede tener `estadoRevision`:
+//   undefined / 'aprobado' -> cuenta como válido
+//   'anulado'              -> no cuenta (reversión rechazada por el dueño)
+//   'pendiente'            -> repetido sin decidir; no cuenta hasta aprobarse
+// Un caso REPETIDO = un mismo Waybill No. que aparece >1 vez dentro de la MISMA
+// factura (invoiceId). Suele ser un claim (monto negativo) + su reversión
+// (monto positivo). El dueño decide manualmente si el caso se aprueba o se anula.
+
+// Clave de agrupación: factura + waybill (para no cruzar facturas distintas).
+function claveWaybill(c) {
+  const wb = (c.waybill || '').trim()
+  return `${c.invoiceId || ''}||${wb || `__${c.id || Math.random()}`}`
+}
+
+// Detecta los casos de waybill repetido en un conjunto de claims.
+// Devuelve [{ waybill, invoiceId, courier, estado, claims: [...] }].
+export function detectarClaimsRepetidos(claims) {
+  const grupos = {}
+  for (const c of claims || []) {
+    if (!(c.waybill || '').trim()) continue
+    const k = claveWaybill(c)
+    ;(grupos[k] = grupos[k] || []).push(c)
+  }
+  return Object.values(grupos)
+    .filter((arr) => arr.length > 1)
+    .map((arr) => ({
+      waybill: (arr[0].waybill || '').trim(),
+      invoiceId: arr[0].invoiceId || '',
+      courier: arr[0].courier,
+      ciudad: arr[0].ciudad || '',
+      estado: arr[0].estadoRevision || 'pendiente',
+      claims: arr,
+    }))
+}
+
+// Casos repetidos aún sin resolver (pendientes de aprobación del dueño).
+export function claimsRepetidosPendientes(claims) {
+  return detectarClaimsRepetidos(claims).filter((g) => (g.estado || 'pendiente') === 'pendiente')
+}
+
+// Conteo CANÓNICO: lista de claims VÁLIDOS (mismo criterio en todo el sistema).
+// - No repetido: cuenta salvo que esté 'anulado'.
+// - Repetido: cuenta UNA vez y solo si el caso está 'aprobado' (representado por
+//   el claim de monto negativo, el "real"); 'pendiente'/'anulado' no cuentan.
+export function claimsValidos(claims) {
+  const grupos = {}
+  for (const c of claims || []) {
+    const k = claveWaybill(c)
+    ;(grupos[k] = grupos[k] || []).push(c)
+  }
+  const validos = []
+  for (const arr of Object.values(grupos)) {
+    if (arr.length === 1) {
+      if (arr[0].estadoRevision !== 'anulado') validos.push(arr[0])
+    } else {
+      const estado = arr[0].estadoRevision || 'pendiente'
+      if (estado === 'aprobado') {
+        const real = arr.find((c) => Number(c.montoGofo) < 0) || arr[0]
+        validos.push(real)
+      }
+    }
+  }
+  return validos
+}
+
+// Número oficial de claims válidos.
+export function contarClaimsValidos(claims) {
+  return claimsValidos(claims).length
+}
+
+// Claims activos (válidos y no perdonados) por chofer → base del cobro de $100.
 export function claimsActivosPorChofer(claims) {
   const map = {}
-  for (const c of claims || []) {
+  for (const c of claimsValidos(claims)) {
     if (c.perdonado) continue
     map[c.courier] = (map[c.courier] || 0) + 1
   }
+  return map
+}
+
+// Claims válidos (perdonados incluidos) por chofer → conteo de calidad.
+export function claimsValidosPorChofer(claims) {
+  const map = {}
+  for (const c of claimsValidos(claims)) map[c.courier] = (map[c.courier] || 0) + 1
   return map
 }
 
@@ -73,9 +151,11 @@ export function claimsActivosPorChofer(claims) {
 // Devuelve filas con ingreso, tarifas, descuento de claims, total a pagar y ganancia.
 export function calcularPagos(inv, claims, drivers, ciudad) {
   const choferes = porCiudad(inv?.resumenChoferes || [], ciudad)
-  const activos = claimsActivosPorChofer(claims)
-  const totalClaimsPorChofer = {}
-  for (const c of claims || []) totalClaimsPorChofer[c.courier] = (totalClaimsPorChofer[c.courier] || 0) + 1
+  const activos = claimsActivosPorChofer(claims)          // válidos y no perdonados
+  const totalClaimsPorChofer = claimsValidosPorChofer(claims) // válidos (incluye perdonados)
+  // Monto que Gofo descontó por chofer (suma de |montoGofo| de sus claims válidos).
+  const descuentoGofoPorChofer = {}
+  for (const c of claimsValidos(claims)) descuentoGofoPorChofer[c.courier] = (descuentoGofoPorChofer[c.courier] || 0) + Math.abs(Number(c.montoGofo) || 0)
 
   return choferes.map((ch) => {
     const driver = buscarDriver(drivers, ch.nombre)
@@ -85,6 +165,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
     const claimsTotales = totalClaimsPorChofer[ch.nombre] || 0
     const claimsPerdonados = claimsTotales - claimsActivos
     const descuentoClaims = claimsActivos * CLAIM_FEE
+    const descontadoGofo = descuentoGofoPorChofer[ch.nombre] || 0
     const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
     const totalPagar = pagoBase - descuentoClaims
     return {
@@ -101,6 +182,8 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       claimsActivos,
       claimsPerdonados,
       descuentoClaims,
+      descontadoGofo,
+      gananciaClaims: descuentoClaims - descontadoGofo,
       totalPagar,
       ganancia: ch.ingreso - totalPagar,
     }
@@ -181,13 +264,13 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
 // Gofo descuenta un monto variable (montoGofo) por cada claim, ya incluido en el
 // neto. Perdonar = no cobrar los $100 y ABSORBER el monto que Gofo cobró.
 export function economiaClaims(claims) {
-  const lista = claims || []
-  const total = lista.length
-  const perdonados = lista.filter((c) => c.perdonado).length
+  const validos = claimsValidos(claims)
+  const total = validos.length
+  const perdonados = validos.filter((c) => c.perdonado).length
   const activos = total - perdonados
   const cobradoChoferes = activos * CLAIM_FEE
-  const descontadoGofo = lista.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
-  const perdidaAbsorbida = lista.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
+  const descontadoGofo = validos.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
+  const perdidaAbsorbida = validos.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
   return {
     total,
     perdonados,
@@ -221,7 +304,7 @@ export function etiquetaTipoClaim(tipo) {
 //   matriz : [{ courier, total, porTipo: { [key]: n } }]  ordenado por total desc
 //   porTipo: { [key]: [{ courier, n }] }  ranking por cada tipo (desc)
 export function rankingClaimsPorTipo(claims) {
-  const lista = claims || []
+  const lista = claimsValidos(claims)
   const tiposMap = new Map() // key normalizado -> etiqueta cruda representativa
   const porCourier = {}
   for (const c of lista) {
