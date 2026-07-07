@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { X, Search, Filter, RotateCcw } from 'lucide-react'
+import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wallet, Package, Route, Clock, UserX } from 'lucide-react'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { calcularPagos, rankingsRutas, porCiudad, claimsValidos, etiquetaTipoClaim } from '../utils/calc'
+import { calcularPagos, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, costoManagers, etiquetaTipoClaim } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, Widget } from '../components/charts'
+import KpiPro from '../components/KpiPro'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import CitySelector from '../components/CitySelector'
@@ -14,7 +17,7 @@ import RangeSelector from '../components/RangeSelector'
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
 export default function Performance() {
-  const { facturaRango: selectedInvoice, claims, drivers, selectedCity, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, activeCompanyId, cargando } = useData()
   const navigate = useNavigate()
   const [sortKey, setSortKey] = useState('ingreso')
   const [asc, setAsc] = useState(false)
@@ -108,6 +111,92 @@ export default function Performance() {
     { name: 'Con claims', valor: conClaims.length },
   ]
 
+  // ---- INDICADORES (sección NUEVA; respeta ciudad + rango globales) ----------
+  const avgTar = useMemo(() => {
+    const act = (drivers || []).filter((d) => d.activo !== false)
+    const indT = act.reduce((a, d) => a + (Number(d.precioIndividual) || 0), 0) / (act.length || 1)
+    const dobT = act.reduce((a, d) => a + (Number(d.precioDoble) || 0), 0) / (act.length || 1)
+    return { ind: indT, dob: dobT }
+  }, [drivers])
+
+  // Serie semana a semana para mini-sparklines y tendencia vs. periodo anterior.
+  const serie = useMemo(() => {
+    return [...invoicesRango]
+      .sort((a, b) => {
+        const ta = a.fechaInicio instanceof Date ? a.fechaInicio.getTime() : 0
+        const tb = b.fechaInicio instanceof Date ? b.fechaInicio.getTime() : 0
+        return ta - tb
+      })
+      .map((f) => {
+        const cl = claims.filter((c) => c.invoiceId === f.id)
+        const ps = calcularPagos(f, cl, drivers, selectedCity)
+        const paquetes = ps.reduce((a, p) => a + p.individuales + p.dobles, 0)
+        const ingreso = ps.reduce((a, p) => a + p.ingreso, 0)
+        const nomina = ps.reduce((a, p) => a + p.totalPagar, 0)
+        const gananciaClaims = ps.reduce((a, p) => a + p.gananciaClaims, 0)
+        return { ticket: paquetes > 0 ? ingreso / paquetes : 0, nomina, gananciaClaims }
+      })
+  }, [invoicesRango, claims, drivers, selectedCity])
+
+  const trendDe = (key) => {
+    if (serie.length < 2) return null
+    const prev = serie[serie.length - 2][key]
+    const act = serie[serie.length - 1][key]
+    if (prev == null || prev === 0) return null
+    return (act - prev) / Math.abs(prev)
+  }
+
+  const indic = useMemo(() => {
+    const conTarifa = pagos.filter((p) => !p.sinTarifa)
+    const masRentable = [...(conTarifa.length ? conTarifa : pagos)].sort((a, b) => b.ganancia - a.ganancia)[0] || null
+    const masProblematico = [...pagos].filter((p) => p.claimsTotales > 0).sort((a, b) => b.claimsTotales - a.claimsTotales)[0] || null
+    const gananciaClaims = pagos.reduce((a, p) => a + p.gananciaClaims, 0)
+    const nominaChoferes = pagos.reduce((a, p) => a + p.totalPagar, 0)
+    const costoMgr = costoManagers(managers, Math.max(1, invoicesRango.length))
+    const ingresoBruto = pagos.reduce((a, p) => a + p.ingreso, 0)
+    const paquetes = pagos.reduce((a, p) => a + p.individuales + p.dobles, 0)
+    const rutasG = porCiudad(selectedInvoice?.resumenRutas || [], selectedCity).map((r) => ({
+      ruta: r.ruta,
+      ganancia: r.ingreso - (r.individuales * avgTar.ind + r.dobles * avgTar.dob),
+    }))
+    const rutasOrden = [...rutasG].sort((a, b) => b.ganancia - a.ganancia)
+    const rutaTop = rutasOrden[0] || null
+    const rutaBottom = rutasOrden.length > 1 ? rutasOrden[rutasOrden.length - 1] : null
+    const sinTarifaN = (drivers || []).filter((d) => !(Number(d.precioIndividual) > 0) || !(Number(d.precioDoble) > 0)).length
+    const entregaron = new Set(pagos.filter((p) => p.individuales + p.dobles > 0).map((p) => p.nombre))
+    const inactivosN = (drivers || []).filter((d) => d.activo !== false && !entregaron.has(d.nombre)).length
+    return {
+      masRentable, masProblematico, gananciaClaims,
+      nominaChoferes, costoMgr, nominaTotal: nominaChoferes + costoMgr,
+      ticket: paquetes > 0 ? ingresoBruto / paquetes : 0, paquetes,
+      rutaTop, rutaBottom, sinTarifaN, inactivosN,
+    }
+  }, [pagos, managers, invoicesRango, selectedInvoice, selectedCity, avgTar, drivers])
+
+  // Pagos pendientes (nómina no marcada como pagada) en el rango.
+  const [pendientes, setPendientes] = useState({ monto: 0, choferes: 0 })
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      if (!activeCompanyId || invoicesRango.length === 0) { if (vivo) setPendientes({ monto: 0, choferes: 0 }); return }
+      const pagadas = new Set()
+      await Promise.all(invoicesRango.map((f) =>
+        getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', f.id)))
+          .then((s) => s.docs.forEach((d) => { const x = d.data(); if (x.estado === 'pagado') pagadas.add(`${x.invoiceId}||${x.driverNombre}`) }))
+      ))
+      let monto = 0
+      const chof = new Set()
+      for (const f of invoicesRango) {
+        const cl = claims.filter((c) => c.invoiceId === f.id)
+        for (const p of calcularPagos(f, cl, drivers, selectedCity)) {
+          if (!pagadas.has(`${f.id}||${p.nombre}`)) { monto += p.totalPagar; chof.add(p.nombre) }
+        }
+      }
+      if (vivo) setPendientes({ monto, choferes: chof.size })
+    })().catch(() => {})
+    return () => { vivo = false }
+  }, [activeCompanyId, invoicesRango, claims, drivers, selectedCity])
+
   return (
     <div>
       <PageTitle right={<><RangeSelector /><CitySelector /></>}>Performance</PageTitle>
@@ -121,6 +210,63 @@ export default function Performance() {
           <Aviso tipo="info">
             Nota: por ahora la factura solo trae paquetes entregados (no fallidos), por lo que los <b>claims</b> se usan como indicador de problemas. El código queda listo para agregar "fallidos" en el futuro.
           </Aviso>
+
+          {/* ==== Indicadores (sección nueva; respeta ciudad + fechas globales) ==== */}
+          <h2 className="mb-2 mt-1 text-xl font-bold text-brand-navy dark:text-slate-100">Indicadores</h2>
+          <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KpiPro
+              icon={TrendingUp} accent="gold" label="Chofer más rentable"
+              value={indic.masRentable ? indic.masRentable.nombre : '—'}
+              sub={indic.masRentable ? `Ganancia ${money(indic.masRentable.ganancia)}` : 'Sin datos'}
+              onClick={indic.masRentable ? () => verPerfil(indic.masRentable.nombre) : undefined}
+            />
+            <KpiPro
+              icon={AlertTriangle} accent="red" valueColor="text-rose-600 dark:text-rose-400" label="Chofer más problemático"
+              value={indic.masProblematico ? indic.masProblematico.nombre : '—'}
+              sub={indic.masProblematico ? `${num(indic.masProblematico.claimsTotales)} claims` : 'Nadie con claims'}
+              onClick={indic.masProblematico ? () => verPerfil(indic.masProblematico.nombre) : undefined}
+            />
+            <KpiPro
+              icon={Handshake} accent="green" label="Ganancia por claims"
+              value={money(indic.gananciaClaims)}
+              valueColor={indic.gananciaClaims >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}
+              sub="Cobrado a choferes − descontado Gofo"
+              spark={serie.map((s) => s.gananciaClaims)} trend={trendDe('gananciaClaims')}
+              onClick={() => navigate('/claims')}
+            />
+            <KpiPro
+              icon={Wallet} accent="navy" label="Costo total de nómina"
+              value={money(indic.nominaTotal)}
+              sub={`Choferes ${money(indic.nominaChoferes)} + managers ${money(indic.costoMgr)}`}
+              spark={serie.map((s) => s.nomina)} trend={trendDe('nomina')}
+              onClick={() => navigate('/pagos')}
+            />
+            <KpiPro
+              icon={Package} accent="steel" label="Ticket promedio / paquete"
+              value={indic.paquetes > 0 ? money(indic.ticket) : '—'}
+              sub={`${num(indic.paquetes)} paquetes`}
+              spark={serie.map((s) => s.ticket)} trend={trendDe('ticket')}
+              onClick={() => navigate('/financiero')}
+            />
+            <KpiPro
+              icon={Route} accent="gold" label="Ruta más / menos rentable"
+              value={indic.rutaTop ? indic.rutaTop.ruta : '—'}
+              sub={indic.rutaTop ? `${money(indic.rutaTop.ganancia)}${indic.rutaBottom ? ` · peor: ${indic.rutaBottom.ruta} (${money(indic.rutaBottom.ganancia)})` : ''}` : 'Sin rutas'}
+              onClick={indic.rutaTop ? () => setFRuta(indic.rutaTop.ruta) : undefined}
+            />
+            <KpiPro
+              icon={Clock} accent="amber" valueColor="text-amber-600 dark:text-amber-400" label="Pagos pendientes"
+              value={money(pendientes.monto)}
+              sub={`${num(pendientes.choferes)} chofer(es) por pagar`}
+              onClick={() => navigate('/pagos')}
+            />
+            <KpiPro
+              icon={UserX} accent="red" label="Sin tarifa / inactivos"
+              value={num(indic.sinTarifaN)}
+              sub={`sin tarifa · ${num(indic.inactivosN)} sin entregas`}
+              onClick={() => navigate('/choferes')}
+            />
+          </div>
 
           {/* Barra de filtros combinables */}
           <Card className="mb-4 p-3">
