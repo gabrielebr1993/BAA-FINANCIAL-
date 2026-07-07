@@ -214,7 +214,8 @@ export default function PerfilChofer() {
 
           {/* Detalle de claims */}
           <Card className="p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Detalle de claims ({claimsChofer.length})</h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Detalle de claims ({claimsChofer.length})</h3>
+            <p className="mb-3 text-xs text-slate-400">Haz clic en un claim para abrir la ficha del tracking.</p>
             <Tabla
               columns={[
                 { key: 'waybill', label: 'Waybill' },
@@ -225,6 +226,7 @@ export default function PerfilChofer() {
                 { key: 'estado', label: 'Estado', align: 'center' },
               ]}
               rows={claimsChofer.map((c) => ({ ...c, _key: c.id }))}
+              onRowClick={(row) => row.waybill && navigate(`/tracking/${encodeURIComponent(row.waybill)}`)}
               emptyText="Sin claims en el periodo."
               renderCell={(row, key) => {
                 if (key === 'montoGofo') return money(row.montoGofo)

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { perdonarClaim, quitarPerdon, decidirClaimRepetido } from '../utils/claims'
+import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios } from '../utils/claims'
 import { porCiudad, claimsValidos, detectarClaimsRepetidos } from '../utils/calc'
 import { CLAIM_FEE, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -19,6 +20,10 @@ export default function Claims() {
   const [perdonandoId, setPerdonandoId] = useState(null)
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  // multiselección
+  const [sel, setSel] = useState(() => new Set())
+  const [lote, setLote] = useState(false) // true = capturando motivo del lote
+  const [motivoLote, setMotivoLote] = useState('')
 
   const base = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
   const couriers = useMemo(() => [...new Set(base.map((c) => c.courier))].sort(), [base])
@@ -54,6 +59,36 @@ export default function Claims() {
   const activos = totalClaims - perdonados
   const descuentoChoferes = activos * CLAIM_FEE
   const descuentoGofo = base.reduce((a, c) => a + (c.montoGofo || 0), 0)
+
+  // ---- multiselección (respeta los filtros activos) ----
+  const idsFiltrados = filtrados.map((c) => c.id)
+  const todosSel = idsFiltrados.length > 0 && idsFiltrados.every((id) => sel.has(id))
+  const toggleUno = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleTodos = () => setSel((s) => {
+    const n = new Set(s)
+    if (todosSel) idsFiltrados.forEach((id) => n.delete(id))
+    else idsFiltrados.forEach((id) => n.add(id))
+    return n
+  })
+  const seleccionados = filtrados.filter((c) => sel.has(c.id))
+  const selPorPerdonar = seleccionados.filter((c) => !c.perdonado)
+  const selPorRestaurar = seleccionados.filter((c) => c.perdonado)
+  const limpiarSel = () => { setSel(new Set()); setLote(false); setMotivoLote('') }
+
+  const confirmarLote = async () => {
+    setOcupado(true)
+    await perdonarVarios(selPorPerdonar, motivoLote, perfil)
+    await reloadClaims()
+    limpiarSel()
+    setOcupado(false)
+  }
+  const quitarPerdonLote = async () => {
+    setOcupado(true)
+    await quitarPerdonVarios(selPorRestaurar)
+    await reloadClaims()
+    limpiarSel()
+    setOcupado(false)
+  }
 
   const confirmarPerdon = async (claim) => {
     setOcupado(true)
@@ -147,8 +182,40 @@ export default function Claims() {
                 </div>
               </Card>
 
+              {/* Barra de acciones en lote (multiselección) */}
+              {seleccionados.length > 0 && (
+                <Card className="mb-3 border-2 border-brand-gold/50 p-3">
+                  {!lote ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} seleccionado(s)</span>
+                      <div className="ml-auto flex flex-wrap gap-2">
+                        <Boton variant="success" disabled={ocupado || selPorPerdonar.length === 0} onClick={() => setLote(true)} className="px-3 py-1.5 text-xs">
+                          <Handshake size={14} strokeWidth={1.8} /> Perdonar seleccionados ({selPorPerdonar.length})
+                        </Boton>
+                        <Boton variant="danger" disabled={ocupado || selPorRestaurar.length === 0} onClick={quitarPerdonLote} className="px-3 py-1.5 text-xs">
+                          Quitar perdón ({selPorRestaurar.length})
+                        </Boton>
+                        <Boton variant="ghost" onClick={limpiarSel} className="px-3 py-1.5 text-xs">Limpiar</Boton>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input autoFocus className="w-64" placeholder="Motivo del perdón (uno para todos)…" value={motivoLote} onChange={(e) => setMotivoLote(e.target.value)} />
+                      <span className="text-sm text-slate-600 dark:text-slate-300">
+                        Vas a perdonar <b>{selPorPerdonar.length}</b> claim(s){motivoLote ? <> con el motivo: “{motivoLote}”</> : null}. Cada uno absorbe su propio monto de Gofo.
+                      </span>
+                      <div className="ml-auto flex gap-2">
+                        <Boton variant="success" disabled={ocupado} onClick={confirmarLote} className="px-3 py-1.5 text-xs">Confirmar</Boton>
+                        <Boton variant="ghost" onClick={() => { setLote(false); setMotivoLote('') }} className="px-3 py-1.5 text-xs">Cancelar</Boton>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              )}
+
               <Tabla
                 columns={[
+                  { key: 'sel', label: <input type="checkbox" aria-label="Seleccionar todos" checked={todosSel} onChange={toggleTodos} />, align: 'center' },
                   { key: 'waybill', label: 'Waybill' },
                   { key: 'courier', label: 'Chofer' },
                   { key: 'date', label: 'Fecha' },
@@ -162,6 +229,8 @@ export default function Claims() {
                 rows={filtrados.map((c) => ({ ...c, _key: c.id }))}
                 emptyText="Sin claims con estos filtros."
                 renderCell={(row, key) => {
+                  if (key === 'sel') return <input type="checkbox" aria-label="Seleccionar claim" checked={sel.has(row.id)} onChange={() => toggleUno(row.id)} />
+                  if (key === 'waybill') return <Link to={`/tracking/${encodeURIComponent(row.waybill)}`} className="font-medium text-brand-navy hover:underline dark:text-brand-gold">{row.waybill || '—'}</Link>
                   if (key === 'montoGofo') return money(row.montoGofo)
                   if (key === 'ciudad') return nombreCiudad(row.ciudad)
                   if (key === 'revision') {

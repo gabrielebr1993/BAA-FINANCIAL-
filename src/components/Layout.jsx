@@ -24,18 +24,29 @@ function ThemeToggle() {
 }
 
 function BuscadorGlobal({ onNavigate }) {
-  const { drivers, facturaRango } = useData()
+  const { drivers, facturaRango, claims } = useData()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [abierto, setAbierto] = useState(false)
 
+  // Un texto parece un tracking si empieza por GFUS/CR o es un código largo alfanumérico.
+  const pareceTracking = (t) => /^(gfus|cr)/i.test(t) || /^[a-z0-9]{10,}$/i.test(t)
+
   const resultados = useMemo(() => {
-    const term = q.trim().toLowerCase()
+    const raw = q.trim()
+    const term = raw.toLowerCase()
     if (!term) return []
     const chof = (drivers || []).filter((d) => (d.nombre || '').toLowerCase().includes(term)).slice(0, 5).map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: `/choferes/${encodeURIComponent(d.nombre)}` }))
     const rutas = [...new Set((facturaRango?.resumenRutas || []).map((r) => r.ruta))].filter((r) => r.toLowerCase().includes(term)).slice(0, 5).map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
-    return [...chof, ...rutas]
-  }, [q, drivers, facturaRango])
+    // Trackings con claim que coinciden (de los claims cargados en el rango).
+    const track = [...new Set((claims || []).map((c) => (c.waybill || '').trim()).filter(Boolean))]
+      .filter((w) => w.toLowerCase().includes(term)).slice(0, 5)
+      .map((w) => ({ tipo: 'Tracking', nombre: w, link: `/tracking/${encodeURIComponent(w)}` }))
+    // Búsqueda directa por tracking exacto aunque no esté en el rango cargado.
+    const directo = pareceTracking(raw) && !track.some((t) => t.nombre.toLowerCase() === term)
+      ? [{ tipo: 'Tracking', nombre: raw, link: `/tracking/${encodeURIComponent(raw)}` }] : []
+    return [...track, ...directo, ...chof, ...rutas]
+  }, [q, drivers, facturaRango, claims])
 
   const ir = (r) => { setQ(''); setAbierto(false); onNavigate?.(); navigate(r.link) }
 

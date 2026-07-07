@@ -13,6 +13,7 @@ import ReclamosGofo from './pages/ReclamosGofo'
 import Claims from './pages/Claims'
 import Choferes from './pages/Choferes'
 import PerfilChofer from './pages/PerfilChofer'
+import TrackingFicha from './pages/TrackingFicha'
 import Pagos from './pages/Pagos'
 import Performance from './pages/Performance'
 import Alertas from './pages/Alertas'
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
               <Route path="/choferes/:nombre" element={<Page filtro="verDashboard"><PerfilChofer /></Page>} />
+              <Route path="/tracking/:waybill" element={<Page filtro="verDashboard"><TrackingFicha /></Page>} />
               <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
               <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
               <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />

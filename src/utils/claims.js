@@ -20,6 +20,40 @@ export async function quitarPerdon(claim) {
   })
 }
 
+// Perdona VARIOS claims a la vez con un mismo motivo. Cada claim conserva su
+// propio montoGofo (la pérdida absorbida es el monto real de cada uno).
+export async function perdonarVarios(claimsArr, motivo, perfil) {
+  const lista = (claimsArr || []).filter((c) => c?.id && !c.perdonado)
+  const chunk = 450
+  for (let i = 0; i < lista.length; i += chunk) {
+    const batch = writeBatch(db)
+    for (const c of lista.slice(i, i + chunk)) {
+      batch.update(doc(db, 'claims', c.id), {
+        perdonado: true,
+        motivo: motivo || '',
+        perdonadoPor: perfil?.nombre || perfil?.email || '',
+        perdonadoEn: serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
+  return lista.length
+}
+
+// Quita el perdón a VARIOS claims a la vez.
+export async function quitarPerdonVarios(claimsArr) {
+  const lista = (claimsArr || []).filter((c) => c?.id && c.perdonado)
+  const chunk = 450
+  for (let i = 0; i < lista.length; i += chunk) {
+    const batch = writeBatch(db)
+    for (const c of lista.slice(i, i + chunk)) {
+      batch.update(doc(db, 'claims', c.id), { perdonado: false, motivo: '', perdonadoPor: '', perdonadoEn: null })
+    }
+    await batch.commit()
+  }
+  return lista.length
+}
+
 // Guarda la decisión de un caso de claim repetido en TODOS sus claims.
 // decision: 'aprobado' (cuenta, cobra $100) | 'anulado' (no cuenta, no cobra).
 export async function decidirClaimRepetido(claimsDelCaso, decision, perfil) {

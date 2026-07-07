@@ -212,6 +212,13 @@ export default function CargarFactura() {
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
+      // Mapa waybill -> detalle de entrega, para enriquecer cada claim con la
+      // info del paquete (ruta, peso, rango de peso, monto de entrega).
+      const detPorWaybill = {}
+      for (const d of detalles) {
+        const wb = (d.waybill || '').trim()
+        if (wb && !detPorWaybill[wb]) detPorWaybill[wb] = d
+      }
       const chunk = 450
       for (let i = 0; i < claims.length; i += chunk) {
         const batch = writeBatch(db)
@@ -222,6 +229,7 @@ export default function CargarFactura() {
           const wb = (c.waybill || '').trim()
           const esRepetido = casosRepetidos.some((k) => k.waybill === wb)
           const estadoRevision = esRepetido ? decisiones[wb] || 'pendiente' : 'aprobado'
+          const det = detPorWaybill[wb] || null
           batch.set(cref, {
             companyId: activeCompanyId,
             invoiceId: ref.id,
@@ -233,6 +241,11 @@ export default function CargarFactura() {
             claimType: c.claimType,
             montoGofo: c.montoGofo,
             ciudad: c.ciudad || '',
+            // Info del paquete (paquete con claim) tomada del detalle de entrega.
+            ruta: det?.ruta || '',
+            peso: det?.peso ?? null,
+            rangoPeso: det?.rango || '',
+            montoEntrega: det?.monto ?? null,
             estadoRevision,
             esRepetido,
             revisadoPor: esRepetido ? perfil?.nombre || perfil?.email || '' : '',
