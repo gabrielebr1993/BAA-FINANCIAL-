@@ -3,9 +3,45 @@
 // Reglas fijas: doble = monto 0.5 ; CLAIM_FEE = $100 por claim no perdonado ;
 // pago = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*100.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad } from '../constants'
+import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, UMBRALES_CALIF, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
+
+const clamp = (v, min = 0, max = 100) => Math.max(min, Math.min(max, v))
+
+// ---- calificación de choferes ------------------------------------------------
+// Promedios de la flota (para comparar productividad y rentabilidad).
+export function promediosFlota(pagos) {
+  const lista = (pagos || []).filter((p) => (p.individuales + p.dobles) > 0)
+  const n = lista.length || 1
+  const paquetes = lista.reduce((a, p) => a + (p.individuales + p.dobles), 0) / n
+  const ganancia = lista.reduce((a, p) => a + (p.ganancia || 0), 0) / n
+  return { paquetes, ganancia, n: lista.length }
+}
+
+const nivelSub = (s) => (s >= 80 ? 'excelente' : s >= 60 ? 'alta' : s >= 40 ? 'media' : 'baja')
+
+// Calcula la calificación 0-100 de un chofer combinando calidad, productividad
+// y rentabilidad (pesos en constants). Devuelve subpuntajes, nivel y desglose.
+export function calificarChofer(pago, prom) {
+  const paquetes = pago.paquetes ?? (pago.individuales + pago.dobles)
+  const claims = pago.claimsTotales || 0
+  const claimsPor100 = paquetes > 0 ? (claims / paquetes) * 100 : 0
+  const calidad = clamp(100 - claimsPor100 * CALIDAD_FACTOR)
+  const productividad = prom?.paquetes > 0 ? clamp(BASE_PROMEDIO * (paquetes / prom.paquetes)) : 50
+  const rentabilidad = prom?.ganancia > 0 ? clamp(BASE_PROMEDIO * ((pago.ganancia || 0) / prom.ganancia)) : (pago.ganancia >= 0 ? 50 : 0)
+  const w = PESOS_CALIF_CHOFER
+  const puntaje = Math.round(w.calidad * calidad + w.productividad * productividad + w.rentabilidad * rentabilidad)
+  const nivel = puntaje >= UMBRALES_CALIF.bueno ? 'bueno' : puntaje >= UMBRALES_CALIF.regular ? 'regular' : 'malo'
+  const etiqueta = nivel === 'bueno' ? 'Bueno' : nivel === 'regular' ? 'Regular' : 'Malo'
+  return {
+    puntaje,
+    estrellas: Math.max(1, Math.round(puntaje / 20)),
+    calidad, productividad, rentabilidad,
+    nivel, etiqueta,
+    desglose: `Calidad: ${nivelSub(calidad)} · Productividad: ${nivelSub(productividad)} · Rentabilidad: ${nivelSub(rentabilidad)}`,
+  }
+}
 
 // Filtra un arreglo del resumen por ciudad. `campo` es la clave que guarda el código.
 export function porCiudad(arr, ciudad, campo = 'ciudad') {

@@ -29,6 +29,25 @@ export const CLAIM_FEE = 100
 export const DOBLE_MONTO = 0.5
 
 // ---------------------------------------------------------------------------
+// Calificación de choferes (0-100). Pesos y umbrales ajustables.
+//   Calidad 40% · Productividad 30% · Rentabilidad 30%.
+//   ≥75 Bueno (verde) · 50-74 Regular (amarillo) · <75 abajo Malo (rojo).
+// ---------------------------------------------------------------------------
+export const PESOS_CALIF_CHOFER = { calidad: 0.4, productividad: 0.3, rentabilidad: 0.3 }
+export const UMBRALES_CALIF = { bueno: 75, regular: 50 }
+// Penalización de calidad por cada claim por cada 100 entregas.
+export const CALIDAD_FACTOR = 25
+// Puntaje base (=50) para quien está justo en el promedio de la flota.
+export const BASE_PROMEDIO = 50
+
+// ---------------------------------------------------------------------------
+// Calificación de ciudades (0-100). Pesos ajustables.
+//   Ganancia 30% · Rentabilidad $/lb 20% · Calidad/claims 25% · Fallidos 15% ·
+//   Volumen 10%.
+// ---------------------------------------------------------------------------
+export const PESOS_CALIF_CIUDAD = { ganancia: 0.3, rentabilidad: 0.2, calidad: 0.25, fallidos: 0.15, volumen: 0.1 }
+
+// ---------------------------------------------------------------------------
 // Ciudades / almacenes (multi-ubicación)
 // El código de almacén es lo que va ANTES del guion en "Region/route".
 // Houston tiene DOS almacenes (IAH01 e IAH02) que se tratan por separado.

@@ -18,7 +18,7 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
     .filter(([, n]) => n > 2)
     .sort((a, b) => b[1] - a[1])
     .forEach(([courier, n]) =>
-      alertas.push({ id: `claims:${courier}`, tipo: 'red', categoria: 'Choferes', titulo: `${courier} tiene ${n} claims`, detalle: 'Más de 2 claims en el periodo — conviene revisar.', link: '/claims' })
+      alertas.push({ id: `claims:${courier}`, tipo: 'red', categoria: 'Choferes', titulo: `${courier} tiene ${n} claims`, detalle: 'Más de 2 claims en el periodo — conviene revisar.', link: `/choferes/${encodeURIComponent(courier)}` })
     )
 
   // 2) Factura que no cuadra con Gofo (grave)

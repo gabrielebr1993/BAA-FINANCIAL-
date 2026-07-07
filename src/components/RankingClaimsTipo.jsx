@@ -49,7 +49,7 @@ function RankTipo({ label, rows, onPick }) {
 export default function RankingClaimsTipo({ claims, compacto = false }) {
   const navigate = useNavigate()
   const { tipos, matriz, porTipo } = useMemo(() => rankingClaimsPorTipo(claims), [claims])
-  const irAChofer = (nombre) => { if (nombre) navigate(`/performance?driver=${encodeURIComponent(nombre)}`) }
+  const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
 
   if (matriz.length === 0) {
     return <EstadoVacio titulo="Sin claims" texto="No hay claims en el rango/ciudad seleccionados para rankear por tipo." />

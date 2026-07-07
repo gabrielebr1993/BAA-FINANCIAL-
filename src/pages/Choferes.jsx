@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
@@ -13,6 +14,7 @@ const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
   const { drivers, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
+  const navigate = useNavigate()
 
   const [tab, setTab] = useState('choferes')
   // ---- alta de chofer ----
@@ -299,7 +301,10 @@ export default function Choferes() {
               return (
                 <tr key={d.id} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/40 dark:bg-slate-800/20' : ''}`}>
                   <td className="px-2 py-2 text-center"><input type="checkbox" checked={seleccion.has(d.id)} onChange={() => toggleSel(d.id)} /></td>
-                  <td className="px-3 py-2">{d.nombre} {guardadoId === d.id && <span className="text-xs text-emerald-600 dark:text-emerald-400">✓ guardado</span>}</td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
+                    {guardadoId === d.id && <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">✓ guardado</span>}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <input type="number" step="0.01" min="0" value={borradores[d.id]?.ind ?? ''} onChange={(e) => setBorrador(d.id, 'ind', e.target.value)} onBlur={() => guardarTarifa(d)}
                       className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />

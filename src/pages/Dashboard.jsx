@@ -23,8 +23,8 @@ export default function Dashboard() {
   const navigate = useNavigate()
   // Navega a una sección y, opcionalmente, preselecciona la ciudad de destino.
   const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
-  // Navega al detalle de un chofer en Performance (preselecciona su ficha).
-  const irAChofer = (nombre) => { if (nombre) navigate(`/performance?driver=${encodeURIComponent(nombre)}`) }
+  // Navega al perfil completo de un chofer.
+  const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
   const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)), [inv, claims, drivers, managers, selectedCity, invoicesRango])
   const esRango = !!inv?.esRango
   const variasSemanas = invoicesRango.length > 1

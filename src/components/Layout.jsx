@@ -32,7 +32,7 @@ function BuscadorGlobal({ onNavigate }) {
   const resultados = useMemo(() => {
     const term = q.trim().toLowerCase()
     if (!term) return []
-    const chof = (drivers || []).filter((d) => (d.nombre || '').toLowerCase().includes(term)).slice(0, 5).map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: '/choferes' }))
+    const chof = (drivers || []).filter((d) => (d.nombre || '').toLowerCase().includes(term)).slice(0, 5).map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: `/choferes/${encodeURIComponent(d.nombre)}` }))
     const rutas = [...new Set((facturaRango?.resumenRutas || []).map((r) => r.ruta))].filter((r) => r.toLowerCase().includes(term)).slice(0, 5).map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
     return [...chof, ...rutas]
   }, [q, drivers, facturaRango])
