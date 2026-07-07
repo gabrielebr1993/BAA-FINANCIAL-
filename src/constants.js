@@ -19,8 +19,8 @@ export const COLORS = {
   red: '#c0392b',
 }
 
-// Paleta para gráficos (recharts)
-export const CHART_COLORS = ['#13233f', '#c9a24b', '#3b6ea5', '#7f9cc0', '#a67c00', '#5b7db1', '#8896a6']
+// Paleta para gráficos (recharts) — navy, dorado, azul acero de marca y grises.
+export const CHART_COLORS = ['#13233f', '#c9a24b', '#3d5a80', '#7f9cc0', '#a67c00', '#94a3b8', '#8896a6']
 
 // Descuento fijo por claim NO perdonado (aplicado al chofer). NO SE CAMBIA.
 export const CLAIM_FEE = 100

@@ -10,6 +10,8 @@ export default {
           gold: '#c9a24b',
           'navy-700': '#1c3a63',
           'navy-900': '#0d1930',
+          steel: '#3d5a80',
+          'steel-soft': '#7f9cc0',
         },
         surface: {
           light: '#fafafa',
@@ -17,9 +19,10 @@ export default {
           dark: '#0f1729',
           'dark-card': '#1b2b45',
         },
+        // Tonos de acento derivados de la marca (sin azul genérico).
         accent: {
-          indigo: '#5b6cc4',
-          soft: '#8b96d6',
+          indigo: '#3d5a80',
+          soft: '#7f9cc0',
         },
       },
       fontFamily: {

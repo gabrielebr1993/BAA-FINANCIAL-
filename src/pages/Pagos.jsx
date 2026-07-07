@@ -9,7 +9,7 @@ import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { exportarPDF } from '../utils/exportar'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -274,7 +274,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, claimsChofer,
                           <span className="inline-flex gap-1.5">
                             <Input autoFocus className="w-32" placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
                             <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(c)} className="px-2 py-1 text-xs">OK</Boton>
-                            <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2 py-1 text-xs">✕</Boton>
+                            <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2 py-1 text-xs"><X size={13} strokeWidth={2.2} /></Boton>
                           </span>
                         ) : c.perdonado ? (
                           <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(c)} className="px-2 py-1 text-xs">Quitar perdón</Boton>

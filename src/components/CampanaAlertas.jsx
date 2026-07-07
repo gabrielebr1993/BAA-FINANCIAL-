@@ -6,7 +6,7 @@ import { Bell, ArrowRight, CheckCircle2, Check, X } from 'lucide-react'
 import { useData } from '../DataContext'
 import { NOMBRE_TIPO } from '../utils/alertas'
 
-const PUNTO = { red: 'bg-rose-500', yellow: 'bg-amber-500', blue: 'bg-sky-500' }
+const PUNTO = { red: 'bg-rose-500', yellow: 'bg-amber-500', blue: 'bg-brand-steel' }
 
 export default function CampanaAlertas() {
   const { alertasVisibles, marcarAlerta } = useData()

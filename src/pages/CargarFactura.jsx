@@ -8,7 +8,7 @@ import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsVali
 import { parsearPeriodo } from '../utils/rango'
 import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2 } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -107,7 +107,7 @@ export default function CargarFactura() {
       }
       const semanas = [...new Set(procs.map((p) => p.semana).filter(Boolean))]
       let semanaFinal = semanas[0] || ''
-      if (semanas.length > 1) nuevosAvisos.push(`⚠️ Los archivos tienen semanas distintas (${semanas.join(', ')}). Se usará "${semanaFinal}". Revisa que correspondan a la misma semana.`)
+      if (semanas.length > 1) nuevosAvisos.push(`Los archivos tienen semanas distintas (${semanas.join(', ')}). Se usará "${semanaFinal}". Revisa que correspondan a la misma semana.`)
       if (!semanaFinal) nuevosAvisos.push('No se detectó la semana en el nombre de los archivos. Escríbela manualmente antes de guardar.')
 
       // choferes únicos (log de diagnóstico) — no dependen de la ciudad
@@ -325,12 +325,12 @@ export default function CargarFactura() {
 
       {procesando && (
         <Aviso tipo="info">
-          <span className="inline-flex items-center gap-2"><Spinner className="text-sky-600" /> Procesando archivo(s)…</span>
+          <span className="inline-flex items-center gap-2"><Spinner className="text-brand-gold" /> Procesando archivo(s)…</span>
         </Aviso>
       )}
       {errores.map((e, i) => <Aviso key={i} tipo="error">{e}</Aviso>)}
       {avisos.map((a, i) => <Aviso key={i} tipo="warn">{a}</Aviso>)}
-      {guardado && <Aviso tipo="ok">✅ Factura guardada correctamente en la base de datos.</Aviso>}
+      {guardado && <Aviso tipo="ok"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={15} strokeWidth={1.8} /> Factura guardada correctamente en la base de datos.</span></Aviso>}
 
       {combinado && (
         <>
@@ -452,7 +452,7 @@ export default function CargarFactura() {
                 Cada chofer tiene su propia tarifa. Asigna precio individual y doble (&gt; 0) a todos antes de guardar.
               </p>
               <div className="mb-3 flex flex-wrap items-end gap-2">
-                <Input className="w-56" placeholder="🔎 Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                <Input className="w-56" placeholder="Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <div className="ml-auto flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
                   <div>
                     <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar: individual</div>
@@ -479,7 +479,7 @@ export default function CargarFactura() {
                       const ok = Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0
                       return (
                         <tr key={n} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
-                          <td className="px-3 py-1.5">{ok ? '✅ ' : '• '}{n}</td>
+                          <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5">{ok ? <Check size={14} strokeWidth={2.2} className="text-emerald-500" /> : <span className="text-slate-300">•</span>}{n}</span></td>
                           <td className="px-3 py-1.5 text-right">
                             <Input className="w-28 text-right" type="number" step="0.01" min="0" value={precios[n]?.ind ?? ''} onChange={(e) => setPrecio(n, 'ind', e.target.value)} />
                           </td>

@@ -179,7 +179,7 @@ export default function Claims() {
                         <div className="flex items-center justify-end gap-1.5">
                           <Input autoFocus className="w-36" placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
                           <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(row)} className="px-2.5 py-1 text-xs">OK</Boton>
-                          <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2.5 py-1 text-xs">✕</Boton>
+                          <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2.5 py-1 text-xs"><X size={13} strokeWidth={2.2} /></Boton>
                         </div>
                       )
                     return row.perdonado ? (

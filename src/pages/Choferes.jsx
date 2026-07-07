@@ -6,6 +6,7 @@ import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
+import { Truck, Check } from 'lucide-react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 
@@ -224,7 +225,7 @@ export default function Choferes() {
       {error && <Aviso tipo="error">{error}</Aviso>}
       {sinTarifa.length > 0 && (
         <Aviso tipo="warn">
-          🚚 {sinTarifa.length} chofer(es) de la factura sin tarifa: {sinTarifa.slice(0, 8).join(', ')}{sinTarifa.length > 8 ? '…' : ''}. Créalos abajo.
+          <span className="inline-flex items-center gap-1.5"><Truck size={15} strokeWidth={1.8} /> {sinTarifa.length} chofer(es) de la factura sin tarifa: {sinTarifa.slice(0, 8).join(', ')}{sinTarifa.length > 8 ? '…' : ''}. Créalos abajo.</span>
         </Aviso>
       )}
 
@@ -241,7 +242,7 @@ export default function Choferes() {
 
       {/* Barra de búsqueda + contador */}
       <div className="mb-2 flex flex-wrap items-center gap-3">
-        <Input className="w-64" placeholder="🔎 Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+        <Input className="w-64" placeholder="Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
         <span className="text-sm text-slate-500 dark:text-slate-400">Mostrando {filtrados.length} de {drivers.length}</span>
       </div>
 
@@ -303,7 +304,7 @@ export default function Choferes() {
                   <td className="px-2 py-2 text-center"><input type="checkbox" checked={seleccion.has(d.id)} onChange={() => toggleSel(d.id)} /></td>
                   <td className="px-3 py-2">
                     <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
-                    {guardadoId === d.id && <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">✓ guardado</span>}
+                    {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <input type="number" step="0.01" min="0" value={borradores[d.id]?.ind ?? ''} onChange={(e) => setBorrador(d.id, 'ind', e.target.value)} onBlur={() => guardarTarifa(d)}

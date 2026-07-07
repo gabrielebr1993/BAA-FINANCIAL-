@@ -95,7 +95,7 @@ export default function Dashboard() {
         <>
           {alertas.length > 0 && (
             <Aviso tipo="warn">
-              ⚠️ Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:
+              <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
               <ul className="mt-2 list-disc pl-5">
                 {alertas.slice(0, 6).map((a) => (
                   <li key={a.ruta}><b>{a.ruta}</b> ({a.nombreCiudad}): ${a.antesLb.toFixed(3)}/lb → ${a.ahoraLb.toFixed(3)}/lb ({a.cambioLb >= 0 ? '+' : ''}{pct(a.cambioLb)})</li>
@@ -168,7 +168,7 @@ export default function Dashboard() {
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
-                <GaugeCard title="% de dobles" value={tot.pctDobles} color="#3b6ea5" />
+                <GaugeCard title="% de dobles" value={tot.pctDobles} color="#3d5a80" />
                 <GaugeCard title="Calidad (entregas sin claim)" value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
               </div>
 
@@ -184,7 +184,7 @@ export default function Dashboard() {
                 <DonutCard title="Distribución individual vs doble" data={donutTipo} fmt={num} />
                 <BarCard title="Ingreso por ruta (top 10)" data={ingresoPorRuta} color="#13233f" fmt={money} />
                 <StackedBarCard title="Individuales vs dobles por ciudad" data={stackedCiudad} fmt={num}
-                  series={[{ key: 'Individuales', label: 'Individuales', color: '#3b6ea5' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
+                  series={[{ key: 'Individuales', label: 'Individuales', color: '#3d5a80' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
                 {ingresoPorCiudad.length > 1 && <DonutCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} />}
                 <BarCard title="Claims por ruta" data={claimsPorRuta} color="#c47f5a" fmt={num} />
               </div>

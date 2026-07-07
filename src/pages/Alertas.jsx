@@ -13,9 +13,9 @@ import RangeSelector from '../components/RangeSelector'
 const ESTILO = {
   red: 'border-l-rose-500 bg-rose-50 dark:bg-rose-500/10',
   yellow: 'border-l-amber-500 bg-amber-50 dark:bg-amber-500/10',
-  blue: 'border-l-sky-500 bg-sky-50 dark:bg-sky-500/10',
+  blue: 'border-l-brand-steel bg-brand-steel/5 dark:bg-brand-steel/10',
 }
-const COLOR_TIPO = { red: 'text-rose-500', yellow: 'text-amber-500', blue: 'text-sky-500' }
+const COLOR_TIPO = { red: 'text-rose-500', yellow: 'text-amber-500', blue: 'text-brand-steel dark:text-brand-steel-soft' }
 
 // Icono Lucide según el tipo de alerta (derivado del id).
 function iconoDe(a) {

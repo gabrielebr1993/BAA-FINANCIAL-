@@ -4,7 +4,7 @@ import { calcularPagos, porCiudad, gananciaRealDe } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
-import { DollarSign, Receipt, AlertTriangle, TrendingUp, Target } from 'lucide-react'
+import { DollarSign, Receipt, AlertTriangle, TrendingUp, Target, FileSpreadsheet, FileText } from 'lucide-react'
 import { Card, KPI, PageTitle, Tabla, Boton, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
@@ -106,8 +106,8 @@ export default function Financiero() {
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Rentabilidad por ruta (ordenado por $/lb)</h3>
                   <div className="ml-auto flex gap-2">
-                    <Boton variant="ghost" onClick={exportarE}>📊 Excel</Boton>
-                    <Boton variant="gold" onClick={exportarP}>📄 PDF</Boton>
+                    <Boton variant="ghost" onClick={exportarE}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
+                    <Boton variant="gold" onClick={exportarP}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">

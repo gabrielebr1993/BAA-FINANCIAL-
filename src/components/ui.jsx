@@ -1,5 +1,6 @@
 // Primitivos de interfaz en Tailwind (claros/oscuros, navy/dorado).
 import { Link } from 'react-router-dom'
+import { Upload } from 'lucide-react'
 import Ilustracion from './Ilustracion'
 
 // --- Card -------------------------------------------------------------------
@@ -20,7 +21,7 @@ const ACCENTS = {
   gold: { bar: 'bg-brand-gold', text: 'text-brand-gold', chip: 'bg-brand-gold/15 text-yellow-700 dark:text-brand-gold' },
   green: { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
   red: { bar: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', chip: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
-  blue: { bar: 'bg-sky-500', text: 'text-sky-600 dark:text-sky-400', chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' },
+  blue: { bar: 'bg-brand-steel', text: 'text-brand-steel dark:text-brand-steel-soft', chip: 'bg-brand-steel/10 text-brand-steel dark:bg-brand-steel-soft/15 dark:text-brand-steel-soft' },
   slate: { bar: 'bg-slate-400', text: 'text-slate-700 dark:text-slate-200', chip: 'bg-slate-400/10 text-slate-600 dark:text-slate-300' },
 }
 
@@ -118,7 +119,7 @@ const BADGE = {
   gold: 'bg-brand-gold/15 text-yellow-700 dark:text-brand-gold',
   green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   red: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
-  blue: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  blue: 'bg-brand-steel/10 text-brand-steel dark:bg-brand-steel-soft/15 dark:text-brand-steel-soft',
   slate: 'bg-slate-400/15 text-slate-600 dark:text-slate-300',
 }
 export function Badge({ children, color = 'navy', title }) {
@@ -131,7 +132,7 @@ export function Badge({ children, color = 'navy', title }) {
 
 // --- Aviso ------------------------------------------------------------------
 const AVISO = {
-  info: 'bg-sky-50 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300',
+  info: 'bg-brand-steel/10 text-brand-steel dark:bg-brand-steel/15 dark:text-brand-steel-soft',
   warn: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300',
   error: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
   ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
@@ -168,9 +169,9 @@ export function EstadoVacio({
       {mostrarBoton && (
         <Link
           to="/facturas"
-          className="inline-block rounded-lg bg-brand-gold px-5 py-2.5 font-bold text-brand-navy no-underline transition hover:brightness-105"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-gold px-5 py-2.5 font-bold text-brand-navy no-underline transition hover:brightness-105"
         >
-          ⬆️ Cargar Factura
+          <Upload size={18} strokeWidth={1.8} /> Cargar Factura
         </Link>
       )}
     </Card>

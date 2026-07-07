@@ -8,7 +8,7 @@ export default function CitySelector() {
   const ciudades = ciudadesDeFactura(selectedInvoice)
   return (
     <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} aria-label="Filtro de ciudad">
-      <option value={TODAS}>🌎 Todas las ciudades</option>
+      <option value={TODAS}>Todas las ciudades</option>
       {ciudades.map((c) => (
         <option key={c} value={c}>
           {nombreCiudadDe(selectedInvoice, c)}
@@ -25,7 +25,7 @@ export function InvoiceSelector() {
     <Select value={selectedInvoiceId || ''} onChange={(e) => setSelectedInvoiceId(e.target.value)} aria-label="Selector de semana">
       {invoices.map((inv) => (
         <option key={inv.id} value={inv.id}>
-          📅 {inv.semana || inv.archivoNombre || inv.id}
+          {inv.semana || inv.archivoNombre || inv.id}
         </option>
       ))}
     </Select>
