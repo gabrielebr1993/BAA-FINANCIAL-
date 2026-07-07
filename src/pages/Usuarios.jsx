@@ -1,22 +1,23 @@
 import { useState, useEffect, useCallback } from 'react'
 import { collection, getDocs, query, where, doc, setDoc, updateDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { PERMISOS, ROLES, SECCIONES } from '../constants'
-import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
+import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 
 function permisosVacios() {
   const o = {}
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-const formVacio = { uid: '', nombre: '', email: '', role: 'manager', permissions: permisosVacios() }
+const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', permissions: permisosVacios() }
 
 export default function Usuarios() {
   const { activeCompanyId, empresaActiva } = useData()
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
+  const [modoManual, setModoManual] = useState(false) // respaldo: crear con UID manual
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
@@ -49,17 +50,41 @@ export default function Usuarios() {
   const guardar = async () => {
     setError('')
     setOk('')
-    if (!editId && !form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
     if (!form.nombre.trim() || !form.email.trim()) return setError('Nombre y email son obligatorios.')
     if (!activeCompanyId) return setError('No hay una empresa activa. Selecciona una empresa primero.')
     setGuardando(true)
     try {
-      const payload = { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId }
-      if (editId) await updateDoc(doc(db, 'users', editId), payload)
-      else await setDoc(doc(db, 'users', form.uid.trim()), payload)
-      await cargar()
-      setOk(editId ? 'Usuario actualizado.' : 'Usuario creado.')
-      nuevo()
+      if (editId) {
+        // editar: solo actualiza el documento (permisos/rol), no toca Auth
+        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId })
+        await cargar()
+        setOk('Usuario actualizado.')
+        nuevo()
+      } else if (modoManual) {
+        // respaldo: crear con UID manual (el acceso en Auth se crea aparte)
+        if (!form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
+        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId })
+        await cargar()
+        setOk('Usuario creado (modo manual).')
+        nuevo()
+      } else {
+        // flujo principal: crear Auth + documento vía función serverless
+        if (String(form.password).length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
+        const token = await auth.currentUser.getIdToken()
+        const resp = await fetch('/api/crear-usuario', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: form.permissions, companyId: activeCompanyId }),
+        })
+        const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
+        if (!resp.ok || !data.ok) {
+          setError(data.error || 'No se pudo crear el usuario.')
+          return
+        }
+        await cargar()
+        setOk('Usuario creado con acceso (correo y contraseña).')
+        nuevo()
+      }
     } catch (e) {
       setError('Error al guardar: ' + e.message)
     } finally {
@@ -77,17 +102,32 @@ export default function Usuarios() {
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       <Card className="mb-5 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar usuario' : 'Crear usuario'}</h3>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar usuario' : 'Crear usuario'}</h3>
+          {!editId && (
+            <label className="ml-auto flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <input type="checkbox" checked={modoManual} onChange={(e) => setModoManual(e.target.checked)} />
+              Modo manual (con UID, respaldo)
+            </label>
+          )}
+        </div>
         <div className="mb-4 flex flex-wrap gap-3">
-          <Campo label="UID (Firebase Auth)">
-            <Input className="w-52" value={form.uid} onChange={(e) => setF('uid', e.target.value)} disabled={!!editId} placeholder="uid del usuario" />
-          </Campo>
           <Campo label="Nombre">
             <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} />
           </Campo>
           <Campo label="Email">
-            <Input className="w-52" value={form.email} onChange={(e) => setF('email', e.target.value)} />
+            <Input className="w-52" type="email" value={form.email} onChange={(e) => setF('email', e.target.value)} />
           </Campo>
+          {!editId && !modoManual && (
+            <Campo label="Contraseña (mín. 6)">
+              <Input className="w-52" type="password" value={form.password} onChange={(e) => setF('password', e.target.value)} placeholder="••••••••" />
+            </Campo>
+          )}
+          {!editId && modoManual && (
+            <Campo label="UID (Firebase Auth)">
+              <Input className="w-52" value={form.uid} onChange={(e) => setF('uid', e.target.value)} placeholder="uid del usuario" />
+            </Campo>
+          )}
           <Campo label="Rol">
             <Select className="w-40" value={form.role} onChange={(e) => setF('role', e.target.value)}>
               {ROLES.map((r) => (
@@ -122,12 +162,16 @@ export default function Usuarios() {
 
         <div className="flex gap-2">
           <Boton onClick={guardar} disabled={guardando} variant="gold">
-            {guardando ? 'Guardando…' : editId ? 'Guardar cambios' : 'Crear usuario'}
+            {guardando ? <><Spinner /> {editId ? 'Guardando…' : 'Creando…'}</> : editId ? 'Guardar cambios' : 'Crear usuario'}
           </Boton>
           {editId && <Boton onClick={nuevo} variant="ghost">Cancelar</Boton>}
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Nota: el acceso en Firebase Auth (correo/contraseña) se crea aparte. Aquí se crea/edita el documento en la colección <code>users</code> con ese UID.
+          {editId
+            ? 'Editar solo cambia el rol y los permisos del usuario (no su contraseña).'
+            : modoManual
+              ? 'Modo manual: crea solo el documento en users con un UID ya existente en Firebase Auth (respaldo si el servidor no está configurado).'
+              : 'El sistema crea el acceso completo (correo + contraseña en Firebase Auth) y su documento, sin cerrar tu sesión. Requiere FIREBASE_SERVICE_ACCOUNT_BASE64 configurado en el servidor.'}
         </p>
       </Card>
 
