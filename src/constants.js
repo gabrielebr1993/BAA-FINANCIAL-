@@ -1,6 +1,10 @@
 // ---------------------------------------------------------------------------
 // Constantes globales del sistema Gofo
 // ---------------------------------------------------------------------------
+import {
+  LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings,
+} from 'lucide-react'
 
 // Marca de color
 export const COLORS = {
@@ -59,18 +63,20 @@ export const PERMISOS = [
 
 export const ROLES = ['owner', 'admin', 'manager']
 
-// Secciones del menú lateral. Cada una gated por su permiso.
+// Secciones del menú lateral. Cada una gated por su permiso. Iconos = Lucide.
 export const SECCIONES = [
-  { path: '/', label: 'Dashboard', permiso: 'verDashboard', icon: '📊' },
-  { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: '⬆️' },
-  { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: '💰' },
-  { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: '⚠️' },
-  { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: '🚚' },
-  { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: '🧾' },
-  { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: '🏆' },
-  { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: '🔔' },
-  { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: '🔀' },
-  { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: '👥' },
+  { path: '/', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard },
+  { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: Upload },
+  { path: '/historial', label: 'Facturas', permiso: 'subirFacturas', icon: FileText },
+  { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign },
+  { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: AlertTriangle },
+  { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: Truck },
+  { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: Wallet },
+  { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: TrendingUp },
+  { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: BarChart3 },
+  { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell },
+  { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users },
+  { path: '/configuracion', label: 'Configuración', permiso: 'gestionarUsuarios', icon: Settings },
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.

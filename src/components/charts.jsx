@@ -24,8 +24,8 @@ import { Card } from './ui'
 
 export const NAVY = '#13233f'
 export const GOLD = '#c9a24b'
-// Navy, dorado + tonos complementarios sobrios.
-export const PALETTE = [NAVY, GOLD, '#3b6ea5', '#4a9c8c', '#8a6ba2', '#c47f5a', '#7f8ea3']
+// Navy, dorado + índigo suave y grises (paleta sobria estilo Mercury).
+export const PALETTE = [NAVY, GOLD, '#5b6cc4', '#8b96d6', '#94a3b8', '#64748b', '#b08968']
 
 // Colores de ejes/grid/tooltip según el tema.
 export function useChartTheme() {

@@ -1,12 +1,12 @@
-// Layout principal: sidebar navy con secciones gated por permiso, buscador
-// global, badge de alertas y toggle de tema.
+// Layout principal: sidebar claro minimalista (estilo Mercury) con iconos Lucide,
+// buscador global, badge de alertas, selector de empresa y toggle de tema.
 import { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Search, Building2, Sun, Moon, LogOut, Menu } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
 import { SECCIONES } from '../constants'
-import InstallBanner from './InstallBanner'
 
 function ThemeToggle() {
   const { oscuro, alternar } = useTheme()
@@ -14,15 +14,14 @@ function ThemeToggle() {
     <button
       onClick={alternar}
       title={oscuro ? 'Cambiar a claro' : 'Cambiar a oscuro'}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/10"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40"
     >
-      <span>{oscuro ? '☀️' : '🌙'}</span>
+      {oscuro ? <Sun size={17} strokeWidth={1.8} /> : <Moon size={17} strokeWidth={1.8} />}
       <span>{oscuro ? 'Modo claro' : 'Modo oscuro'}</span>
     </button>
   )
 }
 
-// Buscador global de choferes y rutas.
 function BuscadorGlobal({ onNavigate }) {
   const { drivers, facturaRango } = useData()
   const navigate = useNavigate()
@@ -32,37 +31,27 @@ function BuscadorGlobal({ onNavigate }) {
   const resultados = useMemo(() => {
     const term = q.trim().toLowerCase()
     if (!term) return []
-    const chof = (drivers || [])
-      .filter((d) => (d.nombre || '').toLowerCase().includes(term))
-      .slice(0, 5)
-      .map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: '/choferes' }))
-    const rutas = [...new Set((facturaRango?.resumenRutas || []).map((r) => r.ruta))]
-      .filter((r) => r.toLowerCase().includes(term))
-      .slice(0, 5)
-      .map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
+    const chof = (drivers || []).filter((d) => (d.nombre || '').toLowerCase().includes(term)).slice(0, 5).map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: '/choferes' }))
+    const rutas = [...new Set((facturaRango?.resumenRutas || []).map((r) => r.ruta))].filter((r) => r.toLowerCase().includes(term)).slice(0, 5).map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
     return [...chof, ...rutas]
   }, [q, drivers, facturaRango])
 
-  const ir = (r) => {
-    setQ('')
-    setAbierto(false)
-    onNavigate?.()
-    navigate(r.link)
-  }
+  const ir = (r) => { setQ(''); setAbierto(false); onNavigate?.(); navigate(r.link) }
 
   return (
-    <div className="relative mb-3">
+    <div className="relative mb-4">
+      <Search size={16} strokeWidth={1.8} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
       <input
         value={q}
         onChange={(e) => { setQ(e.target.value); setAbierto(true) }}
         onFocus={() => setAbierto(true)}
-        placeholder="🔎 Buscar chofer o ruta…"
-        className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-slate-400 outline-none focus:border-brand-gold"
+        placeholder="Buscar…"
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-brand-gold focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
       />
       {abierto && resultados.length > 0 && (
-        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-800 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-cardhover dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
           {resultados.map((r, i) => (
-            <button key={i} onClick={() => ir(r)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+            <button key={i} onClick={() => ir(r)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700">
               <span>{r.nombre}</span>
               <span className="text-xs text-slate-400">{r.tipo}</span>
             </button>
@@ -78,24 +67,43 @@ function CompanySwitcher() {
   const { companies, activeCompanyId, setActiveCompanyId, empresaActiva } = useData()
   if (esSuperAdmin && companies.length > 0) {
     return (
-      <div className="mb-3">
-        <div className="mb-1 text-[11px] uppercase tracking-wide text-slate-400">Empresa activa</div>
-        <select
-          value={activeCompanyId || ''}
-          onChange={(e) => setActiveCompanyId(e.target.value)}
-          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-gold"
-        >
-          {companies.map((c) => (
-            <option key={c.id} value={c.id} className="text-slate-800">{c.nombre}</option>
-          ))}
+      <div className="mb-4">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-400"><Building2 size={13} strokeWidth={1.8} /> Empresa activa</div>
+        <select value={activeCompanyId || ''} onChange={(e) => setActiveCompanyId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
         </select>
       </div>
     )
   }
   if (empresaActiva) {
-    return <div className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-300">🏢 {empresaActiva.nombre}</div>
+    return (
+      <div className="mb-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+        <Building2 size={14} strokeWidth={1.8} /> {empresaActiva.nombre}
+      </div>
+    )
   }
   return null
+}
+
+function ItemMenu({ s, activo, onNavigate, badge }) {
+  const Icon = s.icon
+  return (
+    <Link
+      to={s.path}
+      onClick={onNavigate}
+      className={`group relative flex items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-sm no-underline transition-all duration-150 ${
+        activo
+          ? 'border-brand-gold bg-brand-gold/10 font-semibold text-brand-navy dark:bg-brand-gold/15 dark:text-white'
+          : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
+      }`}
+    >
+      {Icon && <Icon size={19} strokeWidth={1.8} className="flex-shrink-0" />}
+      <span className="flex-1">{s.label}</span>
+      {badge > 0 && (
+        <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white">{badge}</span>
+      )}
+    </Link>
+  )
 }
 
 function SidebarContent({ onNavigate }) {
@@ -105,11 +113,11 @@ function SidebarContent({ onNavigate }) {
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
 
   return (
-    <aside className="flex min-h-screen w-60 flex-col gap-1 bg-brand-navy p-4 text-white">
-      <div className="flex items-center gap-3 px-2 pb-3 pt-1">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-brand-gold text-lg font-extrabold text-brand-navy">G</div>
+    <aside className="flex min-h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
+      <div className="flex items-center gap-3 px-1 pb-4 pt-1">
+        <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">G</div>
         <div>
-          <div className="text-lg font-extrabold leading-none">Gofo</div>
+          <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">Gofo</div>
           <div className="text-[11px] text-slate-400">Gestión de facturas</div>
         </div>
       </div>
@@ -117,55 +125,23 @@ function SidebarContent({ onNavigate }) {
       <BuscadorGlobal onNavigate={onNavigate} />
       <CompanySwitcher />
 
-      {secciones.map((s) => {
-        const activo = location.pathname === s.path
-        const esAlertas = s.path === '/alertas'
-        return (
-          <Link
-            key={s.path}
-            to={s.path}
-            onClick={onNavigate}
-            className={`group relative flex items-center gap-3 rounded-lg border-l-2 py-2.5 pl-3 pr-3 text-sm no-underline transition-all duration-150 ${
-              activo
-                ? 'border-brand-gold bg-brand-gold font-bold text-brand-navy'
-                : 'border-transparent font-medium text-slate-300 hover:translate-x-0.5 hover:border-brand-gold/60 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            <span className="w-5 text-center">{s.icon}</span>
-            <span className="flex-1">{s.label}</span>
-            {esAlertas && numAlertas > 0 && (
-              <span className={`grid h-5 min-w-[20px] place-items-center rounded-full px-1 text-[11px] font-bold ${activo ? 'bg-brand-navy text-white' : 'bg-rose-500 text-white'}`}>
-                {numAlertas}
-              </span>
-            )}
-          </Link>
-        )
-      })}
+      <nav className="flex flex-col gap-0.5">
+        {secciones.map((s) => (
+          <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={s.path === '/alertas' ? numAlertas : 0} />
+        ))}
+        {esSuperAdmin && (
+          <ItemMenu s={{ path: '/empresas', label: 'Empresas', icon: Building2 }} activo={location.pathname === '/empresas'} onNavigate={onNavigate} badge={0} />
+        )}
+      </nav>
 
-      {esSuperAdmin && (
-        <Link
-          to="/empresas"
-          onClick={onNavigate}
-          className={`group relative flex items-center gap-3 rounded-lg border-l-2 py-2.5 pl-3 pr-3 text-sm no-underline transition-all duration-150 ${
-            location.pathname === '/empresas'
-              ? 'border-brand-gold bg-brand-gold font-bold text-brand-navy'
-              : 'border-transparent font-medium text-slate-300 hover:translate-x-0.5 hover:border-brand-gold/60 hover:bg-white/10 hover:text-white'
-          }`}
-        >
-          <span className="w-5 text-center">🏢</span>
-          <span className="flex-1">Empresas</span>
-          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px]">admin</span>
-        </Link>
-      )}
-
-      <div className="mt-auto space-y-3 border-t border-white/10 pt-4 text-sm">
+      <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700/60">
         <ThemeToggle />
         <div>
-          <div className="font-semibold text-slate-200">{perfil?.nombre || 'Usuario'}</div>
+          <div className="font-semibold text-slate-700 dark:text-slate-200">{perfil?.nombre || 'Usuario'}</div>
           <div className="truncate text-xs text-slate-400">{perfil?.role || 'usuario'} · {perfil?.email}</div>
         </div>
-        <button onClick={cerrarSesion} className="w-full rounded-lg border border-white/15 py-2 font-semibold text-white transition hover:bg-white/10">
-          Cerrar sesión
+        <button onClick={cerrarSesion} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
+          <LogOut size={16} strokeWidth={1.8} /> Cerrar sesión
         </button>
       </div>
     </aside>
@@ -177,13 +153,12 @@ export default function Layout({ children }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
-      <div className="sticky top-0 z-20 flex items-center gap-3 bg-brand-navy px-4 py-3 text-white md:hidden">
-        <button onClick={() => setAbierto(true)} className="relative text-2xl leading-none" aria-label="Abrir menú">
-          ☰
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 text-brand-navy dark:border-slate-700/60 dark:bg-surface-dark-card dark:text-white md:hidden">
+        <button onClick={() => setAbierto(true)} className="relative" aria-label="Abrir menú">
+          <Menu size={24} strokeWidth={1.8} />
           {numAlertas > 0 && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500" />}
         </button>
         <span className="font-extrabold">Gofo</span>
-        <button onClick={() => setAbierto(true)} className="ml-auto text-xl leading-none" aria-label="Buscar">🔎</button>
       </div>
 
       <div className="flex">
@@ -192,17 +167,15 @@ export default function Layout({ children }) {
         </div>
 
         {abierto && (
-          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setAbierto(false)}>
+          <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setAbierto(false)}>
             <div onClick={(e) => e.stopPropagation()}>
               <SidebarContent onNavigate={() => setAbierto(false)} />
             </div>
           </div>
         )}
 
-        <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6">{children}</main>
+        <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
-
-      <InstallBanner />
     </div>
   )
 }

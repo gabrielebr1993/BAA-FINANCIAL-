@@ -6,7 +6,7 @@ import Ilustracion from './Ilustracion'
 export function Card({ children, className = '', ...rest }) {
   return (
     <div
-      className={`rounded-xl border border-slate-200 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
+      className={`rounded-2xl border border-slate-200/80 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
       {...rest}
     >
       {children}
@@ -32,17 +32,21 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub }) {
         {trend >= 0 ? '▲' : '▼'} {Math.abs(trend * 100).toFixed(1)}%
       </span>
     )
+  const Icon = typeof icon === 'function' ? icon : null
   return (
-    <div className="relative flex-1 min-w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-surface-card p-4 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card">
-      <span className={`absolute left-0 top-0 h-full w-1 ${a.bar}`} />
+    <div className="flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card">
       <div className="flex items-start justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
-        {icon && <span className={`grid h-7 w-7 place-items-center rounded-lg text-sm ${a.chip}`}>{icon}</span>}
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
+        {(Icon || (icon && typeof icon === 'string')) && (
+          <span className={`grid h-8 w-8 place-items-center rounded-xl ${a.chip}`}>
+            {Icon ? <Icon size={17} strokeWidth={1.8} /> : icon}
+          </span>
+        )}
       </div>
-      <div className={`mt-1 text-2xl font-bold ${a.text}`}>{value}</div>
-      <div className="mt-1 flex items-center gap-2">
+      <div className={`mt-2 text-[28px] font-bold leading-none tracking-tight ${a.text}`}>{value}</div>
+      <div className="mt-2 flex items-center gap-2">
         {tendencia}
-        {sub != null && <span className="text-xs text-slate-500 dark:text-slate-400">{sub}</span>}
+        {sub != null && <span className="text-xs text-slate-400">{sub}</span>}
       </div>
     </div>
   )

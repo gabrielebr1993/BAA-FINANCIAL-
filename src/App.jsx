@@ -6,6 +6,8 @@ import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import CargarFactura from './pages/CargarFactura'
+import Facturas from './pages/Facturas'
+import Configuracion from './pages/Configuracion'
 import Financiero from './pages/Financiero'
 import Claims from './pages/Claims'
 import Choferes from './pages/Choferes'
@@ -34,6 +36,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
               <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
+            <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
+            <Route path="/configuracion" element={<Page filtro="gestionarUsuarios"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />

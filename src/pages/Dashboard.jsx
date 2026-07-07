@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
@@ -89,13 +90,13 @@ export default function Dashboard() {
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label="Ingreso total" value={money(tot.ingreso)} icon="💵" accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
-            <KPI label="Costo total" value={money(costoTotal)} icon="🧾" accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} />
-            <KPI label="Ganancia" value={money(gananciaTotal)} icon="📈" accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} />
-            <KPI label="Margen" value={pct(margen)} icon="🎯" accent="blue" />
-            <KPI label="Paquetes" value={num(tot.paquetes)} icon="📦" accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} />
-            <KPI label="% Dobles" value={pct(tot.pctDobles)} icon="🔁" accent="gold" />
-            <KPI label="Claims" value={num(tot.numClaims)} icon="⚠️" accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} />
+            <KPI label="Ingreso total" value={money(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
+            <KPI label="Costo total" value={money(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} />
+            <KPI label="Ganancia" value={money(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} />
+            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" />
+            <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} />
+            <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" />
+            <KPI label="Claims" value={num(tot.numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} />
           </div>
 
           {!inv ? (

@@ -8,6 +8,7 @@ import { buscarDriver, nombreCiudadDe } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { CIUDADES, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -280,15 +281,15 @@ export default function CargarFactura() {
           dragOver ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
         }`}
       >
-        <div className="text-4xl">⬆️</div>
+        <Upload size={40} strokeWidth={1.5} className="mx-auto text-brand-gold" />
         <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Arrastra uno o varios .xlsx (uno por ciudad)</div>
         <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">o usa el botón para seleccionar desde tu dispositivo</div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-          className="mt-3 inline-block min-h-[44px] rounded-lg bg-brand-navy px-5 py-2.5 font-semibold text-white"
+          className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 font-semibold text-white"
         >
-          📂 Seleccionar archivo
+          <FolderOpen size={18} strokeWidth={1.8} /> Seleccionar archivo
         </button>
         <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
       </div>
@@ -356,13 +357,13 @@ export default function CargarFactura() {
           <Verificacion v={combinado.verificacion} />
 
           <div className="mb-4 flex flex-wrap gap-3">
-            <KPI label="Paquetes" value={num(combinado.totalPaquetes)} icon="📦" accent="navy" />
-            <KPI label="Individuales" value={num(combinado.totalIndividuales)} accent="blue" />
+            <KPI label="Paquetes" value={num(combinado.totalPaquetes)} icon={Package} accent="navy" />
+            <KPI label="Individuales" value={num(combinado.totalIndividuales)} icon={Layers} accent="blue" />
             <KPI label="Dobles" value={num(combinado.totalDobles)} accent="gold" />
-            <KPI label="Ingreso total" value={money(combinado.ingresoTotal)} icon="💵" accent="green" />
-            <KPI label="Choferes" value={num(combinado.numChoferes)} icon="🚚" accent="slate" />
+            <KPI label="Ingreso total" value={money(combinado.ingresoTotal)} icon={DollarSign} accent="green" />
+            <KPI label="Choferes" value={num(combinado.numChoferes)} icon={Truck} accent="slate" />
             <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
-            <KPI label="Claims" value={num(combinado.totalClaims)} icon="⚠️" accent="red" />
+            <KPI label="Claims" value={num(combinado.totalClaims)} icon={AlertTriangle} accent="red" />
           </div>
 
           {choferesNuevos.length > 0 && (
@@ -445,7 +446,7 @@ export default function CargarFactura() {
               <label className="text-sm text-slate-500 dark:text-slate-400">Semana:</label>
               <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder="ej. 22_06_2026-28_06_2026" />
               <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" className="ml-auto">
-                {guardando ? <><Spinner /> Guardando…</> : choferesNuevos.length > 0 ? '💾 Guardar tarifas y procesar' : '💾 Guardar en base de datos'}
+                {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
               </Boton>
               <Boton onClick={reset} variant="ghost">Descartar</Boton>
             </div>
@@ -453,51 +454,7 @@ export default function CargarFactura() {
         </>
       )}
 
-      {/* Listado de facturas cargadas + eliminar */}
-      <Card className="mt-6 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({invoices.length})</h3>
-        <Tabla
-          columns={[
-            { key: 'semana', label: 'Semana' },
-            { key: 'ciudades', label: 'Ciudad(es)' },
-            { key: 'fechaCarga', label: 'Cargada' },
-            { key: 'archivoNombre', label: 'Archivo', wrap: true },
-            { key: 'ingresoTotal', label: 'Total', align: 'right' },
-            { key: 'acciones', label: '', align: 'right' },
-          ]}
-          rows={invoices.map((inv) => ({ ...inv, _key: inv.id }))}
-          emptyText="No hay facturas cargadas."
-          renderCell={(row, key) => {
-            if (key === 'ingresoTotal') return money(row.ingresoTotal)
-            if (key === 'fechaCarga') return fmtFecha(row.fechaCarga)
-            if (key === 'ciudades')
-              return (row.resumenCiudades || []).map((c) => nombreCiudadDe(row, c.ubicacion)).join(', ') || row.ciudadNombre || '—'
-            if (key === 'archivoNombre') return <span className="text-xs text-slate-500 dark:text-slate-400">{row.archivoNombre}</span>
-            if (key === 'acciones')
-              return <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs">Eliminar</Boton>
-            return row[key]
-          }}
-        />
-      </Card>
-
-      {/* Modal de confirmación de borrado */}
-      {porEliminar && (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
-          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="m-0 mb-2 text-lg font-bold text-brand-navy dark:text-slate-100">Eliminar factura</h3>
-            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-              ¿Seguro que quieres eliminar la factura de <b>{porEliminar.ciudadNombre || (porEliminar.resumenCiudades || []).map((c) => nombreCiudadDe(porEliminar, c.ubicacion)).join(', ')}</b> — <b>{porEliminar.semana}</b>?
-              Se borrarán también sus <b>claims</b> y <b>pagos</b> asociados. Esta acción no se puede deshacer.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
-              <Boton variant="danger" onClick={eliminarFactura} disabled={eliminando}>
-                {eliminando ? <><Spinner /> Eliminando…</> : 'Sí, eliminar'}
-              </Boton>
-            </div>
-          </Card>
-        </div>
-      )}
+      <p className="mt-4 text-xs text-slate-400">El historial de facturas y su eliminación están en la sección <b>Facturas</b>.</p>
     </div>
   )
 }

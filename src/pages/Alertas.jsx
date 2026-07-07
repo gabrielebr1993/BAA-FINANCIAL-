@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { Link } from 'react-router-dom'
+import { AlertTriangle, AlertCircle, Info, Scale, TrendingDown, Route, DollarSign, Truck, Wallet, FileSpreadsheet, FileText, X, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { calcularAlertas, SEVERIDAD_ORDEN } from '../utils/alertas'
@@ -14,7 +15,21 @@ const ESTILO = {
   yellow: 'border-l-amber-500 bg-amber-50 dark:bg-amber-500/10',
   blue: 'border-l-sky-500 bg-sky-50 dark:bg-sky-500/10',
 }
+const COLOR_TIPO = { red: 'text-rose-500', yellow: 'text-amber-500', blue: 'text-sky-500' }
 const NOMBRE_TIPO = { red: 'Grave', yellow: 'Aviso', blue: 'Info' }
+
+// Icono Lucide según el tipo de alerta (derivado del id).
+function iconoDe(a) {
+  const id = a.id || ''
+  if (id.startsWith('claims')) return AlertTriangle
+  if (id === 'cuadre') return Scale
+  if (id.startsWith('perdida')) return TrendingDown
+  if (id.startsWith('ruta')) return Route
+  if (id.startsWith('precio')) return DollarSign
+  if (id.startsWith('tarifa')) return Truck
+  if (id === 'pagos') return Wallet
+  return Info
+}
 
 export default function Alertas() {
   const { facturaRango: inv, invoicesRango, claims, drivers, invAnterior, activeCompanyId, alertasDescartadas, descartarAlerta, restaurarAlertas, cargando } = useData()
@@ -61,35 +76,38 @@ export default function Alertas() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
-            <KPI label="Graves" value={nRed} icon="🔴" accent="red" />
-            <KPI label="Avisos" value={nYellow} icon="🟡" accent="gold" />
-            <KPI label="Info" value={nBlue} icon="🔵" accent="blue" />
+            <KPI label="Graves" value={nRed} icon={AlertTriangle} accent="red" />
+            <KPI label="Avisos" value={nYellow} icon={AlertCircle} accent="gold" />
+            <KPI label="Info" value={nBlue} icon={Info} accent="blue" />
             <div className="ml-auto flex gap-2">
               {nDescartadas > 0 && <Boton variant="ghost" onClick={restaurarAlertas}>Restaurar {nDescartadas} descartada(s)</Boton>}
-              <Boton variant="ghost" onClick={exportarE} disabled={visibles.length === 0}>📊 Excel</Boton>
-              <Boton variant="gold" onClick={exportarP} disabled={visibles.length === 0}>📄 PDF</Boton>
+              <Boton variant="ghost" onClick={exportarE} disabled={visibles.length === 0}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
+              <Boton variant="gold" onClick={exportarP} disabled={visibles.length === 0}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
             </div>
           </div>
 
           {visibles.length === 0 ? (
             <Card className="p-8 text-center">
-              <div className="text-4xl">✅</div>
+              <CheckCircle2 size={40} strokeWidth={1.5} className="mx-auto text-emerald-500" />
               <h3 className="mt-2 text-lg font-bold text-brand-navy dark:text-slate-100">Todo en orden</h3>
               <p className="text-slate-500 dark:text-slate-400">No hay alertas activas para este periodo.</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {visibles.map((a) => (
-                <div key={a.id} className={`flex items-start gap-3 rounded-xl border border-slate-200 border-l-4 p-4 dark:border-slate-700/60 ${ESTILO[a.tipo]}`}>
-                  <div className="text-2xl">{a.icon}</div>
-                  <div className="flex-1">
-                    <div className="font-bold text-brand-navy dark:text-slate-100">{a.titulo}</div>
-                    <div className="text-sm text-slate-600 dark:text-slate-300">{a.detalle}</div>
-                    <Link to={a.link} className="mt-1 inline-block text-xs font-semibold text-brand-navy underline dark:text-brand-gold">Ir a la sección →</Link>
-                  </div>
-                  <button onClick={() => descartarAlerta(a.id)} title="Descartar" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">✕</button>
-                </div>
-              ))}
+              {visibles.map((a) => {
+                const Icon = iconoDe(a)
+                return (
+                  <Card key={a.id} className={`flex items-start gap-3 border-l-4 p-4 ${ESTILO[a.tipo]}`}>
+                    <Icon size={22} strokeWidth={1.8} className={`mt-0.5 flex-shrink-0 ${COLOR_TIPO[a.tipo]}`} />
+                    <div className="flex-1">
+                      <div className="font-bold text-brand-navy dark:text-slate-100">{a.titulo}</div>
+                      <div className="text-sm text-slate-600 dark:text-slate-300">{a.detalle}</div>
+                      <Link to={a.link} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-navy dark:text-brand-gold">Ir a la sección <ArrowRight size={13} strokeWidth={2} /></Link>
+                    </div>
+                    <button onClick={() => descartarAlerta(a.id)} title="Descartar" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={16} strokeWidth={2} /></button>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </>

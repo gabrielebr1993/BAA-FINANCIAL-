@@ -5,6 +5,7 @@ import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { porCiudad } from '../utils/calc'
 import { CLAIM_FEE, nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
+import { AlertTriangle, Handshake, Ban, Percent, TrendingDown } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -61,11 +62,11 @@ export default function Claims() {
       ) : (
         <>
           <div className="mb-5 flex flex-wrap gap-3">
-            <KPI label="Total claims" value={num(totalClaims)} icon="⚠️" accent="navy" />
-            <KPI label="Perdonados" value={num(perdonados)} icon="🤝" accent="green" />
-            <KPI label="Activos" value={num(activos)} icon="💢" accent="red" />
-            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} accent="gold" sub={`${num(activos)} × $${CLAIM_FEE}`} />
-            <KPI label="Te descontó Gofo" value={money(descuentoGofo)} accent="red" />
+            <KPI label="Total claims" value={num(totalClaims)} icon={AlertTriangle} accent="navy" />
+            <KPI label="Perdonados" value={num(perdonados)} icon={Handshake} accent="green" />
+            <KPI label="Activos" value={num(activos)} icon={Ban} accent="red" />
+            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} × $${CLAIM_FEE}`} />
+            <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />
           </div>
 
           {!selectedInvoice ? (

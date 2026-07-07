@@ -9,6 +9,7 @@ import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { exportarPDF } from '../utils/exportar'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -135,10 +136,10 @@ export default function Pagos() {
       ) : (
         <>
           <div className="mb-5 flex flex-wrap gap-3">
-            <KPI label="Ingreso total" value={money(totIngreso)} icon="💵" accent="green" />
-            <KPI label="Total a pagar" value={money(totPagar)} icon="🧾" accent="navy" />
-            <KPI label="Ganancia total" value={money(totGanancia)} icon="📈" accent="gold" />
-            <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon="⏳" accent="slate" />
+            <KPI label="Ingreso total" value={money(totIngreso)} icon={DollarSign} accent="green" />
+            <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" />
+            <KPI label="Ganancia total" value={money(totGanancia)} icon={TrendingUp} accent="gold" />
+            <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
           </div>
 
           {!selectedInvoice ? (
@@ -158,8 +159,8 @@ export default function Pagos() {
                     <option value="pagado">Solo pagados</option>
                   </Select>
                   <div className="ml-auto flex gap-2">
-                    <Boton variant="ghost" onClick={exportar}>📊 Excel</Boton>
-                    <Boton variant="gold" onClick={exportarPdf}>📄 PDF</Boton>
+                    <Boton variant="ghost" onClick={exportar}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
+                    <Boton variant="gold" onClick={exportarPdf}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
                   </div>
                 </div>
               </Card>

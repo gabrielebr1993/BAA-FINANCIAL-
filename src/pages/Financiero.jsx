@@ -4,6 +4,7 @@ import { calcularPagos, porCiudad } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
+import { DollarSign, Receipt, AlertTriangle, TrendingUp, Target } from 'lucide-react'
 import { Card, KPI, PageTitle, Tabla, Boton, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
@@ -68,11 +69,11 @@ export default function Financiero() {
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon="💵" accent="green" />
-            <KPI label="Costo (choferes)" value={money(costoTotal)} icon="🧾" accent="navy" />
-            <KPI label="Descuentos claims" value={money(descuentos)} icon="⚠️" accent="red" />
-            <KPI label="Ganancia real" value={money(gananciaReal)} icon="📈" accent="gold" />
-            <KPI label="Margen" value={pct(margen)} icon="🎯" accent="blue" />
+            <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon={DollarSign} accent="green" />
+            <KPI label="Costo (choferes)" value={money(costoTotal)} icon={Receipt} accent="navy" />
+            <KPI label="Descuentos claims" value={money(descuentos)} icon={AlertTriangle} accent="red" />
+            <KPI label="Ganancia real" value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
+            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" />
           </div>
 
           {!selectedInvoice ? (
