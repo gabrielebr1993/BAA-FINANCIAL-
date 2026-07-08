@@ -3,6 +3,7 @@ import { collection, getDocs, query, where, doc, setDoc, updateDoc } from 'fireb
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { PERMISOS, ROLES, SECCIONES } from '../constants'
+import { crearUsuarioApi } from '../utils/api'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 
 function permisosVacios() {
@@ -71,13 +72,8 @@ export default function Usuarios() {
         // flujo principal: crear Auth + documento vía función serverless
         if (String(form.password).length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
         const token = await auth.currentUser.getIdToken()
-        const resp = await fetch('/api/crear-usuario', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: form.permissions, companyId: activeCompanyId }),
-        })
-        const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
-        if (!resp.ok || !data.ok) {
+        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: form.permissions, companyId: activeCompanyId }, token)
+        if (!data.ok) {
           setError(data.error || 'No se pudo crear el usuario.')
           return
         }

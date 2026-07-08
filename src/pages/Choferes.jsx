@@ -6,6 +6,7 @@ import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
+import { crearUsuarioApi } from '../utils/api'
 import { Truck, Check, KeyRound } from 'lucide-react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
@@ -54,13 +55,8 @@ export default function Choferes() {
     setCreandoAcceso(true)
     try {
       const token = await auth.currentUser.getIdToken()
-      const resp = await fetch('/api/crear-usuario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ nombre: modalForm.nombre, email: accesoForm.email.trim(), password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }),
-      })
-      const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
-      if (!resp.ok || !data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || 'No se pudo crear el acceso.' })
+      const data = await crearUsuarioApi({ nombre: modalForm.nombre, email: accesoForm.email.trim(), password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }, token)
+      if (!data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || 'No se pudo crear el acceso.' })
       setAccesoMsg({ tipo: 'ok', txt: `Acceso creado. Correo: ${accesoForm.email.trim()} · Contraseña: ${accesoForm.password} · Link: ${window.location.origin}` })
       setAccesoForm({ email: '', password: '' })
     } catch (e) {

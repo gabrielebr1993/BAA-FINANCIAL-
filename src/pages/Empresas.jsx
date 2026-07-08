@@ -7,6 +7,7 @@ import { useData } from '../DataContext'
 import { PERMISOS } from '../constants'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
 import { borrarRefsEnLotes } from '../utils/borrado'
+import { crearUsuarioApi } from '../utils/api'
 
 export default function Empresas() {
   const { esSuperAdmin } = useAuth()
@@ -52,13 +53,8 @@ export default function Empresas() {
         const permissions = {}
         PERMISOS.forEach((p) => (permissions[p.key] = true))
         const token = await auth.currentUser.getIdToken()
-        const resp = await fetch('/api/crear-usuario', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ nombre: ownerNuevo.nombre.trim(), email: ownerNuevo.email.trim(), password: ownerNuevo.password, role: 'owner', permissions, companyId: ref.id }),
-        })
-        const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
-        if (!resp.ok || !data.ok) {
+        const data = await crearUsuarioApi({ nombre: ownerNuevo.nombre.trim(), email: ownerNuevo.email.trim(), password: ownerNuevo.password, role: 'owner', permissions, companyId: ref.id }, token)
+        if (!data.ok) {
           setError(`Empresa "${nombre.trim()}" creada, pero no se pudo crear el dueño: ${data.error || ''} Puedes crearlo abajo (modo manual con UID).`)
           setNombre('')
           return

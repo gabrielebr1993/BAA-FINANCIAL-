@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/crear-usuario.js": {
+      "maxDuration": 60
+    }
+  }
+}
