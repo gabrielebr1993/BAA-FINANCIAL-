@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { collection, addDoc, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { Copy, Check, Building2, UserPlus } from 'lucide-react'
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, writeBatch, serverTimestamp } from 'firebase/firestore'
+import { Copy, Check, Building2, UserPlus, Eye, EyeOff, Trash2, AlertTriangle } from 'lucide-react'
 import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -20,6 +20,10 @@ export default function Empresas() {
   const [copiado, setCopiado] = useState(false)
   const [ownerForm, setOwnerForm] = useState({ uid: '', nombre: '', email: '', companyId: '' })
   const [guardandoOwner, setGuardandoOwner] = useState(false)
+  const [mostrarAvanzado, setMostrarAvanzado] = useState(false)
+  const [porEliminar, setPorEliminar] = useState(null)
+  const [confirmNombre, setConfirmNombre] = useState('')
+  const [eliminando, setEliminando] = useState(false)
 
   if (!esSuperAdmin) {
     return (
@@ -106,6 +110,42 @@ export default function Empresas() {
     }
   }
 
+  // Borra en lotes todos los documentos de una colección que sean de esa empresa.
+  const purgarColeccion = async (col, cid) => {
+    const snap = await getDocs(query(collection(db, col), where('companyId', '==', cid)))
+    const refs = snap.docs.map((d) => d.ref)
+    const chunk = 450
+    for (let i = 0; i < refs.length; i += chunk) {
+      const batch = writeBatch(db)
+      refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
+      await batch.commit()
+    }
+    return refs.length
+  }
+
+  // Elimina una empresa y TODOS sus datos por companyId (cascada).
+  const eliminarEmpresa = async () => {
+    if (!porEliminar) return
+    setEliminando(true); setError(''); setOk('')
+    try {
+      const cid = porEliminar.id
+      const cols = ['invoices', 'drivers', 'claims', 'payroll', 'managers', 'alertEstados', 'driverStats', 'users']
+      let total = 0
+      for (const c of cols) total += await purgarColeccion(c, cid).catch(() => 0)
+      await deleteDoc(doc(db, 'settings', cid)).catch(() => {})
+      await deleteDoc(doc(db, 'companies', cid))
+      const restantes = await reloadCompanies()
+      if (activeCompanyId === cid) setActiveCompanyId(restantes && restantes[0] ? restantes[0].id : null)
+      const nombreBorrado = porEliminar.nombre
+      setPorEliminar(null); setConfirmNombre('')
+      setOk(`Empresa "${nombreBorrado}" eliminada junto con ${total} registro(s) de sus datos.`)
+    } catch (e) {
+      setError('Error al eliminar la empresa: ' + e.message)
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   return (
     <div>
       <PageTitle>Empresas (súper-admin)</PageTitle>
@@ -175,6 +215,7 @@ export default function Empresas() {
                   <Boton variant="ghost" onClick={() => toggleActivo(row)} className="px-2.5 py-1 text-xs">
                     {row.activo !== false ? 'Desactivar' : 'Activar'}
                   </Boton>
+                  <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre('') }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> Eliminar</Boton>
                 </div>
               )
             return row[key]
@@ -182,24 +223,56 @@ export default function Empresas() {
         />
       </Card>
 
+      {/* Método avanzado (con UID) — oculto por defecto para no confundir. */}
       <Card className="p-4">
-        <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Crear owner de una empresa</h3>
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          El acceso en Firebase Auth (correo/contraseña) se crea aparte (en la consola de Firebase). Aquí se crea el documento del usuario owner con su UID y se le asigna la empresa; luego ese owner gestiona sus propios usuarios.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <Campo label="Empresa">
-            <Select className="w-52" value={ownerForm.companyId || activeCompanyId || ''} onChange={(e) => setOwnerForm((f) => ({ ...f, companyId: e.target.value }))}>
-              <option value="">— Elegir —</option>
-              {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
-            </Select>
-          </Campo>
-          <Campo label="UID (Firebase Auth)"><Input className="w-52" value={ownerForm.uid} onChange={(e) => setOwnerForm((f) => ({ ...f, uid: e.target.value }))} /></Campo>
-          <Campo label="Nombre"><Input className="w-44" value={ownerForm.nombre} onChange={(e) => setOwnerForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
-          <Campo label="Email"><Input className="w-52" value={ownerForm.email} onChange={(e) => setOwnerForm((f) => ({ ...f, email: e.target.value }))} /></Campo>
-          <Boton variant="gold" onClick={crearOwner} disabled={guardandoOwner}>{guardandoOwner ? 'Creando…' : 'Crear owner'}</Boton>
-        </div>
+        <button onClick={() => setMostrarAvanzado((v) => !v)} className="flex w-full items-center gap-2 text-left text-sm font-medium text-slate-500 hover:text-brand-navy dark:text-slate-400 dark:hover:text-slate-200">
+          {mostrarAvanzado ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}
+          Método avanzado (crear owner con UID de Firebase)
+          <span className="text-xs text-slate-400">— {mostrarAvanzado ? 'ocultar' : 'mostrar solo si lo necesitas'}</span>
+        </button>
+        {mostrarAvanzado && (
+          <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700/60">
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Usa la forma de arriba (email + contraseña, sin UID) para crear empresas y dueños. Este método solo es un respaldo:
+              crea el documento del usuario owner con un UID ya existente en Firebase Auth (el acceso se crea aparte en la consola de Firebase).
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <Campo label="Empresa">
+                <Select className="w-52" value={ownerForm.companyId || activeCompanyId || ''} onChange={(e) => setOwnerForm((f) => ({ ...f, companyId: e.target.value }))}>
+                  <option value="">— Elegir —</option>
+                  {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
+                </Select>
+              </Campo>
+              <Campo label="UID (Firebase Auth)"><Input className="w-52" value={ownerForm.uid} onChange={(e) => setOwnerForm((f) => ({ ...f, uid: e.target.value }))} /></Campo>
+              <Campo label="Nombre"><Input className="w-44" value={ownerForm.nombre} onChange={(e) => setOwnerForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
+              <Campo label="Email"><Input className="w-52" value={ownerForm.email} onChange={(e) => setOwnerForm((f) => ({ ...f, email: e.target.value }))} /></Campo>
+              <Boton variant="ghost" onClick={crearOwner} disabled={guardandoOwner}>{guardandoOwner ? 'Creando…' : 'Crear owner (avanzado)'}</Boton>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {/* Confirmación de borrado de empresa (escribiendo su nombre) */}
+      {porEliminar && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
+          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={20} strokeWidth={1.8} /> Eliminar empresa</h3>
+            <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, managers, usuarios, ajustes). Esta acción no se puede deshacer.
+            </p>
+            <div className="mb-3">
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Para confirmar, escribe el nombre exacto de la empresa:</div>
+              <Input className="w-full" value={confirmNombre} onChange={(e) => setConfirmNombre(e.target.value)} placeholder={porEliminar.nombre} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
+              <Boton variant="danger" onClick={eliminarEmpresa} disabled={eliminando || confirmNombre.trim() !== porEliminar.nombre.trim()}>
+                {eliminando ? 'Eliminando…' : <><Trash2 size={15} strokeWidth={1.8} /> Eliminar definitivamente</>}
+              </Boton>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
