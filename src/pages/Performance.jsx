@@ -276,7 +276,7 @@ export default function Performance() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400"><Filter size={14} strokeWidth={2} /> Filtros</div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Ruta</div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Ruta <span className="text-slate-400">(rankings de rutas)</span></div>
                 <Select value={fRuta} onChange={(e) => setFRuta(e.target.value)}>
                   <option value="">Todas</option>
                   {rutasOpts.map((r) => (<option key={r} value={r}>{r}</option>))}
@@ -303,7 +303,7 @@ export default function Performance() {
                 <Input
                   className="w-48 pl-8"
                   value={qBusca}
-                  onChange={(e) => { const v = e.target.value; setQBusca(v); if (v.trim() === '') setFBusca('') }}
+                  onChange={(e) => { const v = e.target.value; setQBusca(v); setFBusca(v.trim()) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') aplicarBusqueda() }}
                   placeholder="Nombre…"
                 />
@@ -332,7 +332,12 @@ export default function Performance() {
 
           <Card className="mb-4 p-4">
             <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">
-              {driverSel ? `Detalle de ${driverSel}` : 'Tabla completa de choferes (clic en encabezado para ordenar)'}
+              {driverSel ? `Detalle de ${driverSel}` : 'Tabla completa de choferes'}
+              {!driverSel && (
+                <span className="ml-2 text-xs font-normal text-slate-400">
+                  {hayFiltros ? `${ordenados.length} de ${pagos.length} choferes` : `${ordenados.length} choferes`} · clic en encabezado para ordenar
+                </span>
+              )}
             </h3>
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[1120px] border-collapse text-[13.5px]">
