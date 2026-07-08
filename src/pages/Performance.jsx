@@ -33,9 +33,11 @@ export default function Performance() {
   const [fTipo, setFTipo] = useState('')
   const [fMin, setFMin] = useState('')
   const [fMax, setFMax] = useState('')
-  const [fBusca, setFBusca] = useState('')
+  const [fBusca, setFBusca] = useState('')   // término aplicado (el que filtra)
+  const [qBusca, setQBusca] = useState('')   // texto que se escribe en el input
+  const aplicarBusqueda = () => setFBusca(qBusca.trim())
   const hayFiltros = fRuta || fTipo || fMin !== '' || fMax !== '' || fBusca
-  const limpiarFiltros = () => { setFRuta(''); setFTipo(''); setFMin(''); setFMax(''); setFBusca('') }
+  const limpiarFiltros = () => { setFRuta(''); setFTipo(''); setFMin(''); setFMax(''); setFBusca(''); setQBusca('') }
 
   const pagos = useMemo(
     () => calcularPagos(selectedInvoice, claims, drivers, selectedCity).map((p) => ({ ...p, paquetes: p.individuales + p.dobles })),
@@ -298,8 +300,15 @@ export default function Performance() {
               <div className="relative">
                 <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Buscar chofer</div>
                 <Search size={15} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-[30px] text-slate-400" />
-                <Input className="w-48 pl-8" value={fBusca} onChange={(e) => setFBusca(e.target.value)} placeholder="Nombre…" />
+                <Input
+                  className="w-48 pl-8"
+                  value={qBusca}
+                  onChange={(e) => { const v = e.target.value; setQBusca(v); if (v.trim() === '') setFBusca('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') aplicarBusqueda() }}
+                  placeholder="Nombre…"
+                />
               </div>
+              <Boton variant="primary" onClick={aplicarBusqueda} className="px-3.5 py-2 text-xs"><Search size={14} strokeWidth={2} /> Buscar</Boton>
               {hayFiltros && (
                 <Boton variant="ghost" onClick={limpiarFiltros} className="px-3 py-2 text-xs"><RotateCcw size={14} strokeWidth={2} /> Limpiar filtros</Boton>
               )}
