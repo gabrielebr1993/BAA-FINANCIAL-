@@ -42,6 +42,7 @@ export default function Empresas() {
     if (!nombre.trim()) return setError('Escribe el nombre de la empresa.')
     if (crearOwnerTambien) {
       if (!ownerNuevo.nombre.trim() || !ownerNuevo.email.trim()) return setError('Completa nombre y email del dueño (o desmarca "crear también el usuario dueño").')
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerNuevo.email.trim())) return setError('El email del dueño no es válido. Escribe un correo real, por ejemplo nombre@dominio.com.')
       if (String(ownerNuevo.password).length < 6) return setError('La contraseña del dueño debe tener al menos 6 caracteres.')
     }
     setCreando(true); setError(''); setOk(''); setResumenAcceso(null)
