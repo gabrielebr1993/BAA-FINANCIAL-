@@ -1,41 +1,53 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './AuthContext'
 import { ThemeProvider } from './ThemeContext'
 import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
-import Dashboard from './pages/Dashboard'
-import CargarFactura from './pages/CargarFactura'
-import Facturas from './pages/Facturas'
-import Configuracion from './pages/Configuracion'
-import Financiero from './pages/Financiero'
-import ReclamosGofo from './pages/ReclamosGofo'
-import Claims from './pages/Claims'
-import Choferes from './pages/Choferes'
-import PerfilChofer from './pages/PerfilChofer'
-import TrackingFicha from './pages/TrackingFicha'
-import Pagos from './pages/Pagos'
-import Rutas from './pages/Rutas'
-import RutaFicha from './pages/RutaFicha'
-import Performance from './pages/Performance'
-import Alertas from './pages/Alertas'
-import Comparar from './pages/Comparar'
-import Empresas from './pages/Empresas'
-import Usuarios from './pages/Usuarios'
-import DriverPortal from './pages/DriverPortal'
+import { Cargando } from './components/ui'
+
+// Páginas cargadas bajo demanda (code-splitting por ruta): cada una es su propio
+// chunk, así el arranque solo descarga lo imprescindible y cada pantalla se baja
+// al visitarla. El portal del chofer nunca descarga el código de administración.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const CargarFactura = lazy(() => import('./pages/CargarFactura'))
+const Facturas = lazy(() => import('./pages/Facturas'))
+const Configuracion = lazy(() => import('./pages/Configuracion'))
+const Financiero = lazy(() => import('./pages/Financiero'))
+const ReclamosGofo = lazy(() => import('./pages/ReclamosGofo'))
+const Claims = lazy(() => import('./pages/Claims'))
+const Choferes = lazy(() => import('./pages/Choferes'))
+const PerfilChofer = lazy(() => import('./pages/PerfilChofer'))
+const TrackingFicha = lazy(() => import('./pages/TrackingFicha'))
+const Pagos = lazy(() => import('./pages/Pagos'))
+const Rutas = lazy(() => import('./pages/Rutas'))
+const RutaFicha = lazy(() => import('./pages/RutaFicha'))
+const Performance = lazy(() => import('./pages/Performance'))
+const Alertas = lazy(() => import('./pages/Alertas'))
+const Comparar = lazy(() => import('./pages/Comparar'))
+const Empresas = lazy(() => import('./pages/Empresas'))
+const Usuarios = lazy(() => import('./pages/Usuarios'))
+const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
 function Page({ filtro, soloSuperAdmin, children }) {
   return (
     <ProtectedRoute filtro={filtro} soloSuperAdmin={soloSuperAdmin}>
-      <Layout>{children}</Layout>
+      <Layout>
+        <Suspense fallback={<Cargando texto="Cargando…" />}>{children}</Suspense>
+      </Layout>
     </ProtectedRoute>
   )
 }
 
 // Portal del chofer: sin el layout normal (chrome de la app), solo lo suyo.
 function PortalPage({ children }) {
-  return <ProtectedRoute soloDriver>{children}</ProtectedRoute>
+  return (
+    <ProtectedRoute soloDriver>
+      <Suspense fallback={<Cargando texto="Cargando tu portal…" />}>{children}</Suspense>
+    </ProtectedRoute>
+  )
 }
 
 export default function App() {

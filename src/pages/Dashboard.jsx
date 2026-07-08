@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
-import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText } from 'lucide-react'
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
@@ -9,7 +9,8 @@ import {
 } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
-import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card } from '../components/ui'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
+import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
 import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
@@ -87,6 +88,38 @@ export default function Dashboard() {
 
   const porSemana = variasSemanas && vista === 'porSemana'
 
+  // Descarga del resumen del periodo (Excel/PDF) reutilizando las utilidades de exportar.
+  const nombreArch = `MilePay Dashboard ${inv?.semana || 'periodo'}`
+  const filasCiudades = comparativoCiudades.map((c) => ({ Ciudad: c.ciudad, Paquetes: c.paquetes, Ingreso: Math.round(c.ingreso), Ganancia: Math.round(c.ganancia), Claims: c.claims }))
+  const descargarExcel = () =>
+    exportarExcel(nombreArch, [
+      { nombre: 'Resumen', rows: [
+        { Métrica: 'Ingreso total', Valor: Math.round(tot.ingreso) },
+        { Métrica: 'Costo total', Valor: Math.round(costoTotal) },
+        { Métrica: 'Ganancia', Valor: Math.round(gananciaTotal) },
+        { Métrica: 'Margen', Valor: pct(margen) },
+        { Métrica: 'Paquetes', Valor: tot.paquetes },
+        { Métrica: '% Dobles', Valor: pct(tot.pctDobles) },
+        { Métrica: 'Claims', Valor: numClaims },
+      ] },
+      ...(filasCiudades.length ? [{ nombre: 'Ciudades', rows: filasCiudades }] : []),
+      ...(rc.ganancia.length ? [{ nombre: 'Choferes', rows: rc.ganancia.map((p) => ({ Chofer: p.nombre, Ingreso: Math.round(p.ingreso), Ganancia: Math.round(p.ganancia) })) }] : []),
+    ])
+  const descargarPDF = () =>
+    exportarPDF(nombreArch, 'Resumen del Dashboard', inv?.semana || '', [
+      { titulo: 'Métricas del periodo', head: ['Métrica', 'Valor'], body: [
+        ['Ingreso total', money(tot.ingreso)],
+        ['Costo total', money(costoTotal)],
+        ['Ganancia', money(gananciaTotal)],
+        ['Margen', pct(margen)],
+        ['Paquetes', num(tot.paquetes)],
+        ['% Dobles', pct(tot.pctDobles)],
+        ['Claims', num(numClaims)],
+      ] },
+      ...(comparativoCiudades.length ? [{ titulo: 'Por ciudad', head: ['Ciudad', 'Paquetes', 'Ingreso', 'Ganancia', 'Claims'],
+        body: [...comparativoCiudades].sort((a, b) => b.ingreso - a.ingreso).map((c) => [c.ciudad, num(c.paquetes), money(c.ingreso), money(c.ganancia), num(c.claims)]) }] : []),
+    ])
+
   // Mostrar onboarding solo a empresas nuevas (sin flag y sin facturas) o si se
   // reabrió explícitamente desde "primeros pasos" (onboardingCompleto === false).
   // Nunca a empresas que ya operan (no molesta a las existentes).
@@ -94,7 +127,18 @@ export default function Dashboard() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Dashboard</PageTitle>
+      <PageTitle right={
+        <>
+          <RangeSelector />
+          <CitySelector />
+          {inv && !cargando && (
+            <>
+              <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
+              <Boton variant="gold" onClick={descargarPDF}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
+            </>
+          )}
+        </>
+      }>Dashboard</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />

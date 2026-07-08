@@ -132,6 +132,72 @@ function armarContenido(h, meta) {
   }
 }
 
+// Descarga UN reporte consolidado con TODOS los hallazgos del periodo (las 3
+// categorías) + el total en disputa. Intenta PDF; si falla, Excel de respaldo.
+export async function descargarReporteConsolidado({ cuadres = [], precios = [], sospechosos = [], meta = {} }) {
+  const total = totalEnDisputa(cuadres, precios, sospechosos)
+  const nHallazgos = cuadres.length + precios.length + sospechosos.length
+  const nombre = `reclamos_gofo_${meta.semana || 'periodo'}`.replace(/[^\w-]+/g, '_').slice(0, 60)
+  try {
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+    const ancho = doc.internal.pageSize.getWidth()
+    doc.setFillColor(...NAVY); doc.rect(0, 0, ancho, 56, 'F')
+    doc.setFillColor(...GOLD); doc.rect(0, 56, ancho, 4, 'F')
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
+    doc.text('MilePay', 40, 36)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(12)
+    doc.text('Reclamos a Gofo — reporte consolidado', 116, 36)
+
+    let y = 88
+    doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(13)
+    doc.text('Resumen de hallazgos del periodo', 40, y); y += 18
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60, 60, 60)
+    const metaLinea = [meta.empresa ? `Empresa: ${meta.empresa}` : null, meta.semana ? `Semana: ${meta.semana}` : null, meta.fecha ? `Fecha: ${meta.fecha}` : null].filter(Boolean).join('   ·   ')
+    if (metaLinea) { doc.text(metaLinea, 40, y); y += 16 }
+    doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+    doc.text(`Total en disputa: ${money(total)}   ·   ${nHallazgos} hallazgo(s)`, 40, y)
+
+    const seccion = (titulo, head, body) => {
+      if (!body.length) return
+      y += 24
+      doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(titulo, 40, y)
+      autoTable(doc, {
+        startY: y + 6, head: [head], body,
+        styles: { fontSize: 9, cellPadding: 5 }, headStyles: { fillColor: NAVY, textColor: 255 },
+        alternateRowStyles: { fillColor: [244, 245, 247] }, margin: { left: 40, right: 40 },
+      })
+      y = doc.lastAutoTable.finalY
+    }
+    seccion(`Facturas que no cuadran (${cuadres.length})`, ['Referencia', 'Semana', 'Línea principal', 'Diferencia', 'En disputa'],
+      cuadres.map((h) => [h.referencia, h.semana || '—', h.lineaPrincipal?.linea || '—', money(h.diferencia), money(h.disputa)]))
+    seccion(`Cambios de precio (${precios.length})`, ['Ruta', 'Ciudad', 'Antes $/paq', 'Ahora $/paq', 'Paquetes', 'Impacto'],
+      precios.map((h) => [h.ruta, h.nombreCiudad || '', money(h.antesPq), money(h.ahoraPq), String(h.paquetes), money(h.impacto)]))
+    seccion(`Claims sospechosos (${sospechosos.length})`, ['Waybill', 'Chofer', 'Tipo', 'Monto de Gofo', 'En disputa'],
+      sospechosos.map((h) => [h.waybill, h.courier, h.claimType || '—', money(h.montoGofo), money(h.disputa)]))
+
+    doc.save(`${nombre}.pdf`)
+    return { formato: 'pdf' }
+  } catch {
+    const XLSX = await import('xlsx')
+    const wb = XLSX.utils.book_new()
+    const push = (hoja, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), hoja.slice(0, 31)) }
+    push('Resumen', [
+      { Métrica: 'Empresa', Valor: meta.empresa || '' },
+      { Métrica: 'Semana', Valor: meta.semana || '' },
+      { Métrica: 'Fecha', Valor: meta.fecha || '' },
+      { Métrica: 'Total en disputa', Valor: money(total) },
+      { Métrica: 'Hallazgos', Valor: nHallazgos },
+    ])
+    push('Descuadres', cuadres.map((h) => ({ Referencia: h.referencia, Semana: h.semana || '', 'Línea principal': h.lineaPrincipal?.linea || '', Diferencia: money(h.diferencia), 'En disputa': money(h.disputa) })))
+    push('Cambios de precio', precios.map((h) => ({ Ruta: h.ruta, Ciudad: h.nombreCiudad || '', 'Antes $/paq': money(h.antesPq), 'Ahora $/paq': money(h.ahoraPq), Paquetes: h.paquetes, Impacto: money(h.impacto) })))
+    push('Claims sospechosos', sospechosos.map((h) => ({ Waybill: h.waybill, Chofer: h.courier, Tipo: h.claimType || '', 'Monto de Gofo': money(h.montoGofo), 'En disputa': money(h.disputa) })))
+    if (!wb.SheetNames.length) push('Resumen', [{ Métrica: 'Sin hallazgos', Valor: '' }])
+    XLSX.writeFile(wb, `${nombre}.xlsx`)
+    return { formato: 'excel' }
+  }
+}
+
 // Descarga el reporte formal de un hallazgo. Intenta PDF; si falla, Excel.
 export async function descargarReporteReclamo(h, meta = {}) {
   const c = armarContenido(h, meta)

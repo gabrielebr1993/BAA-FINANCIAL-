@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Scale, AlertTriangle, TrendingDown, FileWarning, Download, CheckCircle2 } from 'lucide-react'
 import { useData } from '../DataContext'
 import { porCiudad } from '../utils/calc'
-import { facturasQueNoCuadran, cambiosDePrecio, claimsSospechosos, totalEnDisputa, descargarReporteReclamo } from '../utils/reclamos'
+import { facturasQueNoCuadran, cambiosDePrecio, claimsSospechosos, totalEnDisputa, descargarReporteReclamo, descargarReporteConsolidado } from '../utils/reclamos'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
@@ -28,6 +28,11 @@ export default function ReclamosGofo() {
     try { await descargarReporteReclamo(h, meta) } finally { setGenerando(null) }
   }
 
+  const generarTodo = async () => {
+    setGenerando('todo')
+    try { await descargarReporteConsolidado({ cuadres, precios, sospechosos, meta }) } finally { setGenerando(null) }
+  }
+
   const BotonReporte = ({ h, keyId }) => (
     <Boton variant="gold" disabled={generando === keyId} onClick={() => generar(h, keyId)} className="px-3 py-1.5 text-xs">
       <Download size={14} strokeWidth={1.8} /> {generando === keyId ? 'Generando…' : 'Generar reporte de reclamo'}
@@ -51,8 +56,15 @@ export default function ReclamosGofo() {
               <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">En disputa este periodo</div>
               <div className={`text-3xl font-extrabold ${total > 0 ? 'text-brand-gold' : 'text-emerald-600 dark:text-emerald-400'}`}>{money(total)}</div>
             </div>
-            <div className="ml-auto text-right text-sm text-slate-500 dark:text-slate-400">
-              {nHallazgos > 0 ? <><b className="text-brand-navy dark:text-slate-100">{num(nHallazgos)}</b> hallazgo(s)</> : 'Todo en orden'}
+            <div className="ml-auto flex flex-col items-end gap-2">
+              <div className="text-right text-sm text-slate-500 dark:text-slate-400">
+                {nHallazgos > 0 ? <><b className="text-brand-navy dark:text-slate-100">{num(nHallazgos)}</b> hallazgo(s)</> : 'Todo en orden'}
+              </div>
+              {nHallazgos > 0 && (
+                <Boton variant="gold" disabled={generando === 'todo'} onClick={generarTodo} className="px-3 py-1.5 text-xs">
+                  <Download size={14} strokeWidth={1.8} /> {generando === 'todo' ? 'Generando…' : 'Descargar todo'}
+                </Boton>
+              )}
             </div>
           </Card>
 
