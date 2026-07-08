@@ -16,7 +16,7 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user, companyId, esSuperAdmin } = useAuth()
+  const { user, companyId, esSuperAdmin, esDriver } = useAuth()
   const [companies, setCompanies] = useState([])
   const [activeCompanyId, setActiveCompanyId] = useState(null)
   const [invoices, setInvoices] = useState([])
@@ -44,6 +44,7 @@ export function DataProvider({ children }) {
   // (compatible con reglas de seguridad estrictas de Firestore).
   const cargarCompanies = useCallback(async () => {
     try {
+      if (esDriver) { setCompanies([]); return [] }
       if (esSuperAdmin) {
         const snap = await getDocs(collection(db, 'companies'))
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -61,7 +62,7 @@ export function DataProvider({ children }) {
     } catch {
       return []
     }
-  }, [esSuperAdmin, companyId])
+  }, [esSuperAdmin, esDriver, companyId])
 
   // Facturas de la empresa activa (sin orderBy para no requerir índice compuesto).
   const cargarInvoices = useCallback(async (cid) => {
@@ -128,7 +129,9 @@ export function DataProvider({ children }) {
 
   // Cargar datos de la empresa activa.
   useEffect(() => {
-    if (!user) {
+    // SEGURIDAD: un chofer NUNCA carga los datos de la empresa (facturas,
+    // choferes, claims, etc.). Su portal consulta solo lo suyo por separado.
+    if (!user || esDriver) {
       setInvoices([]); setDrivers([]); setManagers([]); setClaims([]); setAjustes(null); setSelectedInvoiceId(null); setCargando(false)
       return
     }
@@ -144,7 +147,7 @@ export function DataProvider({ children }) {
       setEstadosAlertas(estados || {})
       setCargando(false)
     })()
-  }, [user, activeCompanyId, cargarInvoices, cargarDrivers, cargarManagers, cargarAjustes])
+  }, [user, esDriver, activeCompanyId, cargarInvoices, cargarDrivers, cargarManagers, cargarAjustes])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoices, rango), [invoices, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])

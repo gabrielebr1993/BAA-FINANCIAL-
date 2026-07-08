@@ -88,7 +88,9 @@ export const PERMISOS = [
   { key: 'gestionarUsuarios', label: 'Gestionar Usuarios' },
 ]
 
-export const ROLES = ['owner', 'admin', 'manager']
+// 'driver' = acceso muy limitado: solo su Portal del chofer (ver constantes de
+// portal y ProtectedRoute). Nunca ve finanzas, otros choferes ni gestión.
+export const ROLES = ['owner', 'admin', 'manager', 'driver']
 
 // Secciones del menú lateral. Cada una gated por su permiso. Iconos = Lucide.
 export const SECCIONES = [

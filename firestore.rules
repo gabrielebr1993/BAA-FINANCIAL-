@@ -6,6 +6,13 @@ rules_version = '2';
 // companyId coincide con la de su documento en `users`. El súper-admin
 // (users/{uid}.superAdmin == true) accede a todo.
 //
+// ROL "driver" (chofer): acceso MUY limitado. Solo puede LEER:
+//   - su propio documento en `drivers` (el de su driverId)
+//   - sus propios `claims` (donde courier == su driverNombre)
+//   - sus propios `payroll` y `driverStats` (donde driverNombre/driverKey == el suyo)
+//   NO puede leer invoices, otros drivers, users, companies, managers, settings
+//   ni alertEstados. Tampoco puede escribir en ninguna colección de datos.
+//
 // Desplegar con:  firebase deploy --only firestore:rules
 // (o pegar en Firebase Console → Firestore → Reglas)
 // ---------------------------------------------------------------------------
@@ -24,65 +31,100 @@ service cloud.firestore {
     function isSuper() {
       return hasProfile() && userDoc().superAdmin == true;
     }
+    function role() {
+      return hasProfile() ? userDoc().role : '';
+    }
+    function isDriver() {
+      return role() == 'driver';
+    }
+    // Personal = staff de la empresa (owner/admin/manager/súper-admin), NO chofer.
+    function isStaff(cid) {
+      return isSuper() || (hasProfile() && !isDriver() && userDoc().companyId == cid);
+    }
     function myCompany() {
       return hasProfile() ? userDoc().companyId : null;
     }
+    // Datos "de empresa" (finanzas, agregados): solo staff, NUNCA un chofer.
     function inCompany(cid) {
-      return isSuper() || (hasProfile() && myCompany() == cid);
+      return isStaff(cid);
+    }
+    // Nombre / clave / id del chofer vinculado al usuario (rol driver).
+    function myDriverName() {
+      return hasProfile() ? userDoc().driverNombre : '';
+    }
+    function myDriverKey() {
+      return hasProfile() ? userDoc().driverKey : '';
+    }
+    function myDriverId() {
+      return hasProfile() ? userDoc().driverId : '';
     }
 
-    // Empresas: lectura para súper-admin (todas) o para el usuario de esa empresa;
-    // escritura solo súper-admin.
+    // Empresas: solo staff de esa empresa o súper-admin. Escritura súper-admin.
     match /companies/{companyId} {
-      allow read: if isSuper() || (hasProfile() && myCompany() == companyId);
+      allow read: if isStaff(companyId);
       allow write: if isSuper();
     }
 
-    // Usuarios: cada uno lee su propio doc; el owner/súper-admin de la empresa
-    // gestiona los usuarios de su empresa.
+    // Usuarios: cada uno lee su PROPIO doc. El staff (no chofer) lee/gestiona los
+    // usuarios de su empresa. Un chofer solo puede leer su propio documento.
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isSuper() || (hasProfile() && myCompany() == resource.data.companyId));
-      allow create, update, delete: if isSuper() || (hasProfile() && myCompany() == request.resource.data.companyId);
+      allow read: if signedIn() && (request.auth.uid == uid || isSuper() || (hasProfile() && !isDriver() && myCompany() == resource.data.companyId));
+      allow create, update, delete: if isSuper() || (hasProfile() && !isDriver() && myCompany() == request.resource.data.companyId);
     }
 
-    // Colecciones de datos: acceso solo dentro de la empresa.
+    // Facturas / agregados financieros: solo staff. Un chofer NO puede leerlas.
     match /invoices/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId);
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
+
+    // Drivers: el staff gestiona todos; un chofer solo LEE su propio doc.
     match /drivers/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId) || (isDriver() && id == myDriverId());
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
+
+    // Claims: el staff gestiona todos; un chofer solo LEE los suyos (courier == su nombre).
     match /claims/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId) || (isDriver() && resource.data.courier == myDriverName());
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
+
+    // Nómina: el staff gestiona; un chofer solo LEE la suya (driverNombre == su nombre).
     match /payroll/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId) || (isDriver() && resource.data.driverNombre == myDriverName());
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
-    // Managers (sueldo fijo semanal) — costo de empresa.
+
+    // Resumen por chofer y semana (para el portal del chofer). El chofer solo lee
+    // las filas suyas (driverKey == la suya). Lo escribe el staff al cargar facturas.
+    match /driverStats/{id} {
+      allow read: if isStaff(resource.data.companyId) || (isDriver() && resource.data.driverKey == myDriverKey());
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
+    }
+
+    // Managers (costo de empresa): solo staff.
     match /managers/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId);
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
-    // Estado persistido de cada alerta (resuelta / descartada).
+    // Estado de alertas: solo staff.
     match /alertEstados/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId);
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
-    // Configuración por empresa.
+    // Configuración por empresa: solo staff.
     match /settings/{id} {
-      allow read: if inCompany(resource.data.companyId);
-      allow create: if inCompany(request.resource.data.companyId);
-      allow update, delete: if inCompany(resource.data.companyId);
+      allow read: if isStaff(resource.data.companyId);
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
     }
   }
 }

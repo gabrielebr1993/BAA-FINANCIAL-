@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, TODAS } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -297,6 +297,65 @@ export default function CargarFactura() {
         }
         await batch.commit()
       }
+
+      // Resumen por chofer y semana (driverStats), para el PORTAL DEL CHOFER.
+      // Se calcula con las tarifas finales y la calificación vs. la flota, y cada
+      // chofer solo podrá leer su propia fila (reglas de Firestore por driverKey).
+      const preciosNuevos = {}
+      choferesNuevos.forEach((n) => { preciosNuevos[n.trim().toLowerCase()] = { ind: Number(precios[n]?.ind) || 0, dob: Number(precios[n]?.doble) || 0 } })
+      const driversFinal = drivers.map((d) => {
+        let ind = Number(d.precioIndividual) || 0
+        let dob = Number(d.precioDoble) || 0
+        const e = editExist[d.nombre]
+        if (e) { if (e.ind !== undefined && Number(e.ind) > 0) ind = Number(e.ind); if (e.doble !== undefined && Number(e.doble) > 0) dob = Number(e.doble) }
+        const pn = preciosNuevos[(d.nombre || '').trim().toLowerCase()]
+        if (pn) { ind = pn.ind; dob = pn.dob }
+        return { ...d, precioIndividual: ind, precioDoble: dob }
+      })
+      choferesNuevos.filter((n) => !buscarDriver(drivers, n)).forEach((n) => {
+        driversFinal.push({ id: `nuevo_${n}`, nombre: n, precioIndividual: Number(precios[n]?.ind) || 0, precioDoble: Number(precios[n]?.doble) || 0, activo: true })
+      })
+      const claimsConDecision = combinado.claims.map((c) => {
+        const wb = (c.waybill || '').trim()
+        const esRep = casosRepetidos.some((k) => k.waybill === wb)
+        return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false }
+      })
+      const pagosFinal = calcularPagos(combinado, claimsConDecision, driversFinal, TODAS)
+      const prom = promediosFlota(pagosFinal)
+      const fechaInicioISO = periodo.fechaInicio ? periodo.fechaInicio.toISOString() : ''
+      for (let i = 0; i < pagosFinal.length; i += chunk) {
+        const batch = writeBatch(db)
+        for (const p of pagosFinal.slice(i, i + chunk)) {
+          const key = (p.nombre || '').trim().toLowerCase()
+          const calif = calificarChofer({ ...p, paquetes: p.individuales + p.dobles }, prom)
+          const sref = doc(db, 'driverStats', `${ref.id}__${key.replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`)
+          batch.set(sref, {
+            companyId: activeCompanyId,
+            invoiceId: ref.id,
+            semana: semana.trim(),
+            fechaInicioISO,
+            driverNombre: p.nombre,
+            driverKey: key,
+            ciudad: p.ciudad || '',
+            individuales: p.individuales,
+            dobles: p.dobles,
+            paquetes: p.individuales + p.dobles,
+            ingreso: p.ingreso,
+            tarifaInd: p.tarifaInd,
+            tarifaDoble: p.tarifaDoble,
+            claimsTotales: p.claimsTotales,
+            claimsActivos: p.claimsActivos,
+            claimsPerdonados: p.claimsPerdonados,
+            descuentoClaims: p.descuentoClaims,
+            descontadoGofo: p.descontadoGofo,
+            totalPagar: p.totalPagar,
+            ganancia: p.ganancia,
+            calificacion: { puntaje: calif.puntaje, estrellas: calif.estrellas, nivel: calif.nivel, etiqueta: calif.etiqueta, desglose: calif.desglose },
+          })
+        }
+        await batch.commit()
+      }
+
       await reloadInvoices()
       setSelectedInvoiceId(ref.id)
       setGuardado(true)

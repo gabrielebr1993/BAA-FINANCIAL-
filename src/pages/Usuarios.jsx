@@ -130,7 +130,7 @@ export default function Usuarios() {
           )}
           <Campo label="Rol">
             <Select className="w-40" value={form.role} onChange={(e) => setF('role', e.target.value)}>
-              {ROLES.map((r) => (
+              {ROLES.filter((r) => r !== 'driver').map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </Select>

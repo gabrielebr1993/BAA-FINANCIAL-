@@ -43,7 +43,15 @@ export function AuthProvider({ children }) {
   // Empresa a la que pertenece el usuario (null para súper-admin sin empresa).
   const companyId = perfil?.companyId || null
 
+  // Rol chofer: acceso muy limitado (solo su portal). Vinculado a un driver.
+  const esDriver = perfil?.role === 'driver'
+  const driverId = perfil?.driverId || null
+  const driverNombre = perfil?.driverNombre || ''
+  const driverKey = perfil?.driverKey || (driverNombre ? driverNombre.trim().toLowerCase() : '')
+
   const puede = (filtro) => {
+    // El chofer NUNCA tiene permiso sobre las secciones normales del sistema.
+    if (esDriver) return false
     if (esSuperAdmin) return true
     if (!perfil) return false
     if (perfil.role === 'owner') return true
@@ -53,7 +61,7 @@ export function AuthProvider({ children }) {
   const cerrarSesion = () => signOut(auth)
 
   return (
-    <AuthContext.Provider value={{ user, perfil, cargando, companyId, esSuperAdmin, puede, cerrarSesion }}>
+    <AuthContext.Provider value={{ user, perfil, cargando, companyId, esSuperAdmin, esDriver, driverId, driverNombre, driverKey, puede, cerrarSesion }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,10 +1,14 @@
+import { Navigate } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import { Spinner } from './components/ui'
 import Login from './Login'
 
-export default function ProtectedRoute({ filtro, soloSuperAdmin, children }) {
-  const { user, cargando, puede, esSuperAdmin } = useAuth()
+// `soloDriver` marca la ruta del Portal del chofer. El resto de rutas están
+// vedadas para el rol driver: si un chofer intenta entrar por URL a cualquier
+// sección normal, se le redirige a su portal (no ve ni carga nada más).
+export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, children }) {
+  const { user, cargando, puede, esSuperAdmin, esDriver } = useAuth()
   if (cargando)
     return (
       <div className="flex min-h-screen items-center justify-center gap-3 bg-surface-light text-slate-500 dark:bg-surface-dark dark:text-slate-400">
@@ -12,6 +16,11 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, children }) {
       </div>
     )
   if (!user) return <Login />
+
+  // Blindaje del rol driver: solo su portal; cualquier otra ruta -> /portal.
+  if (esDriver && !soloDriver) return <Navigate to="/portal" replace />
+  // Un no-chofer no necesita el portal del chofer -> al inicio.
+  if (soloDriver && !esDriver) return <Navigate to="/" replace />
   if (soloSuperAdmin && !esSuperAdmin)
     return (
       <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">

@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-  const { nombre, email, password, role, permissions, companyId } = body
+  const { nombre, email, password, role, permissions, companyId, driverId, driverNombre } = body
 
   if (!nombre || !email || !password || !companyId) {
     return res.status(400).json({ ok: false, error: 'Faltan datos: nombre, email, contraseña y empresa son obligatorios.' })
@@ -71,15 +71,25 @@ export default async function handler(req, res) {
       password: String(password),
       displayName: String(nombre).trim(),
     })
-    await db.collection('users').doc(userRecord.uid).set({
+    // Un usuario "driver" queda vinculado a un chofer (driverId + nombre) y sin
+    // permisos de gestión. El resto de roles ignoran esos campos.
+    const esDriver = role === 'driver'
+    const dNombre = driverNombre ? String(driverNombre).trim() : ''
+    const userDocData = {
       nombre: String(nombre).trim(),
       email: String(email).trim(),
       role: role || 'manager',
-      permissions: permissions || {},
+      permissions: esDriver ? {} : (permissions || {}),
       companyId,
       superAdmin: false,
       createdAt: FieldValue.serverTimestamp(),
-    })
+    }
+    if (esDriver) {
+      userDocData.driverId = driverId ? String(driverId) : ''
+      userDocData.driverNombre = dNombre
+      userDocData.driverKey = dNombre.toLowerCase()
+    }
+    await db.collection('users').doc(userRecord.uid).set(userDocData)
     return res.status(200).json({ ok: true, uid: userRecord.uid })
   } catch (e) {
     const code = e?.errorInfo?.code || e?.code || ''

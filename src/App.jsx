@@ -22,6 +22,7 @@ import Alertas from './pages/Alertas'
 import Comparar from './pages/Comparar'
 import Empresas from './pages/Empresas'
 import Usuarios from './pages/Usuarios'
+import DriverPortal from './pages/DriverPortal'
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
 function Page({ filtro, soloSuperAdmin, children }) {
@@ -32,6 +33,11 @@ function Page({ filtro, soloSuperAdmin, children }) {
   )
 }
 
+// Portal del chofer: sin el layout normal (chrome de la app), solo lo suyo.
+function PortalPage({ children }) {
+  return <ProtectedRoute soloDriver>{children}</ProtectedRoute>
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -39,6 +45,7 @@ export default function App() {
         <DataProvider>
           <BrowserRouter>
             <Routes>
+              <Route path="/portal" element={<PortalPage><DriverPortal /></PortalPage>} />
               <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
               <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />

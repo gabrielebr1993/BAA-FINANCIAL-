@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
-import { Truck, Check } from 'lucide-react'
+import { Truck, Check, KeyRound } from 'lucide-react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 
@@ -41,6 +41,34 @@ export default function Choferes() {
   const [guardandoModal, setGuardandoModal] = useState(false)
   const [historial, setHistorial] = useState([])
   const [cargandoHist, setCargandoHist] = useState(false)
+  // ---- acceso del chofer (rol driver) ----
+  const [accesoForm, setAccesoForm] = useState({ email: '', password: '' })
+  const [creandoAcceso, setCreandoAcceso] = useState(false)
+  const [accesoMsg, setAccesoMsg] = useState(null)
+
+  const crearAccesoDriver = async () => {
+    setAccesoMsg(null)
+    if (!accesoForm.email.trim()) return setAccesoMsg({ tipo: 'error', txt: 'Escribe el email del chofer.' })
+    if (String(accesoForm.password).length < 6) return setAccesoMsg({ tipo: 'error', txt: 'La contraseña debe tener al menos 6 caracteres.' })
+    if (!activeCompanyId || !modal) return
+    setCreandoAcceso(true)
+    try {
+      const token = await auth.currentUser.getIdToken()
+      const resp = await fetch('/api/crear-usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ nombre: modalForm.nombre, email: accesoForm.email.trim(), password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }),
+      })
+      const data = await resp.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor.' }))
+      if (!resp.ok || !data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || 'No se pudo crear el acceso.' })
+      setAccesoMsg({ tipo: 'ok', txt: `Acceso creado. Correo: ${accesoForm.email.trim()} · Contraseña: ${accesoForm.password} · Link: ${window.location.origin}` })
+      setAccesoForm({ email: '', password: '' })
+    } catch (e) {
+      setAccesoMsg({ tipo: 'error', txt: 'Error: ' + e.message })
+    } finally {
+      setCreandoAcceso(false)
+    }
+  }
 
   // sincronizar borradores con drivers
   useEffect(() => {
@@ -171,6 +199,8 @@ export default function Choferes() {
   const abrirModal = async (d) => {
     setModal(d)
     setModalForm({ nombre: d.nombre || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', activo: d.activo !== false, notas: d.notas || '' })
+    setAccesoForm({ email: '', password: '' })
+    setAccesoMsg(null)
     setCargandoHist(true)
     setHistorial([])
     try {
@@ -399,6 +429,22 @@ export default function Choferes() {
                   <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Acumulado: <b>{money(historial.reduce((a, h) => a + (h.totalPagar || 0), 0))}</b></div>
                 </>
               )}
+            </div>
+
+            {/* Dar acceso al chofer (usuario rol driver) */}
+            <div className="mb-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+              <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                <KeyRound size={15} strokeWidth={1.8} className="text-brand-gold" /> Dar acceso al chofer
+              </div>
+              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                Crea un usuario para <b>{modalForm.nombre}</b> que solo verá su portal (sus pagos, entregas, claims y calificación). No verá finanzas ni a otros choferes.
+              </p>
+              {accesoMsg && <Aviso tipo={accesoMsg.tipo}>{accesoMsg.txt}</Aviso>}
+              <div className="flex flex-wrap items-end gap-2">
+                <Campo label="Email del chofer"><Input className="w-52" type="email" value={accesoForm.email} onChange={(e) => setAccesoForm((f) => ({ ...f, email: e.target.value }))} placeholder="chofer@correo.com" /></Campo>
+                <Campo label="Contraseña (mín. 6)"><Input className="w-40" value={accesoForm.password} onChange={(e) => setAccesoForm((f) => ({ ...f, password: e.target.value }))} placeholder="la que definas" /></Campo>
+                <Boton variant="primary" disabled={creandoAcceso} onClick={crearAccesoDriver}>{creandoAcceso ? <><Spinner /> Creando…</> : <><KeyRound size={15} strokeWidth={1.8} /> Crear acceso</>}</Boton>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">
