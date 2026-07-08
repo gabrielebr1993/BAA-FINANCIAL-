@@ -4,13 +4,13 @@
 // Perdonar = no cobrar los $100 (multa que dejas de cobrar, NO pérdida) y solo
 // absorber el montoGofo REAL de ese claim (perdidaAbsorbida, variable por claim).
 // Ganancia neta por claims = cobradoChoferes − descontadoGofo.
-import { economiaClaims } from '../utils/calc'
+import { economiaClaims, claimFeeDe } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { Card } from './ui'
 import { Handshake } from 'lucide-react'
 
-export default function PanelClaims({ claims, compacto = false }) {
-  const e = economiaClaims(claims)
+export default function PanelClaims({ claims, inv, compacto = false }) {
+  const e = economiaClaims(claims, inv ? (c) => claimFeeDe(inv, c) : undefined)
   if (!e.total) return null
 
   const Fila = ({ label, valor, negativo, fuerte }) => (
@@ -33,7 +33,7 @@ export default function PanelClaims({ claims, compacto = false }) {
       </div>
 
       <div className="space-y-1.5 text-sm">
-        <Fila label={`Multas cobradas a choferes (${num(e.activos)} × $100)`} valor={e.cobradoChoferes} />
+        <Fila label={`Multas cobradas a choferes (${num(e.activos)} claim activo(s))`} valor={e.cobradoChoferes} />
         <Fila label="Descontado por Gofo (todos los claims, variable)" valor={e.descontadoGofo} negativo />
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
           <span className="font-bold text-brand-navy dark:text-slate-100">GANANCIA NETA POR CLAIMS</span>

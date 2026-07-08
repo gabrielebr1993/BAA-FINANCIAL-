@@ -14,3 +14,10 @@ export async function setOnboardingCompleto(cid, valor) {
   if (!cid) return
   await setDoc(doc(db, 'settings', cid), { companyId: cid, onboardingCompleto: !!valor, actualizadoEn: serverTimestamp() }, { merge: true })
 }
+
+// Reglas de cálculo: default de empresa { claimFee, dobleMonto } y overrides por
+// ciudad { [codigoCiudad]: { claimFee?, dobleMonto? } }. Valores vacíos = heredar.
+export async function guardarReglasEmpresa(cid, reglas, reglasCiudad) {
+  if (!cid) return
+  await setDoc(doc(db, 'settings', cid), { companyId: cid, reglas: reglas || {}, reglasCiudad: reglasCiudad || {}, actualizadoEn: serverTimestamp() }, { merge: true })
+}

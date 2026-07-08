@@ -1,13 +1,44 @@
 // ---------------------------------------------------------------------------
 // Cálculos de negocio derivados del resumen de una factura.
-// Reglas fijas: doble = monto 0.5 ; CLAIM_FEE = $100 por claim no perdonado ;
-// pago = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*100.
+// Reglas por defecto: doble = monto 0.5 ; CLAIM_FEE = $100 por claim no perdonado.
+// Ambas son CONFIGURABLES por empresa y por ciudad (ver resolverReglas). El pago
+// = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*claimFee.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
+import { CLAIM_FEE, DOBLE_MONTO, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
 
 const clamp = (v, min = 0, max = 100) => Math.max(min, Math.min(max, v))
+
+// ---- reglas de cálculo configurables (empresa → ciudad → global) -------------
+const numONull = (x) => { const n = Number(x); return Number.isFinite(n) ? n : null }
+
+// Resuelve claimFee y dobleMonto para una ciudad, con jerarquía:
+//   ciudad (si la definió) → empresa (default de la empresa) → global (100 / 0.5).
+// `ajustes` = settings/{companyId} con { reglas:{claimFee,dobleMonto},
+//   reglasCiudad:{ [codigoCiudad]: {claimFee?, dobleMonto?} } }.
+export function resolverReglas(ajustes, ciudad) {
+  const emp = ajustes?.reglas || {}
+  const ciu = (ajustes?.reglasCiudad && ajustes.reglasCiudad[ciudad]) || {}
+  const claimFee = numONull(ciu.claimFee) ?? numONull(emp.claimFee) ?? CLAIM_FEE
+  const dobleMonto = numONull(ciu.dobleMonto) ?? numONull(emp.dobleMonto) ?? DOBLE_MONTO
+  return { claimFee, dobleMonto }
+}
+
+// ¿Un paquete es "doble" según la regla (monto == dobleMonto, con tolerancia)?
+export function esDoblePorRegla(monto, dobleMonto = DOBLE_MONTO) {
+  return Math.abs((Number(monto) || 0) - (Number(dobleMonto) || 0)) < 1e-9
+}
+
+// claimFee aplicado a una factura para una ciudad concreta. Usa las reglas que se
+// guardaron EN la factura al procesarla (histórico consistente); si no existen
+// (facturas antiguas), cae al valor global 100.
+export function claimFeeDe(inv, ciudad) {
+  const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
+  if (r && numONull(r.claimFee) != null) return Number(r.claimFee)
+  if (inv?.reglaEmpresa && numONull(inv.reglaEmpresa.claimFee) != null) return Number(inv.reglaEmpresa.claimFee)
+  return CLAIM_FEE
+}
 
 // ---- calificación de choferes ------------------------------------------------
 // Promedios de la flota (para comparar productividad y rentabilidad).
@@ -207,7 +238,9 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
     const claimsActivos = activos[ch.nombre] || 0
     const claimsTotales = totalClaimsPorChofer[ch.nombre] || 0
     const claimsPerdonados = claimsTotales - claimsActivos
-    const descuentoClaims = claimsActivos * CLAIM_FEE
+    // claimFee según la ciudad del chofer (config empresa→ciudad guardada en la factura).
+    const claimFee = claimFeeDe(inv, ch.ciudad)
+    const descuentoClaims = claimsActivos * claimFee
     const descontadoGofo = descuentoGofoPorChofer[ch.nombre] || 0
     const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
     const totalPagar = pagoBase - descuentoClaims
@@ -221,6 +254,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       tarifaInd,
       tarifaDoble,
       sinTarifa: !driver,
+      claimFee,
       claimsTotales,
       claimsActivos,
       claimsPerdonados,
@@ -303,15 +337,19 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
   }
 }
 
-// Economía de claims. El chofer paga $100 fijo por cada claim NO perdonado.
-// Gofo descuenta un monto variable (montoGofo) por cada claim, ya incluido en el
-// neto. Perdonar = no cobrar los $100 y ABSORBER el monto que Gofo cobró.
-export function economiaClaims(claims) {
+// Economía de claims. El chofer paga la MULTA (claimFee, configurable por ciudad)
+// por cada claim NO perdonado. Gofo descuenta un monto variable (montoGofo) por
+// cada claim, ya incluido en el neto. Perdonar = no cobrar la multa y ABSORBER el
+// monto que Gofo cobró.
+// `feeDe(ciudad)` resuelve la multa por ciudad; por defecto usa CLAIM_FEE (100),
+// así que sin pasarlo el resultado es idéntico al actual.
+export function economiaClaims(claims, feeDe) {
+  const fee = typeof feeDe === 'function' ? feeDe : () => CLAIM_FEE
   const validos = claimsValidos(claims)
   const total = validos.length
   const perdonados = validos.filter((c) => c.perdonado).length
   const activos = total - perdonados
-  const cobradoChoferes = activos * CLAIM_FEE
+  const cobradoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + fee(c.ciudad), 0)
   const descontadoGofo = validos.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
   const perdidaAbsorbida = validos.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
   return {

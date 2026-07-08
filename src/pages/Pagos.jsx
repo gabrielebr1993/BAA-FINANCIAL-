@@ -4,10 +4,9 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad } from '../utils/calc'
+import { calcularPagos, porCiudad, claimFeeDe } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { exportarPDF } from '../utils/exportar'
-import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
 import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
@@ -211,7 +210,7 @@ export default function Pagos() {
                 </table>
               </div>
               <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
-                Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × ${CLAIM_FEE}. Perdonar un claim lo excluye del descuento y recalcula al instante.
+                Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × multa por claim (configurable por empresa/ciudad). Perdonar un claim lo excluye del descuento y recalcula al instante.
               </p>
             </>
           )}
@@ -267,7 +266,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, claimsChofer,
                       <td className="px-2 py-1.5">{c.claimType}</td>
                       <td className="px-2 py-1.5">{money(c.montoGofo)}</td>
                       <td className="px-2 py-1.5">
-                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−${CLAIM_FEE})</Badge>}
+                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(claimFeeDe(selectedInvoice, c.ciudad))})</Badge>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {perdonandoId === c.id ? (

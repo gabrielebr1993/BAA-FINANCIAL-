@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, TODAS } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, TODAS } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -14,7 +14,7 @@ import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -62,19 +62,22 @@ export default function CargarFactura() {
     return [...map.entries()].map(([codigo, nombre]) => ({ codigo, nombre }))
   }, [ciudadesEmpresa, ciudadesExtra, procesados])
 
-  // Combinado recalculado con la ciudad MANUAL de cada archivo.
+  // Combinado recalculado con la ciudad MANUAL de cada archivo. Además reclasifica
+  // "doble" según la regla (dobleMonto) de la CIUDAD de cada archivo (config
+  // empresa→ciudad). Con el default (0.5) el resultado es idéntico al actual.
   const combinado = useMemo(() => {
     if (procesados.length === 0) return null
     const overridden = procesados.map((p, i) => {
       const code = ciudadPorArchivo[i] || ''
+      const { dobleMonto } = resolverReglas(ajustes, code)
       return {
         ...p,
-        detalles: p.detalles.map((d) => ({ ...d, ciudad: code })),
+        detalles: p.detalles.map((d) => ({ ...d, ciudad: code, esDoble: esDoblePorRegla(d.monto, dobleMonto) })),
         claims: p.claims.map((c) => ({ ...c, ciudad: code })),
       }
     })
     return combinarArchivos(overridden, nombreMap)
-  }, [procesados, ciudadPorArchivo, nombreMap])
+  }, [procesados, ciudadPorArchivo, nombreMap, ajustes])
 
   // Casos de claim repetido (mismo Waybill No. más de una vez) que requieren
   // que el dueño apruebe o anule ANTES de guardar la factura.
@@ -238,6 +241,11 @@ export default function CargarFactura() {
       const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
       const ciudadPrincipal = combinado.ciudades[0] || ''
       const periodo = parsearPeriodo(semana.trim())
+      // Reglas de cálculo APLICADAS (claimFee/dobleMonto) por ciudad + default de
+      // empresa, guardadas EN la factura para que el histórico sea consistente
+      // aunque la config cambie después.
+      const reglaEmpresa = resolverReglas(ajustes, '__empresa__')
+      const reglasAplicadas = Object.fromEntries((combinado.ciudades || []).map((c) => [c, resolverReglas(ajustes, c)]))
       const invoicePayload = {
         companyId: activeCompanyId,
         semana: semana.trim(),
@@ -248,6 +256,8 @@ export default function CargarFactura() {
         ciudad: ciudadPrincipal,
         ciudadNombre: ciudadesMap[ciudadPrincipal] || nombreCiudad(ciudadPrincipal),
         ciudadesMap,
+        reglaEmpresa,
+        reglasAplicadas,
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
@@ -320,7 +330,7 @@ export default function CargarFactura() {
         const esRep = casosRepetidos.some((k) => k.waybill === wb)
         return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false }
       })
-      const pagosFinal = calcularPagos(combinado, claimsConDecision, driversFinal, TODAS)
+      const pagosFinal = calcularPagos({ ...combinado, reglaEmpresa, reglasAplicadas }, claimsConDecision, driversFinal, TODAS)
       const prom = promediosFlota(pagosFinal)
       const fechaInicioISO = periodo.fechaInicio ? periodo.fechaInicio.toISOString() : ''
       for (let i = 0; i < pagosFinal.length; i += chunk) {

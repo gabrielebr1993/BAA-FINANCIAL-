@@ -137,6 +137,16 @@ export function combinarFacturas(invoices) {
   }))
   const resumenChoferes = Object.values(porChofer)
 
+  // Reglas de cálculo aplicadas: se conservan (unión de mapas por ciudad + el
+  // default de empresa de la primera factura), para que calcularPagos use el
+  // claimFee correcto por ciudad también en rangos de varias semanas.
+  const reglasAplicadas = {}
+  let reglaEmpresa = null
+  for (const inv of invoices) {
+    if (inv.reglasAplicadas) Object.assign(reglasAplicadas, inv.reglasAplicadas)
+    if (!reglaEmpresa && inv.reglaEmpresa) reglaEmpresa = inv.reglaEmpresa
+  }
+
   const suma = (campo) => invoices.reduce((a, i) => a + (i[campo] || 0), 0)
 
   // verificación combinada + por factura
@@ -176,6 +186,8 @@ export function combinarFacturas(invoices) {
     resumenChoferes,
     resumenRutas,
     resumenCiudades,
+    reglaEmpresa,
+    reglasAplicadas,
     verificacion,
   }
 }

@@ -9,6 +9,7 @@ import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import MisCiudades from '../components/MisCiudades'
+import ReglasCalculo from '../components/ReglasCalculo'
 
 export default function Configuracion() {
   const { activeCompanyId, empresaActiva, reloadAjustes } = useData()
@@ -47,31 +48,34 @@ export default function Configuracion() {
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Reglas de negocio (fijas) */}
+        {/* Reglas de negocio */}
         <Card className="p-5">
           <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de negocio</h3>
           <ul className="space-y-3 text-sm">
             <li className="flex items-center justify-between">
-              <span className="text-slate-600 dark:text-slate-300">Descuento por claim (CLAIM_FEE)</span>
-              <span className="font-semibold">${CLAIM_FEE} <Badge color="slate">fijo</Badge></span>
+              <span className="text-slate-600 dark:text-slate-300">Multa por claim (default)</span>
+              <span className="font-semibold">${CLAIM_FEE} <Badge color="gold">configurable</Badge></span>
+            </li>
+            <li className="flex items-center justify-between">
+              <span className="text-slate-600 dark:text-slate-300">Clasificación de doble (default)</span>
+              <span className="font-semibold">monto = $0.50 <Badge color="gold">configurable</Badge></span>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-slate-600 dark:text-slate-300">Umbral de alerta de cambio de precio</span>
               <span className="font-semibold">{pct(UMBRAL_CAMBIO_PRECIO, 0)} <Badge color="slate">fijo</Badge></span>
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-slate-600 dark:text-slate-300">Clasificación de doble</span>
-              <span className="font-semibold">monto = $0.50 <Badge color="slate">fijo</Badge></span>
-            </li>
           </ul>
           <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             <Info size={15} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
-            Estas reglas están validadas con Gofo y son fijas para no afectar los cálculos ni la verificación al centavo.
+            La multa por claim y el monto de “doble” se pueden ajustar por empresa y por ciudad abajo. Con los valores por defecto, el cálculo cuadra con Gofo igual que siempre.
           </div>
         </Card>
 
         {/* Ciudades propias de la empresa */}
         <MisCiudades />
+
+        {/* Reglas de cálculo configurables (empresa + ciudad) */}
+        <ReglasCalculo />
 
         {/* Primeros pasos / onboarding */}
         <Card className="p-5">

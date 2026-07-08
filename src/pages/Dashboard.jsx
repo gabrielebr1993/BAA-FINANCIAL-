@@ -174,7 +174,7 @@ export default function Dashboard() {
               </div>
 
               <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
-                <PanelClaims claims={porCiudad(claims, selectedCity)} compacto />
+                <PanelClaims claims={porCiudad(claims, selectedCity)} inv={inv} compacto />
               </ClickWrap>
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">

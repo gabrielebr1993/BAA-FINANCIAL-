@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios } from '../utils/claims'
-import { porCiudad, claimsValidos, detectarClaimsRepetidos } from '../utils/calc'
-import { CLAIM_FEE, nombreCiudad } from '../constants'
+import { porCiudad, claimsValidos, detectarClaimsRepetidos, claimFeeDe } from '../utils/calc'
+import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
@@ -57,7 +57,8 @@ export default function Claims() {
   const totalClaims = validos.length
   const perdonados = validos.filter((c) => c.perdonado).length
   const activos = totalClaims - perdonados
-  const descuentoChoferes = activos * CLAIM_FEE
+  // Descuento a choferes = suma de la multa (claimFee por ciudad) de cada claim activo.
+  const descuentoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + claimFeeDe(selectedInvoice, c.ciudad), 0)
   const descuentoGofo = base.reduce((a, c) => a + (c.montoGofo || 0), 0)
 
   // ---- multiselección (respeta los filtros activos) ----
@@ -117,7 +118,7 @@ export default function Claims() {
             <KPI label="Total claims" value={num(totalClaims)} icon={AlertTriangle} accent="navy" />
             <KPI label="Perdonados" value={num(perdonados)} icon={Handshake} accent="green" />
             <KPI label="Activos" value={num(activos)} icon={Ban} accent="red" />
-            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} × $${CLAIM_FEE}`} />
+            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} claim(s) activo(s)`} />
             <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />
           </div>
 
