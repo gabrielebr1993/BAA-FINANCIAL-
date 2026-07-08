@@ -28,8 +28,17 @@ service cloud.firestore {
     function hasProfile() {
       return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
+    // Súper-admin por CORREO verificado (respaldo "break-glass"): garantiza el
+    // acceso del dueño de la plataforma aunque su doc en `users` tenga cualquier
+    // problema. Edita esta lista con tu(s) correo(s) de súper-admin.
+    function isSuperEmail() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() in ['gabriele.brandonisio.o@gmail.com'];
+    }
+    // Súper-admin: por correo (respaldo) o por flag superAdmin==true en su doc.
     function isSuper() {
-      return hasProfile() && userDoc().superAdmin == true;
+      return isSuperEmail() || (hasProfile() && userDoc().superAdmin == true);
     }
     function role() {
       return hasProfile() ? userDoc().role : '';
@@ -62,7 +71,7 @@ service cloud.firestore {
     // Empresas: solo staff de esa empresa o súper-admin. Escritura súper-admin.
     match /companies/{companyId} {
       allow read: if isStaff(companyId);
-      allow write: if isSuper();
+      allow create, update, delete: if isSuper();
     }
 
     // Usuarios: cada uno lee su PROPIO doc. El staff (no chofer) lee/gestiona los
