@@ -24,6 +24,7 @@ export default function Empresas() {
   const [porEliminar, setPorEliminar] = useState(null)
   const [confirmNombre, setConfirmNombre] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [borrarUsuarios, setBorrarUsuarios] = useState(false)
 
   if (!esSuperAdmin) {
     return (
@@ -110,39 +111,94 @@ export default function Empresas() {
     }
   }
 
-  // Borra en lotes todos los documentos de una colección que sean de esa empresa.
+  // Colecciones de DATOS de una empresa (todas filtradas por companyId). Se
+  // incluyen algunas que quizá no existan: getDocs sobre una colección vacía
+  // simplemente resuelve sin documentos (no pasa nada). NO incluye `users`.
+  const COLECCIONES_DATOS = ['invoices', 'drivers', 'claims', 'payroll', 'managers', 'alertEstados', 'driverStats', 'packages', 'notifications', 'cities', 'backups', 'resumenes']
+
+  // Envuelve una promesa con un tope de tiempo: si algo (consulta o borrado) se
+  // queda colgado, RECHAZA en vez de dejar el "Eliminando…" pegado para siempre.
+  const conTimeout = (promesa, ms, etiqueta) =>
+    Promise.race([
+      Promise.resolve(promesa),
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`Tiempo de espera agotado en ${etiqueta} (${Math.round(ms / 1000)}s). Revisa tu conexión o las reglas de Firestore.`)), ms)),
+    ])
+
+  // Borra en lotes (≤500) todos los documentos de una colección de esa empresa.
   const purgarColeccion = async (col, cid) => {
-    const snap = await getDocs(query(collection(db, col), where('companyId', '==', cid)))
-    const refs = snap.docs.map((d) => d.ref)
+    try {
+      const snap = await conTimeout(getDocs(query(collection(db, col), where('companyId', '==', cid))), 30000, `leer ${col}`)
+      const refs = snap.docs.map((d) => d.ref)
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] ${col}: ${refs.length} doc(s) a borrar`)
+      const chunk = 450
+      let borrados = 0
+      for (let i = 0; i < refs.length; i += chunk) {
+        const batch = writeBatch(db)
+        const lote = refs.slice(i, i + chunk)
+        lote.forEach((r) => batch.delete(r))
+        await conTimeout(batch.commit(), 30000, `borrar ${col}`)
+        borrados += lote.length
+      }
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] ${col}: ${borrados} borrado(s)`)
+      return borrados
+    } catch (e) {
+      // Un fallo en una colección NO debe abortar todo el proceso: se avisa y sigue.
+      // eslint-disable-next-line no-console
+      console.warn(`[MilePay] ${col}: no se pudo purgar (${e.message})`)
+      return 0
+    }
+  }
+
+  // Usuarios de la empresa (opcional). NUNCA borra al súper-admin ni a ti mismo.
+  const purgarUsuarios = async (cid) => {
+    const snap = await conTimeout(getDocs(query(collection(db, 'users'), where('companyId', '==', cid))), 30000, 'leer usuarios')
+    const refs = snap.docs.filter((d) => d.data().superAdmin !== true && d.id !== auth.currentUser?.uid).map((d) => d.ref)
+    // eslint-disable-next-line no-console
+    console.log(`[MilePay] users: ${refs.length} usuario(s) a borrar (se conservan súper-admins y tu usuario)`)
     const chunk = 450
     for (let i = 0; i < refs.length; i += chunk) {
       const batch = writeBatch(db)
       refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
-      await batch.commit()
+      await conTimeout(batch.commit(), 30000, 'borrar usuarios')
     }
     return refs.length
   }
 
-  // Elimina una empresa y TODOS sus datos por companyId (cascada).
+  // Elimina una empresa concreta (por su ID) y TODOS sus datos por companyId.
+  // Blindado contra cuelgues: cada paso tiene timeout y el finally SIEMPRE apaga
+  // el estado "Eliminando…". Maneja la empresa duplicada porque borra por id.
   const eliminarEmpresa = async () => {
     if (!porEliminar) return
+    const cid = porEliminar.id
+    const nombreBorrado = porEliminar.nombre
     setEliminando(true); setError(''); setOk('')
     try {
-      const cid = porEliminar.id
-      const cols = ['invoices', 'drivers', 'claims', 'payroll', 'managers', 'alertEstados', 'driverStats', 'users']
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] Eliminando empresa "${nombreBorrado}" (id: ${cid})…`)
       let total = 0
-      for (const c of cols) total += await purgarColeccion(c, cid).catch(() => 0)
-      await deleteDoc(doc(db, 'settings', cid)).catch(() => {})
-      await deleteDoc(doc(db, 'companies', cid))
-      const restantes = await reloadCompanies()
+      for (const c of COLECCIONES_DATOS) {
+        total += await purgarColeccion(c, cid)
+      }
+      if (borrarUsuarios) {
+        total += await purgarUsuarios(cid).catch((e) => { console.warn('[MilePay] users:', e.message); return 0 })
+      }
+      // settings usa el id de la empresa como doc id.
+      await conTimeout(deleteDoc(doc(db, 'settings', cid)).catch(() => {}), 15000, 'ajustes')
+      await conTimeout(deleteDoc(doc(db, 'companies', cid)), 15000, 'empresa')
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] Empresa "${nombreBorrado}" eliminada. Total docs de datos borrados: ${total}`)
+      const restantes = await conTimeout(reloadCompanies(), 15000, 'refrescar lista').catch(() => null)
       if (activeCompanyId === cid) setActiveCompanyId(restantes && restantes[0] ? restantes[0].id : null)
-      const nombreBorrado = porEliminar.nombre
-      setPorEliminar(null); setConfirmNombre('')
-      setOk(`Empresa "${nombreBorrado}" eliminada junto con ${total} registro(s) de sus datos.`)
+      setPorEliminar(null); setConfirmNombre(''); setBorrarUsuarios(false)
+      setOk(`Empresa "${nombreBorrado}" eliminada (${total} registro(s) de datos borrados).`)
     } catch (e) {
-      setError('Error al eliminar la empresa: ' + e.message)
+      // eslint-disable-next-line no-console
+      console.error('[MilePay] Error al eliminar empresa:', e)
+      setError(`No se pudo eliminar: ${e.message}`)
     } finally {
-      setEliminando(false)
+      setEliminando(false) // pase lo que pase, nunca se queda en "Eliminando…"
     }
   }
 
@@ -204,6 +260,7 @@ export default function Empresas() {
           rows={companies.map((c) => ({ ...c, _key: c.id }))}
           emptyText="Aún no hay empresas. Crea la primera arriba."
           renderCell={(row, key) => {
+            if (key === 'nombre') return <span>{row.nombre} <span className="ml-1 font-mono text-[11px] text-slate-400">{String(row.id).slice(0, 6)}…</span></span>
             if (key === 'activo') return row.activo !== false ? <Badge color="green">Activa</Badge> : <Badge color="slate">Inactiva</Badge>
             if (key === 'activa') return row.id === activeCompanyId ? <Badge color="gold">● En uso</Badge> : ''
             if (key === 'acciones')
@@ -215,7 +272,7 @@ export default function Empresas() {
                   <Boton variant="ghost" onClick={() => toggleActivo(row)} className="px-2.5 py-1 text-xs">
                     {row.activo !== false ? 'Desactivar' : 'Activar'}
                   </Boton>
-                  <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre('') }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> Eliminar</Boton>
+                  <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre(''); setBorrarUsuarios(false) }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> Eliminar</Boton>
                 </div>
               )
             return row[key]
@@ -257,9 +314,14 @@ export default function Empresas() {
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
           <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={20} strokeWidth={1.8} /> Eliminar empresa</h3>
-            <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, managers, usuarios, ajustes). Esta acción no se puede deshacer.
+            <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, managers, ajustes). Esta acción no se puede deshacer.
             </p>
+            <p className="mb-3 text-xs text-slate-400">ID: <span className="font-mono">{porEliminar.id}</span> — se borra exactamente esta (útil si hay nombres duplicados).</p>
+            <label className="mb-3 flex items-start gap-2 rounded-xl bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+              <input type="checkbox" checked={borrarUsuarios} onChange={(e) => setBorrarUsuarios(e.target.checked)} className="mt-0.5" />
+              <span>También eliminar los usuarios de esta empresa (nunca borra súper-admins ni tu propio usuario). Si lo dejas sin marcar, los usuarios se conservan.</span>
+            </label>
             <div className="mb-3">
               <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Para confirmar, escribe el nombre exacto de la empresa:</div>
               <Input className="w-full" value={confirmNombre} onChange={(e) => setConfirmNombre(e.target.value)} placeholder={porEliminar.nombre} />
