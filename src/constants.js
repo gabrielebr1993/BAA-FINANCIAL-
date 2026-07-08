@@ -92,6 +92,7 @@ export const PERMISOS = [
   { key: 'gestionarChoferes', label: 'Gestionar Choferes y Tarifas' },
   { key: 'verPagos', label: 'Ver Pagos' },
   { key: 'gestionarUsuarios', label: 'Gestionar Usuarios' },
+  { key: 'gestionarConfiguracion', label: 'Acceso a Configuración' },
 ]
 
 // 'driver' = acceso muy limitado: solo su Portal del chofer (ver constantes de
@@ -113,7 +114,7 @@ export const SECCIONES = [
   { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: BarChart3 },
   { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell },
   { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users },
-  { path: '/configuracion', label: 'Configuración', permiso: 'gestionarUsuarios', icon: Settings },
+  { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings },
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.

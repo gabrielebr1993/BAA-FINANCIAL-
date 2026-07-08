@@ -61,7 +61,7 @@ export default function App() {
               <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
               <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
-            <Route path="/configuracion" element={<Page filtro="gestionarUsuarios"><Configuracion /></Page>} />
+            <Route path="/configuracion" element={<Page filtro="gestionarConfiguracion"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
