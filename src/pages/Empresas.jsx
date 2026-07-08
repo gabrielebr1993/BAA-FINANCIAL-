@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, writeBatch, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore'
 import { Copy, Check, Building2, UserPlus, Eye, EyeOff, Trash2, AlertTriangle } from 'lucide-react'
 import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { PERMISOS } from '../constants'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
+import { borrarRefsEnLotes } from '../utils/borrado'
 
 export default function Empresas() {
   const { esSuperAdmin } = useAuth()
@@ -24,6 +25,7 @@ export default function Empresas() {
   const [porEliminar, setPorEliminar] = useState(null)
   const [confirmNombre, setConfirmNombre] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [progreso, setProgreso] = useState(null) // { hechos, total } durante el borrado
   const [borrarUsuarios, setBorrarUsuarios] = useState(false)
 
   if (!esSuperAdmin) {
@@ -111,10 +113,10 @@ export default function Empresas() {
     }
   }
 
-  // Colecciones de DATOS de una empresa (todas filtradas por companyId). Se
-  // incluyen algunas que quizá no existan: getDocs sobre una colección vacía
-  // simplemente resuelve sin documentos (no pasa nada). NO incluye `users`.
-  const COLECCIONES_DATOS = ['invoices', 'drivers', 'claims', 'payroll', 'managers', 'alertEstados', 'driverStats', 'packages', 'notifications', 'cities', 'backups', 'resumenes']
+  // Colecciones de DATOS reales de una empresa (todas con companyId). Solo las que
+  // la app escribe; NO incluye `users` (opcional aparte) ni colecciones fantasma
+  // (que solo generaban consultas denegadas y ralentizaban el borrado).
+  const COLECCIONES_DATOS = ['invoices', 'drivers', 'claims', 'payroll', 'managers', 'alertEstados', 'driverStats']
 
   // Envuelve una promesa con un tope de tiempo: si algo (consulta o borrado) se
   // queda colgado, RECHAZA en vez de dejar el "Eliminando…" pegado para siempre.
@@ -124,71 +126,51 @@ export default function Empresas() {
       new Promise((_, rej) => setTimeout(() => rej(new Error(`Tiempo de espera agotado en ${etiqueta} (${Math.round(ms / 1000)}s). Revisa tu conexión o las reglas de Firestore.`)), ms)),
     ])
 
-  // Borra en lotes (≤500) todos los documentos de una colección de esa empresa.
-  const purgarColeccion = async (col, cid) => {
+  // Devuelve las refs de una colección de esa empresa (acotada por companyId).
+  // Si falla (colección inexistente, permisos), avisa y sigue con [].
+  const refsDeColeccion = async (col, cid) => {
     try {
       const snap = await conTimeout(getDocs(query(collection(db, col), where('companyId', '==', cid))), 30000, `leer ${col}`)
-      const refs = snap.docs.map((d) => d.ref)
-      // eslint-disable-next-line no-console
-      console.log(`[MilePay] ${col}: ${refs.length} doc(s) a borrar`)
-      const chunk = 450
-      let borrados = 0
-      for (let i = 0; i < refs.length; i += chunk) {
-        const batch = writeBatch(db)
-        const lote = refs.slice(i, i + chunk)
-        lote.forEach((r) => batch.delete(r))
-        await conTimeout(batch.commit(), 30000, `borrar ${col}`)
-        borrados += lote.length
-      }
-      // eslint-disable-next-line no-console
-      console.log(`[MilePay] ${col}: ${borrados} borrado(s)`)
-      return borrados
+      return snap.docs.map((d) => d.ref)
     } catch (e) {
-      // Un fallo en una colección NO debe abortar todo el proceso: se avisa y sigue.
       // eslint-disable-next-line no-console
-      console.warn(`[MilePay] ${col}: no se pudo purgar (${e.message})`)
-      return 0
+      console.warn(`[MilePay] ${col}: no se pudo leer (${e.message})`)
+      return []
     }
   }
 
-  // Usuarios de la empresa (opcional). NUNCA borra al súper-admin ni a ti mismo.
-  const purgarUsuarios = async (cid) => {
+  // Refs de usuarios de la empresa (opcional). NUNCA incluye súper-admin ni a ti.
+  const refsUsuarios = async (cid) => {
     const snap = await conTimeout(getDocs(query(collection(db, 'users'), where('companyId', '==', cid))), 30000, 'leer usuarios')
-    const refs = snap.docs.filter((d) => d.data().superAdmin !== true && d.id !== auth.currentUser?.uid).map((d) => d.ref)
-    // eslint-disable-next-line no-console
-    console.log(`[MilePay] users: ${refs.length} usuario(s) a borrar (se conservan súper-admins y tu usuario)`)
-    const chunk = 450
-    for (let i = 0; i < refs.length; i += chunk) {
-      const batch = writeBatch(db)
-      refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
-      await conTimeout(batch.commit(), 30000, 'borrar usuarios')
-    }
-    return refs.length
+    return snap.docs.filter((d) => d.data().superAdmin !== true && d.id !== auth.currentUser?.uid).map((d) => d.ref)
   }
 
   // Elimina una empresa concreta (por su ID) y TODOS sus datos por companyId.
-  // Blindado contra cuelgues: cada paso tiene timeout y el finally SIEMPRE apaga
-  // el estado "Eliminando…". Maneja la empresa duplicada porque borra por id.
+  // RÁPIDO: lee todas las colecciones EN PARALELO, junta las refs y las borra en
+  // lotes de 450 ejecutados en paralelo por olas (segundos, no minutos). Blindado
+  // contra cuelgues (timeouts) y el finally SIEMPRE apaga "Eliminando…".
   const eliminarEmpresa = async () => {
     if (!porEliminar) return
     const cid = porEliminar.id
     const nombreBorrado = porEliminar.nombre
-    setEliminando(true); setError(''); setOk('')
+    setEliminando(true); setError(''); setOk(''); setProgreso({ hechos: 0, total: 0 })
     try {
       // eslint-disable-next-line no-console
       console.log(`[MilePay] Eliminando empresa "${nombreBorrado}" (id: ${cid})…`)
-      let total = 0
-      for (const c of COLECCIONES_DATOS) {
-        total += await purgarColeccion(c, cid)
-      }
+      // 1) Reunir refs de TODAS las colecciones de datos en paralelo.
+      const grupos = await Promise.all(COLECCIONES_DATOS.map((c) => refsDeColeccion(c, cid)))
+      let refs = grupos.flat()
       if (borrarUsuarios) {
-        total += await purgarUsuarios(cid).catch((e) => { console.warn('[MilePay] users:', e.message); return 0 })
+        const u = await refsUsuarios(cid).catch((e) => { console.warn('[MilePay] users:', e.message); return [] })
+        refs = refs.concat(u)
       }
-      // settings usa el id de la empresa como doc id.
+      // 2) Borrar todo en lotes paralelos con progreso.
+      const total = await borrarRefsEnLotes(refs, (hechos, t) => setProgreso({ hechos, total: t }))
+      // 3) settings (doc id = cid) y el propio doc de la empresa.
       await conTimeout(deleteDoc(doc(db, 'settings', cid)).catch(() => {}), 15000, 'ajustes')
       await conTimeout(deleteDoc(doc(db, 'companies', cid)), 15000, 'empresa')
       // eslint-disable-next-line no-console
-      console.log(`[MilePay] Empresa "${nombreBorrado}" eliminada. Total docs de datos borrados: ${total}`)
+      console.log(`[MilePay] Empresa "${nombreBorrado}" eliminada. Docs de datos borrados: ${total}`)
       const restantes = await conTimeout(reloadCompanies(), 15000, 'refrescar lista').catch(() => null)
       if (activeCompanyId === cid) setActiveCompanyId(restantes && restantes[0] ? restantes[0].id : null)
       setPorEliminar(null); setConfirmNombre(''); setBorrarUsuarios(false)
@@ -199,6 +181,7 @@ export default function Empresas() {
       setError(`No se pudo eliminar: ${e.message}`)
     } finally {
       setEliminando(false) // pase lo que pase, nunca se queda en "Eliminando…"
+      setProgreso(null)
     }
   }
 
@@ -326,6 +309,17 @@ export default function Empresas() {
               <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Para confirmar, escribe el nombre exacto de la empresa:</div>
               <Input className="w-full" value={confirmNombre} onChange={(e) => setConfirmNombre(e.target.value)} placeholder={porEliminar.nombre} />
             </div>
+            {eliminando && progreso && (
+              <div className="mb-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Eliminando datos…</span>
+                  <span>{progreso.hechos} de {progreso.total || '—'}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full rounded-full bg-brand-gold transition-all duration-200" style={{ width: `${progreso.total ? Math.round((progreso.hechos / progreso.total) * 100) : 5}%` }} />
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
               <Boton variant="danger" onClick={eliminarEmpresa} disabled={eliminando || confirmNombre.trim() !== porEliminar.nombre.trim()}>

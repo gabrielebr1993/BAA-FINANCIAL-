@@ -61,3 +61,28 @@ export async function eliminarFacturaCascada(companyId, invoiceId, onProgress) {
 
   return total
 }
+
+// Borra una lista de refs cualesquiera en lotes de 450 ejecutados en paralelo por
+// olas. `onProgress(hechos, total)` para pintar progreso. Reutilizable (p. ej. al
+// eliminar una empresa entera, que junta refs de varias colecciones).
+export async function borrarRefsEnLotes(refs, onProgress) {
+  const total = refs.length
+  let hechos = 0
+  onProgress?.(0, total)
+  const lotes = []
+  for (let i = 0; i < refs.length; i += CHUNK) lotes.push(refs.slice(i, i + CHUNK))
+  for (let i = 0; i < lotes.length; i += OLAS) {
+    const ola = lotes.slice(i, i + OLAS)
+    await Promise.all(
+      ola.map((grupo) => {
+        const batch = writeBatch(db)
+        grupo.forEach((r) => batch.delete(r))
+        return batch.commit().then(() => {
+          hechos += grupo.length
+          onProgress?.(hechos, total)
+        })
+      })
+    )
+  }
+  return total
+}
