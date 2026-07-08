@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { collection, getDocs, query, where, doc, writeBatch } from 'firebase/firestore'
 import { Trash2 } from 'lucide-react'
-import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { nombreCiudadDe } from '../utils/calc'
+import { eliminarFacturaCascada } from '../utils/borrado'
 import { money } from '../utils/format'
 import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
@@ -11,22 +10,16 @@ export default function Facturas() {
   const { invoices, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
+  const [progreso, setProgreso] = useState(null) // { hechos, total }
   const [error, setError] = useState('')
 
   const eliminar = async () => {
     if (!porEliminar) return
     setEliminando(true)
+    setProgreso({ hechos: 0, total: 0 })
     setError('')
     try {
-      const cs = await getDocs(query(collection(db, 'claims'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', porEliminar.id)))
-      const ps = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', porEliminar.id)))
-      const refs = [...cs.docs.map((d) => d.ref), ...ps.docs.map((d) => d.ref), doc(db, 'invoices', porEliminar.id)]
-      const chunk = 450
-      for (let i = 0; i < refs.length; i += chunk) {
-        const batch = writeBatch(db)
-        refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
-        await batch.commit()
-      }
+      await eliminarFacturaCascada(activeCompanyId, porEliminar.id, (hechos, total) => setProgreso({ hechos, total }))
       const eraSeleccionada = selectedInvoiceId === porEliminar.id
       const restantes = await reloadInvoices()
       if (eraSeleccionada) setSelectedInvoiceId(restantes && restantes[0] ? restantes[0].id : null)
@@ -36,6 +29,7 @@ export default function Facturas() {
       setError('Error al eliminar: ' + e.message)
     } finally {
       setEliminando(false)
+      setProgreso(null)
     }
   }
 
@@ -86,6 +80,17 @@ export default function Facturas() {
               ¿Seguro que quieres eliminar la factura de <b>{porEliminar.ciudadNombre || (porEliminar.resumenCiudades || []).map((c) => nombreCiudadDe(porEliminar, c.ubicacion)).join(', ')}</b> — <b>{porEliminar.semana}</b>?
               Se borrarán también sus <b>claims</b> y <b>pagos</b> asociados. Esta acción no se puede deshacer.
             </p>
+            {eliminando && progreso && (
+              <div className="mb-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>Eliminando…</span>
+                  <span>{progreso.hechos} de {progreso.total || '—'}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full rounded-full bg-brand-gold transition-all duration-200" style={{ width: `${progreso.total ? Math.round((progreso.hechos / progreso.total) * 100) : 5}%` }} />
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
               <Boton variant="danger" onClick={eliminar} disabled={eliminando}>{eliminando ? <><Spinner /> Eliminando…</> : 'Sí, eliminar'}</Boton>

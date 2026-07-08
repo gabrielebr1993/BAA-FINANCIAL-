@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc, getDocs, query, where } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -14,7 +14,7 @@ import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -30,8 +30,6 @@ export default function CargarFactura() {
   const [busqueda, setBusqueda] = useState('')
   const [bulk, setBulk] = useState({ ind: '', doble: '' })
   const [nuevaCiudad, setNuevaCiudad] = useState({ codigo: '', nombre: '' })
-  const [porEliminar, setPorEliminar] = useState(null)
-  const [eliminando, setEliminando] = useState(false)
   const [decisiones, setDecisiones] = useState({}) // { waybill: 'aprobado' | 'anulado' }
   const [verExistentes, setVerExistentes] = useState(false)
   const [editExist, setEditExist] = useState({}) // nombre -> { ind, doble }
@@ -374,32 +372,6 @@ export default function CargarFactura() {
       setErrores(['Error al guardar: ' + e.message])
     } finally {
       setGuardando(false)
-    }
-  }
-
-  // ---- eliminar factura (cascada) ----
-  const eliminarFactura = async () => {
-    if (!porEliminar) return
-    setEliminando(true)
-    try {
-      const cs = await getDocs(query(collection(db, 'claims'), where('invoiceId', '==', porEliminar.id)))
-      const ps = await getDocs(query(collection(db, 'payroll'), where('invoiceId', '==', porEliminar.id)))
-      const refs = [...cs.docs.map((d) => d.ref), ...ps.docs.map((d) => d.ref), doc(db, 'invoices', porEliminar.id)]
-      const chunk = 450
-      for (let i = 0; i < refs.length; i += chunk) {
-        const batch = writeBatch(db)
-        refs.slice(i, i + chunk).forEach((r) => batch.delete(r))
-        await batch.commit()
-      }
-      const eraSeleccionada = selectedInvoiceId === porEliminar.id
-      const restantes = await reloadInvoices()
-      if (eraSeleccionada) setSelectedInvoiceId(restantes && restantes[0] ? restantes[0].id : null)
-      await reloadClaims()
-      setPorEliminar(null)
-    } catch (e) {
-      setErrores(['Error al eliminar: ' + e.message])
-    } finally {
-      setEliminando(false)
     }
   }
 
