@@ -85,7 +85,7 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
       tipo: 'yellow',
       categoria: 'Dinero',
       titulo: `Perdonaste ${ec.perdonados} claim(s): te costaron ${money(ec.perdidaAbsorbida)}`,
-      detalle: `Tu única pérdida real es lo que Gofo te descontó por esos claims (monto variable): ${money(ec.perdidaAbsorbida)}. Los $100 por claim son una multa que dejas de cobrar, no una pérdida.`,
+      detalle: `Tu única pérdida real es lo que Gofo te descontó por esos claims (monto variable): ${money(ec.perdidaAbsorbida)}. La multa por claim es algo que dejas de cobrar, no una pérdida.`,
       link: '/claims',
     })
   }

@@ -1,16 +1,17 @@
 // Panel "Ganancia por claims".
-// Multa al chofer: $100 fijo por claim NO perdonado (cobradoChoferes).
+// Multa al chofer por claim NO perdonado: según las reglas de la factura —
+// general, reducida (tracking interruption / lost) o "real" (lo que cobró Gofo).
 // Descuento de Gofo: monto VARIABLE por claim (descontadoGofo, ya en el neto).
-// Perdonar = no cobrar los $100 (multa que dejas de cobrar, NO pérdida) y solo
+// Perdonar = no cobrar la multa (que dejas de cobrar, NO pérdida) y solo
 // absorber el montoGofo REAL de ese claim (perdidaAbsorbida, variable por claim).
 // Ganancia neta por claims = cobradoChoferes − descontadoGofo.
-import { economiaClaims, claimFeeDe } from '../utils/calc'
+import { economiaClaims, feeDeClaim } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { Card } from './ui'
 import { Handshake } from 'lucide-react'
 
 export default function PanelClaims({ claims, inv, compacto = false }) {
-  const e = economiaClaims(claims, inv ? (c) => claimFeeDe(inv, c) : undefined)
+  const e = economiaClaims(claims, inv ? (c) => feeDeClaim(inv, c.ciudad, c) : undefined)
   if (!e.total) return null
 
   const Fila = ({ label, valor, negativo, fuerte }) => (

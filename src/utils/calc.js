@@ -410,13 +410,15 @@ export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas
 // monto que Gofo cobró.
 // `feeDe(ciudad)` resuelve la multa por ciudad; por defecto usa CLAIM_FEE (100),
 // así que sin pasarlo el resultado es idéntico al actual.
+// `feeDe` recibe el CLAIM completo (para respetar multa reducida por tipo y el
+// modo "real"). Por defecto usa la multa fija global.
 export function economiaClaims(claims, feeDe) {
   const fee = typeof feeDe === 'function' ? feeDe : () => CLAIM_FEE
   const validos = claimsValidos(claims)
   const total = validos.length
   const perdonados = validos.filter((c) => c.perdonado).length
   const activos = total - perdonados
-  const cobradoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + fee(c.ciudad), 0)
+  const cobradoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + fee(c), 0)
   const descontadoGofo = validos.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
   const perdidaAbsorbida = validos.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
   return {
