@@ -125,7 +125,7 @@ function SidebarContent({ onNavigate }) {
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
 
   return (
-    <aside className="flex min-h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
+    <aside className="flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
       <div className="flex items-center gap-3 px-1 pb-4 pt-1">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
         <div>
@@ -137,7 +137,7 @@ function SidebarContent({ onNavigate }) {
       <BuscadorGlobal onNavigate={onNavigate} />
       <CompanySwitcher />
 
-      <nav className="flex flex-col gap-0.5">
+      <nav className="scroll-thin -mr-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-2">
         {secciones.map((s) => (
           <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={s.path === '/alertas' ? numAlertas : 0} />
         ))}
