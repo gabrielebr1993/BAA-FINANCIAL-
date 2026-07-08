@@ -53,7 +53,7 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick }
           </span>
         )}
       </div>
-      <div className={`mt-2 text-[28px] font-bold leading-none tracking-tight ${a.text}`}>{value}</div>
+      <div className={`mt-2 text-[22px] font-bold leading-tight tracking-tight tabular-nums break-words ${a.text}`}>{value}</div>
       <div className="mt-2 flex items-center gap-2">
         {tendencia}
         {sub != null && <span className="text-xs text-slate-400">{sub}</span>}
