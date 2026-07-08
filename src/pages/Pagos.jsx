@@ -110,12 +110,12 @@ export default function Pagos() {
       Dobles: p.dobles,
       'Claims activos': p.claimsActivos,
       'Claims perdonados': p.claimsPerdonados,
-      'Ingreso Gofo': p.ingreso,
+      'Ingreso Gofo': ocultarIngreso ? OCULTO : p.ingreso,
       'Tarifa Ind': p.tarifaInd,
       'Tarifa Doble': p.tarifaDoble,
       'Descuento Claims': p.descuentoClaims,
       'Total a Pagar': p.totalPagar,
-      Ganancia: p.ganancia,
+      Ganancia: ocultarGanancia ? OCULTO : p.ganancia,
       Estado: p.estado,
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
@@ -129,7 +129,7 @@ export default function Pagos() {
       {
         titulo: 'Pagos por chofer',
         head: ['Chofer', 'Ciudad', 'Ind.', 'Dobles', 'Ingreso', 'Total a pagar', 'Ganancia', 'Estado'],
-        body: pagosConEstado.map((p) => [p.nombre, p.nombreCiudad, p.individuales, p.dobles, money(p.ingreso), money(p.totalPagar), money(p.ganancia), p.estado]),
+        body: pagosConEstado.map((p) => [p.nombre, p.nombreCiudad, p.individuales, p.dobles, fIngreso(p.ingreso), money(p.totalPagar), fGanancia(p.ganancia), p.estado]),
       },
     ])
   }
