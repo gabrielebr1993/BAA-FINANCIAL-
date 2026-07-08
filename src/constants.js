@@ -25,6 +25,12 @@ export const CHART_COLORS = ['#13233f', '#c9a24b', '#3d5a80', '#7f9cc0', '#a67c0
 // Descuento fijo por claim NO perdonado (aplicado al chofer). NO SE CAMBIA.
 export const CLAIM_FEE = 100
 
+// Multa reducida (sugerida) para ciertos tipos de claim. Es CONFIGURABLE por
+// empresa/ciudad; si no se configura, se usa la multa general (sin cambio).
+export const CLAIM_FEE_REDUCIDO = 50
+// Tipos de claim (normalizados a minúsculas) que pagan la multa REDUCIDA.
+export const TIPOS_CLAIM_REDUCIDO = ['tracking interruption', 'lost']
+
 // Un monto exactamente igual a este valor clasifica el paquete como DOBLE. NO SE CAMBIA.
 export const DOBLE_MONTO = 0.5
 

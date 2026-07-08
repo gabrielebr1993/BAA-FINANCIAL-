@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, claimFeeDe } from '../utils/calc'
+import { calcularPagos, porCiudad, feeDeClaim } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
@@ -298,7 +298,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
                       <td className="px-2 py-1.5">{c.claimType}</td>
                       <td className="px-2 py-1.5">{money(c.montoGofo)}</td>
                       <td className="px-2 py-1.5">
-                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(claimFeeDe(selectedInvoice, c.ciudad))})</Badge>}
+                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(selectedInvoice, c.ciudad, c.claimType))})</Badge>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {perdonandoId === c.id ? (
