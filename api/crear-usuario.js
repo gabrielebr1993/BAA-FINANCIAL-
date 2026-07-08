@@ -5,18 +5,41 @@
 //
 // Requiere la variable de entorno FIREBASE_SERVICE_ACCOUNT_BASE64:
 //   una clave de servicio de Firebase (JSON) codificada en base64.
+//
+// IMPORTANTE: firebase-admin se importa de forma DIFERIDA (dynamic import) dentro
+// del handler, para que cualquier fallo al cargarlo se devuelva como un error
+// JSON legible en vez de un 500 opaco (página de error de Vercel) que el cliente
+// no puede interpretar.
 // ---------------------------------------------------------------------------
-import { initializeApp, getApps, cert } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+
+let admin = null
+
+// Carga firebase-admin una sola vez (cacheado entre invocaciones calientes).
+async function cargarAdmin() {
+  if (admin) return admin
+  const [appMod, authMod, fsMod] = await Promise.all([
+    import('firebase-admin/app'),
+    import('firebase-admin/auth'),
+    import('firebase-admin/firestore'),
+  ])
+  admin = {
+    getApps: appMod.getApps,
+    initializeApp: appMod.initializeApp,
+    cert: appMod.cert,
+    getAuth: authMod.getAuth,
+    getFirestore: fsMod.getFirestore,
+    FieldValue: fsMod.FieldValue,
+  }
+  return admin
+}
 
 // Inicializa el Admin SDK una sola vez (singleton entre invocaciones).
-function ensureAdmin() {
-  if (getApps().length) return
+function ensureAdmin(a) {
+  if (a.getApps().length) return
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64
   if (!b64) throw new Error('SIN_SERVICE_ACCOUNT')
   const json = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
-  initializeApp({ credential: cert(json) })
+  a.initializeApp({ credential: a.cert(json) })
 }
 
 export default async function handler(req, res) {
@@ -26,19 +49,23 @@ export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Método no permitido.' })
 
+    // 1) Cargar e inicializar firebase-admin (diferido, para capturar fallos de import).
+    let a
     try {
-      ensureAdmin()
+      a = await cargarAdmin()
+      ensureAdmin(a)
     } catch (e) {
-      const falta = e?.message === 'SIN_SERVICE_ACCOUNT'
       // eslint-disable-next-line no-console
-      console.error('[crear-usuario] Admin SDK no inicializó:', e?.message || e)
+      console.error('[crear-usuario] init/admin:', e?.stack || e?.message || e)
+      const falta = e?.message === 'SIN_SERVICE_ACCOUNT'
       return res.status(503).json({
         ok: false,
         error: falta
           ? 'El servidor no tiene configurada la clave de servicio (FIREBASE_SERVICE_ACCOUNT_BASE64) en Vercel. Usa el modo con UID manual mientras tanto.'
-          : 'La clave de servicio (FIREBASE_SERVICE_ACCOUNT_BASE64) es inválida o no se pudo leer. Revisa que sea el JSON en base64.',
+          : 'No se pudo inicializar el servidor de administración: ' + (e?.message || 'error desconocido') + '. Revisa FIREBASE_SERVICE_ACCOUNT_BASE64 (que sea el JSON en base64) y los logs de la función en Vercel.',
       })
     }
+    const { getAuth, getFirestore, FieldValue } = a
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
     const { nombre, email, password, role, permissions, companyId, driverId, driverNombre } = body
@@ -115,7 +142,7 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error('[crear-usuario] Error no controlado:', e?.message || e)
+    console.error('[crear-usuario] Error no controlado:', e?.stack || e?.message || e)
     return res.status(400).json({ ok: false, error: 'Error inesperado en el servidor: ' + (e?.message || 'desconocido') })
   }
 }
