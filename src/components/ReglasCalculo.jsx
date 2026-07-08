@@ -76,13 +76,13 @@ export default function ReglasCalculo() {
       <div className="mb-4 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por defecto de la empresa</div>
         <div className="flex flex-wrap items-end gap-3">
-          <div>
+          <div className={empresa.claimModo === 'real' ? 'opacity-40' : ''}>
             <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Multa por claim ($)</div>
-            <Input className="w-32" type="number" step="0.01" min="0" value={empresa.claimFee} onChange={(e) => setEmpresa((f) => ({ ...f, claimFee: e.target.value }))} placeholder={String(CLAIM_FEE)} />
+            <Input className="w-32" type="number" step="0.01" min="0" disabled={empresa.claimModo === 'real'} value={empresa.claimFee} onChange={(e) => setEmpresa((f) => ({ ...f, claimFee: e.target.value }))} placeholder={String(CLAIM_FEE)} />
           </div>
-          <div>
+          <div className={empresa.claimModo === 'real' ? 'opacity-40' : ''}>
             <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Multa reducida ($) <span className="text-slate-400">tracking interr. / lost</span></div>
-            <Input className="w-40" type="number" step="0.01" min="0" value={empresa.claimFeeReducido} onChange={(e) => setEmpresa((f) => ({ ...f, claimFeeReducido: e.target.value }))} placeholder={String(CLAIM_FEE_REDUCIDO)} />
+            <Input className="w-40" type="number" step="0.01" min="0" disabled={empresa.claimModo === 'real'} value={empresa.claimFeeReducido} onChange={(e) => setEmpresa((f) => ({ ...f, claimFeeReducido: e.target.value }))} placeholder={String(CLAIM_FEE_REDUCIDO)} />
           </div>
           <div>
             <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Monto de “doble” ($)</div>
@@ -118,11 +118,16 @@ export default function ReglasCalculo() {
               </tr>
             </thead>
             <tbody>
-              {ciudadesConCodigo.map((c) => (
+              {ciudadesConCodigo.map((c) => {
+                // Modo efectivo de la ciudad: el suyo o, si está en “Como la empresa”, el de la empresa.
+                const modoEfectivo = valCiudad(c.codigo, 'claimModo') || empresa.claimModo
+                const real = modoEfectivo === 'real'
+                const dim = real ? 'opacity-40' : ''
+                return (
                 <tr key={c.codigo} className="border-t border-slate-100 dark:border-slate-700/50">
                   <td className="px-3 py-2">{c.nombre} <span className="text-xs text-slate-400">({c.codigo})</span></td>
-                  <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${empClaim}`} /></td>
-                  <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFeeReducido')} onChange={(e) => setCiudad(c.codigo, 'claimFeeReducido', e.target.value)} placeholder={`${empClaimRed}`} /></td>
+                  <td className={`px-3 py-2 text-right ${dim}`}><Input className="w-28 text-right" type="number" step="0.01" min="0" disabled={real} value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={real ? 'Gofo' : `${empClaim}`} /></td>
+                  <td className={`px-3 py-2 text-right ${dim}`}><Input className="w-28 text-right" type="number" step="0.01" min="0" disabled={real} value={valCiudad(c.codigo, 'claimFeeReducido')} onChange={(e) => setCiudad(c.codigo, 'claimFeeReducido', e.target.value)} placeholder={real ? 'Gofo' : `${empClaimRed}`} /></td>
                   <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${empDoble}`} /></td>
                   <td className="px-3 py-2">
                     <Select className="w-44" value={valCiudad(c.codigo, 'claimModo') || ''} onChange={(e) => setCiudad(c.codigo, 'claimModo', e.target.value)}>
@@ -132,7 +137,7 @@ export default function ReglasCalculo() {
                     </Select>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
