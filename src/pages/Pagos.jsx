@@ -298,7 +298,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
                       <td className="px-2 py-1.5">{c.claimType}</td>
                       <td className="px-2 py-1.5">{money(c.montoGofo)}</td>
                       <td className="px-2 py-1.5">
-                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(selectedInvoice, c.ciudad, c.claimType))})</Badge>}
+                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(selectedInvoice, c.ciudad, c))})</Badge>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {perdonandoId === c.id ? (

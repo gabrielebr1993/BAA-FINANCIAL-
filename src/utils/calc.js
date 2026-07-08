@@ -25,7 +25,10 @@ export function resolverReglas(ajustes, ciudad) {
   // Multa REDUCIDA (tracking interruption / lost). Si no se configura, es igual a
   // la general (así el histórico y las empresas que no la usan no cambian nada).
   const claimFeeReducido = numONull(ciu.claimFeeReducido) ?? numONull(emp.claimFeeReducido) ?? claimFee
-  return { claimFee, dobleMonto, claimFeeReducido }
+  // Modo de multa: 'fijo' (multa configurada) o 'real' (se le cobra al chofer
+  // exactamente lo que Gofo cobró por ese claim). Default 'fijo'.
+  const claimModo = ciu.claimModo || emp.claimModo || 'fijo'
+  return { claimFee, dobleMonto, claimFeeReducido, claimModo }
 }
 
 // ¿Este tipo de claim paga la multa REDUCIDA? (tracking interruption / lost)
@@ -57,10 +60,21 @@ export function claimFeeReducidoDe(inv, ciudad) {
   return claimFeeDe(inv, ciudad)
 }
 
-// Multa que le corresponde a UN claim según su tipo: reducida para los tipos
-// especiales (tracking interruption / lost), general para el resto.
-export function feeDeClaim(inv, ciudad, claimType) {
-  return esClaimReducido(claimType) ? claimFeeReducidoDe(inv, ciudad) : claimFeeDe(inv, ciudad)
+// Modo de multa de una ciudad: 'fijo' (multa configurada) o 'real' (se cobra al
+// chofer lo que Gofo cobró por el claim). Cae a la regla de empresa y luego 'fijo'.
+export function claimModoDe(inv, ciudad) {
+  const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
+  if (r && r.claimModo) return r.claimModo
+  if (inv?.reglaEmpresa && inv.reglaEmpresa.claimModo) return inv.reglaEmpresa.claimModo
+  return 'fijo'
+}
+
+// Multa que le corresponde a UN claim (objeto con claimType y montoGofo):
+//   - modo 'real'  → exactamente lo que Gofo cobró (|montoGofo|).
+//   - modo 'fijo'  → multa reducida si es tracking interruption / lost, si no la general.
+export function feeDeClaim(inv, ciudad, claim) {
+  if (claimModoDe(inv, ciudad) === 'real') return Math.abs(Number(claim?.montoGofo) || 0)
+  return esClaimReducido(claim?.claimType) ? claimFeeReducidoDe(inv, ciudad) : claimFeeDe(inv, ciudad)
 }
 
 // ---- calificación de choferes ------------------------------------------------
@@ -276,7 +290,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
     // Multa por CADA claim activo según su tipo: reducida para tracking
     // interruption / lost, general para el resto (config empresa→ciudad guardada).
     const claimFee = claimFeeDe(inv, ch.ciudad) // general (referencia/visualización)
-    const descuentoClaims = misActivos.reduce((a, cl) => a + feeDeClaim(inv, ch.ciudad, cl.claimType), 0)
+    const descuentoClaims = misActivos.reduce((a, cl) => a + feeDeClaim(inv, ch.ciudad, cl), 0)
     const descontadoGofo = descuentoGofoPorChofer[ch.nombre] || 0
     const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
     const totalPagar = pagoBase - descuentoClaims

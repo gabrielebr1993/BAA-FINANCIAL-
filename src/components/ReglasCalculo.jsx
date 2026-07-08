@@ -7,18 +7,18 @@ import { Save, SlidersHorizontal, Info } from 'lucide-react'
 import { useData } from '../DataContext'
 import { CLAIM_FEE, DOBLE_MONTO, CLAIM_FEE_REDUCIDO } from '../constants'
 import { guardarReglasEmpresa } from '../utils/empresaSettings'
-import { Card, Boton, Input, Aviso, Spinner } from './ui'
+import { Card, Boton, Input, Select, Aviso, Spinner } from './ui'
 
 export default function ReglasCalculo() {
   const { activeCompanyId, ajustes, ciudadesEmpresa, reloadAjustes } = useData()
-  const [empresa, setEmpresa] = useState({ claimFee: '', claimFeeReducido: '', dobleMonto: '' })
+  const [empresa, setEmpresa] = useState({ claimFee: '', claimFeeReducido: '', dobleMonto: '', claimModo: 'fijo' })
   const [porCiudad, setPorCiudad] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState('')
 
   useEffect(() => {
     const r = ajustes?.reglas || {}
-    setEmpresa({ claimFee: r.claimFee ?? '', claimFeeReducido: r.claimFeeReducido ?? '', dobleMonto: r.dobleMonto ?? '' })
+    setEmpresa({ claimFee: r.claimFee ?? '', claimFeeReducido: r.claimFeeReducido ?? '', dobleMonto: r.dobleMonto ?? '', claimModo: r.claimModo || 'fijo' })
     setPorCiudad(ajustes?.reglasCiudad || {})
   }, [ajustes])
 
@@ -39,12 +39,14 @@ export default function ReglasCalculo() {
       if (empresa.claimFee !== '' && isFinite(+empresa.claimFee)) emp.claimFee = +empresa.claimFee
       if (empresa.claimFeeReducido !== '' && isFinite(+empresa.claimFeeReducido)) emp.claimFeeReducido = +empresa.claimFeeReducido
       if (empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto)) emp.dobleMonto = +empresa.dobleMonto
+      if (empresa.claimModo === 'real') emp.claimModo = 'real' // 'fijo' es el default, no hace falta guardarlo
       const ciu = {}
       for (const [code, v] of Object.entries(porCiudad)) {
         const o = {}
         if (v?.claimFee !== '' && v?.claimFee != null && isFinite(+v.claimFee)) o.claimFee = +v.claimFee
         if (v?.claimFeeReducido !== '' && v?.claimFeeReducido != null && isFinite(+v.claimFeeReducido)) o.claimFeeReducido = +v.claimFeeReducido
         if (v?.dobleMonto !== '' && v?.dobleMonto != null && isFinite(+v.dobleMonto)) o.dobleMonto = +v.dobleMonto
+        if (v?.claimModo === 'real' || v?.claimModo === 'fijo') o.claimModo = v.claimModo // '' = hereda de la empresa
         if (Object.keys(o).length) ciu[code] = o
       }
       await guardarReglasEmpresa(activeCompanyId, emp, ciu)
@@ -65,7 +67,8 @@ export default function ReglasCalculo() {
         Configura la multa por claim (general y reducida) y qué monto cuenta como “doble”. La <b>multa reducida</b> se aplica
         a los claims de tipo <b>tracking interruption</b> y <b>lost</b>; el resto usa la general. Puedes fijar valores por defecto de la
         empresa y sobreescribirlos por ciudad. Vacío = hereda: ciudad → empresa → general ({CLAIM_FEE} / {DOBLE_MONTO}).
-        Si dejas la multa reducida vacía, es igual a la general (sin descuento por tipo).
+        Si dejas la multa reducida vacía, es igual a la general (sin descuento por tipo). El <b>modo de multa</b> permite, por ciudad,
+        cobrarle al chofer <b>lo que Gofo te cobró</b> por cada claim (modo “real”) en vez de una multa fija — útil si ese es el trato con esa ciudad.
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
@@ -85,7 +88,17 @@ export default function ReglasCalculo() {
             <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Monto de “doble” ($)</div>
             <Input className="w-32" type="number" step="0.01" min="0" value={empresa.dobleMonto} onChange={(e) => setEmpresa((f) => ({ ...f, dobleMonto: e.target.value }))} placeholder={String(DOBLE_MONTO)} />
           </div>
+          <div>
+            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Modo de multa</div>
+            <Select className="w-56" value={empresa.claimModo} onChange={(e) => setEmpresa((f) => ({ ...f, claimModo: e.target.value }))}>
+              <option value="fijo">Multa fija (configurada arriba)</option>
+              <option value="real">Cobrar lo que cobra Gofo (real)</option>
+            </Select>
+          </div>
         </div>
+        {empresa.claimModo === 'real' && (
+          <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">En modo “real”, a cada chofer se le descuenta exactamente el monto que Gofo cobró por cada claim (se ignoran las multas fija/reducida).</p>
+        )}
       </div>
 
       {/* Nivel ciudad */}
@@ -94,13 +107,14 @@ export default function ReglasCalculo() {
         <p className="text-sm text-slate-400">Agrega ciudades con código en “Mis ciudades” para poder configurarlas por separado.</p>
       ) : (
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
-          <table className="w-full min-w-[420px] border-collapse text-sm">
+          <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
                 <th className="px-3 py-2 text-right font-semibold">Multa por claim ($)</th>
                 <th className="px-3 py-2 text-right font-semibold">Multa reducida ($)</th>
                 <th className="px-3 py-2 text-right font-semibold">Monto de “doble” ($)</th>
+                <th className="px-3 py-2 text-left font-semibold">Modo de multa</th>
               </tr>
             </thead>
             <tbody>
@@ -110,6 +124,13 @@ export default function ReglasCalculo() {
                   <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${empClaim}`} /></td>
                   <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFeeReducido')} onChange={(e) => setCiudad(c.codigo, 'claimFeeReducido', e.target.value)} placeholder={`${empClaimRed}`} /></td>
                   <td className="px-3 py-2 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${empDoble}`} /></td>
+                  <td className="px-3 py-2">
+                    <Select className="w-44" value={valCiudad(c.codigo, 'claimModo') || ''} onChange={(e) => setCiudad(c.codigo, 'claimModo', e.target.value)}>
+                      <option value="">Como la empresa ({empresa.claimModo === 'real' ? 'real' : 'fija'})</option>
+                      <option value="fijo">Multa fija</option>
+                      <option value="real">Cobrar lo de Gofo</option>
+                    </Select>
+                  </td>
                 </tr>
               ))}
             </tbody>
