@@ -169,7 +169,7 @@ export default function Dashboard() {
                   <Verificacion v={inv.verificacion} compacto />
                 </ClickWrap>
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                  <GananciaReal g={gReal} />
+                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} />
                 </ClickWrap>
               </div>
 

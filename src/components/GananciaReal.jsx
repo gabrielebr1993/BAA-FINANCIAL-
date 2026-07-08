@@ -2,7 +2,7 @@
 import { money, pct } from '../utils/format'
 import { Card } from './ui'
 
-export default function GananciaReal({ g }) {
+export default function GananciaReal({ g, ciudadLabel }) {
   if (!g) return null
   return (
     <Card className="mb-4 p-5">
@@ -17,7 +17,7 @@ export default function GananciaReal({ g }) {
           <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoChoferes)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">− Pago a managers</span>
+          <span className="text-slate-600 dark:text-slate-300">− Pago a managers{ciudadLabel ? ` (${ciudadLabel})` : ''}</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoManagers)}</span>
         </div>
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
@@ -27,7 +27,7 @@ export default function GananciaReal({ g }) {
           </span>
         </div>
       </div>
-      {g.soloTodas && <p className="mt-2 text-xs text-slate-400">El sueldo de managers es un costo fijo de empresa; se cuenta en "Todas las ciudades".</p>}
+      {g.ingresoAprox && <p className="mt-2 text-xs text-slate-400">Para una ciudad, el ingreso neto es aproximado (entregas + claims de esa ciudad) y el costo de managers es el de esa ciudad.</p>}
     </Card>
   )
 }

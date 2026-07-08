@@ -304,15 +304,22 @@ export function variacion(actual, anterior) {
 }
 
 // Costo semanal de los managers activos × número de semanas del periodo.
-export function costoManagers(managers, semanas = 1) {
-  const base = (managers || []).filter((m) => m.activo !== false).reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0)
+// Cada manager pertenece a UNA ciudad (campo `ciudad`). Con `ciudad` se cuenta
+// solo esa ciudad; con "Todas" (o sin ciudad) se suman todas las ciudades.
+export function costoManagers(managers, semanas = 1, ciudad) {
+  const esTodas = !ciudad || ciudad === TODAS
+  const base = (managers || [])
+    .filter((m) => m.activo !== false)
+    .filter((m) => esTodas || (m.ciudad || '') === ciudad)
+    .reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0)
   return base * (semanas || 1)
 }
 
 // Ganancia real = ingresoNeto − costoChoferes − costoManagers.
 // ingresoNeto: si "Todas", el neto verificado (entregas+offset+claims+ajustes);
 // si una ciudad, se aproxima con entregas(ciudad) + claimsGofo(ciudad).
-// Los managers son costo fijo de empresa: solo se cuentan en "Todas las ciudades".
+// El costo de managers respeta el filtro de ciudad (solo los de esa ciudad, o el
+// total si es "Todas").
 export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas = 1) {
   const pagos = calcularPagos(inv, claims, drivers, ciudad)
   const costoChoferes = pagos.reduce((a, p) => a + p.totalPagar, 0)
@@ -325,7 +332,7 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     const claimsGofo = porCiudad(claims || [], ciudad).reduce((a, c) => a + (c.montoGofo || 0), 0)
     ingresoNeto = entregas + claimsGofo
   }
-  const cMgr = esTodas ? costoManagers(managers, semanas) : 0
+  const cMgr = costoManagers(managers, semanas, ciudad)
   const ganancia = ingresoNeto - costoChoferes - cMgr
   return {
     ingresoNeto,
@@ -333,8 +340,18 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     costoManagers: cMgr,
     gananciaReal: ganancia,
     margen: ingresoNeto > 0 ? ganancia / ingresoNeto : 0,
-    soloTodas: !esTodas,
+    ingresoAprox: !esTodas, // en una ciudad el ingreso neto es aproximado
   }
+}
+
+// Desglose de ganancia real POR CIUDAD (una fila por ciudad de la factura).
+export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas = 1) {
+  return (inv?.resumenCiudades || [])
+    .map((c) => {
+      const g = gananciaRealDe(inv, claims, drivers, managers, c.ubicacion, semanas)
+      return { code: c.ubicacion, nombreCiudad: nombreCiudadDe(inv, c.ubicacion), ...g }
+    })
+    .sort((a, b) => b.gananciaReal - a.gananciaReal)
 }
 
 // Economía de claims. El chofer paga la MULTA (claimFee, configurable por ciudad)

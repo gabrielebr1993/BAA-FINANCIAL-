@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, gananciaRealDe } from '../utils/calc'
+import { calcularPagos, porCiudad, gananciaRealDe, desgloseGananciaCiudades, nombreCiudadDe, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -15,10 +15,16 @@ import RangeSelector from '../components/RangeSelector'
 
 export default function Financiero() {
   const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, cargando } = useData()
+  const semanas = Math.max(1, invoicesRango.length)
   const gReal = useMemo(
-    () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)),
-    [selectedInvoice, claims, drivers, managers, selectedCity, invoicesRango]
+    () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, semanas),
+    [selectedInvoice, claims, drivers, managers, selectedCity, semanas]
   )
+  const desgloseCiudades = useMemo(
+    () => desgloseGananciaCiudades(selectedInvoice, claims, drivers, managers, semanas),
+    [selectedInvoice, claims, drivers, managers, semanas]
+  )
+  const ciudadLabel = selectedCity === TODAS ? '' : nombreCiudadDe(selectedInvoice, selectedCity)
 
   const avg = useMemo(() => {
     const act = (drivers || []).filter((d) => d.activo !== false)
@@ -73,7 +79,38 @@ export default function Financiero() {
       ) : (
         <>
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
-          {selectedInvoice && <GananciaReal g={gReal} />}
+          {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} />}
+
+          {/* Desglose de ganancia real por ciudad */}
+          {selectedInvoice && desgloseCiudades.length > 0 && (
+            <Card className="mb-4 p-4">
+              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real por ciudad</h3>
+              <p className="mb-3 text-xs text-slate-400">Ingreso neto (aprox. por ciudad) − costo de choferes − costo de managers de esa ciudad. El total general es la fila inferior.</p>
+              <Tabla
+                columns={[
+                  { key: 'nombreCiudad', label: 'Ciudad' },
+                  { key: 'ingresoNeto', label: 'Ingreso neto', align: 'right' },
+                  { key: 'costoChoferes', label: 'Costo choferes', align: 'right' },
+                  { key: 'costoManagers', label: 'Costo managers', align: 'right' },
+                  { key: 'gananciaReal', label: 'Ganancia real', align: 'right' },
+                  { key: 'margen', label: 'Margen', align: 'right' },
+                ]}
+                rows={desgloseCiudades.map((c) => ({ ...c, _key: c.code }))}
+                renderCell={(row, key) => {
+                  if (key === 'margen') return <span className={row.margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{pct(row.margen)}</span>
+                  if (key === 'gananciaReal') return <span className={`font-semibold ${row.gananciaReal >= 0 ? 'text-brand-gold' : 'text-rose-600 dark:text-rose-400'}`}>{money(row.gananciaReal)}</span>
+                  if (['ingresoNeto', 'costoChoferes', 'costoManagers'].includes(key)) return money(row[key])
+                  return row[key]
+                }}
+              />
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-4 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">TOTAL general:</span>
+                <span>Managers <b className="text-brand-navy dark:text-slate-100">{money(desgloseCiudades.reduce((a, c) => a + c.costoManagers, 0))}</b></span>
+                <span>Ganancia real <b className="text-brand-gold">{money(desgloseCiudades.reduce((a, c) => a + c.gananciaReal, 0))}</b></span>
+              </div>
+            </Card>
+          )}
+
           {selectedInvoice && <PanelClaims claims={porCiudad(claims, selectedCity)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

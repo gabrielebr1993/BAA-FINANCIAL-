@@ -1,33 +1,53 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
+import { Building2, Users } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { costoManagers } from '../utils/calc'
+import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
-import { Card, Boton, Tabla, Aviso, Badge, Input } from './ui'
+import { Card, Boton, Aviso, Badge, Input, Select } from './ui'
 
-const vacio = { nombre: '', sueldoSemanal: '' }
+const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
-  const { managers, reloadManagers, activeCompanyId, invoicesRango } = useData()
+  const { managers, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango } = useData()
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
   const semanas = Math.max(1, invoicesRango.length)
-  const activos = managers.filter((m) => m.activo !== false)
-
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const cancelar = () => { setEditId(null); setForm(vacio); setError('') }
 
+  // Nombre legible de una ciudad (por su código): ciudades de la empresa → tabla estándar.
+  const nombreDe = (code) => {
+    if (!code) return 'Sin ciudad'
+    const c = (ciudadesEmpresa || []).find((x) => x.codigo === code)
+    return c ? c.nombre : nombreCiudad(code)
+  }
+
+  // Grupos por ciudad (códigos presentes en managers + ciudades de la empresa).
+  const grupos = useMemo(() => {
+    const codes = new Set([...(ciudadesEmpresa || []).map((c) => c.codigo).filter(Boolean), ...managers.map((m) => m.ciudad || '')])
+    return [...codes].sort((a, b) => nombreDe(a).localeCompare(nombreDe(b))).map((code) => {
+      const items = managers.filter((m) => (m.ciudad || '') === code).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+      const activos = items.filter((m) => m.activo !== false)
+      return { code, nombre: nombreDe(code), items, costo: costoManagers(activos, semanas, code || undefined) }
+    }).filter((g) => g.items.length > 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managers, ciudadesEmpresa, semanas])
+
+  const costoTotal = costoManagers(managers, semanas) // todas las ciudades
+
   const guardar = async () => {
     if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
+    if (!form.ciudad) return setError('Elige la ciudad a la que pertenece el manager.')
     if (Number(form.sueldoSemanal) < 0) return setError('El sueldo no puede ser negativo.')
-    setGuardando(true)
-    setError('')
+    setGuardando(true); setError('')
     try {
-      const payload = { nombre: form.nombre.trim(), sueldoSemanal: Number(form.sueldoSemanal) || 0 }
+      const payload = { nombre: form.nombre.trim(), ciudad: form.ciudad, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
       if (editId) await updateDoc(doc(db, 'managers', editId), payload)
       else await addDoc(collection(db, 'managers'), { ...payload, activo: true, companyId: activeCompanyId })
       await reloadManagers()
@@ -39,7 +59,7 @@ export default function ManagersPanel() {
     }
   }
 
-  const editar = (m) => { setEditId(m.id); setForm({ nombre: m.nombre || '', sueldoSemanal: m.sueldoSemanal ?? '' }) }
+  const editar = (m) => { setEditId(m.id); setForm({ nombre: m.nombre || '', ciudad: m.ciudad || '', sueldoSemanal: m.sueldoSemanal ?? '' }) }
   const toggle = async (m) => { await updateDoc(doc(db, 'managers', m.id), { activo: !(m.activo !== false) }); await reloadManagers() }
 
   return (
@@ -47,48 +67,81 @@ export default function ManagersPanel() {
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar manager' : 'Agregar manager'}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
+        {(ciudadesEmpresa || []).length === 0 && (
+          <Aviso tipo="warn">Primero agrega ciudades en <b>Configuración → Mis ciudades</b>: cada manager pertenece a una ciudad.</Aviso>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre</div>
-            <Input className="w-56" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} disabled={!!editId} />
+            <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} disabled={!!editId} />
           </div>
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Sueldo semanal ($)</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Ciudad</div>
+            <Select className="w-44" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
+              <option value="">— Elegir ciudad —</option>
+              {(ciudadesEmpresa || []).filter((c) => c.codigo).map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
+            </Select>
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Sueldo semanal ($) en esa ciudad</div>
             <Input className="w-40" type="number" step="0.01" min="0" value={form.sueldoSemanal} onChange={(e) => setF('sueldoSemanal', e.target.value)} />
           </div>
           <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : editId ? 'Guardar' : 'Agregar'}</Boton>
           {editId && <Boton variant="ghost" onClick={cancelar}>Cancelar</Boton>}
         </div>
+        <p className="mt-2 text-xs text-slate-400">Si la misma persona trabaja en dos ciudades, agrégala como dos managers (uno por ciudad) con su propio sueldo.</p>
       </Card>
 
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Managers ({managers.length})</h3>
-        <span className="text-sm text-slate-500 dark:text-slate-400">
-          Costo fijo del periodo ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(costoManagers(activos, semanas))}</b>
+        <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">
+          Costo total del periodo ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(costoTotal)}</b>
         </span>
       </div>
-      <Tabla
-        columns={[
-          { key: 'nombre', label: 'Manager' },
-          { key: 'sueldoSemanal', label: 'Sueldo semanal', align: 'right' },
-          { key: 'activo', label: 'Estado', align: 'center' },
-          { key: 'acciones', label: '', align: 'right' },
-        ]}
-        rows={[...managers].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((m) => ({ ...m, _key: m.id }))}
-        emptyText="Aún no hay managers. Agrégalos arriba; su sueldo se suma como costo fijo semanal."
-        renderCell={(row, key) => {
-          if (key === 'sueldoSemanal') return money(row.sueldoSemanal)
-          if (key === 'activo') return row.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>
-          if (key === 'acciones')
-            return (
-              <div className="flex justify-end gap-2">
-                <Boton variant="ghost" onClick={() => editar(row)} className="px-2.5 py-1 text-xs">Editar</Boton>
-                <Boton variant="ghost" onClick={() => toggle(row)} className="px-2.5 py-1 text-xs">{row.activo !== false ? 'Desactivar' : 'Activar'}</Boton>
+
+      {grupos.length === 0 ? (
+        <Card className="p-4 text-sm text-slate-400">Aún no hay managers. Agrégalos arriba eligiendo su ciudad; su sueldo se suma como costo de esa ciudad.</Card>
+      ) : (
+        <div className="space-y-4">
+          {grupos.map((g) => (
+            <Card key={g.code || 'sin'} className="p-4">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Building2 size={16} strokeWidth={1.8} className="text-slate-400" />
+                <h4 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{g.nombre}{g.code ? <span className="ml-1 text-xs font-normal text-slate-400">({g.code})</span> : null}</h4>
+                <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Costo ciudad ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(g.costo)}</b></span>
               </div>
-            )
-          return row[key]
-        }}
-      />
+              <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+                <table className="w-full min-w-[420px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <th className="px-3 py-2 text-left font-semibold">Manager</th>
+                      <th className="px-3 py-2 text-right font-semibold">Sueldo semanal</th>
+                      <th className="px-3 py-2 text-center font-semibold">Estado</th>
+                      <th className="px-3 py-2 text-right font-semibold"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.items.map((m) => (
+                      <tr key={m.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                        <td className="px-3 py-2">{m.nombre}</td>
+                        <td className="px-3 py-2 text-right">{money(m.sueldoSemanal)}</td>
+                        <td className="px-3 py-2 text-center">{m.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>}</td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Boton variant="ghost" onClick={() => editar(m)} className="px-2.5 py-1 text-xs">Editar</Boton>
+                            <Boton variant="ghost" onClick={() => toggle(m)} className="px-2.5 py-1 text-xs">{m.activo !== false ? 'Desactivar' : 'Activar'}</Boton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
