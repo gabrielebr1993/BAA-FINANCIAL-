@@ -55,9 +55,17 @@ export default function Choferes() {
     setCreandoAcceso(true)
     try {
       const token = await auth.currentUser.getIdToken()
-      const data = await crearUsuarioApi({ nombre: modalForm.nombre, email: accesoForm.email.trim(), password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }, token)
+      const email = accesoForm.email.trim()
+      const data = await crearUsuarioApi({ nombre: modalForm.nombre, email, password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }, token)
       if (!data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || 'No se pudo crear el acceso.' })
-      setAccesoMsg({ tipo: 'ok', txt: `Acceso creado. Correo: ${accesoForm.email.trim()} · Contraseña: ${accesoForm.password} · Link: ${window.location.origin}` })
+      // Guardar en el doc del chofer que ya tiene cuenta (email de acceso), para
+      // saber de un vistazo quién ya tiene portal. No rompe nada del cálculo.
+      try {
+        await updateDoc(doc(db, 'drivers', modal.id), { accesoEmail: email })
+        setModal((m) => (m ? { ...m, accesoEmail: email } : m))
+        await reloadDrivers()
+      } catch { /* si falla el updateDoc, el acceso igual quedó creado */ }
+      setAccesoMsg({ tipo: 'ok', txt: `Acceso creado. Correo: ${email} · Contraseña: ${accesoForm.password} · Link: ${window.location.origin}` })
       setAccesoForm({ email: '', password: '' })
     } catch (e) {
       setAccesoMsg({ tipo: 'error', txt: 'Error: ' + e.message })
@@ -435,6 +443,11 @@ export default function Choferes() {
               <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                 Crea un usuario para <b>{modalForm.nombre}</b> que solo verá su portal (sus pagos, entregas, claims y calificación). No verá finanzas ni a otros choferes.
               </p>
+              {modal.accesoEmail && (
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <KeyRound size={13} strokeWidth={1.9} /> Ya tiene acceso: {modal.accesoEmail}. Crear de nuevo generará otra cuenta.
+                </div>
+              )}
               {accesoMsg && <Aviso tipo={accesoMsg.tipo}>{accesoMsg.txt}</Aviso>}
               <div className="flex flex-wrap items-end gap-2">
                 <Campo label="Email del chofer"><Input className="w-52" type="email" value={accesoForm.email} onChange={(e) => setAccesoForm((f) => ({ ...f, email: e.target.value }))} placeholder="chofer@correo.com" /></Campo>

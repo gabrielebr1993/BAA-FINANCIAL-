@@ -21,15 +21,9 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, chi
   if (esDriver && !soloDriver) return <Navigate to="/portal" replace />
   // Un no-chofer no necesita el portal del chofer -> al inicio.
   if (soloDriver && !esDriver) return <Navigate to="/" replace />
-  if (soloSuperAdmin && !esSuperAdmin)
-    return (
-      <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
-        <div>
-          <Lock size={40} strokeWidth={1.5} className="mx-auto text-brand-gold" />
-          <h3 className="mt-2 text-lg font-bold">Sección solo para súper-administradores</h3>
-        </div>
-      </div>
-    )
+  // Sección solo para súper-admin (ej. /empresas): un owner/manager NO puede
+  // entrar ni por URL; se le redirige a su dashboard sin ver ni cargar nada.
+  if (soloSuperAdmin && !esSuperAdmin) return <Navigate to="/" replace />
   if (filtro && !puede(filtro))
     return (
       <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
