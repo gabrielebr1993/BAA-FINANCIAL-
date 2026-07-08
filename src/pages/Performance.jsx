@@ -62,9 +62,13 @@ export default function Performance() {
     [claimsCiudad, fTipo]
   )
 
+  // Ciudad de la ruta seleccionada (el código de ruta empieza con el de la ciudad:
+  // "DFW01-003" → "DFW01"). Sirve para acotar la tabla de choferes por esa ciudad.
+  const ciudadDeRuta = fRuta ? fRuta.split('-')[0].trim().toUpperCase() : ''
   const ordenados = [...pagos]
     .filter((p) => {
       if (fBusca && !p.nombre.toLowerCase().includes(fBusca.trim().toLowerCase())) return false
+      if (fRuta && (p.ciudad || '').toUpperCase() !== ciudadDeRuta) return false
       if (fMin !== '' && p.claimsTotales < Number(fMin)) return false
       if (fMax !== '' && p.claimsTotales > Number(fMax)) return false
       if (couriersConTipo && !couriersConTipo.has(p.nombre)) return false
@@ -276,7 +280,7 @@ export default function Performance() {
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400"><Filter size={14} strokeWidth={2} /> Filtros</div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Ruta <span className="text-slate-400">(rankings de rutas)</span></div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Ruta <span className="text-slate-400">(choferes de su ciudad)</span></div>
                 <Select value={fRuta} onChange={(e) => setFRuta(e.target.value)}>
                   <option value="">Todas</option>
                   {rutasOpts.map((r) => (<option key={r} value={r}>{r}</option>))}
