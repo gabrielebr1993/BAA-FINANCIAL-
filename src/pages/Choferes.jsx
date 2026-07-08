@@ -4,7 +4,6 @@ import { collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimest
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
-import { CLAIM_FEE } from '../constants'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
 import { Truck, Check, KeyRound } from 'lucide-react'
@@ -99,7 +98,7 @@ export default function Choferes() {
     if (!w) return null
     const ind = Number(borradores[d.id]?.ind ?? d.precioIndividual) || 0
     const dob = Number(borradores[d.id]?.dob ?? d.precioDoble) || 0
-    return w.individuales * ind + w.dobles * dob - w.claimsActivos * CLAIM_FEE
+    return w.individuales * ind + w.dobles * dob - (w.descuentoClaims || 0)
   }
   const totalNomina = filtrados.reduce((a, d) => a + (totalRow(d) || 0), 0)
 

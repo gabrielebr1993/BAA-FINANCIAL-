@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios } from '../utils/claims'
-import { porCiudad, claimsValidos, detectarClaimsRepetidos, claimFeeDe } from '../utils/calc'
+import { porCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
@@ -57,8 +57,9 @@ export default function Claims() {
   const totalClaims = validos.length
   const perdonados = validos.filter((c) => c.perdonado).length
   const activos = totalClaims - perdonados
-  // Descuento a choferes = suma de la multa (claimFee por ciudad) de cada claim activo.
-  const descuentoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + claimFeeDe(selectedInvoice, c.ciudad), 0)
+  // Descuento a choferes = suma de la multa de cada claim activo, según su tipo/modo
+  // (general, reducida para tracking interruption/lost, o "real" = lo de Gofo).
+  const descuentoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + feeDeClaim(selectedInvoice, c.ciudad, c), 0)
   const descuentoGofo = base.reduce((a, c) => a + (c.montoGofo || 0), 0)
 
   // ---- multiselección (respeta los filtros activos) ----

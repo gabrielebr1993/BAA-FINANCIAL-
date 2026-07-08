@@ -331,7 +331,7 @@ export function resumenEstimado(inv, drivers, ciudad) {
     individuales += ch.individuales
     dobles += ch.dobles
     claims += ch.numClaims
-    costo += ch.individuales * tInd + ch.dobles * tDob - ch.numClaims * CLAIM_FEE
+    costo += ch.individuales * tInd + ch.dobles * tDob - ch.numClaims * claimFeeDe(inv, ch.ciudad)
   }
   const paquetes = individuales + dobles
   return {
