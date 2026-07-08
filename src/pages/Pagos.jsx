@@ -8,7 +8,7 @@ import { calcularPagos, porCiudad, claimFeeDe } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -24,6 +24,14 @@ export default function Pagos() {
   const [perdonandoId, setPerdonandoId] = useState(null)
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  // Ojitos de privacidad: ocultan un dato sensible en TODA la página (KPI +
+  // columna + total). Solo afecta lo que se VE en pantalla; las exportaciones
+  // siguen completas.
+  const [ocultarIngreso, setOcultarIngreso] = useState(false)
+  const [ocultarGanancia, setOcultarGanancia] = useState(false)
+  const OCULTO = '••••••'
+  const fIngreso = (v) => (ocultarIngreso ? OCULTO : money(v))
+  const fGanancia = (v) => (ocultarGanancia ? OCULTO : money(v))
 
   // Los pagos se marcan por factura individual: solo con una semana seleccionada.
   const pagoInvoiceId = invoicesRango.length === 1 ? invoicesRango[0].id : null
@@ -135,9 +143,9 @@ export default function Pagos() {
       ) : (
         <>
           <div className="mb-5 flex flex-wrap gap-3">
-            <KPI label="Ingreso total" value={money(totIngreso)} icon={DollarSign} accent="green" />
+            <KPI label="Ingreso total" value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />
             <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" />
-            <KPI label="Ganancia total" value={money(totGanancia)} icon={TrendingUp} accent="gold" />
+            <KPI label="Ganancia total" value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />
             <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
           </div>
 
@@ -157,6 +165,10 @@ export default function Pagos() {
                     <option value="pendiente">Solo pendientes</option>
                     <option value="pagado">Solo pagados</option>
                   </Select>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label="Ingreso Gofo" />
+                    <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label="Ganancia" />
+                  </div>
                   <div className="ml-auto flex gap-2">
                     <Boton variant="ghost" onClick={exportar}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
                     <Boton variant="gold" onClick={exportarPdf}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
@@ -185,6 +197,8 @@ export default function Pagos() {
                         onToggle={() => setExpandido(expandido === p.nombre ? null : p.nombre)}
                         onMarcar={marcarEstado}
                         puedeMarcar={!esRango}
+                        fIngreso={fIngreso}
+                        fGanancia={fGanancia}
                         claimsChofer={expandido === p.nombre ? claimsDeChofer(p.nombre) : []}
                         perdonandoId={perdonandoId}
                         motivo={motivo}
@@ -200,10 +214,10 @@ export default function Pagos() {
                     <tr className="bg-slate-100 font-bold dark:bg-slate-800">
                       <td className="px-2.5 py-2.5">TOTAL ({filtrados.length})</td>
                       <td colSpan={3}></td>
-                      <td className="px-2.5 py-2.5">{money(totIngreso)}</td>
+                      <td className="px-2.5 py-2.5">{fIngreso(totIngreso)}</td>
                       <td colSpan={3}></td>
                       <td className="px-2.5 py-2.5">{money(totPagar)}</td>
-                      <td className="px-2.5 py-2.5 text-brand-gold">{money(totGanancia)}</td>
+                      <td className="px-2.5 py-2.5 text-brand-gold">{fGanancia(totGanancia)}</td>
                       <td colSpan={2}></td>
                     </tr>
                   </tfoot>
@@ -220,7 +234,25 @@ export default function Pagos() {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado }) {
+// Botón-ojito para ocultar/mostrar un dato sensible en pantalla.
+function OjoToggle({ activo, onClick, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={activo ? `Ocultar ${label}` : `Mostrar ${label}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+        activo
+          ? 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+          : 'border-brand-gold/40 bg-brand-gold/10 text-brand-navy dark:text-brand-gold'
+      }`}
+    >
+      {activo ? <Eye size={14} strokeWidth={1.9} /> : <EyeOff size={14} strokeWidth={1.9} />} {label}
+    </button>
+  )
+}
+
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado }) {
   return (
     <>
       <tr className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
@@ -233,12 +265,12 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, claimsChofer,
         <td className={TD}>{num(p.individuales)}</td>
         <td className={TD}>{num(p.dobles)}</td>
         <td className={TD}>{p.claimsActivos}/{p.claimsTotales}{p.claimsPerdonados > 0 ? ` (${p.claimsPerdonados} perd.)` : ''}</td>
-        <td className={TD}>{money(p.ingreso)}</td>
+        <td className={TD}>{fIngreso(p.ingreso)}</td>
         <td className={TD}>{money(p.tarifaInd)}</td>
         <td className={TD}>{money(p.tarifaDoble)}</td>
         <td className={`${TD} text-rose-600 dark:text-rose-400`}>{money(p.descuentoClaims)}</td>
         <td className={`${TD} font-bold`}>{money(p.totalPagar)}</td>
-        <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(p.ganancia)}</td>
+        <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>
         <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
         <td className={TD}>
           {!puedeMarcar ? (
