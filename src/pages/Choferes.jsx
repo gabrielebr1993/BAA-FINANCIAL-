@@ -294,8 +294,8 @@ export default function Choferes() {
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Agregar chofer</h3>
         <div className="flex flex-wrap items-end gap-3">
           <Campo label="Nombre (= Courier del Excel)"><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
-          <Campo label="Precio individual ($)"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-          <Campo label="Precio doble ($)"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+          <Campo label="Rate individual ($) — lo que le pagas"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+          <Campo label="Rate doble ($) — lo que le pagas"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? 'Guardando…' : 'Agregar'}</Boton>
         </div>
       </Card>
@@ -345,8 +345,8 @@ export default function Choferes() {
             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <th className="px-2 py-2.5"><input type="checkbox" checked={todosSel} onChange={toggleTodos} /></th>
               <th className="px-3 py-2.5 text-left font-semibold">Chofer</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Precio parada</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Precio doble</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Rate individual</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Rate doble</th>
               <th className="px-3 py-2.5 text-right font-semibold">Ind.</th>
               <th className="px-3 py-2.5 text-right font-semibold">Dobles</th>
               <th className="px-3 py-2.5 text-right font-semibold">Claims</th>
@@ -426,8 +426,8 @@ export default function Choferes() {
               <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">{modalForm.nombre}</div>
             </div>
             <div className="mb-3 flex flex-wrap gap-3">
-              <Campo label="Precio individual ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-              <Campo label="Precio doble ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+              <Campo label="Rate individual ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+              <Campo label="Rate doble ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
               <Campo label="Activo">
                 <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={modalForm.activo} onChange={(e) => setModalForm((f) => ({ ...f, activo: e.target.checked }))} /> {modalForm.activo ? 'Sí' : 'No'}</label>
               </Campo>

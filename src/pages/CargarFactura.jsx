@@ -764,8 +764,8 @@ export default function CargarFactura() {
                     <table className="w-full border-collapse text-sm">
                       <thead className="sticky top-0"><tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <th className="px-3 py-2 text-left font-semibold">Chofer</th>
-                        <th className="px-3 py-2 text-right font-semibold">Precio individual</th>
-                        <th className="px-3 py-2 text-right font-semibold">Precio doble</th>
+                        <th className="px-3 py-2 text-right font-semibold">Rate individual</th>
+                        <th className="px-3 py-2 text-right font-semibold">Rate doble</th>
                       </tr></thead>
                       <tbody>
                         {reconocidos.map((n, i) => (
@@ -817,8 +817,8 @@ export default function CargarFactura() {
                   <thead className="sticky top-0">
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       <th className="px-3 py-2 text-left font-semibold">Chofer</th>
-                      <th className="px-3 py-2 text-right font-semibold">Precio individual</th>
-                      <th className="px-3 py-2 text-right font-semibold">Precio doble</th>
+                      <th className="px-3 py-2 text-right font-semibold">Rate individual</th>
+                      <th className="px-3 py-2 text-right font-semibold">Rate doble</th>
                     </tr>
                   </thead>
                   <tbody>

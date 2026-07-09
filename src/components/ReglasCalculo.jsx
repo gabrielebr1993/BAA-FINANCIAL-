@@ -93,10 +93,13 @@ export default function ReglasCalculo() {
         <SlidersHorizontal size={18} strokeWidth={1.8} className="text-brand-gold" />
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de cálculo</h3>
       </div>
-      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
         Por cada <b>categoría de claim</b> (se detecta sola desde la factura) eliges el <b>método</b> de cobro al chofer:
         {' '}<b>M1</b> cobra la multa (ganancia = multa − Gofo) · <b>M2</b> cobra lo de Gofo (ganancia $0) · <b>M3</b> perdón (absorbes lo de Gofo).
         Puedes fijarlo por empresa y sobreescribirlo por ciudad. Global: multa {CLAIM_FEE} / doble {DOBLE_MONTO} / método {METODO_CLAIM_DEFAULT}.
+      </p>
+      <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer. En modo Estándar la <b>tarifa (rate)</b> que le pagas por cada entrega va por chofer en <b>Choferes → Rate individual / Rate doble</b>. Los campos de abajo son la <b>multa por claim</b> (lo que le cobras) y el <b>monto que marca un “doble”</b> (detección, no pago).
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
@@ -105,11 +108,11 @@ export default function ReglasCalculo() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por defecto de la empresa</div>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <div>
-            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Multa por claim ($) — método M1</div>
+            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Multa por claim al chofer ($) — método M1</div>
             <Input className="w-40" type="number" step="0.01" min="0" value={empresa.claimFee} onChange={(e) => setEmpresa((f) => ({ ...f, claimFee: e.target.value }))} placeholder={String(CLAIM_FEE)} />
           </div>
           <div>
-            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Monto de “doble” ($)</div>
+            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Monto que marca un “doble” ($) <span className="text-slate-400">(detección, no pago)</span></div>
             <Input className="w-32" type="number" step="0.01" min="0" value={empresa.dobleMonto} onChange={(e) => setEmpresa((f) => ({ ...f, dobleMonto: e.target.value }))} placeholder={String(DOBLE_MONTO)} />
           </div>
         </div>
@@ -139,8 +142,8 @@ export default function ReglasCalculo() {
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
-                <th className="px-3 py-2 text-right font-semibold">Multa ($)</th>
-                <th className="px-3 py-2 text-right font-semibold">Doble ($)</th>
+                <th className="px-3 py-2 text-right font-semibold">Multa claim ($)</th>
+                <th className="px-3 py-2 text-right font-semibold">Monto doble ($)</th>
                 {todasCats.map((cat) => (<th key={cat.key} className="px-3 py-2 text-left font-semibold">{cat.label}</th>))}
               </tr>
             </thead>
