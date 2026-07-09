@@ -45,6 +45,9 @@ export default function ReglasCalculo() {
 
   const empClaim = empresa.claimFee !== '' && isFinite(+empresa.claimFee) ? +empresa.claimFee : CLAIM_FEE
   const empDoble = empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto) ? +empresa.dobleMonto : DOBLE_MONTO
+  // Monto M1 heredado para una categoría: el de la empresa para esa categoría si
+  // se definió, si no la multa general de la empresa.
+  const empMontoCat = (cat) => { const v = empresa.montos[cat]; return v !== '' && v != null && isFinite(+v) ? +v : empClaim }
 
   const guardar = async () => {
     setGuardando(true); setOk('')
@@ -154,7 +157,7 @@ export default function ReglasCalculo() {
                         {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
                       </Select>
                       {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
-                        <Input className="mt-1 w-36 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${empClaim}`} />
+                        <Input className="mt-1 w-36 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${empMontoCat(cat.key)} (hereda)`} />
                       )}
                     </td>
                   ))}
