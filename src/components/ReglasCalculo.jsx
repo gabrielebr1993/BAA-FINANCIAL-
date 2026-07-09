@@ -73,10 +73,10 @@ export default function ReglasCalculo() {
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
         Configuración <b>manual por ciudad</b>. Por cada <b>categoría de claim</b> (se detecta sola desde la factura) eliges el <b>método</b> de cobro al chofer:
-        {' '}<b>Rate</b> = le cobras el monto que tú pones (ganancia = rate − Gofo) · <b>Lo que Gofo cobra</b> = al chofer se le descuenta lo mismo que Gofo (ganancia $0) · <b>Perdón</b> = no cobras, tú lo asumes (absorbes lo de Gofo).
+        {' '}<b>Manual</b> = le cobras el monto que tú pones (ganancia = monto − Gofo) · <b>Lo que Gofo cobra</b> = al chofer se le descuenta lo mismo que Gofo (ganancia $0) · <b>Perdón</b> = no cobras, tú lo asumes (absorbes lo de Gofo).
       </p>
       <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer (eso va por chofer en <b>Choferes</b> o al subir la factura). Cuando eliges el método <b>Rate</b> en una categoría, aparece un campo para poner el <b>monto que le cobras</b> por ese claim. El <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
+        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer (eso va por chofer en <b>Choferes</b> o al subir la factura). Cuando eliges el método <b>Manual</b> en una categoría, aparece un campo para poner el <b>monto que le cobras</b> por ese claim. El <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
@@ -105,7 +105,7 @@ export default function ReglasCalculo() {
                         {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
                       </Select>
                       {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
-                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${CLAIM_FEE} (monto Rate)`} />
+                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${CLAIM_FEE} (monto manual)`} />
                       )}
                     </td>
                   ))}

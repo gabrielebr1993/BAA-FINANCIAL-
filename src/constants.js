@@ -37,11 +37,11 @@ export const CATEGORIAS_CLAIM = [
 export const CATEGORIAS_CLAIM_KEYS = [...CATEGORIAS_CLAIM.map((c) => c.key), 'otro']
 
 // Métodos de cobro por claim (M1/M2/M3 son las claves internas; no cambian):
-//   M1 = "Rate": le cobras al chofer el monto que tú pones → ganancia = rate − montoGofo
+//   M1 = "Manual": le cobras al chofer el monto que tú pones → ganancia = monto − montoGofo
 //   M2 = "Lo que Gofo cobra": al chofer se le descuenta lo mismo que Gofo → ganancia = 0
 //   M3 = "Perdón": no cobras nada, tú lo asumes → ganancia = − montoGofo
 export const METODOS_CLAIM = [
-  { key: 'M1', label: 'Rate (tú pones el monto)', corto: 'Rate' },
+  { key: 'M1', label: 'Manual (tú pones el monto)', corto: 'Manual' },
   { key: 'M2', label: 'Lo que Gofo cobra', corto: 'Lo que Gofo cobra' },
   { key: 'M3', label: 'Perdón (no cobrar)', corto: 'Perdón' },
 ]

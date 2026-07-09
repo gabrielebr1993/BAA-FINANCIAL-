@@ -266,8 +266,8 @@ export default function Claims() {
                       <div className="flex flex-col items-center gap-1">
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">{etiquetaCategoria(cat)}</span>
                         <Select className="w-40 py-1 text-xs" value={manual ? row.metodo : 'auto'} disabled={ocupado} onChange={(e) => cambiarMetodo(row, e.target.value)}>
-                          <option value="auto">Auto ({auto === 'M1' ? 'Rate' : auto === 'M2' ? 'Gofo' : 'Perdón'})</option>
-                          <option value="M1">Rate</option>
+                          <option value="auto">Auto ({auto === 'M1' ? 'Manual' : auto === 'M2' ? 'Gofo' : 'Perdón'})</option>
+                          <option value="M1">Manual</option>
                           <option value="M2">Lo que Gofo cobra</option>
                           <option value="M3">Perdón</option>
                         </Select>

@@ -53,7 +53,7 @@ export default function Configuracion() {
           <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de negocio</h3>
           <ul className="space-y-3 text-sm">
             <li className="flex items-center justify-between">
-              <span className="text-slate-600 dark:text-slate-300">Rate por claim al chofer (default)</span>
+              <span className="text-slate-600 dark:text-slate-300">Monto manual por claim al chofer (default)</span>
               <span className="font-semibold">${CLAIM_FEE} <Badge color="gold">por ciudad</Badge></span>
             </li>
             <li className="flex items-center justify-between">
