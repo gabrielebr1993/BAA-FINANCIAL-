@@ -6,7 +6,8 @@ import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
-import { Truck, Check, KeyRound, Trash2 } from 'lucide-react'
+import { Truck, Check, KeyRound, Trash2, FileSpreadsheet } from 'lucide-react'
+import { exportarExcel } from '../utils/exportar'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 
@@ -110,6 +111,26 @@ export default function Choferes() {
     return w.individuales * ind + w.dobles * dob - (w.descuentoClaims || 0)
   }
   const totalNomina = filtrados.reduce((a, d) => a + (totalRow(d) || 0), 0)
+
+  // Exporta a Excel los choferes mostrados (todos si no hay búsqueda) con su rate,
+  // estado y sus números de la semana seleccionada.
+  const exportarChoferes = () => {
+    const rows = filtrados.map((d) => {
+      const w = pagoMap[key(d.nombre)]
+      const t = totalRow(d)
+      return {
+        Chofer: d.nombre,
+        'Rate individual': Number(d.precioIndividual) || 0,
+        'Rate doble': Number(d.precioDoble) || 0,
+        Activo: d.activo === false ? 'No' : 'Sí',
+        Individuales: w ? w.individuales : 0,
+        Dobles: w ? w.dobles : 0,
+        Claims: w ? w.claimsTotales : 0,
+        'Total semana': t == null ? 0 : Math.round(t),
+      }
+    })
+    exportarExcel(`choferes_${new Date().toISOString().slice(0, 10)}`, [{ nombre: 'Choferes', rows }])
+  }
 
   // ---- alta ----
   const agregar = async () => {
@@ -313,6 +334,9 @@ export default function Choferes() {
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <Input className="w-64" placeholder="Buscar por nombre o rate (ej. 1.6)…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
         <span className="text-sm text-slate-500 dark:text-slate-400">Mostrando {filtrados.length} de {drivers.length}</span>
+        <Boton variant="ghost" className="ml-auto px-3 py-1.5 text-xs" onClick={exportarChoferes} disabled={filtrados.length === 0}>
+          <FileSpreadsheet size={15} strokeWidth={1.8} /> Exportar Excel
+        </Boton>
       </div>
 
       {/* Barra de acciones masivas */}
