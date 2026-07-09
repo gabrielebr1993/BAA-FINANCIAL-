@@ -14,7 +14,7 @@ const CATS = CATEGORIAS_CLAIM // [{key,label}]
 
 export default function ReglasCalculo() {
   const { activeCompanyId, ajustes, ciudadesEmpresa, reloadAjustes } = useData()
-  const [empresa, setEmpresa] = useState({ claimFee: '', dobleMonto: '', metodos: {} })
+  const [empresa, setEmpresa] = useState({ claimFee: '', dobleMonto: '', metodos: {}, montos: {} })
   const [porCiudad, setPorCiudad] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState('')
@@ -22,9 +22,12 @@ export default function ReglasCalculo() {
   useEffect(() => {
     const r = ajustes?.reglas || {}
     const met = {}
-    CATS.forEach((c) => { met[c.key] = (r.metodos && r.metodos[c.key]) || METODO_CLAIM_DEFAULT })
-    met.otro = (r.metodos && r.metodos.otro) || METODO_CLAIM_DEFAULT
-    setEmpresa({ claimFee: r.claimFee ?? '', dobleMonto: r.dobleMonto ?? '', metodos: met })
+    const mon = {}
+    ;[...CATS.map((c) => c.key), 'otro'].forEach((k) => {
+      met[k] = (r.metodos && r.metodos[k]) || METODO_CLAIM_DEFAULT
+      mon[k] = r.montos && r.montos[k] != null ? r.montos[k] : ''
+    })
+    setEmpresa({ claimFee: r.claimFee ?? '', dobleMonto: r.dobleMonto ?? '', metodos: met, montos: mon })
     setPorCiudad(ajustes?.reglasCiudad || {})
   }, [ajustes])
 
@@ -33,7 +36,12 @@ export default function ReglasCalculo() {
   const setCiudadMetodo = (code, cat, val) => setPorCiudad((m) => ({ ...m, [code]: { ...(m[code] || {}), metodos: { ...((m[code] || {}).metodos || {}), [cat]: val } } }))
   const valCiudad = (code, campo) => { const v = porCiudad[code]?.[campo]; return v === undefined || v === null ? '' : v }
   const valCiudadMetodo = (code, cat) => porCiudad[code]?.metodos?.[cat] || ''
+  const valCiudadMonto = (code, cat) => { const v = porCiudad[code]?.montos?.[cat]; return v === undefined || v === null ? '' : v }
+  const setCiudadMonto = (code, cat, val) => setPorCiudad((m) => ({ ...m, [code]: { ...(m[code] || {}), montos: { ...((m[code] || {}).montos || {}), [cat]: val } } }))
   const setEmpMetodo = (cat, val) => setEmpresa((f) => ({ ...f, metodos: { ...f.metodos, [cat]: val } }))
+  const setEmpMonto = (cat, val) => setEmpresa((f) => ({ ...f, montos: { ...f.montos, [cat]: val } }))
+  // Método efectivo de una ciudad para una categoría (el suyo o el de la empresa).
+  const metodoEfCiudad = (code, cat) => valCiudadMetodo(code, cat) || empresa.metodos[cat] || METODO_CLAIM_DEFAULT
 
   const empClaim = empresa.claimFee !== '' && isFinite(+empresa.claimFee) ? +empresa.claimFee : CLAIM_FEE
   const empDoble = empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto) ? +empresa.dobleMonto : DOBLE_MONTO
@@ -41,18 +49,29 @@ export default function ReglasCalculo() {
   const guardar = async () => {
     setGuardando(true); setOk('')
     try {
-      const emp = { metodos: {} }
+      const claves = [...CATS.map((c) => c.key), 'otro']
+      const emp = { metodos: {}, montos: {} }
       if (empresa.claimFee !== '' && isFinite(+empresa.claimFee)) emp.claimFee = +empresa.claimFee
       if (empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto)) emp.dobleMonto = +empresa.dobleMonto
-      ;[...CATS.map((c) => c.key), 'otro'].forEach((k) => { emp.metodos[k] = empresa.metodos[k] || METODO_CLAIM_DEFAULT })
+      claves.forEach((k) => {
+        emp.metodos[k] = empresa.metodos[k] || METODO_CLAIM_DEFAULT
+        const mv = empresa.montos[k]
+        if (mv !== '' && mv != null && isFinite(+mv)) emp.montos[k] = +mv
+      })
       const ciu = {}
       for (const [code, v] of Object.entries(porCiudad)) {
         const o = {}
         if (v?.claimFee !== '' && v?.claimFee != null && isFinite(+v.claimFee)) o.claimFee = +v.claimFee
         if (v?.dobleMonto !== '' && v?.dobleMonto != null && isFinite(+v.dobleMonto)) o.dobleMonto = +v.dobleMonto
         const met = {}
-        ;[...CATS.map((c) => c.key), 'otro'].forEach((k) => { if (v?.metodos?.[k]) met[k] = v.metodos[k] })
+        const mon = {}
+        claves.forEach((k) => {
+          if (v?.metodos?.[k]) met[k] = v.metodos[k]
+          const mv = v?.montos?.[k]
+          if (mv !== '' && mv != null && isFinite(+mv)) mon[k] = +mv
+        })
         if (Object.keys(met).length) o.metodos = met
+        if (Object.keys(mon).length) o.montos = mon
         if (Object.keys(o).length) ciu[code] = o
       }
       await guardarReglasEmpresa(activeCompanyId, emp, ciu)
@@ -99,6 +118,9 @@ export default function ReglasCalculo() {
               <Select className="w-44" value={empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT} onChange={(e) => setEmpMetodo(cat.key, e.target.value)}>
                 {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
               </Select>
+              {(empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT) === 'M1' && (
+                <Input className="mt-1 w-44" type="number" step="0.01" min="0" value={empresa.montos[cat.key] ?? ''} onChange={(e) => setEmpMonto(cat.key, e.target.value)} placeholder={`$ ${empClaim} (multa general)`} />
+              )}
             </div>
           ))}
         </div>
@@ -126,11 +148,14 @@ export default function ReglasCalculo() {
                   <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${empClaim}`} /></td>
                   <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${empDoble}`} /></td>
                   {todasCats.map((cat) => (
-                    <td key={cat.key} className="px-3 py-2">
+                    <td key={cat.key} className="px-3 py-2 align-top">
                       <Select className="w-36" value={valCiudadMetodo(c.codigo, cat.key)} onChange={(e) => setCiudadMetodo(c.codigo, cat.key, e.target.value)}>
                         <option value="">Empresa ({empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT})</option>
                         {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
                       </Select>
+                      {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
+                        <Input className="mt-1 w-36 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${empClaim}`} />
+                      )}
                     </td>
                   ))}
                 </tr>

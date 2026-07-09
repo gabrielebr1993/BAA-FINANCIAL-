@@ -24,10 +24,14 @@ export function resolverReglas(ajustes, ciudad) {
   const dobleMonto = numONull(ciu.dobleMonto) ?? numONull(emp.dobleMonto) ?? DOBLE_MONTO
   // Método de cobro por CATEGORÍA de claim (M1/M2/M3): ciudad → empresa → M1.
   const metodos = {}
+  // Monto de M1 por categoría (opcional). Si no se define, se usa claimFee.
+  const montos = {}
   for (const cat of CATEGORIAS_CLAIM_KEYS) {
     metodos[cat] = (ciu.metodos && ciu.metodos[cat]) || (emp.metodos && emp.metodos[cat]) || METODO_CLAIM_DEFAULT
+    const mv = numONull(ciu.montos && ciu.montos[cat]) ?? numONull(emp.montos && emp.montos[cat])
+    if (mv != null) montos[cat] = mv
   }
-  return { claimFee, dobleMonto, metodos }
+  return { claimFee, dobleMonto, metodos, montos }
 }
 
 // Detecta la CATEGORÍA de un claim desde su "Claim Type" (normaliza mayúsculas,
@@ -71,15 +75,25 @@ export function metodoDe(inv, ciudad, claim) {
   return METODO_CLAIM_DEFAULT
 }
 
+// Monto de M1 para un claim: precio por su CATEGORÍA si se configuró, si no la
+// multa general de la ciudad (claimFee).
+export function montoM1De(inv, ciudad, claim) {
+  const cat = categoriaClaim(claim?.claimType)
+  const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
+  if (r?.montos && numONull(r.montos[cat]) != null) return Number(r.montos[cat])
+  if (inv?.reglaEmpresa?.montos && numONull(inv.reglaEmpresa.montos[cat]) != null) return Number(inv.reglaEmpresa.montos[cat])
+  return claimFeeDe(inv, ciudad)
+}
+
 // Lo que se le COBRA al chofer por UN claim, según su método:
-//   M1 → la multa fija (claimFee de la ciudad)
+//   M1 → la multa fija (precio por categoría si existe, si no claimFee de la ciudad)
 //   M2 → exactamente lo que Gofo descontó (|montoGofo|)
 //   M3 → 0 (perdón)
 export function feeDeClaim(inv, ciudad, claim) {
   const m = metodoDe(inv, ciudad, claim)
   if (m === 'M2') return Math.abs(Number(claim?.montoGofo) || 0)
   if (m === 'M3') return 0
-  return claimFeeDe(inv, ciudad)
+  return montoM1De(inv, ciudad, claim)
 }
 
 // ---- calificación de choferes ------------------------------------------------
