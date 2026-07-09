@@ -201,7 +201,14 @@ export default function CargarFactura() {
     })
   }
   const todosConPrecio = choferesNuevos.every((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0)
-  const nuevosFiltrados = choferesNuevos.filter((n) => n.toLowerCase().includes(busqueda.trim().toLowerCase()))
+  // Filtra los choferes nuevos por nombre O por el rate que ya les asignaste (ind/doble).
+  const nuevosFiltrados = choferesNuevos.filter((n) => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return true
+    const ind = String(precios[n]?.ind ?? '')
+    const dob = String(precios[n]?.doble ?? '')
+    return n.toLowerCase().includes(q) || ind.includes(q) || dob.includes(q)
+  })
   const nConPrecio = choferesNuevos.filter((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0).length
 
   // Editar tarifas de choferes ya reconocidos (opcional).
@@ -822,7 +829,7 @@ export default function CargarFactura() {
                 Cada chofer tiene su propia tarifa. Asigna precio individual y doble (&gt; 0) a todos antes de guardar.
               </p>
               <div className="mb-3 flex flex-wrap items-end gap-2">
-                <Input className="w-56" placeholder="Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                <Input className="w-56" placeholder="Buscar por nombre o rate (ej. 1.6)…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <div className="ml-auto flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
                   <div>
                     <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar: individual</div>
