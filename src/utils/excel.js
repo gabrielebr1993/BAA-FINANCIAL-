@@ -300,6 +300,50 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
   }
 }
 
+// ---- reporte de FALLIDOS (segundo archivo, hoja "sheet") ---------------------
+//
+// Del reporte de Gofo SOLO se usan dos columnas: "Courier Name" y "Courier
+// Operation Status". Se cuenta como FALLIDO únicamente cada fila cuyo estado sea
+// "Failed delivery". TODO lo demás del archivo se ignora (Delivered, Returned,
+// waybill, zip, fechas, issue type, etc.). Devuelve el conteo por nombre de chofer.
+export function procesarReporteFallidos(arrayBuffer, nombreArchivo) {
+  const errores = []
+  let wb
+  try {
+    wb = XLSX.read(arrayBuffer, { type: 'array' })
+  } catch (e) {
+    throw new Error(`No se pudo leer "${nombreArchivo}": ${e.message}`)
+  }
+  // Hoja "sheet": exacta preferida; si no, la primera que la incluya; si no, la primera hoja.
+  let hoja = wb.SheetNames.find((n) => norm(n) === 'sheet')
+  if (!hoja) hoja = wb.SheetNames.find((n) => norm(n).includes('sheet'))
+  const sheet = hoja ? wb.Sheets[hoja] : wb.Sheets[wb.SheetNames[0]]
+  if (!sheet) {
+    errores.push('El reporte de fallidos no tiene hojas legibles.')
+    return { archivoNombre: nombreArchivo, porNombre: {}, totalFailed: 0, filas: 0, errores }
+  }
+  const rows = leerObjetos(
+    sheet,
+    {
+      courier: { cands: ['couriername', 'courier'], fallback: -1 },
+      status: { cands: ['courieroperationstatus', 'operationstatus', 'deliverystatus', 'status'], fallback: -1 },
+    },
+    ['couriername', 'courieroperationstatus']
+  )
+  const porNombre = {}
+  let totalFailed = 0
+  for (const r of rows) {
+    const status = String(r.status == null ? '' : r.status).trim().toLowerCase()
+    if (status !== 'failed delivery') continue // SOLO "Failed delivery"
+    const nombre = String(r.courier == null ? '' : r.courier).trim()
+    if (!nombre) continue
+    porNombre[nombre] = (porNombre[nombre] || 0) + 1
+    totalFailed += 1
+  }
+  if (totalFailed === 0) errores.push('No se encontró ninguna fila con estado "Failed delivery" en el reporte.')
+  return { archivoNombre: nombreArchivo, porNombre, totalFailed, filas: rows.length, errores }
+}
+
 // ---- construcción del resumen agregado ---------------------------------------
 
 // Resuelve el nombre de una ciudad usando primero un mapa personalizado

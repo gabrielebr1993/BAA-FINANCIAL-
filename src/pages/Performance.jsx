@@ -107,6 +107,7 @@ export default function Performance() {
     { key: 'totalPagar', label: 'Pago' },
     { key: 'ganancia', label: 'Ganancia' },
     { key: 'claimsTotales', label: 'Claims' },
+    { key: 'fallidos', label: 'Fallidos' },
     { key: 'descuentoClaims', label: 'Desc. al chofer' },
     { key: 'descontadoGofo', label: 'Descontado Gofo' },
     { key: 'gananciaClaims', label: 'Ganancia claims' },
@@ -118,14 +119,14 @@ export default function Performance() {
   const exportarE = () =>
     exportarExcel(nombreExp, [{ nombre: 'Choferes', rows: ordenados.map((p) => ({
       Chofer: p.nombre, Ciudad: p.nombreCiudad, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles,
-      Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales,
+      Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales, Fallidos: p.fallidos || 0,
       'Desc. al chofer': Math.round(p.descuentoClaims), 'Descontado Gofo': Math.round(p.descontadoGofo), 'Ganancia claims': Math.round(p.gananciaClaims),
     })) }])
   const exportarP = () =>
     exportarPDF(nombreExp, tituloExp, selectedInvoice?.semana || '', [{
       titulo: `Choferes (${ordenados.length})`,
-      head: ['Chofer', 'Ciudad', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims', 'Desc. chofer', 'Desc. Gofo', 'Gan. claims'],
-      body: ordenados.map((p) => [p.nombre, p.nombreCiudad, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales), money(p.descuentoClaims), money(p.descontadoGofo), money(p.gananciaClaims)]),
+      head: ['Chofer', 'Ciudad', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims', 'Fallidos', 'Desc. chofer', 'Desc. Gofo', 'Gan. claims'],
+      body: ordenados.map((p) => [p.nombre, p.nombreCiudad, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales), num(p.fallidos || 0), money(p.descuentoClaims), money(p.descontadoGofo), money(p.gananciaClaims)]),
     }])
 
   const conClaims = [...pagos].filter((p) => p.claimsTotales > 0).sort((a, b) => b.claimsTotales - a.claimsTotales)
@@ -239,7 +240,7 @@ export default function Performance() {
       ) : (
         <>
           <Aviso tipo="info">
-            Nota: por ahora la factura solo trae paquetes entregados (no fallidos), por lo que los <b>claims</b> se usan como indicador de problemas. El código queda listo para agregar "fallidos" en el futuro.
+            Nota: los <b>paquetes fallidos</b> (“Failed delivery”) salen del reporte de fallidos que subes junto a la factura y son <b>informativos de desempeño</b> (no afectan el pago ni el neto de Gofo). Los <b>claims</b> siguen midiendo problemas con costo.
           </Aviso>
 
           {/* ==== Indicadores (sección nueva; respeta ciudad + fechas globales) ==== */}
@@ -405,6 +406,7 @@ export default function Performance() {
                       <td className="px-2.5 py-2 text-right">{money(p.totalPagar)}</td>
                       <td className={`px-2.5 py-2 text-right ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(p.ganancia)}</td>
                       <td className="px-2.5 py-2 text-right">{num(p.claimsTotales)}</td>
+                      <td className={`px-2.5 py-2 text-right ${(p.fallidos || 0) > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} title={(p.fallidos || 0) > 0 ? `${(p.pctFallidos * 100).toFixed(1)}% de sus entregas` : ''}>{num(p.fallidos || 0)}</td>
                       <td className="px-2.5 py-2 text-right font-medium text-brand-navy dark:text-slate-200">{money(p.descuentoClaims)}</td>
                       <td className="px-2.5 py-2 text-right text-rose-600 dark:text-rose-400">{money(p.descontadoGofo)}</td>
                       <td className={`px-2.5 py-2 text-right font-semibold ${p.gananciaClaims >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(p.gananciaClaims)}</td>

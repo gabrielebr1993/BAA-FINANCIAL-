@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet } from 'lucide-react'
+import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
@@ -75,6 +75,7 @@ export default function PerfilChofer() {
           paquetes: p.individuales + p.dobles,
           totalPagar: p.totalPagar,
           claims: p.claimsTotales,
+          fallidos: p.fallidos || 0,
         }
       })
       .filter(Boolean)
@@ -153,6 +154,7 @@ export default function PerfilChofer() {
             <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : undefined} />
             <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
             <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
+            <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
           </div>
 
           {tiposChofer.length > 0 && (
@@ -195,6 +197,7 @@ export default function PerfilChofer() {
                 { key: 'semana', label: 'Semana' },
                 { key: 'paquetes', label: 'Entregas', align: 'right' },
                 { key: 'claims', label: 'Claims', align: 'right' },
+                { key: 'fallidos', label: 'Fallidos', align: 'right' },
                 { key: 'totalPagar', label: 'Pagado', align: 'right' },
                 { key: 'estado', label: 'Estado', align: 'center' },
               ]}
@@ -202,7 +205,7 @@ export default function PerfilChofer() {
               emptyText="Sin semanas en el rango."
               renderCell={(row, key) => {
                 if (key === 'totalPagar') return money(row.totalPagar)
-                if (key === 'paquetes' || key === 'claims') return num(row[key])
+                if (key === 'paquetes' || key === 'claims' || key === 'fallidos') return num(row[key] || 0)
                 if (key === 'estado') {
                   const e = pagosStatus[row.id]
                   return e === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>

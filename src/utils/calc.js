@@ -341,6 +341,10 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
     const descontadoGofo = descuentoGofoPorChofer[ch.nombre] || 0
     const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
     const totalPagar = pagoBase - descuentoClaims
+    // Paquetes fallidos ("Failed delivery") del reporte de Gofo — SOLO informativo
+    // de desempeño; no afecta el pago ni el neto (viene inyectado en resumenChoferes).
+    const fallidos = Number(ch.fallidos) || 0
+    const entregados = ch.individuales + ch.dobles
     return {
       nombre: ch.nombre,
       ciudad: ch.ciudad,
@@ -348,6 +352,8 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       individuales: ch.individuales,
       dobles: ch.dobles,
       ingreso: ch.ingreso,
+      fallidos,
+      pctFallidos: entregados > 0 ? fallidos / entregados : 0,
       tarifaInd,
       tarifaDoble,
       sinTarifa,
@@ -395,6 +401,8 @@ export function pagosPorRuta(inv, claims, drivers, ruta) {
       dobles: ch.dobles,
       paquetes: ch.individuales + ch.dobles,
       ingreso: ch.ingreso,
+      fallidos: Number(ch.fallidos) || 0,
+      pctFallidos: (ch.individuales + ch.dobles) > 0 ? (Number(ch.fallidos) || 0) / (ch.individuales + ch.dobles) : 0,
       tarifaInd,
       tarifaDoble,
       sinTarifa,

@@ -95,11 +95,12 @@ export function combinarFacturas(invoices) {
     Object.assign(ciudadesMap, inv.ciudadesMap || {})
     for (const c of inv.resumenChoferes || []) {
       const k = `${c.nombre}||${c.ciudad}`
-      const t = (porChofer[k] = porChofer[k] || { nombre: c.nombre, ciudad: c.ciudad, nombreCiudad: c.nombreCiudad, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0 })
+      const t = (porChofer[k] = porChofer[k] || { nombre: c.nombre, ciudad: c.ciudad, nombreCiudad: c.nombreCiudad, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, fallidos: 0 })
       t.individuales += c.individuales || 0
       t.dobles += c.dobles || 0
       t.ingreso += c.ingreso || 0
       t.numClaims += c.numClaims || 0
+      t.fallidos += c.fallidos || 0
     }
     for (const r of inv.resumenRutas || []) {
       const t = (porRuta[r.ruta] = porRuta[r.ruta] || { ruta: r.ruta, ciudad: r.ciudad, nombreCiudad: r.nombreCiudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, pesoTotalLb: 0, numClaims: 0 })
@@ -149,6 +150,14 @@ export function combinarFacturas(invoices) {
 
   const suma = (campo) => invoices.reduce((a, i) => a + (i[campo] || 0), 0)
 
+  // Fallidos combinados: conteo por chofer (unión sumada) + total + sin asociar.
+  const fallidosPorChofer = {}
+  const fallidosSinAsociar = []
+  for (const inv of invoices) {
+    for (const [nombre, n] of Object.entries(inv.fallidosPorChofer || {})) fallidosPorChofer[nombre] = (fallidosPorChofer[nombre] || 0) + (n || 0)
+    for (const s of inv.fallidosSinAsociar || []) fallidosSinAsociar.push({ ...s, semana: inv.semana })
+  }
+
   // verificación combinada + por factura
   const gofo = invoices.reduce(
     (a, i) => {
@@ -188,6 +197,9 @@ export function combinarFacturas(invoices) {
     resumenCiudades,
     reglaEmpresa,
     reglasAplicadas,
+    totalFallidos: suma('totalFallidos'),
+    fallidosPorChofer,
+    fallidosSinAsociar,
     verificacion,
   }
 }

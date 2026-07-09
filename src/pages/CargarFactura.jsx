@@ -3,12 +3,13 @@ import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc } from 
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { procesarArchivo, combinarArchivos } from '../utils/excel'
+import { procesarArchivo, combinarArchivos, procesarReporteFallidos } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
+import { asociarFallidos } from '../utils/fallidos'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -35,7 +36,10 @@ export default function CargarFactura() {
   const [verExistentes, setVerExistentes] = useState(false)
   const [editExist, setEditExist] = useState({}) // nombre -> { ind, doble }
   const [guardandoExist, setGuardandoExist] = useState(false)
+  const [fallidosProc, setFallidosProc] = useState(null) // { porNombre, totalFailed, archivoNombre }
+  const [procesandoFallidos, setProcesandoFallidos] = useState(false)
   const inputRef = useRef(null)
+  const inputFallidosRef = useRef(null)
 
   const reset = () => {
     setProcesados([])
@@ -49,6 +53,24 @@ export default function CargarFactura() {
     setBulk({ ind: '', doble: '' })
     setDecisiones({})
     setAsignacionRuta({})
+  }
+
+  // Procesa el REPORTE DE FALLIDOS (segundo archivo). Solo extrae los "Failed
+  // delivery" por chofer; ignora el resto del archivo. No toca la factura.
+  const manejarFallidos = async (fileList) => {
+    const f = Array.from(fileList).find((x) => /\.xlsx?$/i.test(x.name))
+    if (!f) return setErrores((e) => [...e, 'El reporte de fallidos debe ser un .xlsx.'])
+    setProcesandoFallidos(true)
+    try {
+      const buf = await f.arrayBuffer()
+      const rep = procesarReporteFallidos(buf, f.name)
+      setFallidosProc(rep)
+      if (rep.errores?.length) setErrores((e) => [...e, ...rep.errores.map((m) => `${f.name}: ${m}`)])
+    } catch (e) {
+      setErrores((prev) => [...prev, e.message])
+    } finally {
+      setProcesandoFallidos(false)
+    }
   }
 
   const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
@@ -210,6 +232,12 @@ export default function CargarFactura() {
   const driversSinRuta = useMemo(() => (modoRuta ? nombresFactura.filter((n) => !asignacionRuta[n]) : []), [modoRuta, nombresFactura, asignacionRuta])
   const todosDriversRuta = !modoRuta || (nombresFactura.length > 0 && driversSinRuta.length === 0)
 
+  // Asociación de los "Failed delivery" del reporte a los choferes de la factura.
+  const fallidosAsoc = useMemo(
+    () => (fallidosProc && combinado ? asociarFallidos(fallidosProc.porNombre, nombresFactura) : null),
+    [fallidosProc, combinado, nombresFactura]
+  )
+
   const todasCiudadesAsignadas = ciudadPorArchivo.length > 0 && ciudadPorArchivo.every((c) => !!c)
 
   const guardar = async () => {
@@ -217,6 +245,7 @@ export default function CargarFactura() {
     if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
+    if (!fallidosProc) return setErrores(['Falta el segundo archivo obligatorio: el Reporte de fallidos (GOFO).'])
     if (!modoRuta && choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
     if (modoRuta) {
       if (codigosRuta.length === 0) return setErrores(['Estás en modo “Por ruta” pero no hay rutas configuradas. Ve a Configuración → Modo de configuración → Por ruta.'])
@@ -258,6 +287,22 @@ export default function CargarFactura() {
       const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
       const ciudadPrincipal = combinado.ciudades[0] || ''
       const periodo = parsearPeriodo(semana.trim())
+
+      // FALLIDOS: asociar los "Failed delivery" a los choferes de la factura e
+      // inyectar el conteo en la fila del chofer de su CIUDAD PRINCIPAL (la de más
+      // paquetes), para que sume bien por ciudad y en "Todas" sin doble conteo.
+      const asoc = asociarFallidos(fallidosProc?.porNombre || {}, nombresFactura)
+      const fallidosPorChofer = asoc.porChofer
+      const ciudadPrincipalChofer = {}
+      const mejorPq = {}
+      for (const ch of resumen.resumenChoferes || []) {
+        const pq = ch.individuales + ch.dobles
+        if (mejorPq[ch.nombre] == null || pq > mejorPq[ch.nombre]) { mejorPq[ch.nombre] = pq; ciudadPrincipalChofer[ch.nombre] = ch.ciudad }
+      }
+      resumen.resumenChoferes = (resumen.resumenChoferes || []).map((ch) => ({
+        ...ch,
+        fallidos: ciudadPrincipalChofer[ch.nombre] === ch.ciudad ? (fallidosPorChofer[ch.nombre] || 0) : 0,
+      }))
       // Reglas de cálculo APLICADAS (claimFee/dobleMonto) por ciudad + default de
       // empresa, guardadas EN la factura para que el histórico sea consistente
       // aunque la config cambie después.
@@ -281,6 +326,11 @@ export default function CargarFactura() {
         reglasAplicadas,
         modoConfig: modoRuta ? 'ruta' : 'estandar',
         ...(modoRuta ? { reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal } : {}),
+        // Fallidos (solo informativo de desempeño; no afecta pago ni neto).
+        totalFallidos: fallidosProc?.totalFailed || 0,
+        fallidosPorChofer,
+        fallidosSinAsociar: asoc.sinAsociar,
+        fallidosArchivo: fallidosProc?.archivoNombre || '',
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
@@ -360,7 +410,7 @@ export default function CargarFactura() {
         const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
         return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false, rutaAsignada }
       })
-      const invCalc = { ...combinado, reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal }
+      const invCalc = { ...combinado, resumenChoferes: resumen.resumenChoferes, reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal }
       const pagosFinal = calcularPagos(invCalc, claimsConDecision, driversFinal, TODAS)
       const prom = promediosFlota(pagosFinal)
       const fechaInicioISO = periodo.fechaInicio ? periodo.fechaInicio.toISOString() : ''
@@ -381,6 +431,7 @@ export default function CargarFactura() {
             individuales: p.individuales,
             dobles: p.dobles,
             paquetes: p.individuales + p.dobles,
+            fallidos: fallidosPorChofer[p.nombre] || 0,
             ingreso: p.ingreso,
             tarifaInd: p.tarifaInd,
             tarifaDoble: p.tarifaDoble,
@@ -401,6 +452,7 @@ export default function CargarFactura() {
       setSelectedInvoiceId(ref.id)
       setGuardado(true)
       reset()
+      setFallidosProc(null)
     } catch (e) {
       setErrores(['Error al guardar: ' + e.message])
     } finally {
@@ -408,7 +460,7 @@ export default function CargarFactura() {
     }
   }
 
-  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (modoRuta || choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos && todosDriversRuta && (!modoRuta || codigosRuta.length > 0)
+  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && !!fallidosProc && (modoRuta || choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos && todosDriversRuta && (!modoRuta || codigosRuta.length > 0)
 
   const fmtFecha = (ts) => {
     try {
@@ -433,26 +485,51 @@ export default function CargarFactura() {
         </Aviso>
       )}
 
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); manejarArchivos(e.dataTransfer.files) }}
-        onClick={() => inputRef.current?.click()}
-        className={`mb-4 cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition ${
-          dragOver ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
-        }`}
-      >
-        <Upload size={40} strokeWidth={1.5} className="mx-auto text-brand-gold" />
-        <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Arrastra uno o varios .xlsx (uno por ciudad)</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">o usa el botón para seleccionar desde tu dispositivo</div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-          className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-brand-navy px-5 py-2.5 font-semibold text-white"
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* 1) FACTURA (obligatoria) */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); manejarArchivos(e.dataTransfer.files) }}
+          onClick={() => inputRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed p-8 text-center transition ${
+            dragOver ? 'border-brand-gold bg-brand-gold/5' : procesados.length ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-600/60 dark:bg-emerald-500/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
+          }`}
         >
-          <FolderOpen size={18} strokeWidth={1.8} /> Seleccionar archivo
-        </button>
-        <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
+          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand-navy px-2.5 py-0.5 text-[11px] font-bold text-white">1 · Obligatorio</div>
+          <Upload size={34} strokeWidth={1.5} className="mt-1 text-brand-gold" />
+          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Factura de pagos (GOFO)</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">El Excel “Details of Delivery Fees”. Uno o varios .xlsx (uno por ciudad).</div>
+          {procesados.length > 0 && <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {procesados.length} archivo(s) cargado(s)</div>}
+          <button type="button" onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white">
+            <FolderOpen size={16} strokeWidth={1.8} /> Seleccionar factura
+          </button>
+          <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
+        </div>
+
+        {/* 2) REPORTE DE FALLIDOS (obligatorio) */}
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); manejarFallidos(e.dataTransfer.files) }}
+          onClick={() => inputFallidosRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed p-8 text-center transition ${
+            fallidosProc ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-600/60 dark:bg-emerald-500/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
+          }`}
+        >
+          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-bold text-white">2 · Obligatorio</div>
+          <PackageX size={34} strokeWidth={1.5} className="mt-1 text-rose-500" />
+          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Reporte de fallidos (GOFO)</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">El Excel con hoja “sheet”. Solo se usan los <b>“Failed delivery”</b> por chofer.</div>
+          {procesandoFallidos ? (
+            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500"><Spinner className="text-rose-500" /> Procesando…</div>
+          ) : fallidosProc && (
+            <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(fallidosProc.totalFailed)} “Failed delivery” · {fallidosProc.archivoNombre}</div>
+          )}
+          <button type="button" onClick={(e) => { e.stopPropagation(); inputFallidosRef.current?.click() }} className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white">
+            <FolderOpen size={16} strokeWidth={1.8} /> Seleccionar reporte
+          </button>
+          <input ref={inputFallidosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarFallidos(e.target.files)} />
+        </div>
       </div>
 
       {procesando && (
@@ -516,6 +593,39 @@ export default function CargarFactura() {
           </Card>
 
           <Verificacion v={combinado.verificacion} />
+
+          {/* Reporte de fallidos: resumen + nombres sin asociar */}
+          {!fallidosProc ? (
+            <Aviso tipo="warn">
+              <span className="inline-flex flex-wrap items-center gap-1.5"><PackageX size={15} strokeWidth={1.8} /> Falta el <b>Reporte de fallidos (GOFO)</b> (obligatorio). Súbelo arriba para poder guardar.</span>
+            </Aviso>
+          ) : fallidosAsoc && (
+            <Card className="mb-4 border-2 border-rose-300/70 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <PackageX size={18} strokeWidth={1.8} className="text-rose-500" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reporte de fallidos</h3>
+                <Badge color="red">{num(fallidosProc.totalFailed)} Failed delivery</Badge>
+                <Badge color="green">{num(fallidosAsoc.asociados)} choferes</Badge>
+                {fallidosAsoc.sinAsociar.length > 0 && <Badge color="gold">{num(fallidosAsoc.sinAsociar.length)} sin asociar</Badge>}
+              </div>
+              <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+                Reporte de fallidos procesado: <b>{num(fallidosProc.totalFailed)}</b> “Failed delivery” asociados a <b>{num(fallidosAsoc.asociados)}</b> choferes.
+                {fallidosAsoc.sinAsociar.length > 0 ? <> <b>{num(fallidosAsoc.sinAsociar.length)}</b> nombres sin asociar (revisar).</> : ' Todos los nombres se asociaron.'}
+              </p>
+              {fallidosAsoc.sinAsociar.length > 0 && (
+                <div className="rounded-lg bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
+                  <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300"><FileWarning size={14} strokeWidth={1.9} /> Nombres del reporte que no coinciden con ningún chofer de la factura:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fallidosAsoc.sinAsociar.map((s, i) => (
+                      <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{s.nombre} <b className="text-rose-600 dark:text-rose-400">({s.n})</b></span>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 text-amber-700/80 dark:text-amber-300/80">Estos fallidos NO se asignarán a ningún chofer. Si es el mismo chofer escrito distinto, ajústalo y vuelve a subir el reporte.</div>
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-slate-400">Los fallidos son solo informativos de desempeño: no afectan el pago ni el neto de Gofo.</p>
+            </Card>
+          )}
 
           {casosRepetidos.length > 0 && (
             <Card className="mb-4 border-2 border-amber-400/70 p-4">
@@ -760,7 +870,7 @@ export default function CargarFactura() {
               <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" className="ml-auto">
                 {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
               </Boton>
-              <Boton onClick={reset} variant="ghost">Descartar</Boton>
+              <Boton onClick={() => { reset(); setFallidosProc(null) }} variant="ghost">Descartar</Boton>
             </div>
           </Card>
         </>
