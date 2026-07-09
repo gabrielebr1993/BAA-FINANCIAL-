@@ -16,7 +16,7 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user, companyId, esSuperAdmin, esDriver } = useAuth()
+  const { user, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth } = useAuth()
   const [companies, setCompanies] = useState([])
   // Empresa activa PERSISTIDA: al refrescar se mantiene la que estabas viendo
   // (solo aplica al súper-admin, que puede cambiar de empresa).
@@ -126,16 +126,21 @@ export function DataProvider({ children }) {
 
   // Determinar la empresa activa.
   useEffect(() => {
-    if (!user) { setActiveCompanyId(null); return }
+    // Mientras la sesión aún carga NO tocamos la empresa activa (si la ponemos en
+    // null se pierde la persistida y luego cae a la primera de la lista).
+    if (!user) { if (!cargandoAuth) setActiveCompanyId(null); return }
     if (!esSuperAdmin) { setActiveCompanyId(companyId || null); return }
     // Súper-admin: conservar la empresa que estaba viendo (persistida) mientras
-    // siga siendo válida. Si aún no cargó la lista, se respeta lo persistido; una
-    // vez cargada, si esa empresa ya no existe, se pasa a la primera disponible.
+    // siga siendo válida. Si `prev` se perdió, se REELE de localStorage antes de
+    // caer a la primera de la lista, para no cambiar de empresa al refrescar.
+    const persistida = (() => { try { return localStorage.getItem('milepay_activeCompany') } catch { return null } })()
+    const valida = (id) => !!id && (companies.length === 0 || companies.some((c) => c.id === id))
     setActiveCompanyId((prev) => {
-      if (prev && (companies.length === 0 || companies.some((c) => c.id === prev))) return prev
+      if (valida(prev)) return prev
+      if (valida(persistida)) return persistida
       return companyId || (companies[0] ? companies[0].id : null)
     })
-  }, [user, esSuperAdmin, companyId, companies])
+  }, [user, cargandoAuth, esSuperAdmin, companyId, companies])
 
   // Persistir la empresa activa para que sobreviva al refresco.
   useEffect(() => {
