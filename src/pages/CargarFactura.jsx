@@ -34,6 +34,7 @@ export default function CargarFactura() {
   const [decisiones, setDecisiones] = useState({}) // { waybill: 'aprobado' | 'anulado' }
   const [asignacionRuta, setAsignacionRuta] = useState({}) // { driverNombre: rutaCode } (modo 'ruta')
   const [verExistentes, setVerExistentes] = useState(false)
+  const [filtroExist, setFiltroExist] = useState('') // filtro por nombre o rate en existentes
   const [editExist, setEditExist] = useState({}) // nombre -> { ind, doble }
   const [guardandoExist, setGuardandoExist] = useState(false)
   const [fallidosProc, setFallidosProc] = useState(null) // { porNombre, totalFailed, archivoNombre }
@@ -175,6 +176,17 @@ export default function CargarFactura() {
   // Nuevo = no existe en drivers, o existe pero sin precio (match por nombre normalizado).
   const choferesNuevos = useMemo(() => nombresFactura.filter((n) => !tienePrecio(buscarDriver(drivers, n))).sort(), [nombresFactura, drivers])
   const reconocidos = useMemo(() => nombresFactura.filter((n) => tienePrecio(buscarDriver(drivers, n))).sort(), [nombresFactura, drivers])
+  // Filtro de la lista de existentes: por nombre o por rate (individual o doble).
+  const reconocidosFiltrados = useMemo(() => {
+    const q = filtroExist.trim().toLowerCase()
+    if (!q) return reconocidos
+    return reconocidos.filter((n) => {
+      const d = buscarDriver(drivers, n)
+      const ind = String(d?.precioIndividual ?? '')
+      const dob = String(d?.precioDoble ?? '')
+      return n.toLowerCase().includes(q) || ind.includes(q) || dob.includes(q)
+    })
+  }, [reconocidos, filtroExist, drivers])
   const setPrecio = (courier, campo, valor) => setPrecios((p) => ({ ...p, [courier]: { ...(p[courier] || { ind: '', doble: '' }), [campo]: valor } }))
   const aplicarBulk = () => {
     setPrecios((p) => {
@@ -760,6 +772,14 @@ export default function CargarFactura() {
               {verExistentes && (
                 <div className="mt-3">
                   <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Opcional: cambia una tarifa antes de procesar. Si no tocas nada, se usan las tarifas guardadas.</p>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Users size={14} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Input className="w-64 pl-8" value={filtroExist} onChange={(e) => setFiltroExist(e.target.value)} placeholder="Filtrar por nombre o rate (ej. 1.6)" />
+                    </div>
+                    {filtroExist && <Boton variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setFiltroExist('')}><X size={13} strokeWidth={2} /> Limpiar</Boton>}
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{reconocidosFiltrados.length} de {reconocidos.length}</span>
+                  </div>
                   <div className="scroll-thin max-h-80 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                     <table className="w-full border-collapse text-sm">
                       <thead className="sticky top-0"><tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
@@ -768,13 +788,16 @@ export default function CargarFactura() {
                         <th className="px-3 py-2 text-right font-semibold">Rate doble</th>
                       </tr></thead>
                       <tbody>
-                        {reconocidos.map((n, i) => (
+                        {reconocidosFiltrados.map((n, i) => (
                           <tr key={n} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
                             <td className="px-3 py-1.5">{n}</td>
                             <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'ind')} onChange={(e) => setExist(n, 'ind', e.target.value)} /></td>
                             <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'doble')} onChange={(e) => setExist(n, 'doble', e.target.value)} /></td>
                           </tr>
                         ))}
+                        {reconocidosFiltrados.length === 0 && (
+                          <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">Ningún chofer con ese nombre o rate.</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
