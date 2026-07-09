@@ -88,10 +88,19 @@ export default function Choferes() {
     return m
   }, [facturaRango, claims, drivers])
 
-  const filtrados = useMemo(
-    () => [...drivers].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).filter((d) => (d.nombre || '').toLowerCase().includes(busqueda.trim().toLowerCase())),
-    [drivers, busqueda]
-  )
+  // Filtra por nombre O por rate (individual/doble): escribir "1.6" muestra los que ganan 1.6.
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    return [...drivers]
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+      .filter((d) => {
+        if (!q) return true
+        const nombre = (d.nombre || '').toLowerCase()
+        const ind = String(d.precioIndividual ?? '')
+        const dob = String(d.precioDoble ?? '')
+        return nombre.includes(q) || ind.includes(q) || dob.includes(q)
+      })
+  }, [drivers, busqueda])
 
   const totalRow = (d) => {
     const w = pagoMap[key(d.nombre)]
@@ -302,7 +311,7 @@ export default function Choferes() {
 
       {/* Barra de búsqueda + contador */}
       <div className="mb-2 flex flex-wrap items-center gap-3">
-        <Input className="w-64" placeholder="Buscar chofer…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+        <Input className="w-64" placeholder="Buscar por nombre o rate (ej. 1.6)…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
         <span className="text-sm text-slate-500 dark:text-slate-400">Mostrando {filtrados.length} de {drivers.length}</span>
       </div>
 
