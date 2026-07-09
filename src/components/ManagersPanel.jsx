@@ -60,8 +60,8 @@ export default function ManagersPanel() {
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
-    if (!form.ciudad) return setError('Elige la ciudad a la que pertenece el manager.')
-    if (Number(form.sueldoSemanal) < 0) return setError('El sueldo no puede ser negativo.')
+    if (!form.ciudad) return setError('Elige la ciudad a la que pertenece el gasto fijo.')
+    if (Number(form.sueldoSemanal) < 0) return setError('El monto no puede ser negativo.')
     setGuardando(true); setError('')
     try {
       const payload = { nombre: form.nombre.trim(), ciudad: form.ciudad, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
@@ -82,10 +82,10 @@ export default function ManagersPanel() {
   return (
     <div>
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar manager' : 'Agregar manager'}</h3>
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar gasto fijo' : 'Agregar gasto fijo'}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
         {(ciudadesEmpresa || []).length === 0 && (
-          <Aviso tipo="warn">Primero agrega ciudades en <b>Configuración → Mis ciudades</b>: cada manager pertenece a una ciudad.</Aviso>
+          <Aviso tipo="warn">Primero agrega ciudades en <b>Configuración → Mis ciudades</b>: cada gasto fijo pertenece a una ciudad.</Aviso>
         )}
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -100,19 +100,19 @@ export default function ManagersPanel() {
             </Select>
           </div>
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Sueldo semanal ($) en esa ciudad</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Monto semanal ($) en esa ciudad</div>
             <Input className="w-40" type="number" step="0.01" min="0" value={form.sueldoSemanal} onChange={(e) => setF('sueldoSemanal', e.target.value)} />
           </div>
           <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : editId ? 'Guardar' : 'Agregar'}</Boton>
           {editId && <Boton variant="ghost" onClick={cancelar}>Cancelar</Boton>}
         </div>
-        <p className="mt-2 text-xs text-slate-400">Si la misma persona trabaja en dos ciudades, agrégala como dos managers (uno por ciudad) con su propio sueldo.</p>
+        <p className="mt-2 text-xs text-slate-400">Un mismo gasto que aplica en dos ciudades agrégalo como dos gastos fijos (uno por ciudad) con su propio monto.</p>
       </Card>
 
       {sinCiudad.length > 0 && (
         <Aviso tipo="warn">
           <div className="flex flex-wrap items-center gap-2">
-            <span><b>{sinCiudad.length} manager(s) sin ciudad válida.</b> Su costo NO aparece al filtrar por ciudad (solo en “Todas”). Asígnalos a su ciudad.</span>
+            <span><b>{sinCiudad.length} gasto(s) fijo(s) sin ciudad válida.</b> Su costo NO aparece al filtrar por ciudad (solo en “Todas”). Asígnalos a su ciudad.</span>
             {ciudadesConCodigo.length === 1 && (
               <Boton variant="gold" disabled={reasignando} onClick={() => reasignarTodos(ciudadesConCodigo[0].codigo)} className="px-3 py-1.5 text-xs">
                 {reasignando ? 'Asignando…' : `Asignar todos a ${ciudadesConCodigo[0].nombre}`}
@@ -124,14 +124,14 @@ export default function ManagersPanel() {
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Managers ({managers.length})</h3>
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Gastos fijos ({managers.length})</h3>
         <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">
           Costo total del periodo ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(costoTotal)}</b>
         </span>
       </div>
 
       {grupos.length === 0 ? (
-        <Card className="p-4 text-sm text-slate-400">Aún no hay managers. Agrégalos arriba eligiendo su ciudad; su sueldo se suma como costo de esa ciudad.</Card>
+        <Card className="p-4 text-sm text-slate-400">Aún no hay gastos fijos. Agrégalos arriba eligiendo su ciudad; su monto se suma como costo de esa ciudad.</Card>
       ) : (
         <div className="space-y-4">
           {grupos.map((g) => (
@@ -145,8 +145,8 @@ export default function ManagersPanel() {
                 <table className="w-full min-w-[420px] border-collapse text-sm">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      <th className="px-3 py-2 text-left font-semibold">Manager</th>
-                      <th className="px-3 py-2 text-right font-semibold">Sueldo semanal</th>
+                      <th className="px-3 py-2 text-left font-semibold">Gasto fijo</th>
+                      <th className="px-3 py-2 text-right font-semibold">Monto semanal</th>
                       <th className="px-3 py-2 text-center font-semibold">Estado</th>
                       <th className="px-3 py-2 text-right font-semibold"></th>
                     </tr>

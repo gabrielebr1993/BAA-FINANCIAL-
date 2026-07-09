@@ -295,7 +295,7 @@ export default function Empresas() {
           <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={20} strokeWidth={1.8} /> Eliminar empresa</h3>
             <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
-              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, managers, ajustes). Esta acción no se puede deshacer.
+              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, gastos fijos, ajustes). Esta acción no se puede deshacer.
             </p>
             <p className="mb-3 text-xs text-slate-400">ID: <span className="font-mono">{porEliminar.id}</span> — se borra exactamente esta (útil si hay nombres duplicados).</p>
             <label className="mb-3 flex items-start gap-2 rounded-xl bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">

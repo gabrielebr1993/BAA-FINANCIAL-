@@ -85,13 +85,13 @@ export default function Financiero() {
           {selectedInvoice && desgloseCiudades.length > 0 && (
             <Card className="mb-4 p-4">
               <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real por ciudad</h3>
-              <p className="mb-3 text-xs text-slate-400">Ingreso neto (aprox. por ciudad) − costo de choferes − costo de managers de esa ciudad. El total general es la fila inferior.</p>
+              <p className="mb-3 text-xs text-slate-400">Ingreso neto (aprox. por ciudad) − costo de choferes − gastos fijos de esa ciudad. El total general es la fila inferior.</p>
               <Tabla
                 columns={[
                   { key: 'nombreCiudad', label: 'Ciudad' },
                   { key: 'ingresoNeto', label: 'Ingreso neto', align: 'right' },
                   { key: 'costoChoferes', label: 'Costo choferes', align: 'right' },
-                  { key: 'costoManagers', label: 'Costo managers', align: 'right' },
+                  { key: 'costoManagers', label: 'Gastos fijos', align: 'right' },
                   { key: 'gananciaReal', label: 'Ganancia real', align: 'right' },
                   { key: 'margen', label: 'Margen', align: 'right' },
                 ]}
@@ -105,7 +105,7 @@ export default function Financiero() {
               />
               <div className="mt-2 flex flex-wrap items-center justify-end gap-4 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
                 <span className="text-slate-500 dark:text-slate-400">TOTAL general:</span>
-                <span>Managers <b className="text-brand-navy dark:text-slate-100">{money(desgloseCiudades.reduce((a, c) => a + c.costoManagers, 0))}</b></span>
+                <span>Gastos fijos <b className="text-brand-navy dark:text-slate-100">{money(desgloseCiudades.reduce((a, c) => a + c.costoManagers, 0))}</b></span>
                 <span>Ganancia real <b className="text-brand-gold">{money(desgloseCiudades.reduce((a, c) => a + c.gananciaReal, 0))}</b></span>
               </div>
             </Card>

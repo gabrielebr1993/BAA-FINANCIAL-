@@ -269,7 +269,7 @@ export default function Performance() {
             <KpiPro
               icon={Wallet} accent="navy" label="Costo total de nómina"
               value={money(indic.nominaTotal)}
-              sub={`Choferes ${money(indic.nominaChoferes)} + managers ${money(indic.costoMgr)}`}
+              sub={`Choferes ${money(indic.nominaChoferes)} + gastos fijos ${money(indic.costoMgr)}`}
               spark={serie.map((s) => s.nomina)} trend={trendDe('nomina')}
               onClick={() => navigate('/pagos')}
             />

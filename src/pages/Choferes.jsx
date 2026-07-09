@@ -301,7 +301,7 @@ export default function Choferes() {
       <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">Semana: <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>Choferes y Tarifas</PageTitle>
 
       <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-        {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Managers' }].map((t) => (
+        {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Gastos fijos' }].map((t) => (
           <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
             {t.l}
           </button>
