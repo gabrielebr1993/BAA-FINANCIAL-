@@ -41,6 +41,23 @@ export default function ManagersPanel() {
 
   const costoTotal = costoManagers(managers, semanas) // todas las ciudades
 
+  // Managers cuya ciudad NO está entre las ciudades de la empresa (vacía o código
+  // que no existe): su costo NO aparece al filtrar por ciudad, solo en "Todas".
+  const codigosEmpresa = new Set((ciudadesEmpresa || []).map((c) => c.codigo).filter(Boolean))
+  const sinCiudad = managers.filter((m) => !codigosEmpresa.has(m.ciudad || ''))
+  const ciudadesConCodigo = (ciudadesEmpresa || []).filter((c) => c.codigo)
+  const [reasignando, setReasignando] = useState(false)
+
+  // Asigna TODOS los managers sin ciudad válida a una ciudad (útil con 1 sola ciudad).
+  const reasignarTodos = async (code) => {
+    if (!code) return
+    setReasignando(true)
+    try {
+      for (const m of sinCiudad) await updateDoc(doc(db, 'managers', m.id), { ciudad: code })
+      await reloadManagers()
+    } finally { setReasignando(false) }
+  }
+
   const guardar = async () => {
     if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
     if (!form.ciudad) return setError('Elige la ciudad a la que pertenece el manager.')
@@ -91,6 +108,19 @@ export default function ManagersPanel() {
         </div>
         <p className="mt-2 text-xs text-slate-400">Si la misma persona trabaja en dos ciudades, agrégala como dos managers (uno por ciudad) con su propio sueldo.</p>
       </Card>
+
+      {sinCiudad.length > 0 && (
+        <Aviso tipo="warn">
+          <div className="flex flex-wrap items-center gap-2">
+            <span><b>{sinCiudad.length} manager(s) sin ciudad válida.</b> Su costo NO aparece al filtrar por ciudad (solo en “Todas”). Asígnalos a su ciudad.</span>
+            {ciudadesConCodigo.length === 1 && (
+              <Boton variant="gold" disabled={reasignando} onClick={() => reasignarTodos(ciudadesConCodigo[0].codigo)} className="px-3 py-1.5 text-xs">
+                {reasignando ? 'Asignando…' : `Asignar todos a ${ciudadesConCodigo[0].nombre}`}
+              </Boton>
+            )}
+          </div>
+        </Aviso>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
