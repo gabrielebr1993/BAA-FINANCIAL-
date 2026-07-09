@@ -27,15 +27,15 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
       <div className="space-y-1.5 text-sm">
         {/* Desglose por método */}
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">M1 · cobra la multa ({num(pm.M1.n)} claim(s))</span>
+          <span className="text-slate-600 dark:text-slate-300">Rate · le cobras el monto ({num(pm.M1.n)} claim(s))</span>
           <span className={`font-semibold ${pm.M1.ganancia >= 0 ? '' : 'text-rose-600 dark:text-rose-400'}`}>{g(pm.M1.ganancia)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">M2 · cobra lo de Gofo ({num(pm.M2.n)} claim(s))</span>
+          <span className="text-slate-600 dark:text-slate-300">Lo que Gofo cobra ({num(pm.M2.n)} claim(s))</span>
           <span className="font-semibold text-slate-500 dark:text-slate-400">{g(pm.M2.ganancia)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">M3 · perdón ({num(pm.M3.n)} claim(s))</span>
+          <span className="text-slate-600 dark:text-slate-300">Perdón ({num(pm.M3.n)} claim(s))</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">{g(pm.M3.ganancia)}</span>
         </div>
 

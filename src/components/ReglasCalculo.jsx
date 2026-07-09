@@ -14,20 +14,11 @@ const CATS = CATEGORIAS_CLAIM // [{key,label}]
 
 export default function ReglasCalculo() {
   const { activeCompanyId, ajustes, ciudadesEmpresa, reloadAjustes } = useData()
-  const [empresa, setEmpresa] = useState({ claimFee: '', dobleMonto: '', metodos: {}, montos: {} })
   const [porCiudad, setPorCiudad] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState('')
 
   useEffect(() => {
-    const r = ajustes?.reglas || {}
-    const met = {}
-    const mon = {}
-    ;[...CATS.map((c) => c.key), 'otro'].forEach((k) => {
-      met[k] = (r.metodos && r.metodos[k]) || METODO_CLAIM_DEFAULT
-      mon[k] = r.montos && r.montos[k] != null ? r.montos[k] : ''
-    })
-    setEmpresa({ claimFee: r.claimFee ?? '', dobleMonto: r.dobleMonto ?? '', metodos: met, montos: mon })
     setPorCiudad(ajustes?.reglasCiudad || {})
   }, [ajustes])
 
@@ -38,29 +29,16 @@ export default function ReglasCalculo() {
   const valCiudadMetodo = (code, cat) => porCiudad[code]?.metodos?.[cat] || ''
   const valCiudadMonto = (code, cat) => { const v = porCiudad[code]?.montos?.[cat]; return v === undefined || v === null ? '' : v }
   const setCiudadMonto = (code, cat, val) => setPorCiudad((m) => ({ ...m, [code]: { ...(m[code] || {}), montos: { ...((m[code] || {}).montos || {}), [cat]: val } } }))
-  const setEmpMetodo = (cat, val) => setEmpresa((f) => ({ ...f, metodos: { ...f.metodos, [cat]: val } }))
-  const setEmpMonto = (cat, val) => setEmpresa((f) => ({ ...f, montos: { ...f.montos, [cat]: val } }))
-  // Método efectivo de una ciudad para una categoría (el suyo o el de la empresa).
-  const metodoEfCiudad = (code, cat) => valCiudadMetodo(code, cat) || empresa.metodos[cat] || METODO_CLAIM_DEFAULT
-
-  const empClaim = empresa.claimFee !== '' && isFinite(+empresa.claimFee) ? +empresa.claimFee : CLAIM_FEE
-  const empDoble = empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto) ? +empresa.dobleMonto : DOBLE_MONTO
-  // Monto M1 heredado para una categoría: el de la empresa para esa categoría si
-  // se definió, si no la multa general de la empresa.
-  const empMontoCat = (cat) => { const v = empresa.montos[cat]; return v !== '' && v != null && isFinite(+v) ? +v : empClaim }
+  // Método efectivo de una ciudad para una categoría (el suyo o el default global).
+  const metodoEfCiudad = (code, cat) => valCiudadMetodo(code, cat) || METODO_CLAIM_DEFAULT
 
   const guardar = async () => {
     setGuardando(true); setOk('')
     try {
       const claves = [...CATS.map((c) => c.key), 'otro']
-      const emp = { metodos: {}, montos: {} }
-      if (empresa.claimFee !== '' && isFinite(+empresa.claimFee)) emp.claimFee = +empresa.claimFee
-      if (empresa.dobleMonto !== '' && isFinite(+empresa.dobleMonto)) emp.dobleMonto = +empresa.dobleMonto
-      claves.forEach((k) => {
-        emp.metodos[k] = empresa.metodos[k] || METODO_CLAIM_DEFAULT
-        const mv = empresa.montos[k]
-        if (mv !== '' && mv != null && isFinite(+mv)) emp.montos[k] = +mv
-      })
+      // Sin defaults de empresa: las reglas de empresa se dejan vacías (todo va por
+      // ciudad; lo no definido cae al global).
+      const emp = {}
       const ciu = {}
       for (const [code, v] of Object.entries(porCiudad)) {
         const o = {}
@@ -94,55 +72,25 @@ export default function ReglasCalculo() {
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de cálculo</h3>
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-        Por cada <b>categoría de claim</b> (se detecta sola desde la factura) eliges el <b>método</b> de cobro al chofer:
-        {' '}<b>M1</b> cobra la multa (ganancia = multa − Gofo) · <b>M2</b> cobra lo de Gofo (ganancia $0) · <b>M3</b> perdón (absorbes lo de Gofo).
-        Puedes fijarlo por empresa y sobreescribirlo por ciudad. Global: multa {CLAIM_FEE} / doble {DOBLE_MONTO} / método {METODO_CLAIM_DEFAULT}.
+        Configuración <b>manual por ciudad</b>. Por cada <b>categoría de claim</b> (se detecta sola desde la factura) eliges el <b>método</b> de cobro al chofer:
+        {' '}<b>Rate</b> = le cobras el monto que tú pones (ganancia = rate − Gofo) · <b>Lo que Gofo cobra</b> = al chofer se le descuenta lo mismo que Gofo (ganancia $0) · <b>Perdón</b> = no cobras, tú lo asumes (absorbes lo de Gofo).
       </p>
       <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer. En modo Estándar la <b>tarifa (rate)</b> que le pagas por cada entrega va por chofer en <b>Choferes → Rate individual / Rate doble</b>. Los campos de abajo son la <b>multa por claim</b> (lo que le cobras) y el <b>monto que marca un “doble”</b> (detección, no pago).
+        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer. La <b>tarifa (rate) de pago</b> va por chofer en <b>Choferes → Rate individual / Rate doble</b>. El <b>Rate</b> de esta tabla es lo que le <b>cobras por un claim</b>; el <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
-      {/* Nivel empresa */}
-      <div className="mb-4 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por defecto de la empresa</div>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <div>
-            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Multa por claim al chofer ($) — método M1</div>
-            <Input className="w-40" type="number" step="0.01" min="0" value={empresa.claimFee} onChange={(e) => setEmpresa((f) => ({ ...f, claimFee: e.target.value }))} placeholder={String(CLAIM_FEE)} />
-          </div>
-          <div>
-            <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Monto que marca un “doble” ($) <span className="text-slate-400">(detección, no pago)</span></div>
-            <Input className="w-32" type="number" step="0.01" min="0" value={empresa.dobleMonto} onChange={(e) => setEmpresa((f) => ({ ...f, dobleMonto: e.target.value }))} placeholder={String(DOBLE_MONTO)} />
-          </div>
-        </div>
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Método por categoría de claim</div>
-        <div className="flex flex-wrap gap-3">
-          {todasCats.map((cat) => (
-            <div key={cat.key}>
-              <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{cat.label}</div>
-              <Select className="w-44" value={empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT} onChange={(e) => setEmpMetodo(cat.key, e.target.value)}>
-                {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
-              </Select>
-              {(empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT) === 'M1' && (
-                <Input className="mt-1 w-44" type="number" step="0.01" min="0" value={empresa.montos[cat.key] ?? ''} onChange={(e) => setEmpMonto(cat.key, e.target.value)} placeholder={`$ ${empClaim} (multa general)`} />
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Nivel ciudad */}
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Por ciudad (opcional — vacío = hereda de la empresa)</div>
+      {/* Configuración manual POR CIUDAD (sin defaults de empresa) */}
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Manual por ciudad — Rate = lo que cobras por claim · Monto doble = detección</div>
       {ciudadesConCodigo.length === 0 ? (
-        <p className="text-sm text-slate-400">Agrega ciudades con código en “Mis ciudades” para poder configurarlas por separado.</p>
+        <p className="text-sm text-slate-400">Agrega ciudades con código en “Mis ciudades” para poder configurarlas.</p>
       ) : (
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
           <table className="w-full min-w-[900px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
-                <th className="px-3 py-2 text-right font-semibold">Multa claim ($)</th>
+                <th className="px-3 py-2 text-right font-semibold">Rate ($)</th>
                 <th className="px-3 py-2 text-right font-semibold">Monto doble ($)</th>
                 {todasCats.map((cat) => (<th key={cat.key} className="px-3 py-2 text-left font-semibold">{cat.label}</th>))}
               </tr>
@@ -151,16 +99,15 @@ export default function ReglasCalculo() {
               {ciudadesConCodigo.map((c) => (
                 <tr key={c.codigo} className="border-t border-slate-100 dark:border-slate-700/50">
                   <td className="px-3 py-2 whitespace-nowrap">{c.nombre} <span className="text-xs text-slate-400">({c.codigo})</span></td>
-                  <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${empClaim}`} /></td>
-                  <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${empDoble}`} /></td>
+                  <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${CLAIM_FEE}`} /></td>
+                  <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${DOBLE_MONTO}`} /></td>
                   {todasCats.map((cat) => (
                     <td key={cat.key} className="px-3 py-2 align-top">
-                      <Select className="w-36" value={valCiudadMetodo(c.codigo, cat.key)} onChange={(e) => setCiudadMetodo(c.codigo, cat.key, e.target.value)}>
-                        <option value="">Empresa ({empresa.metodos[cat.key] || METODO_CLAIM_DEFAULT})</option>
+                      <Select className="w-40" value={valCiudadMetodo(c.codigo, cat.key) || METODO_CLAIM_DEFAULT} onChange={(e) => setCiudadMetodo(c.codigo, cat.key, e.target.value)}>
                         {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
                       </Select>
                       {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
-                        <Input className="mt-1 w-36 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${empMontoCat(cat.key)} (hereda)`} />
+                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${valCiudad(c.codigo, 'claimFee') || CLAIM_FEE} (rate)`} />
                       )}
                     </td>
                   ))}
