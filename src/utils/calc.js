@@ -449,11 +449,24 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     const claimsGofo = porCiudad(claims || [], ciudad).reduce((a, c) => a + (c.montoGofo || 0), 0)
     ingresoNeto = entregas + claimsGofo
   }
-  // Costo de managers de la ciudad. Si la operación tiene UNA sola ciudad, todos
-  // los managers pertenecen a ella (evita descuadres cuando el código de ciudad
-  // del manager no coincide con el de las facturas).
-  const unaSolaCiudad = ciudadesDeFactura(inv).length === 1
-  const cMgr = (esTodas || unaSolaCiudad) ? costoManagers(managers, semanas) : costoManagers(managers, semanas, ciudad)
+  // Costo de managers de la ciudad, robusto ante códigos que no coinciden entre
+  // "Mis ciudades" (manager) y las facturas (filtro):
+  //   - un manager cuenta para la ciudad cuyo código coincide con el suyo;
+  //   - un manager "huérfano" (su ciudad no está en ninguna ciudad de la factura)
+  //     se atribuye a la ciudad PRINCIPAL (la primera), sin doble conteo.
+  const activosMgr = (managers || []).filter((m) => m.activo !== false)
+  const sueldoDe = (arr) => arr.reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0) * (semanas || 1)
+  let cMgr
+  if (esTodas) {
+    cMgr = sueldoDe(activosMgr)
+  } else {
+    const ciudadesInv = ciudadesDeFactura(inv)
+    const setInv = new Set(ciudadesInv)
+    const principal = ciudadesInv[0]
+    const match = activosMgr.filter((m) => (m.ciudad || '') === ciudad)
+    const huerfanos = ciudad === principal ? activosMgr.filter((m) => !setInv.has(m.ciudad || '')) : []
+    cMgr = sueldoDe([...match, ...huerfanos])
+  }
   const ganancia = ingresoNeto - costoChoferes - cMgr
   return {
     ingresoNeto,
