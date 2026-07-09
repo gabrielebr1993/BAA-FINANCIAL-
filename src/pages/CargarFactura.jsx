@@ -41,6 +41,7 @@ export default function CargarFactura() {
   const [procesandoFallidos, setProcesandoFallidos] = useState(false)
   const [preciosResumen, setPreciosResumen] = useState(null) // { archivoNombre, total }
   const [procesandoPrecios, setProcesandoPrecios] = useState(false)
+  const [dragPrecios, setDragPrecios] = useState(false) // arrastrar el archivo de rates
   const [ratesList, setRatesList] = useState([]) // lista maestra de choferes desde el archivo de rates
   const [mapaManual, setMapaManual] = useState({}) // { rawNombre: canonicalName | '__nuevo__' }
   const [verUniones, setVerUniones] = useState(false)
@@ -876,8 +877,18 @@ export default function CargarFactura() {
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
                 Dos formas de poner precios: escríbelos <b>a mano</b> abajo, o sube el <b>Excel de rates</b> (hoja <b>“Rates”</b>: <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>). Ese archivo es tu <b>lista maestra</b> de choferes reales: se usan sus nombres para <b>unificar</b> las variantes de la factura y se rellenan los precios. Todo queda editable.
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Boton variant="gold" onClick={() => inputPreciosRef.current?.click()} disabled={procesandoPrecios}>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragPrecios(true) }}
+                onDragLeave={() => setDragPrecios(false)}
+                onDrop={(e) => { e.preventDefault(); setDragPrecios(false); manejarArchivoPrecios(e.dataTransfer.files) }}
+                onClick={() => inputPreciosRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-5 text-center transition ${
+                  dragPrecios ? 'border-brand-gold bg-brand-gold/5' : preciosResumen ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-600/60 dark:bg-emerald-500/5' : 'border-slate-300 dark:border-slate-600'
+                }`}
+              >
+                <Upload size={26} strokeWidth={1.5} className="text-brand-gold" />
+                <div className="text-sm text-slate-500 dark:text-slate-400"><b>Arrastra el Excel aquí</b> o haz clic para seleccionarlo</div>
+                <Boton variant="gold" onClick={(e) => { e.stopPropagation(); inputPreciosRef.current?.click() }} disabled={procesandoPrecios}>
                   {procesandoPrecios ? <><Spinner /> Leyendo…</> : <><Upload size={16} strokeWidth={1.8} /> Cargar rates / precios desde Excel</>}
                 </Boton>
                 <input ref={inputPreciosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarArchivoPrecios(e.target.files)} />
