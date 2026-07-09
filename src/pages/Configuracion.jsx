@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { Save, Info, Compass } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { CLAIM_FEE, UMBRAL_CAMBIO_PRECIO } from '../constants'
+import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
@@ -52,10 +52,6 @@ export default function Configuracion() {
         <Card className="p-5">
           <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de negocio</h3>
           <ul className="space-y-3 text-sm">
-            <li className="flex items-center justify-between">
-              <span className="text-slate-600 dark:text-slate-300">Monto manual por claim al chofer (default)</span>
-              <span className="font-semibold">${CLAIM_FEE} <Badge color="gold">por ciudad</Badge></span>
-            </li>
             <li className="flex items-center justify-between">
               <span className="text-slate-600 dark:text-slate-300">Monto que marca un “doble” (detección)</span>
               <span className="font-semibold">monto = $0.50 <Badge color="gold">configurable</Badge></span>

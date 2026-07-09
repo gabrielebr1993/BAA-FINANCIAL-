@@ -134,4 +134,4 @@ export const SECCIONES = [
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.
-export const UMBRAL_CAMBIO_PRECIO = 0.05
+export const UMBRAL_CAMBIO_PRECIO = 0.01
