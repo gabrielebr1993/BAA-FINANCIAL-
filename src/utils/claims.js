@@ -54,6 +54,27 @@ export async function quitarPerdonVarios(claimsArr) {
   return lista.length
 }
 
+// Define MANUALMENTE el método de cobro (M1/M2/M3) de un claim, sobrescribiendo el
+// que resuelven las reglas. `metodo` null/'' o 'auto' quita el override (vuelve a
+// resolverse por ciudad/categoría o por ruta).
+export async function cambiarMetodoClaim(claim, metodo) {
+  const val = metodo === 'M1' || metodo === 'M2' || metodo === 'M3' ? metodo : null
+  await updateDoc(doc(db, 'claims', claim.id), { metodo: val, metodoManual: !!val })
+}
+
+// Igual que el anterior pero para VARIOS claims a la vez.
+export async function cambiarMetodoVarios(claimsArr, metodo) {
+  const val = metodo === 'M1' || metodo === 'M2' || metodo === 'M3' ? metodo : null
+  const lista = (claimsArr || []).filter((c) => c?.id)
+  const chunk = 450
+  for (let i = 0; i < lista.length; i += chunk) {
+    const batch = writeBatch(db)
+    for (const c of lista.slice(i, i + chunk)) batch.update(doc(db, 'claims', c.id), { metodo: val, metodoManual: !!val })
+    await batch.commit()
+  }
+  return lista.length
+}
+
 // Guarda la decisión de un caso de claim repetido en TODOS sus claims.
 // decision: 'aprobado' (cuenta, cobra $100) | 'anulado' (no cuenta, no cobra).
 export async function decidirClaimRepetido(claimsDelCaso, decision, perfil) {

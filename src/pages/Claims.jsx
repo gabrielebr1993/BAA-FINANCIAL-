@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios } from '../utils/claims'
+import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios, cambiarMetodoClaim, cambiarMetodoVarios } from '../utils/claims'
 import { porCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -107,6 +107,22 @@ export default function Claims() {
     setOcupado(false)
   }
 
+  // Cambiar el método (M1/M2/M3 o 'auto') de UN claim.
+  const cambiarMetodo = async (claim, metodo) => {
+    setOcupado(true)
+    await cambiarMetodoClaim(claim, metodo === 'auto' ? null : metodo)
+    await reloadClaims()
+    setOcupado(false)
+  }
+  // Cambiar el método de los seleccionados.
+  const cambiarMetodoLote = async (metodo) => {
+    setOcupado(true)
+    await cambiarMetodoVarios(seleccionados, metodo === 'auto' ? null : metodo)
+    await reloadClaims()
+    limpiarSel()
+    setOcupado(false)
+  }
+
   return (
     <div>
       <PageTitle right={<><RangeSelector /><CitySelector /></>}>Claims</PageTitle>
@@ -190,6 +206,12 @@ export default function Claims() {
                   {!lote ? (
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} seleccionado(s)</span>
+                      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 dark:bg-slate-800/60">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Método:</span>
+                        {['M1', 'M2', 'M3', 'auto'].map((mm) => (
+                          <Boton key={mm} variant="ghost" disabled={ocupado} onClick={() => cambiarMetodoLote(mm)} className="px-2 py-1 text-xs">{mm === 'auto' ? 'Auto' : mm}</Boton>
+                        ))}
+                      </div>
                       <div className="ml-auto flex flex-wrap gap-2">
                         <Boton variant="success" disabled={ocupado || selPorPerdonar.length === 0} onClick={() => setLote(true)} className="px-3 py-1.5 text-xs">
                           <Handshake size={14} strokeWidth={1.8} /> Perdonar seleccionados ({selPorPerdonar.length})
@@ -237,10 +259,21 @@ export default function Claims() {
                   if (key === 'montoGofo') return money(row.montoGofo)
                   if (key === 'metodo') {
                     const cat = row.categoria || categoriaClaim(row.claimType)
-                    const m = metodoDe(selectedInvoice, row.ciudad, row)
-                    const col = m === 'M3' ? 'green' : m === 'M2' ? 'slate' : 'gold'
-                    const txt = m === 'M1' ? 'M1 · multa' : m === 'M2' ? 'M2 · =Gofo' : 'M3 · perdón'
-                    return <span className="inline-flex items-center gap-1.5"><span className="text-xs text-slate-500 dark:text-slate-400">{etiquetaCategoria(cat)}</span> <Badge color={col}>{txt}</Badge></span>
+                    const manual = row.metodo === 'M1' || row.metodo === 'M2' || row.metodo === 'M3'
+                    // método que resolverían las reglas (ignorando el override manual)
+                    const auto = metodoDe(selectedInvoice, row.ciudad, { ...row, metodo: undefined })
+                    return (
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">{etiquetaCategoria(cat)}</span>
+                        <Select className="w-36 py-1 text-xs" value={manual ? row.metodo : 'auto'} disabled={ocupado} onChange={(e) => cambiarMetodo(row, e.target.value)}>
+                          <option value="auto">Auto ({auto})</option>
+                          <option value="M1">M1 · multa</option>
+                          <option value="M2">M2 · =Gofo</option>
+                          <option value="M3">M3 · perdón</option>
+                        </Select>
+                        {manual && <span className="text-[10px] font-semibold text-brand-gold">manual</span>}
+                      </div>
+                    )
                   }
                   if (key === 'ciudad') return nombreCiudad(row.ciudad)
                   if (key === 'revision') {
