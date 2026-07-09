@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
@@ -204,6 +204,26 @@ export default function Choferes() {
       texto: `Vas a ELIMINAR ${idsSel().length} chofer(es) de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero estos choferes desaparecerán de la lista y de los cálculos futuros. Esta acción no se puede deshacer.`,
       accion: () => aplicarBatch((batch, d) => batch.delete(doc(db, 'drivers', d.id))),
     })
+
+  // Eliminar UN chofer desde su ficha. Cierra la ficha y pide confirmación roja.
+  const pedirBorrarUno = (d) => {
+    setModal(null)
+    setConfirm({
+      peligro: true,
+      texto: `Vas a ELIMINAR al chofer "${d.nombre}" de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero desaparecerá de la lista y de los cálculos futuros. Esta acción no se puede deshacer.`,
+      accion: async () => {
+        setOcupado(true)
+        try {
+          await deleteDoc(doc(db, 'drivers', d.id))
+          await reloadDrivers()
+          setSeleccion((s) => { const n = new Set(s); n.delete(d.id); return n })
+          setConfirm(null)
+        } finally {
+          setOcupado(false)
+        }
+      },
+    })
+  }
 
   // ---- modal ----
   const abrirModal = async (d) => {
@@ -465,9 +485,12 @@ export default function Choferes() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Boton variant="ghost" onClick={() => setModal(null)}>Cancelar</Boton>
-              <Boton variant="gold" onClick={guardarModal} disabled={guardandoModal}>{guardandoModal ? <><Spinner /> Guardando…</> : 'Guardar cambios'}</Boton>
+            <div className="flex items-center gap-2">
+              <Boton variant="danger" onClick={() => pedirBorrarUno(modal)}><Trash2 size={15} strokeWidth={1.8} /> Eliminar chofer</Boton>
+              <div className="ml-auto flex gap-2">
+                <Boton variant="ghost" onClick={() => setModal(null)}>Cancelar</Boton>
+                <Boton variant="gold" onClick={guardarModal} disabled={guardandoModal}>{guardandoModal ? <><Spinner /> Guardando…</> : 'Guardar cambios'}</Boton>
+              </div>
             </div>
           </Card>
         </div>
