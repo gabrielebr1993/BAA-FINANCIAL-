@@ -449,7 +449,11 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     const claimsGofo = porCiudad(claims || [], ciudad).reduce((a, c) => a + (c.montoGofo || 0), 0)
     ingresoNeto = entregas + claimsGofo
   }
-  const cMgr = costoManagers(managers, semanas, ciudad)
+  // Costo de managers de la ciudad. Si la operación tiene UNA sola ciudad, todos
+  // los managers pertenecen a ella (evita descuadres cuando el código de ciudad
+  // del manager no coincide con el de las facturas).
+  const unaSolaCiudad = ciudadesDeFactura(inv).length === 1
+  const cMgr = (esTodas || unaSolaCiudad) ? costoManagers(managers, semanas) : costoManagers(managers, semanas, ciudad)
   const ganancia = ingresoNeto - costoChoferes - cMgr
   return {
     ingresoNeto,
