@@ -20,6 +20,7 @@ export default function Pagos() {
   const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando } = useData()
   const [payrollMap, setPayrollMap] = useState({})
   const [fEstado, setFEstado] = useState('')
+  const [busqueda, setBusqueda] = useState('') // por nombre o rate
   const [expandido, setExpandido] = useState(null)
   const [perdonandoId, setPerdonandoId] = useState(null)
   const [motivo, setMotivo] = useState('')
@@ -54,8 +55,15 @@ export default function Pagos() {
   const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
   const pagosConEstado = pagos.map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente' }))
   const filtrados = pagosConEstado.filter((p) => {
-    if (fEstado === 'pendiente') return p.estado === 'pendiente'
-    if (fEstado === 'pagado') return p.estado === 'pagado'
+    if (fEstado === 'pendiente' && p.estado !== 'pendiente') return false
+    if (fEstado === 'pagado' && p.estado !== 'pagado') return false
+    const q = busqueda.trim().toLowerCase()
+    if (q) {
+      const nombre = (p.nombre || '').toLowerCase()
+      const ind = String(p.tarifaInd ?? '')
+      const dob = String(p.tarifaDoble ?? '')
+      if (!(nombre.includes(q) || ind.includes(q) || dob.includes(q))) return false
+    }
     return true
   })
 
@@ -165,6 +173,10 @@ export default function Pagos() {
                     <option value="pendiente">Solo pendientes</option>
                     <option value="pagado">Solo pagados</option>
                   </Select>
+                  <div className="flex items-center gap-1">
+                    <Input className="w-56" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o rate (ej. 1.6)…" />
+                    {busqueda && <Boton variant="ghost" className="px-2 py-1 text-xs" onClick={() => setBusqueda('')}><X size={13} strokeWidth={2} /></Boton>}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label="Ingreso Gofo" />
                     <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label="Ganancia" />
