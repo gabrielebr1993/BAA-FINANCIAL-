@@ -18,7 +18,11 @@ export const useData = () => useContext(DataContext)
 export function DataProvider({ children }) {
   const { user, companyId, esSuperAdmin, esDriver } = useAuth()
   const [companies, setCompanies] = useState([])
-  const [activeCompanyId, setActiveCompanyId] = useState(null)
+  // Empresa activa PERSISTIDA: al refrescar se mantiene la que estabas viendo
+  // (solo aplica al súper-admin, que puede cambiar de empresa).
+  const [activeCompanyId, setActiveCompanyId] = useState(() => {
+    try { return localStorage.getItem('milepay_activeCompany') || null } catch { return null }
+  })
   const [invoices, setInvoices] = useState([])
   const [drivers, setDrivers] = useState([])
   const [managers, setManagers] = useState([])
@@ -124,8 +128,21 @@ export function DataProvider({ children }) {
   useEffect(() => {
     if (!user) { setActiveCompanyId(null); return }
     if (!esSuperAdmin) { setActiveCompanyId(companyId || null); return }
-    setActiveCompanyId((prev) => prev || companyId || (companies[0] ? companies[0].id : null))
+    // Súper-admin: conservar la empresa que estaba viendo (persistida) mientras
+    // siga siendo válida. Si aún no cargó la lista, se respeta lo persistido; una
+    // vez cargada, si esa empresa ya no existe, se pasa a la primera disponible.
+    setActiveCompanyId((prev) => {
+      if (prev && (companies.length === 0 || companies.some((c) => c.id === prev))) return prev
+      return companyId || (companies[0] ? companies[0].id : null)
+    })
   }, [user, esSuperAdmin, companyId, companies])
+
+  // Persistir la empresa activa para que sobreviva al refresco.
+  useEffect(() => {
+    try {
+      if (activeCompanyId) localStorage.setItem('milepay_activeCompany', activeCompanyId)
+    } catch { /* almacenamiento no disponible */ }
+  }, [activeCompanyId])
 
   // Cargar datos de la empresa activa.
   useEffect(() => {
