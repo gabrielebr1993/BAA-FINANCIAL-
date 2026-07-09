@@ -313,6 +313,9 @@ export default function Performance() {
                 />
               </div>
               <Boton variant="primary" onClick={aplicarBusqueda} className="px-3.5 py-2 text-xs"><Search size={14} strokeWidth={2} /> Buscar</Boton>
+              {fRuta && (
+                <Boton variant="gold" onClick={() => navigate(`/rutas/${encodeURIComponent(fRuta)}`)} className="px-3 py-2 text-xs"><Route size={14} strokeWidth={2} /> Ver ficha de {fRuta}</Boton>
+              )}
               {hayFiltros && (
                 <Boton variant="ghost" onClick={limpiarFiltros} className="px-3 py-2 text-xs"><RotateCcw size={14} strokeWidth={2} /> Limpiar filtros</Boton>
               )}
