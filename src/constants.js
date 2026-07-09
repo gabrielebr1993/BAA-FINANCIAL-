@@ -22,14 +22,30 @@ export const COLORS = {
 // Paleta para gráficos (recharts) — navy, dorado, azul acero de marca y grises.
 export const CHART_COLORS = ['#13233f', '#c9a24b', '#3d5a80', '#7f9cc0', '#a67c00', '#94a3b8', '#8896a6']
 
-// Descuento fijo por claim NO perdonado (aplicado al chofer). NO SE CAMBIA.
+// Multa "M1" por claim (lo que cobras al chofer en el método fijo). CONFIGURABLE.
 export const CLAIM_FEE = 100
 
-// Multa reducida (sugerida) para ciertos tipos de claim. Es CONFIGURABLE por
-// empresa/ciudad; si no se configura, se usa la multa general (sin cambio).
-export const CLAIM_FEE_REDUCIDO = 50
-// Tipos de claim (normalizados a minúsculas) que pagan la multa REDUCIDA.
-export const TIPOS_CLAIM_REDUCIDO = ['tracking interruption', 'lost']
+// Categorías de claim (se detectan automáticamente desde la columna "Claim Type"
+// de la factura). `match` = patrones normalizados (minúsculas, sin espacios ni
+// símbolos) que identifican esa categoría. Lo no reconocido cae en 'otro'.
+export const CATEGORIAS_CLAIM = [
+  { key: 'damaged', label: 'Dañado', match: ['damageditem', 'damaged', 'damage', 'danado'] },
+  { key: 'lost', label: 'Perdido', match: ['lostitem', 'lost', 'perdido'] },
+  { key: 'fakepod', label: 'Fake POD', match: ['fakepod', 'falsopod'] },
+  { key: 'tracking', label: 'Interrupción tracking', match: ['trackinginterruption', 'tracking', 'interrupcion'] },
+]
+export const CATEGORIAS_CLAIM_KEYS = [...CATEGORIAS_CLAIM.map((c) => c.key), 'otro']
+
+// Métodos de cobro por claim:
+//   M1 = cobras la multa fija (CLAIM_FEE) → ganancia = multa − montoGofo
+//   M2 = cobras al chofer lo mismo que Gofo te cobró → ganancia = 0
+//   M3 = perdón (no cobras nada) → ganancia = − montoGofo
+export const METODOS_CLAIM = [
+  { key: 'M1', label: 'Cobrar la multa (fijo)', corto: 'M1 · multa' },
+  { key: 'M2', label: 'Cobrar lo de Gofo', corto: 'M2 · = Gofo' },
+  { key: 'M3', label: 'Perdón (no cobrar)', corto: 'M3 · perdón' },
+]
+export const METODO_CLAIM_DEFAULT = 'M1'
 
 // Un monto exactamente igual a este valor clasifica el paquete como DOBLE. NO SE CAMBIA.
 export const DOBLE_MONTO = 0.5

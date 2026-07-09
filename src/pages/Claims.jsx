@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios } from '../utils/claims'
-import { porCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim } from '../utils/calc'
+import { porCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
@@ -222,6 +222,7 @@ export default function Claims() {
                   { key: 'courier', label: 'Chofer' },
                   { key: 'date', label: 'Fecha' },
                   { key: 'claimType', label: 'Tipo' },
+                  { key: 'metodo', label: 'Categoría · Método', align: 'center' },
                   { key: 'ciudad', label: 'Ciudad' },
                   { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
                   { key: 'revision', label: 'Revisión', align: 'center' },
@@ -234,6 +235,13 @@ export default function Claims() {
                   if (key === 'sel') return <input type="checkbox" aria-label="Seleccionar claim" checked={sel.has(row.id)} onChange={() => toggleUno(row.id)} />
                   if (key === 'waybill') return <Link to={`/tracking/${encodeURIComponent(row.waybill)}`} className="font-medium text-brand-navy hover:underline dark:text-brand-gold">{row.waybill || '—'}</Link>
                   if (key === 'montoGofo') return money(row.montoGofo)
+                  if (key === 'metodo') {
+                    const cat = row.categoria || categoriaClaim(row.claimType)
+                    const m = metodoDe(selectedInvoice, row.ciudad, row)
+                    const col = m === 'M3' ? 'green' : m === 'M2' ? 'slate' : 'gold'
+                    const txt = m === 'M1' ? 'M1 · multa' : m === 'M2' ? 'M2 · =Gofo' : 'M3 · perdón'
+                    return <span className="inline-flex items-center gap-1.5"><span className="text-xs text-slate-500 dark:text-slate-400">{etiquetaCategoria(cat)}</span> <Badge color={col}>{txt}</Badge></span>
+                  }
                   if (key === 'ciudad') return nombreCiudad(row.ciudad)
                   if (key === 'revision') {
                     const est = estadoPorWaybill[(row.waybill || '').trim()]

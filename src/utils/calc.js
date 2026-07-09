@@ -4,7 +4,7 @@
 // Ambas son CONFIGURABLES por empresa y por ciudad (ver resolverReglas). El pago
 // = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*claimFee.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, DOBLE_MONTO, TIPOS_CLAIM_REDUCIDO, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
+import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, CATEGORIAS_CLAIM_KEYS, METODO_CLAIM_DEFAULT, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
 
@@ -22,18 +22,25 @@ export function resolverReglas(ajustes, ciudad) {
   const ciu = (ajustes?.reglasCiudad && ajustes.reglasCiudad[ciudad]) || {}
   const claimFee = numONull(ciu.claimFee) ?? numONull(emp.claimFee) ?? CLAIM_FEE
   const dobleMonto = numONull(ciu.dobleMonto) ?? numONull(emp.dobleMonto) ?? DOBLE_MONTO
-  // Multa REDUCIDA (tracking interruption / lost). Si no se configura, es igual a
-  // la general (así el histórico y las empresas que no la usan no cambian nada).
-  const claimFeeReducido = numONull(ciu.claimFeeReducido) ?? numONull(emp.claimFeeReducido) ?? claimFee
-  // Modo de multa: 'fijo' (multa configurada) o 'real' (se le cobra al chofer
-  // exactamente lo que Gofo cobró por ese claim). Default 'fijo'.
-  const claimModo = ciu.claimModo || emp.claimModo || 'fijo'
-  return { claimFee, dobleMonto, claimFeeReducido, claimModo }
+  // Método de cobro por CATEGORÍA de claim (M1/M2/M3): ciudad → empresa → M1.
+  const metodos = {}
+  for (const cat of CATEGORIAS_CLAIM_KEYS) {
+    metodos[cat] = (ciu.metodos && ciu.metodos[cat]) || (emp.metodos && emp.metodos[cat]) || METODO_CLAIM_DEFAULT
+  }
+  return { claimFee, dobleMonto, metodos }
 }
 
-// ¿Este tipo de claim paga la multa REDUCIDA? (tracking interruption / lost)
-export function esClaimReducido(claimType) {
-  return TIPOS_CLAIM_REDUCIDO.includes(String(claimType || '').trim().toLowerCase())
+// Detecta la CATEGORÍA de un claim desde su "Claim Type" (normaliza mayúsculas,
+// espacios y símbolos). Devuelve 'damaged' | 'lost' | 'fakepod' | 'tracking' | 'otro'.
+export function categoriaClaim(claimType) {
+  const s = String(claimType || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  for (const c of CATEGORIAS_CLAIM) if (c.match.some((p) => s.includes(p))) return c.key
+  return 'otro'
+}
+// Etiqueta legible de una categoría.
+export function etiquetaCategoria(cat) {
+  const c = CATEGORIAS_CLAIM.find((x) => x.key === cat)
+  return c ? c.label : 'Otro'
 }
 
 // ¿Un paquete es "doble" según la regla (monto == dobleMonto, con tolerancia)?
@@ -41,9 +48,8 @@ export function esDoblePorRegla(monto, dobleMonto = DOBLE_MONTO) {
   return Math.abs((Number(monto) || 0) - (Number(dobleMonto) || 0)) < 1e-9
 }
 
-// claimFee aplicado a una factura para una ciudad concreta. Usa las reglas que se
-// guardaron EN la factura al procesarla (histórico consistente); si no existen
-// (facturas antiguas), cae al valor global 100.
+// claimFee (multa M1) aplicado a una factura para una ciudad. Usa las reglas que se
+// guardaron EN la factura al procesarla (histórico consistente); si no, global 100.
 export function claimFeeDe(inv, ciudad) {
   const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
   if (r && numONull(r.claimFee) != null) return Number(r.claimFee)
@@ -51,30 +57,29 @@ export function claimFeeDe(inv, ciudad) {
   return CLAIM_FEE
 }
 
-// Multa REDUCIDA aplicada (para tracking interruption / lost). Si la factura no la
-// guardó (histórico), cae a la multa general → sin cambio en datos existentes.
-export function claimFeeReducidoDe(inv, ciudad) {
+// Método (M1/M2/M3) que le corresponde a UN claim. Prioridad:
+//   1) claim.metodo (override guardado/manual en ese claim)
+//   2) reglas de la ciudad guardadas en la factura, por su categoría
+//   3) reglas de empresa de la factura, por su categoría
+//   4) M1 (default)
+export function metodoDe(inv, ciudad, claim) {
+  if (claim?.metodo === 'M1' || claim?.metodo === 'M2' || claim?.metodo === 'M3') return claim.metodo
+  const cat = categoriaClaim(claim?.claimType)
   const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
-  if (r && numONull(r.claimFeeReducido) != null) return Number(r.claimFeeReducido)
-  if (inv?.reglaEmpresa && numONull(inv.reglaEmpresa.claimFeeReducido) != null) return Number(inv.reglaEmpresa.claimFeeReducido)
-  return claimFeeDe(inv, ciudad)
+  if (r?.metodos && r.metodos[cat]) return r.metodos[cat]
+  if (inv?.reglaEmpresa?.metodos && inv.reglaEmpresa.metodos[cat]) return inv.reglaEmpresa.metodos[cat]
+  return METODO_CLAIM_DEFAULT
 }
 
-// Modo de multa de una ciudad: 'fijo' (multa configurada) o 'real' (se cobra al
-// chofer lo que Gofo cobró por el claim). Cae a la regla de empresa y luego 'fijo'.
-export function claimModoDe(inv, ciudad) {
-  const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
-  if (r && r.claimModo) return r.claimModo
-  if (inv?.reglaEmpresa && inv.reglaEmpresa.claimModo) return inv.reglaEmpresa.claimModo
-  return 'fijo'
-}
-
-// Multa que le corresponde a UN claim (objeto con claimType y montoGofo):
-//   - modo 'real'  → exactamente lo que Gofo cobró (|montoGofo|).
-//   - modo 'fijo'  → multa reducida si es tracking interruption / lost, si no la general.
+// Lo que se le COBRA al chofer por UN claim, según su método:
+//   M1 → la multa fija (claimFee de la ciudad)
+//   M2 → exactamente lo que Gofo descontó (|montoGofo|)
+//   M3 → 0 (perdón)
 export function feeDeClaim(inv, ciudad, claim) {
-  if (claimModoDe(inv, ciudad) === 'real') return Math.abs(Number(claim?.montoGofo) || 0)
-  return esClaimReducido(claim?.claimType) ? claimFeeReducidoDe(inv, ciudad) : claimFeeDe(inv, ciudad)
+  const m = metodoDe(inv, ciudad, claim)
+  if (m === 'M2') return Math.abs(Number(claim?.montoGofo) || 0)
+  if (m === 'M3') return 0
+  return claimFeeDe(inv, ciudad)
 }
 
 // ---- calificación de choferes ------------------------------------------------
@@ -452,30 +457,39 @@ export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas
     .sort((a, b) => b.gananciaReal - a.gananciaReal)
 }
 
-// Economía de claims. El chofer paga la MULTA (claimFee, configurable por ciudad)
-// por cada claim NO perdonado. Gofo descuenta un monto variable (montoGofo) por
-// cada claim, ya incluido en el neto. Perdonar = no cobrar la multa y ABSORBER el
-// monto que Gofo cobró.
-// `feeDe(ciudad)` resuelve la multa por ciudad; por defecto usa CLAIM_FEE (100),
-// así que sin pasarlo el resultado es idéntico al actual.
-// `feeDe` recibe el CLAIM completo (para respetar multa reducida por tipo y el
-// modo "real"). Por defecto usa la multa fija global.
-export function economiaClaims(claims, feeDe) {
-  const fee = typeof feeDe === 'function' ? feeDe : () => CLAIM_FEE
+// Economía de claims por MÉTODO (M1/M2/M3), evaluando CADA claim individualmente
+// según su ciudad y categoría (NO multiplica todo × $100).
+//   - Ganancia de un claim = feeDeClaim − |montoGofo|
+//       M1: multa − montoGofo   |   M2: 0   |   M3: −montoGofo (perdón)
+//   - Perdón MANUAL (c.perdonado) se trata como M3.
+// `inv` = factura (para leer las reglas guardadas). Si no se pasa, todo es M1.
+export function economiaClaims(claims, inv) {
   const validos = claimsValidos(claims)
   const total = validos.length
-  const perdonados = validos.filter((c) => c.perdonado).length
-  const activos = total - perdonados
-  const cobradoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + fee(c), 0)
-  const descontadoGofo = validos.reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
-  const perdidaAbsorbida = validos.filter((c) => c.perdonado).reduce((a, c) => a + Math.abs(Number(c.montoGofo) || 0), 0)
+  const porMetodo = { M1: { n: 0, ganancia: 0 }, M2: { n: 0, ganancia: 0 }, M3: { n: 0, ganancia: 0 } }
+  let cobradoChoferes = 0
+  let descontadoGofo = 0
+  let perdidaAbsorbida = 0
+  for (const c of validos) {
+    const gofo = Math.abs(Number(c.montoGofo) || 0)
+    descontadoGofo += gofo
+    // Perdón manual = M3. Si no, el método resuelto por reglas.
+    const m = c.perdonado ? 'M3' : (inv ? metodoDe(inv, c.ciudad, c) : METODO_CLAIM_DEFAULT)
+    const fee = c.perdonado ? 0 : (inv ? feeDeClaim(inv, c.ciudad, c) : CLAIM_FEE)
+    const ganancia = fee - gofo
+    cobradoChoferes += fee
+    porMetodo[m].n += 1
+    porMetodo[m].ganancia += ganancia
+    if (m === 'M3') perdidaAbsorbida += gofo
+  }
   return {
     total,
-    perdonados,
-    activos,
+    perdonados: porMetodo.M3.n,
+    activos: total - porMetodo.M3.n,
     cobradoChoferes,
     descontadoGofo,
     perdidaAbsorbida,
+    porMetodo,
     gananciaNetaClaims: cobradoChoferes - descontadoGofo,
   }
 }

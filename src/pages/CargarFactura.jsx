@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, TODAS } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -286,6 +286,8 @@ export default function CargarFactura() {
             date: c.date,
             postalCode: c.postalCode,
             claimType: c.claimType,
+            categoria: categoriaClaim(c.claimType),
+            metodo: metodoDe({ reglaEmpresa, reglasAplicadas }, c.ciudad || '', c),
             montoGofo: c.montoGofo,
             ciudad: c.ciudad || '',
             // Info del paquete (paquete con claim) tomada del detalle de entrega.

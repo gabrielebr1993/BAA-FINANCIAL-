@@ -78,7 +78,7 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
 
   // 8) Costo de claims perdonados (aviso) — dinero que dejas de cobrar + monto
   //    que Gofo ya te descontó y que absorbes al perdonar.
-  const ec = economiaClaims(claims)
+  const ec = economiaClaims(claims, inv)
   if (ec.perdonados > 0) {
     alertas.push({
       id: 'claimsPerdonados',
