@@ -8,7 +8,7 @@ import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsVali
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -31,6 +31,7 @@ export default function CargarFactura() {
   const [bulk, setBulk] = useState({ ind: '', doble: '' })
   const [nuevaCiudad, setNuevaCiudad] = useState({ codigo: '', nombre: '' })
   const [decisiones, setDecisiones] = useState({}) // { waybill: 'aprobado' | 'anulado' }
+  const [asignacionRuta, setAsignacionRuta] = useState({}) // { driverNombre: rutaCode } (modo 'ruta')
   const [verExistentes, setVerExistentes] = useState(false)
   const [editExist, setEditExist] = useState({}) // nombre -> { ind, doble }
   const [guardandoExist, setGuardandoExist] = useState(false)
@@ -47,6 +48,7 @@ export default function CargarFactura() {
     setBusqueda('')
     setBulk({ ind: '', doble: '' })
     setDecisiones({})
+    setAsignacionRuta({})
   }
 
   const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
@@ -195,6 +197,19 @@ export default function CargarFactura() {
     }
   }
 
+  // ---- modo POR RUTA: asignación manual de choferes a rutas ----
+  const modoRuta = ajustes?.modoConfig === 'ruta'
+  const rutasDef = useMemo(() => ajustes?.reglasRuta || {}, [ajustes])
+  const codigosRuta = useMemo(() => Object.keys(rutasDef).sort(), [rutasDef])
+  const toggleDriverRuta = (driver, code) => setAsignacionRuta((a) => {
+    const n = { ...a }
+    if (n[driver] === code) delete n[driver]
+    else n[driver] = code
+    return n
+  })
+  const driversSinRuta = useMemo(() => (modoRuta ? nombresFactura.filter((n) => !asignacionRuta[n]) : []), [modoRuta, nombresFactura, asignacionRuta])
+  const todosDriversRuta = !modoRuta || (nombresFactura.length > 0 && driversSinRuta.length === 0)
+
   const todasCiudadesAsignadas = ciudadPorArchivo.length > 0 && ciudadPorArchivo.every((c) => !!c)
 
   const guardar = async () => {
@@ -202,7 +217,11 @@ export default function CargarFactura() {
     if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
-    if (choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
+    if (!modoRuta && choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
+    if (modoRuta) {
+      if (codigosRuta.length === 0) return setErrores(['Estás en modo “Por ruta” pero no hay rutas configuradas. Ve a Configuración → Modo de configuración → Por ruta.'])
+      if (!todosDriversRuta) return setErrores([`Asigna cada chofer a una ruta antes de guardar. Faltan ${driversSinRuta.length}.`])
+    }
     if (!todosRepetidosResueltos) return setErrores([`Hay ${casosRepetidos.filter((c) => !decisiones[c.waybill]).length} claim(s) repetido(s) sin resolver. Aprueba o anula cada uno antes de guardar.`])
     setGuardando(true)
     setErrores([])
@@ -244,6 +263,10 @@ export default function CargarFactura() {
       // aunque la config cambie después.
       const reglaEmpresa = resolverReglas(ajustes, '__empresa__')
       const reglasAplicadas = Object.fromEntries((combinado.ciudades || []).map((c) => [c, resolverReglas(ajustes, c)]))
+      // Modo POR RUTA: snapshot de las reglas de ruta y de la asignación chofer→ruta
+      // guardados EN la factura (histórico consistente aunque cambie la config).
+      const reglasRutaAplicadas = modoRuta ? JSON.parse(JSON.stringify(rutasDef)) : null
+      const asignacionRutaFinal = modoRuta ? { ...asignacionRuta } : null
       const invoicePayload = {
         companyId: activeCompanyId,
         semana: semana.trim(),
@@ -256,9 +279,13 @@ export default function CargarFactura() {
         ciudadesMap,
         reglaEmpresa,
         reglasAplicadas,
+        modoConfig: modoRuta ? 'ruta' : 'estandar',
+        ...(modoRuta ? { reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal } : {}),
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
+      // Objeto de reglas para resolver el método (M1/M2/M3) de cada claim, sensible al modo.
+      const invReglas = { reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas }
       // Mapa waybill -> detalle de entrega, para enriquecer cada claim con la
       // info del paquete (ruta, peso, rango de peso, monto de entrega).
       const detPorWaybill = {}
@@ -277,6 +304,7 @@ export default function CargarFactura() {
           const esRepetido = casosRepetidos.some((k) => k.waybill === wb)
           const estadoRevision = esRepetido ? decisiones[wb] || 'pendiente' : 'aprobado'
           const det = detPorWaybill[wb] || null
+          const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
           batch.set(cref, {
             companyId: activeCompanyId,
             invoiceId: ref.id,
@@ -287,7 +315,8 @@ export default function CargarFactura() {
             postalCode: c.postalCode,
             claimType: c.claimType,
             categoria: categoriaClaim(c.claimType),
-            metodo: metodoDe({ reglaEmpresa, reglasAplicadas }, c.ciudad || '', c),
+            metodo: metodoDe(invReglas, c.ciudad || '', { ...c, rutaAsignada }),
+            rutaAsignada,
             montoGofo: c.montoGofo,
             ciudad: c.ciudad || '',
             // Info del paquete (paquete con claim) tomada del detalle de entrega.
@@ -328,9 +357,11 @@ export default function CargarFactura() {
       const claimsConDecision = combinado.claims.map((c) => {
         const wb = (c.waybill || '').trim()
         const esRep = casosRepetidos.some((k) => k.waybill === wb)
-        return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false }
+        const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
+        return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false, rutaAsignada }
       })
-      const pagosFinal = calcularPagos({ ...combinado, reglaEmpresa, reglasAplicadas }, claimsConDecision, driversFinal, TODAS)
+      const invCalc = { ...combinado, reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal }
+      const pagosFinal = calcularPagos(invCalc, claimsConDecision, driversFinal, TODAS)
       const prom = promediosFlota(pagosFinal)
       const fechaInicioISO = periodo.fechaInicio ? periodo.fechaInicio.toISOString() : ''
       for (let i = 0; i < pagosFinal.length; i += chunk) {
@@ -377,7 +408,7 @@ export default function CargarFactura() {
     }
   }
 
-  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos
+  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && (modoRuta || choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos && todosDriversRuta && (!modoRuta || codigosRuta.length > 0)
 
   const fmtFecha = (ts) => {
     try {
@@ -542,17 +573,76 @@ export default function CargarFactura() {
             <KPI label="Claims válidos" value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} filas · ${casosRepetidos.length} repetido(s)` : `${combinado.totalClaims} filas`} />
           </div>
 
-          {/* Resumen: reconocidos (tarifa guardada) vs nuevos */}
-          <Aviso tipo={choferesNuevos.length === 0 ? 'ok' : 'info'}>
-            <span className="inline-flex flex-wrap items-center gap-1.5">
-              <Users size={15} strokeWidth={1.8} />
-              <b>{reconocidos.length}</b> chofer(es) reconocidos con su tarifa guardada · <b>{choferesNuevos.length}</b> nuevo(s)
-              {choferesNuevos.length === 0 ? '. Se procesa directo con las tarifas guardadas.' : ' que requieren precio.'}
-            </span>
-          </Aviso>
+          {/* Modo POR RUTA: asignar manualmente choferes a cada ruta */}
+          {modoRuta && (
+            <Card className="mb-4 border-2 border-brand-gold/60 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Asigna cada chofer a su ruta</h3>
+                <Badge color={todosDriversRuta ? 'green' : 'gold'}>{nombresFactura.length - driversSinRuta.length}/{nombresFactura.length} asignados</Badge>
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Estás en modo <b>Por ruta</b>. Se ignora la ruta del archivo: tú decides a qué ruta pertenece cada chofer y se le paga con las tarifas y métodos de esa ruta. Un chofer pertenece a una sola ruta.
+              </p>
+              {codigosRuta.length === 0 ? (
+                <Aviso tipo="warn">No hay rutas configuradas. Ve a <b>Configuración → Modo de configuración → Por ruta</b> y crea al menos una ruta con sus tarifas.</Aviso>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {codigosRuta.map((code) => {
+                      const r = rutasDef[code] || {}
+                      const enRuta = nombresFactura.filter((n) => asignacionRuta[n] === code)
+                      return (
+                        <div key={code} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <Badge color="gold">{code}</Badge>
+                            {r.nombre && <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{r.nombre}</span>}
+                            <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+                              Ind. {money(Number(r.tarifaInd) || 0)} · Doble {money(Number(r.tarifaDoble) || 0)} · {enRuta.length} chofer(es)
+                            </span>
+                          </div>
+                          <div className="scroll-thin max-h-56 space-y-1 overflow-y-auto">
+                            {nombresFactura.map((n) => {
+                              const asignadoAqui = asignacionRuta[n] === code
+                              const asignadoOtra = asignacionRuta[n] && asignacionRuta[n] !== code
+                              return (
+                                <label key={n} className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm ${asignadoAqui ? 'bg-brand-gold/10' : asignadoOtra ? 'opacity-40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
+                                  <input type="checkbox" checked={asignadoAqui} onChange={() => toggleDriverRuta(n, code)} className="h-4 w-4 accent-brand-gold" />
+                                  <span className="truncate">{n}</span>
+                                  {asignadoOtra && <span className="ml-auto text-[10px] text-slate-400">→ {asignacionRuta[n]}</span>}
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {driversSinRuta.length > 0 && (
+                    <Aviso tipo="warn" className="mt-3">
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <AlertTriangle size={15} strokeWidth={1.8} /> Faltan <b>{driversSinRuta.length}</b> chofer(es) sin ruta: {driversSinRuta.slice(0, 8).join(', ')}{driversSinRuta.length > 8 ? '…' : ''}
+                      </span>
+                    </Aviso>
+                  )}
+                </>
+              )}
+            </Card>
+          )}
+
+          {/* Resumen: reconocidos (tarifa guardada) vs nuevos (solo modo estándar) */}
+          {!modoRuta && (
+            <Aviso tipo={choferesNuevos.length === 0 ? 'ok' : 'info'}>
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                <Users size={15} strokeWidth={1.8} />
+                <b>{reconocidos.length}</b> chofer(es) reconocidos con su tarifa guardada · <b>{choferesNuevos.length}</b> nuevo(s)
+                {choferesNuevos.length === 0 ? '. Se procesa directo con las tarifas guardadas.' : ' que requieren precio.'}
+              </span>
+            </Aviso>
+          )}
 
           {/* Ver/editar choferes existentes (opcional) */}
-          {reconocidos.length > 0 && (
+          {!modoRuta && reconocidos.length > 0 && (
             <Card className="mb-4 p-4">
               <button onClick={() => setVerExistentes((v) => !v)} className="flex w-full items-center gap-2 text-left text-sm font-semibold text-brand-navy dark:text-slate-100">
                 <ChevronDown size={16} strokeWidth={2} className={`transition ${verExistentes ? 'rotate-180' : ''}`} /> Ver/editar choferes existentes ({reconocidos.length})
@@ -588,7 +678,7 @@ export default function CargarFactura() {
             </Card>
           )}
 
-          {choferesNuevos.length > 0 && (
+          {!modoRuta && choferesNuevos.length > 0 && (
             <Card className="mb-4 border-2 border-brand-gold/60 p-4">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Choferes nuevos — asigna sus tarifas</h3>

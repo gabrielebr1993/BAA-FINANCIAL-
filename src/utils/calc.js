@@ -69,6 +69,12 @@ export function claimFeeDe(inv, ciudad) {
 export function metodoDe(inv, ciudad, claim) {
   if (claim?.metodo === 'M1' || claim?.metodo === 'M2' || claim?.metodo === 'M3') return claim.metodo
   const cat = categoriaClaim(claim?.claimType)
+  // Modo POR RUTA: el método sale de la regla de la ruta asignada al chofer.
+  if (inv?.modoConfig === 'ruta') {
+    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[claim?.rutaAsignada]
+    if (rr?.metodos && rr.metodos[cat]) return rr.metodos[cat]
+    return METODO_CLAIM_DEFAULT
+  }
   const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
   if (r?.metodos && r.metodos[cat]) return r.metodos[cat]
   if (inv?.reglaEmpresa?.metodos && inv.reglaEmpresa.metodos[cat]) return inv.reglaEmpresa.metodos[cat]
@@ -79,10 +85,34 @@ export function metodoDe(inv, ciudad, claim) {
 // multa general de la ciudad (claimFee).
 export function montoM1De(inv, ciudad, claim) {
   const cat = categoriaClaim(claim?.claimType)
+  // Modo POR RUTA: precio M1 de la ruta asignada (por categoría → multa de la ruta).
+  if (inv?.modoConfig === 'ruta') {
+    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[claim?.rutaAsignada]
+    if (rr?.montos && numONull(rr.montos[cat]) != null) return Number(rr.montos[cat])
+    if (rr && numONull(rr.claimFee) != null) return Number(rr.claimFee)
+    return CLAIM_FEE
+  }
   const r = inv?.reglasAplicadas && inv.reglasAplicadas[ciudad]
   if (r?.montos && numONull(r.montos[cat]) != null) return Number(r.montos[cat])
   if (inv?.reglaEmpresa?.montos && numONull(inv.reglaEmpresa.montos[cat]) != null) return Number(inv.reglaEmpresa.montos[cat])
   return claimFeeDe(inv, ciudad)
+}
+
+// Tarifas (individual/doble) de un chofer. En modo POR RUTA salen de la regla de
+// la ruta asignada; si no, del perfil del chofer (como siempre).
+export function tarifaDriver(inv, drivers, nombre) {
+  if (inv?.modoConfig === 'ruta') {
+    const ruta = inv?.asignacionRuta && inv.asignacionRuta[nombre]
+    const rr = ruta && inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[ruta]
+    if (rr) {
+      const tarifaInd = Number(rr.tarifaInd) || 0
+      const tarifaDoble = Number(rr.tarifaDoble) || 0
+      return { tarifaInd, tarifaDoble, sinTarifa: !(tarifaInd > 0 || tarifaDoble > 0) }
+    }
+    return { tarifaInd: 0, tarifaDoble: 0, sinTarifa: true } // sin ruta asignada
+  }
+  const d = buscarDriver(drivers, nombre)
+  return { tarifaInd: d ? Number(d.precioIndividual) || 0 : 0, tarifaDoble: d ? Number(d.precioDoble) || 0 : 0, sinTarifa: !d }
 }
 
 // Lo que se le COBRA al chofer por UN claim, según su método:
@@ -299,9 +329,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
   for (const c of claimsValidos(claims)) descuentoGofoPorChofer[c.courier] = (descuentoGofoPorChofer[c.courier] || 0) + Math.abs(Number(c.montoGofo) || 0)
 
   return choferes.map((ch) => {
-    const driver = buscarDriver(drivers, ch.nombre)
-    const tarifaInd = driver ? Number(driver.precioIndividual) || 0 : 0
-    const tarifaDoble = driver ? Number(driver.precioDoble) || 0 : 0
+    const { tarifaInd, tarifaDoble, sinTarifa } = tarifaDriver(inv, drivers, ch.nombre)
     const misActivos = activosDet[ch.nombre] || []
     const claimsActivos = misActivos.length
     const claimsTotales = totalClaimsPorChofer[ch.nombre] || 0
@@ -322,7 +350,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       ingreso: ch.ingreso,
       tarifaInd,
       tarifaDoble,
-      sinTarifa: !driver,
+      sinTarifa,
       claimFee,
       claimsTotales,
       claimsActivos,
@@ -350,9 +378,7 @@ export function pagosPorRuta(inv, claims, drivers, ruta) {
   const descGofo = {}
   for (const c of claimsValidos(claimsRuta)) descGofo[c.courier] = (descGofo[c.courier] || 0) + Math.abs(Number(c.montoGofo) || 0)
   return filas.map((ch) => {
-    const driver = buscarDriver(drivers, ch.nombre)
-    const tarifaInd = driver ? Number(driver.precioIndividual) || 0 : 0
-    const tarifaDoble = driver ? Number(driver.precioDoble) || 0 : 0
+    const { tarifaInd, tarifaDoble, sinTarifa } = tarifaDriver(inv, drivers, ch.nombre)
     const misActivos = activosDet[ch.nombre] || []
     const claimsActivos = misActivos.length
     const claimsTotales = totalPorChofer[ch.nombre] || 0
@@ -371,7 +397,7 @@ export function pagosPorRuta(inv, claims, drivers, ruta) {
       ingreso: ch.ingreso,
       tarifaInd,
       tarifaDoble,
-      sinTarifa: !driver,
+      sinTarifa,
       claimsTotales,
       claimsActivos,
       claimsPerdonados: claimsTotales - claimsActivos,
