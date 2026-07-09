@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArchivoPrecios } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
-import { asociarFallidos, asociarPrecios } from '../utils/fallidos'
+import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -39,8 +39,11 @@ export default function CargarFactura() {
   const [guardandoExist, setGuardandoExist] = useState(false)
   const [fallidosProc, setFallidosProc] = useState(null) // { porNombre, totalFailed, archivoNombre }
   const [procesandoFallidos, setProcesandoFallidos] = useState(false)
-  const [preciosResumen, setPreciosResumen] = useState(null) // { archivoNombre, total, asociados, sinAsociar, cambios }
+  const [preciosResumen, setPreciosResumen] = useState(null) // { archivoNombre, total }
   const [procesandoPrecios, setProcesandoPrecios] = useState(false)
+  const [ratesList, setRatesList] = useState([]) // lista maestra de choferes desde el archivo de rates
+  const [mapaManual, setMapaManual] = useState({}) // { rawNombre: canonicalName | '__nuevo__' }
+  const [verUniones, setVerUniones] = useState(false)
   const inputRef = useRef(null)
   const inputFallidosRef = useRef(null)
   const inputPreciosRef = useRef(null)
@@ -59,6 +62,8 @@ export default function CargarFactura() {
     setAsignacionRuta({})
     setPreciosResumen(null)
     setEditExist({})
+    setRatesList([])
+    setMapaManual({})
   }
 
   // Procesa el REPORTE DE FALLIDOS (segundo archivo). Solo extrae los "Failed
@@ -81,6 +86,53 @@ export default function CargarFactura() {
 
   const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
 
+  // ---- unificación de nombres de chofer (variantes de Gofo → chofer real) ----
+  // Lista CANÓNICA de choferes: los que ya existen (con sus alias guardados) + los
+  // del archivo de rates (lista maestra de 99). Cada nombre crudo de la factura se
+  // resuelve a uno de estos; lo que no se resuelve con seguridad va a "sin asociar".
+  const canonicos = useMemo(() => {
+    const out = []
+    const vistos = new Set()
+    for (const d of drivers) {
+      const norm = normNombre(d.nombre)
+      if (!norm || vistos.has(norm)) continue
+      vistos.add(norm)
+      out.push({ nombre: d.nombre, norm, toks: tokensNombre(d.nombre), aliasNorm: (d.alias || []).map(normNombre) })
+    }
+    for (const p of ratesList) {
+      const norm = normNombre(p.nombre)
+      if (!norm || vistos.has(norm)) continue
+      vistos.add(norm)
+      out.push({ nombre: p.nombre, norm, toks: tokensNombre(p.nombre), aliasNorm: [] })
+    }
+    return out
+  }, [drivers, ratesList])
+
+  // Nombres crudos de "Courier" presentes en los archivos.
+  const rawCouriers = useMemo(
+    () => (procesados.length ? [...new Set(procesados.flatMap((p) => p.detalles.map((d) => d.courier)))].filter(Boolean).sort() : []),
+    [procesados]
+  )
+
+  // Resolución: raw → canónico. mapaManual manda; luego el match automático; si no,
+  // se deja el nombre crudo (chofer nuevo) y se lista en "sin asociar".
+  const unif = useMemo(() => {
+    const map = {}
+    const auto = {} // raw -> canónico (solo los unidos automáticamente, para mostrarlos)
+    const sinAsociar = []
+    for (const raw of rawCouriers) {
+      const man = mapaManual[raw]
+      if (man && man !== '__nuevo__') { map[raw] = man; continue }
+      if (man === '__nuevo__') { map[raw] = raw; continue }
+      const r = resolverNombre(raw, canonicos)
+      if (r) { map[raw] = r.nombre; if (normNombre(r.nombre) !== normNombre(raw)) auto[raw] = r.nombre } else { map[raw] = raw; sinAsociar.push(raw) }
+    }
+    const unidas = rawCouriers.filter((raw) => normNombre(map[raw]) !== normNombre(raw)).length
+    const totalReal = new Set(rawCouriers.map((raw) => normNombre(map[raw]))).size
+    return { map, auto, sinAsociar, unidas, totalReal }
+  }, [rawCouriers, canonicos, mapaManual])
+  const asignarManual = (raw, valor) => setMapaManual((m) => ({ ...m, [raw]: valor }))
+
   // Opciones del selector de ciudad: las de ESTA empresa + personalizadas + detectadas.
   const opcionesCiudad = useMemo(() => {
     const map = new Map()
@@ -95,17 +147,18 @@ export default function CargarFactura() {
   // empresa→ciudad). Con el default (0.5) el resultado es idéntico al actual.
   const combinado = useMemo(() => {
     if (procesados.length === 0) return null
+    const nom = (raw) => unif.map[raw] || raw // nombre canónico (unificado)
     const overridden = procesados.map((p, i) => {
       const code = ciudadPorArchivo[i] || ''
       const { dobleMonto } = resolverReglas(ajustes, code)
       return {
         ...p,
-        detalles: p.detalles.map((d) => ({ ...d, ciudad: code, esDoble: esDoblePorRegla(d.monto, dobleMonto) })),
-        claims: p.claims.map((c) => ({ ...c, ciudad: code })),
+        detalles: p.detalles.map((d) => ({ ...d, courier: nom(d.courier), ciudad: code, esDoble: esDoblePorRegla(d.monto, dobleMonto) })),
+        claims: p.claims.map((c) => ({ ...c, courier: nom(c.courier), ciudad: code })),
       }
     })
     return combinarArchivos(overridden, nombreMap)
-  }, [procesados, ciudadPorArchivo, nombreMap, ajustes])
+  }, [procesados, ciudadPorArchivo, nombreMap, ajustes, unif.map])
 
   // Casos de claim repetido (mismo Waybill No. más de una vez) que requieren
   // que el dueño apruebe o anule ANTES de guardar la factura.
@@ -216,9 +269,10 @@ export default function CargarFactura() {
   })
   const nConPrecio = choferesNuevos.filter((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0).length
 
-  // Carga precios desde un Excel (hoja "Rates": Nombre / Rate / Paquetes Dobles) y
-  // los aplica por match de nombre (corto→largo). Rellena los NUEVOS y marca los
-  // EXISTENTES cuyo precio cambiaría (no pisa nada sin que se vea; todo es editable).
+  // Carga el archivo de RATES (hoja "Rates": Nombre / Rate / Paquetes Dobles). Es
+  // la LISTA MAESTRA de choferes reales (nombres oficiales) y sus precios. Con ella
+  // se unifican los nombres de la factura y se rellenan los precios por nombre
+  // canónico (el nombre del archivo). Todo queda editable a mano.
   const manejarArchivoPrecios = async (fileList) => {
     const f = Array.from(fileList).find((x) => /\.xlsx?$/i.test(x.name))
     if (!f) return setErrores((e) => [...e, 'El archivo de precios debe ser un .xlsx.'])
@@ -227,30 +281,11 @@ export default function CargarFactura() {
       const buf = await f.arrayBuffer()
       const { precios: lista, errores } = procesarArchivoPrecios(buf, f.name)
       if (errores?.length) setErrores((e) => [...e, ...errores.map((m) => `${f.name}: ${m}`)])
-      const asoc = asociarPrecios(lista, nombresFactura)
-      const nuevosSet = new Set(choferesNuevos)
+      setRatesList(lista)
       const preciosNuevos = {}
-      const editNuevo = {}
-      const cambios = []
-      for (const [nombre, v] of Object.entries(asoc.porChofer)) {
-        if (nuevosSet.has(nombre)) {
-          preciosNuevos[nombre] = { ind: String(v.ind ?? ''), doble: String(v.doble ?? '') }
-        } else {
-          const d = buscarDriver(drivers, nombre)
-          const antesInd = Number(d?.precioIndividual) || 0
-          const antesDob = Number(d?.precioDoble) || 0
-          const nInd = Number(v.ind) || 0
-          const nDob = Number(v.doble) || 0
-          if (nInd !== antesInd || nDob !== antesDob) {
-            editNuevo[nombre] = { ind: String(v.ind ?? ''), doble: String(v.doble ?? '') }
-            cambios.push({ nombre, antesInd, antesDob, ind: nInd, doble: nDob })
-          }
-        }
-      }
+      for (const p of lista) preciosNuevos[p.nombre] = { ind: String(p.ind ?? ''), doble: String(p.doble ?? '') }
       setPrecios((prev) => ({ ...prev, ...preciosNuevos }))
-      setEditExist((prev) => ({ ...prev, ...editNuevo }))
-      if (cambios.length) setVerExistentes(true)
-      setPreciosResumen({ archivoNombre: f.name, total: lista.length, asociados: asoc.asociados, sinAsociar: asoc.sinAsociar, cambios })
+      setPreciosResumen({ archivoNombre: f.name, total: lista.length })
     } catch (e) {
       setErrores((prev) => [...prev, e.message])
     } finally {
@@ -321,6 +356,14 @@ export default function CargarFactura() {
     setGuardando(true)
     setErrores([])
     try {
+      // Alias por chofer canónico: los nombres crudos (variantes de Gofo) que se
+      // unieron a un chofer real se guardan como alias para reconocerlos solos la
+      // próxima vez.
+      const aliasPorCanonico = {}
+      for (const raw of rawCouriers) {
+        const canon = unif.map[raw] || raw
+        if (normNombre(canon) !== normNombre(raw)) (aliasPorCanonico[canon] = aliasPorCanonico[canon] || []).push(raw)
+      }
       if (choferesNuevos.length > 0) {
         // Un chofer "nuevo" puede ser inexistente (crear) o existente sin precio
         // (actualizar), para no duplicarlo. Match por nombre normalizado.
@@ -337,6 +380,7 @@ export default function CargarFactura() {
               precioDoble: Number(precios[n].doble) || 0,
               activo: true,
               companyId: activeCompanyId,
+              alias: aliasPorCanonico[n] || [],
               creadoEn: serverTimestamp(),
             })
           }
@@ -347,6 +391,11 @@ export default function CargarFactura() {
           await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: Number(precios[n].ind) || 0, precioDoble: Number(precios[n].doble) || 0, activo: true })
         }
         await reloadDrivers()
+      }
+      // Guardar alias en los choferes YA existentes (los nuevos ya se crearon con alias).
+      for (const [canon, aliases] of Object.entries(aliasPorCanonico)) {
+        const d = buscarDriver(drivers, canon)
+        if (d && aliases.length) await updateDoc(doc(db, 'drivers', d.id), { alias: arrayUnion(...aliases) }).catch(() => {})
       }
 
       const { detalles, claims, ...resumen } = combinado
@@ -825,43 +874,66 @@ export default function CargarFactura() {
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precios de choferes desde archivo (opcional)</h3>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Dos formas de poner precios: escríbelos <b>a mano</b> abajo, o sube un <b>Excel</b> con hoja <b>“Rates”</b> (columnas <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>) y se rellenan solos. Después puedes revisar y ajustar cualquiera antes de procesar.
+                Dos formas de poner precios: escríbelos <b>a mano</b> abajo, o sube el <b>Excel de rates</b> (hoja <b>“Rates”</b>: <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>). Ese archivo es tu <b>lista maestra</b> de choferes reales: se usan sus nombres para <b>unificar</b> las variantes de la factura y se rellenan los precios. Todo queda editable.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <Boton variant="gold" onClick={() => inputPreciosRef.current?.click()} disabled={procesandoPrecios}>
-                  {procesandoPrecios ? <><Spinner /> Leyendo…</> : <><Upload size={16} strokeWidth={1.8} /> Cargar precios desde Excel</>}
+                  {procesandoPrecios ? <><Spinner /> Leyendo…</> : <><Upload size={16} strokeWidth={1.8} /> Cargar rates / precios desde Excel</>}
                 </Boton>
                 <input ref={inputPreciosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarArchivoPrecios(e.target.files)} />
-                {preciosResumen && <span className="text-xs text-slate-500 dark:text-slate-400">{preciosResumen.archivoNombre}</span>}
+                {preciosResumen && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(preciosResumen.total)} choferes en la lista · {preciosResumen.archivoNombre}</span>}
               </div>
+            </Card>
+          )}
 
-              {preciosResumen && (
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <Badge color="green">{num(preciosResumen.asociados)} con precio asignado</Badge>
-                    {preciosResumen.cambios.length > 0 && <Badge color="gold">{num(preciosResumen.cambios.length)} cambian de precio</Badge>}
-                    {preciosResumen.sinAsociar.length > 0 && <Badge color="red">{num(preciosResumen.sinAsociar.length)} sin asociar</Badge>}
-                    <span className="text-xs text-slate-400">de {num(preciosResumen.total)} filas del archivo</span>
+          {/* Unificación de nombres: variantes de Gofo → chofer real */}
+          {!modoRuta && rawCouriers.length > 0 && (
+            <Card className="mb-4 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Unificación de nombres</h3>
+                <Badge color="green">{num(rawCouriers.length)} → {num(unif.totalReal)} choferes</Badge>
+                {unif.unidas > 0 && <Badge color="gold">{num(unif.unidas)} variantes unidas</Badge>}
+                {unif.sinAsociar.length > 0 && <Badge color="red">{num(unif.sinAsociar.length)} sin asociar</Badge>}
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                <b>{num(rawCouriers.length)}</b> nombres en la factura se asociaron a <b>{num(unif.totalReal)}</b> choferes reales ({num(unif.unidas)} variantes unidas). Los paquetes, pagos y claims de cada variante se suman al chofer correcto.
+              </p>
+
+              {unif.sinAsociar.length > 0 && (
+                <div className="mb-3 rounded-lg border border-rose-200 p-3 dark:border-rose-700/50">
+                  <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={15} strokeWidth={1.9} /> Sin asociar — asígnalos a un chofer o déjalos como nuevo</div>
+                  <div className="scroll-thin max-h-72 space-y-1.5 overflow-y-auto">
+                    {unif.sinAsociar.map((raw) => (
+                      <div key={raw} className="flex flex-wrap items-center gap-2">
+                        <span className="min-w-[200px] flex-1 truncate text-sm text-slate-700 dark:text-slate-200">{raw}</span>
+                        <Select className="w-64" value={mapaManual[raw] || ''} onChange={(e) => asignarManual(raw, e.target.value)}>
+                          <option value="">— Revisar / elegir —</option>
+                          <option value="__nuevo__">➕ Es un chofer NUEVO (no unir)</option>
+                          {canonicos.map((c) => (<option key={c.nombre} value={c.nombre}>{c.nombre}</option>))}
+                        </Select>
+                      </div>
+                    ))}
                   </div>
-                  {preciosResumen.cambios.length > 0 && (
-                    <div className="rounded-lg bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
-                      <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300"><AlertTriangle size={14} strokeWidth={1.9} /> Choferes que YA tenían precio y el archivo lo cambia (revísalos en “Ver/editar choferes existentes”):</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {preciosResumen.cambios.slice(0, 20).map((c, i) => (
-                          <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{c.nombre}: {money(c.antesInd)}/{money(c.antesDob)} → <b className="text-amber-700 dark:text-amber-300">{money(c.ind)}/{money(c.doble)}</b></span>
-                        ))}
-                        {preciosResumen.cambios.length > 20 && <span className="text-slate-400">y {preciosResumen.cambios.length - 20} más…</span>}
-                      </div>
-                    </div>
-                  )}
-                  {preciosResumen.sinAsociar.length > 0 && (
-                    <div className="rounded-lg bg-rose-50 p-3 text-xs dark:bg-rose-500/10">
-                      <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={14} strokeWidth={1.9} /> Nombres del archivo sin match con ningún chofer de la factura (ponles el precio a mano):</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {preciosResumen.sinAsociar.map((s, i) => (
-                          <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{s.nombre} <span className="text-slate-400">({money(s.ind)}/{money(s.doble)})</span></span>
-                        ))}
-                      </div>
+                  <p className="mt-2 text-xs text-slate-400">Al asignar a un chofer, ese nombre se guarda como <b>alias</b> y en próximas facturas se unirá solo.</p>
+                </div>
+              )}
+
+              {Object.keys(unif.auto).length > 0 && (
+                <div>
+                  <button onClick={() => setVerUniones((v) => !v)} className="flex items-center gap-2 text-left text-sm font-semibold text-brand-navy dark:text-slate-100">
+                    <ChevronDown size={16} strokeWidth={2} className={`transition ${verUniones ? 'rotate-180' : ''}`} /> Ver uniones automáticas ({Object.keys(unif.auto).length})
+                  </button>
+                  {verUniones && (
+                    <div className="mt-2 scroll-thin max-h-64 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
+                      {Object.entries(unif.auto).map(([raw, canon]) => (
+                        <div key={raw} className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-slate-500 dark:text-slate-400">{raw}</span>
+                          <span className="text-brand-gold">→</span>
+                          <b className="text-brand-navy dark:text-slate-100">{canon}</b>
+                          <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">separar (es otro)</button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
