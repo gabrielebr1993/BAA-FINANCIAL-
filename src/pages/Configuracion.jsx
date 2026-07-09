@@ -9,7 +9,7 @@ import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import MisCiudades from '../components/MisCiudades'
-import ReglasCalculo from '../components/ReglasCalculo'
+import ConfigReglas from '../components/ConfigReglas'
 
 export default function Configuracion() {
   const { activeCompanyId, empresaActiva, reloadAjustes } = useData()
@@ -75,7 +75,7 @@ export default function Configuracion() {
         <MisCiudades />
 
         {/* Reglas de cálculo configurables (empresa + ciudad) */}
-        <ReglasCalculo />
+        <ConfigReglas />
 
         {/* Primeros pasos / onboarding */}
         <Card className="p-5">

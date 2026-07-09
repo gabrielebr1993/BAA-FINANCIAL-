@@ -21,3 +21,16 @@ export async function guardarReglasEmpresa(cid, reglas, reglasCiudad) {
   if (!cid) return
   await setDoc(doc(db, 'settings', cid), { companyId: cid, reglas: reglas || {}, reglasCiudad: reglasCiudad || {}, actualizadoEn: serverTimestamp() }, { merge: true })
 }
+
+// Modo de configuración de reglas: 'estandar' (por ciudad) o 'ruta' (por ruta).
+export async function guardarModoConfig(cid, modoConfig) {
+  if (!cid) return
+  await setDoc(doc(db, 'settings', cid), { companyId: cid, modoConfig: modoConfig || 'estandar', actualizadoEn: serverTimestamp() }, { merge: true })
+}
+
+// Reglas por RUTA (modo 'ruta'): { [rutaCode]: { nombre, tarifaInd, tarifaDoble,
+// dobleMonto, claimFee, metodos:{cat->M}, montos:{cat->$} } }.
+export async function guardarReglasRuta(cid, reglasRuta) {
+  if (!cid) return
+  await setDoc(doc(db, 'settings', cid), { companyId: cid, reglasRuta: reglasRuta || {}, actualizadoEn: serverTimestamp() }, { merge: true })
+}
