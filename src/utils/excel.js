@@ -344,6 +344,45 @@ export function procesarReporteFallidos(arrayBuffer, nombreArchivo) {
   return { archivoNombre: nombreArchivo, porNombre, totalFailed, filas: rows.length, errores }
 }
 
+// ---- archivo de PRECIOS de choferes (hoja "Rates") ---------------------------
+//
+// Excel con hoja "Rates" y columnas: "Nombre", "Rate" (precio individual) y
+// "Paquetes Dobles" (precio doble). Devuelve [{ nombre, ind, doble }] por chofer.
+// El match con los choferes de la factura se hace aparte (utils/fallidos.js).
+export function procesarArchivoPrecios(arrayBuffer, nombreArchivo) {
+  const errores = []
+  let wb
+  try {
+    wb = XLSX.read(arrayBuffer, { type: 'array' })
+  } catch (e) {
+    throw new Error(`No se pudo leer "${nombreArchivo}": ${e.message}`)
+  }
+  let hoja = wb.SheetNames.find((n) => norm(n) === 'rates')
+  if (!hoja) hoja = wb.SheetNames.find((n) => norm(n).includes('rate'))
+  const sheet = hoja ? wb.Sheets[hoja] : wb.Sheets[wb.SheetNames[0]]
+  if (!sheet) {
+    errores.push('El archivo de precios no tiene hojas legibles.')
+    return { archivoNombre: nombreArchivo, precios: [], errores }
+  }
+  const rows = leerObjetos(
+    sheet,
+    {
+      nombre: { cands: ['nombre', 'name', 'courier', 'couriername', 'chofer'], fallback: -1 },
+      ind: { cands: ['rate', 'preciopaqueteindividual', 'precioindividual', 'individual', 'precio'], fallback: -1 },
+      doble: { cands: ['paquetesdobles', 'paquetedoble', 'ratedoble', 'preciodoble', 'doble', 'dobles'], fallback: -1 },
+    },
+    ['nombre', 'rate']
+  )
+  const precios = []
+  for (const r of rows) {
+    const nombre = String(r.nombre == null ? '' : r.nombre).trim()
+    if (!nombre) continue
+    precios.push({ nombre, ind: toNum(r.ind), doble: toNum(r.doble) })
+  }
+  if (!precios.length) errores.push('No se encontraron filas con Nombre/Rate en la hoja "Rates".')
+  return { archivoNombre: nombreArchivo, precios, errores }
+}
+
 // ---- construcción del resumen agregado ---------------------------------------
 
 // Resuelve el nombre de una ciudad usando primero un mapa personalizado

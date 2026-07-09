@@ -3,13 +3,13 @@ import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc } from 
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { procesarArchivo, combinarArchivos, procesarReporteFallidos } from '../utils/excel'
+import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArchivoPrecios } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
-import { asociarFallidos } from '../utils/fallidos'
+import { asociarFallidos, asociarPrecios } from '../utils/fallidos'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning, FileSpreadsheet } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Verificacion from '../components/Verificacion'
 
@@ -39,8 +39,11 @@ export default function CargarFactura() {
   const [guardandoExist, setGuardandoExist] = useState(false)
   const [fallidosProc, setFallidosProc] = useState(null) // { porNombre, totalFailed, archivoNombre }
   const [procesandoFallidos, setProcesandoFallidos] = useState(false)
+  const [preciosResumen, setPreciosResumen] = useState(null) // { archivoNombre, total, asociados, sinAsociar, cambios }
+  const [procesandoPrecios, setProcesandoPrecios] = useState(false)
   const inputRef = useRef(null)
   const inputFallidosRef = useRef(null)
+  const inputPreciosRef = useRef(null)
 
   const reset = () => {
     setProcesados([])
@@ -54,6 +57,8 @@ export default function CargarFactura() {
     setBulk({ ind: '', doble: '' })
     setDecisiones({})
     setAsignacionRuta({})
+    setPreciosResumen(null)
+    setEditExist({})
   }
 
   // Procesa el REPORTE DE FALLIDOS (segundo archivo). Solo extrae los "Failed
@@ -210,6 +215,48 @@ export default function CargarFactura() {
     return n.toLowerCase().includes(q) || ind.includes(q) || dob.includes(q)
   })
   const nConPrecio = choferesNuevos.filter((n) => Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0).length
+
+  // Carga precios desde un Excel (hoja "Rates": Nombre / Rate / Paquetes Dobles) y
+  // los aplica por match de nombre (corto→largo). Rellena los NUEVOS y marca los
+  // EXISTENTES cuyo precio cambiaría (no pisa nada sin que se vea; todo es editable).
+  const manejarArchivoPrecios = async (fileList) => {
+    const f = Array.from(fileList).find((x) => /\.xlsx?$/i.test(x.name))
+    if (!f) return setErrores((e) => [...e, 'El archivo de precios debe ser un .xlsx.'])
+    setProcesandoPrecios(true)
+    try {
+      const buf = await f.arrayBuffer()
+      const { precios: lista, errores } = procesarArchivoPrecios(buf, f.name)
+      if (errores?.length) setErrores((e) => [...e, ...errores.map((m) => `${f.name}: ${m}`)])
+      const asoc = asociarPrecios(lista, nombresFactura)
+      const nuevosSet = new Set(choferesNuevos)
+      const preciosNuevos = {}
+      const editNuevo = {}
+      const cambios = []
+      for (const [nombre, v] of Object.entries(asoc.porChofer)) {
+        if (nuevosSet.has(nombre)) {
+          preciosNuevos[nombre] = { ind: String(v.ind ?? ''), doble: String(v.doble ?? '') }
+        } else {
+          const d = buscarDriver(drivers, nombre)
+          const antesInd = Number(d?.precioIndividual) || 0
+          const antesDob = Number(d?.precioDoble) || 0
+          const nInd = Number(v.ind) || 0
+          const nDob = Number(v.doble) || 0
+          if (nInd !== antesInd || nDob !== antesDob) {
+            editNuevo[nombre] = { ind: String(v.ind ?? ''), doble: String(v.doble ?? '') }
+            cambios.push({ nombre, antesInd, antesDob, ind: nInd, doble: nDob })
+          }
+        }
+      }
+      setPrecios((prev) => ({ ...prev, ...preciosNuevos }))
+      setEditExist((prev) => ({ ...prev, ...editNuevo }))
+      if (cambios.length) setVerExistentes(true)
+      setPreciosResumen({ archivoNombre: f.name, total: lista.length, asociados: asoc.asociados, sinAsociar: asoc.sinAsociar, cambios })
+    } catch (e) {
+      setErrores((prev) => [...prev, e.message])
+    } finally {
+      setProcesandoPrecios(false)
+    }
+  }
 
   // Editar tarifas de choferes ya reconocidos (opcional).
   const valorExist = (n, campo) => {
@@ -768,6 +815,58 @@ export default function CargarFactura() {
                 {choferesNuevos.length === 0 ? '. Se procesa directo con las tarifas guardadas.' : ' que requieren precio.'}
               </span>
             </Aviso>
+          )}
+
+          {/* Precios desde archivo (opcional; convive con el manual) */}
+          {!modoRuta && (
+            <Card className="mb-4 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <FileSpreadsheet size={18} strokeWidth={1.8} className="text-brand-gold" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precios de choferes desde archivo (opcional)</h3>
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Dos formas de poner precios: escríbelos <b>a mano</b> abajo, o sube un <b>Excel</b> con hoja <b>“Rates”</b> (columnas <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>) y se rellenan solos. Después puedes revisar y ajustar cualquiera antes de procesar.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Boton variant="gold" onClick={() => inputPreciosRef.current?.click()} disabled={procesandoPrecios}>
+                  {procesandoPrecios ? <><Spinner /> Leyendo…</> : <><Upload size={16} strokeWidth={1.8} /> Cargar precios desde Excel</>}
+                </Boton>
+                <input ref={inputPreciosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarArchivoPrecios(e.target.files)} />
+                {preciosResumen && <span className="text-xs text-slate-500 dark:text-slate-400">{preciosResumen.archivoNombre}</span>}
+              </div>
+
+              {preciosResumen && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge color="green">{num(preciosResumen.asociados)} con precio asignado</Badge>
+                    {preciosResumen.cambios.length > 0 && <Badge color="gold">{num(preciosResumen.cambios.length)} cambian de precio</Badge>}
+                    {preciosResumen.sinAsociar.length > 0 && <Badge color="red">{num(preciosResumen.sinAsociar.length)} sin asociar</Badge>}
+                    <span className="text-xs text-slate-400">de {num(preciosResumen.total)} filas del archivo</span>
+                  </div>
+                  {preciosResumen.cambios.length > 0 && (
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
+                      <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300"><AlertTriangle size={14} strokeWidth={1.9} /> Choferes que YA tenían precio y el archivo lo cambia (revísalos en “Ver/editar choferes existentes”):</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {preciosResumen.cambios.slice(0, 20).map((c, i) => (
+                          <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{c.nombre}: {money(c.antesInd)}/{money(c.antesDob)} → <b className="text-amber-700 dark:text-amber-300">{money(c.ind)}/{money(c.doble)}</b></span>
+                        ))}
+                        {preciosResumen.cambios.length > 20 && <span className="text-slate-400">y {preciosResumen.cambios.length - 20} más…</span>}
+                      </div>
+                    </div>
+                  )}
+                  {preciosResumen.sinAsociar.length > 0 && (
+                    <div className="rounded-lg bg-rose-50 p-3 text-xs dark:bg-rose-500/10">
+                      <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={14} strokeWidth={1.9} /> Nombres del archivo sin match con ningún chofer de la factura (ponles el precio a mano):</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {preciosResumen.sinAsociar.map((s, i) => (
+                          <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{s.nombre} <span className="text-slate-400">({money(s.ind)}/{money(s.doble)})</span></span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
           )}
 
           {/* Ver/editar choferes existentes (opcional) */}

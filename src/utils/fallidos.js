@@ -55,3 +55,42 @@ export function asociarFallidos(fallidosPorNombre, choferesNombres) {
   sinAsociar.sort((a, b) => b.n - a.n)
   return { porChofer, sinAsociar, asociados, totalAsociado }
 }
+
+// Asocia una lista de PRECIOS por nombre CORTO (ej. "Alejandro Mejía") a los
+// choferes de la factura, cuyos nombres son LARGOS (ej. "Alejandro Rafael Mejía
+// Villanueva"). Reglas (conservadoras: ante duda, se deja para revisión manual):
+//   1) match exacto normalizado
+//   2) todos los tokens del nombre corto están en el largo (subconjunto) → fuerte
+//   3) ≥2 tokens en común (nombre+apellido); si empatan dos choferes, se descarta
+// `preciosArr` = [{ nombre, ind, doble }]. Devuelve:
+//   { porChofer: { nombreChofer: {ind, doble, origen} }, sinAsociar:[...], asociados }
+export function asociarPrecios(preciosArr, choferesNombres) {
+  const choferes = (choferesNombres || []).map((nombre) => ({ nombre, norm: normNombre(nombre), toks: tokensNombre(nombre) }))
+  const porNorm = new Map()
+  for (const c of choferes) if (c.norm && !porNorm.has(c.norm)) porNorm.set(c.norm, c.nombre)
+
+  const porChofer = {}
+  const sinAsociar = []
+  for (const p of preciosArr || []) {
+    const nrm = normNombre(p.nombre)
+    let target = porNorm.get(nrm) || null
+    if (!target) {
+      const rt = tokensNombre(p.nombre)
+      let best = null
+      let bestScore = 0
+      let empate = false
+      for (const c of choferes) {
+        const shared = rt.filter((t) => c.toks.includes(t)).length
+        const subconjunto = rt.length > 0 && rt.every((t) => c.toks.includes(t))
+        const bordes = rt.length && c.toks.length && rt[0] === c.toks[0] && rt[rt.length - 1] === c.toks[c.toks.length - 1]
+        const score = shared + (subconjunto ? 1 : 0) + (bordes ? 1 : 0)
+        if (score > bestScore) { bestScore = score; best = c.nombre; empate = false }
+        else if (score === bestScore && score > 0 && best && c.nombre !== best) empate = true
+      }
+      if (bestScore >= 2 && !empate) target = best
+    }
+    if (target) porChofer[target] = { ind: p.ind, doble: p.doble }
+    else sinAsociar.push(p)
+  }
+  return { porChofer, sinAsociar, asociados: Object.keys(porChofer).length }
+}
