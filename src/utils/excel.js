@@ -357,29 +357,34 @@ export function procesarArchivoPrecios(arrayBuffer, nombreArchivo) {
   } catch (e) {
     throw new Error(`No se pudo leer "${nombreArchivo}": ${e.message}`)
   }
-  let hoja = wb.SheetNames.find((n) => norm(n) === 'rates')
-  if (!hoja) hoja = wb.SheetNames.find((n) => norm(n).includes('rate'))
-  const sheet = hoja ? wb.Sheets[hoja] : wb.Sheets[wb.SheetNames[0]]
-  if (!sheet) {
-    errores.push('El archivo de precios no tiene hojas legibles.')
-    return { archivoNombre: nombreArchivo, precios: [], errores }
-  }
-  const rows = leerObjetos(
-    sheet,
-    {
-      nombre: { cands: ['nombre', 'name', 'courier', 'couriername', 'chofer'], fallback: -1 },
-      ind: { cands: ['rate', 'preciopaqueteindividual', 'precioindividual', 'individual', 'precio'], fallback: -1 },
-      doble: { cands: ['paquetesdobles', 'paquetedoble', 'ratedoble', 'preciodoble', 'doble', 'dobles'], fallback: -1 },
-    },
-    ['nombre', 'rate']
-  )
+  // Se recorren TODAS las hojas (la lista maestra puede venir repartida en varias,
+  // ej. "$15 por hora", "$14 por hora"…). De cada hoja se toma la columna de nombre
+  // y, si existen, "Rate" (individual) y "Paquetes Dobles" (doble). El precio es
+  // OPCIONAL: lo importante es el nombre para unificar. Se dedup por nombre.
   const precios = []
-  for (const r of rows) {
-    const nombre = String(r.nombre == null ? '' : r.nombre).trim()
-    if (!nombre) continue
-    precios.push({ nombre, ind: toNum(r.ind), doble: toNum(r.doble) })
+  const vistos = new Set()
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName]
+    if (!sheet) continue
+    const rows = leerObjetos(
+      sheet,
+      {
+        nombre: { cands: ['nombre', 'name', 'courier', 'couriername', 'chofer', 'driver'], fallback: -1 },
+        ind: { cands: ['rate', 'preciopaqueteindividual', 'precioindividual', 'individual'], fallback: -1 },
+        doble: { cands: ['paquetesdobles', 'paquetedoble', 'ratedoble', 'preciodoble', 'dobles'], fallback: -1 },
+      },
+      ['nombre', 'name', 'courier', 'chofer']
+    )
+    for (const r of rows) {
+      const nombre = String(r.nombre == null ? '' : r.nombre).trim()
+      if (!nombre) continue
+      const key = nombre.toLowerCase()
+      if (vistos.has(key)) continue
+      vistos.add(key)
+      precios.push({ nombre, ind: toNum(r.ind), doble: toNum(r.doble) })
+    }
   }
-  if (!precios.length) errores.push('No se encontraron filas con Nombre/Rate en la hoja "Rates".')
+  if (!precios.length) errores.push('No se encontró una columna "Nombre" con choferes en el archivo.')
   return { archivoNombre: nombreArchivo, precios, errores }
 }
 

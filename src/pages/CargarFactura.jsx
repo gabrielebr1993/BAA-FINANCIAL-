@@ -61,10 +61,10 @@ export default function CargarFactura() {
     setBulk({ ind: '', doble: '' })
     setDecisiones({})
     setAsignacionRuta({})
-    setPreciosResumen(null)
     setEditExist({})
-    setRatesList([])
     setMapaManual({})
+    // NO se limpia ratesList/preciosResumen aquí: la lista maestra de choferes se
+    // conserva aunque cambies el archivo de factura. Se limpia al Descartar/guardar.
   }
 
   // Procesa el REPORTE DE FALLIDOS (segundo archivo). Solo extrae los "Failed
@@ -569,6 +569,8 @@ export default function CargarFactura() {
       setGuardado(true)
       reset()
       setFallidosProc(null)
+      setRatesList([])
+      setPreciosResumen(null)
     } catch (e) {
       setErrores(['Error al guardar: ' + e.message])
     } finally {
@@ -1082,7 +1084,7 @@ export default function CargarFactura() {
               <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" className="ml-auto">
                 {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
               </Boton>
-              <Boton onClick={() => { reset(); setFallidosProc(null) }} variant="ghost">Descartar</Boton>
+              <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">Descartar</Boton>
             </div>
           </Card>
         </>
