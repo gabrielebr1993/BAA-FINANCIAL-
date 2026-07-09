@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wallet, Package, Route, Clock, UserX } from 'lucide-react'
+import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wallet, Package, Route, Clock, UserX, FileSpreadsheet, FileText } from 'lucide-react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { calcularPagos, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, costoManagers, etiquetaTipoClaim } from '../utils/calc'
+import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, costoManagers, etiquetaTipoClaim } from '../utils/calc'
 import { money, num } from '../utils/format'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { BarCard, DonutCard, Widget } from '../components/charts'
 import KpiPro from '../components/KpiPro'
@@ -43,6 +44,12 @@ export default function Performance() {
     () => calcularPagos(selectedInvoice, claims, drivers, selectedCity).map((p) => ({ ...p, paquetes: p.individuales + p.dobles })),
     [selectedInvoice, claims, drivers, selectedCity]
   )
+  // Nómina EXACTA por la ruta elegida (solo facturas nuevas que guardan el
+  // desglose chofer×ruta). Si hay, la tabla muestra SOLO los choferes de esa ruta
+  // con sus números de esa ruta; si no, cae a la aproximación por ciudad.
+  const pagosRuta = useMemo(() => (fRuta ? pagosPorRuta(selectedInvoice, claims, drivers, fRuta) : []), [fRuta, selectedInvoice, claims, drivers])
+  const usaRutaExacta = !!fRuta && pagosRuta.length > 0
+  const basePagos = usaRutaExacta ? pagosRuta : pagos
   const rr = useMemo(() => rankingsRutas(selectedInvoice, drivers, selectedCity), [selectedInvoice, drivers, selectedCity])
   const claimsCiudad = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
 
@@ -65,10 +72,11 @@ export default function Performance() {
   // Ciudad de la ruta seleccionada (el código de ruta empieza con el de la ciudad:
   // "DFW01-003" → "DFW01"). Sirve para acotar la tabla de choferes por esa ciudad.
   const ciudadDeRuta = fRuta ? fRuta.split('-')[0].trim().toUpperCase() : ''
-  const ordenados = [...pagos]
+  const ordenados = [...basePagos]
     .filter((p) => {
       if (fBusca && !p.nombre.toLowerCase().includes(fBusca.trim().toLowerCase())) return false
-      if (fRuta && (p.ciudad || '').toUpperCase() !== ciudadDeRuta) return false
+      // Con datos exactos de ruta ya viene filtrado; si no, acota por ciudad de la ruta.
+      if (fRuta && !usaRutaExacta && (p.ciudad || '').toUpperCase() !== ciudadDeRuta) return false
       if (fMin !== '' && p.claimsTotales < Number(fMin)) return false
       if (fMax !== '' && p.claimsTotales > Number(fMax)) return false
       if (couriersConTipo && !couriersConTipo.has(p.nombre)) return false
@@ -103,6 +111,22 @@ export default function Performance() {
     { key: 'descontadoGofo', label: 'Descontado Gofo' },
     { key: 'gananciaClaims', label: 'Ganancia claims' },
   ]
+
+  // Exportaciones de la tabla de choferes (respetan los filtros: ruta, ciudad, etc.).
+  const nombreExp = `performance_${fRuta || (selectedCity !== 'todas' ? selectedCity : '') || selectedInvoice?.semana || 'periodo'}`.replace(/[^\w-]+/g, '_')
+  const tituloExp = `Performance${fRuta ? ` · Ruta ${fRuta}` : ''}`
+  const exportarE = () =>
+    exportarExcel(nombreExp, [{ nombre: 'Choferes', rows: ordenados.map((p) => ({
+      Chofer: p.nombre, Ciudad: p.nombreCiudad, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles,
+      Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales,
+      'Desc. al chofer': Math.round(p.descuentoClaims), 'Descontado Gofo': Math.round(p.descontadoGofo), 'Ganancia claims': Math.round(p.gananciaClaims),
+    })) }])
+  const exportarP = () =>
+    exportarPDF(nombreExp, tituloExp, selectedInvoice?.semana || '', [{
+      titulo: `Choferes (${ordenados.length})`,
+      head: ['Chofer', 'Ciudad', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims', 'Desc. chofer', 'Desc. Gofo', 'Gan. claims'],
+      body: ordenados.map((p) => [p.nombre, p.nombreCiudad, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales), money(p.descuentoClaims), money(p.descontadoGofo), money(p.gananciaClaims)]),
+    }])
 
   const conClaims = [...pagos].filter((p) => p.claimsTotales > 0).sort((a, b) => b.claimsTotales - a.claimsTotales)
   const ceroClaims = pagos.filter((p) => p.claimsTotales === 0)
@@ -338,14 +362,23 @@ export default function Performance() {
           )}
 
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">
-              {driverSel ? `Detalle de ${driverSel}` : 'Tabla completa de choferes'}
-              {!driverSel && (
-                <span className="ml-2 text-xs font-normal text-slate-400">
-                  {hayFiltros ? `${ordenados.length} de ${pagos.length} choferes` : `${ordenados.length} choferes`} · clic en encabezado para ordenar
-                </span>
-              )}
-            </h3>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">
+                {driverSel ? `Detalle de ${driverSel}` : usaRutaExacta ? `Choferes de la ruta ${fRuta}` : 'Tabla completa de choferes'}
+                {!driverSel && (
+                  <span className="ml-2 text-xs font-normal text-slate-400">
+                    {hayFiltros ? `${ordenados.length} de ${pagos.length} choferes` : `${ordenados.length} choferes`} · clic en encabezado para ordenar
+                  </span>
+                )}
+              </h3>
+              <div className="ml-auto flex gap-2">
+                <Boton variant="ghost" onClick={exportarE} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
+                <Boton variant="gold" onClick={exportarP} className="px-3 py-1.5 text-xs"><FileText size={15} strokeWidth={1.8} /> PDF</Boton>
+              </div>
+            </div>
+            {usaRutaExacta && (
+              <Aviso tipo="info">Mostrando los <b>datos exactos de la ruta {fRuta}</b> (paquetes, ingreso y claims de esa ruta). Requiere factura cargada con el desglose por ruta.</Aviso>
+            )}
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[1120px] border-collapse text-[13.5px]">
                 <thead>

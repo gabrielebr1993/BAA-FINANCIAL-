@@ -317,6 +317,54 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
   })
 }
 
+// Nómina EXACTA por una ruta puntual, usando el desglose por (chofer, ruta) que
+// guarda cada factura nueva (inv.resumenChoferRuta) y los claims de esa ruta.
+// Devuelve las mismas filas que calcularPagos, pero acotadas a la ruta.
+// Si la factura no trae el desglose (histórico), devuelve [] (el llamador cae
+// a la aproximación por ciudad).
+export function pagosPorRuta(inv, claims, drivers, ruta) {
+  const filas = (inv?.resumenChoferRuta || []).filter((r) => r.ruta === ruta)
+  if (!filas.length) return []
+  const claimsRuta = (claims || []).filter((c) => (c.ruta || '') === ruta)
+  const activosDet = claimsActivosDetallePorChofer(claimsRuta)
+  const totalPorChofer = claimsValidosPorChofer(claimsRuta)
+  const descGofo = {}
+  for (const c of claimsValidos(claimsRuta)) descGofo[c.courier] = (descGofo[c.courier] || 0) + Math.abs(Number(c.montoGofo) || 0)
+  return filas.map((ch) => {
+    const driver = buscarDriver(drivers, ch.nombre)
+    const tarifaInd = driver ? Number(driver.precioIndividual) || 0 : 0
+    const tarifaDoble = driver ? Number(driver.precioDoble) || 0 : 0
+    const misActivos = activosDet[ch.nombre] || []
+    const claimsActivos = misActivos.length
+    const claimsTotales = totalPorChofer[ch.nombre] || 0
+    const descuentoClaims = misActivos.reduce((a, cl) => a + feeDeClaim(inv, ch.ciudad, cl), 0)
+    const descontadoGofo = descGofo[ch.nombre] || 0
+    const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
+    const totalPagar = pagoBase - descuentoClaims
+    return {
+      nombre: ch.nombre,
+      ciudad: ch.ciudad,
+      nombreCiudad: nombreCiudad(ch.ciudad),
+      ruta: ch.ruta,
+      individuales: ch.individuales,
+      dobles: ch.dobles,
+      paquetes: ch.individuales + ch.dobles,
+      ingreso: ch.ingreso,
+      tarifaInd,
+      tarifaDoble,
+      sinTarifa: !driver,
+      claimsTotales,
+      claimsActivos,
+      claimsPerdonados: claimsTotales - claimsActivos,
+      descuentoClaims,
+      descontadoGofo,
+      gananciaClaims: descuentoClaims - descontadoGofo,
+      totalPagar,
+      ganancia: ch.ingreso - totalPagar,
+    }
+  })
+}
+
 // Estimación rápida de totales de una factura (sin depender de la colección de
 // claims perdonados). Trata todos los claims como activos. Útil para comparar
 // tendencia semana-a-semana en los KPIs.

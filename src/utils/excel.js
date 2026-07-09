@@ -313,6 +313,7 @@ function nombreDe(code, nombreMap) {
 // construye todo el resumen que se guarda/usa en la app.
 export function construirResumen(detalles, claims, nombreMap) {
   const porChofer = {}
+  const porChoferRuta = {} // desglose exacto por (chofer, ruta)
   const porRuta = {}
   const porCiudad = {}
 
@@ -355,6 +356,13 @@ export function construirResumen(detalles, claims, nombreMap) {
     porChofer[ck].ingreso += d.monto
     if (d.esDoble) porChofer[ck].dobles += 1
     else porChofer[ck].individuales += 1
+
+    // por chofer + ruta (desglose exacto para filtrar por ruta puntual)
+    const crk = `${d.courier}||${d.ruta}`
+    if (!porChoferRuta[crk]) porChoferRuta[crk] = { nombre: d.courier, ruta: d.ruta, ciudad: d.ciudad, individuales: 0, dobles: 0, ingreso: 0 }
+    porChoferRuta[crk].ingreso += d.monto
+    if (d.esDoble) porChoferRuta[crk].dobles += 1
+    else porChoferRuta[crk].individuales += 1
 
     // por ruta
     if (!porRuta[d.ruta]) porRuta[d.ruta] = { ruta: d.ruta, ciudad: d.ciudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, pesoTotalLb: 0 }
@@ -436,6 +444,7 @@ export function construirResumen(detalles, claims, nombreMap) {
     totalClaims,
     totalDescuentoGofo,
     resumenChoferes,
+    resumenChoferRuta: Object.values(porChoferRuta),
     resumenRutas,
     resumenCiudades,
   }

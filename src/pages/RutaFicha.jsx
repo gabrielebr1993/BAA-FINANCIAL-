@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Route as RouteIcon, Package, DollarSign, TrendingUp, Users, AlertTriangle, Scale } from 'lucide-react'
+import { ArrowLeft, Route as RouteIcon, Package, DollarSign, TrendingUp, Users, AlertTriangle, Scale, FileSpreadsheet, FileText } from 'lucide-react'
 import { useData } from '../DataContext'
-import { rutasConGanancia, claimsValidos, etiquetaTipoClaim, TODAS } from '../utils/calc'
+import { rutasConGanancia, pagosPorRuta, claimsValidos, etiquetaTipoClaim, TODAS } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, PageTitle, Tabla, Badge, Aviso, Cargando, EstadoVacio } from '../components/ui'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
+import { Card, KPI, PageTitle, Boton, Tabla, Badge, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import { TrendCard } from '../components/charts'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
@@ -58,11 +59,49 @@ export default function RutaFicha() {
     return Object.entries(m).map(([nombre, n]) => ({ nombre, claims: n })).sort((a, b) => b.claims - a.claims)
   }, [claimsRuta])
 
+  // Choferes de la ruta con números EXACTOS (opción B: desglose chofer×ruta que
+  // guardan las facturas nuevas). Vacío si la factura no lo trae (histórico).
+  const choferesRuta = useMemo(() => pagosPorRuta(inv, claims, drivers, decoded).sort((a, b) => b.ingreso - a.ingreso), [inv, claims, drivers, decoded])
+
+  const nombreExp = `ruta_${decoded}`.replace(/[^\w-]+/g, '_')
+  const exportarE = () =>
+    exportarExcel(nombreExp, [
+      ...(rutaActual ? [{ nombre: 'Resumen', rows: [
+        { Métrica: 'Ruta', Valor: decoded },
+        { Métrica: 'Paquetes', Valor: rutaActual.paquetes },
+        { Métrica: 'Ingreso', Valor: Math.round(rutaActual.ingreso) },
+        { Métrica: '$/paquete', Valor: rutaActual.precioPorPaquete },
+        { Métrica: 'Costo choferes', Valor: Math.round(rutaActual.costoChoferes) },
+        { Métrica: 'Ganancia', Valor: Math.round(rutaActual.ganancia) },
+        { Métrica: 'Claims', Valor: rutaActual.numClaims || 0 },
+      ] }] : []),
+      ...(choferesRuta.length ? [{ nombre: 'Choferes', rows: choferesRuta.map((p) => ({ Chofer: p.nombre, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles, Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales })) }] : []),
+      ...(historial.length ? [{ nombre: 'Historial', rows: historial.map((h) => ({ Semana: h.semana, Paquetes: h.paquetes, Ingreso: Math.round(h.ingreso), Ganancia: Math.round(h.ganancia), Claims: h.claims })) }] : []),
+    ])
+  const exportarP = () =>
+    exportarPDF(nombreExp, `Ruta ${decoded}`, inv?.semana || '', [
+      ...(rutaActual ? [{ titulo: 'Resumen de la ruta', head: ['Métrica', 'Valor'], body: [
+        ['Paquetes', num(rutaActual.paquetes)], ['Ingreso (Gofo)', money(rutaActual.ingreso)], ['$/paquete', money(rutaActual.precioPorPaquete)],
+        ['Costo choferes', money(rutaActual.costoChoferes)], ['Ganancia', money(rutaActual.ganancia)], ['Claims', num(rutaActual.numClaims || 0)],
+      ] }] : []),
+      ...(choferesRuta.length ? [{ titulo: `Choferes de la ruta (${choferesRuta.length})`, head: ['Chofer', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims'], body: choferesRuta.map((p) => [p.nombre, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales)]) }] : []),
+    ])
+
   const hayDatos = rutaActual || historial.length > 0
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>
+      <PageTitle right={
+        <>
+          <RangeSelector /><CitySelector />
+          {hayDatos && !cargando && (
+            <>
+              <Boton variant="ghost" onClick={exportarE} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
+              <Boton variant="gold" onClick={exportarP} className="px-3 py-1.5 text-xs"><FileText size={15} strokeWidth={1.8} /> PDF</Boton>
+            </>
+          )}
+        </>
+      }>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
           <ArrowLeft size={16} strokeWidth={2} /> Volver
         </button>
@@ -131,18 +170,45 @@ export default function RutaFicha() {
 
           {/* 3. Choferes de la ruta */}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Choferes con actividad en esta ruta</h3>
-            <p className="mb-3 text-xs text-slate-400">Derivado de los claims registrados en la ruta (la factura no desglosa los paquetes por chofer×ruta). Clic para ir a su perfil.</p>
-            {choferes.length === 0 ? (
-              <div className="text-sm text-slate-400">Sin choferes con claims en esta ruta en el periodo.</div>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Choferes de esta ruta{choferesRuta.length ? ` (${choferesRuta.length})` : ''}</h3>
+            {choferesRuta.length > 0 ? (
+              <>
+                <p className="mb-3 text-xs text-slate-400">Números exactos de esta ruta (paquetes, ingreso, pago y claims). Clic en un chofer para ver su perfil.</p>
+                <Tabla
+                  columns={[
+                    { key: 'nombre', label: 'Chofer' },
+                    { key: 'paquetes', label: 'Paquetes', align: 'right' },
+                    { key: 'individuales', label: 'Ind.', align: 'right' },
+                    { key: 'dobles', label: 'Dobles', align: 'right' },
+                    { key: 'ingreso', label: 'Ingreso', align: 'right' },
+                    { key: 'totalPagar', label: 'Pago', align: 'right' },
+                    { key: 'ganancia', label: 'Ganancia', align: 'right' },
+                    { key: 'claimsTotales', label: 'Claims', align: 'right' },
+                  ]}
+                  rows={choferesRuta.map((p) => ({ ...p, _key: p.nombre }))}
+                  onRowClick={(row) => navigate(`/choferes/${encodeURIComponent(row.nombre)}`)}
+                  renderCell={(row, key) => {
+                    if (['ingreso', 'totalPagar', 'ganancia'].includes(key)) return money(row[key])
+                    if (['paquetes', 'individuales', 'dobles', 'claimsTotales'].includes(key)) return num(row[key])
+                    return row[key]
+                  }}
+                />
+              </>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {choferes.map((c) => (
-                  <Link key={c.nombre} to={`/choferes/${encodeURIComponent(c.nombre)}`} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
-                    <Users size={14} strokeWidth={1.8} className="text-slate-400" /> {c.nombre} <Badge color="red">{c.claims} claim(s)</Badge>
-                  </Link>
-                ))}
-              </div>
+              <>
+                <p className="mb-3 text-xs text-slate-400">Esta factura no guardó el desglose por chofer×ruta (histórico). Se muestran los choferes con claims en la ruta. Las facturas nuevas ya traen el detalle completo.</p>
+                {choferes.length === 0 ? (
+                  <div className="text-sm text-slate-400">Sin choferes con claims en esta ruta en el periodo.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {choferes.map((c) => (
+                      <Link key={c.nombre} to={`/choferes/${encodeURIComponent(c.nombre)}`} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                        <Users size={14} strokeWidth={1.8} className="text-slate-400" /> {c.nombre} <Badge color="red">{c.claims} claim(s)</Badge>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </Card>
 
