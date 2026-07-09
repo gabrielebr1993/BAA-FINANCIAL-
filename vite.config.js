@@ -28,7 +28,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/__/],
+        // El nuevo SW toma control de inmediato y limpia cachés viejas: así nadie
+        // se queda pegado en un bundle antiguo (causa de "borrado lento" y de
+        // llamadas fantasma a /api/crear-usuario que ya no existen en el código).
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // Nunca servir /api/* desde el SW (endpoints serverless siempre a la red).
+        navigateFallbackDenylist: [/^\/__/, /^\/api\//],
       },
     }),
   ],
