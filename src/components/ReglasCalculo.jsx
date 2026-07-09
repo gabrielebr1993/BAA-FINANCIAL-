@@ -76,21 +76,20 @@ export default function ReglasCalculo() {
         {' '}<b>Rate</b> = le cobras el monto que tú pones (ganancia = rate − Gofo) · <b>Lo que Gofo cobra</b> = al chofer se le descuenta lo mismo que Gofo (ganancia $0) · <b>Perdón</b> = no cobras, tú lo asumes (absorbes lo de Gofo).
       </p>
       <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer. La <b>tarifa (rate) de pago</b> va por chofer en <b>Choferes → Rate individual / Rate doble</b>. El <b>Rate</b> de esta tabla es lo que le <b>cobras por un claim</b>; el <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
+        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer (eso va por chofer en <b>Choferes</b> o al subir la factura). Cuando eliges el método <b>Rate</b> en una categoría, aparece un campo para poner el <b>monto que le cobras</b> por ese claim. El <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       {/* Configuración manual POR CIUDAD (sin defaults de empresa) */}
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Manual por ciudad — Rate = lo que cobras por claim · Monto doble = detección</div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Manual por ciudad — método por categoría · Monto doble = detección</div>
       {ciudadesConCodigo.length === 0 ? (
         <p className="text-sm text-slate-400">Agrega ciudades con código en “Mis ciudades” para poder configurarlas.</p>
       ) : (
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
+          <table className="w-full min-w-[860px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
-                <th className="px-3 py-2 text-right font-semibold">Rate ($)</th>
                 <th className="px-3 py-2 text-right font-semibold">Monto doble ($)</th>
                 {todasCats.map((cat) => (<th key={cat.key} className="px-3 py-2 text-left font-semibold">{cat.label}</th>))}
               </tr>
@@ -99,7 +98,6 @@ export default function ReglasCalculo() {
               {ciudadesConCodigo.map((c) => (
                 <tr key={c.codigo} className="border-t border-slate-100 dark:border-slate-700/50">
                   <td className="px-3 py-2 whitespace-nowrap">{c.nombre} <span className="text-xs text-slate-400">({c.codigo})</span></td>
-                  <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'claimFee')} onChange={(e) => setCiudad(c.codigo, 'claimFee', e.target.value)} placeholder={`${CLAIM_FEE}`} /></td>
                   <td className="px-3 py-2 text-right"><Input className="w-24 text-right" type="number" step="0.01" min="0" value={valCiudad(c.codigo, 'dobleMonto')} onChange={(e) => setCiudad(c.codigo, 'dobleMonto', e.target.value)} placeholder={`${DOBLE_MONTO}`} /></td>
                   {todasCats.map((cat) => (
                     <td key={cat.key} className="px-3 py-2 align-top">
@@ -107,7 +105,7 @@ export default function ReglasCalculo() {
                         {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
                       </Select>
                       {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
-                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${valCiudad(c.codigo, 'claimFee') || CLAIM_FEE} (rate)`} />
+                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${CLAIM_FEE} (monto Rate)`} />
                       )}
                     </td>
                   ))}
