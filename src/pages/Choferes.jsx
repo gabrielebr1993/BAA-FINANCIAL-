@@ -6,7 +6,7 @@ import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
-import { Truck, Check, KeyRound } from 'lucide-react'
+import { Truck, Check, KeyRound, Trash2 } from 'lucide-react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 
@@ -198,6 +198,13 @@ export default function Choferes() {
   const pedirActivar = (activo) =>
     setConfirm({ texto: `${activo ? 'Activar' : 'Desactivar'} ${idsSel().length} chofer(es).`, accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { activo })) })
 
+  const pedirBorrar = () =>
+    setConfirm({
+      peligro: true,
+      texto: `Vas a ELIMINAR ${idsSel().length} chofer(es) de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero estos choferes desaparecerán de la lista y de los cálculos futuros. Esta acción no se puede deshacer.`,
+      accion: () => aplicarBatch((batch, d) => batch.delete(doc(db, 'drivers', d.id))),
+    })
+
   // ---- modal ----
   const abrirModal = async (d) => {
     setModal(d)
@@ -305,6 +312,7 @@ export default function Choferes() {
             </div>
             <Boton variant="ghost" onClick={() => pedirActivar(true)}>Activar</Boton>
             <Boton variant="ghost" onClick={() => pedirActivar(false)}>Desactivar</Boton>
+            <Boton variant="danger" onClick={pedirBorrar}><Trash2 size={15} strokeWidth={1.8} /> Borrar</Boton>
             <Boton variant="ghost" onClick={() => setSeleccion(new Set())}>Limpiar</Boton>
           </div>
         </Card>
@@ -372,12 +380,14 @@ export default function Choferes() {
       {/* Modal de confirmación masiva */}
       {confirm && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !ocupado && setConfirm(null)}>
-          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="m-0 mb-2 text-lg font-bold text-brand-navy dark:text-slate-100">Confirmar cambio masivo</h3>
+          <Card className={`w-full max-w-md p-5 ${confirm.peligro ? 'border-2 border-rose-400/70' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <h3 className={`m-0 mb-2 flex items-center gap-2 text-lg font-bold ${confirm.peligro ? 'text-rose-600 dark:text-rose-400' : 'text-brand-navy dark:text-slate-100'}`}>
+              {confirm.peligro && <Trash2 size={18} strokeWidth={1.9} />}{confirm.peligro ? 'Eliminar choferes' : 'Confirmar cambio masivo'}
+            </h3>
             <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">{confirm.texto}</p>
             <div className="flex justify-end gap-2">
               <Boton variant="ghost" onClick={() => setConfirm(null)} disabled={ocupado}>Cancelar</Boton>
-              <Boton variant="gold" onClick={confirm.accion} disabled={ocupado}>{ocupado ? <><Spinner /> Aplicando…</> : 'Confirmar'}</Boton>
+              <Boton variant={confirm.peligro ? 'danger' : 'gold'} onClick={confirm.accion} disabled={ocupado}>{ocupado ? <><Spinner /> {confirm.peligro ? 'Borrando…' : 'Aplicando…'}</> : (confirm.peligro ? 'Sí, eliminar' : 'Confirmar')}</Boton>
             </div>
           </Card>
         </div>
