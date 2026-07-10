@@ -2,7 +2,7 @@
 // Solo owner/súper-admin. Los datos personales/documentos se guardan en Firestore/
 // Storage; los datos BANCARIOS los maneja Stripe (aquí solo se ve el estado).
 import { useState } from 'react'
-import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info } from 'lucide-react'
+import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
 import { stripeCrearCuenta, stripeOnboardingLink, stripeEstado } from '../utils/stripe'
@@ -113,71 +113,88 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
         {driver.stripeTest && <Badge color="slate">TEST</Badge>}
       </div>
 
-      {msg && <Aviso tipo={msg.tipo}>{msg.txt}</Aviso>}
+      {msg && <div className="mb-4"><Aviso tipo={msg.tipo}>{msg.txt}</Aviso></div>}
 
-      {/* Datos personales */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Campo label="Nombre completo"><Input value={v.nombreCompleto} onChange={(e) => set('nombreCompleto', e.target.value)} placeholder={driver.nombre} /></Campo>
-        <Campo label="Teléfono"><Input value={v.telefono} onChange={(e) => set('telefono', e.target.value)} /></Campo>
-        <Campo label="Email"><Input type="email" value={v.email} onChange={(e) => set('email', e.target.value)} /></Campo>
-        <Campo label="Dirección" className="sm:col-span-2"><Input value={v.direccion} onChange={(e) => set('direccion', e.target.value)} /></Campo>
-        <Campo label="Fecha de nacimiento (opcional)"><Input type="date" value={v.fechaNacimiento} onChange={(e) => set('fechaNacimiento', e.target.value)} /></Campo>
-      </div>
+      <div className="space-y-4">
+        {/* 1 · Datos personales */}
+        <Seccion icon={User} titulo="Datos personales">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Campo label="Nombre completo"><Input value={v.nombreCompleto} onChange={(e) => set('nombreCompleto', e.target.value)} placeholder={driver.nombre} /></Campo>
+            <Campo label="Teléfono"><Input value={v.telefono} onChange={(e) => set('telefono', e.target.value)} /></Campo>
+            <Campo label="Email"><Input type="email" value={v.email} onChange={(e) => set('email', e.target.value)} /></Campo>
+            <Campo label="Dirección" className="sm:col-span-2"><Input value={v.direccion} onChange={(e) => set('direccion', e.target.value)} /></Campo>
+            <Campo label="Fecha de nacimiento (opcional)"><Input type="date" value={v.fechaNacimiento} onChange={(e) => set('fechaNacimiento', e.target.value)} /></Campo>
+          </div>
+        </Seccion>
 
-      {/* Documentos */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Campo label="Número de licencia / ID"><Input value={v.licenciaNumero} onChange={(e) => set('licenciaNumero', e.target.value)} /></Campo>
-        <div className="flex items-end">
-          <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
-          </label>
-        </div>
-        <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
-        <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
-      </div>
+        {/* 2 · Documentos e identificación */}
+        <Seccion icon={IdCard} titulo="Documentos e identificación">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Campo label="Número de licencia / ID"><Input value={v.licenciaNumero} onChange={(e) => set('licenciaNumero', e.target.value)} /></Campo>
+            <div className="flex items-end">
+              <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
+              </label>
+            </div>
+            <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
+            <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+          </div>
+        </Seccion>
 
-      {/* Estatus de verificación */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Campo label="Estatus de verificación">
-          <Select value={v.estado || 'pendiente'} onChange={(e) => set('estado', e.target.value)}>
-            {ESTADOS_VERIFICACION.map((e) => (<option key={e.key} value={e.key}>{e.label}</option>))}
-          </Select>
-        </Campo>
-        <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, W-9 correcto…" /></Campo>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? <><Spinner /> Guardando…</> : 'Guardar verificación'}</Boton>
-        {v.revisadoPor && <span className="text-xs text-slate-400">Última revisión por {v.revisadoPor}</span>}
-      </div>
+        {/* 3 · Estado de verificación */}
+        <Seccion icon={ClipboardCheck} titulo="Estado de verificación">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Campo label="Estatus de verificación">
+              <Select value={v.estado || 'pendiente'} onChange={(e) => set('estado', e.target.value)}>
+                {ESTADOS_VERIFICACION.map((e) => (<option key={e.key} value={e.key}>{e.label}</option>))}
+              </Select>
+            </Campo>
+            <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, W-9 correcto…" /></Campo>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? <><Spinner /> Guardando…</> : 'Guardar verificación'}</Boton>
+            {v.revisadoPor && <span className="text-xs text-slate-400">Última revisión por {v.revisadoPor}</span>}
+          </div>
+        </Seccion>
 
-      {/* Sección de pago (Stripe) */}
-      <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700/60">
-        <div className="mb-1 flex items-center gap-2">
-          <CreditCard size={16} strokeWidth={1.8} className="text-brand-gold" />
-          <h4 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">Datos bancarios y pago (Stripe)</h4>
-          {estadoStripe === 'verificado' ? <Badge color="green">Listo para pago</Badge> : <Badge color="gold">Pendiente de registrar banco</Badge>}
-        </div>
-        <p className="mb-3 flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
-          El chofer registra su cuenta bancaria <b>directamente en Stripe</b>. Nosotros <b>no vemos ni guardamos</b> el número de cuenta: solo el estado que Stripe reporta. Prueba primero en <b>modo TEST</b>.
-        </p>
-        {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}
-        <div className="flex flex-wrap items-center gap-2">
-          <Boton variant="primary" onClick={invitar} disabled={!!stripeBusy}>
-            {stripeBusy === 'invitar' ? <><Spinner /> Generando…</> : <><ExternalLink size={15} strokeWidth={1.8} /> {driver.stripeAccountId ? 'Volver a abrir registro de banco' : 'Invitar a registrar pago'}</>}
-          </Boton>
-          {driver.stripeAccountId && (
-            <Boton variant="ghost" onClick={actualizarEstado} disabled={!!stripeBusy}>
-              {stripeBusy === 'estado' ? <><Spinner /> Consultando…</> : <><RefreshCw size={15} strokeWidth={1.8} /> Actualizar estado</>}
+        {/* 4 · Datos bancarios y pago (Stripe) */}
+        <Seccion icon={CreditCard} titulo="Datos bancarios y pago (Stripe)" right={estadoStripe === 'verificado' ? <Badge color="green">Listo para pago</Badge> : <Badge color="gold">Pendiente de registrar banco</Badge>}>
+          <p className="mb-3 flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
+            El chofer registra su cuenta bancaria <b>directamente en Stripe</b>. Nosotros <b>no vemos ni guardamos</b> el número de cuenta: solo el estado que Stripe reporta. Prueba primero en <b>modo TEST</b>.
+          </p>
+          {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Boton variant="primary" onClick={invitar} disabled={!!stripeBusy}>
+              {stripeBusy === 'invitar' ? <><Spinner /> Generando…</> : <><ExternalLink size={15} strokeWidth={1.8} /> {driver.stripeAccountId ? 'Volver a abrir registro de banco' : 'Invitar a registrar pago'}</>}
             </Boton>
+            {driver.stripeAccountId && (
+              <Boton variant="ghost" onClick={actualizarEstado} disabled={!!stripeBusy}>
+                {stripeBusy === 'estado' ? <><Spinner /> Consultando…</> : <><RefreshCw size={15} strokeWidth={1.8} /> Actualizar estado</>}
+              </Boton>
+            )}
+            {driver.stripeAccountId && <span className="text-[11px] text-slate-400">Cuenta: {driver.stripeAccountId}</span>}
+          </div>
+          {estadoStripe !== 'verificado' && (
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Este chofer aún no puede recibir pago hasta que su estado sea <b>verificado</b>.</p>
           )}
-          {driver.stripeAccountId && <span className="text-[11px] text-slate-400">Cuenta: {driver.stripeAccountId}</span>}
-        </div>
-        {estadoStripe !== 'verificado' && (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Este chofer aún no puede recibir pago hasta que su estado sea <b>verificado</b>.</p>
-        )}
+        </Seccion>
       </div>
     </Card>
+  )
+}
+
+// Bloque de sección: subheader con icono + separación visual (card interna).
+function Seccion({ icon: Icon, titulo, right, children }) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700/60">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Icon size={15} strokeWidth={1.8} className="text-brand-gold" />
+        <h4 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{titulo}</h4>
+        {right && <span className="ml-auto">{right}</span>}
+      </div>
+      {children}
+    </div>
   )
 }
 
