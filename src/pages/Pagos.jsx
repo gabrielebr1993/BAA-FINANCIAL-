@@ -114,22 +114,16 @@ export default function Pagos() {
   }
 
   const exportar = () => {
-    const rows = pagosConEstado.map((p) => ({
-      Chofer: p.nombre,
-      Ciudad: p.nombreCiudad,
-      Individuales: p.individuales,
-      Dobles: p.dobles,
-      'Claims activos': p.claimsActivos,
-      'Claims perdonados': p.claimsPerdonados,
-      'Ingreso Gofo': ocultarIngreso ? OCULTO : p.ingreso,
-      'Tarifa Ind': p.tarifaInd,
-      'Tarifa Doble': p.tarifaDoble,
-      'Descuento Claims': p.descuentoClaims,
-      'Total a Pagar': p.totalPagar,
-      Ganancia: ocultarGanancia ? OCULTO : p.ganancia,
-      Estado: p.estado,
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
+    // Se arma por filas (array) para poder enmascarar también el ENCABEZADO cuando
+    // el ojito oculta Ingreso Gofo / Ganancia (json_to_sheet usa las claves como
+    // encabezado y no permitiría ocultarlas).
+    const head = ['Chofer', 'Ciudad', 'Individuales', 'Dobles', 'Claims activos', 'Claims perdonados', lIngreso('Ingreso Gofo'), 'Tarifa Ind', 'Tarifa Doble', 'Descuento Claims', 'Total a Pagar', lGanancia('Ganancia'), 'Estado']
+    const body = pagosConEstado.map((p) => [
+      p.nombre, p.nombreCiudad, p.individuales, p.dobles, p.claimsActivos, p.claimsPerdonados,
+      ocultarIngreso ? OCULTO : p.ingreso, p.tarifaInd, p.tarifaDoble, p.descuentoClaims, p.totalPagar,
+      ocultarGanancia ? OCULTO : p.ganancia, p.estado,
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([head, ...body])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Pagos')
     XLSX.writeFile(wb, `pagos_${selectedInvoice?.semana || 'factura'}.xlsx`)
@@ -139,7 +133,7 @@ export default function Pagos() {
     exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
       {
         titulo: 'Pagos por chofer',
-        head: ['Chofer', 'Ciudad', 'Ind.', 'Dobles', 'Ingreso', 'Total a pagar', 'Ganancia', 'Estado'],
+        head: ['Chofer', 'Ciudad', 'Ind.', 'Dobles', lIngreso('Ingreso'), 'Total a pagar', lGanancia('Ganancia'), 'Estado'],
         body: pagosConEstado.map((p) => [p.nombre, p.nombreCiudad, p.individuales, p.dobles, fIngreso(p.ingreso), money(p.totalPagar), fGanancia(p.ganancia), p.estado]),
       },
     ])
