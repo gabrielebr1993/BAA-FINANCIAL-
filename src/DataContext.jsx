@@ -195,6 +195,14 @@ export function DataProvider({ children }) {
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
+  // Si la ciudad filtrada ya no está en el rango de fechas elegido, se vuelve a
+  // "Todas" (así el filtro de ciudad siempre corresponde a los días seleccionados).
+  useEffect(() => {
+    if (selectedCity === TODAS) return
+    const ciudades = new Set((facturaRango?.resumenCiudades || []).map((c) => c.ubicacion))
+    if (!ciudades.has(selectedCity)) setSelectedCity(TODAS)
+  }, [facturaRango, selectedCity])
+
   useEffect(() => {
     cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps

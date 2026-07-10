@@ -9,7 +9,7 @@
 // al restaurar, para no perder los tipos de fecha.
 // ---------------------------------------------------------------------------
 import { collection, getDocs, query, where, writeBatch, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
-import { ref, uploadString } from 'firebase/storage'
+import { ref, uploadString, listAll, getMetadata, getDownloadURL, deleteObject } from 'firebase/storage'
 import { db, storage } from '../firebase'
 
 // Colecciones que pertenecen a una empresa (todas llevan companyId).
@@ -70,6 +70,33 @@ export async function subirBackupStorage(companyId) {
   // Deja constancia de la fecha del último backup en settings (para el intervalo).
   await setDoc(doc(db, 'settings', companyId), { companyId, ultimoBackupAuto: serverTimestamp(), ultimoBackupPath: path }, { merge: true }).catch(() => {})
   return { path, fecha: data.fecha, total: totalDocsBackup(data) }
+}
+
+// Lista el HISTORIAL de backups en la nube (Storage) de la empresa, más reciente
+// primero. Devuelve [{ name, path, url, size, updated }].
+export async function listarBackups(companyId) {
+  if (!companyId) return []
+  const res = await listAll(ref(storage, `backups/${companyId}`))
+  const items = await Promise.all(
+    res.items.map(async (it) => {
+      const [meta, url] = await Promise.all([getMetadata(it).catch(() => ({})), getDownloadURL(it).catch(() => '')])
+      return { name: it.name, path: it.fullPath, url, size: meta.size || 0, updated: meta.updated || meta.timeCreated || '' }
+    })
+  )
+  return items.sort((a, b) => String(b.updated).localeCompare(String(a.updated)))
+}
+
+// Restaura desde un backup guardado en la nube (por su URL de descarga).
+export async function restaurarDesdeUrl(url) {
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error('No se pudo descargar el backup de la nube.')
+  const data = await resp.json()
+  return restaurarBackup(data)
+}
+
+// Borra un backup de la nube (por su ruta en Storage).
+export async function borrarBackupNube(path) {
+  await deleteObject(ref(storage, path))
 }
 
 // Restaura desde un objeto de backup. MERGE por documento: repone lo que falte y

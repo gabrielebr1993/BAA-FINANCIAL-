@@ -4,14 +4,16 @@ import { TODAS, ciudadesDeFactura, nombreCiudadDe } from '../utils/calc'
 import { Select } from './ui'
 
 export default function CitySelector() {
-  const { selectedInvoice, selectedCity, setSelectedCity } = useData()
-  const ciudades = ciudadesDeFactura(selectedInvoice)
+  // El filtro de ciudad se basa en el RANGO de fechas seleccionado (facturaRango),
+  // así solo aparecen las ciudades presentes en esos días y la info corresponde a ellos.
+  const { facturaRango, selectedCity, setSelectedCity } = useData()
+  const ciudades = ciudadesDeFactura(facturaRango)
   return (
     <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} aria-label="Filtro de ciudad">
       <option value={TODAS}>Todas las ciudades</option>
       {ciudades.map((c) => (
         <option key={c} value={c}>
-          {nombreCiudadDe(selectedInvoice, c)}
+          {nombreCiudadDe(facturaRango, c)}
         </option>
       ))}
     </Select>

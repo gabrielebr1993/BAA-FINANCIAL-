@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
-  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup,
 } from 'lucide-react'
 
 // Marca de color
@@ -134,6 +134,7 @@ export const SECCIONES = [
   { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell },
   { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users },
   { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings },
+  { path: '/backups', label: 'Backups', permiso: 'gestionarConfiguracion', icon: DatabaseBackup },
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.

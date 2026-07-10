@@ -28,6 +28,7 @@ const Alertas = lazy(() => import('./pages/Alertas'))
 const Comparar = lazy(() => import('./pages/Comparar'))
 const Empresas = lazy(() => import('./pages/Empresas'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
+const Backups = lazy(() => import('./pages/Backups'))
 const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
@@ -76,6 +77,7 @@ export default function App() {
               <Route path="/comparar" element={<Page filtro="verDashboard"><Comparar /></Page>} />
               <Route path="/empresas" element={<Page soloSuperAdmin><Empresas /></Page>} />
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
+              <Route path="/backups" element={<Page filtro="gestionarConfiguracion"><Backups /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>
           </BrowserRouter>
