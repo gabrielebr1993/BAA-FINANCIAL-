@@ -8,12 +8,14 @@
 // `alerta` (ámbar) para el mini-cerebro del Panel. `size` en px (CSS).
 import { useEffect, useRef } from 'react'
 
-export default function JarvisSphere({ estado = 'idle', size = 300, alerta = false }) {
+export default function JarvisSphere({ estado = 'idle', size = 300, alerta = false, animo = 'neutro' }) {
   const canvasRef = useRef(null)
   const estadoRef = useRef(estado)
   const alertaRef = useRef(alerta)
+  const animoRef = useRef(animo)
   useEffect(() => { estadoRef.current = estado }, [estado])
   useEffect(() => { alertaRef.current = alerta }, [alerta])
+  useEffect(() => { animoRef.current = animo }, [animo])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -54,6 +56,12 @@ export default function JarvisSphere({ estado = 'idle', size = 300, alerta = fal
       else if (e === 'thinking') { sp = 3.2; pu = 1; amp = 1.04; think = 1 }
       else if (e === 'speaking') { sp = 1.1; amp = 1 + Math.abs(Math.sin(t * 0.25)) * 0.14; pu = 0.8 }
       else { sp = 0.55; amp = 1 + Math.sin(t * 0.05) * 0.025 }
+      // Matiz EMOCIONAL (ánimo) al hablar / en espera — no altera escuchar ni pensar.
+      const mood = animoRef.current
+      if ((e === 'speaking' || e === 'idle') && !alertaRef.current) {
+        if (mood === 'positivo') { node = [214, 178, 92]; core = [222, 188, 104]; pu *= 1.18; sp *= 1.12 }
+        else if (mood === 'alerta') { node = [198, 120, 52]; core = [198, 120, 52]; sp *= 0.8; pu *= 0.85 }
+      }
       if (alertaRef.current) { node = [217, 119, 6]; core = [217, 119, 6] }
 
       ctx.clearRect(0, 0, S, S)

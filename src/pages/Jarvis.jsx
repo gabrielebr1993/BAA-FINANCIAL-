@@ -49,6 +49,7 @@ export default function Jarvis() {
   const [error, setError] = useState('')
   const [vozIA, setVozIA] = useState(null)
   const [fuenteVoz, setFuenteVoz] = useState(null)
+  const [animo, setAnimo] = useState('neutro') // ánimo de la última respuesta
 
   const finRef = useRef(null)
   const recRef = useRef(null)
@@ -99,13 +100,15 @@ export default function Jarvis() {
     try {
       const r = await preguntarAsistente({ companyId: activeCompanyId, messages: nuevos })
       if (!r.ok) { setError(r.error || 'No se pudo responder.'); setEstado('idle'); return }
+      const mood = r.mood || 'neutro'
+      setAnimo(mood)
       setMensajes((m) => [...m, { role: 'assistant', content: r.reply }])
       await ejecutarAcciones(r.acciones)
       if (r.propuesta) setPropuesta(r.propuesta)
       if (vozActiva && r.reply) {
         setEstado('speaking')
         hablar(r.reply, {
-          idioma: detectarIdioma(r.reply),
+          idioma: detectarIdioma(r.reply), mood,
           onFuente: setFuenteVoz,
           onError: (m) => setError('Voz ElevenLabs no disponible: ' + m + '. Se usó la voz del navegador.'),
           onFin: () => { setEstado('idle'); if (continuoRef.current) setTimeout(() => escucharRef.current?.(), 350) },
@@ -203,7 +206,7 @@ export default function Jarvis() {
         </div>
 
         <button onClick={alternar} className="-my-4 cursor-pointer" aria-label="Hablar con JARVIS" title="Toca para hablar">
-          <JarvisSphere estado={estado} size={340} />
+          <JarvisSphere estado={estado} size={340} animo={animo} />
         </button>
 
         <div className="mx-auto max-w-2xl text-center">

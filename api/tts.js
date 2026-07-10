@@ -37,14 +37,20 @@ export default async function handler(req, res) {
     const texto = String((req.body && req.body.texto) || '').slice(0, 2000)
     if (!texto.trim()) return res.status(400).json({ ok: false, error: 'Falta texto.' })
 
+    // Ajusta la EXPRESIÓN de la voz según el ánimo (sin exagerar):
+    //   positivo → más expresivo/animado · alerta → más contenido/serio · neutro → equilibrado.
+    const mood = String((req.body && req.body.mood) || 'neutro')
+    const AJUSTE = {
+      positivo: { stability: 0.32, similarity_boost: 0.78, style: 0.45 },
+      alerta: { stability: 0.6, similarity_boost: 0.72, style: 0.08 },
+      neutro: { stability: 0.45, similarity_boost: 0.75, style: 0.2 },
+    }
+    const vs = { ...(AJUSTE[mood] || AJUSTE.neutro), use_speaker_boost: true }
+
     const sintetizar = (vId) => fetch(`${ELEVEN_URL}/${vId}`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({
-        text: texto,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true },
-      }),
+      body: JSON.stringify({ text: texto, model_id: 'eleven_multilingual_v2', voice_settings: vs }),
     })
 
     let r = await sintetizar(voiceId)

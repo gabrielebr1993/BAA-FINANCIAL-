@@ -142,18 +142,38 @@ async function construirContexto(db, companyId, empresaNombre) {
   }
 }
 
-function systemPrompt(ctx) {
+function systemPrompt(ctx, nombre) {
+  const n = nombre || 'Gabriele'
   return [
-    'Eres JARVIS, el asistente de MilePay (sistema de gestión de facturas de reparto).',
-    'Respondes SIEMPRE con datos reales del CONTEXTO que se te da (no inventes cifras; si no está en el contexto, dilo).',
-    'Detecta el idioma del usuario (español o inglés) y responde en ese mismo idioma.',
-    'Sé breve, claro y directo, con tono profesional y cercano. Usa cifras concretas del contexto.',
-    'Cuando el usuario pida abrir/mostrar una pantalla, usa la herramienta "navegar". Para acotar por fecha/ciudad usa "aplicar_filtro". Para exportar usa "generar_reporte".',
-    'Para cambiar el estatus de verificación de un chofer o su tarifa, usa "proponer_cambio": NUNCA se aplica sin confirmación del usuario.',
-    'LÍMITES: no puedes pagar, transferir dinero, borrar nada, ni tocar configuración sensible (claves, Stripe, permisos, datos bancarios). No tienes herramientas para eso. Si te lo piden, explica amablemente que no está permitido.',
+    `Eres JARVIS, el asistente de MilePay y SOCIO de confianza de ${n} (negocio de reparto).`,
+    'PERSONALIDAD: cálido, cercano y natural, con algo de complicidad — como un socio, no un robot frío ni un mayordomo formal.',
+    `Dirígete a la persona por su nombre (${n}) de vez en cuando, sin abusar.`,
+    'Celebra los logros ("¡Buena semana, subiste el margen!") y sé empático con los problemas ("Ojo, tenemos un tema con unos claims"). Tono humano, no acartonado.',
+    'Sé BREVE y conversacional: respuestas pensadas para escucharse en voz, no textos largos. Claro y directo con los números.',
+    'Detecta el idioma (español o inglés) y responde en el mismo, con la misma calidez.',
+    'PRECISIÓN ANTE TODO: usa SOLO los datos reales del CONTEXTO. Nunca inventes cifras; si no tienes el dato, dilo con naturalidad y ofrece buscarlo. La calidez no justifica exagerar ni inventar.',
+    'Cuando pida abrir/mostrar una pantalla, usa "navegar". Para acotar por fecha/ciudad usa "aplicar_filtro". Para exportar usa "generar_reporte".',
+    'Para cambiar el estatus de verificación de un chofer o su tarifa, usa "proponer_cambio": NUNCA se aplica sin confirmación.',
+    'LÍMITES: no puedes pagar, transferir dinero, borrar nada, ni tocar configuración sensible (claves, Stripe, permisos, datos bancarios). No tienes herramientas para eso. Si te lo piden, explícalo con amabilidad.',
+    'ÁNIMO: al FINAL de tu respuesta añade en una línea aparte una etiqueta oculta con el ánimo de la noticia, EXACTAMENTE así: [[mood:positivo]] o [[mood:neutro]] o [[mood:alerta]]. positivo = buenas noticias; alerta = problemas/preocupación; neutro = información normal. Esta etiqueta es para el sistema (se ocultará al usuario).',
     'CONTEXTO (datos reales de la empresa activa):',
     JSON.stringify(ctx),
   ].join('\n')
+}
+
+// Extrae y quita la etiqueta [[mood:...]] del texto. Si falta, infiere por palabras.
+function extraerMood(texto) {
+  let reply = texto || ''
+  let mood = null
+  const m = reply.match(/\[\[\s*mood\s*:\s*(positivo|neutro|alerta)\s*\]\]/i)
+  if (m) { mood = m[1].toLowerCase(); reply = reply.replace(m[0], '').trim() }
+  if (!mood) {
+    const t = reply.toLowerCase()
+    if (/(problema|ojo|cuidado|alerta|sin pagar|sin asociar|riesgo|preocup|cay[oó]|bajó|perd)/.test(t)) mood = 'alerta'
+    else if (/(buena|excelente|subi[oó]|mejor|genial|creci[oó]|récord|record|felicidad)/.test(t)) mood = 'positivo'
+    else mood = 'neutro'
+  }
+  return { reply, mood }
 }
 
 async function llamarAnthropic(apiKey, body) {
@@ -192,6 +212,8 @@ export default async function handler(req, res) {
     try { const c = await auth.db.collection('companies').doc(companyId).get(); if (c.exists) empresaNombre = c.data().nombre || companyId } catch { /* noop */ }
 
     const ctx = await construirContexto(auth.db, companyId, empresaNombre)
+    // Nombre para el trato personal (cae a "Gabriele" si no hay perfil).
+    const nombreUsuario = (auth.caller && auth.caller.nombre) || auth.decoded.name || 'Gabriele'
 
     // Normaliza mensajes del cliente a formato Anthropic (solo role/content string).
     const convo = messages.slice(-12).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
@@ -205,7 +227,7 @@ export default async function handler(req, res) {
     let convoMsgs = convo
     for (let vuelta = 0; vuelta < 3; vuelta++) {
       const data = await llamarAnthropic(apiKey, {
-        model: MODELO, max_tokens: 1024, system: systemPrompt(ctx), tools: TOOLS, messages: convoMsgs,
+        model: MODELO, max_tokens: 1024, system: systemPrompt(ctx, nombreUsuario), tools: TOOLS, messages: convoMsgs,
       })
       const bloques = data.content || []
       reply = bloques.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim() || reply
@@ -226,7 +248,8 @@ export default async function handler(req, res) {
     }
 
     if (!reply) reply = propuesta ? (propuesta.resumen || 'Propongo un cambio, confírmalo abajo.') : 'Listo.'
-    return res.status(200).json({ ok: true, reply, acciones, propuesta })
+    const { reply: replyLimpio, mood } = extraerMood(reply)
+    return res.status(200).json({ ok: true, reply: replyLimpio, mood, acciones, propuesta })
   } catch (e) {
     return res.status(400).json({ ok: false, error: 'Error del asistente: ' + (e?.message || 'desconocido') })
   }

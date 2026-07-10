@@ -68,14 +68,14 @@ export function detenerVoz() {
 // Intenta ElevenLabs; si no está configurado (204) o falla, usa el navegador.
 // `onFuente('elevenlabs'|'navegador')` avisa qué voz se usó. `onError(msg)` reporta
 // el error real de ElevenLabs (para no fallar en silencio). Devuelve función de corte.
-export async function hablar(texto, { idioma = 'es', onInicio, onFin, onFuente, onError } = {}) {
+export async function hablar(texto, { idioma = 'es', mood = 'neutro', onInicio, onFin, onFuente, onError } = {}) {
   detenerVoz()
   if (!texto?.trim()) { onFin?.(); return detenerVoz }
   try {
     const resp = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token()}` },
-      body: JSON.stringify({ texto }),
+      body: JSON.stringify({ texto, mood }),
     })
     if (resp.status === 204) return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
     if (!resp.ok) {
