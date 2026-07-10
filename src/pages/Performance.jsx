@@ -240,7 +240,7 @@ export default function Performance() {
       ) : (
         <>
           <Aviso tipo="info">
-            Nota: los <b>paquetes fallidos</b> (“Failed delivery”) salen del reporte de fallidos que subes junto a la factura y son <b>informativos de desempeño</b> (no afectan el pago ni el neto de Gofo). Los <b>claims</b> siguen midiendo problemas con costo.
+            Nota: los <b>paquetes fallidos</b> (“Failed delivery”) salen del reporte de fallidos y ahora <b>cuentan en la calificación</b> de desempeño (calidad = 70% claims + 30% fallidos) y en el ranking de ciudades. <b>No</b> afectan el pago ni el neto de Gofo.
           </Aviso>
 
           {/* ==== Indicadores (sección nueva; respeta ciudad + fechas globales) ==== */}

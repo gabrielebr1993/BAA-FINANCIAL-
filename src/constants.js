@@ -56,6 +56,9 @@ export const DOBLE_MONTO = 0.5
 //   ≥75 Bueno (verde) · 50-74 Regular (amarillo) · <75 abajo Malo (rojo).
 // ---------------------------------------------------------------------------
 export const PESOS_CALIF_CHOFER = { calidad: 0.4, productividad: 0.3, rentabilidad: 0.3 }
+// Dentro de la "calidad" del chofer: peso de claims vs paquetes fallidos (los claims
+// pesan más porque tienen costo; los fallidos son señal de desempeño).
+export const PESO_CALIDAD_CHOFER = { claims: 0.7, fallidos: 0.3 }
 export const UMBRALES_CALIF = { bueno: 75, regular: 50 }
 // Estrellas 1-5 según el puntaje 0-100 (ajustable).
 export const UMBRALES_ESTRELLAS = [

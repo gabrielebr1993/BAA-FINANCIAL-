@@ -4,7 +4,7 @@
 // Ambas son CONFIGURABLES por empresa y por ciudad (ver resolverReglas). El pago
 // = individuales*tarifaInd + dobles*tarifaDoble - claimsNoPerdonados*claimFee.
 // ---------------------------------------------------------------------------
-import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, CATEGORIAS_CLAIM_KEYS, METODO_CLAIM_DEFAULT, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
+import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, CATEGORIAS_CLAIM_KEYS, METODO_CLAIM_DEFAULT, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, PESO_CALIDAD_CHOFER, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
 
@@ -150,8 +150,15 @@ export function estrellasDe(puntaje) {
 export function calificarChofer(pago, prom) {
   const paquetes = pago.paquetes ?? (pago.individuales + pago.dobles)
   const claims = pago.claimsTotales || 0
+  const fallidos = pago.fallidos || 0
+  // La CALIDAD combina claims y fallidos (ambos por cada 100 paquetes). Los claims
+  // pesan más (70/30): tienen costo; los fallidos son señal de mal desempeño.
   const claimsPor100 = paquetes > 0 ? (claims / paquetes) * 100 : 0
-  const calidad = clamp(100 - claimsPor100 * CALIDAD_FACTOR)
+  const fallidosPor100 = paquetes > 0 ? (fallidos / paquetes) * 100 : 0
+  const calidadClaims = clamp(100 - claimsPor100 * CALIDAD_FACTOR)
+  const calidadFallidos = clamp(100 - fallidosPor100 * CALIDAD_FACTOR)
+  const wq = PESO_CALIDAD_CHOFER
+  const calidad = wq.claims * calidadClaims + wq.fallidos * calidadFallidos
   const productividad = prom?.paquetes > 0 ? clamp(BASE_PROMEDIO * (paquetes / prom.paquetes)) : 50
   const rentabilidad = prom?.ganancia > 0 ? clamp(BASE_PROMEDIO * ((pago.ganancia || 0) / prom.ganancia)) : (pago.ganancia >= 0 ? 50 : 0)
   const w = PESOS_CALIF_CHOFER
@@ -573,6 +580,10 @@ export function rankingCiudades(inv, claims, drivers, managers, semanas = 1) {
     pesoPorCiudad[r.ciudad] = (pesoPorCiudad[r.ciudad] || 0) + (r.pesoTotalLb || 0)
     ingresoRutaPorCiudad[r.ciudad] = (ingresoRutaPorCiudad[r.ciudad] || 0) + (r.ingreso || 0)
   }
+  // Paquetes fallidos reales por ciudad (del reporte de fallidos, atribuidos a la
+  // ciudad principal de cada chofer en resumenChoferes).
+  const fallidosPorCiudad = {}
+  for (const ch of inv?.resumenChoferes || []) fallidosPorCiudad[ch.ciudad] = (fallidosPorCiudad[ch.ciudad] || 0) + (Number(ch.fallidos) || 0)
 
   const base = ciudades.map((c) => {
     const code = c.ubicacion
@@ -591,8 +602,8 @@ export function rankingCiudades(inv, claims, drivers, managers, semanas = 1) {
       ganancia: g.gananciaReal,
       precioLb,
       numClaims,
-      // TODO: cuando la factura traiga fallidos reales, usarlos aquí en vez de claims.
-      fallidos: numClaims,
+      // Fallidos reales del reporte (antes se usaban los claims como proxy).
+      fallidos: fallidosPorCiudad[code] || 0,
       pctClaims: paquetes > 0 ? numClaims / paquetes : 0,
     }
   })
