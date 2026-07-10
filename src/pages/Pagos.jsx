@@ -114,27 +114,47 @@ export default function Pagos() {
   }
 
   const exportar = () => {
-    // Se arma por filas (array) para poder enmascarar también el ENCABEZADO cuando
-    // el ojito oculta Ingreso Gofo / Ganancia (json_to_sheet usa las claves como
-    // encabezado y no permitiría ocultarlas).
-    const head = ['Chofer', 'Ciudad', 'Individuales', 'Dobles', 'Claims activos', 'Claims perdonados', lIngreso('Ingreso Gofo'), 'Tarifa Ind', 'Tarifa Doble', 'Descuento Claims', 'Total a Pagar', lGanancia('Ganancia'), 'Estado']
-    const body = pagosConEstado.map((p) => [
-      p.nombre, p.nombreCiudad, p.individuales, p.dobles, p.claimsActivos, p.claimsPerdonados,
-      ocultarIngreso ? OCULTO : p.ingreso, p.tarifaInd, p.tarifaDoble, p.descuentoClaims, p.totalPagar,
-      ocultarGanancia ? OCULTO : p.ganancia, p.estado,
-    ])
-    const ws = XLSX.utils.aoa_to_sheet([head, ...body])
+    // Con el ojito tapando, la columna se OMITE por completo del archivo (no sale
+    // ni el encabezado ni el valor). Sin tapar, sale normal.
+    const cols = [
+      { h: 'Chofer', v: (p) => p.nombre },
+      { h: 'Ciudad', v: (p) => p.nombreCiudad },
+      { h: 'Individuales', v: (p) => p.individuales },
+      { h: 'Dobles', v: (p) => p.dobles },
+      { h: 'Claims activos', v: (p) => p.claimsActivos },
+      { h: 'Claims perdonados', v: (p) => p.claimsPerdonados },
+      ...(ocultarIngreso ? [] : [{ h: 'Ingreso Gofo', v: (p) => p.ingreso }]),
+      { h: 'Tarifa Ind', v: (p) => p.tarifaInd },
+      { h: 'Tarifa Doble', v: (p) => p.tarifaDoble },
+      { h: 'Descuento Claims', v: (p) => p.descuentoClaims },
+      { h: 'Total a Pagar', v: (p) => p.totalPagar },
+      ...(ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => p.ganancia }]),
+      { h: 'Estado', v: (p) => p.estado },
+    ]
+    const aoa = [cols.map((c) => c.h), ...pagosConEstado.map((p) => cols.map((c) => c.v(p)))]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Pagos')
     XLSX.writeFile(wb, `pagos_${selectedInvoice?.semana || 'factura'}.xlsx`)
   }
 
   const exportarPdf = () => {
+    // Igual que el Excel: la columna se omite si el ojito la está tapando.
+    const cols = [
+      { h: 'Chofer', v: (p) => p.nombre },
+      { h: 'Ciudad', v: (p) => p.nombreCiudad },
+      { h: 'Ind.', v: (p) => p.individuales },
+      { h: 'Dobles', v: (p) => p.dobles },
+      ...(ocultarIngreso ? [] : [{ h: 'Ingreso', v: (p) => money(p.ingreso) }]),
+      { h: 'Total a pagar', v: (p) => money(p.totalPagar) },
+      ...(ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => money(p.ganancia) }]),
+      { h: 'Estado', v: (p) => p.estado },
+    ]
     exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
       {
         titulo: 'Pagos por chofer',
-        head: ['Chofer', 'Ciudad', 'Ind.', 'Dobles', lIngreso('Ingreso'), 'Total a pagar', lGanancia('Ganancia'), 'Estado'],
-        body: pagosConEstado.map((p) => [p.nombre, p.nombreCiudad, p.individuales, p.dobles, fIngreso(p.ingreso), money(p.totalPagar), fGanancia(p.ganancia), p.estado]),
+        head: cols.map((c) => c.h),
+        body: pagosConEstado.map((p) => cols.map((c) => c.v(p))),
       },
     ])
   }
