@@ -584,7 +584,24 @@ export default function CargarFactura() {
     }
   }
 
-  const puedeGuardar = !guardando && !!semana.trim() && todasCiudadesAsignadas && !!fallidosProc && (modoRuta || choferesNuevos.length === 0 || todosConPrecio) && todosRepetidosResueltos && todosDriversRuta && (!modoRuta || codigosRuta.length > 0)
+  // Motivo EXACTO por el que el botón de procesar está deshabilitado (null = todo ok).
+  // Se evalúa campo por campo para poder mostrárselo al usuario (nada en silencio).
+  const motivoBloqueo = (() => {
+    if (guardando) return 'Guardando…'
+    if (!semana.trim()) return 'Falta indicar la semana.'
+    if (!todasCiudadesAsignadas) return 'Falta asignar la ciudad de cada archivo.'
+    if (!fallidosProc) return 'Falta subir el Reporte de fallidos (GOFO).'
+    if (modoRuta) {
+      if (codigosRuta.length === 0) return 'Modo “Por ruta”: no hay rutas configuradas en Configuración.'
+      if (!todosDriversRuta) return `Modo “Por ruta”: faltan ${driversSinRuta.length} chofer(es) por asignar a una ruta.`
+    } else if (choferesNuevos.length > 0 && !todosConPrecio) {
+      const faltan = choferesNuevos.filter((n) => !(Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0))
+      return `Faltan ${faltan.length} chofer(es) con precio (individual y doble > 0)${faltan.length ? ': ' + faltan.slice(0, 4).join(', ') + (faltan.length > 4 ? '…' : '') : ''}.`
+    }
+    if (!todosRepetidosResueltos) return `Hay ${casosRepetidos.filter((c) => !decisiones[c.waybill]).length} claim(s) repetido(s) sin aprobar/anular.`
+    return null
+  })()
+  const puedeGuardar = !motivoBloqueo
 
   const fmtFecha = (ts) => {
     try {
@@ -1090,10 +1107,17 @@ export default function CargarFactura() {
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm text-slate-500 dark:text-slate-400">Semana:</label>
               <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder="ej. 22_06_2026-28_06_2026" />
-              <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" className="ml-auto">
-                {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
-              </Boton>
-              <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">Descartar</Boton>
+              <div className="ml-auto flex items-center gap-3">
+                {motivoBloqueo && !guardando && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <AlertTriangle size={14} strokeWidth={1.9} /> No puedes procesar: {motivoBloqueo}
+                  </span>
+                )}
+                <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" title={motivoBloqueo || 'Procesar factura'}>
+                  {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
+                </Boton>
+                <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">Descartar</Boton>
+              </div>
             </div>
           </Card>
         </>
