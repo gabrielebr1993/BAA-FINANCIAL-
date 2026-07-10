@@ -41,9 +41,27 @@ export async function estadoVozIA() {
 }
 
 // --- Voz que HABLA -----------------------------------------------------------
-let audioActual = null
+// Se reutiliza UN solo elemento <audio> desbloqueado por un gesto del usuario:
+// así los navegadores permiten reproducir las respuestas siguientes (modo
+// continuo) sin bloquear por "autoplay".
+let audioEl = null
+const SILENCIO = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+function getAudioEl() {
+  if (!audioEl) { audioEl = typeof Audio !== 'undefined' ? new Audio() : null; if (audioEl) audioEl.preload = 'auto' }
+  return audioEl
+}
+// Llamar DENTRO de un gesto del usuario (clic/tap) para habilitar el audio.
+export function desbloquearAudio() {
+  try {
+    const el = getAudioEl(); if (!el) return
+    el.muted = true; el.src = SILENCIO
+    const p = el.play()
+    if (p && p.then) p.then(() => { try { el.pause(); el.currentTime = 0 } catch { /* noop */ } el.muted = false }).catch(() => { el.muted = false })
+    else el.muted = false
+  } catch { /* noop */ }
+}
 export function detenerVoz() {
-  try { if (audioActual) { audioActual.pause(); audioActual = null } } catch { /* noop */ }
+  try { if (audioEl) { audioEl.pause() } } catch { /* noop */ }
   try { window.speechSynthesis?.cancel() } catch { /* noop */ }
 }
 
@@ -68,10 +86,12 @@ export async function hablar(texto, { idioma = 'es', onInicio, onFin, onFuente, 
     const alterna = resp.headers.get('X-Voice-Fallback') === '1'
     const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    audioActual = audio
+    const audio = getAudioEl()
+    if (!audio) return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+    audio.muted = false
+    audio.src = url
     audio.onplay = () => { onFuente?.(alterna ? 'elevenlabs-alt' : 'elevenlabs'); onInicio?.() }
-    audio.onended = () => { URL.revokeObjectURL(url); if (audioActual === audio) audioActual = null; onFin?.() }
+    audio.onended = () => { URL.revokeObjectURL(url); onFin?.() }
     audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(texto, idioma, { onInicio, onFin, onFuente }) }
     try {
       await audio.play()

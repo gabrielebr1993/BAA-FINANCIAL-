@@ -12,7 +12,7 @@ import { TODAS } from '../utils/calc'
 import { PageTitle, Boton, Aviso } from '../components/ui'
 import JarvisSphere from '../components/JarvisSphere'
 import {
-  preguntarAsistente, ejecutarAccionAsistente, hablar, detenerVoz,
+  preguntarAsistente, ejecutarAccionAsistente, hablar, detenerVoz, desbloquearAudio,
   crearReconocedor, reconocimientoDisponible, detectarIdioma, estadoVozIA,
 } from '../utils/asistente'
 
@@ -154,9 +154,9 @@ export default function Jarvis() {
     recRef.current?.detener(); detenerVoz()
     setEscuchando(false); setEstado('idle')
   }
-  const alternar = () => { if (activo) detenerTodo(); else iniciarEscucha() }
-  const toggleContinuo = () => { const v = !continuo; setContinuo(v); continuoRef.current = v; if (v && !activo) iniciarEscucha() }
-  const toggleVoz = () => { if (vozActiva) detenerVoz(); setVozActiva((v) => !v) }
+  const alternar = () => { desbloquearAudio(); if (activo) detenerTodo(); else iniciarEscucha() }
+  const toggleContinuo = () => { desbloquearAudio(); const v = !continuo; setContinuo(v); continuoRef.current = v; if (v && !activo) iniciarEscucha() }
+  const toggleVoz = () => { desbloquearAudio(); if (vozActiva) detenerVoz(); setVozActiva((v) => !v) }
 
   const confirmar = async () => {
     if (!propuesta) return
@@ -260,7 +260,7 @@ export default function Jarvis() {
           <div className="border-t border-slate-200 p-3 dark:border-slate-700/60">
             <div className="flex items-end gap-2">
               <textarea rows={1} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} placeholder="Escribe tu pregunta…" className="max-h-32 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
-              <Boton variant="gold" onClick={() => enviar()} disabled={cargando || !texto.trim()}><Send size={16} strokeWidth={1.9} /></Boton>
+              <Boton variant="gold" onClick={() => { desbloquearAudio(); enviar() }} disabled={cargando || !texto.trim()}><Send size={16} strokeWidth={1.9} /></Boton>
             </div>
           </div>
         </div>
