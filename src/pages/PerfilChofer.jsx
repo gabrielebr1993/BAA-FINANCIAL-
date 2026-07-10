@@ -13,6 +13,7 @@ import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio } from '../co
 import { TrendCard } from '../components/charts'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
+import VerificacionChofer from '../components/VerificacionChofer'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -43,7 +44,7 @@ export default function PerfilChofer() {
   const { nombre } = useParams()
   const navigate = useNavigate()
   const decoded = decodeURIComponent(nombre || '')
-  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando } = useData()
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
@@ -155,6 +156,11 @@ export default function PerfilChofer() {
             <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
             <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
             <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
+          </div>
+
+          {/* Verificación del chofer + estado de pago (Stripe). Solo owner/súper-admin. */}
+          <div className="mb-4">
+            <VerificacionChofer driver={driver} activeCompanyId={activeCompanyId} onReload={reloadDrivers} />
           </div>
 
           {tiposChofer.length > 0 && (

@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage para MilePay.
+// SOLO se guardan documentos de verificación del chofer (licencia, W-9), y solo
+// el STAFF (no drivers) de la empresa dueña puede leerlos/subirlos. Nada público.
+// NUNCA se guardan datos bancarios aquí (esos viven en Stripe).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    function esSuper() {
+      return request.auth != null && userDoc().superAdmin == true;
+    }
+    function esStaffDe(companyId) {
+      return request.auth != null
+        && userDoc().companyId == companyId
+        && userDoc().role != 'driver';
+    }
+
+    // Documentos de verificación: verificacion/{companyId}/{driverId}/...
+    match /verificacion/{companyId}/{driverId}/{allPaths=**} {
+      allow read, write: if esSuper() || esStaffDe(companyId);
+    }
+
+    // Todo lo demás: cerrado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
