@@ -53,8 +53,10 @@ export default function Jarvis() {
   const recRef = useRef(null)
   const continuoRef = useRef(false)
   const escucharRef = useRef(null)
+  const silencioRef = useRef(null)
+  const cancelRef = useRef(false)
 
-  useEffect(() => () => { detenerVoz(); recRef.current?.detener() }, [])
+  useEffect(() => () => { detenerVoz(); recRef.current?.detener(); if (silencioRef.current) clearTimeout(silencioRef.current) }, [])
   useEffect(() => {
     estadoVozIA().then((r) => setVozIA(!!r.configurado)).catch(() => setVozIA(false))
     try { window.speechSynthesis?.getVoices() } catch { /* noop */ }
@@ -106,16 +108,38 @@ export default function Jarvis() {
     } finally { setCargando(false) }
   }, [texto, cargando, mensajes, activeCompanyId, vozActiva, ejecutarAcciones])
 
-  // Inicia el reconocimiento de voz (una toma). Al terminar de hablar, envía.
+  // Inicia el reconocimiento de voz (una toma). Envía cuando detecta que
+  // terminaste: por "final" del navegador, por pausa de ~1.6 s, o al cerrarse el
+  // micro (algunos navegadores no marcan "final"). No envía si tú lo detienes.
   const iniciarEscucha = useCallback(() => {
     if (!reconocimientoDisponible()) { setError('Tu navegador no soporta reconocimiento de voz. Usa Chrome.'); return }
     detenerVoz()
     setError(''); setInterim('')
+    cancelRef.current = false
+    let ultimo = ''
+    let enviado = false
+    const limpiarSilencio = () => { if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null } }
+    const despachar = (t) => { if (enviado) return; const q = (t || '').trim(); if (!q) return; enviado = true; limpiarSilencio(); setEscuchando(false); enviar(q) }
+
     const rec = crearReconocedor({
       idioma: 'es-ES',
-      onTexto: (t, final) => { setInterim(t); if (final) { setEscuchando(false); enviar(t) } },
-      onFin: () => { setEscuchando(false); setEstado((e) => (e === 'listening' ? 'idle' : e)) },
-      onError: (err) => { setEscuchando(false); setEstado('idle'); if (err === 'not-allowed') setError('Permite el micrófono en el navegador para hablar con JARVIS.') },
+      onTexto: (t, final) => {
+        ultimo = t; setInterim(t)
+        limpiarSilencio()
+        if (final) { despachar(t); return }
+        // Pausa larga sin nuevas palabras → cierra el micro para forzar el envío.
+        silencioRef.current = setTimeout(() => { try { recRef.current?.detener() } catch { /* noop */ } }, 1600)
+      },
+      onFin: () => {
+        limpiarSilencio()
+        setEscuchando(false)
+        setEstado((e) => (e === 'listening' ? 'idle' : e))
+        if (!cancelRef.current) despachar(ultimo) // envía lo capturado aunque no hubo "final"
+      },
+      onError: (err) => {
+        limpiarSilencio(); setEscuchando(false); setEstado('idle')
+        if (err === 'not-allowed') setError('Permite el micrófono en el navegador para hablar con JARVIS.')
+      },
     })
     recRef.current = rec
     rec?.iniciar(); setEscuchando(true); setEstado('listening')
@@ -125,6 +149,8 @@ export default function Jarvis() {
   const activo = escuchando || cargando || estado === 'speaking'
   const detenerTodo = () => {
     continuoRef.current = false; setContinuo(false)
+    cancelRef.current = true // no enviar lo capturado: es una cancelación explícita
+    if (silencioRef.current) { clearTimeout(silencioRef.current); silencioRef.current = null }
     recRef.current?.detener(); detenerVoz()
     setEscuchando(false); setEstado('idle')
   }
