@@ -5,6 +5,7 @@
 // SOLO ANÁLISIS: no ejecuta acciones, no mueve dinero, no borra, no toca config.
 // ---------------------------------------------------------------------------
 import { cargarAdmin, ensureAdmin, autorizar } from './_common.js'
+import { netoClaimsPorChofer } from './_claimecon.js'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODELO = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5'
@@ -14,20 +15,26 @@ const fecha = (t) => { try { return t?.toDate ? t.toDate() : (t?.seconds ? new D
 const norm = (s) => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 // Señales analíticas de una semana (con tendencia vs la anterior).
-function calcularSenales(invoices, drivers, semanaTxt) {
+function calcularSenales(invoices, drivers, semanaTxt, claims) {
   const orden = [...invoices].map((i) => ({ ...i, _fi: fecha(i.fechaInicio) })).sort((a, b) => (b._fi?.getTime() || 0) - (a._fi?.getTime() || 0))
   const inv = semanaTxt ? (orden.find((i) => norm(i.semana).includes(norm(semanaTxt))) || orden[0]) : orden[0]
   if (!inv) return null
   const idx = orden.findIndex((i) => i.id === inv.id)
   const prev = orden[idx + 1] || null
 
+  // Claims de ESTA semana → ganancia NETA por chofer (igual que la app).
+  const claimsSemana = (claims || []).filter((c) => c.invoiceId === inv.id)
+  const claimNet = netoClaimsPorChofer(claimsSemana, { [inv.id]: inv })
+
   const tarifaDe = (nombre) => { const d = drivers.find((x) => norm(x.nombre) === norm(nombre)); return { ind: num(d?.tarifa ?? d?.rate ?? 0), dob: num(d?.tarifaDoble ?? d?.tarifa ?? d?.rate ?? 0) } }
   const choferes = (inv.resumenChoferes || []).map((c) => {
     const t = tarifaDe(c.nombre)
     const entregas = num(c.individuales) + num(c.dobles)
     const pago = num(c.individuales) * t.ind + num(c.dobles) * t.dob
-    const ganancia = num(c.ingreso) - pago
-    return { nombre: c.nombre, ciudad: c.nombreCiudad || c.ciudad, entregas, ingreso: round(c.ingreso), pago: round(pago), ganancia: round(ganancia), margen: c.ingreso ? round((ganancia / c.ingreso) * 100) : 0, claims: num(c.numClaims), fallidos: num(c.fallidos), tarifa: t.ind }
+    const cn = claimNet[c.nombre] || { gananciaClaims: 0, descontadoGofo: 0 }
+    // Ganancia NETA = ingreso bruto − pago + (cobrado al chofer − descuento de Gofo).
+    const ganancia = num(c.ingreso) - pago + cn.gananciaClaims
+    return { nombre: c.nombre, ciudad: c.nombreCiudad || c.ciudad, entregas, ingreso: round(c.ingreso), pago: round(pago), ganancia: round(ganancia), margen: c.ingreso ? round((ganancia / c.ingreso) * 100) : 0, claims: num(c.numClaims), fallidos: num(c.fallidos), descontadoGofo: round(cn.descontadoGofo), tarifa: t.ind }
   })
   const conVolumen = choferes.filter((c) => c.entregas >= 20)
   const peorMargen = [...conVolumen].sort((a, b) => a.margen - b.margen).slice(0, 3)
@@ -104,8 +111,10 @@ export default async function handler(req, res) {
     const invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
     const drvSnap = await auth.db.collection('drivers').where('companyId', '==', companyId).get()
     const drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    let claims = []
+    try { const cs = await auth.db.collection('claims').where('companyId', '==', companyId).get(); claims = cs.docs.map((d) => ({ id: d.id, ...d.data() })) } catch { /* noop */ }
 
-    const senales = calcularSenales(invoices, drivers, semana)
+    const senales = calcularSenales(invoices, drivers, semana, claims)
     if (!senales) return res.status(200).json({ ok: true, semana: null, recomendaciones: [] })
 
     // Con IA si hay clave; si no (o si falla), fallback determinista.

@@ -12,6 +12,7 @@
 // ni tocar configuración sensible. Aunque el modelo lo pida, no hay forma.
 // ---------------------------------------------------------------------------
 import { cargarAdmin, ensureAdmin, autorizar } from './_common.js'
+import { netoClaimsPorChofer } from './_claimecon.js'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODELO = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5'
@@ -60,7 +61,12 @@ async function cargarDatos(db, companyId) {
   const drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
   let ajustes = {}
   try { const s = await db.collection('settings').doc(companyId).get(); ajustes = s.exists ? s.data() : {} } catch { /* noop */ }
-  return { invoices, drivers, ajustes }
+  // Claims (para la ganancia NETA por chofer, igual que la app). Mucho menos que paquetes.
+  let claims = []
+  try { const cs = await db.collection('claims').where('companyId', '==', companyId).get(); claims = cs.docs.map((d) => ({ id: d.id, ...d.data() })) } catch { /* noop */ }
+  const invById = {}; for (const i of invoices) invById[i.id] = i
+  const claimNet = netoClaimsPorChofer(claims, invById)
+  return { invoices, drivers, ajustes, claimNet }
 }
 
 function resumenLigero({ invoices, drivers, ajustes }, empresaNombre) {
@@ -83,7 +89,7 @@ function resumenLigero({ invoices, drivers, ajustes }, empresaNombre) {
 }
 
 // ---- Agregadores para las tools de datos -----------------------------------
-function aggChoferes(invoices, drivers) {
+function aggChoferes(invoices, drivers, claimNet = {}) {
   const info = (nombre) => { const d = drivers.find((x) => norm(x.nombre) === norm(nombre)); return { ind: num(d?.tarifa ?? d?.rate ?? 0), dob: num(d?.tarifaDoble ?? d?.tarifa ?? d?.rate ?? 0), ciudad: d?.ciudad || null } }
   const map = {}
   for (const inv of invoices) for (const c of inv.resumenChoferes || []) {
@@ -92,7 +98,14 @@ function aggChoferes(invoices, drivers) {
     t.ingreso += num(c.ingreso); t.claims += num(c.numClaims); t.fallidos += num(c.fallidos)
     t.semanas[inv.semana] = { entregas: num(c.individuales) + num(c.dobles), ingreso: round(c.ingreso), claims: num(c.numClaims), fallidos: num(c.fallidos) }
   }
-  return Object.values(map).map((t) => { const f = info(t.nombre); const pago = t.individuales * f.ind + t.dobles * f.dob; return { ...t, ingreso: round(t.ingreso), ciudad: f.ciudad, tarifa: f.ind, pagoAprox: round(pago), gananciaAprox: round(t.ingreso - pago) } })
+  return Object.values(map).map((t) => {
+    const f = info(t.nombre)
+    const pago = t.individuales * f.ind + t.dobles * f.dob
+    // gananciaClaims neto = lo que cobras al chofer − lo que Gofo te descontó.
+    const cn = claimNet[t.nombre] || { gananciaClaims: 0, descontadoGofo: 0 }
+    // Ganancia NETA = ingreso bruto − pago + gananciaClaims (igual que la app).
+    return { ...t, ingreso: round(t.ingreso), ciudad: f.ciudad, tarifa: f.ind, pagoAprox: round(pago), descontadoGofo: round(cn.descontadoGofo), gananciaAprox: round(t.ingreso - pago + cn.gananciaClaims) }
+  })
 }
 function aggRutas(invoices) {
   const map = {}
@@ -107,7 +120,7 @@ function buscarSemana(invoices, txt) {
   return invoices.find((i) => norm(i.semana).includes(q)) || null
 }
 
-function ejecutarToolDatos(name, input, invoices, drivers) {
+function ejecutarToolDatos(name, input, invoices, drivers, claimNet) {
   try {
     if (name === 'get_historial') {
       const rows = [...invoices].sort((a, b) => (a._fi?.getTime() || 0) - (b._fi?.getTime() || 0))
@@ -122,7 +135,7 @@ function ejecutarToolDatos(name, input, invoices, drivers) {
       return { semana: inv.semana, ingreso: round(inv.ingresoTotal), paquetes: num(inv.totalPaquetes), claims: num(inv.totalClaims), fallidos: num(inv.totalFallidos), descuentoGofo: round(inv.totalDescuentoGofo), topChoferes: chof, topRutas: rutas }
     }
     if (name === 'get_chofer') {
-      const list = aggChoferes(invoices, drivers)
+      const list = aggChoferes(invoices, drivers, claimNet)
       const c = list.find((x) => norm(x.nombre) === norm(input.nombre)) || list.find((x) => norm(x.nombre).includes(norm(input.nombre)))
       if (!c) return { error: 'No encontré ese chofer.' }
       return c
@@ -137,7 +150,7 @@ function ejecutarToolDatos(name, input, invoices, drivers) {
       const n = Math.min(15, Math.max(1, num(input.n) || 5))
       const metrica = input.metrica || 'ingreso'
       const orden = input.orden === 'asc' ? 1 : -1
-      const list = input.entidad === 'ruta' ? aggRutas(invoices) : aggChoferes(invoices, drivers)
+      const list = input.entidad === 'ruta' ? aggRutas(invoices) : aggChoferes(invoices, drivers, claimNet)
       const ordenado = list.filter((x) => (metrica in x)).sort((a, b) => (num(a[metrica]) - num(b[metrica])) * orden).slice(0, n)
       return { entidad: input.entidad, metrica, orden: input.orden || 'desc', resultados: ordenado }
     }
@@ -150,12 +163,12 @@ function ejecutarToolDatos(name, input, invoices, drivers) {
       return { a: { semana: A.semana, ingreso: round(A.ingresoTotal), paquetes: num(A.totalPaquetes), claims: num(A.totalClaims), fallidos: num(A.totalFallidos) }, b: { semana: B.semana, ingreso: round(B.ingresoTotal), paquetes: num(B.totalPaquetes), claims: num(B.totalClaims), fallidos: num(B.totalFallidos) }, diferencias: dif }
     }
     if (name === 'get_claims') {
-      let list = aggChoferes(invoices, drivers).map((c) => ({ nombre: c.nombre, claims: c.claims })).filter((c) => c.claims > 0).sort((a, b) => b.claims - a.claims)
+      let list = aggChoferes(invoices, drivers, claimNet).map((c) => ({ nombre: c.nombre, claims: c.claims })).filter((c) => c.claims > 0).sort((a, b) => b.claims - a.claims)
       if (input.chofer) list = list.filter((c) => norm(c.nombre).includes(norm(input.chofer)))
       return { total: list.reduce((a, c) => a + c.claims, 0), porChofer: list.slice(0, 30) }
     }
     if (name === 'get_fallidos') {
-      let list = aggChoferes(invoices, drivers).map((c) => ({ nombre: c.nombre, fallidos: c.fallidos })).filter((c) => c.fallidos > 0).sort((a, b) => b.fallidos - a.fallidos)
+      let list = aggChoferes(invoices, drivers, claimNet).map((c) => ({ nombre: c.nombre, fallidos: c.fallidos })).filter((c) => c.fallidos > 0).sort((a, b) => b.fallidos - a.fallidos)
       if (input.chofer) list = list.filter((c) => norm(c.nombre).includes(norm(input.chofer)))
       const sinAsociar = (invoices[0]?.fallidosSinAsociar || []).map((s) => s.nombre || s).slice(0, 20)
       return { total: list.reduce((a, c) => a + c.fallidos, 0), porChofer: list.slice(0, 30), nombresSinAsociar: sinAsociar }
@@ -260,7 +273,7 @@ export default async function handler(req, res) {
       const toolResults = []
       for (const tu of toolUses) {
         if (NOMBRES_DATOS.has(tu.name)) {
-          const r = ejecutarToolDatos(tu.name, tu.input || {}, datos.invoices, datos.drivers)
+          const r = ejecutarToolDatos(tu.name, tu.input || {}, datos.invoices, datos.drivers, datos.claimNet)
           toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(r).slice(0, 12000) })
         } else if (tu.name === 'proponer_cambio') {
           if (!propuesta) propuesta = { ...tu.input }

@@ -328,30 +328,50 @@ export function claimsValidosPorChofer(claims) {
 // Calcula la nómina (payroll) por chofer para una factura, con el filtro de ciudad.
 // Devuelve filas con ingreso, tarifas, descuento de claims, total a pagar y ganancia.
 export function calcularPagos(inv, claims, drivers, ciudad) {
-  const choferes = porCiudad(inv?.resumenChoferes || [], ciudad)
-  const activosDet = claimsActivosDetallePorChofer(claims) // lista de claims activos por chofer
-  const totalClaimsPorChofer = claimsValidosPorChofer(claims) // válidos (incluye perdonados)
-  // Monto que Gofo descontó por chofer (suma de |montoGofo| de sus claims válidos).
-  const descuentoGofoPorChofer = {}
-  for (const c of claimsValidos(claims)) descuentoGofoPorChofer[c.courier] = (descuentoGofoPorChofer[c.courier] || 0) + Math.abs(Number(c.montoGofo) || 0)
+  const choferesFull = inv?.resumenChoferes || []
+  const choferes = porCiudad(choferesFull, ciudad)
+
+  // Ciudades de cada chofer (del resumen COMPLETO) para asignar cada claim a la
+  // fila (chofer, ciudad) correcta y no duplicarlo en choferes de varias ciudades.
+  const ciudadesPorChofer = {}
+  for (const ch of choferesFull) (ciudadesPorChofer[ch.nombre] = ciudadesPorChofer[ch.nombre] || []).push(ch.ciudad)
+  const ciudadDeClaim = (c) => {
+    const cs = ciudadesPorChofer[c.courier] || []
+    if (cs.length <= 1) return cs[0] ?? c.ciudad ?? ''
+    if (c.ciudad && cs.includes(c.ciudad)) return c.ciudad
+    return cs[0] // sin coincidencia → ciudad principal (primera), sin doble conteo
+  }
+  const K = (nombre, ciu) => `${nombre}||${ciu}`
+
+  // Claims válidos agrupados por (chofer, ciudad). Perdón = flag manual O método M3.
+  const activosDet = {}, totalPorCh = {}, descGofoPorCh = {}
+  for (const c of claimsValidos(claims)) {
+    const ciu = ciudadDeClaim(c)
+    const key = K(c.courier, ciu)
+    totalPorCh[key] = (totalPorCh[key] || 0) + 1
+    descGofoPorCh[key] = (descGofoPorCh[key] || 0) + Math.abs(Number(c.montoGofo) || 0)
+    const perdon = c.perdonado || metodoDe(inv, ciu, c) === 'M3'
+    if (!perdon) (activosDet[key] = activosDet[key] || []).push(c)
+  }
 
   return choferes.map((ch) => {
     const { tarifaInd, tarifaDoble, sinTarifa } = tarifaDriver(inv, drivers, ch.nombre)
-    const misActivos = activosDet[ch.nombre] || []
+    const key = K(ch.nombre, ch.ciudad)
+    const misActivos = activosDet[key] || []
     const claimsActivos = misActivos.length
-    const claimsTotales = totalClaimsPorChofer[ch.nombre] || 0
+    const claimsTotales = totalPorCh[key] || 0
     const claimsPerdonados = claimsTotales - claimsActivos
-    // Multa por CADA claim activo según su tipo: reducida para tracking
-    // interruption / lost, general para el resto (config empresa→ciudad guardada).
     const claimFee = claimFeeDe(inv, ch.ciudad) // general (referencia/visualización)
+    // Lo que le COBRAS al chofer por sus claims activos (según método/categoría).
     const descuentoClaims = misActivos.reduce((a, cl) => a + feeDeClaim(inv, ch.ciudad, cl), 0)
-    const descontadoGofo = descuentoGofoPorChofer[ch.nombre] || 0
+    // Lo que GOFO te descontó a ti por los claims de este chofer (pérdida real).
+    const descontadoGofo = descGofoPorCh[key] || 0
     const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
     const totalPagar = pagoBase - descuentoClaims
-    // Paquetes fallidos ("Failed delivery") del reporte de Gofo — SOLO informativo
-    // de desempeño; no afecta el pago ni el neto (viene inyectado en resumenChoferes).
+    // Fallidos ("Failed delivery"): informativo de desempeño; no afecta pago ni neto.
     const fallidos = Number(ch.fallidos) || 0
     const entregados = ch.individuales + ch.dobles
+    const intentos = entregados + fallidos // un fallido es un intento no entregado
     return {
       nombre: ch.nombre,
       ciudad: ch.ciudad,
@@ -360,7 +380,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       dobles: ch.dobles,
       ingreso: ch.ingreso,
       fallidos,
-      pctFallidos: entregados > 0 ? fallidos / entregados : 0,
+      pctFallidos: intentos > 0 ? fallidos / intentos : 0,
       tarifaInd,
       tarifaDoble,
       sinTarifa,
@@ -372,7 +392,9 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       descontadoGofo,
       gananciaClaims: descuentoClaims - descontadoGofo,
       totalPagar,
-      ganancia: ch.ingreso - totalPagar,
+      // Ganancia NETA para la empresa: ingreso bruto − pago al chofer − lo que Gofo
+      // te descontó por claims (lo que recuperas del chofer ya está en totalPagar).
+      ganancia: ch.ingreso - totalPagar - descontadoGofo,
     }
   })
 }
@@ -409,7 +431,7 @@ export function pagosPorRuta(inv, claims, drivers, ruta) {
       paquetes: ch.individuales + ch.dobles,
       ingreso: ch.ingreso,
       fallidos: Number(ch.fallidos) || 0,
-      pctFallidos: (ch.individuales + ch.dobles) > 0 ? (Number(ch.fallidos) || 0) / (ch.individuales + ch.dobles) : 0,
+      pctFallidos: (ch.individuales + ch.dobles + (Number(ch.fallidos) || 0)) > 0 ? (Number(ch.fallidos) || 0) / (ch.individuales + ch.dobles + (Number(ch.fallidos) || 0)) : 0,
       tarifaInd,
       tarifaDoble,
       sinTarifa,
@@ -420,7 +442,8 @@ export function pagosPorRuta(inv, claims, drivers, ruta) {
       descontadoGofo,
       gananciaClaims: descuentoClaims - descontadoGofo,
       totalPagar,
-      ganancia: ch.ingreso - totalPagar,
+      // Ganancia NETA: resta también lo que Gofo descontó por claims.
+      ganancia: ch.ingreso - totalPagar - descontadoGofo,
     }
   })
 }
@@ -439,8 +462,15 @@ export function resumenEstimado(inv, drivers, ciudad) {
     individuales += ch.individuales
     dobles += ch.dobles
     claims += ch.numClaims
-    costo += ch.individuales * tInd + ch.dobles * tDob - ch.numClaims * claimFeeDe(inv, ch.ciudad)
+    // Costo = pago al chofer por entregas. (Aquí no hay detalle de claims por
+    // chofer: el costo NETO de claims se resta abajo con el descuento de Gofo.)
+    costo += ch.individuales * tInd + ch.dobles * tDob
   }
+  // Costo neto de claims (aprox. para tendencia): lo que Gofo te descontó. Solo se
+  // conoce a nivel de factura completa; por ciudad se omite (se ve el margen de
+  // entrega). El P&L exacto de claims está en Financiero/economiaClaims.
+  const esTodas = !ciudad || ciudad === TODAS
+  if (esTodas) costo += Math.abs(Number(inv?.totalDescuentoGofo) || 0)
   const paquetes = individuales + dobles
   return {
     ingreso,
