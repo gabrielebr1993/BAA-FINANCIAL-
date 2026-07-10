@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { Save, Info, Compass, CreditCard, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { Save, Info, Compass } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { setOnboardingCompleto } from '../utils/empresaSettings'
-import { stripeConfig } from '../utils/stripe'
 import { descargarBackup, restaurarBackup } from '../utils/backup'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
@@ -18,14 +17,12 @@ import ConfigReglas from '../components/ConfigReglas'
 export default function Configuracion() {
   const { activeCompanyId, empresaActiva, ajustes, reloadAjustes } = useData()
   const { perfil, esSuperAdmin } = useAuth()
-  const puedeStripe = esSuperAdmin || perfil?.role === 'owner'
+  const puedeAdmin = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
   const [marca, setMarca] = useState('')
   const [notas, setNotas] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState('')
-  const [stripeInfo, setStripeInfo] = useState(null) // { configurado, test } | { error }
-  const [cargandoStripe, setCargandoStripe] = useState(false)
   const [backupBusy, setBackupBusy] = useState('')
   const [backupMsg, setBackupMsg] = useState(null)
 
@@ -51,17 +48,6 @@ export default function Configuracion() {
       setBackupMsg({ tipo: 'error', txt: 'No se pudo restaurar: ' + e.message })
     } finally { setBackupBusy('') }
   }
-
-  const revisarStripe = async () => {
-    setCargandoStripe(true)
-    try {
-      const r = await stripeConfig()
-      setStripeInfo(r.ok ? r : { error: r.error })
-    } catch (e) {
-      setStripeInfo({ error: e.message })
-    } finally { setCargandoStripe(false) }
-  }
-  useEffect(() => { if (puedeStripe) revisarStripe() }, [puedeStripe])
 
   useEffect(() => {
     ;(async () => {
@@ -121,39 +107,8 @@ export default function Configuracion() {
         {/* Reglas de cálculo configurables (empresa + ciudad) */}
         <ConfigReglas />
 
-        {/* Pagos por Stripe (solo owner/súper-admin) */}
-        {puedeStripe && (
-          <Card className="p-5 lg:col-span-2">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <CreditCard size={18} strokeWidth={1.8} className="text-brand-gold" />
-              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Pagos por Stripe</h3>
-              {stripeInfo && !stripeInfo.error && (
-                stripeInfo.configurado
-                  ? <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Configurado</span></Badge>
-                  : <Badge color="red"><span className="inline-flex items-center gap-1"><XCircle size={13} strokeWidth={2} /> No configurado</span></Badge>
-              )}
-              {stripeInfo && !stripeInfo.error && stripeInfo.configurado && <Badge color={stripeInfo.test ? 'gold' : 'slate'}>{stripeInfo.test ? 'Modo TEST' : 'Producción'}</Badge>}
-              <Boton variant="ghost" className="ml-auto px-2.5 py-1 text-xs" onClick={revisarStripe} disabled={cargandoStripe}>
-                {cargandoStripe ? <><Spinner /> Revisando…</> : <><RefreshCw size={14} strokeWidth={1.8} /> Revisar</>}
-              </Boton>
-            </div>
-            <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-              Los pagos a choferes se procesan con <b>Stripe Connect</b>. Los <b>datos bancarios los maneja Stripe</b> — MilePay nunca los ve ni los guarda; solo el estado (verificado / pendiente).
-            </p>
-            {stripeInfo?.error && <Aviso tipo="warn">No se pudo consultar el estado de Stripe: {stripeInfo.error}</Aviso>}
-            {stripeInfo && !stripeInfo.error && !stripeInfo.configurado && (
-              <Aviso tipo="warn">Falta <b>STRIPE_SECRET_KEY</b> en Vercel (usa una clave de <b>TEST</b> <code>sk_test_…</code> para probar) y activar <b>Connect</b> en tu panel de Stripe.</Aviso>
-            )}
-            <ul className="mt-1 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
-              <li>1. Registra a cada chofer desde su <b>perfil → “Verificación y pago” → “Invitar a registrar pago”</b>.</li>
-              <li>2. El chofer completa sus datos bancarios en Stripe y su estado pasa a <b>verificado</b>.</li>
-              <li>3. En <b>Pagos</b> podrás pagarle (por ahora solo en modo <b>TEST</b>; los pagos reales están deshabilitados).</li>
-            </ul>
-          </Card>
-        )}
-
         {/* Copias de seguridad (backup) */}
-        {puedeStripe && (
+        {puedeAdmin && (
           <Card className="p-5 lg:col-span-2">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <DatabaseBackup size={18} strokeWidth={1.8} className="text-brand-gold" />
