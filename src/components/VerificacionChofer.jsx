@@ -2,9 +2,10 @@
 // Solo owner/súper-admin. Los datos personales/documentos se guardan en Firestore/
 // Storage; los datos BANCARIOS los maneja Stripe (aquí solo se ve el estado).
 import { useState } from 'react'
-import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck } from 'lucide-react'
+import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
+import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
 import { stripeCrearCuenta, stripeOnboardingLink, stripeEstado } from '../utils/stripe'
 import { Card, Boton, Input, Select, Badge, Aviso, Spinner } from './ui'
 
@@ -28,6 +29,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
   const [v, setV] = useState({ ...VACIO, ...(driver?.verificacion || {}) })
   const [guardando, setGuardando] = useState(false)
   const [subiendo, setSubiendo] = useState('')
+  const [exportando, setExportando] = useState(false)
   const [msg, setMsg] = useState(null)
   const [stripeMsg, setStripeMsg] = useState(null)
   const [stripeBusy, setStripeBusy] = useState('')
@@ -74,6 +76,15 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
     } finally { setSubiendo('') }
   }
 
+  const exportar = async () => {
+    setExportando(true); setMsg(null)
+    try {
+      await exportarVerificacionPDF(driver, v)
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: 'No se pudo exportar: ' + e.message })
+    } finally { setExportando(false) }
+  }
+
   // ---- Stripe: invitar / abrir onboarding / actualizar estado ----
   const invitar = async () => {
     setStripeBusy('invitar'); setStripeMsg(null)
@@ -111,6 +122,9 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
         ))}
         <span className="inline-flex items-center gap-1"><SBIcon size={14} strokeWidth={1.9} className="text-slate-400" /><Badge color={sb.color}>Cuenta bancaria: {sb.txt}</Badge></span>
         {driver.stripeTest && <Badge color="slate">TEST</Badge>}
+        <Boton variant="ghost" onClick={exportar} disabled={exportando} className="ml-auto px-3 py-1.5 text-xs" title="Exportar a PDF con los documentos e imágenes">
+          {exportando ? <><Spinner /> Exportando…</> : <><Download size={14} strokeWidth={1.9} /> Exportar PDF</>}
+        </Boton>
       </div>
 
       {msg && <div className="mb-4"><Aviso tipo={msg.tipo}>{msg.txt}</Aviso></div>}
