@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, gananciaRealDe, desgloseGananciaCiudades, nombreCiudadDe, TODAS } from '../utils/calc'
+import { calcularPagos, porCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -32,6 +32,7 @@ export default function Financiero() {
   }, [drivers])
 
   const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
+  const claimEco = useMemo(() => economiaClaims(porCiudad(claims, selectedCity), selectedInvoice), [claims, selectedCity, selectedInvoice])
 
   const rutas = useMemo(() => {
     const base = porCiudad(selectedInvoice?.resumenRutas || [], selectedCity)
@@ -47,8 +48,10 @@ export default function Financiero() {
   const ingresoTotal = pagos.reduce((a, p) => a + p.ingreso, 0)
   const costoTotal = pagos.reduce((a, p) => a + p.totalPagar, 0)
   const descuentos = pagos.reduce((a, p) => a + p.descuentoClaims, 0)
-  const gananciaReal = ingresoTotal - costoTotal
-  const margen = ingresoTotal > 0 ? gananciaReal / ingresoTotal : 0
+  // La "Ganancia real" es la autoritativa (incluye descuento de Gofo por claims y
+  // gastos fijos), la misma que la tarjeta — para que todo cuadre.
+  const gananciaReal = gReal.gananciaReal
+  const margen = gReal.margen
 
   const topRutas = [...rutas].sort((a, b) => b.ingreso - a.ingreso).slice(0, 10)
   const ingresoPorRuta = topRutas.map((r) => ({ name: r.ruta, valor: Math.round(r.ingreso) }))
@@ -77,7 +80,7 @@ export default function Financiero() {
       ) : (
         <>
           {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
-          {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} />}
+          {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} />}
 
           {/* Desglose de ganancia real por ciudad */}
           {selectedInvoice && desgloseCiudades.length > 0 && (

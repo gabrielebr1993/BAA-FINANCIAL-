@@ -5,7 +5,7 @@ import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
-  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, nombreCiudadDe, contarClaimsValidos, TODAS,
+  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, economiaClaims, nombreCiudadDe, contarClaimsValidos, TODAS,
 } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
@@ -36,6 +36,7 @@ export default function Dashboard() {
   const rr = useMemo(() => rankingsRutas(inv, drivers, selectedCity), [inv, drivers, selectedCity])
   const tot = useMemo(() => totalesFiltrados(inv, selectedCity), [inv, selectedCity])
   const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
+  const claimEco = useMemo(() => economiaClaims(porCiudad(claims, selectedCity), inv), [claims, selectedCity, inv])
 
   const invAnterior = useMemo(() => {
     if (!inv || esRango) return null
@@ -209,7 +210,7 @@ export default function Dashboard() {
                   <Verificacion v={inv.verificacion} compacto />
                 </ClickWrap>
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} />
+                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} />
                 </ClickWrap>
               </div>
 
