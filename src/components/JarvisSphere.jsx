@@ -30,14 +30,14 @@ export default function JarvisSphere({ estado = 'idle', size = 300, alerta = fal
     const k = R / 270 // escala respecto al diseño de referencia (R=270)
     const esCorto = S < 90 // mini-cerebro: menos nodos
 
-    const N = esCorto ? 16 : 70
+    const N = esCorto ? 16 : 96
     const nodos = Array.from({ length: N }, () => {
       const th = Math.random() * 6.28, ph = Math.acos(2 * Math.random() - 1)
       return { th, ph, r: R * (0.55 + Math.random() * 0.45), sp: 0.0015 + Math.random() * 0.0025, f: Math.random() * 6, jx: 0, jy: 0, pulso: 0, phSp: (Math.random() - 0.5) * 0.004 }
     })
     const cnx = []
-    if (!esCorto) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Math.random() < 0.06) cnx.push([i, j, Math.random()])
-    const parts = esCorto ? [] : Array.from({ length: 110 }, () => {
+    if (!esCorto) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Math.random() < 0.05) cnx.push([i, j, Math.random()])
+    const parts = esCorto ? [] : Array.from({ length: 170 }, () => {
       const th = Math.random() * 6.28, ph = Math.acos(2 * Math.random() - 1)
       return { th, ph, r: R * (0.9 + Math.random() * 0.3), sp: 0.002 + Math.random() * 0.003 }
     })
@@ -125,5 +125,12 @@ export default function JarvisSphere({ estado = 'idle', size = 300, alerta = fal
     return () => cancelAnimationFrame(raf)
   }, [size])
 
-  return <canvas ref={canvasRef} style={{ width: size, height: size }} />
+  // Cuadrado y responsivo: nunca más de 99vw ni 88vh (ocupa casi toda la pantalla
+  // en la vista grande, pero se adapta en móviles).
+  const lado = esCortoLado(size) ? `${size}px` : `min(${size}px, 99vw, 88vh)`
+  return <canvas ref={canvasRef} style={{ width: lado, height: lado }} />
+}
+
+function esCortoLado(size) {
+  return size < 90
 }

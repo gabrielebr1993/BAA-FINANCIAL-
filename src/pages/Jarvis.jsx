@@ -205,8 +205,8 @@ export default function Jarvis() {
           <div className="mt-0.5 text-[10px] tracking-[0.3em] text-brand-gold/60">MILEPAY · NÚCLEO NEURONAL</div>
         </div>
 
-        <button onClick={alternar} className="-my-4 cursor-pointer" aria-label="Hablar con JARVIS" title="Toca para hablar">
-          <JarvisSphere estado={estado} size={340} animo={animo} />
+        <button onClick={alternar} className="cursor-pointer" style={{ marginTop: -30, marginBottom: -30 }} aria-label="Hablar con JARVIS" title="Toca para hablar">
+          <JarvisSphere estado={estado} size={700} animo={animo} />
         </button>
 
         <div className="mx-auto max-w-2xl text-center">
