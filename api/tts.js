@@ -10,9 +10,15 @@ const ELEVEN_URL = 'https://api.elevenlabs.io/v1/text-to-speech'
 
 export default async function handler(req, res) {
   try {
-    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Método no permitido.' })
     const apiKey = process.env.ELEVENLABS_API_KEY
     const voiceId = process.env.ELEVENLABS_VOICE_ID
+
+    // Sonda de estado (sin exponer la clave): dice si ElevenLabs está configurado
+    // en ESTE deploy. Útil para mostrar en la UI qué voz se usará.
+    if (req.method === 'GET' || (req.body && req.body.probe)) {
+      return res.status(200).json({ ok: true, configurado: !!(apiKey && voiceId) })
+    }
+    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Método no permitido.' })
     // No configurado → 204: el navegador usará SpeechSynthesis.
     if (!apiKey || !voiceId) return res.status(204).end()
 

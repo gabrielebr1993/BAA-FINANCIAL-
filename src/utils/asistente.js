@@ -30,6 +30,16 @@ export async function ejecutarAccionAsistente(body) {
   return resp.json().catch(() => ({ ok: false, error: 'Respuesta no válida del servidor.' }))
 }
 
+// ¿Está ElevenLabs configurado en el deploy actual? (para mostrar en la UI).
+export async function estadoVozIA() {
+  try {
+    const resp = await fetch('/api/tts', { method: 'GET' })
+    if (!resp.ok) return { configurado: false }
+    const d = await resp.json().catch(() => ({}))
+    return { configurado: !!d.configurado }
+  } catch { return { configurado: false } }
+}
+
 // --- Voz que HABLA -----------------------------------------------------------
 let audioActual = null
 export function detenerVoz() {
@@ -38,8 +48,8 @@ export function detenerVoz() {
 }
 
 // Intenta ElevenLabs; si no está configurado (204) o falla, usa el navegador.
-// `onFin` se llama cuando termina de hablar. Devuelve una función para cortar.
-export async function hablar(texto, { idioma = 'es', onInicio, onFin } = {}) {
+// `onFuente('elevenlabs'|'navegador')` avisa qué voz se usó. Devuelve función de corte.
+export async function hablar(texto, { idioma = 'es', onInicio, onFin, onFuente } = {}) {
   detenerVoz()
   if (!texto?.trim()) { onFin?.(); return detenerVoz }
   try {
@@ -48,30 +58,50 @@ export async function hablar(texto, { idioma = 'es', onInicio, onFin } = {}) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token()}` },
       body: JSON.stringify({ texto }),
     })
-    if (resp.status === 204) return hablarNavegador(texto, idioma, { onInicio, onFin })
-    if (!resp.ok) return hablarNavegador(texto, idioma, { onInicio, onFin })
+    if (resp.status === 204 || !resp.ok) return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
     const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     audioActual = audio
-    audio.onplay = () => onInicio?.()
+    audio.onplay = () => { onFuente?.('elevenlabs'); onInicio?.() }
     audio.onended = () => { URL.revokeObjectURL(url); if (audioActual === audio) audioActual = null; onFin?.() }
-    audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(texto, idioma, { onInicio, onFin }) }
-    await audio.play()
+    audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(texto, idioma, { onInicio, onFin, onFuente }) }
+    try {
+      await audio.play()
+    } catch {
+      // Autoplay bloqueado por el navegador (fuera de un gesto): caer al navegador.
+      URL.revokeObjectURL(url); return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+    }
   } catch {
-    return hablarNavegador(texto, idioma, { onInicio, onFin })
+    return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
   }
   return detenerVoz
 }
 
-function hablarNavegador(texto, idioma, { onInicio, onFin } = {}) {
+// Elige la mejor voz del navegador para el idioma (evita la más robótica).
+function mejorVoz(idioma) {
+  try {
+    const voces = window.speechSynthesis?.getVoices?.() || []
+    if (!voces.length) return null
+    const pref = idioma?.startsWith('en') ? 'en' : 'es'
+    const delIdioma = voces.filter((v) => (v.lang || '').toLowerCase().startsWith(pref))
+    const candidatas = delIdioma.length ? delIdioma : voces
+    // Prioriza voces "naturales" (Google/Microsoft/Natural/Premium) sobre las básicas.
+    const bonus = (v) => /google|natural|premium|microsoft|neural|enhanced/i.test(v.name || '') ? 1 : 0
+    return candidatas.slice().sort((a, b) => bonus(b) - bonus(a))[0] || null
+  } catch { return null }
+}
+
+function hablarNavegador(texto, idioma, { onInicio, onFin, onFuente } = {}) {
   try {
     const synth = window.speechSynthesis
     if (!synth) { onFin?.(); return detenerVoz }
     const u = new SpeechSynthesisUtterance(texto)
     u.lang = idioma?.startsWith('en') ? 'en-US' : 'es-ES'
-    u.rate = 1.02; u.pitch = 1
-    u.onstart = () => onInicio?.()
+    const v = mejorVoz(idioma)
+    if (v) u.voice = v
+    u.rate = 1.0; u.pitch = 1.05
+    u.onstart = () => { onFuente?.('navegador'); onInicio?.() }
     u.onend = () => onFin?.()
     synth.speak(u)
   } catch { onFin?.() }

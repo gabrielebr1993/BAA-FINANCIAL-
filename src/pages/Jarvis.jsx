@@ -12,7 +12,7 @@ import { Card, PageTitle, Boton, Aviso } from '../components/ui'
 import JarvisSphere from '../components/JarvisSphere'
 import {
   preguntarAsistente, ejecutarAccionAsistente, hablar, detenerVoz,
-  crearReconocedor, reconocimientoDisponible, detectarIdioma,
+  crearReconocedor, reconocimientoDisponible, detectarIdioma, estadoVozIA,
 } from '../utils/asistente'
 
 const RUTA_SECCION = {
@@ -40,10 +40,17 @@ export default function Jarvis() {
   const [propuesta, setPropuesta] = useState(null)
   const [aplicando, setAplicando] = useState(false)
   const [error, setError] = useState('')
+  const [vozIA, setVozIA] = useState(null) // null=comprobando, true=ElevenLabs, false=navegador
+  const [fuenteVoz, setFuenteVoz] = useState(null) // qué voz sonó por última vez
   const finRef = useRef(null)
   const recRef = useRef(null)
 
   useEffect(() => () => detenerVoz(), [])
+  // Estado de la voz IA + precargar voces del navegador (para el fallback).
+  useEffect(() => {
+    estadoVozIA().then((r) => setVozIA(!!r.configurado)).catch(() => setVozIA(false))
+    try { window.speechSynthesis?.getVoices(); window.speechSynthesis && (window.speechSynthesis.onvoiceschanged = () => {}) } catch { /* noop */ }
+  }, [])
   useEffect(() => { finRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [mensajes, cargando, propuesta])
 
   // Resuelve el código de ciudad a partir de un nombre/código aproximado.
@@ -81,7 +88,7 @@ export default function Jarvis() {
       if (r.propuesta) setPropuesta(r.propuesta)
       if (vozActiva && r.reply) {
         setEstado('speaking')
-        hablar(r.reply, { idioma: detectarIdioma(r.reply), onFin: () => setEstado('idle') })
+        hablar(r.reply, { idioma: detectarIdioma(r.reply), onFuente: setFuenteVoz, onFin: () => setEstado('idle') })
       } else setEstado('idle')
     } catch (e) {
       setError('Error: ' + e.message); setEstado('idle')
@@ -155,6 +162,19 @@ export default function Jarvis() {
             <button onClick={toggleVoz} title={vozActiva ? 'Silenciar voz' : 'Activar voz'} className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm font-semibold transition ${vozActiva ? 'border-brand-gold bg-brand-gold/10 text-brand-navy dark:text-brand-gold' : 'border-slate-300 text-slate-500 dark:border-slate-600'}`}>
               {vozActiva ? <Volume2 size={16} strokeWidth={1.9} /> : <VolumeX size={16} strokeWidth={1.9} />}
             </button>
+          </div>
+          {/* Qué voz está activa: ElevenLabs (IA) o la del navegador (robótica) */}
+          <div className="text-center text-[11px]">
+            {vozIA === null ? (
+              <span className="text-slate-400">Comprobando voz…</span>
+            ) : vozIA ? (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Voz IA (ElevenLabs) activa</span>
+            ) : (
+              <span className="text-amber-600 dark:text-amber-400" title="Falta ELEVENLABS en este deploy o requiere Redeploy">Voz del navegador · ElevenLabs no disponible</span>
+            )}
+            {fuenteVoz === 'navegador' && vozIA && (
+              <div className="mt-0.5 text-amber-600 dark:text-amber-400">Sonó la voz del navegador (¿autoplay bloqueado? toca 🔊 y reintenta)</div>
+            )}
           </div>
         </Card>
 
