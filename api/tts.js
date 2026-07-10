@@ -7,6 +7,10 @@
 import { cargarAdmin, ensureAdmin, autorizar } from './_common.js'
 
 const ELEVEN_URL = 'https://api.elevenlabs.io/v1/text-to-speech'
+// Voz "premade" de ElevenLabs usable en CUALQUIER plan (incluida la capa gratis).
+// Sirve de respaldo si la voz elegida es de la BIBLIOTECA y el plan/cuenta no la
+// permite por API ("Free users cannot use library voices"). Configurable por env.
+const VOZ_FALLBACK = process.env.ELEVENLABS_FALLBACK_VOICE_ID || '21m00Tcm4TlvDq8ikWAM' // Rachel (multilingüe)
 
 export default async function handler(req, res) {
   try {
@@ -33,7 +37,7 @@ export default async function handler(req, res) {
     const texto = String((req.body && req.body.texto) || '').slice(0, 2000)
     if (!texto.trim()) return res.status(400).json({ ok: false, error: 'Falta texto.' })
 
-    const r = await fetch(`${ELEVEN_URL}/${voiceId}`, {
+    const sintetizar = (vId) => fetch(`${ELEVEN_URL}/${vId}`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
       body: JSON.stringify({
@@ -42,13 +46,26 @@ export default async function handler(req, res) {
         voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true },
       }),
     })
+
+    let r = await sintetizar(voiceId)
+    let alterna = false
     if (!r.ok) {
       const t = await r.text().catch(() => '')
-      return res.status(502).json({ ok: false, error: 'ElevenLabs ' + r.status + ': ' + t.slice(0, 200) })
+      // Si la voz elegida es de biblioteca / el plan no la permite → reintenta con
+      // una voz premade (válida en cualquier plan) para no caer en la voz robótica.
+      const esProblemaPlan = r.status === 401 || r.status === 403 || /library|free users|subscription|can ?not use|no puede/i.test(t)
+      if (esProblemaPlan && VOZ_FALLBACK && VOZ_FALLBACK !== voiceId) {
+        const r2 = await sintetizar(VOZ_FALLBACK)
+        if (r2.ok) { r = r2; alterna = true }
+        else { const t2 = await r2.text().catch(() => ''); return res.status(502).json({ ok: false, error: 'ElevenLabs ' + r2.status + ': ' + t2.slice(0, 200) }) }
+      } else {
+        return res.status(502).json({ ok: false, error: 'ElevenLabs ' + r.status + ': ' + t.slice(0, 200) })
+      }
     }
     const buf = Buffer.from(await r.arrayBuffer())
     res.setHeader('Content-Type', 'audio/mpeg')
     res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-Voice-Fallback', alterna ? '1' : '0') // 1 = se usó la voz alterna
     return res.status(200).send(buf)
   } catch (e) {
     return res.status(400).json({ ok: false, error: 'TTS error: ' + (e?.message || 'desconocido') })

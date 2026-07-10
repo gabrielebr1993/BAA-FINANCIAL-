@@ -212,6 +212,7 @@ export default function Jarvis() {
         {/* Indicador de qué voz está activa */}
         <div className="mt-3 text-center text-[11px]">
           {vozIA === null ? <span className="text-slate-400">Comprobando voz…</span>
+            : fuenteVoz === 'elevenlabs-alt' ? <span className="text-amber-400">● Voz alterna de ElevenLabs (tu voz elegida es de biblioteca: agrégala a “My Voices” con tu plan de pago)</span>
             : vozIA ? <span className="text-emerald-400">● Voz IA (ElevenLabs) activa</span>
             : <span className="text-amber-400">Voz del navegador · ElevenLabs no disponible (revisa variables + Redeploy)</span>}
           {fuenteVoz === 'navegador' && vozIA && <span className="ml-2 text-amber-400">· sonó la voz del navegador (¿autoplay? toca 🔊 y reintenta)</span>}

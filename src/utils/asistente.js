@@ -65,11 +65,12 @@ export async function hablar(texto, { idioma = 'es', onInicio, onFin, onFuente, 
       if (d?.error) onError?.(d.error)
       return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
     }
+    const alterna = resp.headers.get('X-Voice-Fallback') === '1'
     const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     audioActual = audio
-    audio.onplay = () => { onFuente?.('elevenlabs'); onInicio?.() }
+    audio.onplay = () => { onFuente?.(alterna ? 'elevenlabs-alt' : 'elevenlabs'); onInicio?.() }
     audio.onended = () => { URL.revokeObjectURL(url); if (audioActual === audio) audioActual = null; onFin?.() }
     audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(texto, idioma, { onInicio, onFin, onFuente }) }
     try {
