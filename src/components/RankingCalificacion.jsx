@@ -79,7 +79,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
     return true
   })
   const val = (r, k) =>
-    k === 'nombre' ? r.nombre : k === 'claims' ? r.claimsTotales : k === 'ganancia' ? r.ganancia : k === 'paquetes' ? r.paquetes : r.calif.puntaje
+    k === 'nombre' ? r.nombre : k === 'claims' ? r.claimsTotales : k === 'fallidos' ? (r.fallidos || 0) : k === 'ganancia' ? r.ganancia : k === 'paquetes' ? r.paquetes : r.calif.puntaje
   const rows = [...filtradas].sort((a, b) => {
     const va = val(a, sortKey), vb = val(b, sortKey)
     if (typeof va === 'string') return asc ? va.localeCompare(vb) : vb.localeCompare(va)
@@ -135,6 +135,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
                 <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('puntaje')}>Puntaje{flecha('puntaje')}</th>
                 <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('paquetes')}>Paquetes{flecha('paquetes')}</th>
                 <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('claims')}>Claims{flecha('claims')}</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('fallidos')}>Fallidos{flecha('fallidos')}</th>
                 <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('ganancia')}>Ganancia{flecha('ganancia')}</th>
                 <th className="px-2.5 py-2.5 text-left font-semibold">Etiqueta</th>
               </tr>
@@ -154,13 +155,14 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
                     <td className="px-2.5 py-2 text-right font-bold" style={{ color: COLOR_NIVEL[r.calif.nivel] }}>{r.calif.puntaje}</td>
                     <td className="px-2.5 py-2 text-right">{num(r.paquetes)}</td>
                     <td className="px-2.5 py-2 text-right">{num(r.claimsTotales)}</td>
+                    <td className={`px-2.5 py-2 text-right ${(r.fallidos || 0) > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>{num(r.fallidos || 0)}</td>
                     <td className={`px-2.5 py-2 text-right ${r.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(r.ganancia)}</td>
                     <td className="px-2.5 py-2"><Badge color={BADGE_NIVEL[r.calif.nivel]}>{r.calif.etiqueta}</Badge></td>
                   </tr>
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">Sin choferes con estos filtros.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400">Sin choferes con estos filtros.</td></tr>
               )}
             </tbody>
           </table>
