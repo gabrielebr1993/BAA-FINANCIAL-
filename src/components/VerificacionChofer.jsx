@@ -116,28 +116,38 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
       {msg && <div className="mb-4"><Aviso tipo={msg.tipo}>{msg.txt}</Aviso></div>}
 
       <div className="space-y-4">
-        {/* 1 · Datos personales */}
+        {/* 1 · Datos personales — orden par (6 celdas) para que no queden campos solitarios */}
         <Seccion icon={User} titulo="Datos personales">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             <Campo label="Nombre completo"><Input value={v.nombreCompleto} onChange={(e) => set('nombreCompleto', e.target.value)} placeholder={driver.nombre} /></Campo>
             <Campo label="Teléfono"><Input value={v.telefono} onChange={(e) => set('telefono', e.target.value)} /></Campo>
             <Campo label="Email"><Input type="email" value={v.email} onChange={(e) => set('email', e.target.value)} /></Campo>
-            <Campo label="Dirección" className="sm:col-span-2"><Input value={v.direccion} onChange={(e) => set('direccion', e.target.value)} /></Campo>
             <Campo label="Fecha de nacimiento (opcional)"><Input type="date" value={v.fechaNacimiento} onChange={(e) => set('fechaNacimiento', e.target.value)} /></Campo>
+            <Campo label="Dirección" className="sm:col-span-2"><Input value={v.direccion} onChange={(e) => set('direccion', e.target.value)} /></Campo>
           </div>
         </Seccion>
 
-        {/* 2 · Documentos e identificación */}
+        {/* 2 · Documentos e identificación — cada documento en su propio sub-bloque */}
         <Seccion icon={IdCard} titulo="Documentos e identificación">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Campo label="Número de licencia / ID"><Input value={v.licenciaNumero} onChange={(e) => set('licenciaNumero', e.target.value)} /></Campo>
-            <div className="flex items-end">
-              <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
-              </label>
+            {/* Licencia / ID */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><IdCard size={14} strokeWidth={1.9} className="text-brand-gold" /> Licencia / ID</div>
+              <div className="space-y-3">
+                <Campo label="Número de licencia / ID"><Input value={v.licenciaNumero} onChange={(e) => set('licenciaNumero', e.target.value)} /></Campo>
+                <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
+              </div>
             </div>
-            <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
-            <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+            {/* Formulario W-9 */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Formulario W-9</div>
+              <div className="space-y-3">
+                <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
+                </label>
+                <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+              </div>
+            </div>
           </div>
         </Seccion>
 
