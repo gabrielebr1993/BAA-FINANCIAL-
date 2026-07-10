@@ -3,6 +3,23 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Divide las librerías grandes en chunks propios (mejor caché y arranque más
+  // liviano). Firebase se saca del bundle principal; charts/xlsx/pdf ya se cargan
+  // por página de forma diferida.
+  build: {
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
+          if (id.includes('recharts') || id.includes('/d3-') || id.includes('victory')) return 'charts'
+          if (id.includes('xlsx')) return 'xlsx'
+          if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg')) return 'pdf'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

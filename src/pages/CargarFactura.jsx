@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -311,14 +311,19 @@ export default function CargarFactura() {
   const guardarExistentes = async () => {
     setGuardandoExist(true)
     try {
+      const cambios = []
       for (const [n, v] of Object.entries(editExist)) {
         const d = buscarDriver(drivers, n)
         if (!d) continue
         const ni = v.ind !== undefined && Number(v.ind) > 0 ? Number(v.ind) : Number(d.precioIndividual)
         const nd = v.doble !== undefined && Number(v.doble) > 0 ? Number(v.doble) : Number(d.precioDoble)
-        if (ni !== Number(d.precioIndividual) || nd !== Number(d.precioDoble)) {
-          await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: ni, precioDoble: nd })
-        }
+        if (ni !== Number(d.precioIndividual) || nd !== Number(d.precioDoble)) cambios.push({ id: d.id, precioIndividual: ni, precioDoble: nd })
+      }
+      const chunk = 450
+      for (let i = 0; i < cambios.length; i += chunk) {
+        const batch = writeBatch(db)
+        cambios.slice(i, i + chunk).forEach((c) => batch.update(doc(db, 'drivers', c.id), { precioIndividual: c.precioIndividual, precioDoble: c.precioDoble }))
+        await batch.commit()
       }
       await reloadDrivers()
       setEditExist({})
@@ -371,12 +376,10 @@ export default function CargarFactura() {
         const canon = unif.map[raw] || raw
         if (normNombre(canon) !== normNombre(raw)) (aliasPorCanonico[canon] = aliasPorCanonico[canon] || []).push(raw)
       }
+      const chunk = 450
+      // Crear los choferes NUEVOS (inexistentes) en batch, con su alias.
       if (choferesNuevos.length > 0) {
-        // Un chofer "nuevo" puede ser inexistente (crear) o existente sin precio
-        // (actualizar), para no duplicarlo. Match por nombre normalizado.
         const aCrear = choferesNuevos.filter((n) => !buscarDriver(drivers, n))
-        const aActualizar = choferesNuevos.filter((n) => buscarDriver(drivers, n))
-        const chunk = 450
         for (let i = 0; i < aCrear.length; i += chunk) {
           const batch = writeBatch(db)
           for (const n of aCrear.slice(i, i + chunk)) {
@@ -393,17 +396,28 @@ export default function CargarFactura() {
           }
           await batch.commit()
         }
-        for (const n of aActualizar) {
-          const d = buscarDriver(drivers, n)
-          await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: Number(precios[n].ind) || 0, precioDoble: Number(precios[n].doble) || 0, activo: true })
-        }
-        await reloadDrivers()
       }
-      // Guardar alias en los choferes YA existentes (los nuevos ya se crearon con alias).
+      // Actualizar choferes EXISTENTES: precio/activo (los "nuevos" que ya existían sin
+      // precio) + alias. Se combinan por documento (Firestore no permite dos escrituras
+      // al mismo doc en un batch) y se comitean en lotes, en vez de uno por uno.
+      const updates = {}
+      if (choferesNuevos.length > 0) {
+        for (const n of choferesNuevos.filter((x) => buscarDriver(drivers, x))) {
+          const d = buscarDriver(drivers, n)
+          updates[d.id] = { ...(updates[d.id] || {}), precioIndividual: Number(precios[n].ind) || 0, precioDoble: Number(precios[n].doble) || 0, activo: true }
+        }
+      }
       for (const [canon, aliases] of Object.entries(aliasPorCanonico)) {
         const d = buscarDriver(drivers, canon)
-        if (d && aliases.length) await updateDoc(doc(db, 'drivers', d.id), { alias: arrayUnion(...aliases) }).catch(() => {})
+        if (d && aliases.length) updates[d.id] = { ...(updates[d.id] || {}), alias: arrayUnion(...aliases) }
       }
+      const upIds = Object.keys(updates)
+      for (let i = 0; i < upIds.length; i += chunk) {
+        const batch = writeBatch(db)
+        upIds.slice(i, i + chunk).forEach((id) => batch.update(doc(db, 'drivers', id), updates[id]))
+        await batch.commit()
+      }
+      if (choferesNuevos.length > 0 || upIds.length) await reloadDrivers()
 
       const { detalles, claims, ...resumen } = combinado
       const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
@@ -465,7 +479,6 @@ export default function CargarFactura() {
         const wb = (d.waybill || '').trim()
         if (wb && !detPorWaybill[wb]) detPorWaybill[wb] = d
       }
-      const chunk = 450
       for (let i = 0; i < claims.length; i += chunk) {
         const batch = writeBatch(db)
         for (const c of claims.slice(i, i + chunk)) {
