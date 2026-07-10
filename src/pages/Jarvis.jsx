@@ -88,7 +88,12 @@ export default function Jarvis() {
       if (r.propuesta) setPropuesta(r.propuesta)
       if (vozActiva && r.reply) {
         setEstado('speaking')
-        hablar(r.reply, { idioma: detectarIdioma(r.reply), onFuente: setFuenteVoz, onFin: () => setEstado('idle') })
+        hablar(r.reply, {
+          idioma: detectarIdioma(r.reply),
+          onFuente: setFuenteVoz,
+          onError: (m) => setError('Voz ElevenLabs no disponible: ' + m + '. Se usó la voz del navegador.'),
+          onFin: () => setEstado('idle'),
+        })
       } else setEstado('idle')
     } catch (e) {
       setError('Error: ' + e.message); setEstado('idle')
