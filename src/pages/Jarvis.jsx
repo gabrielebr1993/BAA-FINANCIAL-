@@ -9,6 +9,7 @@ import { Send, Mic, Volume2, VolumeX, Loader2, Check, X, MessageSquare, Repeat }
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { TODAS } from '../utils/calc'
+import { generarReporteAsistente } from '../utils/reporteAsistente'
 import { PageTitle, Boton, Aviso } from '../components/ui'
 import JarvisSphere from '../components/JarvisSphere'
 import {
@@ -28,7 +29,7 @@ const COLOR_ESTADO = { idle: '#8ea0bd', listening: '#4ade80', thinking: '#e3c988
 
 export default function Jarvis() {
   const navigate = useNavigate()
-  const { activeCompanyId, empresaActiva, drivers, facturaRango, setRango, setSelectedCity, reloadDrivers } = useData()
+  const { activeCompanyId, empresaActiva, drivers, claims, facturaRango, selectedCity, setRango, setSelectedCity, reloadDrivers } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const puede = esSuperAdmin || perfil?.role === 'owner'
 
@@ -70,17 +71,24 @@ export default function Jarvis() {
     return m ? m.ubicacion : ciudad
   }, [facturaRango])
 
-  const ejecutarAcciones = useCallback((acciones) => {
+  const ejecutarAcciones = useCallback(async (acciones) => {
     for (const ac of acciones || []) {
-      if (ac.tipo === 'navegar' || ac.tipo === 'generar_reporte') {
+      if (ac.tipo === 'navegar') {
         const path = RUTA_SECCION[ac.seccion]; if (path) navigate(path)
+      } else if (ac.tipo === 'generar_reporte') {
+        try {
+          const r = await generarReporteAsistente(ac.seccion, ac.formato, { facturaRango, claims, drivers, selectedCity })
+          setMensajes((m) => [...m, { role: 'assistant', content: `📥 Descargando ${r.formato}: ${r.titulo} (${r.filas} filas).` }])
+        } catch (e) {
+          setError('No se pudo generar el reporte: ' + e.message)
+        }
       } else if (ac.tipo === 'aplicar_filtro') {
         if (ac.desde || ac.hasta) setRango({ preset: 'personalizado', desde: ac.desde || '', hasta: ac.hasta || '' })
         else if (ac.preset) setRango({ preset: ac.preset, desde: '', hasta: '' })
         if (ac.ciudad) setSelectedCity(resolverCiudad(ac.ciudad))
       }
     }
-  }, [navigate, setRango, setSelectedCity, resolverCiudad])
+  }, [navigate, setRango, setSelectedCity, resolverCiudad, facturaRango, claims, drivers, selectedCity])
 
   const enviar = useCallback(async (preguntaTxt) => {
     const q = (preguntaTxt ?? texto).trim()
@@ -92,7 +100,7 @@ export default function Jarvis() {
       const r = await preguntarAsistente({ companyId: activeCompanyId, messages: nuevos })
       if (!r.ok) { setError(r.error || 'No se pudo responder.'); setEstado('idle'); return }
       setMensajes((m) => [...m, { role: 'assistant', content: r.reply }])
-      ejecutarAcciones(r.acciones)
+      await ejecutarAcciones(r.acciones)
       if (r.propuesta) setPropuesta(r.propuesta)
       if (vozActiva && r.reply) {
         setEstado('speaking')
