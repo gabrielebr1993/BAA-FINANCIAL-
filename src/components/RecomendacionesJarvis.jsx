@@ -1,7 +1,7 @@
 // Panel "Recomendaciones de JARVIS": análisis accionable de la semana en curso.
 // Automático (se genera al ver el dashboard) y también accesible pidiéndoselo a
 // JARVIS por voz/chat. Solo owner/súper-admin. SOLO sugerencias, no ejecuta nada.
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, RefreshCw, ArrowRight, Lightbulb } from 'lucide-react'
 import { useData } from '../DataContext'
@@ -22,16 +22,21 @@ export default function RecomendacionesJarvis() {
   const [recs, setRecs] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
-  const cacheRef = useRef({}) // por semana, para no repetir la llamada
+
+  // Se guarda en localStorage por empresa+semana: se genera UNA vez por semana y
+  // los siguientes refrescos la leen guardada (no vuelve a llamar a la IA).
+  const claveCache = activeCompanyId && semana ? `milepay_recs_${activeCompanyId}_${semana}` : null
+  const leerCache = () => { try { return claveCache ? JSON.parse(localStorage.getItem(claveCache) || 'null') : null } catch { return null } }
+  const guardarCache = (arr) => { try { if (claveCache) localStorage.setItem(claveCache, JSON.stringify(arr)) } catch { /* almacenamiento no disponible */ } }
 
   const cargar = async (forzar = false) => {
     if (!activeCompanyId || !semana) return
-    if (!forzar && cacheRef.current[semana]) { setRecs(cacheRef.current[semana]); return }
+    if (!forzar) { const guardado = leerCache(); if (guardado) { setRecs(guardado); return } }
     setCargando(true); setError('')
     try {
       const r = await obtenerRecomendaciones({ companyId: activeCompanyId, semana })
       if (!r.ok) { setError(r.error || 'No se pudieron generar.'); return }
-      cacheRef.current[semana] = r.recomendaciones || []
+      guardarCache(r.recomendaciones || [])
       setRecs(r.recomendaciones || [])
     } catch (e) { setError('Error: ' + e.message) } finally { setCargando(false) }
   }
