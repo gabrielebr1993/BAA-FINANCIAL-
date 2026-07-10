@@ -11,6 +11,7 @@ import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
+import RecomendacionesJarvis from '../components/RecomendacionesJarvis'
 import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
@@ -142,6 +143,7 @@ export default function Dashboard() {
       ) : (
         <>
           {onbAbierto && <Onboarding />}
+          <RecomendacionesJarvis />
           {alertas.length > 0 && (
             <Aviso tipo="warn">
               <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
