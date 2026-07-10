@@ -185,12 +185,15 @@ export default function Pagos() {
         <Cargando texto="Cargando pagos…" />
       ) : (
         <>
-          <div className="mb-5 flex flex-wrap gap-3">
+          <div className="mb-2 flex flex-wrap gap-3">
             <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />
             <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" />
-            <KPI label={lGanancia('Ganancia total')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />
+            <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />
             <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
           </div>
+          <p className="mb-5 text-xs text-slate-400">
+            Esta ganancia es la de los choferes (ingreso − pago − descuento de Gofo por claims), <b>antes</b> de gastos fijos. La <b>Ganancia real</b> (que también resta los gastos fijos) está en el <b>Dashboard</b> y <b>Financiero</b>. Si filtras o buscas, este total es solo de los choferes mostrados.
+          </p>
 
           {!selectedInvoice ? (
             <EstadoVacio texto="Cuando cargues una factura verás aquí el pago calculado de cada chofer." />
