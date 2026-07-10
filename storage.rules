@@ -1,30 +1,43 @@
 rules_version = '2';
 
 // Reglas de Firebase Storage para MilePay.
-// SOLO se guardan documentos de verificación del chofer (licencia, W-9), y solo
-// el STAFF (no drivers) de la empresa dueña puede leerlos/subirlos. Nada público.
-// NUNCA se guardan datos bancarios aquí (esos viven en Stripe).
+// - verificacion/... : documentos de choferes (licencia, W-9)
+// - backups/...       : copias de seguridad de la empresa
+// Solo el STAFF (no drivers) de la empresa dueña, o el SÚPER-ADMIN, pueden
+// leer/escribir. Nada público. NUNCA se guardan datos bancarios aquí (van a Stripe).
 service firebase.storage {
   match /b/{bucket}/o {
 
+    function signedIn() { return request.auth != null; }
+
+    // Correo (en minúsculas) del que llama.
+    function emailLower() {
+      return signedIn() && request.auth.token.email != null ? request.auth.token.email.lower() : '';
+    }
+    // Súper-admin por CORREO (break-glass): el dueño de la plataforma siempre entra,
+    // aunque su doc en `users` no tenga companyId de la empresa activa. Edita la lista.
+    function esSuperEmail() {
+      return emailLower() in ['gabriele.brandonisio.o@gmail.com'];
+    }
+    function tieneDoc() {
+      return signedIn() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
     function userDoc() {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
     function esSuper() {
-      return request.auth != null && userDoc().superAdmin == true;
+      return esSuperEmail() || (tieneDoc() && userDoc().superAdmin == true);
     }
     function esStaffDe(companyId) {
-      return request.auth != null
-        && userDoc().companyId == companyId
-        && userDoc().role != 'driver';
+      return tieneDoc() && userDoc().companyId == companyId && userDoc().role != 'driver';
     }
 
-    // Documentos de verificación: verificacion/{companyId}/{driverId}/...
+    // Documentos de verificación del chofer: verificacion/{companyId}/{driverId}/...
     match /verificacion/{companyId}/{driverId}/{allPaths=**} {
       allow read, write: if esSuper() || esStaffDe(companyId);
     }
 
-    // Backups automáticos/manuales: backups/{companyId}/{archivo}. Solo staff.
+    // Backups automáticos/manuales: backups/{companyId}/{archivo}
     match /backups/{companyId}/{allPaths=**} {
       allow read, write: if esSuper() || esStaffDe(companyId);
     }
