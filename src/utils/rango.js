@@ -67,7 +67,9 @@ export function invoicesEnRango(invoices, rango) {
   else if (preset === 'esteTrimestre') { const q = Math.floor(hoy.getMonth() / 3); desde = new Date(hoy.getFullYear(), q * 3, 1); hasta = new Date(hoy.getFullYear(), q * 3 + 3, 0, 23, 59, 59) }
   else if (preset === 'esteAno') { desde = new Date(hoy.getFullYear(), 0, 1); hasta = new Date(hoy.getFullYear(), 11, 31, 23, 59, 59) }
   else if (preset === 'personalizado') {
-    desde = rango.desde ? new Date(rango.desde) : null
+    // Se parsea como fecha LOCAL (con hora) para no correr un día por la zona horaria
+    // (new Date('YYYY-MM-DD') se interpreta como UTC).
+    desde = rango.desde ? new Date(rango.desde + 'T00:00:00') : null
     hasta = rango.hasta ? new Date(rango.hasta + 'T23:59:59') : null
   }
   // intersección del periodo de la factura con [desde, hasta]
