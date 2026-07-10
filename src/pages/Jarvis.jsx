@@ -195,50 +195,48 @@ export default function Jarvis() {
     <div>
       <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>JARVIS</PageTitle>
 
-      {/* HERO: la esfera-cerebro como protagonista */}
-      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8" style={{ background: 'radial-gradient(ellipse at center,#16294a 0%,#13233f 55%,#050a14 100%)' }}>
-        <div className="mb-2 text-center">
-          <div className="text-sm font-bold tracking-[0.4em] text-brand-gold">J.A.R.V.I.S</div>
-          <div className="mt-0.5 text-[10px] tracking-[0.3em] text-brand-gold/70">MILEPAY · NÚCLEO NEURONAL</div>
+      {/* HERO claro: la esfera-cerebro (canvas transparente) sobre el fondo de la app */}
+      <div className="flex flex-col items-center pt-2">
+        <div className="text-center">
+          <div className="text-xs font-bold tracking-[0.4em] text-brand-gold">J.A.R.V.I.S</div>
+          <div className="mt-0.5 text-[10px] tracking-[0.3em] text-brand-gold/60">MILEPAY · NÚCLEO NEURONAL</div>
         </div>
 
-        <div className="flex justify-center py-2">
-          <button onClick={alternar} className="cursor-pointer" aria-label="Hablar con JARVIS" title="Toca para hablar">
-            <JarvisSphere estado={estado} size={320} />
-          </button>
-        </div>
+        <button onClick={alternar} className="-my-4 cursor-pointer" aria-label="Hablar con JARVIS" title="Toca para hablar">
+          <JarvisSphere estado={estado} size={340} />
+        </button>
 
-        <div className="mx-auto mt-2 max-w-2xl text-center">
+        <div className="mx-auto max-w-2xl text-center">
           <div className="mb-2 text-xs font-bold tracking-[0.3em]" style={{ color: COLOR_ESTADO[estado] }}>{LABEL_ESTADO[estado]}</div>
-          <div className="min-h-[64px] px-2 text-lg leading-relaxed" style={{ color: '#f8f3eb' }}>{subtitulo}</div>
+          <div className="min-h-[56px] px-2 text-lg leading-relaxed text-slate-700 dark:text-slate-200">{subtitulo}</div>
         </div>
 
         {/* Propuesta de cambio (requiere confirmación) */}
         {propuesta && (
           <div className="mx-auto mt-3 max-w-xl rounded-2xl border border-brand-gold/50 bg-brand-gold/10 p-4 text-center">
-            <div className="mb-2 text-sm font-semibold text-brand-gold">Confirmación requerida</div>
-            <div className="mb-3 text-sm text-cream" style={{ color: '#f8f3eb' }}>{propuesta.resumen}</div>
+            <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-brand-gold">Confirmación requerida</div>
+            <div className="mb-3 text-sm text-slate-700 dark:text-slate-200">{propuesta.resumen}</div>
             <div className="flex justify-center gap-2">
               <Boton variant="gold" onClick={confirmar} disabled={aplicando}>{aplicando ? <><Loader2 size={15} className="animate-spin" /> Aplicando…</> : <><Check size={15} strokeWidth={2} /> Confirmar</>}</Boton>
-              <button onClick={() => setPropuesta(null)} disabled={aplicando} className="inline-flex items-center gap-1 rounded-xl border border-white/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"><X size={15} strokeWidth={2} /> Cancelar</button>
+              <Boton variant="ghost" onClick={() => setPropuesta(null)} disabled={aplicando}><X size={15} strokeWidth={2} /> Cancelar</Boton>
             </div>
           </div>
         )}
 
-        {error && <div className="mx-auto mt-3 max-w-xl"><Aviso tipo="error">{error}</Aviso></div>}
+        {error && <div className="mx-auto mt-3 w-full max-w-xl"><Aviso tipo="error">{error}</Aviso></div>}
 
-        {/* Controles */}
+        {/* Controles (estilo claro) */}
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
-          <button onClick={alternar} className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-bold tracking-wide backdrop-blur transition" style={{ borderColor: '#c9a24b', background: activo ? '#c9a24b33' : '#c9a24b18', color: '#c9a24b' }}>
-            {activo ? <>◼ DETENER</> : <><Mic size={16} strokeWidth={2} /> HABLAR CON JARVIS</>}
+          <button onClick={alternar} className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold tracking-wide text-white shadow-lg transition hover:brightness-105" style={{ background: '#c9a24b', boxShadow: '0 6px 18px rgba(201,162,75,0.4)' }}>
+            {activo ? <>◼ Detener</> : <><Mic size={16} strokeWidth={2} /> Hablar con JARVIS</>}
           </button>
-          <button onClick={toggleContinuo} title="Conversación continua: reactiva el micrófono tras responder" className="inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition" style={{ borderColor: continuo ? '#4ade80' : '#c9a24b55', background: continuo ? '#4ade8022' : 'transparent', color: continuo ? '#4ade80' : '#c9a24baa' }}>
+          <button onClick={toggleContinuo} title="Conversación continua: reactiva el micrófono tras responder" className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${continuo ? 'border-emerald-400 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' : 'border-brand-gold/50 bg-white text-[#8a6d2f] hover:bg-brand-gold/5 dark:border-slate-600 dark:bg-slate-800 dark:text-brand-gold'}`}>
             <Repeat size={15} strokeWidth={2} /> Continuo
           </button>
-          <button onClick={toggleVoz} title={vozActiva ? 'Silenciar voz' : 'Activar voz'} className="inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition" style={{ borderColor: '#c9a24b55', color: vozActiva ? '#c9a24b' : '#8ea0bd' }}>
-            {vozActiva ? <Volume2 size={15} strokeWidth={2} /> : <VolumeX size={15} strokeWidth={2} />}
+          <button onClick={toggleVoz} title={vozActiva ? 'Silenciar voz' : 'Activar voz'} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-600 transition hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            {vozActiva ? <Volume2 size={15} strokeWidth={2} className="text-brand-gold" /> : <VolumeX size={15} strokeWidth={2} />}
           </button>
-          <button onClick={() => setChatAbierto((c) => !c)} title="Abrir/cerrar chat de texto" className="inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition" style={{ borderColor: '#c9a24b55', background: chatAbierto ? '#c9a24b18' : 'transparent', color: '#c9a24b' }}>
+          <button onClick={() => setChatAbierto((c) => !c)} title="Abrir/cerrar chat de texto" className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${chatAbierto ? 'border-brand-gold bg-brand-gold/10 text-[#8a6d2f] dark:text-brand-gold' : 'border-slate-300 bg-white text-slate-600 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
             <MessageSquare size={15} strokeWidth={2} /> Chat
           </button>
         </div>
@@ -246,10 +244,10 @@ export default function Jarvis() {
         {/* Indicador de qué voz está activa */}
         <div className="mt-3 text-center text-[11px]">
           {vozIA === null ? <span className="text-slate-400">Comprobando voz…</span>
-            : fuenteVoz === 'elevenlabs-alt' ? <span className="text-amber-400">● Voz alterna de ElevenLabs (tu voz elegida es de biblioteca: agrégala a “My Voices” con tu plan de pago)</span>
-            : vozIA ? <span className="text-emerald-400">● Voz IA (ElevenLabs) activa</span>
-            : <span className="text-amber-400">Voz del navegador · ElevenLabs no disponible (revisa variables + Redeploy)</span>}
-          {fuenteVoz === 'navegador' && vozIA && <span className="ml-2 text-amber-400">· sonó la voz del navegador (¿autoplay? toca 🔊 y reintenta)</span>}
+            : fuenteVoz === 'elevenlabs-alt' ? <span className="text-amber-600 dark:text-amber-400">● Voz alterna de ElevenLabs (tu voz elegida es de biblioteca: agrégala a “My Voices” con tu plan de pago)</span>
+            : vozIA ? <span className="text-emerald-600 dark:text-emerald-400">● Voz IA (ElevenLabs) activa</span>
+            : <span className="text-amber-600 dark:text-amber-400">Voz del navegador · ElevenLabs no disponible (revisa variables + Redeploy)</span>}
+          {fuenteVoz === 'navegador' && vozIA && <span className="ml-2 text-amber-600 dark:text-amber-400">· sonó la voz del navegador (¿autoplay? toca 🔊 y reintenta)</span>}
         </div>
       </div>
 

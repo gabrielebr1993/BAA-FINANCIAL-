@@ -1,10 +1,14 @@
-// Esfera JARVIS estilo "cerebro neuronal" (canvas): nodos/sinapsis orbitando con
-// pulsos de energía y núcleo brillante. Reacciona a `estado`:
-//   'idle' | 'listening' | 'speaking' | 'thinking'.
-// `alerta` (ámbar) para el mini-orbe del Panel de Control. `size` en px (CSS).
+// Esfera-cerebro neuronal (canvas TRANSPARENTE, para fondo claro): nodos dorados,
+// sinapsis navy suaves y núcleo dorado con glow sutil. Reacciona a `estado`:
+//   idle      → giro lento, dorado tenue
+//   listening → verde, respiración suave
+//   thinking  → las NEURONAS SE MUEVEN: vibran (jitter), migran por la esfera,
+//               se disparan con flash blanco y las conexiones parpadean
+//   speaking  → pulsa dorado al ritmo
+// `alerta` (ámbar) para el mini-cerebro del Panel. `size` en px (CSS).
 import { useEffect, useRef } from 'react'
 
-export default function JarvisSphere({ estado = 'idle', size = 200, alerta = false }) {
+export default function JarvisSphere({ estado = 'idle', size = 300, alerta = false }) {
   const canvasRef = useRef(null)
   const estadoRef = useRef(estado)
   const alertaRef = useRef(alerta)
@@ -20,100 +24,92 @@ export default function JarvisSphere({ estado = 'idle', size = 200, alerta = fal
     canvas.height = S * dpr
     const ctx = canvas.getContext('2d')
     ctx.scale(dpr, dpr)
-    const cx = S / 2, cy = S / 2, R = S * 0.34
-    const k = R / 210 // factor de escala respecto al diseño original
+    const cx = S / 2, cy = S / 2, R = S * 0.355
+    const k = R / 270 // escala respecto al diseño de referencia (R=270)
+    const esCorto = S < 90 // mini-cerebro: menos nodos
 
-    const N = 58
-    const nodos = Array.from({ length: N }, () => ({
-      theta: Math.random() * Math.PI * 2,
-      phi: Math.acos(2 * Math.random() - 1),
-      r: R * (0.55 + Math.random() * 0.45),
-      sp: 0.0015 + Math.random() * 0.003,
-      fase: Math.random() * Math.PI * 2,
-    }))
-    const conex = []
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Math.random() < 0.08) conex.push([i, j])
+    const N = esCorto ? 16 : 70
+    const nodos = Array.from({ length: N }, () => {
+      const th = Math.random() * 6.28, ph = Math.acos(2 * Math.random() - 1)
+      return { th, ph, r: R * (0.55 + Math.random() * 0.45), sp: 0.0015 + Math.random() * 0.0025, f: Math.random() * 6, jx: 0, jy: 0, pulso: 0, phSp: (Math.random() - 0.5) * 0.004 }
+    })
+    const cnx = []
+    if (!esCorto) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Math.random() < 0.06) cnx.push([i, j, Math.random()])
+    const parts = esCorto ? [] : Array.from({ length: 110 }, () => {
+      const th = Math.random() * 6.28, ph = Math.acos(2 * Math.random() - 1)
+      return { th, ph, r: R * (0.9 + Math.random() * 0.3), sp: 0.002 + Math.random() * 0.003 }
+    })
 
-    const M = 90
-    const parts = Array.from({ length: M }, () => ({
-      theta: Math.random() * Math.PI * 2,
-      phi: Math.acos(2 * Math.random() - 1),
-      r: R * (0.9 + Math.random() * 0.3),
-      sp: 0.002 + Math.random() * 0.004,
-    }))
-
-    const proj = (theta, phi, r) => {
-      const x3 = r * Math.sin(phi) * Math.cos(theta)
-      const y3 = r * Math.sin(phi) * Math.sin(theta)
-      const z3 = r * Math.cos(phi)
-      const sc = (z3 + R) / (2 * R)
-      return { x: cx + x3, y: cy + y3 * 0.6, sc }
+    const pr = (th, ph, r, jx = 0, jy = 0) => {
+      const x = r * Math.sin(ph) * Math.cos(th), y = r * Math.sin(ph) * Math.sin(th), z = r * Math.cos(ph)
+      return { x: cx + x + jx, y: cy + y * 0.6 + jy, sc: (z + R) / (2 * R) }
     }
 
     let raf, t = 0
     const draw = () => {
       t++
       const e = estadoRef.current
-      let col = [227, 201, 136], speed = 1, amp = 1, pulso = 0.5
-      if (e === 'listening') { col = [74, 222, 128]; speed = 1.3; amp = 1 + Math.sin(t * 0.15) * 0.1; pulso = 0.6 }
-      else if (e === 'thinking') { col = [227, 201, 136]; speed = 3; amp = 1.05; pulso = 1 }
-      else if (e === 'speaking') { col = [201, 162, 75]; speed = 1.1; amp = 1 + Math.abs(Math.sin(t * 0.25)) * 0.16; pulso = 0.8 }
-      else { speed = 0.5; amp = 1 + Math.sin(t * 0.05) * 0.03; pulso = 0.3 }
-      if (alertaRef.current) col = [245, 158, 11] // ámbar si hay alerta crítica
-      const [r, g, b] = col
+      let node = [201, 162, 75], line = [19, 35, 63], core = [201, 162, 75], sp = 1, amp = 1, pu = 0.4, think = 0
+      if (e === 'listening') { node = [22, 163, 74]; line = [22, 130, 74]; core = [22, 163, 74]; sp = 1.3; amp = 1 + Math.sin(t * 0.15) * 0.08; pu = 0.6 }
+      else if (e === 'thinking') { sp = 3.2; pu = 1; amp = 1.04; think = 1 }
+      else if (e === 'speaking') { sp = 1.1; amp = 1 + Math.abs(Math.sin(t * 0.25)) * 0.14; pu = 0.8 }
+      else { sp = 0.55; amp = 1 + Math.sin(t * 0.05) * 0.025 }
+      if (alertaRef.current) { node = [217, 119, 6]; core = [217, 119, 6] }
 
       ctx.clearRect(0, 0, S, S)
-
-      const grad = ctx.createRadialGradient(cx, cy, 20 * k, cx, cy, R * amp * 1.1)
-      grad.addColorStop(0, `rgba(${r},${g},${b},0.45)`)
-      grad.addColorStop(0.5, `rgba(${r},${g},${b},0.18)`)
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`)
-      ctx.fillStyle = grad
-      ctx.beginPath(); ctx.arc(cx, cy, R * amp * 1.1, 0, Math.PI * 2); ctx.fill()
-
-      nodos.forEach((n) => { n.theta += n.sp * speed })
-
-      conex.forEach(([i, j], idx) => {
-        const a = proj(nodos[i].theta, nodos[i].phi, nodos[i].r * amp)
-        const bb = proj(nodos[j].theta, nodos[j].phi, nodos[j].r * amp)
-        const op = 0.08 + ((a.sc + bb.sc) / 2) * 0.25 * pulso
-        ctx.strokeStyle = `rgba(${r},${g},${b},${op})`
-        ctx.lineWidth = Math.max(0.5, 0.8 * k)
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(bb.x, bb.y); ctx.stroke()
-        if (pulso > 0.5) {
-          const prog = ((t * 0.02 * speed) + idx * 0.3) % 1
-          const px = a.x + (bb.x - a.x) * prog, py = a.y + (bb.y - a.y) * prog
-          ctx.fillStyle = `rgba(248,243,235,${0.6 * pulso})`
-          ctx.beginPath(); ctx.arc(px, py, 1.6 * k, 0, Math.PI * 2); ctx.fill()
-        }
-      })
-
-      parts.forEach((p) => {
-        p.theta += p.sp * speed
-        const pr = proj(p.theta, p.phi, p.r * amp)
-        ctx.fillStyle = `rgba(${r},${g},${b},${0.1 + pr.sc * 0.4})`
-        ctx.beginPath(); ctx.arc(pr.x, pr.y, (0.5 + pr.sc * 1.6) * k, 0, Math.PI * 2); ctx.fill()
-      })
+      const [cr, cg, cb] = core
+      const gr = ctx.createRadialGradient(cx, cy, 20 * k, cx, cy, R * 1.05)
+      gr.addColorStop(0, `rgba(${cr},${cg},${cb},0.08)`); gr.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(cx, cy, R * 1.05, 0, 6.28); ctx.fill()
 
       nodos.forEach((n) => {
-        const pr = proj(n.theta, n.phi, n.r * amp)
-        const activa = (Math.sin(t * 0.08 * speed + n.fase) * 0.5 + 0.5) * pulso
-        const s = (1.2 + pr.sc * 2.5) * (0.8 + activa * 0.6) * k
-        ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + pr.sc * 0.6})`
-        ctx.beginPath(); ctx.arc(pr.x, pr.y, s, 0, Math.PI * 2); ctx.fill()
-        if (activa > 0.7) {
-          ctx.fillStyle = `rgba(248,243,235,${(activa - 0.7) * 0.8})`
-          ctx.beginPath(); ctx.arc(pr.x, pr.y, s * 2, 0, Math.PI * 2); ctx.fill()
+        n.th += n.sp * sp
+        if (think) {
+          n.jx = Math.sin(t * 0.3 + n.f) * 6 * k + (Math.random() - 0.5) * 4 * k
+          n.jy = Math.cos(t * 0.35 + n.f) * 6 * k + (Math.random() - 0.5) * 4 * k
+          n.ph += n.phSp * 3
+          if (n.ph < 0.2 || n.ph > 3) n.phSp *= -1
+          if (Math.random() < 0.03) n.pulso = 1
+        } else { n.jx *= 0.9; n.jy *= 0.9 }
+        if (n.pulso > 0) n.pulso *= 0.9
+      })
+
+      const [lr, lg, lb] = line
+      cnx.forEach((c) => {
+        const [i, j] = c
+        const a = pr(nodos[i].th, nodos[i].ph, nodos[i].r * amp, nodos[i].jx, nodos[i].jy)
+        const b = pr(nodos[j].th, nodos[j].ph, nodos[j].r * amp, nodos[j].jx, nodos[j].jy)
+        let op = 0.05 + ((a.sc + b.sc) / 2) * 0.18
+        if (think) op *= 0.5 + Math.abs(Math.sin(t * 0.1 + c[2] * 6)) * 0.9
+        ctx.strokeStyle = `rgba(${lr},${lg},${lb},${op})`; ctx.lineWidth = Math.max(0.5, 0.7 * k)
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
+        if (pu > 0.5) {
+          const p = ((t * 0.03 * sp) + c[2]) % 1, px = a.x + (b.x - a.x) * p, py = a.y + (b.y - a.y) * p
+          ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.7 * pu})`
+          ctx.beginPath(); ctx.arc(px, py, (think ? 2.2 : 1.6) * k, 0, 6.28); ctx.fill()
         }
       })
 
-      ctx.fillStyle = `rgba(248,243,235,${0.85 + pulso * 0.15})`
-      ctx.beginPath(); ctx.arc(cx, cy, 20 * k * amp, 0, Math.PI * 2); ctx.fill()
-      const ng = ctx.createRadialGradient(cx, cy, 5 * k, cx, cy, 40 * k * amp)
-      ng.addColorStop(0, 'rgba(248,243,235,0.6)')
-      ng.addColorStop(1, 'rgba(248,243,235,0)')
-      ctx.fillStyle = ng
-      ctx.beginPath(); ctx.arc(cx, cy, 40 * k * amp, 0, Math.PI * 2); ctx.fill()
+      const [nr, ng, nb] = node
+      parts.forEach((p) => {
+        p.th += p.sp * sp
+        const q = pr(p.th, p.ph, p.r * amp)
+        ctx.fillStyle = `rgba(${nr},${ng},${nb},${0.1 + q.sc * 0.35})`
+        ctx.beginPath(); ctx.arc(q.x, q.y, (0.5 + q.sc * 1.4) * k, 0, 6.28); ctx.fill()
+      })
+      nodos.forEach((n) => {
+        const q = pr(n.th, n.ph, n.r * amp, n.jx, n.jy)
+        const ac = (Math.sin(t * 0.06 * sp + n.f) * 0.5 + 0.5) * pu
+        const s = (1.3 + q.sc * 2.4) * (0.85 + ac * 0.5) * (1 + n.pulso * 0.8) * k
+        ctx.fillStyle = `rgba(${nr},${ng},${nb},${0.4 + q.sc * 0.5})`
+        ctx.beginPath(); ctx.arc(q.x, q.y, s, 0, 6.28); ctx.fill()
+        if (n.pulso > 0.3) { ctx.fillStyle = `rgba(255,255,255,${n.pulso * 0.7})`; ctx.beginPath(); ctx.arc(q.x, q.y, s * 1.8, 0, 6.28); ctx.fill() }
+      })
+
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},0.95)`; ctx.beginPath(); ctx.arc(cx, cy, 17 * k * amp, 0, 6.28); ctx.fill()
+      const c2 = ctx.createRadialGradient(cx, cy, 5 * k, cx, cy, 36 * k * amp)
+      c2.addColorStop(0, `rgba(${cr},${cg},${cb},0.35)`); c2.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
+      ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(cx, cy, 36 * k * amp, 0, 6.28); ctx.fill()
 
       raf = requestAnimationFrame(draw)
     }
@@ -121,10 +117,5 @@ export default function JarvisSphere({ estado = 'idle', size = 200, alerta = fal
     return () => cancelAnimationFrame(raf)
   }, [size])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: size, height: size, filter: `drop-shadow(0 0 ${Math.round(size * 0.28)}px rgba(201,162,75,0.45))` }}
-    />
-  )
+  return <canvas ref={canvasRef} style={{ width: size, height: size }} />
 }
