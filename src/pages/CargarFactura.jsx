@@ -11,6 +11,7 @@ import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning, FileSpreadsheet } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
+import Combobox from '../components/Combobox'
 import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
@@ -133,6 +134,11 @@ export default function CargarFactura() {
     return { map, auto, sinAsociar, unidas, totalReal }
   }, [rawCouriers, canonicos, mapaManual])
   const asignarManual = (raw, valor) => setMapaManual((m) => ({ ...m, [raw]: valor }))
+  // Opciones del combobox de choferes (nuevo + toda la lista canónica).
+  const opcionesChofer = useMemo(
+    () => [{ value: '__nuevo__', label: '➕ Es un chofer NUEVO (no unir)' }, ...canonicos.map((c) => ({ value: c.nombre, label: c.nombre }))],
+    [canonicos]
+  )
 
   // Opciones del selector de ciudad: las de ESTA empresa + personalizadas + detectadas.
   const opcionesCiudad = useMemo(() => {
@@ -916,15 +922,18 @@ export default function CargarFactura() {
               {unif.sinAsociar.length > 0 && (
                 <div className="mb-3 rounded-lg border border-rose-200 p-3 dark:border-rose-700/50">
                   <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={15} strokeWidth={1.9} /> Sin asociar — asígnalos a un chofer o déjalos como nuevo</div>
-                  <div className="scroll-thin max-h-72 space-y-1.5 overflow-y-auto">
+                  <div className="space-y-1.5">
                     {unif.sinAsociar.map((raw) => (
                       <div key={raw} className="flex flex-wrap items-center gap-2">
                         <span className="min-w-[200px] flex-1 truncate text-sm text-slate-700 dark:text-slate-200">{raw}</span>
-                        <Select className="w-64" value={mapaManual[raw] || ''} onChange={(e) => asignarManual(raw, e.target.value)}>
-                          <option value="">— Revisar / elegir —</option>
-                          <option value="__nuevo__">➕ Es un chofer NUEVO (no unir)</option>
-                          {canonicos.map((c) => (<option key={c.nombre} value={c.nombre}>{c.nombre}</option>))}
-                        </Select>
+                        <Combobox
+                          className="w-72"
+                          value={mapaManual[raw] || ''}
+                          onChange={(v) => asignarManual(raw, v)}
+                          options={opcionesChofer}
+                          placeholder="— Revisar / elegir —"
+                          searchPlaceholder="Escribe un nombre (ej. figue)…"
+                        />
                       </div>
                     ))}
                   </div>
