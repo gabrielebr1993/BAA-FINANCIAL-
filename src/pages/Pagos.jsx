@@ -4,21 +4,25 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, feeDeClaim } from '../utils/calc'
+import { calcularPagos, porCiudad, feeDeClaim, buscarDriver } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
+import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff } from 'lucide-react'
-import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio } from '../components/ui'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard } from 'lucide-react'
+import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
 import CitySelector from '../components/CitySelector'
 import RangeSelector from '../components/RangeSelector'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
-  const { perfil } = useAuth()
+  const { perfil, esSuperAdmin } = useAuth()
   const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando } = useData()
+  const puedePagar = esSuperAdmin || perfil?.role === 'owner'
   const [payrollMap, setPayrollMap] = useState({})
+  const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
+  const [stripeMsg, setStripeMsg] = useState(null)
   const [fEstado, setFEstado] = useState('')
   const [busqueda, setBusqueda] = useState('') // por nombre o rate
   const [expandido, setExpandido] = useState(null)
@@ -94,6 +98,22 @@ export default function Pagos() {
     if (existente) await updateDoc(doc(db, 'payroll', existente.id), payload)
     else await addDoc(collection(db, 'payroll'), payload)
     await cargarPayroll()
+  }
+
+  // Pago por Stripe (SOLO modo TEST; el servidor rechaza pagos reales). Requiere que
+  // el chofer esté verificado en Stripe.
+  const pagarStripe = async (p, driver) => {
+    if (!driver?.id) return setStripeMsg({ tipo: 'warn', txt: `${p.nombre} no está registrado como chofer guardado.` })
+    if (!(p.totalPagar > 0)) return setStripeMsg({ tipo: 'warn', txt: `No hay monto a pagar para ${p.nombre}.` })
+    if (!window.confirm(`Pagar ${money(p.totalPagar)} a ${p.nombre} por Stripe en modo TEST?`)) return
+    setPagandoStripe(p.nombre); setStripeMsg(null)
+    try {
+      const r = await stripePagar({ companyId: activeCompanyId, driverId: driver.id, monto: p.totalPagar, semana: selectedInvoice?.semana || '' })
+      if (!r.ok) return setStripeMsg({ tipo: 'error', txt: `${p.nombre}: ${r.error}` })
+      setStripeMsg({ tipo: 'ok', txt: `Pago TEST enviado a ${p.nombre} (${money(p.totalPagar)}). Transfer: ${r.transferId}` })
+    } catch (e) {
+      setStripeMsg({ tipo: 'error', txt: `${p.nombre}: ${e.message}` })
+    } finally { setPagandoStripe(null) }
   }
 
   const claimsDeChofer = (nombre) => porCiudad(claims, selectedCity).filter((c) => c.courier === nombre)
@@ -183,6 +203,7 @@ export default function Pagos() {
                   Estás viendo un <b>acumulado de {invoicesRango.length} semanas</b>. Los montos mostrados son la suma del periodo. Para <b>marcar pagos</b> (pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").
                 </Aviso>
               )}
+              {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}
               <Card className="mb-4 p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
@@ -236,6 +257,10 @@ export default function Pagos() {
                         confirmarPerdon={confirmarPerdon}
                         restaurar={restaurar}
                         ocupado={ocupado}
+                        driver={buscarDriver(drivers, p.nombre)}
+                        puedePagar={puedePagar}
+                        pagandoStripe={pagandoStripe === p.nombre}
+                        onPagarStripe={pagarStripe}
                       />
                     ))}
                   </tbody>
@@ -281,7 +306,9 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, pagandoStripe, onPagarStripe }) {
+  const estadoStripe = driver?.stripeEstado || 'sin_registrar'
+  const verificado = estadoStripe === 'verificado'
   return (
     <>
       <tr className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
@@ -302,13 +329,26 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
         <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>
         <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
         <td className={TD}>
-          {!puedeMarcar ? (
-            <span className="text-xs text-slate-400">—</span>
-          ) : p.estado === 'pagado' ? (
-            <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
-          ) : (
-            <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>
-          )}
+          <div className="flex items-center justify-end gap-1.5">
+            {!puedeMarcar ? (
+              <span className="text-xs text-slate-400">—</span>
+            ) : p.estado === 'pagado' ? (
+              <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
+            ) : (
+              <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>
+            )}
+            {puedePagar && (
+              <Boton
+                variant={verificado ? 'primary' : 'ghost'}
+                disabled={!verificado || pagandoStripe}
+                onClick={() => onPagarStripe(p, driver)}
+                className="px-2 py-1 text-xs"
+                title={verificado ? 'Pagar por Stripe (modo TEST)' : 'El chofer aún no tiene su banco verificado en Stripe'}
+              >
+                {pagandoStripe ? <Spinner /> : <CreditCard size={13} strokeWidth={1.9} />} {verificado ? 'Pagar (Stripe)' : 'Sin banco'}
+              </Boton>
+            )}
+          </div>
         </td>
       </tr>
       {abierto && (
