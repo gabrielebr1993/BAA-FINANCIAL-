@@ -45,13 +45,19 @@ export default function Financiero() {
       .sort((a, b) => (b.precioPorLb || 0) - (a.precioPorLb || 0))
   }, [selectedInvoice, selectedCity, avg])
 
-  const ingresoTotal = pagos.reduce((a, p) => a + p.ingreso, 0)
-  const costoTotal = pagos.reduce((a, p) => a + p.totalPagar, 0)
-  const descuentos = pagos.reduce((a, p) => a + p.descuentoClaims, 0)
-  // La "Ganancia real" es la autoritativa (incluye descuento de Gofo por claims y
-  // gastos fijos), la misma que la tarjeta — para que todo cuadre.
+  const descuentos = pagos.reduce((a, p) => a + p.descuentoClaims, 0) // cobrado a choferes por claims
+  // Fila de KPIs = espejo EXACTO de la tarjeta "Ganancia real": ingreso neto − pago
+  // a choferes − gastos fijos = ganancia real. Así Ingreso − Costo − Fijos = Ganancia.
+  const ingresoNetoT = gReal.ingresoNeto
+  const pagoChoferesT = gReal.costoChoferes
+  const gastosFijosT = gReal.costoManagers
   const gananciaReal = gReal.gananciaReal
   const margen = gReal.margen
+  // Conciliación de la tabla por ciudad con el total autoritativo (offset/ajustes de
+  // verificación no se reparten por ciudad; se muestran como "ajustes de verificación").
+  const sumaGanCiudades = desgloseCiudades.reduce((a, c) => a + c.gananciaReal, 0)
+  const sumaMgrCiudades = desgloseCiudades.reduce((a, c) => a + c.costoManagers, 0)
+  const ajusteVerif = selectedCity === TODAS ? gananciaReal - sumaGanCiudades : 0
 
   const topRutas = [...rutas].sort((a, b) => b.ingreso - a.ingreso).slice(0, 10)
   const ingresoPorRuta = topRutas.map((r) => ({ name: r.ruta, valor: Math.round(r.ingreso) }))
@@ -62,12 +68,12 @@ export default function Financiero() {
   const nombreArch = `financiero_${selectedInvoice?.semana || 'periodo'}`
   const exportarE = () =>
     exportarExcel(nombreArch, [
-      { nombre: 'Resumen', rows: [{ Ingreso: ingresoTotal, Costo: costoTotal, Descuentos: descuentos, Ganancia: gananciaReal, Margen: pct(margen) }] },
+      { nombre: 'Resumen', rows: [{ 'Ingreso neto': ingresoNetoT, 'Pago choferes': pagoChoferesT, 'Gastos fijos': gastosFijosT, 'Ganancia real': gananciaReal, Margen: pct(margen), 'Neto claims': claimEco.gananciaNetaClaims, 'Cobrado a choferes (claims)': descuentos }] },
       { nombre: 'Rutas', rows: rutas.map((r) => ({ Ruta: r.ruta, Ciudad: r.nombreCiudad, Paquetes: r.paquetes, Ingreso: r.ingreso, '$/lb': r.precioPorLb, CostoEst: r.costoEst, Ganancia: r.ganancia, Margen: r.margen })) },
     ])
   const exportarP = () =>
     exportarPDF(nombreArch, 'Resumen Financiero', selectedInvoice?.semana || '', [
-      { titulo: 'Totales', head: ['Ingreso', 'Costo', 'Descuentos', 'Ganancia', 'Margen'], body: [[money(ingresoTotal), money(costoTotal), money(descuentos), money(gananciaReal), pct(margen)]] },
+      { titulo: 'Totales', head: ['Ingreso neto', 'Pago choferes', 'Gastos fijos', 'Ganancia real', 'Margen'], body: [[money(ingresoNetoT), money(pagoChoferesT), money(gastosFijosT), money(gananciaReal), pct(margen)]] },
       { titulo: 'Rentabilidad por ruta', head: ['Ruta', 'Ciudad', 'Paquetes', 'Ingreso', '$/lb', 'Costo est.', 'Ganancia', 'Margen'], body: rutas.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), money(r.ingreso), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoEst), money(r.ganancia), pct(r.margen)]) },
     ])
 
@@ -106,8 +112,11 @@ export default function Financiero() {
               />
               <div className="mt-2 flex flex-wrap items-center justify-end gap-4 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
                 <span className="text-slate-500 dark:text-slate-400">TOTAL general:</span>
-                <span>Gastos fijos <b className="text-brand-navy dark:text-slate-100">{money(desgloseCiudades.reduce((a, c) => a + c.costoManagers, 0))}</b></span>
-                <span>Ganancia real <b className="text-brand-gold">{money(desgloseCiudades.reduce((a, c) => a + c.gananciaReal, 0))}</b></span>
+                <span>Gastos fijos <b className="text-brand-navy dark:text-slate-100">{money(sumaMgrCiudades)}</b></span>
+                {Math.abs(ajusteVerif) >= 0.5 && (
+                  <span title="Offset y ajustes de la verificación de Gofo que no se reparten por ciudad">Ajustes verif. <b className={ajusteVerif >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{money(ajusteVerif)}</b></span>
+                )}
+                <span>Ganancia real <b className="text-brand-gold">{money(selectedCity === TODAS ? gananciaReal : sumaGanCiudades)}</b></span>
               </div>
             </Card>
           )}
@@ -115,9 +124,9 @@ export default function Financiero() {
           {selectedInvoice && <PanelClaims claims={porCiudad(claims, selectedCity)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <KPI label="Ingreso (Gofo)" value={money(ingresoTotal)} icon={DollarSign} accent="green" />
-            <KPI label="Costo (choferes)" value={money(costoTotal)} icon={Receipt} accent="navy" />
-            <KPI label="Descuentos claims" value={money(descuentos)} icon={AlertTriangle} accent="red" />
+            <KPI label="Ingreso neto (Gofo)" value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
+            <KPI label="− Pago choferes" value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
+            <KPI label="− Gastos fijos" value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
             <KPI label="Ganancia real" value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
             <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" />
           </div>
