@@ -8,13 +8,15 @@ import { useAuth } from '../AuthContext'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { stripeConfig } from '../utils/stripe'
+import { descargarBackup, restaurarBackup } from '../utils/backup'
 import { pct } from '../utils/format'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
+import { DatabaseBackup, Download, Upload } from 'lucide-react'
 import MisCiudades from '../components/MisCiudades'
 import ConfigReglas from '../components/ConfigReglas'
 
 export default function Configuracion() {
-  const { activeCompanyId, empresaActiva, reloadAjustes } = useData()
+  const { activeCompanyId, empresaActiva, ajustes, reloadAjustes } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const puedeStripe = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
@@ -24,6 +26,31 @@ export default function Configuracion() {
   const [ok, setOk] = useState('')
   const [stripeInfo, setStripeInfo] = useState(null) // { configurado, test } | { error }
   const [cargandoStripe, setCargandoStripe] = useState(false)
+  const [backupBusy, setBackupBusy] = useState('')
+  const [backupMsg, setBackupMsg] = useState(null)
+
+  const descargar = async () => {
+    setBackupBusy('descargar'); setBackupMsg(null)
+    try {
+      const r = await descargarBackup(activeCompanyId)
+      setBackupMsg({ tipo: 'ok', txt: `Backup descargado: ${r.total} registros. Guárdalo en un lugar seguro.` })
+    } catch (e) {
+      setBackupMsg({ tipo: 'error', txt: 'No se pudo generar el backup: ' + e.message })
+    } finally { setBackupBusy('') }
+  }
+  const restaurar = async (file) => {
+    if (!file) return
+    if (!window.confirm('Restaurar REPONE y actualiza los datos desde el archivo (no borra nada nuevo). ¿Continuar?')) return
+    setBackupBusy('restaurar'); setBackupMsg(null)
+    try {
+      const data = JSON.parse(await file.text())
+      if (data.companyId && data.companyId !== activeCompanyId && !window.confirm('Este backup es de OTRA empresa. Restaurar podría fallar por permisos. ¿Continuar?')) { setBackupBusy(''); return }
+      const n = await restaurarBackup(data)
+      setBackupMsg({ tipo: 'ok', txt: `Restaurados ${n} registros. Recarga la página (Ctrl+Shift+R) para ver los cambios.` })
+    } catch (e) {
+      setBackupMsg({ tipo: 'error', txt: 'No se pudo restaurar: ' + e.message })
+    } finally { setBackupBusy('') }
+  }
 
   const revisarStripe = async () => {
     setCargandoStripe(true)
@@ -122,6 +149,33 @@ export default function Configuracion() {
               <li>2. El chofer completa sus datos bancarios en Stripe y su estado pasa a <b>verificado</b>.</li>
               <li>3. En <b>Pagos</b> podrás pagarle (por ahora solo en modo <b>TEST</b>; los pagos reales están deshabilitados).</li>
             </ul>
+          </Card>
+        )}
+
+        {/* Copias de seguridad (backup) */}
+        {puedeStripe && (
+          <Card className="p-5 lg:col-span-2">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <DatabaseBackup size={18} strokeWidth={1.8} className="text-brand-gold" />
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Copias de seguridad (backup)</h3>
+              {ajustes?.ultimoBackupAuto && (
+                <Badge color="green">Auto: {(() => { try { const d = ajustes.ultimoBackupAuto.toDate(); return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) } catch { return 'sí' } })()}</Badge>
+              )}
+            </div>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              La app guarda una copia <b>automática cada 24 h</b> en Firebase Storage. Además puedes <b>descargar</b> una copia completa (JSON) cuando quieras — <b>recomendado antes de cualquier borrado grande</b> — y <b>restaurarla</b> si necesitas recuperar datos.
+            </p>
+            {backupMsg && <Aviso tipo={backupMsg.tipo}>{backupMsg.txt}</Aviso>}
+            <div className="flex flex-wrap items-center gap-2">
+              <Boton variant="gold" onClick={descargar} disabled={!activeCompanyId || !!backupBusy}>
+                {backupBusy === 'descargar' ? <><Spinner /> Generando…</> : <><Download size={16} strokeWidth={1.8} /> Descargar backup ahora</>}
+              </Boton>
+              <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-600 dark:text-slate-300 ${backupBusy ? 'pointer-events-none opacity-60' : ''}`}>
+                {backupBusy === 'restaurar' ? <><Spinner /> Restaurando…</> : <><Upload size={16} strokeWidth={1.8} /> Restaurar desde archivo</>}
+                <input type="file" accept="application/json,.json" className="hidden" onChange={(e) => restaurar(e.target.files?.[0])} />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">Restaurar solo <b>agrega o repone</b> documentos; nunca borra los datos actuales. Para máxima seguridad, activa también los <b>backups administrados de Firebase</b> (exportaciones programadas) desde la consola de Google Cloud.</p>
           </Card>
         )}
 

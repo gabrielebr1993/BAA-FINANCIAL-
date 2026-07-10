@@ -3,7 +3,7 @@
 // (empresa activa, rango de fechas, ciudad, factura). Multi-empresa: todos los
 // datos se filtran por companyId (la empresa activa).
 // ---------------------------------------------------------------------------
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore'
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
@@ -11,6 +11,9 @@ import { TODAS } from './utils/calc'
 import { conFechas, invoicesEnRango, combinarFacturas } from './utils/rango'
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
+import { subirBackupStorage } from './utils/backup'
+
+const INTERVALO_BACKUP_MS = 24 * 60 * 60 * 1000 // backup automático cada 24 h
 
 const DataContext = createContext()
 export const useData = () => useContext(DataContext)
@@ -170,6 +173,22 @@ export function DataProvider({ children }) {
       setCargando(false)
     })()
   }, [user, esDriver, activeCompanyId, cargarInvoices, cargarDrivers, cargarManagers, cargarAjustes])
+
+  // Backup AUTOMÁTICO cada 24 h a Firebase Storage (silencioso). Se dispara cuando
+  // hay empresa activa y datos cargados, si pasó el intervalo desde el último backup.
+  // Un ref evita repetirlo varias veces en la misma sesión.
+  const backupIntentado = useRef(new Set())
+  useEffect(() => {
+    if (!user || esDriver || !activeCompanyId || !ajustes) return
+    const marca = backupIntentado.current
+    if (marca.has(activeCompanyId)) return
+    const ult = ajustes.ultimoBackupAuto
+    const ultMs = ult?.toDate ? ult.toDate().getTime() : (typeof ult?.seconds === 'number' ? ult.seconds * 1000 : 0)
+    if (ultMs && Date.now() - ultMs < INTERVALO_BACKUP_MS) return
+    marca.add(activeCompanyId)
+    // No bloquea la UI; si falla (ej. Storage sin habilitar) se ignora en silencio.
+    subirBackupStorage(activeCompanyId).catch(() => {})
+  }, [user, esDriver, activeCompanyId, ajustes])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoices, rango), [invoices, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
