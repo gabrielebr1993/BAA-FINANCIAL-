@@ -534,13 +534,35 @@ export default function CargarFactura() {
       })
       const invCalc = { ...combinado, resumenChoferes: resumen.resumenChoferes, reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal }
       const pagosFinal = calcularPagos(invCalc, claimsConDecision, driversFinal, TODAS)
-      const prom = promediosFlota(pagosFinal)
+      // Un chofer que entrega en 2 ciudades sale como 2 filas (una por ciudad). Para
+      // el portal se AGREGAN en UNA sola fila por chofer (mismo driverKey) sumando sus
+      // números; si no, el segundo documento pisaba al primero y el portal mostraba
+      // solo una ciudad. La ciudad guardada es la principal (donde entrega más).
+      const SUMAR = ['individuales', 'dobles', 'ingreso', 'claimsTotales', 'claimsActivos', 'claimsPerdonados', 'descuentoClaims', 'descontadoGofo', 'totalPagar', 'ganancia', 'gananciaClaims', 'fallidos']
+      const porDriver = {}
+      for (const p of pagosFinal) {
+        const key = (p.nombre || '').trim().toLowerCase()
+        const pq = (p.individuales || 0) + (p.dobles || 0)
+        if (!porDriver[key]) {
+          porDriver[key] = { ...p, _pqPrincipal: pq }
+        } else {
+          const t = porDriver[key]
+          SUMAR.forEach((k) => { t[k] = (t[k] || 0) + (p[k] || 0) })
+          if (!t.tarifaInd && p.tarifaInd) t.tarifaInd = p.tarifaInd
+          if (!t.tarifaDoble && p.tarifaDoble) t.tarifaDoble = p.tarifaDoble
+          if (pq > t._pqPrincipal) { t._pqPrincipal = pq; t.ciudad = p.ciudad; t.nombreCiudad = p.nombreCiudad }
+          t.sinTarifa = t.sinTarifa && p.sinTarifa
+        }
+      }
+      const pagosPorChofer = Object.values(porDriver)
+      const prom = promediosFlota(pagosPorChofer)
       const fechaInicioISO = periodo.fechaInicio ? periodo.fechaInicio.toISOString() : ''
-      for (let i = 0; i < pagosFinal.length; i += chunk) {
+      for (let i = 0; i < pagosPorChofer.length; i += chunk) {
         const batch = writeBatch(db)
-        for (const p of pagosFinal.slice(i, i + chunk)) {
+        for (const p of pagosPorChofer.slice(i, i + chunk)) {
           const key = (p.nombre || '').trim().toLowerCase()
-          const calif = calificarChofer({ ...p, paquetes: p.individuales + p.dobles }, prom)
+          const paquetes = (p.individuales || 0) + (p.dobles || 0)
+          const calif = calificarChofer({ ...p, paquetes }, prom)
           const sref = doc(db, 'driverStats', `${ref.id}__${key.replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`)
           batch.set(sref, {
             companyId: activeCompanyId,
@@ -552,8 +574,8 @@ export default function CargarFactura() {
             ciudad: p.ciudad || '',
             individuales: p.individuales,
             dobles: p.dobles,
-            paquetes: p.individuales + p.dobles,
-            fallidos: fallidosPorChofer[p.nombre] || 0,
+            paquetes,
+            fallidos: p.fallidos || 0,
             ingreso: p.ingreso,
             tarifaInd: p.tarifaInd,
             tarifaDoble: p.tarifaDoble,
