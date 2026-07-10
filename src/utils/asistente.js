@@ -2,6 +2,7 @@
 // Anthropic/ElevenLabs vive en el servidor) y gestiona la voz (TTS con fallback
 // al navegador, y reconocimiento de voz del navegador).
 import { auth } from '../firebase'
+import { aHablable } from './hablable'
 
 async function token() {
   const t = await auth.currentUser?.getIdToken()
@@ -71,36 +72,38 @@ export function detenerVoz() {
 export async function hablar(texto, { idioma = 'es', mood = 'neutro', onInicio, onFin, onFuente, onError } = {}) {
   detenerVoz()
   if (!texto?.trim()) { onFin?.(); return detenerVoz }
+  // Convierte cifras/símbolos a palabras SOLO para el audio (la pantalla no cambia).
+  const hablado = aHablable(texto, idioma)
   try {
     const resp = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token()}` },
-      body: JSON.stringify({ texto, mood }),
+      body: JSON.stringify({ texto: hablado, mood }),
     })
-    if (resp.status === 204) return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+    if (resp.status === 204) return hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente })
     if (!resp.ok) {
       const d = await resp.json().catch(() => null)
       if (d?.error) onError?.(d.error)
-      return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+      return hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente })
     }
     const alterna = resp.headers.get('X-Voice-Fallback') === '1'
     const blob = await resp.blob()
     const url = URL.createObjectURL(blob)
     const audio = getAudioEl()
-    if (!audio) return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+    if (!audio) return hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente })
     audio.muted = false
     audio.src = url
     audio.onplay = () => { onFuente?.(alterna ? 'elevenlabs-alt' : 'elevenlabs'); onInicio?.() }
     audio.onended = () => { URL.revokeObjectURL(url); onFin?.() }
-    audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(texto, idioma, { onInicio, onFin, onFuente }) }
+    audio.onerror = () => { URL.revokeObjectURL(url); hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente }) }
     try {
       await audio.play()
     } catch {
       // Autoplay bloqueado por el navegador (fuera de un gesto): caer al navegador.
-      URL.revokeObjectURL(url); return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+      URL.revokeObjectURL(url); return hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente })
     }
   } catch {
-    return hablarNavegador(texto, idioma, { onInicio, onFin, onFuente })
+    return hablarNavegador(hablado, idioma, { onInicio, onFin, onFuente })
   }
   return detenerVoz
 }
