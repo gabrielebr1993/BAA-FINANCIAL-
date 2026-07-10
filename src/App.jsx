@@ -30,6 +30,8 @@ const Empresas = lazy(() => import('./pages/Empresas'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 const Backups = lazy(() => import('./pages/Backups'))
 const Stripe = lazy(() => import('./pages/Stripe'))
+const Jarvis = lazy(() => import('./pages/Jarvis'))
+const PanelControl = lazy(() => import('./pages/PanelControl'))
 const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
@@ -80,6 +82,8 @@ export default function App() {
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
               <Route path="/backups" element={<Page filtro="gestionarConfiguracion"><Backups /></Page>} />
               <Route path="/stripe" element={<Page filtro="gestionarConfiguracion"><Stripe /></Page>} />
+              <Route path="/ia/jarvis" element={<Page filtro="gestionarConfiguracion"><Jarvis /></Page>} />
+              <Route path="/ia/panel" element={<Page soloSuperAdmin><PanelControl /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>
           </BrowserRouter>
