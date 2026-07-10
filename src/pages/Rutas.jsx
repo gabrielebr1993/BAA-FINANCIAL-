@@ -5,8 +5,6 @@ import { useData } from '../DataContext'
 import { rutasConGanancia } from '../utils/calc'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Input, Badge, Cargando, EstadoVacio } from '../components/ui'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 export default function Rutas() {
   const { facturaRango: inv, drivers, selectedCity, cargando } = useData()
@@ -44,7 +42,7 @@ export default function Rutas() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Rutas</PageTitle>
+      <PageTitle>Rutas</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando rutas…" />

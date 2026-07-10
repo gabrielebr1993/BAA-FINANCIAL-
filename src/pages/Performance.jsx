@@ -13,8 +13,6 @@ import KpiPro from '../components/KpiPro'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
@@ -231,7 +229,7 @@ export default function Performance() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Performance</PageTitle>
+      <PageTitle>Performance</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />

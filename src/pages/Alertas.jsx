@@ -8,7 +8,6 @@ import { calcularAlertas, SEVERIDAD_ORDEN, NOMBRE_TIPO, CATEGORIAS } from '../ut
 import { calcularPagos } from '../utils/calc'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { KPI, PageTitle, Card, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
-import RangeSelector from '../components/RangeSelector'
 
 const ESTILO = {
   red: 'border-l-rose-500 bg-rose-50 dark:bg-rose-500/10',
@@ -90,7 +89,7 @@ export default function Alertas() {
 
   return (
     <div>
-      <PageTitle right={<RangeSelector />}>Alertas</PageTitle>
+      <PageTitle>Alertas</PageTitle>
 
       {cargando ? (
         <Cargando texto="Calculando alertas…" />

@@ -11,8 +11,6 @@ import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
@@ -181,7 +179,7 @@ export default function Pagos() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Pagos a Choferes</PageTitle>
+      <PageTitle>Pagos a Choferes</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando pagos…" />

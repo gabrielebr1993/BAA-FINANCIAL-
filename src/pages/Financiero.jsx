@@ -10,8 +10,6 @@ import { BarCard, DonutCard, GaugeCard } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 export default function Financiero() {
   const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, cargando } = useData()
@@ -72,7 +70,7 @@ export default function Financiero() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Financiero</PageTitle>
+      <PageTitle>Financiero</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando datos…" />

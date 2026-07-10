@@ -5,8 +5,6 @@ import { porCiudad } from '../utils/calc'
 import { facturasQueNoCuadran, cambiosDePrecio, claimsSospechosos, totalEnDisputa, descargarReporteReclamo, descargarReporteConsolidado } from '../utils/reclamos'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 export default function ReclamosGofo() {
   const { facturaRango: inv, invoicesRango, invAnterior, claims, selectedCity, empresaActiva, cargando } = useData()
@@ -41,7 +39,7 @@ export default function ReclamosGofo() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Reclamos a Gofo</PageTitle>
+      <PageTitle>Reclamos a Gofo</PageTitle>
 
       {cargando ? (
         <Cargando texto="Analizando facturación…" />

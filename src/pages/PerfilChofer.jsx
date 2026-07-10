@@ -11,8 +11,6 @@ import {
 import { money, num, pct } from '../utils/format'
 import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio } from '../components/ui'
 import { TrendCard } from '../components/charts'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 import VerificacionChofer from '../components/VerificacionChofer'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
@@ -112,7 +110,7 @@ export default function PerfilChofer() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>
+      <PageTitle>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
           <ArrowLeft size={16} strokeWidth={2} /> Volver
         </button>

@@ -8,8 +8,6 @@ import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import { TrendCard } from '../components/charts'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 const tms = (d) => (d instanceof Date ? d.getTime() : 0)
 
@@ -92,15 +90,12 @@ export default function RutaFicha() {
   return (
     <div>
       <PageTitle right={
-        <>
-          <RangeSelector /><CitySelector />
-          {hayDatos && !cargando && (
-            <>
-              <Boton variant="ghost" onClick={exportarE} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
-              <Boton variant="gold" onClick={exportarP} className="px-3 py-1.5 text-xs"><FileText size={15} strokeWidth={1.8} /> PDF</Boton>
-            </>
-          )}
-        </>
+        hayDatos && !cargando && (
+          <>
+            <Boton variant="ghost" onClick={exportarE} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
+            <Boton variant="gold" onClick={exportarP} className="px-3 py-1.5 text-xs"><FileText size={15} strokeWidth={1.8} /> PDF</Boton>
+          </>
+        )
       }>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
           <ArrowLeft size={16} strokeWidth={2} /> Volver

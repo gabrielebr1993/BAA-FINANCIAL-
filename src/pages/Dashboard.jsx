@@ -19,8 +19,6 @@ import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
 import Onboarding from '../components/Onboarding'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 export default function Dashboard() {
   const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, selectedCity, setSelectedCity, vista, cargando } = useData()
@@ -128,16 +126,12 @@ export default function Dashboard() {
   return (
     <div>
       <PageTitle right={
-        <>
-          <RangeSelector />
-          <CitySelector />
-          {inv && !cargando && (
-            <>
-              <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
-              <Boton variant="gold" onClick={descargarPDF}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
-            </>
-          )}
-        </>
+        inv && !cargando && (
+          <>
+            <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
+            <Boton variant="gold" onClick={descargarPDF}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
+          </>
+        )
       }>Dashboard</PageTitle>
 
       {cargando ? (

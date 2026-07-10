@@ -8,8 +8,6 @@ import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
-import CitySelector from '../components/CitySelector'
-import RangeSelector from '../components/RangeSelector'
 
 export default function Claims() {
   const { perfil } = useAuth()
@@ -125,7 +123,7 @@ export default function Claims() {
 
   return (
     <div>
-      <PageTitle right={<><RangeSelector /><CitySelector /></>}>Claims</PageTitle>
+      <PageTitle>Claims</PageTitle>
 
       {cargando ? (
         <Cargando texto="Cargando claims…" />
