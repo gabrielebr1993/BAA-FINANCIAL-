@@ -122,9 +122,9 @@ export async function exportarVerificacionPDF(driver, v) {
 
   seccion('Documentos e identificación')
   campo('Número de licencia / ID', v.licenciaNumero)
-  campo('¿Entregó W-9?', v.w9Entregado ? 'Sí' : 'No')
+  campo('¿Entregó 1099?', v.w9Entregado ? 'Sí' : 'No')
   await documento('Imagen de licencia / ID', v.licenciaUrl)
-  await documento('Documento W-9', v.w9Url)
+  await documento('Documento 1099', v.w9Url)
 
   seccion('Estado de verificación')
   campo('Estatus', ESTADO_LABEL(v.estado))

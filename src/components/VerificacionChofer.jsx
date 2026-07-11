@@ -155,14 +155,14 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                 <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
               </div>
             </div>
-            {/* Formulario W-9 */}
+            {/* Formulario 1099 */}
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Formulario W-9</div>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Formulario 1099</div>
               <div className="space-y-3">
                 <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
+                  <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó 1099
                 </label>
-                <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+                <DocUpload label="Documento 1099" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
               </div>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                 {ESTADOS_VERIFICACION.map((e) => (<option key={e.key} value={e.key}>{e.label}</option>))}
               </Select>
             </Campo>
-            <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, W-9 correcto…" /></Campo>
+            <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, 1099 correcto…" /></Campo>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? <><Spinner /> Guardando…</> : 'Guardar verificación'}</Boton>
