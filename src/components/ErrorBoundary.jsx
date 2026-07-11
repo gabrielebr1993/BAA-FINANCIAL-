@@ -49,6 +49,11 @@ export default class ErrorBoundary extends React.Component {
           >
             Actualizar ahora
           </button>
+          {this.state.error && (
+            <pre style={{ marginTop: 20, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 11, color: '#f6a5a5', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: 12, maxHeight: 220, overflow: 'auto' }}>
+              {String(this.state.error?.message || this.state.error)}
+            </pre>
+          )}
         </div>
       </div>
     )
