@@ -2,7 +2,7 @@
 // Solo owner/súper-admin. Los datos personales/documentos se guardan en Firestore/
 // Storage; los datos BANCARIOS los maneja Stripe (aquí solo se ve el estado).
 import { useState } from 'react'
-import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download } from 'lucide-react'
+import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
 import { BANCOS_EEUU } from '../utils/bancos'
@@ -36,6 +36,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
   const [msg, setMsg] = useState(null)
   const [stripeMsg, setStripeMsg] = useState(null)
   const [stripeBusy, setStripeBusy] = useState('')
+  const [pidiendoW9, setPidiendoW9] = useState(false)
 
   if (!puede) return null
   if (!driver?.id) {
@@ -78,6 +79,21 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
       setMsg({ tipo: 'error', txt: 'No se pudo subir el documento: ' + e.message + ' (revisa que Storage esté habilitado y sus reglas publicadas).' })
     } finally { setSubiendo('') }
   }
+
+  // Marca el W-9 como solicitado: el chofer lo verá y podrá subirlo desde su portal.
+  const pedirW9 = async () => {
+    setPidiendoW9(true); setMsg(null)
+    try {
+      const next = { ...v, w9Solicitado: true }
+      setV(next)
+      await guardarVerificacion(driver.id, next, perfil?.nombre || perfil?.email || '')
+      await onReload?.()
+      setMsg({ tipo: 'ok', txt: 'Marcado como solicitado. Pídele al chofer que entre a su cuenta (portal del chofer) y suba su W-9 en “Mi formulario W-9”. Cuando lo suba, aparecerá aquí guardado.' })
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: 'No se pudo: ' + e.message })
+    } finally { setPidiendoW9(false) }
+  }
+  const fechaCorta = (t) => { try { const d = t?.toDate ? t.toDate() : (t?.seconds ? new Date(t.seconds * 1000) : null); return d ? d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' }) : null } catch { return null } }
 
   const exportar = async () => {
     setExportando(true); setMsg(null)
@@ -155,14 +171,21 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                 <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
               </div>
             </div>
-            {/* Formulario 1099 */}
+            {/* Formulario W-9 */}
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Formulario 1099</div>
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Formulario W-9
+                {v.w9SubidoPorChofer && <Badge color="green">Subido por el chofer{fechaCorta(v.w9SubidoEn) ? ` · ${fechaCorta(v.w9SubidoEn)}` : ''}</Badge>}
+                {!v.w9SubidoPorChofer && v.w9Solicitado && <Badge color="gold">Solicitado al chofer</Badge>}
+              </div>
               <div className="space-y-3">
                 <label className="flex h-10 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó 1099
+                  <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
                 </label>
-                <DocUpload label="Documento 1099" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+                <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
+                <Boton variant="ghost" onClick={pedirW9} disabled={pidiendoW9} className="px-3 py-1.5 text-xs" title="Marca el W-9 como solicitado; el chofer lo sube desde su portal">
+                  {pidiendoW9 ? <><Spinner /> …</> : <><Send size={14} strokeWidth={1.9} /> Pedir W-9 al chofer</>}
+                </Boton>
               </div>
             </div>
           </div>
@@ -219,7 +242,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                 {ESTADOS_VERIFICACION.map((e) => (<option key={e.key} value={e.key}>{e.label}</option>))}
               </Select>
             </Campo>
-            <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, 1099 correcto…" /></Campo>
+            <Campo label="Notas de revisión" className="sm:col-span-2"><Input value={v.notas} onChange={(e) => set('notas', e.target.value)} placeholder="Ej. licencia vigente, W-9 correcto…" /></Campo>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? <><Spinner /> Guardando…</> : 'Guardar verificación'}</Boton>

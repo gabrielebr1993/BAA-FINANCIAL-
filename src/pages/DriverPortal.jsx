@@ -3,14 +3,15 @@
 // por su driverKey/driverNombre, y las reglas de Firestore lo blindan además.
 import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { Truck, DollarSign, Package, AlertTriangle, Star, LogOut, FileText, Wallet, ShieldCheck, Sun, Moon } from 'lucide-react'
+import { Truck, DollarSign, Package, AlertTriangle, Star, LogOut, FileText, Wallet, ShieldCheck, Sun, Moon, Upload, CheckCircle2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { etiquetaTipoClaim } from '../utils/calc'
+import { subirW9Chofer } from '../utils/verificacion'
 import { exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio } from '../components/ui'
+import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio, Aviso, Spinner } from '../components/ui'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -25,12 +26,27 @@ function Estrellas({ n }) {
 }
 
 export default function DriverPortal() {
-  const { perfil, companyId, driverNombre, driverKey, cerrarSesion } = useAuth()
+  const { perfil, companyId, driverId, driverNombre, driverKey, cerrarSesion } = useAuth()
   const { oscuro, alternar } = useTheme()
   const [stats, setStats] = useState(null) // driverStats del chofer
   const [claims, setClaims] = useState([])
   const [payroll, setPayroll] = useState({}) // invoiceId -> estado
   const [error, setError] = useState('')
+  const [subiendoW9, setSubiendoW9] = useState(false)
+  const [w9Msg, setW9Msg] = useState(null)
+  const [w9Listo, setW9Listo] = useState(false)
+
+  const subirW9 = async (file) => {
+    if (!file) return
+    setSubiendoW9(true); setW9Msg(null)
+    try {
+      await subirW9Chofer(file)
+      setW9Listo(true)
+      setW9Msg({ tipo: 'ok', txt: '¡Listo! Tu W-9 se envió y quedó guardado. Tu empresa ya puede verlo.' })
+    } catch (e) {
+      setW9Msg({ tipo: 'error', txt: e.message })
+    } finally { setSubiendoW9(false) }
+  }
 
   useEffect(() => {
     let vivo = true
@@ -133,6 +149,25 @@ export default function DriverPortal() {
                   </div>
                 )}
               </div>
+            </Card>
+
+            {/* Documentos: subir mi W-9 (se envía y guarda para la empresa) */}
+            <Card className="mb-4 p-5">
+              <div className="mb-2 flex items-center gap-2">
+                <FileText size={18} strokeWidth={1.8} className="text-brand-gold" />
+                <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mi formulario W-9</h2>
+                {w9Listo && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Enviado</span></Badge>}
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Sube aquí tu formulario <b>W-9</b> (foto o PDF). Se envía a tu empresa y queda guardado — no tienes que mandarlo por otro lado.</p>
+              {w9Msg && <div className="mb-3"><Aviso tipo={w9Msg.tipo}>{w9Msg.txt}</Aviso></div>}
+              {!driverId ? (
+                <Aviso tipo="warn">Tu cuenta aún no está vinculada a tu registro de chofer. Pídele a tu empresa que la vincule para poder subir tu W-9.</Aviso>
+              ) : (
+                <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoW9 ? 'pointer-events-none opacity-60' : ''}`}>
+                  {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={16} strokeWidth={1.8} /> {w9Listo ? 'Subir otro' : 'Subir mi W-9'}</>}
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirW9(e.target.files?.[0])} />
+                </label>
+              )}
             </Card>
 
             {error && <EstadoVacio titulo="Sin acceso a esos datos" texto={error} mostrarBoton={false} />}

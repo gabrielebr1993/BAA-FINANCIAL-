@@ -5,7 +5,7 @@
 // Firestore). Alternativa más segura: gestionarlos solo en Stripe.
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../firebase'
+import { db, storage, auth } from '../firebase'
 
 export const ESTADOS_VERIFICACION = [
   { key: 'pendiente', label: 'Pendiente', color: 'gold' },
@@ -19,6 +19,29 @@ export async function guardarVerificacion(driverId, verificacion, revisor) {
     verificacion: { ...verificacion, revisadoPor: revisor || verificacion.revisadoPor || '', revisadoEn: verificacion.estado ? serverTimestamp() : verificacion.revisadoEn || null },
     verificacionActualizada: serverTimestamp(),
   })
+}
+
+// El CHOFER sube su propio W-9 desde su portal (vía endpoint serverless con Admin
+// SDK: no requiere abrir reglas al rol driver). Devuelve la URL guardada.
+export async function subirW9Chofer(file) {
+  if (!file) throw new Error('Falta el archivo.')
+  if (file.size > 5 * 1024 * 1024) throw new Error('El archivo es muy grande (máx 5 MB).')
+  const t = await auth.currentUser?.getIdToken()
+  if (!t) throw new Error('Sesión no válida. Vuelve a iniciar sesión.')
+  const fileBase64 = await new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '')
+    fr.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    fr.readAsDataURL(file)
+  })
+  const resp = await fetch('/api/driver-w9', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ fileBase64, fileName: file.name, mimeType: file.type }),
+  })
+  const d = await resp.json().catch(() => ({ ok: false, error: 'Respuesta no válida del servidor.' }))
+  if (!d.ok) throw new Error(d.error || 'No se pudo subir el W-9.')
+  return d.url
 }
 
 // Sube un documento del chofer a Storage y devuelve su URL de descarga.
