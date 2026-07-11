@@ -19,7 +19,8 @@ const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
   const { drivers: driversAll, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
-  const { ciudadBloqueada, ciudadUsuario } = useAuth()
+  const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
+  const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
 
   // Usuario asignado a una ciudad: solo ve los choferes que operan en SU ciudad
@@ -311,8 +312,12 @@ export default function Choferes() {
     }
   }
 
+  // Choferes de la factura sin tarifa creada. Si el usuario está fijado a una
+  // ciudad, solo cuenta los de SU ciudad (no los de toda la empresa).
   const sinTarifa = facturaRango
-    ? [...new Set((facturaRango.resumenChoferes || []).map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n))
+    ? [...new Set((facturaRango.resumenChoferes || [])
+        .filter((c) => !ciudadBloqueada || c.ciudad === ciudadUsuario)
+        .map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n))
     : []
   const nSel = idsSel().length
 
@@ -320,15 +325,18 @@ export default function Choferes() {
     <div>
       <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">Semana: <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>Choferes y Tarifas</PageTitle>
 
-      <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-        {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Gastos fijos' }].map((t) => (
-          <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
-            {t.l}
-          </button>
-        ))}
-      </div>
+      {/* Gastos fijos solo lo ve/gestiona el dueño; el manager no. */}
+      {esDueno && (
+        <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+          {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Gastos fijos' }].map((t) => (
+            <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === 'managers' ? (
+      {esDueno && tab === 'managers' ? (
         <ManagersPanel />
       ) : (
        <>
