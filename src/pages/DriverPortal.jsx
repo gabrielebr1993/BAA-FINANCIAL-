@@ -215,16 +215,16 @@ export default function DriverPortal() {
       {stats === null ? (
         <Cargando texto="Cargando tu portal…" />
       ) : (
-        <div className="mx-auto flex max-w-5xl gap-3 p-3 sm:gap-5 sm:p-6">
+        <div className="mx-auto flex max-w-5xl gap-2.5 p-2.5 sm:gap-6 sm:p-6">
           {/* Menú lateral SIEMPRE a la izquierda: riel angosto en móvil, ancho en tablet/PC */}
-          <nav className="sticky top-[68px] flex w-[72px] flex-shrink-0 flex-col gap-1.5 self-start sm:w-52">
+          <nav className="sticky top-[64px] flex w-16 flex-shrink-0 flex-col gap-1 self-start rounded-2xl bg-white p-1.5 shadow-card dark:bg-surface-dark-card sm:w-52 sm:p-2">
             {MENU.map((m) => {
               const Icon = m.icon
               const activo = vista === m.k
               return (
                 <button key={m.k} onClick={() => setVista(m.k)}
-                  className={`flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-center text-[10px] font-semibold leading-tight transition sm:flex-row sm:gap-2 sm:px-3.5 sm:py-2.5 sm:text-left sm:text-sm sm:leading-normal ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
-                  <Icon size={19} strokeWidth={1.9} className="flex-shrink-0" /> <span>{m.label}</span>
+                  className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-semibold leading-tight transition sm:flex-row sm:gap-2.5 sm:px-3 sm:py-2.5 sm:text-left sm:text-sm sm:leading-normal ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
+                  <Icon size={20} strokeWidth={1.9} className="flex-shrink-0" /> <span>{m.label}</span>
                 </button>
               )
             })}
