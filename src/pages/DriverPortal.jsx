@@ -217,15 +217,7 @@ export default function DriverPortal() {
       ) : (
         <div className="mx-auto flex max-w-5xl gap-3 p-3 sm:gap-5 sm:p-6">
           {/* Menú lateral SIEMPRE a la izquierda: riel angosto en móvil, ancho en tablet/PC */}
-          <nav className="sticky top-[68px] flex w-[74px] flex-shrink-0 flex-col gap-1.5 self-start sm:w-52">
-            {/* Mini ficha con foto */}
-            <div className="mb-1 flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-surface-card p-2 dark:border-slate-700/60 dark:bg-surface-dark-card sm:flex-row sm:gap-3 sm:p-3">
-              <Foto url={fotoUrl} size={40} />
-              <div className="hidden min-w-0 sm:block">
-                <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || 'Chofer'}</div>
-                {calif && <div className="text-[11px] font-semibold" style={{ color: COLOR_NIVEL[calif.nivel] }}>{calif.etiqueta} · {calif.puntaje}/100</div>}
-              </div>
-            </div>
+          <nav className="sticky top-[68px] flex w-[72px] flex-shrink-0 flex-col gap-1.5 self-start sm:w-52">
             {MENU.map((m) => {
               const Icon = m.icon
               const activo = vista === m.k
@@ -246,26 +238,19 @@ export default function DriverPortal() {
             {vista === 'inicio' && (
               <>
                 <Card className="mb-4 overflow-hidden">
-                  <div className="relative bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel px-5 pb-16 pt-5 sm:px-7">
+                  <div className="bg-gradient-to-br from-brand-navy to-brand-steel p-5 sm:p-6">
                     <div className="text-[11px] font-medium uppercase tracking-wide text-white/50">Portal del chofer</div>
+                    <h1 className="mt-0.5 text-xl font-bold text-white sm:text-2xl">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
+                    <p className="mt-1 text-sm text-white/70">Tus pagos, entregas, claims y tu calificación.</p>
                     {calif && (
-                      <div className="absolute right-4 top-4 flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15 backdrop-blur">
-                        <span className="grid h-11 w-11 place-items-center rounded-full text-base font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
-                        <div className="pr-1">
+                      <div className="mt-4 inline-flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
+                        <span className="grid h-10 w-10 place-items-center rounded-full text-sm font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
+                        <div>
                           <div className="flex items-center gap-1.5 text-sm font-bold text-white">{calif.etiqueta} <EstrellasBlancas n={calif.estrellas} /></div>
-                          <div className="hidden text-[11px] text-white/70 sm:block">{calif.desglose}</div>
+                          <div className="text-[11px] text-white/70">{calif.desglose}</div>
                         </div>
                       </div>
                     )}
-                  </div>
-                  <div className="px-5 pb-5 sm:px-7">
-                    <div className="-mt-12 flex flex-wrap items-end gap-4">
-                      <Foto url={fotoUrl} size={88} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
-                      <div className="min-w-0 flex-1 pb-1">
-                        <h1 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
-                        <p className="m-0 text-sm text-slate-500 dark:text-slate-400">Aquí ves solo tus pagos, entregas, claims y tu calificación.</p>
-                      </div>
-                    </div>
                   </div>
                 </Card>
 
