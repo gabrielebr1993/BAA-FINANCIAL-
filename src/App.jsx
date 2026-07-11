@@ -34,6 +34,7 @@ const ManagerPerfil = lazy(() => import('./pages/ManagerPerfil'))
 const Jarvis = lazy(() => import('./pages/Jarvis'))
 const PanelControl = lazy(() => import('./pages/PanelControl'))
 const DriverPortal = lazy(() => import('./pages/DriverPortal'))
+const RegistroPublico = lazy(() => import('./pages/RegistroPublico'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
 function Page({ filtro, soloSuperAdmin, children }) {

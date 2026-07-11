@@ -11,6 +11,7 @@ import { exportarExcel } from '../utils/exportar'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
+import RegistroChoferes from '../components/RegistroChoferes'
 
 const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
@@ -326,6 +327,9 @@ export default function Choferes() {
           <span className="inline-flex items-center gap-1.5"><Truck size={15} strokeWidth={1.8} /> {sinTarifa.length} chofer(es) de la factura sin tarifa: {sinTarifa.slice(0, 8).join(', ')}{sinTarifa.length > 8 ? '…' : ''}. Créalos abajo.</span>
         </Aviso>
       )}
+
+      {/* Enlace público de registro (SSN / banco / W-9) */}
+      <RegistroChoferes drivers={drivers} activeCompanyId={activeCompanyId} reloadDrivers={reloadDrivers} />
 
       {/* Alta de chofer */}
       <Card className="mb-4 p-4">
