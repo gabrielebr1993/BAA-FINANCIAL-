@@ -215,13 +215,13 @@ export default function DriverPortal() {
       {stats === null ? (
         <Cargando texto="Cargando tu portal…" />
       ) : (
-        <div className="mx-auto max-w-5xl gap-5 p-4 sm:flex sm:p-6">
-          {/* Menú lateral (columna en escritorio, barra deslizable en móvil) */}
-          <nav className="mb-4 flex gap-2 overflow-x-auto pb-1 sm:mb-0 sm:w-52 sm:flex-col sm:overflow-visible sm:pb-0">
+        <div className="mx-auto flex max-w-5xl gap-3 p-3 sm:gap-5 sm:p-6">
+          {/* Menú lateral SIEMPRE a la izquierda: riel angosto en móvil, ancho en tablet/PC */}
+          <nav className="sticky top-[68px] flex w-[74px] flex-shrink-0 flex-col gap-1.5 self-start sm:w-52">
             {/* Mini ficha con foto */}
-            <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-surface-card p-3 dark:border-slate-700/60 dark:bg-surface-dark-card sm:flex">
-              <Foto url={fotoUrl} size={44} />
-              <div className="min-w-0">
+            <div className="mb-1 flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-surface-card p-2 dark:border-slate-700/60 dark:bg-surface-dark-card sm:flex-row sm:gap-3 sm:p-3">
+              <Foto url={fotoUrl} size={40} />
+              <div className="hidden min-w-0 sm:block">
                 <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || 'Chofer'}</div>
                 {calif && <div className="text-[11px] font-semibold" style={{ color: COLOR_NIVEL[calif.nivel] }}>{calif.etiqueta} · {calif.puntaje}/100</div>}
               </div>
@@ -231,8 +231,8 @@ export default function DriverPortal() {
               const activo = vista === m.k
               return (
                 <button key={m.k} onClick={() => setVista(m.k)}
-                  className={`inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
-                  <Icon size={16} strokeWidth={1.9} /> {m.label}
+                  className={`flex flex-col items-center gap-1 rounded-xl px-1.5 py-2 text-center text-[10px] font-semibold leading-tight transition sm:flex-row sm:gap-2 sm:px-3.5 sm:py-2.5 sm:text-left sm:text-sm sm:leading-normal ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
+                  <Icon size={19} strokeWidth={1.9} className="flex-shrink-0" /> <span>{m.label}</span>
                 </button>
               )
             })}

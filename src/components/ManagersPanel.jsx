@@ -161,7 +161,16 @@ export default function ManagersPanel() {
                   <tbody>
                     {g.items.map((m) => (
                       <tr key={m.id} className="border-t border-slate-100 dark:border-slate-700/50">
-                        <td className="px-3 py-2"><button onClick={() => navigate(`/managers/${m.id}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{m.nombre}</button></td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            {m.fotoUrl ? (
+                              <img src={m.fotoUrl} alt="" className="h-8 w-8 flex-shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                            ) : (
+                              <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800"><Building2 size={15} strokeWidth={1.8} /></span>
+                            )}
+                            <button onClick={() => navigate(`/managers/${m.id}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{m.nombre}</button>
+                          </div>
+                        </td>
                         <td className="px-3 py-2 text-right">{money(m.sueldoSemanal)}</td>
                         <td className="px-3 py-2 text-center">{m.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>}</td>
                         <td className="px-3 py-2 text-right">
