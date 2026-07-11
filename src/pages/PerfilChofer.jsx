@@ -9,7 +9,7 @@ import {
   claimsValidos, porCiudad, nombreCiudadDe, etiquetaTipoClaim, TODAS,
 } from '../utils/calc'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio } from '../components/ui'
+import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso } from '../components/ui'
 import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
 
@@ -50,6 +50,9 @@ export default function PerfilChofer() {
   const prom = useMemo(() => promediosFlota(pagos), [pagos])
   const pago = useMemo(() => pagos.find((p) => p.nombre === decoded) || null, [pagos, decoded])
   const calif = useMemo(() => (pago ? calificarChofer({ ...pago, paquetes: pago.individuales + pago.dobles }, prom) : null), [pago, prom])
+  // Tarifas para la cabecera: de la actividad si la hay, si no del registro del chofer.
+  const tarInd = pago ? pago.tarifaInd : (driver ? Number(driver.precioIndividual) || 0 : 0)
+  const tarDob = pago ? pago.tarifaDoble : (driver ? Number(driver.precioDoble) || 0 : 0)
 
   // Claims del chofer en el periodo (respetando ciudad).
   const claimsChofer = useMemo(() => porCiudad(claims, selectedCity).filter((c) => c.courier === decoded), [claims, selectedCity, decoded])
@@ -119,8 +122,8 @@ export default function PerfilChofer() {
 
       {cargando ? (
         <Cargando texto="Cargando perfil…" />
-      ) : !pago ? (
-        <EstadoVacio titulo={decoded} texto="Este chofer no tiene datos en el rango de fechas / ciudad seleccionados. Cambia el filtro para ver su actividad." />
+      ) : !pago && !driver ? (
+        <EstadoVacio titulo={decoded} texto="Este chofer no tiene datos en el rango de fechas / ciudad seleccionados, y no está guardado como chofer. Cámbialo en el filtro o créalo en Choferes." />
       ) : (
         <>
           {/* Cabecera */}
@@ -138,30 +141,39 @@ export default function PerfilChofer() {
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1"><MapPin size={14} strokeWidth={1.8} /> {ciudades.join(', ') || '—'}</span>
-                  <span>Tarifa individual: <b className="text-brand-navy dark:text-slate-200">{money(pago.tarifaInd)}</b></span>
-                  <span>Tarifa doble: <b className="text-brand-navy dark:text-slate-200">{money(pago.tarifaDoble)}</b></span>
+                  <span>Tarifa individual: <b className="text-brand-navy dark:text-slate-200">{money(tarInd)}</b></span>
+                  <span>Tarifa doble: <b className="text-brand-navy dark:text-slate-200">{money(tarDob)}</b></span>
                 </div>
               </div>
               {calif && <Calificacion c={calif} />}
             </div>
           </Card>
 
+          {/* Sin actividad en el rango: igual se puede verificar/registrar el pago. */}
+          {!pago && (
+            <div className="mb-4">
+              <Aviso tipo="info">Este chofer no tiene actividad en el rango de fechas / ciudad seleccionados. Aún así puedes completar su <b>verificación y registro de pago</b> aquí abajo.</Aviso>
+            </div>
+          )}
+
           {/* Métricas del periodo */}
-          <div className="mb-4 flex flex-wrap gap-3">
-            <KPI label="Entregas" value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ind · ${num(pago.dobles)} dob`} />
-            <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
-            <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : undefined} />
-            <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
-            <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
-            <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
-          </div>
+          {pago && (
+            <div className="mb-4 flex flex-wrap gap-3">
+              <KPI label="Entregas" value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ind · ${num(pago.dobles)} dob`} />
+              <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
+              <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : undefined} />
+              <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
+              <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
+              <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
+            </div>
+          )}
 
           {/* Verificación del chofer + estado de pago (Stripe). Solo owner/súper-admin. */}
           <div className="mb-4">
             <VerificacionChofer driver={driver} activeCompanyId={activeCompanyId} onReload={reloadDrivers} />
           </div>
 
-          {tiposChofer.length > 0 && (
+          {pago && tiposChofer.length > 0 && (
             <Card className="mb-4 p-4">
               <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h3>
               <div className="flex flex-wrap gap-2">
@@ -191,6 +203,7 @@ export default function PerfilChofer() {
           )}
 
           {/* Historial de pagos */}
+          {pago && (<>
           <Card className="mb-4 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de pagos</h3>
@@ -250,6 +263,7 @@ export default function PerfilChofer() {
               }}
             />
           </Card>
+          </>)}
         </>
       )}
     </div>
