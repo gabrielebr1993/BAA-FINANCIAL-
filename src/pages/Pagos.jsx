@@ -19,6 +19,10 @@ export default function Pagos() {
   const { perfil, esSuperAdmin } = useAuth()
   const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando, ajustes, empresaActiva } = useData()
   const puedePagar = esSuperAdmin || perfil?.role === 'owner'
+  // SOLO dueño/súper-admin ven lo relacionado con GANANCIA (ingreso de Gofo,
+  // ganancia total y por chofer). Un manager con acceso a Pagos solo ve lo
+  // necesario para PAGAR: entregas, tarifas, descuento por claims y total a pagar.
+  const verGanancia = puedePagar
   const [payrollMap, setPayrollMap] = useState({})
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
   const [stripeMsg, setStripeMsg] = useState(null)
@@ -151,12 +155,12 @@ export default function Pagos() {
       { h: 'Dobles', v: (p) => p.dobles },
       { h: 'Claims activos', v: (p) => p.claimsActivos },
       { h: 'Claims perdonados', v: (p) => p.claimsPerdonados },
-      ...(ocultarIngreso ? [] : [{ h: 'Ingreso Gofo', v: (p) => p.ingreso }]),
+      ...(!verGanancia || ocultarIngreso ? [] : [{ h: 'Ingreso Gofo', v: (p) => p.ingreso }]),
       { h: 'Tarifa Ind', v: (p) => p.tarifaInd },
       { h: 'Tarifa Doble', v: (p) => p.tarifaDoble },
       { h: 'Descuento Claims', v: (p) => p.descuentoClaims },
       { h: 'Total a Pagar', v: (p) => p.totalPagar },
-      ...(ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => p.ganancia }]),
+      ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => p.ganancia }]),
       { h: 'Estado', v: (p) => p.estado },
     ]
     const aoa = [cols.map((c) => c.h), ...pagosConEstado.map((p) => cols.map((c) => c.v(p)))]
@@ -173,9 +177,9 @@ export default function Pagos() {
       { h: 'Ciudad', v: (p) => p.nombreCiudad },
       { h: 'Ind.', v: (p) => p.individuales },
       { h: 'Dobles', v: (p) => p.dobles },
-      ...(ocultarIngreso ? [] : [{ h: 'Ingreso', v: (p) => money(p.ingreso) }]),
+      ...(!verGanancia || ocultarIngreso ? [] : [{ h: 'Ingreso', v: (p) => money(p.ingreso) }]),
       { h: 'Total a pagar', v: (p) => money(p.totalPagar) },
-      ...(ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => money(p.ganancia) }]),
+      ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => money(p.ganancia) }]),
       { h: 'Estado', v: (p) => p.estado },
     ]
     exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
@@ -196,14 +200,18 @@ export default function Pagos() {
       ) : (
         <>
           <div className="mb-2 flex flex-wrap gap-3">
-            <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />
+            {verGanancia && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
             <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" />
-            <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />
+            {verGanancia && <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />}
             <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
           </div>
-          <p className="mb-5 text-xs text-slate-400">
-            Esta ganancia es la de los choferes (ingreso − pago − descuento de Gofo por claims), <b>antes</b> de gastos fijos. La <b>Ganancia real</b> (que también resta los gastos fijos) está en el <b>Dashboard</b> y <b>Financiero</b>. Si filtras o buscas, este total es solo de los choferes mostrados.
-          </p>
+          {verGanancia ? (
+            <p className="mb-5 text-xs text-slate-400">
+              Esta ganancia es la de los choferes (ingreso − pago − descuento de Gofo por claims), <b>antes</b> de gastos fijos. La <b>Ganancia real</b> (que también resta los gastos fijos) está en el <b>Dashboard</b> y <b>Financiero</b>. Si filtras o buscas, este total es solo de los choferes mostrados.
+            </p>
+          ) : (
+            <p className="mb-5 text-xs text-slate-400">Aquí registras los pagos a los choferes: marca cada uno como pagado y avísale. Total a pagar = entregas × tarifa − descuento por claims.</p>
+          )}
 
           {!selectedInvoice ? (
             <EstadoVacio texto="Cuando cargues una factura verás aquí el pago calculado de cada chofer." />
@@ -226,10 +234,12 @@ export default function Pagos() {
                     <Input className="w-56" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o rate (ej. 1.6)…" />
                     {busqueda && <Boton variant="ghost" className="px-2 py-1 text-xs" onClick={() => setBusqueda('')}><X size={13} strokeWidth={2} /></Boton>}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label="Ingreso Gofo" />
-                    <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label="Ganancia" />
-                  </div>
+                  {verGanancia && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label="Ingreso Gofo" />
+                      <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label="Ganancia" />
+                    </div>
+                  )}
                   <div className="ml-auto flex gap-2">
                     <Boton variant="ghost" onClick={exportar}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
                     <Boton variant="gold" onClick={exportarPdf}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
@@ -241,14 +251,20 @@ export default function Pagos() {
                 <table className="w-full min-w-[980px] border-collapse text-[13.5px]">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      {['Chofer', 'Ind.', 'Dobles', 'Claims (act/tot)', lIngreso('Ingreso Gofo'), 'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar', lGanancia('Ganancia'), 'Estado', ''].map((h, i) => (
+                      {[
+                        'Chofer', 'Ind.', 'Dobles', 'Claims (act/tot)',
+                        ...(verGanancia ? [lIngreso('Ingreso Gofo')] : []),
+                        'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar',
+                        ...(verGanancia ? [lGanancia('Ganancia')] : []),
+                        'Estado', '',
+                      ].map((h, i) => (
                         <th key={i} className="px-2.5 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filtrados.length === 0 && (
-                      <tr><td colSpan={12} className="px-4 py-6 text-center text-slate-400">Sin choferes con este filtro.</td></tr>
+                      <tr><td colSpan={verGanancia ? 12 : 10} className="px-4 py-6 text-center text-slate-400">Sin choferes con este filtro.</td></tr>
                     )}
                     {filtrados.map((p) => (
                       <FilaChofer
@@ -270,6 +286,7 @@ export default function Pagos() {
                         ocupado={ocupado}
                         driver={buscarDriver(drivers, p.nombre)}
                         puedePagar={puedePagar}
+                        verGanancia={verGanancia}
                         pagandoStripe={pagandoStripe === p.nombre}
                         onPagarStripe={pagarStripe}
                         avisoPago={!esRango && p.estado === 'pagado' ? avisoPagoDe(p) : null}
@@ -280,10 +297,10 @@ export default function Pagos() {
                     <tr className="bg-slate-100 font-bold dark:bg-slate-800">
                       <td className="px-2.5 py-2.5">TOTAL ({filtrados.length})</td>
                       <td colSpan={3}></td>
-                      <td className="px-2.5 py-2.5">{fIngreso(totIngreso)}</td>
+                      {verGanancia && <td className="px-2.5 py-2.5">{fIngreso(totIngreso)}</td>}
                       <td colSpan={3}></td>
                       <td className="px-2.5 py-2.5">{money(totPagar)}</td>
-                      <td className="px-2.5 py-2.5 text-brand-gold">{fGanancia(totGanancia)}</td>
+                      {verGanancia && <td className="px-2.5 py-2.5 text-brand-gold">{fGanancia(totGanancia)}</td>}
                       <td colSpan={2}></td>
                     </tr>
                   </tfoot>
@@ -318,7 +335,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, pagandoStripe, onPagarStripe, avisoPago }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verGanancia, pagandoStripe, onPagarStripe, avisoPago }) {
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -333,12 +350,12 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
         <td className={TD}>{num(p.individuales)}</td>
         <td className={TD}>{num(p.dobles)}</td>
         <td className={TD}>{p.claimsActivos}/{p.claimsTotales}{p.claimsPerdonados > 0 ? ` (${p.claimsPerdonados} perd.)` : ''}</td>
-        <td className={TD}>{fIngreso(p.ingreso)}</td>
+        {verGanancia && <td className={TD}>{fIngreso(p.ingreso)}</td>}
         <td className={TD}>{money(p.tarifaInd)}</td>
         <td className={TD}>{money(p.tarifaDoble)}</td>
         <td className={`${TD} text-rose-600 dark:text-rose-400`}>{money(p.descuentoClaims)}</td>
         <td className={`${TD} font-bold`}>{money(p.totalPagar)}</td>
-        <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>
+        {verGanancia && <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>}
         <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
         <td className={TD}>
           <div className="flex items-center justify-end gap-1.5">
@@ -374,7 +391,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
       </tr>
       {abierto && (
         <tr className="bg-slate-50 dark:bg-slate-800/40">
-          <td colSpan={12} className="px-4 py-2.5">
+          <td colSpan={verGanancia ? 12 : 10} className="px-4 py-2.5">
             <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Claims de {p.nombre} ({claimsChofer.length})</div>
             {claimsChofer.length === 0 ? (
               <div className="text-sm text-slate-400">Sin claims.</div>
