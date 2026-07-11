@@ -13,10 +13,11 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { etiquetaTipoClaim } from '../utils/calc'
-import { subirW9Chofer, guardarDatosBancariosChofer, subirFotoChofer, subirLicenciaChofer, estadoChoferPortal } from '../utils/verificacion'
+import { subirW9Chofer, guardarDatosBancariosChofer, subirFotoChofer, subirLicenciaChofer, estadoChoferPortal, firmarW9Chofer } from '../utils/verificacion'
 import { consejoChofer } from '../utils/consejoChofer'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { W9_OFICIAL_URL } from '../utils/w9'
+import FirmaCanvas from '../components/FirmaCanvas'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio, Aviso, Spinner, Input, Select } from '../components/ui'
@@ -50,6 +51,10 @@ export default function DriverPortal() {
   // ---- W-9 ----
   const [subiendoW9, setSubiendoW9] = useState(false)
   const [w9Msg, setW9Msg] = useState(null)
+  const [firmando, setFirmando] = useState(false)
+  const [firmaPng, setFirmaPng] = useState(null)
+  const [enviandoFirma, setEnviandoFirma] = useState(false)
+  const [subirManual, setSubirManual] = useState(false)
   // ---- Licencia ----
   const [subiendoLic, setSubiendoLic] = useState(false)
   const [licMsg, setLicMsg] = useState(null)
@@ -74,6 +79,17 @@ export default function DriverPortal() {
     try { await subirW9Chofer(file); await cargarEstado(); setW9Msg({ tipo: 'ok', txt: '¡Listo! Tu W-9 se envió y quedó guardado.' }) }
     catch (e) { setW9Msg({ tipo: 'error', txt: e.message }) } finally { setSubiendoW9(false) }
   }
+  const firmarW9 = async () => {
+    if (!firmaPng) return
+    setEnviandoFirma(true); setW9Msg(null)
+    try {
+      await firmarW9Chofer(firmaPng, new Date().toLocaleDateString())
+      await cargarEstado()
+      setFirmando(false); setFirmaPng(null)
+      setW9Msg({ tipo: 'ok', txt: '¡Listo! Tu W-9 firmado se generó y quedó guardado. Tu empresa ya puede verlo.' })
+    } catch (e) { setW9Msg({ tipo: 'error', txt: e.message }) } finally { setEnviandoFirma(false) }
+  }
+
   const subirLic = async (file) => {
     if (!file) return
     setSubiendoLic(true); setLicMsg(null)
@@ -137,10 +153,12 @@ export default function DriverPortal() {
   const calif = ultima?.calificacion || null
   const consejo = useMemo(() => consejoChofer(semanas, calif), [semanas, calif])
 
-  const totalPaquetes = semanas.reduce((a, w) => a + (w.paquetes || 0), 0)
-  const totalClaims = semanas.reduce((a, w) => a + (w.claimsTotales || 0), 0)
-  const totalPagado = semanas.filter((w) => payroll[w.invoiceId] === 'pagado').reduce((a, w) => a + (w.totalPagar || 0), 0)
-  const totalPendiente = semanas.filter((w) => payroll[w.invoiceId] !== 'pagado').reduce((a, w) => a + (w.totalPagar || 0), 0)
+  // El chofer SOLO ve las semanas/recibos que el dueño ya marcó como PAGADAS. Si el
+  // dueño las regresa a "pendiente", desaparecen de su vista.
+  const semanasPagadas = useMemo(() => semanas.filter((w) => payroll[w.invoiceId] === 'pagado'), [semanas, payroll])
+  const totalPagado = semanasPagadas.reduce((a, w) => a + (w.totalPagar || 0), 0)
+  const totalPaquetes = semanasPagadas.reduce((a, w) => a + (w.paquetes || 0), 0)
+  const totalClaims = semanasPagadas.reduce((a, w) => a + (w.claimsTotales || 0), 0)
 
   const recibo = (w) => {
     const estadoPago = payroll[w.invoiceId] === 'pagado' ? 'Pagado' : 'Pendiente'
@@ -249,21 +267,21 @@ export default function DriverPortal() {
                   </div>
                 </Card>
 
-                {semanas.length === 0 ? (
-                  <EstadoVacio titulo="Aún no hay datos" texto="Cuando tu empresa cargue una factura con tus entregas, verás aquí tus pagos y métricas." mostrarBoton={false} />
+                {semanasPagadas.length === 0 ? (
+                  <EstadoVacio titulo="Aún no tienes pagos" texto="Cuando tu empresa apruebe y marque como pagada una de tus semanas, verás aquí tu recibo y el detalle. Mientras tanto, no aparece nada." mostrarBoton={false} />
                 ) : (
                   <>
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <KPI label="Total pagado" value={money(totalPagado)} icon={Wallet} accent="green" />
-                      <KPI label="Pendiente" value={money(totalPendiente)} icon={DollarSign} accent="gold" />
-                      <KPI label="Paquetes (total)" value={num(totalPaquetes)} icon={Package} accent="navy" />
-                      <KPI label="Claims (total)" value={num(totalClaims)} icon={AlertTriangle} accent="red" />
+                      <KPI label="Semanas pagadas" value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
+                      <KPI label="Paquetes (pagados)" value={num(totalPaquetes)} icon={Package} accent="navy" />
+                      <KPI label="Claims (pagados)" value={num(totalClaims)} icon={AlertTriangle} accent="red" />
                     </div>
 
                     <Card className="mb-4 p-4">
-                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis pagos y entregas por semana</h2>
+                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis pagos y entregas</h2>
                       <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
-                        <table className="w-full min-w-[640px] border-collapse text-sm">
+                        <table className="w-full min-w-[600px] border-collapse text-sm">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                               <th className="px-3 py-2.5 text-left font-semibold">Semana</th>
@@ -277,7 +295,7 @@ export default function DriverPortal() {
                             </tr>
                           </thead>
                           <tbody>
-                            {semanas.map((w) => (
+                            {semanasPagadas.map((w) => (
                               <tr key={w.id} className="border-t border-slate-100 dark:border-slate-700/50">
                                 <td className="px-3 py-2">{w.semana}</td>
                                 <td className="px-3 py-2 text-right">{num(w.individuales)}</td>
@@ -285,7 +303,7 @@ export default function DriverPortal() {
                                 <td className="px-3 py-2 text-right">{num(w.paquetes)}</td>
                                 <td className="px-3 py-2 text-right">{num(w.claimsTotales)}</td>
                                 <td className="px-3 py-2 text-right font-semibold">{money(w.totalPagar)}</td>
-                                <td className="px-3 py-2 text-center">{payroll[w.invoiceId] === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
+                                <td className="px-3 py-2 text-center"><Badge color="green">Pagado</Badge></td>
                                 <td className="px-3 py-2 text-right"><Boton variant="ghost" onClick={() => recibo(w)} className="px-2.5 py-1 text-xs"><FileText size={13} strokeWidth={1.8} /> PDF</Boton></td>
                               </tr>
                             ))}
@@ -472,20 +490,55 @@ export default function DriverPortal() {
                         {estado?.w9Url && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Enviado</span></Badge>}
                         {!estado?.w9Url && estado?.w9Solicitado && <Badge color="gold">Solicitado</Badge>}
                       </div>
-                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Abre el <b>W-9 oficial del IRS</b>, llénalo, guárdalo y <b>súbelo aquí</b>.</p>
+                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">El sistema <b>llena tu W-9</b> con los datos que guardaste. Tú solo tienes que <b>firmar</b> aquí mismo (como DocuSign).</p>
                       {w9Msg && <div className="mb-3"><Aviso tipo={w9Msg.tipo}>{w9Msg.txt}</Aviso></div>}
-                      <div className="mb-3">
-                        <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white no-underline hover:bg-brand-navy-700">
-                          <FileText size={16} strokeWidth={1.8} /> Abrir y llenar el W-9 oficial (IRS)
-                        </a>
-                        <span className="ml-2 text-xs text-slate-400">Paso 1: llénalo · Paso 2: súbelo</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoW9 ? 'pointer-events-none opacity-60' : ''}`}>
-                          {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={16} strokeWidth={1.8} /> {estado?.w9Url ? 'Subir otro' : 'Subir mi W-9 lleno'}</>}
-                          <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirW9(e.target.files?.[0])} />
-                        </label>
-                        {estado?.w9Url && <a href={estado.w9Url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Ver mi W-9</a>}
+
+                      {!estado?.completo ? (
+                        <Aviso tipo="warn">Primero completa y guarda <b>todos</b> tus datos de pago (nombre, dirección, SSN y banco) arriba. Cuando estén completos, podrás firmar tu W-9.</Aviso>
+                      ) : !firmando ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Boton variant="gold" onClick={() => { setFirmando(true); setFirmaPng(null); setW9Msg(null) }}>
+                            <FileText size={15} strokeWidth={1.8} /> {estado?.w9Url ? 'Volver a firmar mi W-9' : 'Firmar mi W-9'}
+                          </Boton>
+                          {estado?.w9Url && <a href={estado.w9Url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Ver mi W-9 {estado?.w9Firmado ? 'firmado' : ''}</a>}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+                          {/* Vista de los datos que llevará el W-9 */}
+                          <div className="mb-3 grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
+                            <div><span className="text-slate-400">Nombre:</span> <b>{estado?.nombreCompleto || driverNombre}</b></div>
+                            <div><span className="text-slate-400">Dirección:</span> <b>{estado?.direccion || '—'}</b></div>
+                            <div><span className="text-slate-400">SSN:</span> <b>•••-••-••••</b></div>
+                            <div><span className="text-slate-400">Fecha:</span> <b>{new Date().toLocaleDateString()}</b></div>
+                          </div>
+                          <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">Tu firma</div>
+                          <FirmaCanvas onFirma={setFirmaPng} />
+                          <div className="mt-3 flex flex-wrap justify-end gap-2">
+                            <Boton variant="ghost" onClick={() => { setFirmando(false); setFirmaPng(null) }} disabled={enviandoFirma}>Cancelar</Boton>
+                            <Boton variant="gold" onClick={firmarW9} disabled={!firmaPng || enviandoFirma}>
+                              {enviandoFirma ? <><Spinner /> Generando…</> : <><FileText size={15} strokeWidth={1.8} /> Firmar y enviar W-9</>}
+                            </Boton>
+                          </div>
+                          {!firmaPng && <p className="mt-1 text-right text-[11px] text-slate-400">Dibuja tu firma y toca “Usar esta firma”.</p>}
+                        </div>
+                      )}
+
+                      {/* Alternativa: subir el W-9 oficial manualmente */}
+                      <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/50">
+                        <button onClick={() => setSubirManual((s) => !s)} className="text-xs font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-slate-200">
+                          {subirManual ? '− Ocultar' : '¿Prefieres subir tu propio W-9? (opcional)'}
+                        </button>
+                        {subirManual && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-brand-navy no-underline hover:border-brand-gold dark:border-slate-600 dark:text-slate-200">
+                              <FileText size={15} strokeWidth={1.8} /> Abrir W-9 oficial (IRS)
+                            </a>
+                            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoW9 ? 'pointer-events-none opacity-60' : ''}`}>
+                              {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={15} strokeWidth={1.8} /> Subir W-9 lleno</>}
+                              <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirW9(e.target.files?.[0])} />
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </Card>
 

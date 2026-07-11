@@ -86,6 +86,13 @@ export async function guardarDatosBancariosChofer(datos) {
   return true
 }
 
+// El CHOFER firma su W-9 en la app (tipo DocuSign): el sistema lo rellena con sus
+// datos guardados y solo se envía la imagen de la firma (PNG) + la fecha.
+export async function firmarW9Chofer(firmaPngBase64, fecha) {
+  const d = await llamarPortal({ accion: 'w9firmar', firmaPngBase64, fecha })
+  return d.url
+}
+
 // El CHOFER sube su foto de perfil o su licencia desde su portal.
 export async function subirFotoChofer(file) {
   if (!file) throw new Error('Falta la imagen.')

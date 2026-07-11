@@ -19,15 +19,14 @@ function bucketName() {
   return null
 }
 
-// Sube un archivo base64 a Storage (con token de descarga) y devuelve su URL.
-async function subirArchivo(companyId, driverId, prefijo, fileBase64, fileName, mimeType, maxMB = 5) {
+// Sube un Buffer a Storage (con token de descarga) y devuelve su URL.
+async function subirBuffer(companyId, driverId, prefijo, buffer, mimeType, fileName) {
   const bucketId = bucketName()
   if (!bucketId) throw new Error('Falta la variable del bucket de Storage (FIREBASE_STORAGE_BUCKET) en Vercel.')
-  const buffer = Buffer.from(fileBase64, 'base64')
   if (!buffer.length) throw new Error('Archivo vacío.')
-  if (buffer.length > maxMB * 1024 * 1024) throw new Error(`El archivo es muy grande (máx ${maxMB} MB).`)
   const { getStorage } = await import('firebase-admin/storage')
-  const safe = String(fileName || prefijo).replace(/[^\w.\-]+/g, '_').slice(-60)
+  const ext = mimeType === 'application/pdf' ? '.pdf' : ''
+  const safe = String(fileName || (prefijo + ext)).replace(/[^\w.\-]+/g, '_').slice(-60)
   const path = `verificacion/${companyId}/${driverId}/${prefijo}-${Date.now()}-${safe}`
   const token = randomUUID()
   await getStorage().bucket(bucketId).file(path).save(buffer, {
@@ -35,6 +34,13 @@ async function subirArchivo(companyId, driverId, prefijo, fileBase64, fileName, 
     metadata: { contentType: mimeType || 'application/octet-stream', metadata: { firebaseStorageDownloadTokens: token } },
   })
   return `https://firebasestorage.googleapis.com/v0/b/${bucketId}/o/${encodeURIComponent(path)}?alt=media&token=${token}`
+}
+
+// Sube un archivo base64 a Storage y devuelve su URL.
+async function subirArchivo(companyId, driverId, prefijo, fileBase64, fileName, mimeType, maxMB = 5) {
+  const buffer = Buffer.from(fileBase64, 'base64')
+  if (buffer.length > maxMB * 1024 * 1024) throw new Error(`El archivo es muy grande (máx ${maxMB} MB).`)
+  return subirBuffer(companyId, driverId, prefijo, buffer, mimeType, fileName)
 }
 
 export default async function handler(req, res) {
@@ -139,7 +145,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, url })
     }
 
-    // --- W-9 (por defecto) ---
+    // --- W-9 FIRMADO en la app (tipo DocuSign) ---
+    // El sistema rellena el W-9 con los datos YA guardados; el chofer solo firma.
+    if (accion === 'w9firmar') {
+      const snap = await dref.get()
+      const dv = (snap.exists ? snap.data() : {}) || {}
+      const v = dv.verificacion || {}
+      const completo = !!(v.tieneSSN && v.ssn && v.rutaNumero && v.cuentaNumero && v.bancoNombre && (v.nombreCompleto || dv.nombre) && v.direccion)
+      if (!completo) return res.status(400).json({ ok: false, error: 'Primero completa y guarda TODOS tus datos (nombre, dirección, SSN y banco). Luego podrás firmar tu W-9.' })
+      if (!body.firmaPngBase64) return res.status(400).json({ ok: false, error: 'Falta tu firma.' })
+      const { generarW9Buffer } = await import('./_w9pdf.js')
+      const buffer = await generarW9Buffer({
+        nombre: v.nombreCompleto || dv.nombre || '',
+        direccion: v.direccion || '',
+        ssn: v.ssn,
+        firmaPngBase64: body.firmaPngBase64,
+        fecha: String(body.fecha || '').slice(0, 20),
+      })
+      const url = await subirBuffer(companyId, driverId, 'w9-firmado', buffer, 'application/pdf')
+      await dref.update({
+        'verificacion.w9Url': url,
+        'verificacion.w9Entregado': true,
+        'verificacion.w9SubidoPorChofer': true,
+        'verificacion.w9Firmado': true,
+        'verificacion.w9SubidoEn': a.FieldValue.serverTimestamp(),
+        'verificacion.w9Solicitado': false,
+      })
+      return res.status(200).json({ ok: true, url })
+    }
+
+    // --- W-9 (por defecto: sube su propio archivo) ---
     if (!body.fileBase64) return res.status(400).json({ ok: false, error: 'Falta el archivo.' })
     const url = await subirArchivo(companyId, driverId, 'w9', body.fileBase64, body.fileName, body.mimeType, 5)
     await dref.update({
