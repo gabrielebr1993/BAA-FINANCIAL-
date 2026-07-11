@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { collection, addDoc, serverTimestamp, writeBatch, doc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
@@ -16,10 +16,7 @@ import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, setSelectedInvoiceId, selectedCity } = useData()
-  // Para subir, hay que estar en UNA ciudad específica (no "Todas"). Así todos los
-  // datos de la factura quedan en esa ciudad y no se mezclan.
-  const ciudadFija = selectedCity && selectedCity !== TODAS ? selectedCity : ''
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -230,12 +227,6 @@ export default function CargarFactura() {
 
   const setCiudad = (i, code) => setCiudadPorArchivo((arr) => arr.map((c, j) => (j === i ? code : c)))
 
-  // Si hay una ciudad seleccionada en el filtro, TODOS los archivos se asignan a
-  // esa ciudad (para que la factura quede completa en esa ciudad, sin mezclar).
-  useEffect(() => {
-    if (ciudadFija && procesados.length > 0) setCiudadPorArchivo(procesados.map(() => ciudadFija))
-  }, [ciudadFija, procesados])
-
   const agregarCiudad = () => {
     const codigo = nuevaCiudad.codigo.trim().toUpperCase()
     const nombre = nuevaCiudad.nombre.trim()
@@ -365,7 +356,6 @@ export default function CargarFactura() {
   const guardar = async () => {
     if (!combinado) return
     if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
-    if (!ciudadFija) return setErrores(['Estás en “Todas las ciudades”. Selecciona una ciudad específica en el filtro de arriba antes de subir la factura, para que todos los datos queden en esa ciudad.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
     if (!fallidosProc) return setErrores(['Falta el segundo archivo obligatorio: el Reporte de fallidos (GOFO).'])
@@ -727,21 +717,13 @@ export default function CargarFactura() {
       {avisos.map((a, i) => <Aviso key={i} tipo="warn">{a}</Aviso>)}
       {guardado && <Aviso tipo="ok"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={15} strokeWidth={1.8} /> Factura guardada correctamente en la base de datos.</span></Aviso>}
 
-      {!ciudadFija && (
-        <Aviso tipo="warn">
-          Para subir una factura, primero <b>selecciona una ciudad</b> en el filtro de arriba (no “Todas las ciudades”). Así todos los datos de la factura quedan en esa ciudad y no se mezclan.
-        </Aviso>
-      )}
-
       {combinado && (
         <>
           {/* Asignación MANUAL de ciudad por archivo */}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ciudad de la factura</h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Asigna la ciudad de cada archivo</h3>
             <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-              {ciudadFija
-                ? <>Toda esta factura se guardará en la ciudad seleccionada en el filtro de arriba. Para cambiarla, cambia la ciudad en el filtro.</>
-                : <>Selecciona una ciudad en el filtro de arriba: todos los archivos se asignarán a esa ciudad.</>}
+              Confirma (o cambia) la ciudad de cada archivo. Es obligatorio y es la ciudad que se guardará (no la auto-detectada). Cada archivo se guarda en su propia ciudad, así que no se mezclan los datos.
             </p>
             <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -760,7 +742,7 @@ export default function CargarFactura() {
                       <td className="px-3 py-2">{p.semana || '—'}</td>
                       <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{p.ciudadesDetectadas.map(nombreCiudad).join(', ') || '—'}</td>
                       <td className="px-3 py-2">
-                        <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} disabled={!!ciudadFija} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
+                        <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
                           <option value="">— Elegir ciudad —</option>
                           {opcionesCiudad.map((c) => (
                             <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
