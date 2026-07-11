@@ -223,20 +223,10 @@ export function DataProvider({ children }) {
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
-  // Si la ciudad elegida NO tiene datos en el rango cargado, se vuelve a "Todas"
-  // (así no te quedas viendo $0 sin darte cuenta). No se toca mientras la factura
-  // aún carga (para que la ciudad persistida sobreviva al recargar).
-  useEffect(() => {
-    if (ciudadBloqueada) return
-    if (selectedCity === TODAS) return
-    const cs = facturaRango?.resumenCiudades
-    if (!cs || cs.length === 0) return // cargando o sin factura: no tocar
-    const ciudades = new Set(cs.map((c) => c.ubicacion))
-    if (!ciudades.has(selectedCity)) setSelectedCity(TODAS)
-  }, [facturaRango, selectedCity, ciudadBloqueada])
+  // La ciudad elegida es MANUAL y se respeta siempre (aunque esté en 0). Se mantiene
+  // persistida; NO se rebota a "Todas". El usuario cambia de ciudad cuando quiere.
 
-  // Si la empresa tiene UNA sola ciudad, se selecciona sola (una sola vez, con ref
-  // para no pelear con el reset de arriba ni entrar en bucle).
+  // Si la empresa tiene UNA sola ciudad, se selecciona sola (una sola vez, con ref).
   const autoCiudadHecha = useRef(false)
   useEffect(() => {
     if (autoCiudadHecha.current || ciudadBloqueada) return
