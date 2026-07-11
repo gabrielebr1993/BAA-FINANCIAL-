@@ -74,11 +74,17 @@ service cloud.firestore {
       allow create, update, delete: if isSuper();
     }
 
-    // Usuarios: cada uno lee su PROPIO doc. El staff (no chofer) lee/gestiona los
-    // usuarios de su empresa. Un chofer solo puede leer su propio documento.
+    // Usuarios: cada uno lee su PROPIO doc. El staff (no chofer) lee los usuarios de
+    // su empresa. Un chofer solo puede leer su propio documento.
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isSuper() || (hasProfile() && !isDriver() && myCompany() == resource.data.companyId));
-      allow create, update, delete: if isSuper() || (hasProfile() && !isDriver() && myCompany() == request.resource.data.companyId);
+      // Crear / editar / borrar usuarios: SOLO el dueño (o súper-admin) de la empresa.
+      // Así un manager no puede cambiar roles ni permisos de nadie.
+      allow create, update, delete: if isSuper() || (hasProfile() && role() == 'owner' && myCompany() == request.resource.data.companyId);
+      // Excepción: CUALQUIER usuario puede guardar SOLO su preferencia de filtro
+      // (prefFiltro) en su propio doc — sin poder tocar rol, permisos, ciudad ni empresa.
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prefFiltro']);
     }
 
     // Facturas / agregados financieros: solo staff. Un chofer NO puede leerlas.
