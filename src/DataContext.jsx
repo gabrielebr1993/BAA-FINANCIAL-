@@ -4,7 +4,7 @@
 // datos se filtran por companyId (la empresa activa).
 // ---------------------------------------------------------------------------
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore'
+import { collection, getDocs, getDoc, doc, updateDoc, query, where } from 'firebase/firestore'
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
 import { TODAS } from './utils/calc'
@@ -19,7 +19,7 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth, ciudadUsuario, ciudadBloqueada } = useAuth()
+  const { user, perfil, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth, ciudadUsuario, ciudadBloqueada } = useAuth()
   const [companies, setCompanies] = useState([])
   // Empresa activa PERSISTIDA: al refrescar se mantiene la que estabas viendo
   // (solo aplica al súper-admin, que puede cambiar de empresa).
@@ -41,6 +41,27 @@ export function DataProvider({ children }) {
   })
   useEffect(() => { try { localStorage.setItem('milepay_selectedCity', selectedCity) } catch { /* noop */ } }, [selectedCity])
   useEffect(() => { try { localStorage.setItem('milepay_rango', JSON.stringify(rango)) } catch { /* noop */ } }, [rango])
+
+  // Preferencias del filtro guardadas EN LA NUBE (por usuario): al iniciar sesión se
+  // aplican (te siguen en cualquier dispositivo); al cambiar, se guardan (con
+  // pequeño retardo para no escribir en cada tecleo).
+  const prefsAplicadas = useRef(false)
+  useEffect(() => {
+    if (prefsAplicadas.current || !perfil) return
+    prefsAplicadas.current = true
+    const p = perfil.prefFiltro
+    if (p) {
+      if (p.selectedCity) setSelectedCity(p.selectedCity)
+      if (p.rango && p.rango.preset) setRango(p.rango)
+    }
+  }, [perfil])
+  useEffect(() => {
+    if (!user?.uid || esDriver || !prefsAplicadas.current) return
+    const t = setTimeout(() => {
+      updateDoc(doc(db, 'users', user.uid), { prefFiltro: { selectedCity, rango } }).catch(() => {})
+    }, 700)
+    return () => clearTimeout(t)
+  }, [selectedCity, rango, user, esDriver])
   const [vista, setVista] = useState('combinado')
   // Estado persistido de cada alerta: { alertId: 'resuelta' | 'descartada' }.
   const [estadosAlertas, setEstadosAlertas] = useState({})

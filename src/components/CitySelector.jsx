@@ -21,13 +21,17 @@ export default function CitySelector() {
     )
   }
 
+  // Lista = ciudades CONFIGURADAS de la empresa + las detectadas en las facturas
+  // (por si alguna no está configurada). Así aparecen aunque aún no cargues facturas.
+  const opciones = new Map()
+  ;(ciudadesEmpresa || []).forEach((c) => { if (c.codigo) opciones.set(c.codigo, c.nombre) })
+  ciudades.forEach((c) => { if (!opciones.has(c)) opciones.set(c, nombreCiudadDe(facturaRango, c)) })
+
   return (
     <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} aria-label="Filtro de ciudad">
       <option value={TODAS}>Todas las ciudades</option>
-      {ciudades.map((c) => (
-        <option key={c} value={c}>
-          {nombreCiudadDe(facturaRango, c)}
-        </option>
+      {[...opciones.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([code, nombre]) => (
+        <option key={code} value={code}>{nombre}</option>
       ))}
     </Select>
   )
