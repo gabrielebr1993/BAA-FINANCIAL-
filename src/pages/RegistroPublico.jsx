@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { Search, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react'
 import { BANCOS_EEUU } from '../utils/bancos'
-import { generarW9Base64 } from '../utils/w9'
+import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
 import { Card, Input, Select, Boton, Aviso, Spinner } from '../components/ui'
 
 const API = '/api/registro-publico'
@@ -162,8 +162,11 @@ export default function RegistroPublico() {
             </div>
             <label className="mt-3 flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
               <input type="checkbox" className="mt-0.5" checked={f.certifica} onChange={(e) => set('certifica', e.target.checked)} />
-              <span>Certifico (W-9) que la información es correcta, que mi número de identificación es correcto y que soy una persona de EE. UU. Mi nombre servirá como firma.</span>
+              <span>Certifico (W-9) que la información es correcta, que mi número de identificación es correcto y que soy una persona de EE. UU. Mi nombre servirá como firma. Al enviar, se genera tu W-9 con estos datos.</span>
             </label>
+            <p className="mt-2 text-xs text-slate-400">
+              ¿Prefieres el formulario oficial? <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="font-semibold text-brand-navy underline dark:text-brand-gold">Abre el W-9 del IRS</a> para verlo o llenarlo tú mismo.
+            </p>
             <div className="mt-4 flex justify-end gap-2">
               <Boton variant="ghost" onClick={() => setPaso('pin')} disabled={enviando}>Atrás</Boton>
               <Boton variant="gold" onClick={enviar} disabled={enviando}>{enviando ? <><Loader2 size={15} className="animate-spin" /> Enviando…</> : 'Enviar mi información'}</Boton>

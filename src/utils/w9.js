@@ -1,3 +1,7 @@
+// URL del formulario W-9 OFICIAL del IRS (fillable). El chofer puede abrirlo,
+// llenarlo en su teléfono/PC y subirlo. Es la fuente oficial y siempre vigente.
+export const W9_OFICIAL_URL = 'https://www.irs.gov/pub/irs-pdf/fw9.pdf'
+
 // Genera una planilla W-9 (Request for Taxpayer Identification Number and
 // Certification) PRELLENADA con los datos del chofer, y la devuelve en base64
 // (para subirla). No es el PDF oficial editable del IRS, sino un documento claro

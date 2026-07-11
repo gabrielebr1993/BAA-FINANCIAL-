@@ -9,6 +9,7 @@ import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { etiquetaTipoClaim } from '../utils/calc'
 import { subirW9Chofer, guardarDatosBancariosChofer } from '../utils/verificacion'
+import { W9_OFICIAL_URL } from '../utils/w9'
 import { consejoChofer } from '../utils/consejoChofer'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarPDF } from '../utils/exportar'
@@ -279,13 +280,21 @@ export default function DriverPortal() {
                 <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mi formulario W-9</h2>
                 {w9Listo && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Enviado</span></Badge>}
               </div>
-              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Sube aquí tu formulario <b>W-9</b> (foto o PDF). Se envía a tu empresa y queda guardado — no tienes que mandarlo por otro lado.</p>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Abre el <b>W-9 oficial del IRS</b>, llénalo en tu teléfono (nombre, dirección y tu SSN), guárdalo y <b>súbelo aquí</b>. Se envía a tu empresa y queda guardado — no tienes que mandarlo por otro lado.
+              </p>
               {w9Msg && <div className="mb-3"><Aviso tipo={w9Msg.tipo}>{w9Msg.txt}</Aviso></div>}
+              <div className="mb-3">
+                <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white no-underline hover:bg-brand-navy-700">
+                  <FileText size={16} strokeWidth={1.8} /> Abrir y llenar el W-9 oficial (IRS)
+                </a>
+                <span className="ml-2 text-xs text-slate-400">Paso 1: llénalo · Paso 2: súbelo abajo</span>
+              </div>
               {!driverId ? (
                 <Aviso tipo="warn">Tu cuenta aún no está vinculada a tu registro de chofer. Pídele a tu empresa que la vincule para poder subir tu W-9.</Aviso>
               ) : (
                 <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoW9 ? 'pointer-events-none opacity-60' : ''}`}>
-                  {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={16} strokeWidth={1.8} /> {w9Listo ? 'Subir otro' : 'Subir mi W-9'}</>}
+                  {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={16} strokeWidth={1.8} /> {w9Listo ? 'Subir otro' : 'Subir mi W-9 lleno'}</>}
                   <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirW9(e.target.files?.[0])} />
                 </label>
               )}
