@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     const { getAuth, getFirestore, FieldValue } = a
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-    const { nombre, email, password, role, permissions, companyId, driverId, driverNombre } = body
+    const { nombre, email, password, role, permissions, companyId, driverId, driverNombre, ciudad } = body
 
     if (!nombre || !email || !password || !companyId) {
       return res.status(400).json({ ok: false, error: 'Faltan datos: nombre, email, contraseña y empresa son obligatorios.' })
@@ -120,6 +120,8 @@ export default async function handler(req, res) {
         role: role || 'manager',
         permissions: esDriver ? {} : (permissions || {}),
         companyId,
+        // Ciudad asignada (roles de gestión): '' = todas. El owner/driver no aplica.
+        ciudad: (!esDriver && role !== 'owner') ? String(ciudad || '') : '',
         superAdmin: false,
         createdAt: FieldValue.serverTimestamp(),
       }

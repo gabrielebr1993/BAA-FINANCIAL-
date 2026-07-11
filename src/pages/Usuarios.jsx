@@ -11,10 +11,10 @@ function permisosVacios() {
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', permissions: permisosVacios() }
+const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudad: '', permissions: permisosVacios() }
 
 export default function Usuarios() {
-  const { activeCompanyId, empresaActiva, drivers } = useData()
+  const { activeCompanyId, empresaActiva, drivers, ciudadesEmpresa } = useData()
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
@@ -43,7 +43,7 @@ export default function Usuarios() {
   }
   const editar = (u) => {
     setEditId(u.id)
-    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
+    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', ciudad: u.ciudad || '', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
     setError('')
     setOk('')
   }
@@ -62,18 +62,22 @@ export default function Usuarios() {
     const driverNombre = esDriver ? driverNombreDe(form.driverId) : ''
     const permisos = esDriver ? {} : form.permissions
     const extraDriver = esDriver ? { driverId: form.driverId, driverNombre, driverKey: driverNombre.toLowerCase() } : {}
+    // Ciudad asignada: solo para roles de gestión (manager/admin). '' = todas las
+    // ciudades (sin restricción). El owner ve todo; el driver no aplica.
+    const asignaCiudad = form.role !== 'owner' && form.role !== 'driver'
+    const ciudadAsignada = asignaCiudad ? (form.ciudad || '') : ''
     setGuardando(true)
     try {
       if (editId) {
         // editar: solo actualiza el documento (permisos/rol), no toca Auth
-        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...extraDriver })
+        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...extraDriver })
         await cargar()
         setOk('Usuario actualizado.')
         nuevo()
       } else if (modoManual) {
         // respaldo: crear con UID manual (el acceso en Auth se crea aparte)
         if (!form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
-        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...extraDriver })
+        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...extraDriver })
         await cargar()
         setOk('Usuario creado (modo manual).')
         nuevo()
@@ -81,7 +85,7 @@ export default function Usuarios() {
         // flujo principal: crear Auth + documento vía función serverless
         if (String(form.password).length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
         const token = await auth.currentUser.getIdToken()
-        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: permisos, companyId: activeCompanyId, ...(esDriver ? { driverId: form.driverId, driverNombre } : {}) }, token)
+        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...(esDriver ? { driverId: form.driverId, driverNombre } : {}) }, token)
         if (!data.ok) {
           setError(data.error || 'No se pudo crear el usuario.')
           return
@@ -150,7 +154,22 @@ export default function Usuarios() {
               </Select>
             </Campo>
           )}
+          {form.role !== 'owner' && form.role !== 'driver' && (
+            <Campo label="Ciudad asignada">
+              <Select className="w-56" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
+                <option value="">Todas las ciudades</option>
+                {[...(ciudadesEmpresa || [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((c) => (
+                  <option key={c.codigo} value={c.codigo}>{c.nombre}</option>
+                ))}
+              </Select>
+            </Campo>
+          )}
         </div>
+        {form.role !== 'owner' && form.role !== 'driver' && (
+          <p className="-mt-2 mb-4 text-xs text-slate-400">
+            Si eliges una <b>ciudad</b>, este usuario <b>solo verá los datos de esa ciudad</b> (según sus permisos). Déjalo en <b>“Todas las ciudades”</b> para que vea todas.
+          </p>
+        )}
 
         {form.role === 'driver' ? (
           <Aviso tipo="info">

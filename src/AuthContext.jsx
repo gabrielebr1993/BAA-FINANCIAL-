@@ -49,6 +49,11 @@ export function AuthProvider({ children }) {
   const driverNombre = perfil?.driverNombre || ''
   const driverKey = perfil?.driverKey || (driverNombre ? driverNombre.trim().toLowerCase() : '')
 
+  // Ciudad asignada al usuario (ej. un manager de una sola ciudad). Si está puesta
+  // y NO es dueño/súper-admin, su vista queda BLOQUEADA a esa ciudad.
+  const ciudadUsuario = perfil?.ciudad || ''
+  const ciudadBloqueada = !esSuperAdmin && perfil?.role !== 'owner' && !!ciudadUsuario
+
   const puede = (filtro) => {
     // El chofer NUNCA tiene permiso sobre las secciones normales del sistema.
     if (esDriver) return false
@@ -61,7 +66,7 @@ export function AuthProvider({ children }) {
   const cerrarSesion = () => signOut(auth)
 
   return (
-    <AuthContext.Provider value={{ user, perfil, cargando, companyId, esSuperAdmin, esDriver, driverId, driverNombre, driverKey, puede, cerrarSesion }}>
+    <AuthContext.Provider value={{ user, perfil, cargando, companyId, esSuperAdmin, esDriver, driverId, driverNombre, driverKey, ciudadUsuario, ciudadBloqueada, puede, cerrarSesion }}>
       {children}
     </AuthContext.Provider>
   )

@@ -19,7 +19,7 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth } = useAuth()
+  const { user, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth, ciudadUsuario, ciudadBloqueada } = useAuth()
   const [companies, setCompanies] = useState([])
   // Empresa activa PERSISTIDA: al refrescar se mantiene la que estabas viendo
   // (solo aplica al súper-admin, que puede cambiar de empresa).
@@ -197,11 +197,19 @@ export function DataProvider({ children }) {
 
   // Si la ciudad filtrada ya no está en el rango de fechas elegido, se vuelve a
   // "Todas" (así el filtro de ciudad siempre corresponde a los días seleccionados).
+  // Excepción: si el usuario está BLOQUEADO a una ciudad, su filtro no se toca.
   useEffect(() => {
+    if (ciudadBloqueada) return
     if (selectedCity === TODAS) return
     const ciudades = new Set((facturaRango?.resumenCiudades || []).map((c) => c.ubicacion))
     if (!ciudades.has(selectedCity)) setSelectedCity(TODAS)
-  }, [facturaRango, selectedCity])
+  }, [facturaRango, selectedCity, ciudadBloqueada])
+
+  // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
+  // su ciudad; no puede ver ni cambiar a otras.
+  useEffect(() => {
+    if (ciudadBloqueada && ciudadUsuario && selectedCity !== ciudadUsuario) setSelectedCity(ciudadUsuario)
+  }, [ciudadBloqueada, ciudadUsuario, selectedCity])
 
   useEffect(() => {
     cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
@@ -275,7 +283,10 @@ export function DataProvider({ children }) {
     reactivarAlerta,
     descartarAlerta,
     selectedCity,
-    setSelectedCity,
+    // Si el usuario está bloqueado a su ciudad, ignoramos cualquier intento de cambio.
+    setSelectedCity: ciudadBloqueada ? () => {} : setSelectedCity,
+    ciudadBloqueada,
+    ciudadUsuario,
     cargando,
     error,
     reloadInvoices: () => cargarInvoices(activeCompanyId),
