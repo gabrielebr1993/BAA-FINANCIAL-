@@ -16,25 +16,13 @@ import FotoPerfil from '../components/FotoPerfil'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
-// Semáforo + estrellas de la calificación.
-function Calificacion({ c }) {
-  const color = COLOR_NIVEL[c.nivel]
+// Dato rápido en forma de "pill" para la cabecera.
+function Pill({ icon: Icon, label, value }) {
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-full text-sm font-extrabold text-white" style={{ background: color }}>{c.puntaje}</span>
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg font-bold" style={{ color }}>{c.etiqueta}</span>
-            <span className="flex">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Star key={n} size={15} strokeWidth={1.8} className={n <= c.estrellas ? 'fill-brand-gold text-brand-gold' : 'text-slate-300 dark:text-slate-600'} />
-              ))}
-            </span>
-          </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">{c.desglose}</div>
-        </div>
-      </div>
+    <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-1.5 dark:border-slate-700/60 dark:bg-slate-800/50">
+      {Icon && <Icon size={15} strokeWidth={1.8} className="text-brand-gold" />}
+      <span className="text-xs text-slate-400">{label}</span>
+      <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{value}</span>
     </div>
   )
 }
@@ -127,24 +115,46 @@ export default function PerfilChofer() {
         <EstadoVacio titulo={decoded} texto="Este chofer no tiene datos en el rango de fechas / ciudad seleccionados, y no está guardado como chofer. Cámbialo en el filtro o créalo en Choferes." />
       ) : (
         <>
-          {/* Cabecera */}
-          <Card className="mb-4 p-5">
-            <div className="flex flex-wrap items-start gap-4">
-              <FotoPerfil url={driver?.fotoUrl} alt={decoded} icon={Truck} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>
-                  {driver ? (
-                    driver.activo === false ? <Badge color="slate">Inactivo</Badge> : <Badge color="green">Activo</Badge>
-                  ) : <Badge color="red">Sin tarifa</Badge>}
+          {/* Cabecera (hero) */}
+          <Card className="mb-4 overflow-hidden">
+            {/* Banda superior con degradado + calificación destacada */}
+            <div className="relative bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel px-5 pb-16 pt-5 sm:px-7">
+              {calif && (
+                <div className="absolute right-4 top-4 flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15 backdrop-blur">
+                  <span className="grid h-11 w-11 place-items-center rounded-full text-base font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
+                  <div className="pr-1">
+                    <div className="flex items-center gap-1.5 text-sm font-bold text-white">
+                      {calif.etiqueta}
+                      <span className="flex">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Star key={n} size={13} strokeWidth={1.8} className={n <= calif.estrellas ? 'fill-brand-gold text-brand-gold' : 'text-white/30'} />
+                        ))}
+                      </span>
+                    </div>
+                    <div className="hidden text-[11px] text-white/70 sm:block">{calif.desglose}</div>
+                  </div>
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-                  <span className="inline-flex items-center gap-1"><MapPin size={14} strokeWidth={1.8} /> {ciudades.join(', ') || '—'}</span>
-                  <span>Tarifa individual: <b className="text-brand-navy dark:text-slate-200">{money(tarInd)}</b></span>
-                  <span>Tarifa doble: <b className="text-brand-navy dark:text-slate-200">{money(tarDob)}</b></span>
+              )}
+            </div>
+            {/* Cuerpo con la foto sobrepuesta */}
+            <div className="px-5 pb-5 sm:px-7">
+              <div className="-mt-12 flex flex-wrap items-end gap-4">
+                <FotoPerfil url={driver?.fotoUrl} alt={decoded} icon={Truck} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
+                <div className="min-w-0 flex-1 pb-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>
+                    {driver ? (
+                      driver.activo === false ? <Badge color="slate">Inactivo</Badge> : <Badge color="green">Activo</Badge>
+                    ) : <Badge color="red">Sin tarifa</Badge>}
+                  </div>
                 </div>
               </div>
-              {calif && <Calificacion c={calif} />}
+              {/* Datos rápidos en pills */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Pill icon={MapPin} label="Ciudad" value={ciudades.join(', ') || '—'} />
+                <Pill label="Tarifa individual" value={money(tarInd)} />
+                <Pill label="Tarifa doble" value={money(tarDob)} />
+              </div>
             </div>
           </Card>
 
@@ -157,13 +167,16 @@ export default function PerfilChofer() {
 
           {/* Métricas del periodo */}
           {pago && (
-            <div className="mb-4 flex flex-wrap gap-3">
+            <div className="mb-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Resumen del periodo</h3>
+              <div className="flex flex-wrap gap-3">
               <KPI label="Entregas" value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ind · ${num(pago.dobles)} dob`} />
               <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
               <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : undefined} />
               <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
               <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
               <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
+              </div>
             </div>
           )}
 
