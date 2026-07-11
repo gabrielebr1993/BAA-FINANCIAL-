@@ -215,15 +215,16 @@ export default function DriverPortal() {
       {stats === null ? (
         <Cargando texto="Cargando tu portal…" />
       ) : (
-        <div className="mx-auto flex max-w-5xl gap-2.5 p-2.5 sm:gap-6 sm:p-6">
-          {/* Menú lateral SIEMPRE a la izquierda: riel angosto en móvil, ancho en tablet/PC */}
-          <nav className="sticky top-[64px] flex w-16 flex-shrink-0 flex-col gap-1 self-start rounded-2xl bg-white p-1.5 shadow-card dark:bg-surface-dark-card sm:w-52 sm:p-2">
+        <>
+        <div className="mx-auto max-w-5xl p-3 pb-24 sm:flex sm:gap-6 sm:p-6 sm:pb-6">
+          {/* Sidebar (tablet/PC) */}
+          <nav className="hidden w-52 flex-shrink-0 flex-col gap-1 self-start rounded-2xl bg-white p-2 shadow-card dark:bg-surface-dark-card sm:sticky sm:top-[64px] sm:flex">
             {MENU.map((m) => {
               const Icon = m.icon
               const activo = vista === m.k
               return (
                 <button key={m.k} onClick={() => setVista(m.k)}
-                  className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center text-[10px] font-semibold leading-tight transition sm:flex-row sm:gap-2.5 sm:px-3 sm:py-2.5 sm:text-left sm:text-sm sm:leading-normal ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
+                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
                   <Icon size={20} strokeWidth={1.9} className="flex-shrink-0" /> <span>{m.label}</span>
                 </button>
               )
@@ -559,6 +560,21 @@ export default function DriverPortal() {
             </p>
           </main>
         </div>
+
+        {/* Barra inferior (móvil) — estilo app nativa */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/95 sm:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          {MENU.map((m) => {
+            const Icon = m.icon
+            const activo = vista === m.k
+            return (
+              <button key={m.k} onClick={() => setVista(m.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition ${activo ? 'text-brand-navy dark:text-brand-gold' : 'text-slate-400'}`}>
+                <span className={`grid h-8 w-12 place-items-center rounded-full transition ${activo ? 'bg-brand-navy/10 dark:bg-brand-gold/15' : ''}`}><Icon size={21} strokeWidth={1.9} /></span>
+                {m.label}
+              </button>
+            )
+          })}
+        </nav>
+        </>
       )}
     </div>
   )
