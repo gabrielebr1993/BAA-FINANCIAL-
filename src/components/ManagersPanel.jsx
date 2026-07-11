@@ -102,13 +102,16 @@ export default function ManagersPanel() {
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre</div>
             <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} disabled={!!editId} />
           </div>
-          <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Ciudad</div>
-            <Select className="w-44" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
-              {!ciudadBloqueada && <option value="">— Elegir ciudad —</option>}
-              {ciudadesForm.map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
-            </Select>
-          </div>
+          {/* El selector de ciudad solo lo ve el dueño; el manager va fijo a su ciudad. */}
+          {!ciudadBloqueada && (
+            <div>
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Ciudad</div>
+              <Select className="w-44" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
+                <option value="">— Elegir ciudad —</option>
+                {ciudadesForm.map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
+              </Select>
+            </div>
+          )}
           <div>
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Monto semanal ($) en esa ciudad</div>
             <Input className="w-40" type="number" step="0.01" min="0" value={form.sueldoSemanal} onChange={(e) => setF('sueldoSemanal', e.target.value)} />
@@ -119,7 +122,7 @@ export default function ManagersPanel() {
         <p className="mt-2 text-xs text-slate-400">Un mismo gasto que aplica en dos ciudades agrégalo como dos gastos fijos (uno por ciudad) con su propio monto.</p>
       </Card>
 
-      {sinCiudad.length > 0 && (
+      {!ciudadBloqueada && sinCiudad.length > 0 && (
         <Aviso tipo="warn">
           <div className="flex flex-wrap items-center gap-2">
             <span><b>{sinCiudad.length} gasto(s) fijo(s) sin ciudad válida.</b> Su costo NO aparece al filtrar por ciudad (solo en “Todas”). Asígnalos a su ciudad.</span>
