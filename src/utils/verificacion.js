@@ -23,6 +23,12 @@ export async function guardarVerificacion(recordId, verificacion, revisor, colec
   })
 }
 
+// Guarda la URL de la foto de perfil en el doc del registro (chofer/manager).
+export async function guardarFotoRegistro(recordId, url, coleccion = 'drivers') {
+  if (!recordId) return
+  await updateDoc(doc(db, coleccion, recordId), { fotoUrl: url, 'verificacion.fotoUrl': url })
+}
+
 // El DUEÑO habilita (o bloquea) que el chofer actualice sus datos de pago desde su
 // portal. Escribe con dot-path para NO pisar el resto de la verificación.
 export async function habilitarEdicionDatos(recordId, permitir = true, coleccion = 'drivers') {

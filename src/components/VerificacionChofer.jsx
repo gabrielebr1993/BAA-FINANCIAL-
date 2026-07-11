@@ -4,7 +4,7 @@
 import { useState, lazy, Suspense } from 'react'
 import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send, Monitor, Lock, Unlock } from 'lucide-react'
 import { useAuth } from '../AuthContext'
-import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento, habilitarEdicionDatos } from '../utils/verificacion'
+import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento, habilitarEdicionDatos, guardarFotoRegistro } from '../utils/verificacion'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
@@ -70,6 +70,20 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
     } catch (e) {
       setMsg({ tipo: 'error', txt: 'No se pudo guardar: ' + e.message })
     } finally { setGuardando(false) }
+  }
+
+  // Foto de perfil subida por el dueño (para el chofer/manager que no usa portal).
+  const subirFoto = async (file) => {
+    if (!file) return
+    setSubiendo('foto'); setMsg(null)
+    try {
+      const url = await subirDocumento(activeCompanyId, driver.id, 'foto', file)
+      await guardarFotoRegistro(driver.id, url, coleccion)
+      await onReload?.()
+      setMsg({ tipo: 'ok', txt: 'Foto de perfil actualizada.' })
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: 'No se pudo subir la foto: ' + e.message })
+    } finally { setSubiendo('') }
   }
 
   const subir = async (tipo, file) => {
@@ -184,6 +198,18 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
       <div className="space-y-4">
         {/* 1 · Datos personales — orden par (6 celdas) para que no queden campos solitarios */}
         <Seccion icon={User} titulo="Datos personales">
+          {/* Foto de perfil (el dueño la puede subir; el chofer también desde su portal) */}
+          <div className="mb-4 flex items-center gap-3">
+            {driver.fotoUrl ? (
+              <img src={driver.fotoUrl} alt="Foto" className="h-16 w-16 rounded-2xl object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+            ) : (
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800"><User size={26} strokeWidth={1.7} /></div>
+            )}
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 ${subiendo === 'foto' ? 'pointer-events-none opacity-60' : ''}`}>
+              {subiendo === 'foto' ? <Spinner /> : <Upload size={15} strokeWidth={1.8} />} {driver.fotoUrl ? 'Cambiar foto' : 'Subir foto'}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => subirFoto(e.target.files?.[0])} />
+            </label>
+          </div>
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
             <Campo label="Nombre completo"><Input value={v.nombreCompleto} onChange={(e) => set('nombreCompleto', e.target.value)} placeholder={driver.nombre} /></Campo>
             <Campo label="Teléfono"><Input value={v.telefono} onChange={(e) => set('telefono', e.target.value)} /></Campo>

@@ -8,6 +8,7 @@ import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
 import { Card, PageTitle, Badge, EstadoVacio } from '../components/ui'
 import VerificacionChofer from '../components/VerificacionChofer'
+import FotoPerfil from '../components/FotoPerfil'
 
 export default function ManagerPerfil() {
   const { id } = useParams()
@@ -31,7 +32,7 @@ export default function ManagerPerfil() {
         <>
           <Card className="mb-4 p-5">
             <div className="flex flex-wrap items-center gap-4">
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-navy text-brand-gold"><Building2 size={26} strokeWidth={1.8} /></div>
+              <FotoPerfil url={m.fotoUrl} alt={m.nombre} icon={Building2} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{m.nombre}</h2>

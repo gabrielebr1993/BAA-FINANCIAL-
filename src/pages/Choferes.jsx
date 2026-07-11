@@ -413,8 +413,15 @@ export default function Choferes() {
                 <tr key={d.id} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/40 dark:bg-slate-800/20' : ''}`}>
                   <td className="px-2 py-2 text-center"><input type="checkbox" checked={seleccion.has(d.id)} onChange={() => toggleSel(d.id)} /></td>
                   <td className="px-3 py-2">
-                    <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
-                    {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
+                    <div className="flex items-center gap-2">
+                      {d.fotoUrl ? (
+                        <img src={d.fotoUrl} alt="" className="h-8 w-8 flex-shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700" />
+                      ) : (
+                        <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800"><Truck size={15} strokeWidth={1.8} /></span>
+                      )}
+                      <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
+                      {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right">
                     <input type="number" step="0.01" min="0" value={borradores[d.id]?.ind ?? ''} onChange={(e) => setBorrador(d.id, 'ind', e.target.value)} onBlur={() => guardarTarifa(d)}

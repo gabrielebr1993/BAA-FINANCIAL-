@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Maximize2, X } from 'lucide-react'
+import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
@@ -12,6 +12,7 @@ import { money, num, pct } from '../utils/format'
 import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso } from '../components/ui'
 import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
+import FotoPerfil from '../components/FotoPerfil'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -45,7 +46,6 @@ export default function PerfilChofer() {
   const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando } = useData()
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
 
-  const [zoomFoto, setZoomFoto] = useState(false)
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
   const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
   const prom = useMemo(() => promediosFlota(pagos), [pagos])
@@ -130,16 +130,7 @@ export default function PerfilChofer() {
           {/* Cabecera */}
           <Card className="mb-4 p-5">
             <div className="flex flex-wrap items-start gap-4">
-              {driver?.fotoUrl ? (
-                <button onClick={() => setZoomFoto(true)} title="Ampliar foto" className="group relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 sm:h-24 sm:w-24">
-                  <img src={driver.fotoUrl} alt={decoded} className="h-full w-full object-cover transition group-hover:brightness-90" />
-                  <span className="absolute bottom-1 right-1 grid h-6 w-6 place-items-center rounded-lg bg-black/55 text-white opacity-0 transition group-hover:opacity-100"><Maximize2 size={13} strokeWidth={2} /></span>
-                </button>
-              ) : (
-                <div className="grid h-20 w-20 flex-shrink-0 place-items-center rounded-2xl bg-brand-navy text-brand-gold sm:h-24 sm:w-24">
-                  <Truck size={34} strokeWidth={1.8} />
-                </div>
-              )}
+              <FotoPerfil url={driver?.fotoUrl} alt={decoded} icon={Truck} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>
@@ -273,16 +264,6 @@ export default function PerfilChofer() {
           </Card>
           </>)}
         </>
-      )}
-
-      {/* Lightbox: foto del chofer ampliada en la misma pantalla */}
-      {zoomFoto && driver?.fotoUrl && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" onClick={() => setZoomFoto(false)}>
-          <img src={driver.fotoUrl} alt={decoded} onClick={(e) => e.stopPropagation()} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" />
-          <button onClick={() => setZoomFoto(false)} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25" aria-label="Cerrar">
-            <X size={20} strokeWidth={2} />
-          </button>
-        </div>
       )}
     </div>
   )
