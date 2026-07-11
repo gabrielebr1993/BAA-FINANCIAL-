@@ -1,6 +1,8 @@
 // Guardado del perfil de VERIFICACIÓN del chofer + subida de documentos a Storage.
 // Los documentos (licencia, W-9) van a Firebase Storage con reglas restringidas.
-// NUNCA se guardan números de cuenta bancaria (eso lo maneja Stripe).
+// NOTA: por decisión del dueño, este perfil puede incluir datos sensibles (SSN,
+// cuenta/ruta bancaria). Solo dueño/súper-admin de la empresa acceden (reglas de
+// Firestore). Alternativa más segura: gestionarlos solo en Stripe.
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebase'

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
+import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
 import { stripeCrearCuenta, stripeOnboardingLink, stripeEstado } from '../utils/stripe'
 import { Card, Boton, Input, Select, Badge, Aviso, Spinner } from './ui'
@@ -12,6 +13,8 @@ import { Card, Boton, Input, Select, Badge, Aviso, Spinner } from './ui'
 const VACIO = {
   nombreCompleto: '', direccion: '', telefono: '', email: '', fechaNacimiento: '',
   licenciaNumero: '', licenciaUrl: '', w9Url: '', w9Entregado: false,
+  // Identificación (SSN) y banco — guardados en la app por decisión del dueño.
+  tieneSSN: false, ssn: '', bancoNombre: '', tipoCuenta: 'checking', cuentaNumero: '', rutaNumero: '',
   estado: 'pendiente', notas: '', revisadoPor: '',
 }
 
@@ -162,6 +165,49 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                 <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
               </div>
             </div>
+          </div>
+        </Seccion>
+
+        {/* 2b · Identificación (SSN) y datos bancarios — guardados en la app (sensible) */}
+        <Seccion icon={ShieldCheck} titulo="Identificación (SSN) y datos bancarios">
+          <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+            <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
+            Datos <b>sensibles</b> guardados en la app por tu decisión. Visibles solo para dueño/súper-admin. Guárdalos con cuidado.
+          </div>
+
+          {/* SSN */}
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Campo label="¿Tiene SSN?">
+              <Select value={v.tieneSSN ? 'si' : 'no'} onChange={(e) => set('tieneSSN', e.target.value === 'si')}>
+                <option value="no">No</option>
+                <option value="si">Sí</option>
+              </Select>
+            </Campo>
+            {v.tieneSSN && (
+              <Campo label="Número de Seguro Social (9 dígitos)" className="sm:col-span-2">
+                <Input value={v.ssn} onChange={(e) => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="123456789" inputMode="numeric" />
+                {v.ssn && v.ssn.length !== 9 && <div className="mt-1 text-[11px] text-rose-500">Debe tener exactamente 9 dígitos ({v.ssn.length}/9).</div>}
+              </Campo>
+            )}
+          </div>
+
+          {/* Banco */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Campo label="Banco (lista de EE.UU. o escribe)">
+              <Input list="bancos-eeuu" value={v.bancoNombre} onChange={(e) => set('bancoNombre', e.target.value)} placeholder="Escribe o elige…" />
+              <datalist id="bancos-eeuu">{BANCOS_EEUU.map((b) => <option key={b} value={b} />)}</datalist>
+            </Campo>
+            <Campo label="Tipo de cuenta">
+              <Select value={v.tipoCuenta || 'checking'} onChange={(e) => set('tipoCuenta', e.target.value)}>
+                <option value="checking">Corriente (checking)</option>
+                <option value="savings">Ahorros (savings)</option>
+              </Select>
+            </Campo>
+            <Campo label="Número de cuenta"><Input value={v.cuentaNumero} onChange={(e) => set('cuentaNumero', e.target.value.replace(/\s/g, ''))} placeholder="000123456789" inputMode="numeric" /></Campo>
+            <Campo label="Número de ruta (routing, 9 dígitos)">
+              <Input value={v.rutaNumero} onChange={(e) => set('rutaNumero', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="110000000" inputMode="numeric" />
+              {v.rutaNumero && v.rutaNumero.length !== 9 && <div className="mt-1 text-[11px] text-rose-500">El routing debe tener 9 dígitos ({v.rutaNumero.length}/9).</div>}
+            </Campo>
           </div>
         </Seccion>
 
