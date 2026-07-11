@@ -7,6 +7,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { Link2, Copy, Check, KeyRound, RefreshCw, ShieldCheck, ChevronDown, MessageCircle, MessageSquare, Mail } from 'lucide-react'
+import { useData } from '../DataContext'
+import { PLANTILLA_REGISTRO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } from '../utils/mensajes'
 import { Card, Boton, Aviso, Badge, Input, Spinner } from './ui'
 
 // Token de empresa: aleatorio, corto y compartible (va en la URL, no es secreto).
@@ -22,6 +24,7 @@ function nuevoPin() {
 }
 
 export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrivers }) {
+  const { ajustes, empresaActiva } = useData()
   const [abierto, setAbierto] = useState(false)
   const [token, setToken] = useState('')
   const [cargando, setCargando] = useState(true)
@@ -42,15 +45,14 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
   const enlace = token ? `${window.location.origin}/registro/${token}` : ''
   // Enlace PERSONALIZADO por chofer: ya lleva su PIN, cae directo en su formulario.
   const enlaceChofer = (d) => `${window.location.origin}/registro/${token}?d=${d.id}&pin=${d.registroPin}`
-  const mensajeChofer = (d) =>
-    `Hola ${d.nombre} 👋\nPara registrar tus datos de pago (SSN, banco y tu W-9) entra a este enlace:\n${enlaceChofer(d)}\n\nTu PIN es: ${d.registroPin}\n\nSolo tú puedes usar este enlace. Cuando lo envíes, queda guardado y listo. ¡Gracias!`
-  // Teléfono / email del chofer si ya los tenemos (para prellenar destinatario).
-  const telDe = (d) => String(d.telefono || d.verificacion?.telefono || '').replace(/[^\d+]/g, '')
-  const emailDe = (d) => String(d.email || d.accesoEmail || d.verificacion?.email || '').trim()
-  // Enlaces de envío. SMS: "?&body=" funciona en iOS y Android. Correo: mailto.
-  const smsHref = (d) => `sms:${telDe(d)}?&body=${encodeURIComponent(mensajeChofer(d))}`
-  const mailHref = (d) => `mailto:${emailDe(d)}?subject=${encodeURIComponent('Registro de datos de pago')}&body=${encodeURIComponent(mensajeChofer(d))}`
-  const waHref = (d) => `https://wa.me/${telDe(d).replace(/\D/g, '')}?text=${encodeURIComponent(mensajeChofer(d))}`
+  const empresaNom = nombreEmpresa(ajustes, empresaActiva)
+  const mensajeChofer = (d) => llenarPlantilla(ajustes?.mensajeRegistro || PLANTILLA_REGISTRO_DEFAULT, {
+    nombre: d.nombre, enlace: enlaceChofer(d), pin: d.registroPin, empresa: empresaNom, numero: ajustes?.numeroEmpresa || '',
+  })
+  // Enlaces de envío (SMS / WhatsApp / Correo) usando el mensaje configurado.
+  const smsHref = (d) => enviosChofer(d, mensajeChofer(d), 'Registro de datos de pago').sms
+  const mailHref = (d) => enviosChofer(d, mensajeChofer(d), 'Registro de datos de pago').mail
+  const waHref = (d) => enviosChofer(d, mensajeChofer(d), 'Registro de datos de pago').wa
 
   const activos = useMemo(
     () => [...drivers].filter((d) => d.activo !== false).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')),

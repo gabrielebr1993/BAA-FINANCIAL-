@@ -9,14 +9,15 @@ import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard } from 'lucide-react'
+import { PLANTILLA_PAGO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } from '../utils/mensajes'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
   const { perfil, esSuperAdmin } = useAuth()
-  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando, ajustes, empresaActiva } = useData()
   const puedePagar = esSuperAdmin || perfil?.role === 'owner'
   const [payrollMap, setPayrollMap] = useState({})
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
@@ -112,6 +113,15 @@ export default function Pagos() {
     } catch (e) {
       setStripeMsg({ tipo: 'error', txt: `${p.nombre}: ${e.message}` })
     } finally { setPagandoStripe(null) }
+  }
+
+  // Mensaje de "ya te pagué" con el monto transferido (plantilla de la empresa).
+  const avisoPagoDe = (p) => {
+    const texto = llenarPlantilla(ajustes?.mensajePago || PLANTILLA_PAGO_DEFAULT, {
+      nombre: p.nombre, monto: money(p.totalPagar), semana: selectedInvoice?.semana || '',
+      empresa: nombreEmpresa(ajustes, empresaActiva), numero: ajustes?.numeroEmpresa || '',
+    })
+    return enviosChofer(buscarDriver(drivers, p.nombre), texto, 'Aviso de pago')
   }
 
   const claimsDeChofer = (nombre) => porCiudad(claims, selectedCity).filter((c) => c.courier === nombre)
@@ -262,6 +272,7 @@ export default function Pagos() {
                         puedePagar={puedePagar}
                         pagandoStripe={pagandoStripe === p.nombre}
                         onPagarStripe={pagarStripe}
+                        avisoPago={!esRango && p.estado === 'pagado' ? avisoPagoDe(p) : null}
                       />
                     ))}
                   </tbody>
@@ -307,7 +318,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, pagandoStripe, onPagarStripe }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, pagandoStripe, onPagarStripe, avisoPago }) {
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -334,7 +345,16 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
             {!puedeMarcar ? (
               <span className="text-xs text-slate-400">—</span>
             ) : p.estado === 'pagado' ? (
-              <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
+              <>
+                <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
+                {avisoPago && (
+                  <span className="inline-flex items-center gap-0.5" title={`Avisar a ${p.nombre} que se le transfirió ${money(p.totalPagar)}`}>
+                    <a href={avisoPago.sms} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title="Avisar por SMS"><MessageSquare size={13} strokeWidth={1.9} /></a>
+                    <a href={avisoPago.wa} target="_blank" rel="noreferrer" className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500 text-white hover:bg-emerald-600" title="Avisar por WhatsApp"><MessageCircle size={13} strokeWidth={2} /></a>
+                    <a href={avisoPago.mail} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title="Avisar por correo"><Mail size={13} strokeWidth={1.9} /></a>
+                  </span>
+                )}
+              </>
             ) : (
               <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>
             )}

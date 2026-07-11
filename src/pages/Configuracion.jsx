@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { Save, Info, Compass } from 'lucide-react'
+import { Save, Info, Compass, MessageSquare } from 'lucide-react'
+import { PLANTILLA_REGISTRO_DEFAULT, PLANTILLA_PAGO_DEFAULT } from '../utils/mensajes'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
@@ -25,6 +26,28 @@ export default function Configuracion() {
   const [ok, setOk] = useState('')
   const [backupBusy, setBackupBusy] = useState('')
   const [backupMsg, setBackupMsg] = useState(null)
+  // Mensajes a choferes (SMS/WhatsApp/Correo) por empresa.
+  const [numeroEmpresa, setNumeroEmpresa] = useState('')
+  const [msgRegistro, setMsgRegistro] = useState('')
+  const [msgPago, setMsgPago] = useState('')
+  const [guardandoMsg, setGuardandoMsg] = useState(false)
+  const [okMsg, setOkMsg] = useState('')
+
+  const guardarMensajes = async () => {
+    if (!activeCompanyId) return
+    setGuardandoMsg(true); setOkMsg('')
+    try {
+      await setDoc(doc(db, 'settings', activeCompanyId), {
+        companyId: activeCompanyId,
+        numeroEmpresa: numeroEmpresa.trim(),
+        mensajeRegistro: msgRegistro,
+        mensajePago: msgPago,
+        actualizadoEn: serverTimestamp(),
+      }, { merge: true })
+      await reloadAjustes?.()
+      setOkMsg('Mensajes guardados.')
+    } finally { setGuardandoMsg(false) }
+  }
 
   const descargar = async () => {
     setBackupBusy('descargar'); setBackupMsg(null)
@@ -54,7 +77,15 @@ export default function Configuracion() {
       if (!activeCompanyId) return
       try {
         const s = await getDoc(doc(db, 'settings', activeCompanyId))
-        if (s.exists()) { setMarca(s.data().marca || ''); setNotas(s.data().notas || '') }
+        if (s.exists()) {
+          const d = s.data()
+          setMarca(d.marca || ''); setNotas(d.notas || '')
+          setNumeroEmpresa(d.numeroEmpresa || '')
+          setMsgRegistro(d.mensajeRegistro || PLANTILLA_REGISTRO_DEFAULT)
+          setMsgPago(d.mensajePago || PLANTILLA_PAGO_DEFAULT)
+        } else {
+          setMsgRegistro(PLANTILLA_REGISTRO_DEFAULT); setMsgPago(PLANTILLA_PAGO_DEFAULT)
+        }
       } catch { /* noop */ }
     })()
   }, [activeCompanyId])
@@ -162,6 +193,48 @@ export default function Configuracion() {
             </Boton>
           </div>
         </Card>
+
+        {/* Mensajes a choferes (SMS / WhatsApp / Correo) */}
+        {puedeAdmin && (
+          <Card className="p-5 lg:col-span-2">
+            <div className="mb-1 flex items-center gap-2">
+              <MessageSquare size={18} strokeWidth={1.8} className="text-brand-gold" />
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mensajes a choferes (SMS / WhatsApp / Correo)</h3>
+            </div>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              Configura el <b>número de tu empresa</b> y los <b>mensajes predeterminados</b>. Cada empresa tiene los suyos. Los mensajes salen desde el teléfono donde tocas “Enviar”; el número aquí se usa para <b>firmar</b> el mensaje (que el chofer sepa quién le escribe y a dónde responder).
+            </p>
+            {okMsg && <Aviso tipo="ok">{okMsg}</Aviso>}
+            <div className="mb-3 max-w-xs">
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Número de la empresa</div>
+              <Input value={numeroEmpresa} onChange={(e) => setNumeroEmpresa(e.target.value)} placeholder="+1 305 555 0123" inputMode="tel" />
+            </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  Mensaje de <b>invitación a registrarse</b>
+                  <Badge color="slate">{'{nombre}'}</Badge><Badge color="slate">{'{enlace}'}</Badge><Badge color="slate">{'{pin}'}</Badge><Badge color="slate">{'{empresa}'}</Badge><Badge color="slate">{'{numero}'}</Badge>
+                </div>
+                <textarea rows={7} value={msgRegistro} onChange={(e) => setMsgRegistro(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+              </div>
+              <div>
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  Mensaje de <b>aviso de pago</b>
+                  <Badge color="slate">{'{nombre}'}</Badge><Badge color="slate">{'{monto}'}</Badge><Badge color="slate">{'{semana}'}</Badge><Badge color="slate">{'{empresa}'}</Badge><Badge color="slate">{'{numero}'}</Badge>
+                </div>
+                <textarea rows={7} value={msgPago} onChange={(e) => setMsgPago(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Boton variant="gold" onClick={guardarMensajes} disabled={guardandoMsg || !activeCompanyId}>
+                {guardandoMsg ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> Guardar mensajes</>}
+              </Boton>
+              <button onClick={() => { setMsgRegistro(PLANTILLA_REGISTRO_DEFAULT); setMsgPago(PLANTILLA_PAGO_DEFAULT) }} className="text-xs font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-slate-200">
+                Restaurar textos por defecto
+              </button>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   )
