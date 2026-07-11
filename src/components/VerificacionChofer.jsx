@@ -162,11 +162,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
   return (
     <Card className="p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {driver.fotoUrl ? (
-          <img src={driver.fotoUrl} alt="Foto del chofer" className="h-9 w-9 rounded-xl object-cover" />
-        ) : (
-          <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
-        )}
+        <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Verificación{esDriver ? ' y pago' : ' y datos'}</h3>
         {ESTADOS_VERIFICACION.filter((e) => e.key === (v.estado || 'pendiente')).map((e) => (
           <Badge key={e.key} color={e.color}>Verificación: {e.label}</Badge>

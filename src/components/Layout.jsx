@@ -200,12 +200,12 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
       <div className="flex">
-        <div className="sticky top-0 hidden h-screen md:block">
+        <div className="sticky top-0 hidden h-screen sm:block">
           <SidebarContent />
         </div>
 
         {abierto && (
-          <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setAbierto(false)}>
+          <div className="fixed inset-0 z-30 bg-black/40 sm:hidden" onClick={() => setAbierto(false)}>
             <div onClick={(e) => e.stopPropagation()}>
               <SidebarContent onNavigate={() => setAbierto(false)} />
             </div>
@@ -217,10 +217,10 @@ export default function Layout({ children }) {
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
             <div className="flex items-center gap-3 px-4 py-2.5">
-              <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white md:hidden" aria-label="Abrir menú">
+              <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label="Abrir menú">
                 <Menu size={24} strokeWidth={1.8} />
               </button>
-              <span className="font-extrabold text-brand-navy dark:text-white md:hidden">MilePay</span>
+              <span className="font-extrabold text-brand-navy dark:text-white sm:hidden">MilePay</span>
               <div className="ml-auto">
                 <CampanaAlertas />
               </div>
