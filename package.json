@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stripe/connect-js": "^3.4.6",
+    "@stripe/react-connect-js": "^3.4.4",
     "firebase": "^11.0.2",
     "firebase-admin": "^12.7.0",
     "jspdf": "^4.2.1",

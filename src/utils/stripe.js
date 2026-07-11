@@ -23,4 +23,5 @@ export const stripeCrearCuenta = (body) => post('/api/stripe-crear-cuenta', body
 export const stripeOnboardingLink = (body) => post('/api/stripe-onboarding-link', body)
 export const stripeEstado = (body) => post('/api/stripe-estado', body)
 export const stripeConfig = () => post('/api/stripe-config', {})
+export const stripeAccountSession = (body) => post('/api/stripe-onboarding-link', { ...body, modo: 'embedded' })
 export const stripePagar = (body) => post('/api/stripe-pagar', body)

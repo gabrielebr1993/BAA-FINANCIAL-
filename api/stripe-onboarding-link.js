@@ -1,6 +1,9 @@
-// Genera el enlace de onboarding de Stripe para que el CHOFER registre sus datos
-// bancarios directamente en Stripe (nosotros nunca los vemos). Solo owner/súper-admin.
-import { cargarAdmin, ensureAdmin, cargarStripe, autorizar, cargarChoferAutorizado } from './_common.js'
+// Onboarding de Stripe para que el CHOFER registre sus datos bancarios en Stripe.
+// Dos modos:
+//   - por defecto: enlace de onboarding (hosted, redirige a Stripe).
+//   - modo:'embedded': Account Session (client_secret) para el registro INCRUSTADO
+//     dentro de la app. Crea la cuenta Express si aún no existe. Solo owner/súper-admin.
+import { cargarAdmin, ensureAdmin, cargarStripe, esModoTest, autorizar, cargarChoferAutorizado } from './_common.js'
 
 export default async function handler(req, res) {
   try {
@@ -19,12 +22,27 @@ export default async function handler(req, res) {
     if (auth.error) return res.status(auth.code).json({ ok: false, error: auth.error })
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-    const { companyId, driverId, returnUrl, refreshUrl } = body
+    const { companyId, driverId, driverNombre, returnUrl, refreshUrl, modo } = body
     const ch = await cargarChoferAutorizado(auth, companyId, driverId)
     if (ch.error) return res.status(ch.code).json({ ok: false, error: ch.error })
 
-    const accountId = ch.driver.stripeAccountId
-    if (!accountId) return res.status(400).json({ ok: false, error: 'El chofer no tiene cuenta Stripe. Créala primero ("Invitar a registrar pago").' })
+    // Asegura la cuenta conectada (la crea si no existe).
+    let accountId = ch.driver.stripeAccountId || ''
+    if (!accountId) {
+      const acct = await stripe.accounts.create({
+        type: 'express', country: 'US', email: ch.driver.verificacion?.email || undefined, business_type: 'individual',
+        capabilities: { transfers: { requested: true } }, business_profile: { product_description: 'Delivery contractor (1099)' },
+        metadata: { companyId, driverId, driverNombre: driverNombre || ch.driver.nombre || '' },
+      })
+      accountId = acct.id
+      await ch.dref.set({ stripeAccountId: accountId, stripeEstado: 'pendiente', stripeTest: esModoTest(), stripeActualizado: a.FieldValue.serverTimestamp() }, { merge: true })
+    }
+
+    // Modo INCRUSTADO: devuelve el client_secret del Account Session.
+    if (modo === 'embedded') {
+      const session = await stripe.accountSessions.create({ account: accountId, components: { account_onboarding: { enabled: true } } })
+      return res.status(200).json({ ok: true, clientSecret: session.client_secret, stripeAccountId: accountId, test: esModoTest() })
+    }
 
     const origin = req.headers.origin || `https://${req.headers.host || 'baa-financial.vercel.app'}`
     const volver = returnUrl || `${origin}/choferes/${encodeURIComponent(ch.driver.nombre || '')}`

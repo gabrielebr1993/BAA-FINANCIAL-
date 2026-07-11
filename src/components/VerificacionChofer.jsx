@@ -1,8 +1,8 @@
 // Perfil de VERIFICACIÓN del chofer (contratista 1099) + estado de pago Stripe.
 // Solo owner/súper-admin. Los datos personales/documentos se guardan en Firestore/
 // Storage; los datos BANCARIOS los maneja Stripe (aquí solo se ve el estado).
-import { useState } from 'react'
-import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send } from 'lucide-react'
+import { useState, lazy, Suspense } from 'react'
+import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send, Monitor } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
 import { BANCOS_EEUU } from '../utils/bancos'
@@ -10,6 +10,9 @@ import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { stripeCrearCuenta, stripeOnboardingLink, stripeEstado } from '../utils/stripe'
 import { Card, Boton, Input, Select, Badge, Aviso, Spinner } from './ui'
+
+// Onboarding incrustado (embedded) cargado bajo demanda para no engordar el bundle.
+const StripeOnboardingEmbedded = lazy(() => import('./StripeOnboardingEmbedded'))
 
 const VACIO = {
   nombreCompleto: '', direccion: '', telefono: '', email: '', fechaNacimiento: '',
@@ -40,6 +43,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
   const [stripeMsg, setStripeMsg] = useState(null)
   const [stripeBusy, setStripeBusy] = useState('')
   const [pidiendoW9, setPidiendoW9] = useState(false)
+  const [incrustado, setIncrustado] = useState(false) // mostrar onboarding embebido
 
   if (!puede) return null
   if (!driver?.id) {
@@ -275,8 +279,11 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
           </p>
           {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}
           <div className="flex flex-wrap items-center gap-2">
-            <Boton variant="primary" onClick={invitar} disabled={!!stripeBusy}>
-              {stripeBusy === 'invitar' ? <><Spinner /> Generando…</> : <><ExternalLink size={15} strokeWidth={1.8} /> {driver.stripeAccountId ? 'Volver a abrir registro de banco' : 'Invitar a registrar pago'}</>}
+            <Boton variant="primary" onClick={() => setIncrustado((s) => !s)} disabled={!!stripeBusy}>
+              <Monitor size={15} strokeWidth={1.8} /> {incrustado ? 'Ocultar registro' : 'Registrar aquí (sin salir)'}
+            </Boton>
+            <Boton variant="ghost" onClick={invitar} disabled={!!stripeBusy}>
+              {stripeBusy === 'invitar' ? <><Spinner /> Generando…</> : <><ExternalLink size={15} strokeWidth={1.8} /> {driver.stripeAccountId ? 'Abrir en Stripe' : 'Abrir en Stripe (enlace)'}</>}
             </Boton>
             {driver.stripeAccountId && (
               <Boton variant="ghost" onClick={actualizarEstado} disabled={!!stripeBusy}>
@@ -285,6 +292,16 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
             )}
             {driver.stripeAccountId && <span className="text-[11px] text-slate-400">Cuenta: {driver.stripeAccountId}</span>}
           </div>
+
+          {/* Onboarding INCRUSTADO (embedded components) */}
+          {incrustado && (
+            <div className="mt-3">
+              <Suspense fallback={<div className="flex items-center gap-2 py-4 text-sm text-slate-500"><Spinner /> Cargando…</div>}>
+                <StripeOnboardingEmbedded companyId={activeCompanyId} driverId={driver.id} onSalir={async () => { await actualizarEstado() }} />
+              </Suspense>
+            </div>
+          )}
+
           {estadoStripe !== 'verificado' && (
             <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Este chofer aún no puede recibir pago hasta que su estado sea <b>verificado</b>.</p>
           )}

@@ -15,6 +15,7 @@ export default defineConfig({
           if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
           if (id.includes('recharts') || id.includes('/d3-') || id.includes('victory')) return 'charts'
           if (id.includes('xlsx')) return 'xlsx'
+          if (id.includes('@stripe')) return 'stripe'
           if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('canvg')) return 'pdf'
         },
       },
