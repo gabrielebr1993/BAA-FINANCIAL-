@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
-import { Link2, Copy, Check, KeyRound, RefreshCw, ShieldCheck, ChevronDown, MessageCircle } from 'lucide-react'
+import { Link2, Copy, Check, KeyRound, RefreshCw, ShieldCheck, ChevronDown, MessageCircle, MessageSquare, Mail } from 'lucide-react'
 import { Card, Boton, Aviso, Badge, Input, Spinner } from './ui'
 
 // Token de empresa: aleatorio, corto y compartible (va en la URL, no es secreto).
@@ -44,6 +44,13 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
   const enlaceChofer = (d) => `${window.location.origin}/registro/${token}?d=${d.id}&pin=${d.registroPin}`
   const mensajeChofer = (d) =>
     `Hola ${d.nombre} 👋\nPara registrar tus datos de pago (SSN, banco y tu W-9) entra a este enlace:\n${enlaceChofer(d)}\n\nTu PIN es: ${d.registroPin}\n\nSolo tú puedes usar este enlace. Cuando lo envíes, queda guardado y listo. ¡Gracias!`
+  // Teléfono / email del chofer si ya los tenemos (para prellenar destinatario).
+  const telDe = (d) => String(d.telefono || d.verificacion?.telefono || '').replace(/[^\d+]/g, '')
+  const emailDe = (d) => String(d.email || d.accesoEmail || d.verificacion?.email || '').trim()
+  // Enlaces de envío. SMS: "?&body=" funciona en iOS y Android. Correo: mailto.
+  const smsHref = (d) => `sms:${telDe(d)}?&body=${encodeURIComponent(mensajeChofer(d))}`
+  const mailHref = (d) => `mailto:${emailDe(d)}?subject=${encodeURIComponent('Registro de datos de pago')}&body=${encodeURIComponent(mensajeChofer(d))}`
+  const waHref = (d) => `https://wa.me/${telDe(d).replace(/\D/g, '')}?text=${encodeURIComponent(mensajeChofer(d))}`
 
   const activos = useMemo(
     () => [...drivers].filter((d) => d.activo !== false).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')),
@@ -171,12 +178,18 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
                           {d.registroCompletado || !d.registroPin ? (
                             <span className="block text-right text-slate-300">—</span>
                           ) : (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button onClick={() => copiar(mensajeChofer(d), 'msg-' + d.id)} title="Copiar mensaje con enlace + PIN" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200">
-                                {copiado === 'msg-' + d.id ? <><Check size={13} strokeWidth={2.4} className="text-emerald-600" /> Copiado</> : <><Copy size={13} strokeWidth={1.9} /> Mensaje</>}
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => copiar(mensajeChofer(d), 'msg-' + d.id)} title="Copiar mensaje (enlace + PIN)" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200">
+                                {copiado === 'msg-' + d.id ? <Check size={14} strokeWidth={2.4} className="text-emerald-600" /> : <Copy size={14} strokeWidth={1.9} />}
                               </button>
-                              <a href={`https://wa.me/?text=${encodeURIComponent(mensajeChofer(d))}`} target="_blank" rel="noreferrer" title="Enviar por WhatsApp" className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-600">
-                                <MessageCircle size={13} strokeWidth={2} /> WhatsApp
+                              <a href={smsHref(d)} title="Enviar por mensaje de texto (SMS)" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200">
+                                <MessageSquare size={14} strokeWidth={1.9} /> SMS
+                              </a>
+                              <a href={mailHref(d)} title="Enviar por correo" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200">
+                                <Mail size={14} strokeWidth={1.9} /> Correo
+                              </a>
+                              <a href={waHref(d)} target="_blank" rel="noreferrer" title="Enviar por WhatsApp" className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600">
+                                <MessageCircle size={14} strokeWidth={2} />
                               </a>
                             </div>
                           )}
@@ -187,7 +200,7 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
                 </table>
               </div>
               <p className="mt-2 text-xs text-slate-400">
-                <b>Mensaje / WhatsApp</b> le manda a cada chofer un enlace personal que <b>ya incluye su PIN</b> (cae directo en su formulario). Así te llega todo junto.
+                <b>Copiar / SMS / Correo / WhatsApp</b> le mandan a cada chofer un enlace personal que <b>ya incluye su PIN</b> (cae directo en su formulario). El <b>SMS</b> es el más universal: le llega a cualquier teléfono. Si ya tienes el teléfono o correo del chofer, el destinatario se rellena solo; si no, tú lo escribes.
                 El enlace de arriba (sin PIN) es para compartir en el grupo: ahí cada uno se busca y escribe su PIN.
                 Cuando un chofer envía su información, aparece como <b>Enviado</b>, su nombre desaparece del enlace y sus datos quedan en su perfil (solo tú los ves).
               </p>
