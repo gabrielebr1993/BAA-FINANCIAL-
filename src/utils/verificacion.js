@@ -46,6 +46,21 @@ export async function subirW9Chofer(file) {
   return d.url
 }
 
+// El CHOFER guarda sus datos de pago (SSN + banco) desde su portal, vía el mismo
+// endpoint serverless (Admin SDK: sin abrir reglas al rol driver).
+export async function guardarDatosBancariosChofer(datos) {
+  const t = await auth.currentUser?.getIdToken()
+  if (!t) throw new Error('Sesión no válida. Vuelve a iniciar sesión.')
+  const resp = await fetch('/api/driver-w9', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ accion: 'datos', datos }),
+  })
+  const d = await resp.json().catch(() => ({ ok: false, error: 'Respuesta no válida del servidor.' }))
+  if (!d.ok) throw new Error(d.error || 'No se pudieron guardar tus datos.')
+  return true
+}
+
 // Sube un documento del chofer a Storage y devuelve su URL de descarga.
 // Ruta: verificacion/{companyId}/{driverId}/{tipo}-{timestamp}-{nombreArchivo}
 export async function subirDocumento(companyId, driverId, tipo, file) {

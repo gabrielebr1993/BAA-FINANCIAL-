@@ -33,6 +33,31 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+
+    // Rama "datos": el chofer guarda sus datos de pago (SSN + banco) desde el portal.
+    // Se escriben con dot-path para NO pisar el resto de su verificacion (ej. W-9).
+    if (body.accion === 'datos') {
+      const d = body.datos || {}
+      const soloDig = (s, n) => { const x = String(s || '').replace(/\D/g, ''); return x.length === n ? x : null }
+      const ssn = soloDig(d.ssn, 9)
+      const ruta = soloDig(d.rutaNumero, 9)
+      if (!ssn) return res.status(400).json({ ok: false, error: 'El SSN debe tener 9 dígitos.' })
+      if (!ruta) return res.status(400).json({ ok: false, error: 'El número de ruta (routing) debe tener 9 dígitos.' })
+      if (!String(d.cuentaNumero || '').trim()) return res.status(400).json({ ok: false, error: 'Falta el número de cuenta.' })
+      if (!String(d.bancoNombre || '').trim()) return res.status(400).json({ ok: false, error: 'Falta el banco.' })
+      await auth.db.collection('drivers').doc(driverId).update({
+        'verificacion.tieneSSN': true,
+        'verificacion.ssn': ssn,
+        'verificacion.bancoNombre': String(d.bancoNombre || '').trim(),
+        'verificacion.tipoCuenta': d.tipoCuenta === 'savings' ? 'savings' : 'checking',
+        'verificacion.cuentaNumero': String(d.cuentaNumero || '').trim(),
+        'verificacion.rutaNumero': ruta,
+        'verificacion.datosBancariosPorChofer': true,
+        'verificacion.datosBancariosEn': a.FieldValue.serverTimestamp(),
+      })
+      return res.status(200).json({ ok: true })
+    }
+
     const { fileBase64, fileName, mimeType } = body
     if (!fileBase64) return res.status(400).json({ ok: false, error: 'Falta el archivo.' })
     const buffer = Buffer.from(fileBase64, 'base64')

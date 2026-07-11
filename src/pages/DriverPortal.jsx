@@ -3,17 +3,37 @@
 // por su driverKey/driverNombre, y las reglas de Firestore lo blindan además.
 import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { Truck, DollarSign, Package, AlertTriangle, Star, LogOut, FileText, Wallet, ShieldCheck, Sun, Moon, Upload, CheckCircle2 } from 'lucide-react'
+import { Truck, DollarSign, Package, AlertTriangle, Star, LogOut, FileText, Wallet, ShieldCheck, Sun, Moon, Upload, CheckCircle2, Sparkles, Landmark } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { etiquetaTipoClaim } from '../utils/calc'
-import { subirW9Chofer } from '../utils/verificacion'
+import { subirW9Chofer, guardarDatosBancariosChofer } from '../utils/verificacion'
+import { consejoChofer } from '../utils/consejoChofer'
+import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio, Aviso, Spinner } from '../components/ui'
+import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio, Aviso, Spinner, Input, Select } from '../components/ui'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
+
+function Mini({ label, valor, color }) {
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/40">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-lg font-bold tabular-nums" style={color ? { color } : undefined}>{valor}</div>
+    </div>
+  )
+}
+
+function Campo({ label, children }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
+      {children}
+    </div>
+  )
+}
 
 function Estrellas({ n }) {
   return (
@@ -35,6 +55,29 @@ export default function DriverPortal() {
   const [subiendoW9, setSubiendoW9] = useState(false)
   const [w9Msg, setW9Msg] = useState(null)
   const [w9Listo, setW9Listo] = useState(false)
+  // Datos de pago (SSN + banco) que el chofer registra desde su portal.
+  const [banco, setBanco] = useState({ ssn: '', bancoNombre: '', tipoCuenta: 'checking', cuentaNumero: '', rutaNumero: '' })
+  const [guardandoBanco, setGuardandoBanco] = useState(false)
+  const [bancoMsg, setBancoMsg] = useState(null)
+  const [bancoListo, setBancoListo] = useState(false)
+  const setB = (k, v) => setBanco((s) => ({ ...s, [k]: v }))
+
+  const guardarBanco = async () => {
+    setBancoMsg(null)
+    if (String(banco.ssn).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: 'El SSN debe tener 9 dígitos.' })
+    if (String(banco.rutaNumero).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: 'El número de ruta (routing) debe tener 9 dígitos.' })
+    if (!banco.cuentaNumero.trim()) return setBancoMsg({ tipo: 'error', txt: 'Falta el número de cuenta.' })
+    if (!banco.bancoNombre.trim()) return setBancoMsg({ tipo: 'error', txt: 'Elige tu banco.' })
+    setGuardandoBanco(true)
+    try {
+      await guardarDatosBancariosChofer({ ...banco, ssn: String(banco.ssn).replace(/\D/g, '') })
+      setBancoListo(true)
+      setBancoMsg({ tipo: 'ok', txt: '¡Listo! Tus datos de pago se guardaron. Tu empresa ya puede verlos.' })
+      setBanco({ ssn: '', bancoNombre: '', tipoCuenta: 'checking', cuentaNumero: '', rutaNumero: '' }) // no dejamos datos sensibles en memoria
+    } catch (e) {
+      setBancoMsg({ tipo: 'error', txt: e.message })
+    } finally { setGuardandoBanco(false) }
+  }
 
   const subirW9 = async (file) => {
     if (!file) return
@@ -77,6 +120,7 @@ export default function DriverPortal() {
   )
   const ultima = semanas[0] || null
   const calif = ultima?.calificacion || null
+  const consejo = useMemo(() => consejoChofer(semanas, calif), [semanas, calif])
 
   const totalPaquetes = semanas.reduce((a, w) => a + (w.paquetes || 0), 0)
   const totalClaims = semanas.reduce((a, w) => a + (w.claimsTotales || 0), 0)
@@ -149,6 +193,83 @@ export default function DriverPortal() {
                   </div>
                 )}
               </div>
+            </Card>
+
+            {/* Mi desempeño: asesor + calificación */}
+            {semanas.length > 0 && (
+              <Card className="mb-4 overflow-hidden">
+                <div className={`p-5 ${consejo.tono === 'ojo' ? 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-500/10 dark:to-transparent' : 'bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-500/10 dark:to-transparent'}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl text-white ${consejo.tono === 'ojo' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                      <Sparkles size={20} strokeWidth={1.9} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{consejo.titulo}</h2>
+                        <Badge color="navy">Tu asesor</Badge>
+                      </div>
+                      <p className="mt-1 mb-0 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{consejo.mensaje}</p>
+                    </div>
+                  </div>
+
+                  {/* Mini métricas de desempeño de la última semana */}
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Mini label="Claims (semana)" valor={num(ultima?.claimsTotales || 0)} />
+                    <Mini label="Paquetes (semana)" valor={num(ultima?.paquetes || 0)} />
+                    {calif && <Mini label="Calificación" valor={calif.etiqueta} color={COLOR_NIVEL[calif.nivel]} />}
+                    {calif && <Mini label="Puntaje" valor={`${calif.puntaje}/100`} color={COLOR_NIVEL[calif.nivel]} />}
+                  </div>
+                  {calif && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Estrellas n={calif.estrellas} />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{calif.desglose}</span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* Mis datos de pago (SSN + banco) */}
+            <Card className="mb-4 p-5">
+              <div className="mb-2 flex items-center gap-2">
+                <Landmark size={18} strokeWidth={1.8} className="text-brand-gold" />
+                <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mis datos de pago</h2>
+                {bancoListo && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Guardado</span></Badge>}
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Registra tu <b>seguro social</b> y tu <b>cuenta bancaria</b> para recibir tus pagos. Solo tu empresa los verá.</p>
+              {bancoMsg && <div className="mb-3"><Aviso tipo={bancoMsg.tipo}>{bancoMsg.txt}</Aviso></div>}
+              {!driverId ? (
+                <Aviso tipo="warn">Tu cuenta aún no está vinculada a tu registro de chofer. Pídele a tu empresa que la vincule para registrar tus datos.</Aviso>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Campo label="Seguro Social (SSN, 9 dígitos)">
+                      <Input value={banco.ssn} inputMode="numeric" onChange={(e) => setB('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="123456789" />
+                    </Campo>
+                    <Campo label="Banco">
+                      <Input list="bancos-eeuu-portal" value={banco.bancoNombre} onChange={(e) => setB('bancoNombre', e.target.value)} placeholder="Escribe o elige…" />
+                      <datalist id="bancos-eeuu-portal">{BANCOS_EEUU.map((b) => <option key={b} value={b} />)}</datalist>
+                    </Campo>
+                    <Campo label="Tipo de cuenta">
+                      <Select value={banco.tipoCuenta} onChange={(e) => setB('tipoCuenta', e.target.value)}>
+                        <option value="checking">Corriente (checking)</option>
+                        <option value="savings">Ahorros (savings)</option>
+                      </Select>
+                    </Campo>
+                    <Campo label="Número de cuenta">
+                      <Input value={banco.cuentaNumero} inputMode="numeric" onChange={(e) => setB('cuentaNumero', e.target.value.replace(/\s/g, ''))} />
+                    </Campo>
+                    <Campo label="Número de ruta (routing, 9 dígitos)">
+                      <Input value={banco.rutaNumero} inputMode="numeric" onChange={(e) => setB('rutaNumero', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="110000000" />
+                    </Campo>
+                  </div>
+                  <div className="mt-4">
+                    <Boton variant="gold" onClick={guardarBanco} disabled={guardandoBanco}>
+                      {guardandoBanco ? <><Spinner /> Guardando…</> : <><Landmark size={15} strokeWidth={1.8} /> {bancoListo ? 'Actualizar mis datos' : 'Guardar mis datos'}</>}
+                    </Boton>
+                  </div>
+                </>
+              )}
             </Card>
 
             {/* Documentos: subir mi W-9 (se envía y guarda para la empresa) */}
