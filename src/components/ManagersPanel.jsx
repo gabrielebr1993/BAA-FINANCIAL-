@@ -4,6 +4,7 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
 import { Building2, Users, Landmark } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { costoManagers } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
@@ -14,7 +15,11 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
   const navigate = useNavigate()
-  const { managers, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango } = useData()
+  const { ciudadBloqueada, ciudadUsuario } = useAuth()
+  // Usuario asignado a una ciudad: solo ve/gestiona los gastos fijos de SU ciudad.
+  const managers = ciudadBloqueada ? managersAll.filter((m) => (m.ciudad || '') === ciudadUsuario) : managersAll
+  const ciudadesForm = ciudadBloqueada ? (ciudadesEmpresa || []).filter((c) => c.codigo === ciudadUsuario) : (ciudadesEmpresa || []).filter((c) => c.codigo)
   const exportarBancarios = () => exportarDatosBancarios(managers.map((m) => ({ nombre: m.nombre, verificacion: m.verificacion })), `datos-bancarios-gastos-fijos_${new Date().toISOString().slice(0, 10)}`)
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
@@ -64,11 +69,12 @@ export default function ManagersPanel() {
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
-    if (!form.ciudad) return setError('Elige la ciudad a la que pertenece el gasto fijo.')
+    const ciudadFinal = ciudadBloqueada ? ciudadUsuario : form.ciudad
+    if (!ciudadFinal) return setError('Elige la ciudad a la que pertenece el gasto fijo.')
     if (Number(form.sueldoSemanal) < 0) return setError('El monto no puede ser negativo.')
     setGuardando(true); setError('')
     try {
-      const payload = { nombre: form.nombre.trim(), ciudad: form.ciudad, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
+      const payload = { nombre: form.nombre.trim(), ciudad: ciudadFinal, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
       if (editId) await updateDoc(doc(db, 'managers', editId), payload)
       else await addDoc(collection(db, 'managers'), { ...payload, activo: true, companyId: activeCompanyId })
       await reloadManagers()
@@ -99,8 +105,8 @@ export default function ManagersPanel() {
           <div>
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Ciudad</div>
             <Select className="w-44" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
-              <option value="">— Elegir ciudad —</option>
-              {(ciudadesEmpresa || []).filter((c) => c.codigo).map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
+              {!ciudadBloqueada && <option value="">— Elegir ciudad —</option>}
+              {ciudadesForm.map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
             </Select>
           </div>
           <div>

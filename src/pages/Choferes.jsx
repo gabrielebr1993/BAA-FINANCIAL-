@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
@@ -17,8 +18,18 @@ const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true 
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
-  const { drivers, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
+  const { drivers: driversAll, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
+  const { ciudadBloqueada, ciudadUsuario } = useAuth()
   const navigate = useNavigate()
+
+  // Usuario asignado a una ciudad: solo ve los choferes que operan en SU ciudad
+  // (por actividad del rango o por ciudad fija del chofer).
+  const drivers = useMemo(() => {
+    if (!ciudadBloqueada) return driversAll
+    const enMiCiudad = new Set()
+    ;(facturaRango?.resumenChoferes || []).forEach((c) => { if (c.ciudad === ciudadUsuario) enMiCiudad.add((c.nombre || '').trim().toLowerCase()) })
+    return driversAll.filter((d) => (d.ciudad && d.ciudad === ciudadUsuario) || enMiCiudad.has((d.nombre || '').trim().toLowerCase()))
+  }, [driversAll, ciudadBloqueada, ciudadUsuario, facturaRango])
 
   const [tab, setTab] = useState('choferes')
   // ---- alta de chofer ----

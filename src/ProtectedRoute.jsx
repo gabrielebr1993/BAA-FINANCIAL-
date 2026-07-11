@@ -1,6 +1,7 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { useAuth } from './AuthContext'
+import { SECCIONES } from './constants'
 import { Spinner } from './components/ui'
 import Login from './Login'
 
@@ -9,6 +10,7 @@ import Login from './Login'
 // sección normal, se le redirige a su portal (no ve ni carga nada más).
 export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, children }) {
   const { user, cargando, puede, esSuperAdmin, esDriver } = useAuth()
+  const location = useLocation()
   if (cargando)
     return (
       <div className="flex min-h-screen items-center justify-center gap-3 bg-surface-light text-slate-500 dark:bg-surface-dark dark:text-slate-400">
@@ -24,7 +26,12 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, chi
   // Sección solo para súper-admin (ej. /empresas): un owner/manager NO puede
   // entrar ni por URL; se le redirige a su dashboard sin ver ni cargar nada.
   if (soloSuperAdmin && !esSuperAdmin) return <Navigate to="/" replace />
-  if (filtro && !puede(filtro))
+  if (filtro && !puede(filtro)) {
+    // En vez de un candado sin salida (típico al aterrizar en el Dashboard sin
+    // permiso), llevamos al usuario a su PRIMERA sección permitida (ej. Pagos).
+    const inicio = SECCIONES.find((s) => puede(s.permiso))
+    if (inicio && inicio.path !== location.pathname) return <Navigate to={inicio.path} replace />
+    // Sin ninguna sección accesible: sí mostramos el aviso.
     return (
       <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
         <div>
@@ -34,5 +41,6 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, chi
         </div>
       </div>
     )
+  }
   return children
 }
