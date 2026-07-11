@@ -223,22 +223,25 @@ export function DataProvider({ children }) {
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
-  // La ciudad elegida se MANTIENE (persistida) mientras sea una ciudad de la empresa,
-  // aunque no tenga actividad en el rango (ahí se muestra vacía, que es lo correcto).
-  // Solo se vuelve a "Todas" si la ciudad ya no existe en la empresa. No se resetea
-  // mientras los ajustes aún cargan (evita el "se reinicia al recargar").
+  // Si la ciudad elegida NO tiene datos en el rango cargado, se vuelve a "Todas"
+  // (así no te quedas viendo $0 sin darte cuenta). No se toca mientras la factura
+  // aún carga (para que la ciudad persistida sobreviva al recargar).
   useEffect(() => {
     if (ciudadBloqueada) return
     if (selectedCity === TODAS) return
-    const codigos = new Set((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean))
-    if (codigos.size > 0 && !codigos.has(selectedCity)) setSelectedCity(TODAS)
-  }, [selectedCity, ciudadBloqueada, ajustes])
+    const cs = facturaRango?.resumenCiudades
+    if (!cs || cs.length === 0) return // cargando o sin factura: no tocar
+    const ciudades = new Set(cs.map((c) => c.ubicacion))
+    if (!ciudades.has(selectedCity)) setSelectedCity(TODAS)
+  }, [facturaRango, selectedCity, ciudadBloqueada])
 
-  // Si la empresa tiene UNA sola ciudad, se selecciona sola (así se puede subir
-  // factura sin tener que elegirla, y todo queda en esa ciudad).
+  // Si la empresa tiene UNA sola ciudad, se selecciona sola (una sola vez, con ref
+  // para no pelear con el reset de arriba ni entrar en bucle).
+  const autoCiudadHecha = useRef(false)
   useEffect(() => {
+    if (autoCiudadHecha.current || ciudadBloqueada) return
     const cities = (ajustes?.ciudades || []).filter((c) => c.codigo)
-    if (!ciudadBloqueada && cities.length === 1 && selectedCity === TODAS) setSelectedCity(cities[0].codigo)
+    if (cities.length === 1 && selectedCity === TODAS) { autoCiudadHecha.current = true; setSelectedCity(cities[0].codigo) }
   }, [ajustes, ciudadBloqueada, selectedCity])
 
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
