@@ -144,7 +144,9 @@ export default function Dashboard() {
       ) : (
         <>
           {onbAbierto && <Onboarding />}
-          <RecomendacionesJarvis />
+          {/* Recomendaciones: solo si la ciudad seleccionada tiene datos (evita mostrar
+              choferes de otra ciudad cuando estás en una ciudad vacía). */}
+          {(selectedCity === TODAS || est.paquetes > 0) && <RecomendacionesJarvis />}
           {alertas.length > 0 && (
             <Aviso tipo="warn">
               <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
@@ -206,9 +208,13 @@ export default function Dashboard() {
             /* -------- VISTA COMBINADA -------- */
             <>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                  <Verificacion v={inv.verificacion} compacto />
-                </ClickWrap>
+                {/* El desglose de Gofo es a nivel de factura; solo se muestra si la
+                    ciudad seleccionada tiene datos (en una ciudad vacía no aplica). */}
+                {(selectedCity === TODAS || est.paquetes > 0) && (
+                  <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
+                    <Verificacion v={inv.verificacion} compacto />
+                  </ClickWrap>
+                )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
                   <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} />
                 </ClickWrap>
