@@ -245,25 +245,27 @@ export default function DriverPortal() {
             {/* ---------- INICIO ---------- */}
             {vista === 'inicio' && (
               <>
-                <Card className="mb-4 p-5">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <Foto url={fotoUrl} size={56} />
-                    <div className="min-w-0 flex-1">
-                      <h1 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
-                      <p className="m-0 text-sm text-slate-500 dark:text-slate-400">Aquí ves solo tus pagos, entregas, claims y tu calificación.</p>
-                    </div>
+                <Card className="mb-4 overflow-hidden">
+                  <div className="relative bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel px-5 pb-16 pt-5 sm:px-7">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-white/50">Portal del chofer</div>
                     {calif && (
-                      <div className="flex items-center gap-2">
-                        <span className="grid h-9 w-9 place-items-center rounded-full text-sm font-extrabold text-white" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-lg font-bold" style={{ color: COLOR_NIVEL[calif.nivel] }}>{calif.etiqueta}</span>
-                            <Estrellas n={calif.estrellas} />
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">{calif.desglose}</div>
+                      <div className="absolute right-4 top-4 flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15 backdrop-blur">
+                        <span className="grid h-11 w-11 place-items-center rounded-full text-base font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
+                        <div className="pr-1">
+                          <div className="flex items-center gap-1.5 text-sm font-bold text-white">{calif.etiqueta} <EstrellasBlancas n={calif.estrellas} /></div>
+                          <div className="hidden text-[11px] text-white/70 sm:block">{calif.desglose}</div>
                         </div>
                       </div>
                     )}
+                  </div>
+                  <div className="px-5 pb-5 sm:px-7">
+                    <div className="-mt-12 flex flex-wrap items-end gap-4">
+                      <Foto url={fotoUrl} size={88} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
+                      <div className="min-w-0 flex-1 pb-1">
+                        <h1 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
+                        <p className="m-0 text-sm text-slate-500 dark:text-slate-400">Aquí ves solo tus pagos, entregas, claims y tu calificación.</p>
+                      </div>
+                    </div>
                   </div>
                 </Card>
 
@@ -373,9 +375,11 @@ export default function DriverPortal() {
 
             {/* ---------- MI PERFIL ---------- */}
             {vista === 'perfil' && (
-              <Card className="p-5">
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <Foto url={fotoUrl} size={96} />
+              <Card className="overflow-hidden">
+                <div className="h-24 bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel" />
+                <div className="px-5 pb-5 text-center sm:px-7">
+                <div className="-mt-12 flex flex-col items-center gap-3">
+                  <Foto url={fotoUrl} size={96} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
                   <div>
                     <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || 'Chofer'}</h2>
                     {perfil?.email && <div className="text-sm text-slate-400">{perfil.email}</div>}
@@ -408,6 +412,7 @@ export default function DriverPortal() {
                   ) : (
                     <p className="m-0 text-sm text-slate-400">Tu calificación aparecerá cuando tu empresa cargue tus entregas.</p>
                   )}
+                </div>
                 </div>
               </Card>
             )}
@@ -574,10 +579,10 @@ export default function DriverPortal() {
   )
 }
 
-function Foto({ url, size = 48 }) {
-  if (url) return <img src={url} alt="Foto de perfil" className="flex-shrink-0 rounded-2xl object-cover" style={{ width: size, height: size }} />
+function Foto({ url, size = 48, ringClass = '' }) {
+  if (url) return <img src={url} alt="Foto de perfil" className={`flex-shrink-0 rounded-2xl object-cover ${ringClass}`} style={{ width: size, height: size }} />
   return (
-    <div className="grid flex-shrink-0 place-items-center rounded-2xl bg-brand-navy text-brand-gold" style={{ width: size, height: size }}>
+    <div className={`grid flex-shrink-0 place-items-center rounded-2xl bg-brand-navy text-brand-gold ${ringClass}`} style={{ width: size, height: size }}>
       <Truck size={Math.round(size * 0.45)} strokeWidth={1.8} />
     </div>
   )
@@ -615,6 +620,16 @@ function Estrellas({ n }) {
     <span className="inline-flex">
       {[1, 2, 3, 4, 5].map((i) => (
         <Star key={i} size={18} strokeWidth={1.8} className={i <= n ? 'fill-brand-gold text-brand-gold' : 'text-slate-300 dark:text-slate-600'} />
+      ))}
+    </span>
+  )
+}
+
+function EstrellasBlancas({ n }) {
+  return (
+    <span className="inline-flex">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star key={i} size={13} strokeWidth={1.8} className={i <= n ? 'fill-brand-gold text-brand-gold' : 'text-white/30'} />
       ))}
     </span>
   )
