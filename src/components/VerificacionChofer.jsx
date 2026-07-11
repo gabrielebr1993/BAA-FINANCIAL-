@@ -7,6 +7,7 @@ import { useAuth } from '../AuthContext'
 import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
+import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { stripeCrearCuenta, stripeOnboardingLink, stripeEstado } from '../utils/stripe'
 import { Card, Boton, Input, Select, Badge, Aviso, Spinner } from './ui'
 
@@ -26,9 +27,11 @@ const STRIPE_BADGE = {
   verificado: { txt: '✓ Verificada en Stripe', color: 'green', icon: CheckCircle2 },
 }
 
-export default function VerificacionChofer({ driver, activeCompanyId, onReload }) {
+export default function VerificacionChofer({ driver, activeCompanyId, onReload, coleccion = 'drivers' }) {
   const { perfil, esSuperAdmin } = useAuth()
   const puede = esSuperAdmin || perfil?.role === 'owner'
+  const esDriver = coleccion === 'drivers' // managers: sin Stripe ni portal
+  const tipoLabel = esDriver ? 'chofer' : 'gasto fijo'
   const [v, setV] = useState({ ...VACIO, ...(driver?.verificacion || {}) })
   const [guardando, setGuardando] = useState(false)
   const [subiendo, setSubiendo] = useState('')
@@ -42,8 +45,8 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
   if (!driver?.id) {
     return (
       <Card className="p-5">
-        <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" /> Verificación y pago</h3>
-        <Aviso tipo="info">Este chofer aún no existe como registro guardado (aparece solo en una factura). Créalo/guárdalo en <b>Choferes</b> para poder verificarlo y habilitar pagos.</Aviso>
+        <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" /> Verificación{esDriver ? ' y pago' : ''}</h3>
+        <Aviso tipo="info">Este {tipoLabel} aún no existe como registro guardado. Créalo/guárdalo primero para poder verificarlo.</Aviso>
       </Card>
     )
   }
@@ -56,7 +59,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
   const guardar = async () => {
     setGuardando(true); setMsg(null)
     try {
-      await guardarVerificacion(driver.id, v, perfil?.nombre || perfil?.email || '')
+      await guardarVerificacion(driver.id, v, perfil?.nombre || perfil?.email || '', coleccion)
       await onReload?.()
       setMsg({ tipo: 'ok', txt: 'Verificación guardada.' })
     } catch (e) {
@@ -72,12 +75,18 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
       const campo = tipo === 'licencia' ? 'licenciaUrl' : 'w9Url'
       const next = { ...v, [campo]: url }
       setV(next)
-      await guardarVerificacion(driver.id, next, perfil?.nombre || perfil?.email || '')
+      await guardarVerificacion(driver.id, next, perfil?.nombre || perfil?.email || '', coleccion)
       await onReload?.()
       setMsg({ tipo: 'ok', txt: 'Documento subido y guardado.' })
     } catch (e) {
       setMsg({ tipo: 'error', txt: 'No se pudo subir el documento: ' + e.message + ' (revisa que Storage esté habilitado y sus reglas publicadas).' })
     } finally { setSubiendo('') }
+  }
+
+  // Descarga los datos bancarios de ESTE registro a Excel.
+  const exportarBanco = () => {
+    const base = (v.nombreCompleto || driver.nombre || tipoLabel).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')
+    exportarDatosBancarios([{ nombre: driver.nombre, verificacion: v }], `bancarios_${base || tipoLabel}`)
   }
 
   // Marca el W-9 como solicitado: el chofer lo verá y podrá subirlo desde su portal.
@@ -86,7 +95,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
     try {
       const next = { ...v, w9Solicitado: true }
       setV(next)
-      await guardarVerificacion(driver.id, next, perfil?.nombre || perfil?.email || '')
+      await guardarVerificacion(driver.id, next, perfil?.nombre || perfil?.email || '', coleccion)
       await onReload?.()
       setMsg({ tipo: 'ok', txt: 'Marcado como solicitado. Pídele al chofer que entre a su cuenta (portal del chofer) y suba su W-9 en “Mi formulario W-9”. Cuando lo suba, aparecerá aquí guardado.' })
     } catch (e) {
@@ -135,15 +144,20 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
     <Card className="p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Verificación y pago</h3>
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Verificación{esDriver ? ' y pago' : ' y datos'}</h3>
         {ESTADOS_VERIFICACION.filter((e) => e.key === (v.estado || 'pendiente')).map((e) => (
           <Badge key={e.key} color={e.color}>Verificación: {e.label}</Badge>
         ))}
-        <span className="inline-flex items-center gap-1"><SBIcon size={14} strokeWidth={1.9} className="text-slate-400" /><Badge color={sb.color}>Cuenta bancaria: {sb.txt}</Badge></span>
-        {driver.stripeTest && <Badge color="slate">TEST</Badge>}
-        <Boton variant="ghost" onClick={exportar} disabled={exportando} className="ml-auto px-3 py-1.5 text-xs" title="Exportar a PDF con los documentos e imágenes">
-          {exportando ? <><Spinner /> Exportando…</> : <><Download size={14} strokeWidth={1.9} /> Exportar PDF</>}
-        </Boton>
+        {esDriver && <span className="inline-flex items-center gap-1"><SBIcon size={14} strokeWidth={1.9} className="text-slate-400" /><Badge color={sb.color}>Cuenta bancaria: {sb.txt}</Badge></span>}
+        {esDriver && driver.stripeTest && <Badge color="slate">TEST</Badge>}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Boton variant="ghost" onClick={exportarBanco} className="px-3 py-1.5 text-xs" title="Descargar datos bancarios (Excel)">
+            <Download size={14} strokeWidth={1.9} /> Datos bancarios
+          </Boton>
+          <Boton variant="ghost" onClick={exportar} disabled={exportando} className="px-3 py-1.5 text-xs" title="Exportar a PDF con los documentos e imágenes">
+            {exportando ? <><Spinner /> Exportando…</> : <><Download size={14} strokeWidth={1.9} /> Exportar PDF</>}
+          </Boton>
+        </div>
       </div>
 
       {msg && <div className="mb-4"><Aviso tipo={msg.tipo}>{msg.txt}</Aviso></div>}
@@ -183,9 +197,11 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
                   <input type="checkbox" checked={!!v.w9Entregado} onChange={(e) => set('w9Entregado', e.target.checked)} /> Entregó W-9
                 </label>
                 <DocUpload label="Documento W-9" icon={FileText} url={v.w9Url} subiendo={subiendo === 'w9'} onFile={(f) => subir('w9', f)} />
-                <Boton variant="ghost" onClick={pedirW9} disabled={pidiendoW9} className="px-3 py-1.5 text-xs" title="Marca el W-9 como solicitado; el chofer lo sube desde su portal">
-                  {pidiendoW9 ? <><Spinner /> …</> : <><Send size={14} strokeWidth={1.9} /> Pedir W-9 al chofer</>}
-                </Boton>
+                {esDriver && (
+                  <Boton variant="ghost" onClick={pedirW9} disabled={pidiendoW9} className="px-3 py-1.5 text-xs" title="Marca el W-9 como solicitado; el chofer lo sube desde su portal">
+                    {pidiendoW9 ? <><Spinner /> …</> : <><Send size={14} strokeWidth={1.9} /> Pedir W-9 al chofer</>}
+                  </Boton>
+                )}
               </div>
             </div>
           </div>
@@ -250,7 +266,8 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
           </div>
         </Seccion>
 
-        {/* 4 · Datos bancarios y pago (Stripe) */}
+        {/* 4 · Datos bancarios y pago (Stripe) — solo choferes */}
+        {esDriver && (
         <Seccion icon={CreditCard} titulo="Datos bancarios y pago (Stripe)" right={estadoStripe === 'verificado' ? <Badge color="green">Listo para pago</Badge> : <Badge color="gold">Pendiente de registrar banco</Badge>}>
           <p className="mb-3 flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
@@ -272,6 +289,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload }
             <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">Este chofer aún no puede recibir pago hasta que su estado sea <b>verificado</b>.</p>
           )}
         </Seccion>
+        )}
       </div>
     </Card>
   )

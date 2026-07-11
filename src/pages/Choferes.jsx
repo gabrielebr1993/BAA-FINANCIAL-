@@ -6,8 +6,9 @@ import { useData } from '../DataContext'
 import { calcularPagos, buscarDriver } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
-import { Truck, Check, KeyRound, Trash2, FileSpreadsheet } from 'lucide-react'
+import { Truck, Check, KeyRound, Trash2, FileSpreadsheet, Landmark } from 'lucide-react'
 import { exportarExcel } from '../utils/exportar'
+import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 
@@ -130,6 +131,13 @@ export default function Choferes() {
       }
     })
     exportarExcel(`choferes_${new Date().toISOString().slice(0, 10)}`, [{ nombre: 'Choferes', rows }])
+  }
+
+  // Exporta datos bancarios (Excel). Si hay selección → solo los seleccionados;
+  // si no → los choferes mostrados (todos si no hay búsqueda).
+  const exportarBancarios = () => {
+    const base = seleccion.size > 0 ? drivers.filter((d) => seleccion.has(d.id)) : filtrados
+    exportarDatosBancarios(base.map((d) => ({ nombre: d.nombre, verificacion: d.verificacion })), `datos-bancarios-choferes_${new Date().toISOString().slice(0, 10)}`)
   }
 
   // ---- alta ----
@@ -337,6 +345,9 @@ export default function Choferes() {
         <Boton variant="ghost" className="ml-auto px-3 py-1.5 text-xs" onClick={exportarChoferes} disabled={filtrados.length === 0}>
           <FileSpreadsheet size={15} strokeWidth={1.8} /> Exportar Excel
         </Boton>
+        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={filtrados.length === 0} title="Descargar nombre, cuenta, ruta y banco (todos o seleccionados)">
+          <Landmark size={15} strokeWidth={1.8} /> Datos bancarios
+        </Boton>
       </div>
 
       {/* Barra de acciones masivas */}
@@ -365,6 +376,7 @@ export default function Choferes() {
             </div>
             <Boton variant="ghost" onClick={() => pedirActivar(true)}>Activar</Boton>
             <Boton variant="ghost" onClick={() => pedirActivar(false)}>Desactivar</Boton>
+            <Boton variant="ghost" onClick={exportarBancarios}><Landmark size={15} strokeWidth={1.8} /> Datos bancarios</Boton>
             <Boton variant="danger" onClick={pedirBorrar}><Trash2 size={15} strokeWidth={1.8} /> Borrar</Boton>
             <Boton variant="ghost" onClick={() => setSeleccion(new Set())}>Limpiar</Boton>
           </div>

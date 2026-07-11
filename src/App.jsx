@@ -30,6 +30,7 @@ const Empresas = lazy(() => import('./pages/Empresas'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 const Backups = lazy(() => import('./pages/Backups'))
 const Stripe = lazy(() => import('./pages/Stripe'))
+const ManagerPerfil = lazy(() => import('./pages/ManagerPerfil'))
 const Jarvis = lazy(() => import('./pages/Jarvis'))
 const PanelControl = lazy(() => import('./pages/PanelControl'))
 const DriverPortal = lazy(() => import('./pages/DriverPortal'))
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
+              <Route path="/managers/:id" element={<Page filtro="gestionarChoferes"><ManagerPerfil /></Page>} />
               <Route path="/choferes/:nombre" element={<Page filtro="verDashboard"><PerfilChofer /></Page>} />
               <Route path="/tracking/:waybill" element={<Page filtro="verDashboard"><TrackingFicha /></Page>} />
               <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />

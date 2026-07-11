@@ -13,9 +13,11 @@ export const ESTADOS_VERIFICACION = [
   { key: 'rechazado', label: 'Rechazado', color: 'red' },
 ]
 
-export async function guardarVerificacion(driverId, verificacion, revisor) {
-  if (!driverId) return
-  await updateDoc(doc(db, 'drivers', driverId), {
+// coleccion: 'drivers' (chofer) o 'managers' (gasto fijo). Guarda el perfil de
+// verificación en el doc del registro correspondiente.
+export async function guardarVerificacion(recordId, verificacion, revisor, coleccion = 'drivers') {
+  if (!recordId) return
+  await updateDoc(doc(db, coleccion, recordId), {
     verificacion: { ...verificacion, revisadoPor: revisor || verificacion.revisadoPor || '', revisadoEn: verificacion.estado ? serverTimestamp() : verificacion.revisadoEn || null },
     verificacionActualizada: serverTimestamp(),
   })

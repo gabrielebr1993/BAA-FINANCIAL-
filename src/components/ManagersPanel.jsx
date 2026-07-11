@@ -1,17 +1,21 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
-import { Building2, Users } from 'lucide-react'
+import { Building2, Users, Landmark } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { costoManagers } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
+import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, Boton, Aviso, Badge, Input, Select } from './ui'
 
 const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
+  const navigate = useNavigate()
   const { managers, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango } = useData()
+  const exportarBancarios = () => exportarDatosBancarios(managers.map((m) => ({ nombre: m.nombre, verificacion: m.verificacion })), `datos-bancarios-gastos-fijos_${new Date().toISOString().slice(0, 10)}`)
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -125,6 +129,9 @@ export default function ManagersPanel() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Gastos fijos ({managers.length})</h3>
+        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={managers.length === 0} title="Descargar nombre, cuenta, ruta y banco de todos">
+          <Landmark size={15} strokeWidth={1.8} /> Datos bancarios
+        </Boton>
         <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">
           Costo total del periodo ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(costoTotal)}</b>
         </span>
@@ -154,7 +161,7 @@ export default function ManagersPanel() {
                   <tbody>
                     {g.items.map((m) => (
                       <tr key={m.id} className="border-t border-slate-100 dark:border-slate-700/50">
-                        <td className="px-3 py-2">{m.nombre}</td>
+                        <td className="px-3 py-2"><button onClick={() => navigate(`/managers/${m.id}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{m.nombre}</button></td>
                         <td className="px-3 py-2 text-right">{money(m.sueldoSemanal)}</td>
                         <td className="px-3 py-2 text-center">{m.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>}</td>
                         <td className="px-3 py-2 text-right">
