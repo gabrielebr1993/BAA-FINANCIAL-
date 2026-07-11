@@ -11,10 +11,10 @@ function permisosVacios() {
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', permissions: permisosVacios() }
+const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', permissions: permisosVacios() }
 
 export default function Usuarios() {
-  const { activeCompanyId, empresaActiva } = useData()
+  const { activeCompanyId, empresaActiva, drivers } = useData()
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
@@ -43,28 +43,37 @@ export default function Usuarios() {
   }
   const editar = (u) => {
     setEditId(u.id)
-    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
+    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
     setError('')
     setOk('')
   }
+
+  // Nombre del chofer vinculado (para rol driver).
+  const driverNombreDe = (id) => drivers.find((d) => d.id === id)?.nombre || ''
 
   const guardar = async () => {
     setError('')
     setOk('')
     if (!form.nombre.trim() || !form.email.trim()) return setError('Nombre y email son obligatorios.')
     if (!activeCompanyId) return setError('No hay una empresa activa. Selecciona una empresa primero.')
+    const esDriver = form.role === 'driver'
+    if (esDriver && !form.driverId) { setError('Elige a qué chofer se vincula este acceso.'); return }
+    // Un driver no tiene permisos de gestión; sí queda vinculado a su chofer.
+    const driverNombre = esDriver ? driverNombreDe(form.driverId) : ''
+    const permisos = esDriver ? {} : form.permissions
+    const extraDriver = esDriver ? { driverId: form.driverId, driverNombre, driverKey: driverNombre.toLowerCase() } : {}
     setGuardando(true)
     try {
       if (editId) {
         // editar: solo actualiza el documento (permisos/rol), no toca Auth
-        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId })
+        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...extraDriver })
         await cargar()
         setOk('Usuario actualizado.')
         nuevo()
       } else if (modoManual) {
         // respaldo: crear con UID manual (el acceso en Auth se crea aparte)
         if (!form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
-        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: form.permissions, companyId: activeCompanyId })
+        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...extraDriver })
         await cargar()
         setOk('Usuario creado (modo manual).')
         nuevo()
@@ -72,7 +81,7 @@ export default function Usuarios() {
         // flujo principal: crear Auth + documento vía función serverless
         if (String(form.password).length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
         const token = await auth.currentUser.getIdToken()
-        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: form.permissions, companyId: activeCompanyId }, token)
+        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: permisos, companyId: activeCompanyId, ...(esDriver ? { driverId: form.driverId, driverNombre } : {}) }, token)
         if (!data.ok) {
           setError(data.error || 'No se pudo crear el usuario.')
           return
@@ -126,35 +135,53 @@ export default function Usuarios() {
           )}
           <Campo label="Rol">
             <Select className="w-40" value={form.role} onChange={(e) => setF('role', e.target.value)}>
-              {ROLES.filter((r) => r !== 'driver').map((r) => (
-                <option key={r} value={r}>{r}</option>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>{r === 'driver' ? 'driver (chofer)' : r}</option>
               ))}
             </Select>
           </Campo>
+          {form.role === 'driver' && (
+            <Campo label="Chofer vinculado">
+              <Select className="w-56" value={form.driverId} onChange={(e) => setF('driverId', e.target.value)}>
+                <option value="">— Elige el chofer —</option>
+                {[...drivers].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((d) => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </Select>
+            </Campo>
+          )}
         </div>
 
-        <div className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-          Permisos {form.role === 'owner' ? '(el owner ve todo automáticamente)' : '(elige qué puede ver)'}:
-        </div>
-        <div className={`mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 ${form.role === 'owner' ? 'opacity-50' : ''}`}>
-          {PERMISOS.map((p) => {
-            const on = form.role === 'owner' ? true : form.permissions[p.key]
-            return (
-              <label
-                key={p.key}
-                className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
-                onClick={() => form.role !== 'owner' && togglePermiso(p.key)}
-              >
-                <Switch on={on} />
-                <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
-              </label>
-            )
-          })}
-        </div>
+        {form.role === 'driver' ? (
+          <Aviso tipo="info">
+            Acceso de <b>chofer</b>: solo verá su portal (sus pagos, entregas, claims y calificación){form.driverId ? <> vinculado a <b>{driverNombreDe(form.driverId)}</b></> : ''}. No ve finanzas ni a otros choferes ni el menú de gestión.
+          </Aviso>
+        ) : (
+          <>
+            <div className="mb-2 text-sm text-slate-500 dark:text-slate-400">
+              Permisos {form.role === 'owner' ? '(el owner ve todo automáticamente)' : '(elige qué puede ver)'}:
+            </div>
+            <div className={`mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 ${form.role === 'owner' ? 'opacity-50' : ''}`}>
+              {PERMISOS.map((p) => {
+                const on = form.role === 'owner' ? true : form.permissions[p.key]
+                return (
+                  <label
+                    key={p.key}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+                    onClick={() => form.role !== 'owner' && togglePermiso(p.key)}
+                  >
+                    <Switch on={on} />
+                    <span className="text-sm text-slate-700 dark:text-slate-200">{p.label}</span>
+                  </label>
+                )
+              })}
+            </div>
 
-        <Aviso tipo="info">
-          Este usuario podrá ver: {seccionesPermitidas.length === 0 ? 'ninguna sección.' : seccionesPermitidas.map((s) => s.label).join(', ') + '.'}
-        </Aviso>
+            <Aviso tipo="info">
+              Este usuario podrá ver: {seccionesPermitidas.length === 0 ? 'ninguna sección.' : seccionesPermitidas.map((s) => s.label).join(', ') + '.'}
+            </Aviso>
+          </>
+        )}
 
         <div className="flex gap-2">
           <Boton onClick={guardar} disabled={guardando} variant="gold">

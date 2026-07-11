@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
-import { Link2, Copy, Check, KeyRound, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react'
+import { Link2, Copy, Check, KeyRound, RefreshCw, ShieldCheck, ChevronDown, MessageCircle } from 'lucide-react'
 import { Card, Boton, Aviso, Badge, Input, Spinner } from './ui'
 
 // Token de empresa: aleatorio, corto y compartible (va en la URL, no es secreto).
@@ -40,6 +40,10 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
   }, [activeCompanyId])
 
   const enlace = token ? `${window.location.origin}/registro/${token}` : ''
+  // Enlace PERSONALIZADO por chofer: ya lleva su PIN, cae directo en su formulario.
+  const enlaceChofer = (d) => `${window.location.origin}/registro/${token}?d=${d.id}&pin=${d.registroPin}`
+  const mensajeChofer = (d) =>
+    `Hola ${d.nombre} 👋\nPara registrar tus datos de pago (SSN, banco y tu W-9) entra a este enlace:\n${enlaceChofer(d)}\n\nTu PIN es: ${d.registroPin}\n\nSolo tú puedes usar este enlace. Cuando lo envíes, queda guardado y listo. ¡Gracias!`
 
   const activos = useMemo(
     () => [...drivers].filter((d) => d.activo !== false).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')),
@@ -141,10 +145,11 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
                       <th className="px-3 py-2 text-left font-semibold">Chofer</th>
                       <th className="px-3 py-2 text-left font-semibold">PIN</th>
                       <th className="px-3 py-2 text-center font-semibold">Estado</th>
+                      <th className="px-3 py-2 text-right font-semibold">Enviar (enlace + PIN)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {activos.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400">Sin choferes activos.</td></tr>}
+                    {activos.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">Sin choferes activos.</td></tr>}
                     {activos.map((d) => (
                       <tr key={d.id} className="border-t border-slate-100 dark:border-slate-700/50">
                         <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">{d.nombre}</td>
@@ -162,12 +167,28 @@ export default function RegistroChoferes({ drivers, activeCompanyId, reloadDrive
                         <td className="px-3 py-2 text-center">
                           {d.registroCompletado ? <Badge color="green">Enviado ✓</Badge> : d.registroPin ? <Badge color="gold">Pendiente</Badge> : <Badge color="slate">Sin PIN</Badge>}
                         </td>
+                        <td className="px-3 py-2">
+                          {d.registroCompletado || !d.registroPin ? (
+                            <span className="block text-right text-slate-300">—</span>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button onClick={() => copiar(mensajeChofer(d), 'msg-' + d.id)} title="Copiar mensaje con enlace + PIN" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200">
+                                {copiado === 'msg-' + d.id ? <><Check size={13} strokeWidth={2.4} className="text-emerald-600" /> Copiado</> : <><Copy size={13} strokeWidth={1.9} /> Mensaje</>}
+                              </button>
+                              <a href={`https://wa.me/?text=${encodeURIComponent(mensajeChofer(d))}`} target="_blank" rel="noreferrer" title="Enviar por WhatsApp" className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-600">
+                                <MessageCircle size={13} strokeWidth={2} /> WhatsApp
+                              </a>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="mt-2 text-xs text-slate-400">
+                <b>Mensaje / WhatsApp</b> le manda a cada chofer un enlace personal que <b>ya incluye su PIN</b> (cae directo en su formulario). Así te llega todo junto.
+                El enlace de arriba (sin PIN) es para compartir en el grupo: ahí cada uno se busca y escribe su PIN.
                 Cuando un chofer envía su información, aparece como <b>Enviado</b>, su nombre desaparece del enlace y sus datos quedan en su perfil (solo tú los ves).
               </p>
             </>

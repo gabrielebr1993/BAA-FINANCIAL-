@@ -2,7 +2,7 @@
 // la lista, (2) valida su PIN, (3) completa SSN/banco y firma su W-9. Al enviar,
 // se guarda para la empresa y su nombre desaparece del enlace. Datos por token+PIN.
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { Search, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { generarW9Base64 } from '../utils/w9'
@@ -21,6 +21,7 @@ function Campo({ label, children }) {
 
 export default function RegistroPublico() {
   const { token } = useParams()
+  const [sp] = useSearchParams()
   const [paso, setPaso] = useState('cargando') // cargando | buscar | pin | form | listo | error
   const [empresa, setEmpresa] = useState('')
   const [pendientes, setPendientes] = useState([])
@@ -36,7 +37,23 @@ export default function RegistroPublico() {
     ;(async () => {
       const r = await call('lista', { token })
       if (!r.ok) { setError(r.error || 'Enlace no válido.'); setPaso('error'); return }
-      setEmpresa(r.empresa || ''); setPendientes(r.pendientes || []); setPaso('buscar')
+      setEmpresa(r.empresa || ''); setPendientes(r.pendientes || [])
+      // Enlace personalizado (?d=driverId&pin=xxxx): auto-selecciona al chofer y
+      // valida su PIN, para que caiga directo en el formulario sin buscarse.
+      const dId = sp.get('d'); const pinQ = sp.get('pin')
+      if (dId && pinQ) {
+        const d = (r.pendientes || []).find((x) => x.id === dId)
+        if (d) {
+          setSel(d); setPin(pinQ)
+          const v = await call('verificar', { token, driverId: dId, pin: String(pinQ).trim() })
+          if (v.ok) {
+            setF((s) => ({ ...s, nombreCompleto: v.driver.nombreCompleto || v.driver.nombre || d.nombre, direccion: v.driver.direccion || '', telefono: v.driver.telefono || '', email: v.driver.email || '' }))
+            setPaso('form'); return
+          }
+          setPaso('pin'); return // PIN del enlace no válido → que lo escriba
+        }
+      }
+      setPaso('buscar')
     })()
   }, [token])
 
