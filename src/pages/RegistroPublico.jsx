@@ -70,6 +70,8 @@ export default function RegistroPublico() {
 
   const enviar = async () => {
     setError('')
+    if (!f.nombreCompleto.trim()) return setError('Falta tu nombre completo.')
+    if (!f.direccion.trim()) return setError('Falta tu dirección.')
     if (String(f.ssn).replace(/\D/g, '').length !== 9) return setError('El SSN debe tener 9 dígitos.')
     if (String(f.rutaNumero).replace(/\D/g, '').length !== 9) return setError('El número de ruta (routing) debe tener 9 dígitos.')
     if (!f.cuentaNumero.trim()) return setError('Falta el número de cuenta.')

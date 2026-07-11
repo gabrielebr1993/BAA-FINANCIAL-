@@ -2,9 +2,9 @@
 // Solo owner/súper-admin. Los datos personales/documentos se guardan en Firestore/
 // Storage; los datos BANCARIOS los maneja Stripe (aquí solo se ve el estado).
 import { useState, lazy, Suspense } from 'react'
-import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send, Monitor } from 'lucide-react'
+import { ShieldCheck, Upload, FileText, IdCard, CheckCircle2, Clock, XCircle, CreditCard, ExternalLink, RefreshCw, Info, User, ClipboardCheck, Download, Send, Monitor, Lock, Unlock } from 'lucide-react'
 import { useAuth } from '../AuthContext'
-import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento } from '../utils/verificacion'
+import { ESTADOS_VERIFICACION, guardarVerificacion, subirDocumento, habilitarEdicionDatos } from '../utils/verificacion'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { exportarVerificacionPDF } from '../utils/exportarVerificacion'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
@@ -43,6 +43,7 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
   const [stripeMsg, setStripeMsg] = useState(null)
   const [stripeBusy, setStripeBusy] = useState('')
   const [pidiendoW9, setPidiendoW9] = useState(false)
+  const [habilitando, setHabilitando] = useState(false)
   const [incrustado, setIncrustado] = useState(false) // mostrar onboarding embebido
 
   if (!puede) return null
@@ -108,6 +109,20 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
   }
   const fechaCorta = (t) => { try { const d = t?.toDate ? t.toDate() : (t?.seconds ? new Date(t.seconds * 1000) : null); return d ? d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' }) : null } catch { return null } }
 
+  // Habilita / bloquea que el chofer actualice sus datos de pago desde su portal.
+  const habilitarEdicion = async (permitir) => {
+    setHabilitando(true); setMsg(null)
+    try {
+      await habilitarEdicionDatos(driver.id, permitir, coleccion)
+      const next = { ...v, actualizacionSolicitada: permitir }
+      setV(next)
+      await onReload?.()
+      setMsg({ tipo: 'ok', txt: permitir ? 'Edición habilitada. El chofer ya puede actualizar sus datos una vez desde su portal.' : 'Edición bloqueada de nuevo.' })
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: 'No se pudo: ' + e.message })
+    } finally { setHabilitando(false) }
+  }
+
   const exportar = async () => {
     setExportando(true); setMsg(null)
     try {
@@ -147,7 +162,11 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
   return (
     <Card className="p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
+        {driver.fotoUrl ? (
+          <img src={driver.fotoUrl} alt="Foto del chofer" className="h-9 w-9 rounded-xl object-cover" />
+        ) : (
+          <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
+        )}
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Verificación{esDriver ? ' y pago' : ' y datos'}</h3>
         {ESTADOS_VERIFICACION.filter((e) => e.key === (v.estado || 'pendiente')).map((e) => (
           <Badge key={e.key} color={e.color}>Verificación: {e.label}</Badge>
@@ -183,7 +202,10 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Licencia / ID */}
             <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300"><IdCard size={14} strokeWidth={1.9} className="text-brand-gold" /> Licencia / ID</div>
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <IdCard size={14} strokeWidth={1.9} className="text-brand-gold" /> Licencia / ID
+                {v.licenciaSubidaPorChofer && <Badge color="green">Subida por el chofer{fechaCorta(v.licenciaEn) ? ` · ${fechaCorta(v.licenciaEn)}` : ''}</Badge>}
+              </div>
               <div className="space-y-3">
                 <Campo label="Número de licencia / ID"><Input value={v.licenciaNumero} onChange={(e) => set('licenciaNumero', e.target.value)} /></Campo>
                 <DocUpload label="Imagen de licencia / ID" icon={IdCard} url={v.licenciaUrl} subiendo={subiendo === 'licencia'} onFile={(f) => subir('licencia', f)} />
@@ -217,6 +239,29 @@ export default function VerificacionChofer({ driver, activeCompanyId, onReload, 
             <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
             Datos <b>sensibles</b> guardados en la app por tu decisión. Visibles solo para dueño/súper-admin. Guárdalos con cuidado.
           </div>
+
+          {/* Bloqueo del autoservicio del chofer */}
+          {esDriver && (v.datosBloqueados || v.datosBancariosPorChofer) && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/40">
+              {v.actualizacionSolicitada ? (
+                <>
+                  <Badge color="gold"><span className="inline-flex items-center gap-1"><Unlock size={12} strokeWidth={2} /> Edición habilitada</span></Badge>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">El chofer puede actualizar sus datos una vez desde su portal.</span>
+                  <Boton variant="ghost" onClick={() => habilitarEdicion(false)} disabled={habilitando} className="ml-auto px-3 py-1.5 text-xs">
+                    {habilitando ? <Spinner /> : <><Lock size={13} strokeWidth={1.9} /> Bloquear de nuevo</>}
+                  </Boton>
+                </>
+              ) : (
+                <>
+                  <Badge color="slate"><span className="inline-flex items-center gap-1"><Lock size={12} strokeWidth={2} /> Datos enviados y bloqueados</span></Badge>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">El chofer no puede modificarlos hasta que tú lo habilites.</span>
+                  <Boton variant="gold" onClick={() => habilitarEdicion(true)} disabled={habilitando} className="ml-auto px-3 py-1.5 text-xs">
+                    {habilitando ? <Spinner /> : <><Unlock size={13} strokeWidth={1.9} /> Permitir que actualice</>}
+                  </Boton>
+                </>
+              )}
+            </div>
+          )}
 
           {/* SSN */}
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">

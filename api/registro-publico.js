@@ -104,6 +104,9 @@ export default async function handler(req, res) {
         'verificacion.w9Entregado': true,
         'verificacion.w9SubidoPorChofer': true,
         'verificacion.w9SubidoEn': a.FieldValue.serverTimestamp(),
+        'verificacion.datosBancariosPorChofer': true,
+        'verificacion.datosBloqueados': true, // queda bloqueado también para el portal
+        'verificacion.actualizacionSolicitada': false,
         registroCompletado: true,
         registroEn: a.FieldValue.serverTimestamp(),
       })
