@@ -32,8 +32,15 @@ export function DataProvider({ children }) {
   const [claims, setClaims] = useState([])
   const [ajustes, setAjustes] = useState(null) // settings/{companyId}: ciudades, onboardingCompleto, marca…
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
-  const [selectedCity, setSelectedCity] = useState(TODAS)
-  const [rango, setRango] = useState({ preset: 'ultima', desde: '', hasta: '' })
+  // Ciudad y rango PERSISTIDOS: al recargar se mantiene lo que tenías elegido.
+  const [selectedCity, setSelectedCity] = useState(() => {
+    try { return localStorage.getItem('milepay_selectedCity') || TODAS } catch { return TODAS }
+  })
+  const [rango, setRango] = useState(() => {
+    try { const r = JSON.parse(localStorage.getItem('milepay_rango') || 'null'); return r && r.preset ? r : { preset: 'ultima', desde: '', hasta: '' } } catch { return { preset: 'ultima', desde: '', hasta: '' } }
+  })
+  useEffect(() => { try { localStorage.setItem('milepay_selectedCity', selectedCity) } catch { /* noop */ } }, [selectedCity])
+  useEffect(() => { try { localStorage.setItem('milepay_rango', JSON.stringify(rango)) } catch { /* noop */ } }, [rango])
   const [vista, setVista] = useState('combinado')
   // Estado persistido de cada alerta: { alertId: 'resuelta' | 'descartada' }.
   const [estadosAlertas, setEstadosAlertas] = useState({})
@@ -195,15 +202,23 @@ export function DataProvider({ children }) {
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
-  // Si la ciudad filtrada ya no está en el rango de fechas elegido, se vuelve a
-  // "Todas" (así el filtro de ciudad siempre corresponde a los días seleccionados).
-  // Excepción: si el usuario está BLOQUEADO a una ciudad, su filtro no se toca.
+  // La ciudad elegida se MANTIENE (persistida) mientras sea una ciudad de la empresa,
+  // aunque no tenga actividad en el rango (ahí se muestra vacía, que es lo correcto).
+  // Solo se vuelve a "Todas" si la ciudad ya no existe en la empresa. No se resetea
+  // mientras los ajustes aún cargan (evita el "se reinicia al recargar").
   useEffect(() => {
     if (ciudadBloqueada) return
     if (selectedCity === TODAS) return
-    const ciudades = new Set((facturaRango?.resumenCiudades || []).map((c) => c.ubicacion))
-    if (!ciudades.has(selectedCity)) setSelectedCity(TODAS)
-  }, [facturaRango, selectedCity, ciudadBloqueada])
+    const codigos = new Set((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean))
+    if (codigos.size > 0 && !codigos.has(selectedCity)) setSelectedCity(TODAS)
+  }, [selectedCity, ciudadBloqueada, ajustes])
+
+  // Si la empresa tiene UNA sola ciudad, se selecciona sola (así se puede subir
+  // factura sin tener que elegirla, y todo queda en esa ciudad).
+  useEffect(() => {
+    const cities = (ajustes?.ciudades || []).filter((c) => c.codigo)
+    if (!ciudadBloqueada && cities.length === 1 && selectedCity === TODAS) setSelectedCity(cities[0].codigo)
+  }, [ajustes, ciudadBloqueada, selectedCity])
 
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
