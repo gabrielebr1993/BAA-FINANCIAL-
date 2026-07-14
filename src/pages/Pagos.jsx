@@ -110,6 +110,9 @@ export default function Pagos() {
   })
 
   const totIngreso = filtrados.reduce((a, p) => a + p.ingreso, 0)
+  // Ingreso NETO = bruto − lo que Gofo descontó por claims (cuadra con la factura).
+  const totDescontadoGofo = filtrados.reduce((a, p) => a + (p.descontadoGofo || 0), 0)
+  const ingresoNeto = totIngreso - totDescontadoGofo
   const totPagar = filtrados.reduce((a, p) => a + p.totalPagar, 0)
   const totGanancia = filtrados.reduce((a, p) => a + p.ganancia, 0)
   const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
@@ -258,7 +261,7 @@ export default function Pagos() {
       ) : (
         <>
           <div className="mb-2 flex flex-wrap gap-3">
-            {verIngreso && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
+            {verIngreso && <KPI label={lIngreso('Ingreso total')} value={fIngreso(ingresoNeto)} icon={DollarSign} accent="green" sub={ocultarIngreso ? undefined : (totDescontadoGofo > 0 ? `bruto ${money(totIngreso)} − ${money(totDescontadoGofo)} claims` : 'cuadra con la factura')} />}
             <KPI label="Total a pagar" value={money(totPagar + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagar)} + fijos ${money(totGastosFijos)}` : subAjustes} />
             {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub="managers / renta / etc." />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}

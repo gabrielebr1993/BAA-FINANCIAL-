@@ -70,8 +70,12 @@ export default function Dashboard() {
   }, [inv, drivers])
 
   const costoTotal = pagos.reduce((a, p) => a + p.totalPagar, 0)
-  const gananciaTotal = tot.ingreso - costoTotal
-  const margen = tot.ingreso > 0 ? gananciaTotal / tot.ingreso : 0
+  // INGRESO NETO = ingreso bruto − lo que Gofo te descontó por claims. Así el
+  // "Ingreso total" cuadra con el monto REAL de la factura (lo que Gofo te paga).
+  const descuentoGofoTotal = pagos.reduce((a, p) => a + (p.descontadoGofo || 0), 0)
+  const ingresoNeto = tot.ingreso - descuentoGofoTotal
+  const gananciaTotal = ingresoNeto - costoTotal
+  const margen = ingresoNeto > 0 ? gananciaTotal / ingresoNeto : 0
   // Conteo CANÓNICO de claims válidos (mismo en todas las pantallas).
   const claimsCiudad = useMemo(() => claimsDeCiudad(claims, selectedCity, inv), [claims, selectedCity, inv])
   const numClaims = useMemo(() => contarClaimsValidos(claimsCiudad), [claimsCiudad])
@@ -99,7 +103,7 @@ export default function Dashboard() {
   const descargarExcel = () =>
     exportarExcel(nombreArch, [
       { nombre: 'Resumen', rows: [
-        { Métrica: 'Ingreso total', Valor: Math.round(tot.ingreso) },
+        { Métrica: 'Ingreso total', Valor: Math.round(ingresoNeto) },
         { Métrica: 'Costo total', Valor: Math.round(costoTotal) },
         { Métrica: 'Ganancia', Valor: Math.round(gananciaTotal) },
         { Métrica: 'Margen', Valor: pct(margen) },
@@ -113,7 +117,7 @@ export default function Dashboard() {
   const descargarPDF = () =>
     exportarPDF(nombreArch, 'Resumen del Dashboard', inv?.semana || '', [
       { titulo: 'Métricas del periodo', head: ['Métrica', 'Valor'], body: [
-        ['Ingreso total', money(tot.ingreso)],
+        ['Ingreso total', money(ingresoNeto)],
         ['Costo total', money(costoTotal)],
         ['Ganancia', money(gananciaTotal)],
         ['Margen', pct(margen)],
@@ -166,7 +170,7 @@ export default function Dashboard() {
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label="Ingreso total" value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
+            <KPI label="Ingreso total" value={fD(ingresoNeto)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} sub={descuentoGofoTotal > 0 ? `bruto ${money(tot.ingreso)} − ${money(descuentoGofoTotal)} claims` : undefined} />
             <KPI label="Costo total" value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
             <KPI label="Ganancia" value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
             <KPI label="Margen" value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />

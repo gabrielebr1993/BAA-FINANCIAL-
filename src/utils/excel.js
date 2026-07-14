@@ -514,33 +514,30 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
     else porCiudad[d.ciudad].individuales += 1
   }
 
-  // FUENTE DE CONTEOS: si viene el "Driver Summary", SOLO los individuales (col J) y
-  // dobles (col L) por chofer se toman de ahí (es lo que pidió el usuario). El INGRESO
-  // y todo lo demás se siguen sacando de los DETALLES (para que el total cuadre con el
-  // monto real de la factura). La CIUDAD se conserva de los detalles y las RUTAS
-  // (porChoferRuta/porRuta) quedan intactas. Se recomputan porCiudad y los totales.
+  // FUENTE DE CONTEOS: si viene el "Driver Summary", los individuales (col J), dobles
+  // (col L) e ingreso BRUTO (col G) por chofer se toman de ahí. La CIUDAD de cada chofer
+  // se conserva de los detalles (columna E / ruta), y las RUTAS (porChoferRuta/porRuta)
+  // quedan intactas para el modo por ruta. Se recomputan porCiudad y los totales.
   if (driverSummary && driverSummary.length) {
     const norm = (n) => (n || '').trim().toLowerCase()
     const ciudadDeChofer = {}
-    const ingresoDetalleDe = {} // ingreso (de DETALLES) acumulado por nombre de chofer
     let ciudadMayor = '' // ciudad con más paquetes (respaldo si un chofer no calza)
     {
       const mejor = {}, conteo = {}
       for (const c of Object.values(porChofer)) {
         const pq = c.individuales + c.dobles
         if (c.ciudad) conteo[c.ciudad] = (conteo[c.ciudad] || 0) + pq
-        ingresoDetalleDe[norm(c.nombre)] = (ingresoDetalleDe[norm(c.nombre)] || 0) + c.ingreso
         if (mejor[c.nombre] == null || pq > mejor[c.nombre]) { mejor[c.nombre] = pq; ciudadDeChofer[norm(c.nombre)] = c.ciudad }
       }
       ciudadMayor = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a])[0] || ''
     }
-    // Nuevo porChofer: conteos del Driver Summary, INGRESO de los detalles.
+    // Nuevo porChofer basado en el Driver Summary.
     const nuevoPorChofer = {}
     for (const ds of driverSummary) {
       const nombre = ds.nombre
       const ciudad = ciudadDeChofer[norm(nombre)] || ciudadMayor
       const ck = `${nombre}||${ciudad}`
-      nuevoPorChofer[ck] = { nombre, ciudad, individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: ingresoDetalleDe[norm(nombre)] || 0, numClaims: 0 }
+      nuevoPorChofer[ck] = { nombre, ciudad, individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: Number(ds.ingreso) || 0, numClaims: 0 }
     }
     for (const k of Object.keys(porChofer)) delete porChofer[k]
     Object.assign(porChofer, nuevoPorChofer)
