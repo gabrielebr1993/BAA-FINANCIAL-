@@ -26,29 +26,26 @@ export async function exportarPDF(nombreArchivo, titulo, subtitulo, tablas) {
   doc.rect(0, 0, ancho, 64, 'F')
   doc.setFillColor(...GOLD)
   doc.rect(0, 64, ancho, 4, 'F')
-  // Marca MilePay (dorado) + tagline
+  // IZQUIERDA: marca MilePay (dorado) + tagline debajo.
   doc.setTextColor(...GOLD)
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
   doc.text('MilePay', 40, 30)
-  const brandW = doc.getTextWidth('MilePay')
   doc.setTextColor(150, 165, 185)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   doc.text('Gestión de facturas y pagos', 40, 46)
-  // Separador vertical + título (después de la marca, con espacio)
-  const tx = 40 + brandW + 18
-  doc.setDrawColor(90, 105, 130)
-  doc.line(tx - 9, 16, tx - 9, 48)
+  // DERECHA: título (empresa) + subtítulo (recibo · chofer), alineados a la derecha
+  // para que NUNCA se encimen con la marca.
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text(titulo, tx, 28)
+  doc.text(titulo, ancho - 40, 28, { align: 'right' })
   if (subtitulo) {
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(210, 216, 226)
-    doc.text(subtitulo, tx, 44)
+    doc.text(subtitulo, ancho - 40, 44, { align: 'right' })
   }
 
   let y = 92
