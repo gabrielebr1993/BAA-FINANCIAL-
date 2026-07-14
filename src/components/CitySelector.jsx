@@ -21,17 +21,27 @@ export default function CitySelector() {
     )
   }
 
-  // Lista = ciudades CONFIGURADAS de la empresa + las detectadas en las facturas
-  // (por si alguna no está configurada). Así aparecen aunque aún no cargues facturas.
-  // Nombre siempre string (si falta, usamos el código) para no romper el ordenado.
-  const opciones = new Map()
-  ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) opciones.set(c.codigo, c.nombre || c.codigo) })
-  ciudades.forEach((c) => { if (c && !opciones.has(c)) opciones.set(c, nombreCiudadDe(facturaRango, c) || c) })
+  // Lista = ciudades CONFIGURADAS + las detectadas en las facturas. Se DEDUPLICA por
+  // NOMBRE: si hay dos con el mismo nombre (ej. una configurada y otra detectada con
+  // otro código), se deja SOLO la que tiene datos en la factura. Así no salen "dos
+  // Dallas". Nombre siempre string (si falta, el código) para no romper el ordenado.
+  const conDatos = new Set(ciudades) // códigos presentes en la factura del rango
+  const porNombre = new Map() // nombre -> código elegido
+  const considerar = (code, nombre) => {
+    if (!code) return
+    const nom = String(nombre || code).trim()
+    const prev = porNombre.get(nom)
+    if (!prev) { porNombre.set(nom, code); return }
+    // Preferimos el código que SÍ tiene datos.
+    if (conDatos.has(code) && !conDatos.has(prev)) porNombre.set(nom, code)
+  }
+  ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) considerar(c.codigo, c.nombre) })
+  ciudades.forEach((c) => considerar(c, nombreCiudadDe(facturaRango, c)))
 
   return (
     <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} aria-label="Filtro de ciudad">
       <option value={TODAS}>Todas las ciudades</option>
-      {[...opciones.entries()].sort((a, b) => String(a[1] || '').localeCompare(String(b[1] || ''))).map(([code, nombre]) => (
+      {[...porNombre.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([nombre, code]) => (
         <option key={code} value={code}>{nombre}</option>
       ))}
     </Select>

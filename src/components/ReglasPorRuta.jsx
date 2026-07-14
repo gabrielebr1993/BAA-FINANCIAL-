@@ -3,7 +3,7 @@
 // (M1/M2/M3) con su precio M1. Se aplican al cargar la factura asignando choferes
 // a cada ruta (Fase 2).
 import { useState, useEffect } from 'react'
-import { Save, Route as RouteIcon, Plus, Trash2 } from 'lucide-react'
+import { Save, Route as RouteIcon, Plus, Trash2, Info } from 'lucide-react'
 import { useData } from '../DataContext'
 import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, METODOS_CLAIM, METODO_CLAIM_DEFAULT } from '../constants'
 import { guardarReglasRuta } from '../utils/empresaSettings'
@@ -70,10 +70,16 @@ export default function ReglasPorRuta() {
         <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reglas por ruta</h3>
       </div>
-      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
         Cada ruta define sus <b>tarifas</b> (individual/doble) y el <b>método</b> de cobro por categoría de claim (M1 cobra la multa · M2 cobra lo de Gofo · M3 perdón).
         Al cargar la factura asignarás manualmente qué choferes van a cada ruta y se les pagará con estas reglas.
       </p>
+      <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+        <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
+        <span>
+          <b>“Monto de doble ($)”</b> = el valor que <b>Gofo te PAGA en la factura</b> por una entrega doble (columna del monto de la entrega en el Excel de Gofo). El sistema marca como <b>doble</b> toda entrega cuyo monto sea <b>exactamente</b> ese. Ej.: si tus dobles se pagan <b>$1</b>, pon <b>1</b> aquí. Todo lo demás cuenta como <b>individual</b>. (No confundir con la <b>tarifa doble</b>, que es lo que TÚ le pagas al chofer por ese doble.)
+        </span>
+      </div>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
       {error && <Aviso tipo="error">{error}</Aviso>}
 
