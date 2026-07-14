@@ -19,12 +19,13 @@ const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 export default function Pagos() {
   const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
   const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
-  const puedePagar = esSuperAdmin || perfil?.role === 'owner'
-  // INGRESO y GANANCIA por chofer: los ven el dueño, el súper-admin y también
-  // el ADMIN (para su ciudad). Un manager solo ve lo necesario para PAGAR
-  // (entregas, tarifas, descuento por claims y total a pagar).
-  const verIngreso = puedePagar || perfil?.role === 'admin'
-  const verGanancia = puedePagar || perfil?.role === 'admin'
+  // El ADMIN tiene acceso COMPLETO a las opciones de pago (Stripe, ajustes de
+  // préstamo/bono, marcar pagado) igual que el dueño, pero acotado a su ciudad.
+  const puedePagar = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
+  // Ingreso y ganancia por chofer: los ven todos los que pueden pagar (dueño,
+  // súper-admin, admin). Un manager solo ve lo necesario para PAGAR.
+  const verIngreso = puedePagar
+  const verGanancia = puedePagar
   const [payrollMap, setPayrollMap] = useState({})
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
   const [stripeMsg, setStripeMsg] = useState(null)
