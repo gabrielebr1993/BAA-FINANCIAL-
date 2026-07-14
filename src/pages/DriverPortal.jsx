@@ -239,8 +239,11 @@ export default function DriverPortal() {
             {vista === 'inicio' && (
               <>
                 <Card className="mb-4 overflow-hidden">
-                  <div className="bg-gradient-to-br from-brand-navy to-brand-steel p-5 sm:p-6">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-white/50">Portal del chofer</div>
+                  <div className="relative overflow-hidden bg-gradient-to-br from-brand-navy to-brand-steel p-5 sm:p-6">
+                    {/* Resplandor dorado suave y difuminado (decorativo) */}
+                    <div className="pointer-events-none absolute -bottom-16 -right-8 h-52 w-52 rounded-full bg-brand-gold/25 blur-3xl" aria-hidden />
+                    <div className="pointer-events-none absolute -top-12 left-16 h-36 w-36 rounded-full bg-brand-gold/10 blur-3xl" aria-hidden />
+                    <div className="relative text-[11px] font-medium uppercase tracking-wide text-white/50">Portal del chofer</div>
                     <h1 className="mt-0.5 text-xl font-bold text-white sm:text-2xl">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
                     <p className="mt-1 text-sm text-white/70">Tus pagos, entregas, claims y tu calificación.</p>
                     {calif && (
@@ -362,10 +365,17 @@ export default function DriverPortal() {
             {/* ---------- MI PERFIL ---------- */}
             {vista === 'perfil' && (
               <Card className="overflow-hidden">
-                <div className="h-24 bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel" />
+                <div className="relative h-24 overflow-hidden bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel">
+                  {/* Resplandor dorado suave y difuminado (decorativo) */}
+                  <div className="pointer-events-none absolute -bottom-16 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-brand-gold/25 blur-3xl" aria-hidden />
+                </div>
                 <div className="px-5 pb-5 text-center sm:px-7">
                 <div className="-mt-12 flex flex-col items-center gap-3">
-                  <Foto url={fotoUrl} size={96} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
+                  <div className="relative">
+                    {/* Halo dorado difuminado detrás de la foto */}
+                    <div className="pointer-events-none absolute -inset-2.5 rounded-[1.4rem] bg-brand-gold/40 blur-xl dark:bg-brand-gold/30" aria-hidden />
+                    <div className="relative"><Foto url={fotoUrl} size={96} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" /></div>
+                  </div>
                   <div>
                     <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || 'Chofer'}</h2>
                     {perfil?.email && <div className="text-sm text-slate-400">{perfil.email}</div>}
