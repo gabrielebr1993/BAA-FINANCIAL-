@@ -87,7 +87,12 @@ export default function CargarFactura() {
     }
   }
 
-  const nombreMap = useMemo(() => Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])), [ciudadesExtra])
+  // Nombre por código: tu configuración manda (así la factura y el filtro guardan el
+  // nombre que elegiste); las ciudades extra añadidas aquí lo pueden sobrescribir.
+  const nombreMap = useMemo(() => ({
+    ...Object.fromEntries((ciudadesEmpresa || []).filter((c) => c.codigo).map((c) => [c.codigo, c.nombre])),
+    ...Object.fromEntries(ciudadesExtra.map((c) => [c.codigo, c.nombre])),
+  }), [ciudadesEmpresa, ciudadesExtra])
 
   // ---- unificación de nombres de chofer (variantes de Gofo → chofer real) ----
   // Lista CANÓNICA de choferes: los que ya existen (con sus alias guardados) + los
@@ -374,6 +379,41 @@ export default function CargarFactura() {
   )
 
   const todasCiudadesAsignadas = ciudadPorArchivo.length > 0 && ciudadPorArchivo.every((c) => !!c)
+
+  // DISCREPANCIA DE NOMBRE: la ciudad asignada ya existe en tu configuración con un
+  // nombre distinto al que le corresponde a ese código en la factura. Se avisa y se
+  // ofrece corregirlo (actualiza config + filtros; en la carga se refleja al instante).
+  const discrepanciasCiudad = useMemo(() => {
+    const out = []
+    const vistos = new Set()
+    for (const code of (ciudadPorArchivo || [])) {
+      const cod = String(code || '').trim()
+      if (!cod || vistos.has(cod.toUpperCase())) continue
+      vistos.add(cod.toUpperCase())
+      const conf = (ciudadesEmpresa || []).find((c) => String(c.codigo || '').toUpperCase() === cod.toUpperCase())
+      if (!conf) continue // aún no configurada: se registra sola, no es discrepancia
+      const nombreFactura = String(nombreCiudad(cod)).trim()
+      const nombreConfig = String(conf.nombre || '').trim()
+      // Solo si el estándar conoce un nombre real (distinto del código) y no coincide.
+      if (nombreFactura && nombreFactura.toUpperCase() !== cod.toUpperCase() && nombreConfig.toLowerCase() !== nombreFactura.toLowerCase()) {
+        out.push({ codigo: cod, nombreConfig, nombreFactura })
+      }
+    }
+    return out
+  }, [ciudadPorArchivo, ciudadesEmpresa])
+
+  // Aplica el nombre de la factura a una ciudad ya configurada (config + filtros).
+  const [corrigiendoCiudad, setCorrigiendoCiudad] = useState('')
+  const usarNombreFactura = async (codigo, nombre) => {
+    setCorrigiendoCiudad(codigo)
+    try {
+      const lista = (ciudadesEmpresa || []).map((c) =>
+        String(c.codigo || '').toUpperCase() === String(codigo).toUpperCase() ? { ...c, nombre } : c)
+      await guardarCiudadesEmpresa(activeCompanyId, lista)
+      await reloadAjustes()
+    } catch (e) { setErrores([`No se pudo actualizar el nombre de la ciudad: ${e.message}`]) }
+    finally { setCorrigiendoCiudad('') }
+  }
 
   const guardar = async () => {
     if (!combinado) return
@@ -808,6 +848,17 @@ export default function CargarFactura() {
                 </tbody>
               </table>
             </div>
+            {discrepanciasCiudad.map((d) => (
+              <div key={d.codigo} className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-500/40 dark:bg-amber-500/10">
+                <AlertTriangle size={16} strokeWidth={1.9} className="text-amber-600 dark:text-amber-400" />
+                <span className="text-amber-800 dark:text-amber-200">
+                  La ciudad <strong>{d.codigo}</strong> la tienes guardada como <strong>“{d.nombreConfig}”</strong>, pero en la factura corresponde a <strong>“{d.nombreFactura}”</strong>.
+                </span>
+                <Boton variant="gold" disabled={corrigiendoCiudad === d.codigo} onClick={() => usarNombreFactura(d.codigo, d.nombreFactura)} className="ml-auto px-3 py-1 text-xs">
+                  {corrigiendoCiudad === d.codigo ? 'Actualizando…' : `Usar “${d.nombreFactura}”`}
+                </Boton>
+              </div>
+            ))}
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div>
                 <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Agregar ciudad — código</div>

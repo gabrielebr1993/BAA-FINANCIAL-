@@ -92,6 +92,7 @@ export const CIUDADES = {
   MSN01: 'Madison',
   ORD01: 'Chicago',
   AUS01: 'Austin',
+  MRC01: 'Nashville, TN',
 }
 
 // Nombre legible de un código de almacén. Si no se conoce, se usa tal cual.
