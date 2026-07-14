@@ -98,12 +98,37 @@ export default function CargarFactura() {
   // Lista CANÓNICA de choferes: los que ya existen (con sus alias guardados) + los
   // del archivo de rates (lista maestra de 99). Cada nombre crudo de la factura se
   // resuelve a uno de estos; lo que no se resuelve con seguridad va a "sin asociar".
+  // Ciudad(es) donde cada chofer ha trabajado (de sus facturas previas). Cada ciudad
+  // tiene sus choferes; se usa para NO mezclar choferes de otra ciudad al unificar.
+  const ciudadesDeDriverNombre = useMemo(() => {
+    const acc = {}
+    for (const inv of (invoices || [])) {
+      for (const ch of (inv.resumenChoferes || [])) {
+        if (!ch.ciudad) continue
+        ;(acc[ch.nombre] = acc[ch.nombre] || new Set()).add(ch.ciudad)
+      }
+    }
+    return acc
+  }, [invoices])
+
   const canonicos = useMemo(() => {
+    // Solo se ofrecen como candidatos los choferes de la MISMA ciudad de esta factura
+    // (o los que aún no tienen ciudad conocida). Si aún no hay ciudad asignada, no se
+    // filtra. Los del archivo de "rates" no tienen ciudad → se incluyen.
+    const ciudadesFact = new Set((ciudadPorArchivo || []).filter(Boolean))
+    const mismaCiudad = (nombre) => {
+      if (ciudadesFact.size === 0) return true
+      const set = ciudadesDeDriverNombre[nombre]
+      if (!set || set.size === 0) return true
+      for (const c of set) if (ciudadesFact.has(c)) return true
+      return false
+    }
     const out = []
     const vistos = new Set()
     for (const d of drivers) {
       const norm = normNombre(d.nombre)
       if (!norm || vistos.has(norm)) continue
+      if (!mismaCiudad(d.nombre)) continue
       vistos.add(norm)
       out.push({ nombre: d.nombre, norm, toks: tokensNombre(d.nombre), aliasNorm: (d.alias || []).map(normNombre) })
     }
@@ -114,7 +139,7 @@ export default function CargarFactura() {
       out.push({ nombre: p.nombre, norm, toks: tokensNombre(p.nombre), aliasNorm: [] })
     }
     return out
-  }, [drivers, ratesList])
+  }, [drivers, ratesList, ciudadPorArchivo, ciudadesDeDriverNombre])
 
   // Nombres crudos de "Courier" presentes en los archivos.
   const rawCouriers = useMemo(
