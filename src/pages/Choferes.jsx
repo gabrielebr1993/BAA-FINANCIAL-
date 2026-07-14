@@ -29,6 +29,9 @@ export default function Choferes() {
   const nombreCiudadCorto = (cod) => (ciudadesEmpresa || []).find((c) => c.codigo === cod)?.nombre || nombreCiudad(cod)
   const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
+  // El dueño/súper-admin ven Gastos fijos de todas las ciudades; el ADMIN también
+  // los gestiona pero solo de SU ciudad (ManagersPanel ya respeta ciudadBloqueada).
+  const puedeGastos = esDueno || perfil?.role === 'admin'
   const navigate = useNavigate()
 
   // Ciudad "de casa" de cada chofer (por nombre): donde tiene más paquetes en TODAS
@@ -359,8 +362,8 @@ export default function Choferes() {
     <div>
       <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">Semana: <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>Choferes y Tarifas</PageTitle>
 
-      {/* Gastos fijos solo lo ve/gestiona el dueño; el manager no. */}
-      {esDueno && (
+      {/* Gastos fijos: dueño/súper-admin (todas las ciudades) y admin (solo su ciudad). El manager no. */}
+      {puedeGastos && (
         <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
           {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Gastos fijos' }].map((t) => (
             <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
@@ -370,7 +373,7 @@ export default function Choferes() {
         </div>
       )}
 
-      {esDueno && tab === 'managers' ? (
+      {puedeGastos && tab === 'managers' ? (
         <ManagersPanel />
       ) : (
        <>

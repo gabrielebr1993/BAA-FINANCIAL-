@@ -20,12 +20,11 @@ export default function Pagos() {
   const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
   const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   const puedePagar = esSuperAdmin || perfil?.role === 'owner'
-  // INGRESO por chofer ("cuánto genera cada chofer"): lo ven el dueño, el
-  // súper-admin y también el ADMIN (para su ciudad). La GANANCIA / margen
-  // (ganancia por chofer y ganancia real) sigue siendo SOLO del dueño/súper-admin.
-  // Un manager solo ve lo necesario para PAGAR (entregas, tarifas, total a pagar).
+  // INGRESO y GANANCIA por chofer: los ven el dueño, el súper-admin y también
+  // el ADMIN (para su ciudad). Un manager solo ve lo necesario para PAGAR
+  // (entregas, tarifas, descuento por claims y total a pagar).
   const verIngreso = puedePagar || perfil?.role === 'admin'
-  const verGanancia = puedePagar
+  const verGanancia = puedePagar || perfil?.role === 'admin'
   const [payrollMap, setPayrollMap] = useState({})
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
   const [stripeMsg, setStripeMsg] = useState(null)
