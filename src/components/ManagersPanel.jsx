@@ -5,7 +5,7 @@ import { Building2, Users, Landmark } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
-import { costoManagers } from '../utils/calc'
+import { costoManagers, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
@@ -15,10 +15,14 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
   const navigate = useNavigate()
-  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango, selectedCity } = useData()
   const { ciudadBloqueada, ciudadUsuario } = useAuth()
-  // Usuario asignado a una ciudad: solo ve/gestiona los gastos fijos de SU ciudad.
-  const managers = ciudadBloqueada ? managersAll.filter((m) => (m.ciudad || '') === ciudadUsuario) : managersAll
+  // Gastos fijos visibles según la ciudad seleccionada en la barra global:
+  //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
+  //  - Ciudad elegida (≠ Todas): solo los de esa ciudad.
+  //  - "Todas": todos.
+  const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
+  const managers = ciudadFiltro ? managersAll.filter((m) => (m.ciudad || '') === ciudadFiltro) : managersAll
   const ciudadesForm = ciudadBloqueada ? (ciudadesEmpresa || []).filter((c) => c.codigo === ciudadUsuario) : (ciudadesEmpresa || []).filter((c) => c.codigo)
   const exportarBancarios = () => exportarDatosBancarios(managers.map((m) => ({ nombre: m.nombre, verificacion: m.verificacion })), `datos-bancarios-gastos-fijos_${new Date().toISOString().slice(0, 10)}`)
   const [form, setForm] = useState(vacio)
