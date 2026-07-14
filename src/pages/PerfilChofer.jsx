@@ -31,12 +31,12 @@ export default function PerfilChofer() {
   const { nombre } = useParams()
   const navigate = useNavigate()
   const decoded = decodeURIComponent(nombre || '')
-  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes } = useData()
+  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
   const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
-  const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
+  const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity, ajustesPorChofer), [inv, claims, drivers, selectedCity, ajustesPorChofer])
   const prom = useMemo(() => promediosFlota(pagos), [pagos])
   const pago = useMemo(() => pagos.find((p) => p.nombre === decoded) || null, [pagos, decoded])
   const calif = useMemo(() => (pago ? calificarChofer({ ...pago, paquetes: pago.individuales + pago.dobles }, prom) : null), [pago, prom])
@@ -58,7 +58,7 @@ export default function PerfilChofer() {
     return [...invoicesRango]
       .map((f) => {
         const claimsSemana = claims.filter((c) => c.invoiceId === f.id)
-        const p = calcularPagos(f, claimsSemana, drivers, selectedCity).find((x) => x.nombre === decoded)
+        const p = calcularPagos(f, claimsSemana, drivers, selectedCity, f.ajustesPago || null).find((x) => x.nombre === decoded)
         if (!p) return null
         return {
           id: f.id,
@@ -184,7 +184,7 @@ export default function PerfilChofer() {
               <div className="flex flex-wrap gap-3">
               <KPI label="Entregas" value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ind · ${num(pago.dobles)} dob`} />
               <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
-              <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : undefined} />
+              <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={[pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : '', pago.prestamo > 0 ? `−${money(pago.prestamo)} préstamo` : '', pago.bono > 0 ? `+${money(pago.bono)} bono` : ''].filter(Boolean).join(' · ') || undefined} />
               <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
               <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
               <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />

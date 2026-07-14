@@ -238,6 +238,21 @@ export function DataProvider({ children }) {
     return extra.length ? [...claims, ...extra] : claims
   }, [claims, invoicesRango])
 
+  // Ajustes manuales de pago (préstamo/bono) por chofer, SUMADOS sobre las facturas
+  // del rango. Cada factura guarda inv.ajustesPago = { [driverKey]: {prestamo,bono} }.
+  const ajustesPorChofer = useMemo(() => {
+    const acc = {}
+    for (const inv of invoicesRango) {
+      const m = inv.ajustesPago || {}
+      for (const [k, v] of Object.entries(m)) {
+        acc[k] = acc[k] || { prestamo: 0, bono: 0 }
+        acc[k].prestamo += Number(v.prestamo) || 0
+        acc[k].bono += Number(v.bono) || 0
+      }
+    }
+    return acc
+  }, [invoicesRango])
+
   // La ciudad elegida es MANUAL y se respeta siempre (aunque esté en 0). Se mantiene
   // persistida; NO se rebota a "Todas". El usuario cambia de ciudad cuando quiere.
 
@@ -306,6 +321,7 @@ export function DataProvider({ children }) {
     drivers,
     managers,
     claims: claimsEfectivos,
+    ajustesPorChofer,
     ajustes,
     ciudadesEmpresa: (ajustes?.ciudades || []),
     reloadAjustes: () => cargarAjustes(activeCompanyId),

@@ -22,20 +22,20 @@ import RankingCalificacion from '../components/RankingCalificacion'
 import Onboarding from '../components/Onboarding'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, selectedCity, setSelectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, vista, cargando } = useData()
   const navigate = useNavigate()
   // Navega a una sección y, opcionalmente, preselecciona la ciudad de destino.
   const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
   // Navega al perfil completo de un chofer.
   const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
-  const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length)), [inv, claims, drivers, managers, selectedCity, invoicesRango])
+  const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length), ajustesPorChofer), [inv, claims, drivers, managers, selectedCity, invoicesRango, ajustesPorChofer])
   const esRango = !!inv?.esRango
   const variasSemanas = invoicesRango.length > 1
 
   const rc = useMemo(() => rankingsChoferes(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
   const rr = useMemo(() => rankingsRutas(inv, drivers, selectedCity), [inv, drivers, selectedCity])
   const tot = useMemo(() => totalesFiltrados(inv, selectedCity), [inv, selectedCity])
-  const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
+  const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity, ajustesPorChofer), [inv, claims, drivers, selectedCity, ajustesPorChofer])
   const claimEco = useMemo(() => economiaClaims(claimsDeCiudad(claims, selectedCity, inv), inv), [claims, selectedCity, inv])
 
   const invAnterior = useMemo(() => {

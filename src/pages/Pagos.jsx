@@ -17,7 +17,7 @@ const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
   const { perfil, esSuperAdmin } = useAuth()
-  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, cargando, ajustes, empresaActiva } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   const puedePagar = esSuperAdmin || perfil?.role === 'owner'
   // SOLO dueño/súper-admin ven lo relacionado con GANANCIA (ingreso de Gofo,
   // ganancia total y por chofer). Un manager con acceso a Pagos solo ve lo
@@ -62,7 +62,29 @@ export default function Pagos() {
     cargarPayroll()
   }, [cargarPayroll])
 
-  const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
+  // Ajustes manuales (préstamo/bono) por chofer, guardados EN la factura de la semana.
+  const invActual = invoicesRango.length === 1 ? invoicesRango[0] : null
+  const [editAjuste, setEditAjuste] = useState({}) // nombre -> { prestamo, bono }
+  const [guardandoAjuste, setGuardandoAjuste] = useState(null)
+  const driverKey = (n) => (n || '').trim().toLowerCase()
+  const guardarAjuste = async (nombre) => {
+    if (!invActual) return
+    const k = driverKey(nombre)
+    const e = editAjuste[nombre] || {}
+    const prestamo = Number(e.prestamo) || 0
+    const bono = Number(e.bono) || 0
+    setGuardandoAjuste(nombre)
+    try {
+      const nuevo = { ...(invActual.ajustesPago || {}) }
+      if (!prestamo && !bono) delete nuevo[k]
+      else nuevo[k] = { prestamo, bono }
+      await updateDoc(doc(db, 'invoices', invActual.id), { ajustesPago: nuevo })
+      await reloadInvoices()
+      setEditAjuste((s) => { const n = { ...s }; delete n[nombre]; return n })
+    } finally { setGuardandoAjuste(null) }
+  }
+
+  const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity, ajustesPorChofer), [selectedInvoice, claims, drivers, selectedCity, ajustesPorChofer])
   // Modo POR RUTA: mostramos la ruta de cada chofer (de la factura, o su ruta guardada).
   const esRuta = selectedInvoice?.modoConfig === 'ruta'
   const rutaDe = (nombre) => selectedInvoice?.asignacionRuta?.[nombre] || buscarDriver(drivers, nombre)?.rutaDefault || '—'
@@ -295,6 +317,11 @@ export default function Pagos() {
                         pagandoStripe={pagandoStripe === p.nombre}
                         onPagarStripe={pagarStripe}
                         avisoPago={!esRango && p.estado === 'pagado' ? avisoPagoDe(p) : null}
+                        puedeEditarAjuste={!esRango && puedePagar}
+                        editAjuste={editAjuste[p.nombre]}
+                        setEditAjuste={(campo, val) => setEditAjuste((s) => ({ ...s, [p.nombre]: { ...(s[p.nombre] || { prestamo: p.prestamo || '', bono: p.bono || '' }), [campo]: val } }))}
+                        onGuardarAjuste={() => guardarAjuste(p.nombre)}
+                        guardandoAjuste={guardandoAjuste === p.nombre}
                       />
                     ))}
                   </tbody>
@@ -340,7 +367,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -360,7 +387,15 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
         <td className={TD}>{money(p.tarifaInd)}</td>
         <td className={TD}>{money(p.tarifaDoble)}</td>
         <td className={`${TD} text-rose-600 dark:text-rose-400`}>{money(p.descuentoClaims)}</td>
-        <td className={`${TD} font-bold`}>{money(p.totalPagar)}</td>
+        <td className={`${TD} font-bold`}>
+          {money(p.totalPagar)}
+          {(p.prestamo > 0 || p.bono > 0) && (
+            <div className="text-[10px] font-medium">
+              {p.prestamo > 0 && <span className="text-rose-500">−{money(p.prestamo)} préstamo </span>}
+              {p.bono > 0 && <span className="text-emerald-500">+{money(p.bono)} bono</span>}
+            </div>
+          )}
+        </td>
         {verGanancia && <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>}
         <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
         <td className={TD}>
@@ -398,6 +433,28 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
       {abierto && (
         <tr className="bg-slate-50 dark:bg-slate-800/40">
           <td colSpan={(verGanancia ? 12 : 10) + (esRuta ? 1 : 0)} className="px-4 py-2.5">
+            {/* Ajustes: préstamo (se descuenta) y bono (se suma) */}
+            {puedeEditarAjuste && (
+              <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
+                <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-slate-100">Ajustes de pago de {p.nombre}</div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Préstamo / descuento ($)</div>
+                    <Input type="number" step="0.01" min="0" className="w-32" value={editAjuste?.prestamo ?? (p.prestamo || '')} onChange={(e) => setEditAjuste('prestamo', e.target.value)} placeholder="0" />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Bono ($)</div>
+                    <Input type="number" step="0.01" min="0" className="w-32" value={editAjuste?.bono ?? (p.bono || '')} onChange={(e) => setEditAjuste('bono', e.target.value)} placeholder="0" />
+                  </div>
+                  <Boton variant="gold" disabled={guardandoAjuste} onClick={onGuardarAjuste} className="px-3 py-2 text-sm">
+                    {guardandoAjuste ? <Spinner /> : 'Guardar ajuste'}
+                  </Boton>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Se resta el préstamo y se suma el bono al <b>Total a Pagar</b>. Se refleja en el dashboard, finanzas y el perfil del chofer.
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Claims de {p.nombre} ({claimsChofer.length})</div>
             {claimsChofer.length === 0 ? (
               <div className="text-sm text-slate-400">Sin claims.</div>

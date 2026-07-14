@@ -358,7 +358,10 @@ export function claimsValidosPorChofer(claims) {
 
 // Calcula la nómina (payroll) por chofer para una factura, con el filtro de ciudad.
 // Devuelve filas con ingreso, tarifas, descuento de claims, total a pagar y ganancia.
-export function calcularPagos(inv, claims, drivers, ciudad) {
+// `ajustesPorChofer` (opcional): mapa nombre.toLowerCase() -> { prestamo, bono }.
+// Se aplica UNA vez por chofer (a su fila principal si tiene varias ciudades):
+//   totalPagar = pagoBase − descuentoClaims − prestamo + bono.
+export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = null) {
   const choferesFull = inv?.resumenChoferes || []
   const choferes = porCiudad(choferesFull, ciudad)
 
@@ -385,7 +388,7 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
     if (!perdon) (activosDet[key] = activosDet[key] || []).push(c)
   }
 
-  return choferes.map((ch) => {
+  const filas = choferes.map((ch) => {
     const { tarifaInd, tarifaDoble, sinTarifa } = tarifaDriver(inv, drivers, ch.nombre)
     const key = K(ch.nombre, ch.ciudad)
     const misActivos = activosDet[key] || []
@@ -422,12 +425,34 @@ export function calcularPagos(inv, claims, drivers, ciudad) {
       descuentoClaims,
       descontadoGofo,
       gananciaClaims: descuentoClaims - descontadoGofo,
+      prestamo: 0,
+      bono: 0,
       totalPagar,
       // Ganancia NETA para la empresa: ingreso bruto − pago al chofer − lo que Gofo
       // te descontó por claims (lo que recuperas del chofer ya está en totalPagar).
       ganancia: ch.ingreso - totalPagar - descontadoGofo,
     }
   })
+
+  // Ajustes manuales (préstamo/bono) por chofer: se aplican una sola vez por chofer
+  // (a la primera fila = ciudad principal) para no duplicar en choferes multi-ciudad.
+  if (ajustesPorChofer) {
+    const aplicado = new Set()
+    for (const r of filas) {
+      const k = (r.nombre || '').trim().toLowerCase()
+      const adj = ajustesPorChofer[k]
+      if (!adj || aplicado.has(k)) continue
+      aplicado.add(k)
+      const prestamo = Number(adj.prestamo) || 0
+      const bono = Number(adj.bono) || 0
+      if (!prestamo && !bono) continue
+      r.prestamo = prestamo
+      r.bono = bono
+      r.totalPagar = r.totalPagar - prestamo + bono
+      r.ganancia = r.ingreso - r.totalPagar - r.descontadoGofo
+    }
+  }
+  return filas
 }
 
 // Nómina EXACTA por una ruta puntual, usando el desglose por (chofer, ruta) que
@@ -539,8 +564,8 @@ export function costoManagers(managers, semanas = 1, ciudad) {
 // si una ciudad, se aproxima con entregas(ciudad) + claimsGofo(ciudad).
 // El costo de managers respeta el filtro de ciudad (solo los de esa ciudad, o el
 // total si es "Todas").
-export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas = 1) {
-  const pagos = calcularPagos(inv, claims, drivers, ciudad)
+export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas = 1, ajustesPorChofer = null) {
+  const pagos = calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer)
   const costoChoferes = pagos.reduce((a, p) => a + p.totalPagar, 0)
   const esTodas = !ciudad || ciudad === TODAS
   let ingresoNeto
@@ -581,10 +606,10 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
 }
 
 // Desglose de ganancia real POR CIUDAD (una fila por ciudad de la factura).
-export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas = 1) {
+export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas = 1, ajustesPorChofer = null) {
   return (inv?.resumenCiudades || [])
     .map((c) => {
-      const g = gananciaRealDe(inv, claims, drivers, managers, c.ubicacion, semanas)
+      const g = gananciaRealDe(inv, claims, drivers, managers, c.ubicacion, semanas, ajustesPorChofer)
       return { code: c.ubicacion, nombreCiudad: nombreCiudadDe(inv, c.ubicacion), ...g }
     })
     .sort((a, b) => b.gananciaReal - a.gananciaReal)
