@@ -139,14 +139,22 @@ export function DataProvider({ children }) {
 
   // Claims por conjunto de facturas. Se filtra también por companyId para ser
   // compatible con las reglas de seguridad (una query lista debe acotar por empresa).
-  const cargarClaimsDe = useCallback(async (ids, cid) => {
-    if (!ids || ids.length === 0 || !cid) { setClaims([]); return }
-    const partes = await Promise.all(
-      ids.map((id) =>
-        getDocs(query(collection(db, 'claims'), where('companyId', '==', cid), where('invoiceId', '==', id))).then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })))
-      )
-    )
-    setClaims(partes.flat())
+  // Carga claims del rango por invoiceId Y por SEMANA. Cargar por semana hace que un
+  // claim aparezca aunque su documento haya quedado bajo OTRA factura de la misma
+  // semana (facturas duplicadas). Se deduplica por id de documento; los waybills
+  // repetidos se colapsan luego en claimsValidos.
+  const cargarClaimsDe = useCallback(async (ids, semanas, cid) => {
+    const listaIds = (ids || []).filter(Boolean)
+    const listaSem = [...new Set((semanas || []).filter(Boolean))]
+    if (!cid || (listaIds.length === 0 && listaSem.length === 0)) { setClaims([]); return }
+    const consultas = [
+      ...listaIds.map((id) => getDocs(query(collection(db, 'claims'), where('companyId', '==', cid), where('invoiceId', '==', id)))),
+      ...listaSem.map((s) => getDocs(query(collection(db, 'claims'), where('companyId', '==', cid), where('semana', '==', s)))),
+    ]
+    const snaps = await Promise.all(consultas)
+    const map = {}
+    for (const snap of snaps) for (const d of snap.docs) map[d.id] = { id: d.id, ...d.data() }
+    setClaims(Object.values(map))
   }, [])
 
   // Cargar empresas al iniciar sesión.
@@ -222,6 +230,8 @@ export function DataProvider({ children }) {
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
+  const rangoSemanas = invoicesRango.map((i) => i.semana).filter(Boolean)
+  const rangoSemanasKey = [...new Set(rangoSemanas)].sort().join('|')
 
   // Claims EFECTIVOS: los de la colección + un respaldo EMBEBIDO en la factura
   // (inv.claimsData) para las facturas del rango que no trajeron ningún claim de la
@@ -271,9 +281,9 @@ export function DataProvider({ children }) {
   }, [ciudadBloqueada, ciudadUsuario, selectedCity])
 
   useEffect(() => {
-    cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
+    cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], rangoSemanas, activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangoKey, activeCompanyId, cargarClaimsDe])
+  }, [rangoKey, rangoSemanasKey, activeCompanyId, cargarClaimsDe])
 
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null
 
@@ -352,7 +362,7 @@ export function DataProvider({ children }) {
     reloadInvoices: () => cargarInvoices(activeCompanyId),
     reloadDrivers: () => cargarDrivers(activeCompanyId),
     reloadManagers: () => cargarManagers(activeCompanyId),
-    reloadClaims: () => cargarClaimsDe(rangoIds, activeCompanyId),
+    reloadClaims: () => cargarClaimsDe(rangoIds, rangoSemanas, activeCompanyId),
   }
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
