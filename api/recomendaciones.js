@@ -14,6 +14,39 @@ const round = (x) => Math.round(num(x) * 100) / 100
 const fecha = (t) => { try { return t?.toDate ? t.toDate() : (t?.seconds ? new Date(t.seconds * 1000) : null) } catch { return null } }
 const norm = (s) => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
+// Acota TODOS los datos a UNA ciudad (rol admin fijado a su ciudad): filtra
+// choferes/rutas dentro de cada factura y recalcula los totales de esa factura
+// solo con lo de la ciudad. Así las recomendaciones son SOLO de su ciudad.
+function acotarACiudad(invoices, drivers, claims, ciudad) {
+  if (!ciudad) return { invoices, drivers, claims }
+  const drv = drivers.filter((d) => (d.ciudad || '') === ciudad)
+  const nombresCiudad = new Set(drv.map((d) => norm(d.nombre)))
+  const cl = (claims || []).filter((c) => (c.ciudad ? c.ciudad === ciudad : nombresCiudad.has(norm(c.courier))))
+  const gofoPorInv = {}
+  for (const c of cl) { const k = c.invoiceId || ''; gofoPorInv[k] = (gofoPorInv[k] || 0) + Math.abs(Number(c.montoGofo) || 0) }
+  const invs = []
+  for (const inv of invoices) {
+    const chof = (inv.resumenChoferes || []).filter((c) => (c.ciudad || '') === ciudad)
+    const rutas = (inv.resumenRutas || []).filter((r) => (r.ciudad || '') === ciudad)
+    if (chof.length === 0) continue // esta factura no tiene datos de la ciudad
+    const ind = chof.reduce((a, c) => a + num(c.individuales), 0)
+    const dob = chof.reduce((a, c) => a + num(c.dobles), 0)
+    invs.push({
+      ...inv,
+      resumenChoferes: chof,
+      resumenRutas: rutas,
+      ingresoTotal: round(chof.reduce((a, c) => a + num(c.ingreso), 0)),
+      totalIndividuales: ind,
+      totalDobles: dob,
+      totalPaquetes: ind + dob,
+      totalClaims: chof.reduce((a, c) => a + num(c.numClaims), 0),
+      totalFallidos: chof.reduce((a, c) => a + num(c.fallidos), 0),
+      totalDescuentoGofo: round(gofoPorInv[inv.id] || 0),
+    })
+  }
+  return { invoices: invs, drivers: drv, claims: cl }
+}
+
 // Señales analíticas de una semana (con tendencia vs la anterior).
 function calcularSenales(invoices, drivers, semanaTxt, claims) {
   const orden = [...invoices].map((i) => ({ ...i, _fi: fecha(i.fechaInicio) })).sort((a, b) => (b._fi?.getTime() || 0) - (a._fi?.getTime() || 0))
@@ -104,15 +137,23 @@ export default async function handler(req, res) {
     if (auth.error) return res.status(auth.code).json({ ok: false, error: auth.error })
     const { companyId, semana } = req.body || {}
     if (!companyId) return res.status(400).json({ ok: false, error: 'Falta companyId.' })
-    const esOwner = auth.caller && auth.caller.role === 'owner' && auth.caller.companyId === companyId
-    if (!auth.esSuper && !esOwner) return res.status(403).json({ ok: false, error: 'Solo el dueño o súper-admin.' })
+    const mismaEmpresa = auth.caller && auth.caller.companyId === companyId
+    const esOwner = mismaEmpresa && auth.caller.role === 'owner'
+    const esAdmin = mismaEmpresa && auth.caller.role === 'admin'
+    if (!auth.esSuper && !esOwner && !esAdmin) return res.status(403).json({ ok: false, error: 'No tienes permiso para ver recomendaciones.' })
+    // El admin queda ACOTADO a su ciudad.
+    const ciudadFiltro = (esAdmin && auth.caller.ciudad) ? auth.caller.ciudad : null
 
     const invSnap = await auth.db.collection('invoices').where('companyId', '==', companyId).get()
-    const invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    let invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
     const drvSnap = await auth.db.collection('drivers').where('companyId', '==', companyId).get()
-    const drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    let drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
     let claims = []
     try { const cs = await auth.db.collection('claims').where('companyId', '==', companyId).get(); claims = cs.docs.map((d) => ({ id: d.id, ...d.data() })) } catch { /* noop */ }
+    if (ciudadFiltro) {
+      const r = acotarACiudad(invoices, drivers, claims, ciudadFiltro)
+      invoices = r.invoices; drivers = r.drivers; claims = r.claims
+    }
 
     const senales = calcularSenales(invoices, drivers, semana, claims)
     if (!senales) return res.status(200).json({ ok: true, semana: null, recomendaciones: [] })

@@ -14,10 +14,13 @@ const COLOR_PRIO = ['#c9a24b', '#c9a24b', '#d97706', '#64748b', '#64748b']
 
 export default function RecomendacionesJarvis() {
   const navigate = useNavigate()
-  const { perfil, esSuperAdmin } = useAuth()
+  const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
   const { activeCompanyId, facturaRango } = useData()
-  const puede = esSuperAdmin || perfil?.role === 'owner'
+  // Dueño, súper-admin y admin (este último con recomendaciones SOLO de su ciudad,
+  // el backend acota los datos por la ciudad del admin).
+  const puede = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const semana = facturaRango?.semana || null
+  const ciudadCache = ciudadBloqueada ? ciudadUsuario : ''
 
   const [recs, setRecs] = useState([])
   const [cargando, setCargando] = useState(false)
@@ -25,7 +28,7 @@ export default function RecomendacionesJarvis() {
 
   // Se guarda en localStorage por empresa+semana: se genera UNA vez por semana y
   // los siguientes refrescos la leen guardada (no vuelve a llamar a la IA).
-  const claveCache = activeCompanyId && semana ? `milepay_recs_${activeCompanyId}_${semana}` : null
+  const claveCache = activeCompanyId && semana ? `milepay_recs_${activeCompanyId}_${ciudadCache}_${semana}` : null
   const leerCache = () => { try { return claveCache ? JSON.parse(localStorage.getItem(claveCache) || 'null') : null } catch { return null } }
   const guardarCache = (arr) => { try { if (claveCache) localStorage.setItem(claveCache, JSON.stringify(arr)) } catch { /* almacenamiento no disponible */ } }
 
