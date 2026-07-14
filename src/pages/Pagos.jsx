@@ -10,7 +10,7 @@ import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { PLANTILLA_PAGO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } from '../utils/mensajes'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
@@ -109,6 +109,9 @@ export default function Pagos() {
   const totIngreso = filtrados.reduce((a, p) => a + p.ingreso, 0)
   const totPagar = filtrados.reduce((a, p) => a + p.totalPagar, 0)
   const totGanancia = filtrados.reduce((a, p) => a + p.ganancia, 0)
+  const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
+  const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
+  const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
   const nPend = pagosConEstado.filter((p) => p.estado === 'pendiente').length
   const nPag = pagosConEstado.filter((p) => p.estado === 'pagado').length
 
@@ -231,7 +234,8 @@ export default function Pagos() {
         <>
           <div className="mb-2 flex flex-wrap gap-3">
             {verGanancia && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" />
+            <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" sub={subAjustes} />
+            {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />}
             <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Route, Settings2 } from 'lucide-react'
+import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Route, Settings2, Eye, EyeOff, HandCoins, Gift } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
@@ -34,6 +34,7 @@ export default function PerfilChofer() {
   const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
   const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
+  const [verDatos, setVerDatos] = useState(false) // ojo: mostrar datos sensibles (personal/banco/Stripe)
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
   const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity, ajustesPorChofer), [inv, claims, drivers, selectedCity, ajustesPorChofer])
@@ -186,15 +187,31 @@ export default function PerfilChofer() {
               <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
               <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={[pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : '', pago.prestamo > 0 ? `−${money(pago.prestamo)} préstamo` : '', pago.bono > 0 ? `+${money(pago.bono)} bono` : ''].filter(Boolean).join(' · ') || undefined} />
               <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
+              <KPI label="Préstamo (loan)" value={pago.prestamo > 0 ? `−${money(pago.prestamo)}` : money(0)} icon={HandCoins} accent="red" sub="descuento" />
+              <KPI label="Bono" value={pago.bono > 0 ? `+${money(pago.bono)}` : money(0)} icon={Gift} accent="green" sub="a favor" />
               <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
               <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
               </div>
             </div>
           )}
 
-          {/* Verificación del chofer + estado de pago (Stripe). Solo owner/súper-admin. */}
+          {/* Verificación del chofer + estado de pago (Stripe). Datos sensibles ocultos
+              por defecto (información personal, bancaria y Stripe): se muestran con el ojo. */}
           <div className="mb-4">
-            <VerificacionChofer driver={driver} activeCompanyId={activeCompanyId} onReload={reloadDrivers} />
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-400">Datos personales, bancarios y Stripe</h3>
+              <button onClick={() => setVerDatos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verDatos ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}>
+                {verDatos ? <EyeOff size={15} strokeWidth={1.9} /> : <Eye size={15} strokeWidth={1.9} />}
+                {verDatos ? 'Ocultar datos' : 'Ver datos'}
+              </button>
+            </div>
+            {verDatos ? (
+              <VerificacionChofer driver={driver} activeCompanyId={activeCompanyId} onReload={reloadDrivers} />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-800/40">
+                Información personal, bancaria y de Stripe oculta. Toca <b>“Ver datos”</b> para mostrarla.
+              </div>
+            )}
           </div>
 
           {pago && tiposChofer.length > 0 && (

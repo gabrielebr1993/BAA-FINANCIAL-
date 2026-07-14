@@ -595,6 +595,9 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     cMgr = sueldoDe([...match, ...huerfanos])
   }
   const ganancia = ingresoNeto - costoChoferes - cMgr
+  // Ajustes manuales incluidos en el pago a choferes (para transparencia contable).
+  const totalPrestamo = pagos.reduce((a, p) => a + (Number(p.prestamo) || 0), 0)
+  const totalBono = pagos.reduce((a, p) => a + (Number(p.bono) || 0), 0)
   return {
     ingresoNeto,
     costoChoferes,
@@ -602,6 +605,8 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     gananciaReal: ganancia,
     margen: ingresoNeto > 0 ? ganancia / ingresoNeto : 0,
     ingresoAprox: !esTodas, // en una ciudad el ingreso neto es aproximado
+    totalPrestamo,
+    totalBono,
   }
 }
 

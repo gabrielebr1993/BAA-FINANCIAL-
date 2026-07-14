@@ -17,6 +17,11 @@ export default function GananciaReal({ g, ciudadLabel, claims }) {
           <span className="text-slate-600 dark:text-slate-300">− Pago a choferes</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoChoferes)}</span>
         </div>
+        {(g.totalPrestamo > 0 || g.totalBono > 0) && (
+          <div className="flex items-center justify-between pl-3 text-xs">
+            <span className="text-slate-400">↳ incluye ajustes: {g.totalPrestamo > 0 ? `−${money(g.totalPrestamo)} préstamos` : ''}{g.totalPrestamo > 0 && g.totalBono > 0 ? ' · ' : ''}{g.totalBono > 0 ? `+${money(g.totalBono)} bonos` : ''}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">− Gastos fijos{ciudadLabel ? ` (${ciudadLabel})` : ''}</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoManagers)}</span>
