@@ -813,11 +813,11 @@ export default function CargarFactura() {
 
       {combinado && (
         <>
-          {/* Asignación MANUAL de ciudad por archivo */}
+          {/* Ciudad por archivo: automática (detectada) con opción de cambiarla */}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Asigna la ciudad de cada archivo</h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ciudad de cada archivo</h3>
             <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-              Confirma (o cambia) la ciudad de cada archivo. Es obligatorio y es la ciudad que se guardará (no la auto-detectada). Cada archivo se guarda en su propia ciudad, así que no se mezclan los datos.
+              La ciudad se detecta <strong>automáticamente</strong> desde la factura. Si es una ciudad nueva, se <strong>crea y se guarda sola</strong> en tu configuración (Mis ciudades) al guardar la factura, con sus reglas por defecto. Puedes cambiarla si hace falta; si la cambias a mano, se marca como <strong>Manual</strong>.
             </p>
             <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -826,7 +826,7 @@ export default function CargarFactura() {
                     <th className="px-3 py-2 text-left font-semibold">Archivo</th>
                     <th className="px-3 py-2 text-left font-semibold">Semana</th>
                     <th className="px-3 py-2 text-left font-semibold">Detectada</th>
-                    <th className="px-3 py-2 text-left font-semibold">Ciudad (manual) *</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ciudad (automática) *</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -836,12 +836,22 @@ export default function CargarFactura() {
                       <td className="px-3 py-2">{p.semana || '—'}</td>
                       <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{p.ciudadesDetectadas.map(nombreCiudad).join(', ') || '—'}</td>
                       <td className="px-3 py-2">
-                        <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
-                          <option value="">— Elegir ciudad —</option>
-                          {opcionesCiudad.map((c) => (
-                            <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
-                          ))}
-                        </Select>
+                        <div className="flex flex-col gap-1">
+                          <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
+                            <option value="">— Elegir ciudad —</option>
+                            {opcionesCiudad.map((c) => (
+                              <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
+                            ))}
+                          </Select>
+                          {(() => {
+                            const sugerido = codigoConfigurado(p.ciudadesDetectadas[0] || '')
+                            if (!ciudadPorArchivo[i]) return null
+                            const auto = ciudadPorArchivo[i] === sugerido
+                            return auto
+                              ? <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">● Automática</span>
+                              : <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">● Manual</span>
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   ))}
