@@ -140,13 +140,29 @@ export default function CargarFactura() {
     [canonicos]
   )
 
-  // Opciones del selector de ciudad: las de ESTA empresa + personalizadas + detectadas.
+  // Mapea un código DETECTADO al código CONFIGURADO de la empresa si tienen el mismo
+  // NOMBRE (evita ciudades duplicadas: se usa siempre el código configurado).
+  const codigoConfigurado = (code) => {
+    if (!code) return code
+    const nom = String(nombreCiudad(code)).trim().toLowerCase()
+    const conf = (ciudadesEmpresa || []).find((c) => c.codigo && String(c.nombre || '').trim().toLowerCase() === nom)
+    return conf ? conf.codigo : code
+  }
+
+  // Opciones del selector de ciudad: empresa + personalizadas + detectadas, pero
+  // DEDUPLICADAS por NOMBRE (una sola por ciudad) prefiriendo el código configurado.
   const opcionesCiudad = useMemo(() => {
-    const map = new Map()
-    ;(ciudadesEmpresa || []).forEach((c) => { if (c.codigo) map.set(c.codigo, c.nombre) })
-    ciudadesExtra.forEach((c) => map.set(c.codigo, c.nombre))
-    procesados.forEach((p) => p.ciudadesDetectadas.forEach((code) => { if (!map.has(code)) map.set(code, nombreCiudad(code)) }))
-    return [...map.entries()].map(([codigo, nombre]) => ({ codigo, nombre }))
+    const porNombre = new Map() // nombre -> { codigo, pri }
+    const add = (codigo, nombre, pri) => {
+      if (!codigo) return
+      const nom = String(nombre || codigo).trim()
+      const prev = porNombre.get(nom)
+      if (!prev || pri > prev.pri) porNombre.set(nom, { codigo, pri })
+    }
+    ;(ciudadesEmpresa || []).forEach((c) => add(c.codigo, c.nombre, 2))
+    ciudadesExtra.forEach((c) => add(c.codigo, c.nombre, 2))
+    procesados.forEach((p) => p.ciudadesDetectadas.forEach((code) => add(code, nombreCiudad(code), 1)))
+    return [...porNombre.entries()].map(([nombre, v]) => ({ codigo: v.codigo, nombre }))
   }, [ciudadesEmpresa, ciudadesExtra, procesados])
 
   // Combinado recalculado con la ciudad MANUAL de cada archivo. Además reclasifica
@@ -214,7 +230,7 @@ export default function CargarFactura() {
       setPrecios(p0)
 
       setProcesados(procs)
-      setCiudadPorArchivo(procs.map((p) => p.ciudadesDetectadas[0] || '')) // sugerencia por defecto
+      setCiudadPorArchivo(procs.map((p) => codigoConfigurado(p.ciudadesDetectadas[0] || ''))) // sugerencia: código configurado si coincide el nombre
       setSemana(semanaFinal)
       setAvisos(nuevosAvisos)
       setErrores(nuevosErrores)
