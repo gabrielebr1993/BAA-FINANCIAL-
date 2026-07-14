@@ -191,6 +191,27 @@ export function porCiudad(arr, ciudad, campo = 'ciudad') {
   return arr.filter((x) => (x[campo] || x.ubicacion) === ciudad)
 }
 
+// Filtra CLAIMS por ciudad de forma ROBUSTA: por su código de ciudad y, si ese
+// código no existe en la factura (claim con la ciudad vacía o mal guardada de una
+// carga anterior), lo ubica por la ciudad de SU chofer en el resumen. Así un claim
+// no "desaparece" al filtrar por ciudad aunque su código quedó desalineado.
+export function claimsDeCiudad(claims, ciudad, inv) {
+  const lista = claims || []
+  if (!ciudad || ciudad === TODAS) return lista
+  const codigosInv = new Set((inv?.resumenCiudades || []).map((c) => c.ubicacion))
+  const choferesCiudad = new Set(
+    (inv?.resumenChoferes || []).filter((c) => (c.ciudad || c.ubicacion) === ciudad).map((c) => c.nombre)
+  )
+  return lista.filter((c) => {
+    const cc = c.ciudad || c.ubicacion || ''
+    if (cc === ciudad) return true
+    // Claim huérfano (sin ciudad o con un código que no está en la factura): se
+    // asigna por su chofer, evitando doble conteo de claims con ciudad válida.
+    if (!codigosInv.has(cc)) return choferesCiudad.has(c.courier)
+    return false
+  })
+}
+
 // Lista de ciudades disponibles (códigos) presentes en una factura.
 export function ciudadesDeFactura(inv) {
   if (!inv) return []

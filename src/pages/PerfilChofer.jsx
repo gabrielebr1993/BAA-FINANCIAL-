@@ -6,7 +6,7 @@ import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
   calcularPagos, promediosFlota, calificarChofer, buscarDriver,
-  claimsValidos, porCiudad, nombreCiudadDe, etiquetaTipoClaim, TODAS,
+  claimsValidos, porCiudad, claimsDeCiudad, nombreCiudadDe, etiquetaTipoClaim, TODAS,
 } from '../utils/calc'
 import { money, num, pct } from '../utils/format'
 import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso } from '../components/ui'
@@ -45,7 +45,7 @@ export default function PerfilChofer() {
   const tarDob = pago ? pago.tarifaDoble : (driver ? Number(driver.precioDoble) || 0 : 0)
 
   // Claims del chofer en el periodo (respetando ciudad).
-  const claimsChofer = useMemo(() => porCiudad(claims, selectedCity).filter((c) => c.courier === decoded), [claims, selectedCity, decoded])
+  const claimsChofer = useMemo(() => claimsDeCiudad(claims, selectedCity, inv).filter((c) => c.courier === decoded), [claims, selectedCity, decoded, inv])
   const validosChofer = useMemo(() => claimsValidos(claimsChofer), [claimsChofer])
   const tiposChofer = useMemo(() => {
     const m = {}

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios, cambiarMetodoClaim, cambiarMetodoVarios } from '../utils/claims'
-import { porCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
+import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
@@ -23,7 +23,7 @@ export default function Claims() {
   const [lote, setLote] = useState(false) // true = capturando motivo del lote
   const [motivoLote, setMotivoLote] = useState('')
 
-  const base = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
+  const base = useMemo(() => claimsDeCiudad(claims, selectedCity, selectedInvoice), [claims, selectedCity, selectedInvoice])
   const couriers = useMemo(() => [...new Set(base.map((c) => c.courier))].sort(), [base])
   const tipos = useMemo(() => [...new Set(base.map((c) => c.claimType).filter(Boolean))].sort(), [base])
 

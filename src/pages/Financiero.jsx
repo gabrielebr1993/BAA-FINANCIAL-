@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, TODAS } from '../utils/calc'
+import { calcularPagos, porCiudad, claimsDeCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -32,7 +32,7 @@ export default function Financiero() {
   }, [drivers])
 
   const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
-  const claimEco = useMemo(() => economiaClaims(porCiudad(claims, selectedCity), selectedInvoice), [claims, selectedCity, selectedInvoice])
+  const claimEco = useMemo(() => economiaClaims(claimsDeCiudad(claims, selectedCity, selectedInvoice), selectedInvoice), [claims, selectedCity, selectedInvoice])
 
   const rutas = useMemo(() => {
     const base = porCiudad(selectedInvoice?.resumenRutas || [], selectedCity)
@@ -121,7 +121,7 @@ export default function Financiero() {
             </Card>
           )}
 
-          {selectedInvoice && <PanelClaims claims={porCiudad(claims, selectedCity)} inv={selectedInvoice} />}
+          {selectedInvoice && <PanelClaims claims={claimsDeCiudad(claims, selectedCity, selectedInvoice)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <KPI label="Ingreso neto (Gofo)" value={money(ingresoNetoT)} icon={DollarSign} accent="green" />

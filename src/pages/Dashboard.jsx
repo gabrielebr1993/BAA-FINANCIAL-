@@ -5,7 +5,7 @@ import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
-  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, economiaClaims, nombreCiudadDe, contarClaimsValidos, TODAS,
+  porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, economiaClaims, nombreCiudadDe, contarClaimsValidos, claimsDeCiudad, TODAS,
 } from '../utils/calc'
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const rr = useMemo(() => rankingsRutas(inv, drivers, selectedCity), [inv, drivers, selectedCity])
   const tot = useMemo(() => totalesFiltrados(inv, selectedCity), [inv, selectedCity])
   const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
-  const claimEco = useMemo(() => economiaClaims(porCiudad(claims, selectedCity), inv), [claims, selectedCity, inv])
+  const claimEco = useMemo(() => economiaClaims(claimsDeCiudad(claims, selectedCity, inv), inv), [claims, selectedCity, inv])
 
   const invAnterior = useMemo(() => {
     if (!inv || esRango) return null
@@ -68,7 +68,7 @@ export default function Dashboard() {
   const gananciaTotal = tot.ingreso - costoTotal
   const margen = tot.ingreso > 0 ? gananciaTotal / tot.ingreso : 0
   // Conteo CANÓNICO de claims válidos (mismo en todas las pantallas).
-  const claimsCiudad = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
+  const claimsCiudad = useMemo(() => claimsDeCiudad(claims, selectedCity, inv), [claims, selectedCity, inv])
   const numClaims = useMemo(() => contarClaimsValidos(claimsCiudad), [claimsCiudad])
   const calidad = tot.paquetes > 0 ? 1 - numClaims / tot.paquetes : 1
   // eslint-disable-next-line no-console
@@ -221,7 +221,7 @@ export default function Dashboard() {
               </div>
 
               <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
-                <PanelClaims claims={porCiudad(claims, selectedCity)} inv={inv} compacto />
+                <PanelClaims claims={claimsDeCiudad(claims, selectedCity, inv)} inv={inv} compacto />
               </ClickWrap>
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -292,11 +292,11 @@ export default function Dashboard() {
                 <MiniLista titulo="Mejor $/lb" rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
               </div>
 
-              {porCiudad(claims, selectedCity).length > 0 && (
+              {claimsDeCiudad(claims, selectedCity, inv).length > 0 && (
                 <>
                   <h2 className="mb-1 mt-6 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h2>
                   <p className="mb-3 text-xs text-slate-400">Choferes con más claims por tipo. Haz clic para ver su detalle.</p>
-                  <RankingClaimsTipo claims={porCiudad(claims, selectedCity)} compacto />
+                  <RankingClaimsTipo claims={claimsDeCiudad(claims, selectedCity, inv)} compacto />
                 </>
               )}
             </>

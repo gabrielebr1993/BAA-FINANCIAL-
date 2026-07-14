@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, feeDeClaim, buscarDriver } from '../utils/calc'
+import { calcularPagos, porCiudad, claimsDeCiudad, feeDeClaim, buscarDriver } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
@@ -131,7 +131,7 @@ export default function Pagos() {
     return enviosChofer(buscarDriver(drivers, p.nombre), texto, 'Aviso de pago')
   }
 
-  const claimsDeChofer = (nombre) => porCiudad(claims, selectedCity).filter((c) => c.courier === nombre)
+  const claimsDeChofer = (nombre) => claimsDeCiudad(claims, selectedCity, selectedInvoice).filter((c) => c.courier === nombre)
 
   const confirmarPerdon = async (claim) => {
     setOcupado(true)

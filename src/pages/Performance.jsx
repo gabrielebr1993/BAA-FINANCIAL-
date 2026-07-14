@@ -4,7 +4,7 @@ import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wal
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, costoManagers, etiquetaTipoClaim } from '../utils/calc'
+import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, claimsDeCiudad, costoManagers, etiquetaTipoClaim } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
@@ -49,7 +49,7 @@ export default function Performance() {
   const usaRutaExacta = !!fRuta && pagosRuta.length > 0
   const basePagos = usaRutaExacta ? pagosRuta : pagos
   const rr = useMemo(() => rankingsRutas(selectedInvoice, drivers, selectedCity), [selectedInvoice, drivers, selectedCity])
-  const claimsCiudad = useMemo(() => porCiudad(claims, selectedCity), [claims, selectedCity])
+  const claimsCiudad = useMemo(() => claimsDeCiudad(claims, selectedCity, selectedInvoice), [claims, selectedCity, selectedInvoice])
 
   // opciones de los selectores
   const rutasOpts = useMemo(() => [...new Set(porCiudad(selectedInvoice?.resumenRutas || [], selectedCity).map((r) => r.ruta))].sort(), [selectedInvoice, selectedCity])
