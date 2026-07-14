@@ -126,6 +126,10 @@ export default function Pagos() {
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   }, [managers, selectedCity, ciudadBloqueada, ciudadUsuario, semanas, pagoInvoiceId])
   const totGastosFijos = gastosFijos.reduce((a, g) => a + g.monto, 0)
+  const gPag = gastosFijos.filter((g) => g.estado === 'pagado').length
+  const gPend = gastosFijos.length - gPag
+  // Ganancia REAL de lo mostrado: la de choferes MENOS los gastos fijos.
+  const gananciaRealPagos = totGanancia - totGastosFijos
   const marcarGasto = async (m, estado) => {
     if (!pagoInvoiceId) return
     await updateDoc(doc(db, 'managers', m.id), { [`pagados.${pagoInvoiceId}`]: estado })
@@ -256,12 +260,12 @@ export default function Pagos() {
             <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" sub={subAjustes} />
             {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={`+ choferes = ${money(totPagar + totGastosFijos)}`} />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
-            {verGanancia && <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />}
-            <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
+            {verGanancia && <KPI label={lGanancia('Ganancia real')} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
+            <KPI label="Pendientes / Pagados" value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
           </div>
           {verGanancia ? (
             <p className="mb-5 text-xs text-slate-400">
-              Esta ganancia es la de los choferes (ingreso − pago − descuento de Gofo por claims), <b>antes</b> de gastos fijos. La <b>Ganancia real</b> (que también resta los gastos fijos) está en el <b>Dashboard</b> y <b>Financiero</b>. Si filtras o buscas, este total es solo de los choferes mostrados.
+              <b>Ganancia real</b> = ingreso − pago a choferes − descuento de Gofo por claims − <b>gastos fijos</b>. Los <b>Pendientes / Pagados</b> incluyen choferes y gastos fijos. Si filtras o buscas, el total es solo de lo mostrado.
             </p>
           ) : (
             <p className="mb-5 text-xs text-slate-400">Aquí registras los pagos a los choferes: marca cada uno como pagado y avísale. Total a pagar = entregas × tarifa − descuento por claims.</p>
