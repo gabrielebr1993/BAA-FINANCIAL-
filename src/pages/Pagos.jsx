@@ -63,7 +63,10 @@ export default function Pagos() {
   }, [cargarPayroll])
 
   const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity), [selectedInvoice, claims, drivers, selectedCity])
-  const pagosConEstado = pagos.map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente' }))
+  // Modo POR RUTA: mostramos la ruta de cada chofer (de la factura, o su ruta guardada).
+  const esRuta = selectedInvoice?.modoConfig === 'ruta'
+  const rutaDe = (nombre) => selectedInvoice?.asignacionRuta?.[nombre] || buscarDriver(drivers, nombre)?.rutaDefault || '—'
+  const pagosConEstado = pagos.map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
   const filtrados = pagosConEstado.filter((p) => {
     if (fEstado === 'pendiente' && p.estado !== 'pendiente') return false
     if (fEstado === 'pagado' && p.estado !== 'pagado') return false
@@ -150,6 +153,7 @@ export default function Pagos() {
     // ni el encabezado ni el valor). Sin tapar, sale normal.
     const cols = [
       { h: 'Chofer', v: (p) => p.nombre },
+      ...(esRuta ? [{ h: 'Ruta', v: (p) => p.ruta || '' }] : []),
       { h: 'Ciudad', v: (p) => p.nombreCiudad },
       { h: 'Individuales', v: (p) => p.individuales },
       { h: 'Dobles', v: (p) => p.dobles },
@@ -252,7 +256,7 @@ export default function Pagos() {
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {[
-                        'Chofer', 'Ind.', 'Dobles', 'Claims (act/tot)',
+                        'Chofer', ...(esRuta ? ['Ruta'] : []), 'Ind.', 'Dobles', 'Claims (act/tot)',
                         ...(verGanancia ? [lIngreso('Ingreso Gofo')] : []),
                         'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar',
                         ...(verGanancia ? [lGanancia('Ganancia')] : []),
@@ -264,7 +268,7 @@ export default function Pagos() {
                   </thead>
                   <tbody>
                     {filtrados.length === 0 && (
-                      <tr><td colSpan={verGanancia ? 12 : 10} className="px-4 py-6 text-center text-slate-400">Sin choferes con este filtro.</td></tr>
+                      <tr><td colSpan={(verGanancia ? 12 : 10) + (esRuta ? 1 : 0)} className="px-4 py-6 text-center text-slate-400">Sin choferes con este filtro.</td></tr>
                     )}
                     {filtrados.map((p) => (
                       <FilaChofer
@@ -287,6 +291,7 @@ export default function Pagos() {
                         driver={buscarDriver(drivers, p.nombre)}
                         puedePagar={puedePagar}
                         verGanancia={verGanancia}
+                        esRuta={esRuta}
                         pagandoStripe={pagandoStripe === p.nombre}
                         onPagarStripe={pagarStripe}
                         avisoPago={!esRango && p.estado === 'pagado' ? avisoPagoDe(p) : null}
@@ -296,7 +301,7 @@ export default function Pagos() {
                   <tfoot>
                     <tr className="bg-slate-100 font-bold dark:bg-slate-800">
                       <td className="px-2.5 py-2.5">TOTAL ({filtrados.length})</td>
-                      <td colSpan={3}></td>
+                      <td colSpan={3 + (esRuta ? 1 : 0)}></td>
                       {verGanancia && <td className="px-2.5 py-2.5">{fIngreso(totIngreso)}</td>}
                       <td colSpan={3}></td>
                       <td className="px-2.5 py-2.5">{money(totPagar)}</td>
@@ -335,7 +340,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verGanancia, pagandoStripe, onPagarStripe, avisoPago }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago }) {
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -347,6 +352,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
           </button>{' '}
           {p.sinTarifa && <Badge color="red">sin tarifa</Badge>}
         </td>
+        {esRuta && <td className={TD}>{p.ruta ? <Badge color="gold">{p.ruta}</Badge> : '—'}</td>}
         <td className={TD}>{num(p.individuales)}</td>
         <td className={TD}>{num(p.dobles)}</td>
         <td className={TD}>{p.claimsActivos}/{p.claimsTotales}{p.claimsPerdonados > 0 ? ` (${p.claimsPerdonados} perd.)` : ''}</td>
@@ -391,7 +397,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
       </tr>
       {abierto && (
         <tr className="bg-slate-50 dark:bg-slate-800/40">
-          <td colSpan={verGanancia ? 12 : 10} className="px-4 py-2.5">
+          <td colSpan={(verGanancia ? 12 : 10) + (esRuta ? 1 : 0)} className="px-4 py-2.5">
             <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Claims de {p.nombre} ({claimsChofer.length})</div>
             {claimsChofer.length === 0 ? (
               <div className="text-sm text-slate-400">Sin claims.</div>
