@@ -333,6 +333,7 @@ export default function Pagos() {
                         abierto={expandido === p.nombre}
                         onToggle={() => setExpandido(expandido === p.nombre ? null : p.nombre)}
                         onMarcar={marcarEstado}
+                        invoice={selectedInvoice}
                         puedeMarcar={!esRango}
                         fIngreso={fIngreso}
                         fGanancia={fGanancia}
@@ -451,7 +452,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verIngreso, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verIngreso, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -552,7 +553,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, puedeMarcar, fIngreso, fGa
                       <td className="px-2 py-1.5">{c.claimType}</td>
                       <td className="px-2 py-1.5">{money(c.montoGofo)}</td>
                       <td className="px-2 py-1.5">
-                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(selectedInvoice, c.ciudad, c))})</Badge>}
+                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(invoice, c.ciudad, c))})</Badge>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {perdonandoId === c.id ? (
