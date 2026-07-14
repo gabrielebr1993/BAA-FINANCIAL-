@@ -592,7 +592,8 @@ export default function CargarFactura() {
       if (choferesNuevos.length > 0 || upIds.length) await reloadDrivers()
 
       const { detalles, claims, ...resumen } = combinado
-      const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.map((c) => [c.ubicacion, c.nombreCiudad]))
+      // Se filtran ciudades con código vacío: Firestore no permite claves de mapa vacías.
+      const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.filter((c) => c.ubicacion).map((c) => [c.ubicacion, c.nombreCiudad]))
       const ciudadPrincipal = combinado.ciudades[0] || ''
       const periodo = parsearPeriodo(semana.trim())
 

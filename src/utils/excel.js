@@ -521,18 +521,21 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
   if (driverSummary && driverSummary.length) {
     const norm = (n) => (n || '').trim().toLowerCase()
     const ciudadDeChofer = {}
+    let ciudadMayor = '' // ciudad con más paquetes (respaldo si un chofer no calza)
     {
-      const mejor = {}
+      const mejor = {}, conteo = {}
       for (const c of Object.values(porChofer)) {
         const pq = c.individuales + c.dobles
+        if (c.ciudad) conteo[c.ciudad] = (conteo[c.ciudad] || 0) + pq
         if (mejor[c.nombre] == null || pq > mejor[c.nombre]) { mejor[c.nombre] = pq; ciudadDeChofer[norm(c.nombre)] = c.ciudad }
       }
+      ciudadMayor = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a])[0] || ''
     }
     // Nuevo porChofer basado en el Driver Summary.
     const nuevoPorChofer = {}
     for (const ds of driverSummary) {
       const nombre = ds.nombre
-      const ciudad = ciudadDeChofer[norm(nombre)] != null ? ciudadDeChofer[norm(nombre)] : ''
+      const ciudad = ciudadDeChofer[norm(nombre)] || ciudadMayor
       const ck = `${nombre}||${ciudad}`
       nuevoPorChofer[ck] = { nombre, ciudad, individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: Number(ds.ingreso) || 0, numClaims: 0 }
     }
