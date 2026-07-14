@@ -274,7 +274,7 @@ export default function PerfilChofer() {
           )}
 
           {/* Historial de pagos */}
-          {pago && (<>
+          {(pago || historial.length > 0 || claimsChofer.length > 0) && (<>
           <Card className="mb-4 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de pagos</h3>
