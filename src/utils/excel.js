@@ -180,6 +180,9 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
       // "STOP Point Details": posición del paquete dentro de la parada. 1 = primer
       // envío (individual); 2+ = envío subsiguiente al MISMO domicilio (DOBLE).
       stopPos: { cands: ['stoppointdetails', 'stoppoint', 'stoppointdetail'], fallback: 17 },
+      // "Transfer Center" (columna E): identifica la CIUDAD/almacén de forma directa
+      // y confiable (no depende de la ruta). Es la fuente principal de la ciudad.
+      transferCenter: { cands: ['transfercenter', 'transfercentre', 'transfercenterhub'], fallback: 4 },
     },
     ['courier', 'regionroute']
   )
@@ -190,10 +193,13 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
     // subsiguiente). Si no viene la columna, se cae al criterio por monto.
     const posNum = Number(r.stopPos)
     const stopPos = Number.isFinite(posNum) && posNum > 0 ? posNum : null
+    // Ciudad: primero el "Transfer Center" (columna E); si viene vacío, se deriva de
+    // la ruta (columna G). Así la ciudad se detecta aunque la ruta esté vacía.
+    const tc = (r.transferCenter == null ? '' : String(r.transferCenter)).trim().toUpperCase()
     detalles.push({
       courier: (r.courier == null ? '' : String(r.courier)).trim() || 'Sin chofer',
       ruta,
-      ciudad: codigoCiudad(ruta),
+      ciudad: tc || codigoCiudad(ruta),
       monto,
       peso: toNum(r.peso),
       rango: r.rango == null ? '' : String(r.rango),
