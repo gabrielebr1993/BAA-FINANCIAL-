@@ -32,7 +32,10 @@ const STRIPE_BADGE = {
 
 export default function VerificacionChofer({ driver, activeCompanyId, onReload, coleccion = 'drivers' }) {
   const { perfil, esSuperAdmin } = useAuth()
-  const puede = esSuperAdmin || perfil?.role === 'owner'
+  // Dueño, súper-admin y ADMIN pueden ver/gestionar los datos sensibles
+  // (personal, bancario y Stripe) del chofer. El admin queda acotado a su ciudad
+  // por el resto de la app (solo abre perfiles de choferes de su ciudad).
+  const puede = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const esDriver = coleccion === 'drivers' // managers: sin Stripe ni portal
   const tipoLabel = esDriver ? 'chofer' : 'gasto fijo'
   const [v, setV] = useState({ ...VACIO, ...(driver?.verificacion || {}) })
