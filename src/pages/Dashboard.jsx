@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
-import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../DataContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
@@ -24,6 +24,11 @@ import Onboarding from '../components/Onboarding'
 export default function Dashboard() {
   const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, vista, cargando } = useData()
   const navigate = useNavigate()
+  // Ojo: oculta las cifras de dinero (ingreso, costo, ganancia, margen) en pantalla.
+  const [verDinero, setVerDinero] = useState(true)
+  const OCULTO = '••••••'
+  const fD = (v) => (verDinero ? money(v) : OCULTO)
+  const fP = (v) => (verDinero ? pct(v) : OCULTO)
   // Navega a una sección y, opcionalmente, preselecciona la ciudad de destino.
   const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
   // Navega al perfil completo de un chofer.
@@ -130,6 +135,7 @@ export default function Dashboard() {
       <PageTitle right={
         inv && !cargando && (
           <>
+            <Boton variant="ghost" onClick={() => setVerDinero((v) => !v)} title={verDinero ? 'Ocultar montos ($)' : 'Mostrar montos ($)'}>{verDinero ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />} {verDinero ? 'Ocultar $' : 'Ver $'}</Boton>
             <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
             <Boton variant="gold" onClick={descargarPDF}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
           </>
@@ -160,10 +166,10 @@ export default function Dashboard() {
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label="Ingreso total" value={money(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
-            <KPI label="Costo total" value={money(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} />
-            <KPI label="Ganancia" value={money(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
-            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
+            <KPI label="Ingreso total" value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
+            <KPI label="Costo total" value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
+            <KPI label="Ganancia" value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
+            <KPI label="Margen" value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
             <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
             <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
             <KPI label="Claims" value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
@@ -216,7 +222,7 @@ export default function Dashboard() {
                   </ClickWrap>
                 )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} />
+                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} />
                 </ClickWrap>
               </div>
 

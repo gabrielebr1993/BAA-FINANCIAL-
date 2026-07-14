@@ -2,20 +2,22 @@
 import { money, pct } from '../utils/format'
 import { Card } from './ui'
 
-export default function GananciaReal({ g, ciudadLabel, claims }) {
+export default function GananciaReal({ g, ciudadLabel, claims, oculto = false }) {
   if (!g) return null
   const neto = claims ? Number(claims.gananciaNetaClaims) || 0 : null
+  const OCULTO = '••••••'
+  const m = (v) => (oculto ? OCULTO : money(v))
   return (
     <Card className="mb-4 p-5">
       <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real</h3>
       <div className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">Ingreso neto (Gofo)</span>
-          <span className="font-semibold">{money(g.ingresoNeto)}</span>
+          <span className="font-semibold">{m(g.ingresoNeto)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">− Pago a choferes</span>
-          <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoChoferes)}</span>
+          <span className="font-semibold text-rose-600 dark:text-rose-400">−{m(g.costoChoferes)}</span>
         </div>
         {(g.totalPrestamo > 0 || g.totalBono > 0) && (
           <div className="flex items-center justify-between pl-3 text-xs">
@@ -24,12 +26,12 @@ export default function GananciaReal({ g, ciudadLabel, claims }) {
         )}
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">− Gastos fijos{ciudadLabel ? ` (${ciudadLabel})` : ''}</span>
-          <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(g.costoManagers)}</span>
+          <span className="font-semibold text-rose-600 dark:text-rose-400">−{m(g.costoManagers)}</span>
         </div>
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
           <span className="font-bold text-brand-navy dark:text-slate-100">GANANCIA REAL</span>
           <span className={`text-xl font-extrabold ${g.gananciaReal >= 0 ? 'text-brand-gold' : 'text-rose-600 dark:text-rose-400'}`}>
-            {money(g.gananciaReal)} <span className="text-sm font-semibold text-slate-400">({pct(g.margen)})</span>
+            {m(g.gananciaReal)} <span className="text-sm font-semibold text-slate-400">({oculto ? '••' : pct(g.margen)})</span>
           </span>
         </div>
       </div>
