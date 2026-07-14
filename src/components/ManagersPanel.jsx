@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore'
-import { Building2, Users, Landmark } from 'lucide-react'
+import { collection, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { Building2, Users, Landmark, Trash2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
@@ -57,7 +57,7 @@ export default function ManagersPanel() {
   // Managers cuya ciudad NO está entre las ciudades de la empresa (vacía o código
   // que no existe): su costo NO aparece al filtrar por ciudad, solo en "Todas".
   const codigosEmpresa = new Set((ciudadesEmpresa || []).map((c) => c.codigo).filter(Boolean))
-  const sinCiudad = managers.filter((m) => !codigosEmpresa.has(m.ciudad || ''))
+  const sinCiudad = managersAll.filter((m) => !codigosEmpresa.has(m.ciudad || ''))
   const ciudadesConCodigo = (ciudadesEmpresa || []).filter((c) => c.codigo)
   const [reasignando, setReasignando] = useState(false)
 
@@ -92,6 +92,22 @@ export default function ManagersPanel() {
 
   const editar = (m) => { setEditId(m.id); setForm({ nombre: m.nombre || '', ciudad: m.ciudad || '', sueldoSemanal: m.sueldoSemanal ?? '' }) }
   const toggle = async (m) => { await updateDoc(doc(db, 'managers', m.id), { activo: !(m.activo !== false) }); await reloadManagers() }
+  // Borrado REAL de un gasto fijo (desaparece de la base y deja de contar en cálculos).
+  const eliminar = async (m) => {
+    if (!window.confirm(`¿Eliminar de forma permanente el gasto fijo "${m.nombre}" (${money(Number(m.sueldoSemanal) || 0)}/sem)? No se puede deshacer.`)) return
+    await deleteDoc(doc(db, 'managers', m.id))
+    await reloadManagers()
+  }
+  // Borra TODOS los gastos fijos sin ciudad válida (ciudad que ya no existe).
+  const eliminarSinCiudad = async () => {
+    if (!sinCiudad.length) return
+    if (!window.confirm(`¿Eliminar de forma permanente ${sinCiudad.length} gasto(s) fijo(s) sin ciudad válida? No se puede deshacer.`)) return
+    setReasignando(true)
+    try {
+      for (const m of sinCiudad) await deleteDoc(doc(db, 'managers', m.id))
+      await reloadManagers()
+    } finally { setReasignando(false) }
+  }
 
   return (
     <div>
@@ -129,12 +145,13 @@ export default function ManagersPanel() {
       {!ciudadBloqueada && sinCiudad.length > 0 && (
         <Aviso tipo="warn">
           <div className="flex flex-wrap items-center gap-2">
-            <span><b>{sinCiudad.length} gasto(s) fijo(s) sin ciudad válida.</b> Su costo NO aparece al filtrar por ciudad (solo en “Todas”). Asígnalos a su ciudad.</span>
+            <span><b>{sinCiudad.length} gasto(s) fijo(s) en una ciudad que ya no existe.</b> Su costo puede aparecer atribuido raro. Reasígnalos a una ciudad válida o <b>bórralos</b>.</span>
             {ciudadesConCodigo.length === 1 && (
               <Boton variant="gold" disabled={reasignando} onClick={() => reasignarTodos(ciudadesConCodigo[0].codigo)} className="px-3 py-1.5 text-xs">
                 {reasignando ? 'Asignando…' : `Asignar todos a ${ciudadesConCodigo[0].nombre}`}
               </Boton>
             )}
+            <Boton variant="ghost" disabled={reasignando} onClick={eliminarSinCiudad} className="px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={13} strokeWidth={1.8} /> Eliminar los {sinCiudad.length}</Boton>
           </div>
         </Aviso>
       )}
@@ -190,6 +207,7 @@ export default function ManagersPanel() {
                           <div className="flex justify-end gap-2">
                             <Boton variant="ghost" onClick={() => editar(m)} className="px-2.5 py-1 text-xs">Editar</Boton>
                             <Boton variant="ghost" onClick={() => toggle(m)} className="px-2.5 py-1 text-xs">{m.activo !== false ? 'Desactivar' : 'Activar'}</Boton>
+                            <Boton variant="ghost" onClick={() => eliminar(m)} className="px-2 py-1 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={13} strokeWidth={1.8} /></Boton>
                           </div>
                         </td>
                       </tr>
