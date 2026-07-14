@@ -407,8 +407,8 @@ export default function CargarFactura() {
             const dref = doc(collection(db, 'drivers'))
             batch.set(dref, {
               nombre: n,
-              precioIndividual: Number(precios[n].ind) || 0,
-              precioDoble: Number(precios[n].doble) || 0,
+              precioIndividual: Number(precios[n]?.ind) || 0,
+              precioDoble: Number(precios[n]?.doble) || 0,
               activo: true,
               companyId: activeCompanyId,
               alias: aliasPorCanonico[n] || [],
@@ -425,7 +425,7 @@ export default function CargarFactura() {
       if (choferesNuevos.length > 0) {
         for (const n of choferesNuevos.filter((x) => buscarDriver(drivers, x))) {
           const d = buscarDriver(drivers, n)
-          updates[d.id] = { ...(updates[d.id] || {}), precioIndividual: Number(precios[n].ind) || 0, precioDoble: Number(precios[n].doble) || 0, activo: true }
+          updates[d.id] = { ...(updates[d.id] || {}), precioIndividual: Number(precios[n]?.ind) || 0, precioDoble: Number(precios[n]?.doble) || 0, activo: true }
         }
       }
       for (const [canon, aliases] of Object.entries(aliasPorCanonico)) {
