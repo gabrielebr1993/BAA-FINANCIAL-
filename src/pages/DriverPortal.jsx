@@ -157,8 +157,19 @@ export default function DriverPortal() {
 
   // El chofer SOLO ve las semanas/recibos que el dueño ya marcó como PAGADAS. Si el
   // dueño las regresa a "pendiente", desaparecen de su vista.
-  const semanasPagadas = useMemo(() => semanas.filter((w) => payroll[w.invoiceId] === 'pagado'), [semanas, payroll])
-  const totalPagado = semanasPagadas.reduce((a, w) => a + (w.totalPagar || 0), 0)
+  // Cada semana pagada incluye su pago NETO = base − préstamo + bono (loan descuenta,
+  // bonus suma). Se calcula aquí para mostrarlo consistente en todo el portal.
+  const semanasPagadas = useMemo(
+    () => semanas
+      .filter((w) => payroll[w.invoiceId] === 'pagado')
+      .map((w) => {
+        const prestamo = Number(w.prestamo) || 0
+        const bono = Number(w.bono) || 0
+        return { ...w, prestamo, bono, pagoNeto: (Number(w.totalPagar) || 0) - prestamo + bono }
+      }),
+    [semanas, payroll]
+  )
+  const totalPagado = semanasPagadas.reduce((a, w) => a + (w.pagoNeto || 0), 0)
   const totalPaquetes = semanasPagadas.reduce((a, w) => a + (w.paquetes || 0), 0)
   const totalClaims = semanasPagadas.reduce((a, w) => a + (w.claimsTotales || 0), 0)
 
@@ -295,7 +306,15 @@ export default function DriverPortal() {
                                 <td className="px-3 py-2 text-right">{num(w.dobles)}</td>
                                 <td className="px-3 py-2 text-right">{num(w.paquetes)}</td>
                                 <td className="px-3 py-2 text-right">{num(w.claimsTotales)}</td>
-                                <td className="px-3 py-2 text-right font-semibold">{money(w.totalPagar)}</td>
+                                <td className="px-3 py-2 text-right font-semibold">
+                                  {money(w.pagoNeto)}
+                                  {(w.prestamo > 0 || w.bono > 0) && (
+                                    <div className="text-[10px] font-medium">
+                                      {w.prestamo > 0 && <span className="text-rose-500">−{money(w.prestamo)} préstamo </span>}
+                                      {w.bono > 0 && <span className="text-emerald-500">+{money(w.bono)} bono</span>}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="px-3 py-2 text-center"><Badge color="green">Pagado</Badge></td>
                                 <td className="px-3 py-2 text-right"><Boton variant="ghost" onClick={() => recibo(w)} className="px-2.5 py-1 text-xs"><FileText size={13} strokeWidth={1.8} /> PDF</Boton></td>
                               </tr>
@@ -359,11 +378,13 @@ export default function DriverPortal() {
                     <Card className="mb-4 p-4">
                       <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Pagos por semana</h3>
                       <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
-                        <table className="w-full min-w-[520px] border-collapse text-sm">
+                        <table className="w-full min-w-[720px] border-collapse text-sm">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                               <th className="px-3 py-2 text-left font-semibold">Semana</th>
                               <th className="px-3 py-2 text-right font-semibold">Paquetes</th>
+                              <th className="px-3 py-2 text-right font-semibold">Préstamo (loan)</th>
+                              <th className="px-3 py-2 text-right font-semibold">Bono</th>
                               <th className="px-3 py-2 text-right font-semibold">Te cobré por claims</th>
                               <th className="px-3 py-2 text-right font-semibold">Descuento de Gofo</th>
                               <th className="px-3 py-2 text-right font-semibold">Total pagado</th>
@@ -374,9 +395,11 @@ export default function DriverPortal() {
                               <tr key={w.invoiceId} className="border-t border-slate-100 dark:border-slate-700/50">
                                 <td className="px-3 py-2">{w.semana}</td>
                                 <td className="px-3 py-2 text-right">{num(w.paquetes || 0)}</td>
+                                <td className={`px-3 py-2 text-right ${w.prestamo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>{w.prestamo > 0 ? `−${money(w.prestamo)}` : money(0)}</td>
+                                <td className={`px-3 py-2 text-right ${w.bono > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>{w.bono > 0 ? `+${money(w.bono)}` : money(0)}</td>
                                 <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-400">{verMontos ? (Number(w.descuentoClaims) > 0 ? `−${money(w.descuentoClaims)}` : '—') : '••••'}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{verMontos ? (Number(w.descontadoGofo) > 0 ? `−${money(w.descontadoGofo)}` : '—') : '••••'}</td>
-                                <td className="px-3 py-2 text-right font-bold">{money(w.totalPagar || 0)}</td>
+                                <td className="px-3 py-2 text-right font-bold">{money(w.pagoNeto || 0)}</td>
                               </tr>
                             ))}
                           </tbody>

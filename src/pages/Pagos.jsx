@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { collection, getDocs, query, where, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, query, where, addDoc, updateDoc, setDoc, doc, serverTimestamp } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
@@ -79,6 +79,10 @@ export default function Pagos() {
       if (!prestamo && !bono) delete nuevo[k]
       else nuevo[k] = { prestamo, bono }
       await updateDoc(doc(db, 'invoices', invActual.id), { ajustesPago: nuevo })
+      // Espejo en driverStats para que el chofer lo vea en su portal (él no puede
+      // leer las facturas, pero sí su propia fila de driverStats).
+      const skey = k.replace(/[^a-z0-9]+/g, '_').slice(0, 80)
+      await setDoc(doc(db, 'driverStats', `${invActual.id}__${skey}`), { prestamo, bono }, { merge: true }).catch(() => {})
       await reloadInvoices()
       setEditAjuste((s) => { const n = { ...s }; delete n[nombre]; return n })
     } finally { setGuardandoAjuste(null) }
