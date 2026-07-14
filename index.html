@@ -16,6 +16,10 @@
     <meta name="apple-mobile-web-app-title" content="MilePay" />
   </head>
   <body>
+    <script>
+      // Aplica el tema guardado ANTES de pintar, para no ver un flash claro al cargar.
+      try { if (localStorage.getItem('milepay_tema') === 'dark') document.documentElement.classList.add('dark') } catch (e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX } from 'lucide-react'
+import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Route, Settings2 } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
@@ -31,7 +31,8 @@ export default function PerfilChofer() {
   const { nombre } = useParams()
   const navigate = useNavigate()
   const decoded = decodeURIComponent(nombre || '')
-  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes } = useData()
+  const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
@@ -152,6 +153,8 @@ export default function PerfilChofer() {
               {/* Datos rápidos en pills */}
               <div className="mt-4 flex flex-wrap gap-2">
                 <Pill icon={MapPin} label="Ciudad" value={ciudades.join(', ') || '—'} />
+                <Pill icon={Settings2} label="Modo de pago" value={modoRuta ? 'Por ruta' : 'Estándar (por ciudad)'} />
+                {modoRuta && <Pill icon={Route} label="Ruta" value={inv?.asignacionRuta?.[decoded] || driver?.rutaDefault || '—'} />}
                 <Pill label="Tarifa individual" value={money(tarInd)} />
                 <Pill label="Tarifa doble" value={money(tarDob)} />
               </div>
