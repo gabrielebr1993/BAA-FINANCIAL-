@@ -146,7 +146,9 @@ export function detectarSemana(nombreArchivo) {
 // ---- procesamiento de un archivo --------------------------------------------
 
 // Lee un ArrayBuffer y devuelve datos crudos + sumas de verificación.
-export function procesarArchivo(arrayBuffer, nombreArchivo) {
+// `modoConfig`: 'estandar' (default) detecta la ciudad por "Transfer Center" (col E);
+// 'ruta' la deriva de la ruta (col G) como siempre.
+export function procesarArchivo(arrayBuffer, nombreArchivo, modoConfig = 'estandar') {
   const errores = []
   let wb
   try {
@@ -193,13 +195,15 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
     // subsiguiente). Si no viene la columna, se cae al criterio por monto.
     const posNum = Number(r.stopPos)
     const stopPos = Number.isFinite(posNum) && posNum > 0 ? posNum : null
-    // Ciudad: primero el "Transfer Center" (columna E); si viene vacío, se deriva de
-    // la ruta (columna G). Así la ciudad se detecta aunque la ruta esté vacía.
+    // Ciudad: en modo ESTÁNDAR se detecta por "Transfer Center" (columna E), más
+    // confiable; si viene vacío se deriva de la ruta. En modo RUTA se usa la ruta
+    // (columna G) como siempre.
     const tc = (r.transferCenter == null ? '' : String(r.transferCenter)).trim().toUpperCase()
+    const ciudad = modoConfig === 'ruta' ? codigoCiudad(ruta) : (tc || codigoCiudad(ruta))
     detalles.push({
       courier: (r.courier == null ? '' : String(r.courier)).trim() || 'Sin chofer',
       ruta,
-      ciudad: tc || codigoCiudad(ruta),
+      ciudad,
       monto,
       peso: toNum(r.peso),
       rango: r.rango == null ? '' : String(r.rango),

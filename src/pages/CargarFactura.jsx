@@ -217,7 +217,7 @@ export default function CargarFactura() {
       const procs = []
       for (const f of files) {
         const buf = await f.arrayBuffer()
-        const p = procesarArchivo(buf, f.name)
+        const p = procesarArchivo(buf, f.name, ajustes?.modoConfig === 'ruta' ? 'ruta' : 'estandar')
         if (p.errores.length) p.errores.forEach((e) => nuevosErrores.push(`${f.name}: ${e}`))
         procs.push(p)
       }
