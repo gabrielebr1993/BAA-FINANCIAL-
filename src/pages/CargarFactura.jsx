@@ -377,6 +377,12 @@ export default function CargarFactura() {
     for (const r of (combinado?.resumenRutas || [])) { const v = String(r.ruta || '').trim(); if (v && v.toLowerCase() !== 'sin ruta') s.add(v.toUpperCase()) }
     return s
   }, [combinado])
+  // Rutas detectadas por archivo (columna G), para mostrarlas en la tabla de ciudad.
+  const rutasPorArchivo = useMemo(() => procesados.map((p) => {
+    const s = new Set()
+    for (const d of (p.detalles || [])) { const v = String(d.ruta || '').trim(); if (v && v.toLowerCase() !== 'sin ruta') s.add(v) }
+    return [...s].sort()
+  }), [procesados])
   // Ruta del archivo con más paquetes por chofer (para autoasignar).
   const rutaArchivoDeChofer = useMemo(() => {
     const best = {}, bestPq = {}
@@ -939,7 +945,8 @@ export default function CargarFactura() {
                   <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                     <th className="px-3 py-2 text-left font-semibold">Archivo</th>
                     <th className="px-3 py-2 text-left font-semibold">Semana</th>
-                    <th className="px-3 py-2 text-left font-semibold">Detectada</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ciudad detectada</th>
+                    {modoRuta && <th className="px-3 py-2 text-left font-semibold">Ruta(s) detectada(s)</th>}
                     <th className="px-3 py-2 text-left font-semibold">Ciudad (automática) *</th>
                   </tr>
                 </thead>
@@ -949,6 +956,27 @@ export default function CargarFactura() {
                       <td className="px-3 py-2">{p.archivoNombre}</td>
                       <td className="px-3 py-2">{p.semana || '—'}</td>
                       <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{p.ciudadesDetectadas.map(nombreCiudad).join(', ') || '—'}</td>
+                      {modoRuta && (
+                        <td className="px-3 py-2">
+                          {rutasPorArchivo[i]?.length ? (
+                            <div className="flex flex-col gap-1">
+                              {rutasPorArchivo[i].slice(0, 4).map((r) => {
+                                const code = resolverRuta(r)
+                                const enConfig = !!rutasDef[code]
+                                return (
+                                  <span key={r} className="inline-flex w-fit items-center gap-1.5 text-xs">
+                                    <span className="font-medium text-brand-navy dark:text-slate-200">{r}</span>
+                                    {enConfig
+                                      ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">● Automática</span>
+                                      : <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">nueva</span>}
+                                  </span>
+                                )
+                              })}
+                              {rutasPorArchivo[i].length > 4 && <span className="text-[11px] text-slate-400">+{rutasPorArchivo[i].length - 4} más</span>}
+                            </div>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                      )}
                       <td className="px-3 py-2">
                         <div className="flex flex-col gap-1">
                           <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
