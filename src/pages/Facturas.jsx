@@ -1,13 +1,25 @@
 import { useState, useMemo } from 'react'
 import { Trash2, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { nombreCiudadDe } from '../utils/calc'
 import { eliminarFacturaCascada } from '../utils/borrado'
 import { money } from '../utils/format'
 import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
-  const { invoices, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices: invoicesAll, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { perfil, ciudadUsuario } = useAuth()
+  // SOLO el rol ADMIN con ciudad asignada ve únicamente las facturas de SU ciudad.
+  // (El resto de roles no se toca.)
+  const soloSuCiudad = perfil?.role === 'admin' && !!ciudadUsuario
+  const invoices = useMemo(() => {
+    if (!soloSuCiudad) return invoicesAll
+    return invoicesAll.filter((inv) =>
+      (inv.ciudad || '') === ciudadUsuario ||
+      (inv.resumenCiudades || []).some((c) => c.ubicacion === ciudadUsuario)
+    )
+  }, [invoicesAll, soloSuCiudad, ciudadUsuario])
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total }
