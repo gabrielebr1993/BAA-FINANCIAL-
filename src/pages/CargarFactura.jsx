@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { collection, addDoc, serverTimestamp, writeBatch, doc, arrayUnion } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -587,6 +587,11 @@ export default function CargarFactura() {
         const wb = (d.waybill || '').trim()
         if (wb && !detPorWaybill[wb]) detPorWaybill[wb] = d
       }
+      // Se construye el payload de cada claim UNA vez y se usa para: (a) el documento
+      // de la colección `claims` y (b) una copia EMBEBIDA en la factura (`claimsData`),
+      // que sirve de respaldo para que el claim SIEMPRE se muestre aunque la consulta
+      // a la colección no lo traiga (facturas duplicadas, índices, etc.).
+      const claimDocsEmbed = []
       for (let i = 0; i < claims.length; i += chunk) {
         const batch = writeBatch(db)
         for (const c of claims.slice(i, i + chunk)) {
@@ -598,7 +603,7 @@ export default function CargarFactura() {
           const estadoRevision = esRepetido ? decisiones[wb] || 'pendiente' : 'aprobado'
           const det = detPorWaybill[wb] || null
           const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
-          batch.set(cref, {
+          const payload = {
             companyId: activeCompanyId,
             invoiceId: ref.id,
             semana: semana.trim(),
@@ -625,9 +630,16 @@ export default function CargarFactura() {
             motivo: '',
             perdonadoPor: '',
             perdonadoEn: null,
-          })
+          }
+          batch.set(cref, payload)
+          claimDocsEmbed.push(payload)
         }
         await batch.commit()
+      }
+      // Copia embebida en la factura (respaldo de visualización). Se limita para no
+      // acercarse al tope de 1 MB por documento (los claims son casos excepcionales).
+      if (claimDocsEmbed.length && claimDocsEmbed.length <= 1500) {
+        await updateDoc(doc(db, 'invoices', ref.id), { claimsData: claimDocsEmbed })
       }
 
       // Resumen por chofer y semana (driverStats), para el PORTAL DEL CHOFER.

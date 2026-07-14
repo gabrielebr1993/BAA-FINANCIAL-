@@ -223,6 +223,21 @@ export function DataProvider({ children }) {
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
 
+  // Claims EFECTIVOS: los de la colección + un respaldo EMBEBIDO en la factura
+  // (inv.claimsData) para las facturas del rango que no trajeron ningún claim de la
+  // colección (facturas duplicadas, índices, etc.). Así el claim siempre se ve.
+  const claimsEfectivos = useMemo(() => {
+    const conDocs = new Set(claims.map((c) => c.invoiceId))
+    const extra = []
+    for (const inv of invoicesRango) {
+      if (conDocs.has(inv.id)) continue
+      if (Array.isArray(inv.claimsData) && inv.claimsData.length) {
+        for (const c of inv.claimsData) extra.push({ ...c, invoiceId: inv.id })
+      }
+    }
+    return extra.length ? [...claims, ...extra] : claims
+  }, [claims, invoicesRango])
+
   // La ciudad elegida es MANUAL y se respeta siempre (aunque esté en 0). Se mantiene
   // persistida; NO se rebota a "Todas". El usuario cambia de ciudad cuando quiere.
 
@@ -290,7 +305,7 @@ export function DataProvider({ children }) {
     invoices,
     drivers,
     managers,
-    claims,
+    claims: claimsEfectivos,
     ajustes,
     ciudadesEmpresa: (ajustes?.ciudades || []),
     reloadAjustes: () => cargarAjustes(activeCompanyId),
