@@ -231,6 +231,11 @@ export default function CargarFactura() {
 
       setProcesados(procs)
       setCiudadPorArchivo(procs.map((p) => codigoConfigurado(p.ciudadesDetectadas[0] || ''))) // sugerencia: código configurado si coincide el nombre
+      // Precarga la ruta de cada chofer (la que quedó guardada la última vez), para
+      // no reasignar cada semana (modo POR RUTA).
+      const preRutas = {}
+      couriersUnicos.forEach((n) => { const d = buscarDriver(drivers, n); if (d?.rutaDefault) preRutas[n] = d.rutaDefault })
+      setAsignacionRuta(preRutas)
       setSemana(semanaFinal)
       setAvisos(nuevosAvisos)
       setErrores(nuevosErrores)
@@ -486,6 +491,20 @@ export default function CargarFactura() {
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
+
+      // Recuerda la ruta de cada chofer (modo POR RUTA): se guarda en su ficha para
+      // precargarla la próxima factura y para que Pagos la tenga a mano.
+      if (modoRuta) {
+        const rutaUpd = {}
+        Object.entries(asignacionRuta).forEach(([nombre, code]) => { const d = buscarDriver(drivers, nombre); if (d && code) rutaUpd[d.id] = code })
+        const rutaIds = Object.keys(rutaUpd)
+        for (let i = 0; i < rutaIds.length; i += chunk) {
+          const batch = writeBatch(db)
+          rutaIds.slice(i, i + chunk).forEach((id) => batch.update(doc(db, 'drivers', id), { rutaDefault: rutaUpd[id] }))
+          await batch.commit()
+        }
+        if (rutaIds.length) await reloadDrivers()
+      }
       // Objeto de reglas para resolver el método (M1/M2/M3) de cada claim, sensible al modo.
       const invReglas = { reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas }
       // Mapa waybill -> detalle de entrega, para enriquecer cada claim con la
