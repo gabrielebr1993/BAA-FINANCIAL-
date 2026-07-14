@@ -331,13 +331,11 @@ export default function DriverPortal() {
                           { key: 'waybill', label: 'Tracking' },
                           { key: 'semana', label: 'Semana' },
                           { key: 'claimType', label: 'Tipo' },
-                          { key: 'montoGofo', label: 'Descontado', align: 'right' },
                           { key: 'estado', label: 'Estado', align: 'center' },
                         ]}
                         rows={claims.map((c) => ({ ...c, _key: c.id }))}
                         emptyText="No tienes claims registrados. ¡Bien!"
                         renderCell={(row, key) => {
-                          if (key === 'montoGofo') return money(Math.abs(Number(row.montoGofo) || 0))
                           if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
                           if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
                           return row[key] || '—'
@@ -385,8 +383,7 @@ export default function DriverPortal() {
                               <th className="px-3 py-2 text-right font-semibold">Paquetes</th>
                               <th className="px-3 py-2 text-right font-semibold">Préstamo (loan)</th>
                               <th className="px-3 py-2 text-right font-semibold">Bono</th>
-                              <th className="px-3 py-2 text-right font-semibold">Te cobré por claims</th>
-                              <th className="px-3 py-2 text-right font-semibold">Descuento de Gofo</th>
+                              <th className="px-3 py-2 text-right font-semibold">Descuento por claims</th>
                               <th className="px-3 py-2 text-right font-semibold">Total pagado</th>
                             </tr>
                           </thead>
@@ -398,14 +395,13 @@ export default function DriverPortal() {
                                 <td className={`px-3 py-2 text-right ${w.prestamo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>{w.prestamo > 0 ? `−${money(w.prestamo)}` : money(0)}</td>
                                 <td className={`px-3 py-2 text-right ${w.bono > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>{w.bono > 0 ? `+${money(w.bono)}` : money(0)}</td>
                                 <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-400">{verMontos ? (Number(w.descuentoClaims) > 0 ? `−${money(w.descuentoClaims)}` : '—') : '••••'}</td>
-                                <td className="px-3 py-2 text-right text-slate-500">{verMontos ? (Number(w.descontadoGofo) > 0 ? `−${money(w.descontadoGofo)}` : '—') : '••••'}</td>
                                 <td className="px-3 py-2 text-right font-bold">{money(w.pagoNeto || 0)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                      <p className="mt-2 text-[11px] text-slate-400">“Te cobré por claims” = lo que tu empresa te descontó · “Descuento de Gofo” = lo que Gofo le descontó a la empresa por esos claims. Toca “Ver montos” para mostrarlos u ocultarlos.</p>
+                      <p className="mt-2 text-[11px] text-slate-400">“Descuento por claims” = lo que tu empresa te descontó por claims. Toca “Ver montos” para mostrarlo u ocultarlo.</p>
                     </Card>
 
                     <Card className="p-4">
@@ -414,13 +410,11 @@ export default function DriverPortal() {
                         columns={[
                           { key: 'semana', label: 'Semana' },
                           { key: 'claimType', label: 'Tipo' },
-                          { key: 'montoGofo', label: 'Descuento de Gofo', align: 'right' },
                           { key: 'estado', label: 'Estado', align: 'center' },
                         ]}
                         rows={claims.map((c) => ({ ...c, _key: c.id }))}
                         emptyText="No tienes claims registrados. ¡Bien!"
                         renderCell={(row, key) => {
-                          if (key === 'montoGofo') return verMontos ? `−${money(Math.abs(Number(row.montoGofo) || 0))}` : '••••'
                           if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
                           if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
                           return row[key] || '—'

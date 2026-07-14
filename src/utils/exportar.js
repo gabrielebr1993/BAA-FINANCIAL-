@@ -21,25 +21,37 @@ export async function exportarPDF(nombreArchivo, titulo, subtitulo, tablas) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const ancho = doc.internal.pageSize.getWidth()
 
-  // encabezado con branding
+  // encabezado con branding (posiciones calculadas para no encimarse)
   doc.setFillColor(...NAVY)
-  doc.rect(0, 0, ancho, 54, 'F')
+  doc.rect(0, 0, ancho, 64, 'F')
   doc.setFillColor(...GOLD)
-  doc.rect(0, 54, ancho, 4, 'F')
-  doc.setTextColor(255, 255, 255)
+  doc.rect(0, 64, ancho, 4, 'F')
+  // Marca MilePay (dorado) + tagline
+  doc.setTextColor(...GOLD)
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text('MilePay', 40, 34)
-  doc.setFontSize(13)
+  doc.text('MilePay', 40, 30)
+  const brandW = doc.getTextWidth('MilePay')
+  doc.setTextColor(150, 165, 185)
+  doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(titulo, 100, 34)
+  doc.text('Gestión de facturas y pagos', 40, 46)
+  // Separador vertical + título (después de la marca, con espacio)
+  const tx = 40 + brandW + 18
+  doc.setDrawColor(90, 105, 130)
+  doc.line(tx - 9, 16, tx - 9, 48)
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text(titulo, tx, 28)
   if (subtitulo) {
-    doc.setFontSize(9)
-    doc.setTextColor(200, 200, 200)
-    doc.text(subtitulo, ancho - 40, 34, { align: 'right' })
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(210, 216, 226)
+    doc.text(subtitulo, tx, 44)
   }
 
-  let y = 78
+  let y = 92
   tablas.forEach((t) => {
     if (t.titulo) {
       doc.setTextColor(...NAVY)
