@@ -226,7 +226,17 @@ export function DataProvider({ children }) {
     subirBackupStorage(activeCompanyId).catch(() => {})
   }, [user, esDriver, activeCompanyId, ajustes])
 
-  const invoicesRango = useMemo(() => invoicesEnRango(invoices, rango), [invoices, rango])
+  // SOLO el rol ADMIN con ciudad asignada ve únicamente las facturas de SU ciudad
+  // (en todas las pantallas: filtro, dashboard, por factura, etc.).
+  const invoicesVisibles = useMemo(() => {
+    if (perfil?.role !== 'admin' || !ciudadUsuario) return invoices
+    return invoices.filter((inv) =>
+      (inv.ciudad || '') === ciudadUsuario ||
+      (inv.resumenCiudades || []).some((c) => c.ubicacion === ciudadUsuario)
+    )
+  }, [invoices, perfil, ciudadUsuario])
+
+  const invoicesRango = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
@@ -341,7 +351,7 @@ export function DataProvider({ children }) {
     empresaActiva,
     reloadCompanies: cargarCompanies,
     // datos
-    invoices,
+    invoices: invoicesVisibles,
     drivers,
     managers,
     claims: claimsEfectivos,
