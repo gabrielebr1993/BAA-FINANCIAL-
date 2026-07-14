@@ -370,13 +370,65 @@ export default function CargarFactura() {
     for (const c of (combinado?.resumenChoferes || [])) m[c.nombre] = c.ciudad
     return m
   }, [combinado])
-  // Rutas visibles: solo las de las ciudades de esta factura (las sin ciudad se ven
-  // siempre). Si ninguna calza, se muestran todas para no bloquear la asignación.
+  // RUTAS DETECTADAS en el archivo (columna G "Region/route"). Se usan para mostrar
+  // SOLO las rutas presentes en la factura, no todas las configuradas.
+  const rutasArchivo = useMemo(() => {
+    const s = new Set()
+    for (const r of (combinado?.resumenRutas || [])) { const v = String(r.ruta || '').trim(); if (v && v.toLowerCase() !== 'sin ruta') s.add(v.toUpperCase()) }
+    return s
+  }, [combinado])
+  // ¿una ruta configurada corresponde a alguna del archivo? (por su código o su nombre)
+  const rutaConfigEnArchivo = (code) => {
+    const r = rutasDef[code] || {}
+    return rutasArchivo.has(String(code).toUpperCase()) || rutasArchivo.has(String(r.nombre || '').trim().toUpperCase())
+  }
+  // Ruta del archivo con más paquetes por chofer (para autoasignar).
+  const rutaArchivoDeChofer = useMemo(() => {
+    const best = {}, bestPq = {}
+    for (const cr of (combinado?.resumenChoferRuta || [])) {
+      const pq = (cr.individuales || 0) + (cr.dobles || 0)
+      if (bestPq[cr.nombre] == null || pq > bestPq[cr.nombre]) { bestPq[cr.nombre] = pq; best[cr.nombre] = cr.ruta }
+    }
+    return best
+  }, [combinado])
+  // Código de ruta CONFIGURADA que corresponde a una ruta del archivo (código o nombre).
+  const codeDeRutaArchivo = (fileRoute) => {
+    const fr = String(fileRoute || '').trim().toUpperCase()
+    if (!fr) return null
+    for (const code of Object.keys(rutasDef)) {
+      if (String(code).toUpperCase() === fr) return code
+      if (String(rutasDef[code]?.nombre || '').trim().toUpperCase() === fr) return code
+    }
+    return null
+  }
+  // Rutas visibles: SOLO las detectadas en el archivo. Si ninguna configurada calza,
+  // se cae a las de la ciudad (para no bloquear la asignación).
   const codigosRuta = useMemo(() => {
     const todas = Object.keys(rutasDef).sort()
-    const filtradas = todas.filter((code) => { const ciu = rutasDef[code]?.ciudad; return !ciu || ciudadesFactura.has(ciu) })
-    return filtradas.length > 0 ? filtradas : todas
-  }, [rutasDef, ciudadesFactura])
+    const detectadas = todas.filter(rutaConfigEnArchivo)
+    if (detectadas.length > 0) return detectadas
+    const porCiudad = todas.filter((code) => { const ciu = rutasDef[code]?.ciudad; return !ciu || ciudadesFactura.has(ciu) })
+    return porCiudad.length > 0 ? porCiudad : todas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rutasDef, rutasArchivo, ciudadesFactura])
+
+  // Autoasigna cada chofer a la ruta DETECTADA en su archivo (si aún no tiene una),
+  // resolviéndola a la ruta configurada por código o nombre. La ruta guardada
+  // (rutaDefault) tiene prioridad; esto llena el resto automáticamente.
+  useEffect(() => {
+    if (!modoRuta || !combinado) return
+    setAsignacionRuta((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const nombre of nombresFactura) {
+        if (next[nombre]) continue
+        const code = codeDeRutaArchivo(rutaArchivoDeChofer[nombre])
+        if (code) { next[nombre] = code; changed = true }
+      }
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoRuta, combinado, nombresFactura, rutasDef])
   const toggleDriverRuta = (driver, code) => setAsignacionRuta((a) => {
     const n = { ...a }
     if (n[driver] === code) delete n[driver]

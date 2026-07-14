@@ -19,7 +19,12 @@ const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true 
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
-  const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity, ciudadesEmpresa } = useData()
+  const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity, ciudadesEmpresa, ajustes } = useData()
+  // Modo POR RUTA: el rate del chofer sale de su RUTA (no editable aquí); en modo
+  // estándar sale de su ficha (editable). Se muestra el que realmente se le aplica.
+  const modoRuta = ajustes?.modoConfig === 'ruta'
+  const rutasDef = ajustes?.reglasRuta || {}
+  const rateDeRuta = (d) => { const r = rutasDef[d?.rutaDefault] || {}; return { ind: Number(r.tarifaInd) || 0, dob: Number(r.tarifaDoble) || 0, ruta: d?.rutaDefault } }
   // Nombre legible de una ciudad (config de la empresa primero, luego catálogo).
   const nombreCiudadCorto = (cod) => (ciudadesEmpresa || []).find((c) => c.codigo === cod)?.nombre || nombreCiudad(cod)
   const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
@@ -478,14 +483,26 @@ export default function Choferes() {
                       {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    <input type="number" step="0.01" min="0" value={borradores[d.id]?.ind ?? ''} onChange={(e) => setBorrador(d.id, 'ind', e.target.value)} onBlur={() => guardarTarifa(d)}
-                      className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <input type="number" step="0.01" min="0" value={borradores[d.id]?.dob ?? ''} onChange={(e) => setBorrador(d.id, 'dob', e.target.value)} onBlur={() => guardarTarifa(d)}
-                      className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
-                  </td>
+                  {modoRuta ? (
+                    <>
+                      <td className="px-3 py-2 text-right">
+                        <div className="font-semibold">{money(rateDeRuta(d).ind)}</div>
+                        <div className="text-[10px] text-slate-400">{rateDeRuta(d).ruta ? `ruta ${rateDeRuta(d).ruta}` : 'sin ruta'}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">{money(rateDeRuta(d).dob)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-2 text-right">
+                        <input type="number" step="0.01" min="0" value={borradores[d.id]?.ind ?? ''} onChange={(e) => setBorrador(d.id, 'ind', e.target.value)} onBlur={() => guardarTarifa(d)}
+                          className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <input type="number" step="0.01" min="0" value={borradores[d.id]?.dob ?? ''} onChange={(e) => setBorrador(d.id, 'dob', e.target.value)} onBlur={() => guardarTarifa(d)}
+                          className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                      </td>
+                    </>
+                  )}
                   <td className="px-3 py-2 text-right">{w ? num(w.individuales) : '—'}</td>
                   <td className="px-3 py-2 text-right">{w ? num(w.dobles) : '—'}</td>
                   <td className="px-3 py-2 text-right">{w ? `${w.claimsActivos}/${w.claimsTotales}` : '—'}</td>
