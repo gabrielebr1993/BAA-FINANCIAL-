@@ -93,17 +93,29 @@ export default function PerfilChofer() {
   const nombreEmpresa = empresaActiva?.nombre || 'MilePay'
   const estadoDe = (h) => ((pagosStatus[h.id] || pagosStatusSemana[h.semana]) === 'pagado' ? 'Pagado' : 'Pendiente')
   const archivoPago = `${nombreEmpresa} - Pagos ${decoded}`.replace(/[^\w\s.-]/g, '').trim()
+  // Los montos internos de claims (mi descuento / lo de Gofo) SOLO salen en el archivo
+  // si el ojo está activado (verMontosClaim). Si está oculto, se enmascaran.
+  const oculto = '••••'
   const exportarPagoExcel = () => exportarExcel(archivoPago, [
     { nombre: 'Pagos', rows: historial.map((h) => ({
       Semana: h.semana, Entregas: h.paquetes, Claims: h.claims, Fallidos: h.fallidos,
-      Prestamo: -(h.prestamo || 0), Bono: h.bono || 0, 'Descuento claims': -(h.descuentoClaims || 0),
+      Prestamo: -(h.prestamo || 0), Bono: h.bono || 0,
+      'Descuento claims': verMontosClaim ? -(h.descuentoClaims || 0) : oculto,
       Pagado: h.totalPagar, Estado: estadoDe(h),
     })) },
+    ...(claimsChofer.length ? [{ nombre: 'Claims', rows: claimsChofer.map((c) => ({
+      Waybill: c.waybill, Fecha: c.date, Tipo: etiquetaTipoClaim(c.claimType),
+      'Te cobre': c.perdonado ? 0 : (verMontosClaim ? feeDeClaim(inv, c.ciudad, c) : oculto),
+      'Desconto Gofo': verMontosClaim ? -Math.abs(Number(c.montoGofo) || 0) : oculto,
+      Estado: c.perdonado ? 'Perdonado' : 'Activo',
+    })) }] : []),
   ])
   const exportarPagoPDF = () => exportarPDF(archivoPago, `${nombreEmpresa} — Recibo de pagos`, `${decoded}`, [
     { titulo: 'Resumen de pagos por semana', head: ['Semana', 'Entregas', 'Claims', 'Préstamo', 'Bono', 'Pagado', 'Estado'],
       body: historial.map((h) => [h.semana, num(h.paquetes), num(h.claims), h.prestamo > 0 ? `-${money(h.prestamo)}` : money(0), h.bono > 0 ? `+${money(h.bono)}` : money(0), money(h.totalPagar), estadoDe(h)]) },
     { titulo: 'Total del periodo', head: ['Concepto', 'Monto'], body: [['Total pagado', money(totalPagadoAcumulado)]] },
+    ...(claimsChofer.length ? [{ titulo: `Detalle de claims${verMontosClaim ? '' : ' (montos ocultos)'}`, head: ['Waybill', 'Fecha', 'Tipo', 'Te cobré', 'Descontó Gofo', 'Estado'],
+      body: claimsChofer.map((c) => [c.waybill, c.date, etiquetaTipoClaim(c.claimType), c.perdonado ? '—' : (verMontosClaim ? `-${money(feeDeClaim(inv, c.ciudad, c))}` : oculto), verMontosClaim ? `-${money(Math.abs(Number(c.montoGofo) || 0))}` : oculto, c.perdonado ? 'Perdonado' : 'Activo']) }] : []),
   ])
   const trendData = [...historial].reverse().map((h) => ({ name: h.semana, entregas: h.paquetes, claims: h.claims }))
 
@@ -288,6 +300,9 @@ export default function PerfilChofer() {
                 )}
               </div>
             </div>
+            <p className="mb-3 text-[11px] text-slate-400">
+              El export usa el <b>rango de fechas de la barra de arriba</b> (elige “Todo” para todo su historial). Si el <b>ojo</b> de “Detalle de claims” está oculto, los montos de claims salen ocultos también en el archivo.
+            </p>
             <Tabla
               columns={[
                 { key: 'semana', label: 'Semana' },
