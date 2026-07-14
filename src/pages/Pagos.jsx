@@ -4,20 +4,21 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
-import { calcularPagos, porCiudad, claimsDeCiudad, feeDeClaim, buscarDriver } from '../utils/calc'
+import { calcularPagos, porCiudad, claimsDeCiudad, feeDeClaim, buscarDriver, TODAS } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { PLANTILLA_PAGO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } from '../utils/mensajes'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet, Landmark } from 'lucide-react'
+import { nombreCiudad } from '../constants'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
-  const { perfil, esSuperAdmin } = useAuth()
-  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
+  const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
+  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   const puedePagar = esSuperAdmin || perfil?.role === 'owner'
   // SOLO dueño/súper-admin ven lo relacionado con GANANCIA (ingreso de Gofo,
   // ganancia total y por chofer). Un manager con acceso a Pagos solo ve lo
@@ -112,6 +113,24 @@ export default function Pagos() {
   const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
   const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
   const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
+
+  // GASTOS FIJOS del periodo (managers activos de la ciudad × semanas del rango).
+  // También los pagas tú, por eso aparecen aquí para marcarlos como pagados.
+  const semanas = Math.max(1, invoicesRango.length)
+  const gastosFijos = useMemo(() => {
+    const activos = (managers || []).filter((m) => m.activo !== false)
+    const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
+    const filtrados = ciudadFiltro ? activos.filter((m) => (m.ciudad || '') === ciudadFiltro) : activos
+    return filtrados
+      .map((m) => ({ ...m, monto: (Number(m.sueldoSemanal) || 0) * semanas, estado: (pagoInvoiceId && m.pagados && m.pagados[pagoInvoiceId] === 'pagado') ? 'pagado' : 'pendiente' }))
+      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  }, [managers, selectedCity, ciudadBloqueada, ciudadUsuario, semanas, pagoInvoiceId])
+  const totGastosFijos = gastosFijos.reduce((a, g) => a + g.monto, 0)
+  const marcarGasto = async (m, estado) => {
+    if (!pagoInvoiceId) return
+    await updateDoc(doc(db, 'managers', m.id), { [`pagados.${pagoInvoiceId}`]: estado })
+    await reloadManagers()
+  }
   const nPend = pagosConEstado.filter((p) => p.estado === 'pendiente').length
   const nPag = pagosConEstado.filter((p) => p.estado === 'pagado').length
 
@@ -235,6 +254,7 @@ export default function Pagos() {
           <div className="mb-2 flex flex-wrap gap-3">
             {verGanancia && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
             <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" sub={subAjustes} />
+            {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={`+ choferes = ${money(totPagar + totGastosFijos)}`} />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia('Ganancia (antes de gastos fijos)')} value={fGanancia(totGanancia)} icon={TrendingUp} accent="gold" />}
             <KPI label="Pendientes / Pagados" value={`${num(nPend)} / ${num(nPag)}`} icon={Clock} accent="slate" />
@@ -349,6 +369,55 @@ export default function Pagos() {
               <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
                 Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × multa por claim (configurable por empresa/ciudad). Perdonar un claim lo excluye del descuento y recalcula al instante.
               </p>
+
+              {/* GASTOS FIJOS del periodo: también los pagas tú. */}
+              {gastosFijos.length > 0 && (
+                <Card className="mt-4 p-4">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Landmark size={18} strokeWidth={1.8} className="text-brand-gold" />
+                    <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Gastos fijos del periodo</h3>
+                    <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Total: <b className="text-brand-navy dark:text-slate-100">{money(totGastosFijos)}</b></span>
+                  </div>
+                  <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
+                    <table className="w-full min-w-[480px] border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <th className="px-3 py-2 text-left font-semibold">Gasto fijo</th>
+                          <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
+                          <th className="px-3 py-2 text-right font-semibold">Monto ({semanas} sem.)</th>
+                          <th className="px-3 py-2 text-center font-semibold">Estado</th>
+                          <th className="px-3 py-2 text-right font-semibold"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gastosFijos.map((g) => (
+                          <tr key={g.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                            <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">{g.nombre}</td>
+                            <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{nombreCiudad(g.ciudad)}</td>
+                            <td className="px-3 py-2 text-right font-bold">{money(g.monto)}</td>
+                            <td className="px-3 py-2 text-center">{g.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
+                            <td className="px-3 py-2 text-right">
+                              {esRango ? <span className="text-xs text-slate-400">—</span> : g.estado === 'pagado'
+                                ? <Boton variant="ghost" onClick={() => marcarGasto(g, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
+                                : <Boton variant="success" onClick={() => marcarGasto(g, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-100 font-bold dark:bg-slate-800">
+                          <td className="px-3 py-2.5" colSpan={2}>TOTAL gastos fijos</td>
+                          <td className="px-3 py-2.5 text-right text-brand-gold">{money(totGastosFijos)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Gastos fijos activos de {selectedCity === TODAS ? 'todas las ciudades' : 'esta ciudad'} × {semanas} semana(s). {esRango ? 'Para marcarlos como pagados, elige una sola semana.' : 'Márcalos como pagados igual que a los choferes.'} Se configuran en Choferes → Gastos fijos.
+                  </p>
+                </Card>
+              )}
             </>
           )}
         </>
