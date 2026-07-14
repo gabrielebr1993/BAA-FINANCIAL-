@@ -257,8 +257,8 @@ export default function Pagos() {
         <>
           <div className="mb-2 flex flex-wrap gap-3">
             {verGanancia && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label="Total a pagar" value={money(totPagar)} icon={Receipt} accent="navy" sub={subAjustes} />
-            {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={`+ choferes = ${money(totPagar + totGastosFijos)}`} />}
+            <KPI label="Total a pagar" value={money(totPagar + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagar)} + fijos ${money(totGastosFijos)}` : subAjustes} />
+            {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub="managers / renta / etc." />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia('Ganancia real')} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
             <KPI label="Pendientes / Pagados" value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
