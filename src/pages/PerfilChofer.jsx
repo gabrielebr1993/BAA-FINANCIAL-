@@ -34,6 +34,7 @@ export default function PerfilChofer() {
   const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
   const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
+  const [pagosStatusSemana, setPagosStatusSemana] = useState({}) // semana -> estado (respaldo si el invoiceId no coincide por duplicados)
   const [verDatos, setVerDatos] = useState(false) // ojo: mostrar datos sensibles (personal/banco/Stripe)
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
@@ -88,9 +89,14 @@ export default function PerfilChofer() {
     ;(async () => {
       if (!activeCompanyId || !decoded) return
       const snap = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('driverNombre', '==', decoded)))
-      const m = {}
-      snap.docs.forEach((d) => { const x = d.data(); m[x.invoiceId] = x.estado || 'pendiente' })
-      if (vivo) setPagosStatus(m)
+      const m = {}, mSem = {}
+      snap.docs.forEach((d) => {
+        const x = d.data()
+        m[x.invoiceId] = x.estado || 'pendiente'
+        // Por semana: 'pagado' gana (si alguna factura de esa semana quedó pagada).
+        if (x.semana && (x.estado === 'pagado' || !mSem[x.semana])) mSem[x.semana] = x.estado || 'pendiente'
+      })
+      if (vivo) { setPagosStatus(m); setPagosStatusSemana(mSem) }
     })().catch(() => {})
     return () => { vivo = false }
   }, [activeCompanyId, decoded])
@@ -265,7 +271,7 @@ export default function PerfilChofer() {
                 if (key === 'totalPagar') return money(row.totalPagar)
                 if (key === 'paquetes' || key === 'claims' || key === 'fallidos') return num(row[key] || 0)
                 if (key === 'estado') {
-                  const e = pagosStatus[row.id]
+                  const e = pagosStatus[row.id] || pagosStatusSemana[row.semana]
                   return e === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>
                 }
                 return row[key]

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Trash2, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
 import { nombreCiudadDe } from '../utils/calc'
 import { eliminarFacturaCascada } from '../utils/borrado'
@@ -12,6 +12,18 @@ export default function Facturas() {
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total }
   const [error, setError] = useState('')
+
+  // Posibles DUPLICADOS: facturas con la misma ciudad + semana. Suele pasar al re-subir
+  // sin borrar la anterior. Se avisa para que borres las sobrantes (deja una por semana).
+  const duplicados = useMemo(() => {
+    const grupos = {}
+    for (const inv of invoices) {
+      const ciu = inv.ciudad || (inv.resumenCiudades || [])[0]?.ubicacion || ''
+      const k = `${ciu}||${inv.semana || ''}`
+      ;(grupos[k] = grupos[k] || []).push(inv)
+    }
+    return Object.values(grupos).filter((g) => g.length > 1)
+  }, [invoices])
 
   const eliminar = async () => {
     if (!porEliminar) return
@@ -46,6 +58,22 @@ export default function Facturas() {
     <div>
       <PageTitle>Facturas</PageTitle>
       {error && <Aviso tipo="error">{error}</Aviso>}
+
+      {duplicados.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={18} strokeWidth={1.9} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="text-sm text-amber-800 dark:text-amber-200">
+              <b>Posibles facturas duplicadas</b> (misma ciudad y semana). Esto pasa al re-subir una factura sin borrar la anterior, y puede desajustar claims y pagos. Deja <b>una sola por semana</b> y borra las demás con el botón <b>Eliminar</b>.
+              <ul className="mt-1.5 list-disc pl-5">
+                {duplicados.map((g, i) => (
+                  <li key={i}>{(g[0].ciudadNombre || (g[0].resumenCiudades || []).map((c) => nombreCiudadDe(g[0], c.ubicacion)).join(', ') || 'Sin ciudad')} — {g[0].semana}: <b>{g.length} copias</b></li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="p-4">
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({invoices.length})</h3>
