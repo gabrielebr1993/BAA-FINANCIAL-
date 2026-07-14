@@ -226,15 +226,16 @@ export function DataProvider({ children }) {
     subirBackupStorage(activeCompanyId).catch(() => {})
   }, [user, esDriver, activeCompanyId, ajustes])
 
-  // SOLO el rol ADMIN con ciudad asignada ve únicamente las facturas de SU ciudad
-  // (en todas las pantallas: filtro, dashboard, por factura, etc.).
+  // Usuario FIJADO a una ciudad (admin/manager por ciudad): ve ÚNICAMENTE las facturas
+  // de SU ciudad en TODAS las pantallas (filtro, dashboard, por factura, ganancias…).
+  // El dueño y el súper-admin ven todo.
   const invoicesVisibles = useMemo(() => {
-    if (perfil?.role !== 'admin' || !ciudadUsuario) return invoices
+    if (!ciudadBloqueada || !ciudadUsuario) return invoices
     return invoices.filter((inv) =>
       (inv.ciudad || '') === ciudadUsuario ||
       (inv.resumenCiudades || []).some((c) => c.ubicacion === ciudadUsuario)
     )
-  }, [invoices, perfil, ciudadUsuario])
+  }, [invoices, ciudadBloqueada, ciudadUsuario])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
   const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
