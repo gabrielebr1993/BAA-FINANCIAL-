@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Route, Settings2, Eye, EyeOff, HandCoins, Gift } from 'lucide-react'
+import { ArrowLeft, Truck, Star, MapPin, DollarSign, Package, AlertTriangle, TrendingUp, Wallet, PackageX, Route, Settings2, Eye, EyeOff, HandCoins, Gift, FileSpreadsheet, FileText } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import {
   calcularPagos, promediosFlota, calificarChofer, buscarDriver,
-  claimsValidos, porCiudad, claimsDeCiudad, nombreCiudadDe, etiquetaTipoClaim, TODAS,
+  claimsValidos, porCiudad, claimsDeCiudad, nombreCiudadDe, etiquetaTipoClaim, feeDeClaim, TODAS,
 } from '../utils/calc'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
-import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso } from '../components/ui'
+import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso, Boton } from '../components/ui'
 import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
 import FotoPerfil from '../components/FotoPerfil'
@@ -31,11 +32,12 @@ export default function PerfilChofer() {
   const { nombre } = useParams()
   const navigate = useNavigate()
   const decoded = decodeURIComponent(nombre || '')
-  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
+  const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, empresaActiva, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
   const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
   const [pagosStatus, setPagosStatus] = useState({}) // invoiceId -> 'pagado' | 'pendiente'
   const [pagosStatusSemana, setPagosStatusSemana] = useState({}) // semana -> estado (respaldo si el invoiceId no coincide por duplicados)
   const [verDatos, setVerDatos] = useState(false) // ojo: mostrar datos sensibles (personal/banco/Stripe)
+  const [verMontosClaim, setVerMontosClaim] = useState(false) // ojo: montos de claims (mi descuento / Gofo)
 
   const driver = useMemo(() => buscarDriver(drivers, decoded), [drivers, decoded])
   const pagos = useMemo(() => calcularPagos(inv, claims, drivers, selectedCity, ajustesPorChofer), [inv, claims, drivers, selectedCity, ajustesPorChofer])
@@ -68,8 +70,12 @@ export default function PerfilChofer() {
           fechaInicio: f.fechaInicio,
           paquetes: p.individuales + p.dobles,
           totalPagar: p.totalPagar,
+          prestamo: p.prestamo || 0,
+          bono: p.bono || 0,
+          descuentoClaims: p.descuentoClaims || 0,
           claims: p.claimsTotales,
           fallidos: p.fallidos || 0,
+          ingreso: p.ingreso || 0,
         }
       })
       .filter(Boolean)
@@ -81,6 +87,24 @@ export default function PerfilChofer() {
   }, [invoicesRango, claims, drivers, selectedCity, decoded])
 
   const totalPagadoAcumulado = historial.reduce((a, h) => a + h.totalPagar, 0)
+
+  // Exportar el resumen de pagos del chofer por el RANGO actual (Excel / PDF), con el
+  // nombre de la empresa. Útil si el chofer pide su recibo.
+  const nombreEmpresa = empresaActiva?.nombre || 'MilePay'
+  const estadoDe = (h) => ((pagosStatus[h.id] || pagosStatusSemana[h.semana]) === 'pagado' ? 'Pagado' : 'Pendiente')
+  const archivoPago = `${nombreEmpresa} - Pagos ${decoded}`.replace(/[^\w\s.-]/g, '').trim()
+  const exportarPagoExcel = () => exportarExcel(archivoPago, [
+    { nombre: 'Pagos', rows: historial.map((h) => ({
+      Semana: h.semana, Entregas: h.paquetes, Claims: h.claims, Fallidos: h.fallidos,
+      Prestamo: -(h.prestamo || 0), Bono: h.bono || 0, 'Descuento claims': -(h.descuentoClaims || 0),
+      Pagado: h.totalPagar, Estado: estadoDe(h),
+    })) },
+  ])
+  const exportarPagoPDF = () => exportarPDF(archivoPago, `${nombreEmpresa} — Recibo de pagos`, `${decoded}`, [
+    { titulo: 'Resumen de pagos por semana', head: ['Semana', 'Entregas', 'Claims', 'Préstamo', 'Bono', 'Pagado', 'Estado'],
+      body: historial.map((h) => [h.semana, num(h.paquetes), num(h.claims), h.prestamo > 0 ? `-${money(h.prestamo)}` : money(0), h.bono > 0 ? `+${money(h.bono)}` : money(0), money(h.totalPagar), estadoDe(h)]) },
+    { titulo: 'Total del periodo', head: ['Concepto', 'Monto'], body: [['Total pagado', money(totalPagadoAcumulado)]] },
+  ])
   const trendData = [...historial].reverse().map((h) => ({ name: h.semana, entregas: h.paquetes, claims: h.claims }))
 
   // Estado de pago por semana (payroll).
@@ -254,7 +278,15 @@ export default function PerfilChofer() {
           <Card className="mb-4 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de pagos</h3>
-              <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Total pagado en el rango: <b className="text-brand-navy dark:text-slate-100">{money(totalPagadoAcumulado)}</b></span>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Total pagado en el rango: <b className="text-brand-navy dark:text-slate-100">{money(totalPagadoAcumulado)}</b></span>
+                {historial.length > 0 && (
+                  <>
+                    <Boton variant="ghost" onClick={exportarPagoExcel} className="px-2.5 py-1 text-xs"><FileSpreadsheet size={13} strokeWidth={1.8} /> Excel</Boton>
+                    <Boton variant="gold" onClick={exportarPagoPDF} className="px-2.5 py-1 text-xs"><FileText size={13} strokeWidth={1.8} /> PDF</Boton>
+                  </>
+                )}
+              </div>
             </div>
             <Tabla
               columns={[
@@ -262,13 +294,17 @@ export default function PerfilChofer() {
                 { key: 'paquetes', label: 'Entregas', align: 'right' },
                 { key: 'claims', label: 'Claims', align: 'right' },
                 { key: 'fallidos', label: 'Fallidos', align: 'right' },
+                { key: 'prestamo', label: 'Préstamo', align: 'right' },
+                { key: 'bono', label: 'Bono', align: 'right' },
                 { key: 'totalPagar', label: 'Pagado', align: 'right' },
                 { key: 'estado', label: 'Estado', align: 'center' },
               ]}
               rows={historial.map((h) => ({ ...h, _key: h.id }))}
               emptyText="Sin semanas en el rango."
               renderCell={(row, key) => {
-                if (key === 'totalPagar') return money(row.totalPagar)
+                if (key === 'totalPagar') return <b>{money(row.totalPagar)}</b>
+                if (key === 'prestamo') return row.prestamo > 0 ? <span className="text-rose-600 dark:text-rose-400">−{money(row.prestamo)}</span> : <span className="text-slate-400">{money(0)}</span>
+                if (key === 'bono') return row.bono > 0 ? <span className="text-emerald-600 dark:text-emerald-400">+{money(row.bono)}</span> : <span className="text-slate-400">{money(0)}</span>
                 if (key === 'paquetes' || key === 'claims' || key === 'fallidos') return num(row[key] || 0)
                 if (key === 'estado') {
                   const e = pagosStatus[row.id] || pagosStatusSemana[row.semana]
@@ -281,13 +317,20 @@ export default function PerfilChofer() {
 
           {/* Detalle de claims */}
           <Card className="p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Detalle de claims ({claimsChofer.length})</h3>
-            <p className="mb-3 text-xs text-slate-400">Haz clic en un claim para abrir la ficha del tracking.</p>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Detalle de claims ({claimsChofer.length})</h3>
+              <button onClick={() => setVerMontosClaim((v) => !v)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verMontosClaim ? 'Ocultar montos' : 'Mostrar montos'}>
+                {verMontosClaim ? <EyeOff size={14} strokeWidth={1.9} /> : <Eye size={14} strokeWidth={1.9} />}
+                {verMontosClaim ? 'Ocultar montos' : 'Ver montos'}
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-400">“Te cobré” = lo que le descontaste al chofer por ese claim · “Descontó Gofo” = lo que Gofo te quitó a ti. Haz clic en un claim para abrir la ficha del tracking.</p>
             <Tabla
               columns={[
                 { key: 'waybill', label: 'Waybill' },
                 { key: 'date', label: 'Fecha' },
                 { key: 'claimType', label: 'Tipo' },
+                { key: 'miDescuento', label: 'Te cobré', align: 'right' },
                 { key: 'montoGofo', label: 'Descontó Gofo', align: 'right' },
                 { key: 'estadoRevision', label: 'Revisión', align: 'center' },
                 { key: 'estado', label: 'Estado', align: 'center' },
@@ -296,7 +339,8 @@ export default function PerfilChofer() {
               onRowClick={(row) => row.waybill && navigate(`/tracking/${encodeURIComponent(row.waybill)}`)}
               emptyText="Sin claims en el periodo."
               renderCell={(row, key) => {
-                if (key === 'montoGofo') return money(row.montoGofo)
+                if (key === 'miDescuento') { const v = row.perdonado ? 0 : feeDeClaim(inv, row.ciudad, row); return verMontosClaim ? <span className="font-semibold text-rose-600 dark:text-rose-400">{row.perdonado ? '—' : `−${money(v)}`}</span> : '••••' }
+                if (key === 'montoGofo') return verMontosClaim ? <span className="text-slate-500">−{money(Math.abs(Number(row.montoGofo) || 0))}</span> : '••••'
                 if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
                 if (key === 'estadoRevision') {
                   const e = row.estadoRevision
