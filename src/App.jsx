@@ -37,9 +37,9 @@ const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 const RegistroPublico = lazy(() => import('./pages/RegistroPublico'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
-function Page({ filtro, soloSuperAdmin, children }) {
+function Page({ filtro, soloSuperAdmin, roles, children }) {
   return (
-    <ProtectedRoute filtro={filtro} soloSuperAdmin={soloSuperAdmin}>
+    <ProtectedRoute filtro={filtro} soloSuperAdmin={soloSuperAdmin} roles={roles}>
       <Layout>
         <Suspense fallback={<Cargando texto="Cargando…" />}>{children}</Suspense>
       </Layout>
@@ -85,7 +85,7 @@ export default function App() {
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
               <Route path="/backups" element={<Page filtro="gestionarConfiguracion"><Backups /></Page>} />
               <Route path="/stripe" element={<Page filtro="gestionarConfiguracion"><Stripe /></Page>} />
-              <Route path="/ia/jarvis" element={<Page filtro="gestionarConfiguracion"><Jarvis /></Page>} />
+              <Route path="/ia/jarvis" element={<Page roles={['owner', 'admin']}><Jarvis /></Page>} />
               <Route path="/ia/panel" element={<Page soloSuperAdmin><PanelControl /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>

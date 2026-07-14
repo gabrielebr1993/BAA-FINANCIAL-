@@ -31,7 +31,8 @@ export default function Jarvis() {
   const navigate = useNavigate()
   const { activeCompanyId, empresaActiva, drivers, claims, facturaRango, selectedCity, setRango, setSelectedCity, reloadDrivers } = useData()
   const { perfil, esSuperAdmin } = useAuth()
-  const puede = esSuperAdmin || perfil?.role === 'owner'
+  // Dueño, súper-admin y admin (este último con datos SOLO de su ciudad) usan JARVIS.
+  const puede = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
 
   const [mensajes, setMensajes] = useState([
     { role: 'assistant', content: 'Hola, soy JARVIS. Toca la esfera o pulsa “Hablar” y pregúntame por rutas, pagos, choferes, claims o fallidos. También abro secciones y aplico filtros.' },
@@ -188,7 +189,7 @@ export default function Jarvis() {
   }
 
   if (!puede) {
-    return (<div><PageTitle>JARVIS</PageTitle><Aviso tipo="warn">Solo el <b>dueño</b> o el súper-admin pueden usar el asistente.</Aviso></div>)
+    return (<div><PageTitle>JARVIS</PageTitle><Aviso tipo="warn">Solo el <b>dueño</b>, el súper-admin o un <b>admin</b> pueden usar el asistente.</Aviso></div>)
   }
 
   const ultimaResp = [...mensajes].reverse().find((m) => m.role === 'assistant')?.content || ''

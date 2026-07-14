@@ -8,8 +8,8 @@ import Login from './Login'
 // `soloDriver` marca la ruta del Portal del chofer. El resto de rutas están
 // vedadas para el rol driver: si un chofer intenta entrar por URL a cualquier
 // sección normal, se le redirige a su portal (no ve ni carga nada más).
-export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, children }) {
-  const { user, cargando, puede, esSuperAdmin, esDriver } = useAuth()
+export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, roles, children }) {
+  const { user, cargando, puede, esSuperAdmin, esDriver, perfil } = useAuth()
   const location = useLocation()
   if (cargando)
     return (
@@ -26,6 +26,12 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, chi
   // Sección solo para súper-admin (ej. /empresas): un owner/manager NO puede
   // entrar ni por URL; se le redirige a su dashboard sin ver ni cargar nada.
   if (soloSuperAdmin && !esSuperAdmin) return <Navigate to="/" replace />
+  // Ruta abierta a ciertos ROLES (además del súper-admin), sin depender de los
+  // permisos granulares (ej. la IA: dueño + admin). Si no calza, al inicio.
+  if (roles && !(esSuperAdmin || roles.includes(perfil?.role))) {
+    const inicio = SECCIONES.find((s) => puede(s.permiso))
+    return <Navigate to={inicio ? inicio.path : '/'} replace />
+  }
   if (filtro && !puede(filtro)) {
     // En vez de un candado sin salida (típico al aterrizar en el Dashboard sin
     // permiso), llevamos al usuario a su PRIMERA sección permitida (ej. Pagos).

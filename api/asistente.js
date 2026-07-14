@@ -51,19 +51,63 @@ function toolsHabilitadas() {
   return tools
 }
 
+// Acota TODOS los datos a UNA ciudad (para el rol admin fijado a su ciudad):
+// filtra choferes/rutas/ciudades dentro de cada factura y recalcula los totales
+// de esa factura solo con lo de la ciudad. Así JARVIS nunca ve otras ciudades.
+function acotarACiudad(invoices, drivers, claims, ciudad) {
+  if (!ciudad) return { invoices, drivers, claims }
+  const drv = drivers.filter((d) => (d.ciudad || '') === ciudad)
+  const nombresCiudad = new Set(drv.map((d) => norm(d.nombre)))
+  // Claim de la ciudad: por su campo ciudad; si no lo trae, por su chofer de la ciudad.
+  const cl = claims.filter((c) => (c.ciudad ? c.ciudad === ciudad : nombresCiudad.has(norm(c.courier))))
+  // Descuento Gofo por factura (solo claims de la ciudad).
+  const gofoPorInv = {}
+  for (const c of cl) { const k = c.invoiceId || ''; gofoPorInv[k] = (gofoPorInv[k] || 0) + Math.abs(Number(c.montoGofo) || 0) }
+  const invs = []
+  for (const inv of invoices) {
+    const chof = (inv.resumenChoferes || []).filter((c) => (c.ciudad || '') === ciudad)
+    const rutas = (inv.resumenRutas || []).filter((r) => (r.ciudad || '') === ciudad)
+    const ciuds = (inv.resumenCiudades || []).filter((c) => c.ubicacion === ciudad)
+    // Si la factura no tiene NADA de esta ciudad, se descarta por completo.
+    if (chof.length === 0 && ciuds.length === 0) continue
+    const ind = chof.reduce((a, c) => a + num(c.individuales), 0)
+    const dob = chof.reduce((a, c) => a + num(c.dobles), 0)
+    invs.push({
+      ...inv,
+      resumenChoferes: chof,
+      resumenRutas: rutas,
+      resumenCiudades: ciuds,
+      ingresoTotal: round(chof.reduce((a, c) => a + num(c.ingreso), 0)),
+      totalIndividuales: ind,
+      totalDobles: dob,
+      totalPaquetes: ind + dob,
+      totalClaims: chof.reduce((a, c) => a + num(c.numClaims), 0),
+      totalFallidos: chof.reduce((a, c) => a + num(c.fallidos), 0),
+      totalDescuentoGofo: round(gofoPorInv[inv.id] || 0),
+      fallidosSinAsociar: [], // nombres sin ciudad: no se atribuyen a una ciudad
+    })
+  }
+  return { invoices: invs, drivers: drv, claims: cl }
+}
+
 // ---- Carga de datos (una sola vez) + resumen ligero -------------------------
-async function cargarDatos(db, companyId) {
+async function cargarDatos(db, companyId, ciudadFiltro = null) {
   const invSnap = await db.collection('invoices').where('companyId', '==', companyId).get()
-  const invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  let invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
     .map((i) => ({ ...i, _fi: fecha(i.fechaInicio) }))
     .sort((a, b) => (b._fi?.getTime() || 0) - (a._fi?.getTime() || 0))
   const drvSnap = await db.collection('drivers').where('companyId', '==', companyId).get()
-  const drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  let drivers = drvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
   let ajustes = {}
   try { const s = await db.collection('settings').doc(companyId).get(); ajustes = s.exists ? s.data() : {} } catch { /* noop */ }
   // Claims (para la ganancia NETA por chofer, igual que la app). Mucho menos que paquetes.
   let claims = []
   try { const cs = await db.collection('claims').where('companyId', '==', companyId).get(); claims = cs.docs.map((d) => ({ id: d.id, ...d.data() })) } catch { /* noop */ }
+  // Acota a la ciudad del admin (si aplica) ANTES de agregar/resumir.
+  if (ciudadFiltro) {
+    const r = acotarACiudad(invoices, drivers, claims, ciudadFiltro)
+    invoices = r.invoices; drivers = r.drivers; claims = r.claims
+  }
   const invById = {}; for (const i of invoices) invById[i.id] = i
   const claimNet = netoClaimsPorChofer(claims, invById)
   return { invoices, drivers, ajustes, claimNet }
@@ -237,14 +281,20 @@ export default async function handler(req, res) {
 
     const { companyId, messages } = req.body || {}
     if (!companyId) return res.status(400).json({ ok: false, error: 'Falta companyId.' })
-    const esOwner = auth.caller && auth.caller.role === 'owner' && auth.caller.companyId === companyId
-    if (!auth.esSuper && !esOwner) return res.status(403).json({ ok: false, error: 'Solo el dueño o súper-admin pueden usar el asistente.' })
+    const mismaEmpresa = auth.caller && auth.caller.companyId === companyId
+    const esOwner = mismaEmpresa && auth.caller.role === 'owner'
+    const esAdmin = mismaEmpresa && auth.caller.role === 'admin'
+    if (!auth.esSuper && !esOwner && !esAdmin) return res.status(403).json({ ok: false, error: 'No tienes permiso para usar el asistente.' })
     if (!Array.isArray(messages) || messages.length === 0) return res.status(400).json({ ok: false, error: 'Faltan mensajes.' })
+
+    // El admin queda ACOTADO a su ciudad: JARVIS solo ve/analiza datos de esa ciudad.
+    const ciudadFiltro = (esAdmin && auth.caller.ciudad) ? auth.caller.ciudad : null
 
     let empresaNombre = companyId
     try { const c = await auth.db.collection('companies').doc(companyId).get(); if (c.exists) empresaNombre = c.data().nombre || companyId } catch { /* noop */ }
+    if (ciudadFiltro) empresaNombre = `${empresaNombre} · ciudad ${ciudadFiltro}`
 
-    const datos = await cargarDatos(auth.db, companyId)
+    const datos = await cargarDatos(auth.db, companyId, ciudadFiltro)
     const resumen = resumenLigero(datos, empresaNombre)
     const nombreUsuario = (auth.caller && auth.caller.nombre) || auth.decoded.name || 'Gabriele'
 

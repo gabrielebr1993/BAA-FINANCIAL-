@@ -156,7 +156,7 @@ function SidebarContent({ onNavigate }) {
   const { numAlertas } = useData()
   const location = useLocation()
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
-  const puedeIA = esSuperAdmin || perfil?.role === 'owner'
+  const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
 
   return (
     <aside className="flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
