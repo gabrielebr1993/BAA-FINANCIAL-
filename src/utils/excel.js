@@ -177,12 +177,19 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
       peso: { cands: ['settlementweightlb', 'settlementweight'], fallback: 14 },
       rango: { cands: ['billingweightrange'], fallback: -1 },
       waybill: { cands: ['waybillno', 'waybill'], fallback: 0 },
+      // "STOP Point Details": posición del paquete dentro de la parada. 1 = primer
+      // envío (individual); 2+ = envío subsiguiente al MISMO domicilio (DOBLE).
+      stopPos: { cands: ['stoppointdetails', 'stoppoint', 'stoppointdetail'], fallback: 17 },
     },
     ['courier', 'regionroute']
   )
   for (const r of detRows) {
     const monto = toNum(r.monto)
     const ruta = (r.ruta == null ? '' : String(r.ruta)).trim() || 'Sin ruta'
+    // Posición en la parada: si viene un número válido, ≥2 es "doble" (envío
+    // subsiguiente). Si no viene la columna, se cae al criterio por monto.
+    const posNum = Number(r.stopPos)
+    const stopPos = Number.isFinite(posNum) && posNum > 0 ? posNum : null
     detalles.push({
       courier: (r.courier == null ? '' : String(r.courier)).trim() || 'Sin chofer',
       ruta,
@@ -191,7 +198,8 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
       peso: toNum(r.peso),
       rango: r.rango == null ? '' : String(r.rango),
       waybill: r.waybill == null ? '' : String(r.waybill),
-      esDoble: monto === DOBLE_MONTO,
+      stopPos,
+      esDoble: stopPos != null ? stopPos >= 2 : monto === DOBLE_MONTO,
     })
     sumaEntregas += monto
   }

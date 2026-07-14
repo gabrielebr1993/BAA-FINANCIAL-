@@ -4,7 +4,7 @@ import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArchivoPrecios } from '../utils/excel'
-import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
+import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDobleDetalle, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
 import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
 import { guardarCiudadesEmpresa } from '../utils/empresaSettings'
 import { parsearPeriodo } from '../utils/rango'
@@ -182,7 +182,7 @@ export default function CargarFactura() {
       const { dobleMonto } = resolverReglas(ajustes, code)
       return {
         ...p,
-        detalles: p.detalles.map((d) => ({ ...d, courier: nom(d.courier), ciudad: code, esDoble: esDoblePorRegla(d.monto, dobleMonto) })),
+        detalles: p.detalles.map((d) => ({ ...d, courier: nom(d.courier), ciudad: code, esDoble: esDobleDetalle(d, dobleMonto) })),
         claims: p.claims.map((c) => ({ ...c, courier: nom(c.courier), ciudad: code })),
       }
     })

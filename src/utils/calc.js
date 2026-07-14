@@ -52,6 +52,16 @@ export function esDoblePorRegla(monto, dobleMonto = DOBLE_MONTO) {
   return Math.abs((Number(monto) || 0) - (Number(dobleMonto) || 0)) < 1e-9
 }
 
+// ¿Un DETALLE es "doble"? Prioriza la columna "STOP Point Details" (posición en la
+// parada: 2+ = envío subsiguiente al mismo domicilio = doble), que es el criterio
+// correcto e independiente del peso/monto. Si esa columna no viene en la factura,
+// se cae al criterio por monto (dobleMonto configurable por ciudad).
+export function esDobleDetalle(d, dobleMonto = DOBLE_MONTO) {
+  const pos = Number(d?.stopPos)
+  if (Number.isFinite(pos) && pos > 0) return pos >= 2
+  return esDoblePorRegla(d?.monto, dobleMonto)
+}
+
 // claimFee (multa M1) aplicado a una factura para una ciudad. Usa las reglas que se
 // guardaron EN la factura al procesarla (histórico consistente); si no, global 100.
 export function claimFeeDe(inv, ciudad) {
