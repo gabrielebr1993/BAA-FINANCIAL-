@@ -1,14 +1,28 @@
 // Filtro de rango de fechas: date pickers Desde/Hasta + botón BUSCAR (aplica al
 // pulsar, no al teclear) + atajos rápidos + toggle Combinado/Por semana.
 import { useState, useEffect } from 'react'
-import { Calendar, Search, RotateCcw } from 'lucide-react'
+import { Calendar, Search, RotateCcw, FileText } from 'lucide-react'
 import { useData } from '../DataContext'
 import { PRESETS } from '../utils/rango'
+import { nombreCiudadDe } from '../utils/calc'
 
 const ATAJOS = PRESETS.filter((p) => p.key !== 'personalizado')
 
+// Descripción corta de cada atajo, para que quede claro qué muestra cada opción.
+const DESCRIPCIONES = {
+  ultima: 'Solo la factura más reciente.',
+  ultimas4: 'Suma de las 4 facturas más recientes.',
+  esteMes: 'Todas las facturas del mes actual.',
+  mesPasado: 'Todas las facturas del mes anterior.',
+  esteTrimestre: 'Todas las facturas del trimestre actual.',
+  esteAno: 'Todas las facturas de este año.',
+  todo: 'Todas las facturas cargadas.',
+  personalizado: 'Facturas cuya semana toca las fechas elegidas.',
+  factura: 'Los datos de una sola factura que elijas.',
+}
+
 export default function RangeSelector() {
-  const { rango, setRango, vista, setVista, invoicesRango } = useData()
+  const { rango, setRango, vista, setVista, invoicesRango, invoices } = useData()
   const varias = invoicesRango.length > 1
 
   // Estado LOCAL de las fechas: solo se aplica al pulsar "Buscar" (así no filtra a
@@ -19,6 +33,10 @@ export default function RangeSelector() {
 
   const buscar = () => {
     let d = desde, h = hasta
+    // Si solo se elige UNA fecha, se toma como ese día exacto (muestra la factura/semana
+    // que contiene esa fecha), en vez de "desde esa fecha en adelante".
+    if (d && !h) h = d
+    if (h && !d) d = h
     if (d && h && d > h) { const t = d; d = h; h = t } // por si se invierten
     setRango({ preset: 'personalizado', desde: d, hasta: h })
   }
@@ -28,7 +46,15 @@ export default function RangeSelector() {
   const inputCls = 'rounded-lg bg-transparent px-1 py-1.5 text-sm text-slate-700 outline-none dark:text-slate-100'
   const activoPersonalizado = rango.preset === 'personalizado' && (rango.desde || rango.hasta)
 
+  // Etiqueta legible de una factura para el selector "Por factura".
+  const etiquetaFactura = (inv) => {
+    const ciudad = inv.ciudadNombre || nombreCiudadDe(inv, inv.ciudad) || 'Sin ciudad'
+    return `${ciudad} · ${inv.semana || 's/f'}`
+  }
+  const descripcion = DESCRIPCIONES[rango.preset] || ''
+
   return (
+    <div className="flex w-full flex-col gap-1.5">
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
         <Calendar size={16} strokeWidth={1.8} className="text-slate-400" />
@@ -61,6 +87,23 @@ export default function RangeSelector() {
         ))}
       </div>
 
+      {/* Por factura: elige una factura específica y ve solo sus datos. */}
+      <div className={`flex items-center gap-1.5 rounded-xl border px-2 py-1 ${rango.preset === 'factura' ? 'border-brand-navy bg-brand-navy/5 dark:border-brand-gold dark:bg-brand-gold/10' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'}`}>
+        <FileText size={16} strokeWidth={1.8} className="text-slate-400" />
+        <select
+          value={rango.preset === 'factura' ? (rango.invoiceId || '') : ''}
+          onChange={(e) => { const id = e.target.value; if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' }); else setPreset('ultima') }}
+          className="max-w-[220px] rounded-lg bg-transparent px-1 py-1.5 text-sm text-slate-700 outline-none dark:text-slate-100"
+          aria-label="Ver por factura"
+          title="Ver los datos de una sola factura"
+        >
+          <option value="">Por factura…</option>
+          {(invoices || []).map((inv) => (
+            <option key={inv.id} value={inv.id}>{etiquetaFactura(inv)}</option>
+          ))}
+        </select>
+      </div>
+
       {varias && (
         <div className="inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
           {[{ k: 'combinado', l: 'Combinado' }, { k: 'porSemana', l: 'Por semana' }].map((v) => (
@@ -76,6 +119,8 @@ export default function RangeSelector() {
           ))}
         </div>
       )}
+    </div>
+      {descripcion && <p className="m-0 pl-1 text-[11px] text-slate-400 dark:text-slate-500">{descripcion}</p>}
     </div>
   )
 }

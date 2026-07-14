@@ -56,6 +56,11 @@ export function invoicesEnRango(invoices, rango) {
   if (lista.length === 0) return []
   const { preset } = rango || { preset: 'ultima' }
 
+  // Por factura: una sola factura elegida a mano (por id).
+  if (preset === 'factura') {
+    const sel = lista.find((i) => i.id === rango.invoiceId)
+    return sel ? [sel] : []
+  }
   if (preset === 'todo') return lista
   if (preset === 'ultima') return lista.slice(0, 1)
   if (preset === 'ultimas4') return lista.slice(0, 4)
