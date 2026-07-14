@@ -209,6 +209,7 @@ export default function CargarFactura() {
         ...p,
         detalles: p.detalles.map((d) => ({ ...d, courier: nom(d.courier), ciudad: code, esDoble: esDobleDetalle(d, dobleMonto) })),
         claims: p.claims.map((c) => ({ ...c, courier: nom(c.courier), ciudad: code })),
+        driverSummary: (p.driverSummary || []).map((ds) => ({ ...ds, nombre: nom(ds.nombre) })),
       }
     })
     return combinarArchivos(overridden, nombreMap)

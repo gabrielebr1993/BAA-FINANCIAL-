@@ -305,11 +305,35 @@ export function procesarArchivo(arrayBuffer, nombreArchivo, modoConfig = 'estand
   console.log('[MilePay] Choferes únicos:', choferesUnicos.length)
   /* eslint-enable no-console */
 
+  // --- Driver Summary --- conteos CONFIABLES por chofer (fuente principal de
+  // individuales/dobles/ingreso en modo estándar). B=nombre, J=Total Full Price
+  // Tickets (individuales), L=Total Non-Full Price Tickets (dobles), G=Delivery fee.
+  const hDriverSum = buscarHoja(wb, 'driversummary')
+  const driverSummary = []
+  if (hDriverSum) {
+    const dsRows = leerObjetos(
+      hDriverSum,
+      {
+        nombre: { cands: ['courier', 'couriername'], fallback: 1 },
+        individuales: { cands: ['totalfullpricetickets'], fallback: 9 },
+        dobles: { cands: ['totalnonfullpricetickets'], fallback: 11 },
+        ingreso: { cands: ['deliveryfeeamountexclusiveoftaxes', 'deliveryfee'], fallback: 6 },
+      },
+      ['courier']
+    )
+    for (const r of dsRows) {
+      const nombre = String(r.nombre == null ? '' : r.nombre).trim()
+      if (!nombre) continue
+      driverSummary.push({ nombre, individuales: toNum(r.individuales), dobles: toNum(r.dobles), ingreso: toNum(r.ingreso) })
+    }
+  }
+
   return {
     archivoNombre: nombreArchivo,
     semana: detectarSemana(nombreArchivo),
     detalles,
     claims,
+    driverSummary,
     sumaEntregas,
     sumaOffset,
     sumaClaims,
@@ -419,7 +443,7 @@ function nombreDe(code, nombreMap) {
 
 // A partir de una lista de detalles + claims (posiblemente de varios archivos),
 // construye todo el resumen que se guarda/usa en la app.
-export function construirResumen(detalles, claims, nombreMap) {
+export function construirResumen(detalles, claims, nombreMap, driverSummary = null) {
   const porChofer = {}
   const porChoferRuta = {} // desglose exacto por (chofer, ruta)
   const porRuta = {}
@@ -488,6 +512,47 @@ export function construirResumen(detalles, claims, nombreMap) {
     porCiudad[d.ciudad]._rutas.add(d.ruta)
     if (d.esDoble) porCiudad[d.ciudad].dobles += 1
     else porCiudad[d.ciudad].individuales += 1
+  }
+
+  // FUENTE DE CONTEOS: si viene el "Driver Summary", los individuales/dobles/ingreso
+  // por chofer se toman de ahí (más confiable). La CIUDAD de cada chofer se conserva
+  // de los detalles (columna E / ruta), y las RUTAS (porChoferRuta/porRuta) quedan
+  // intactas para el modo por ruta. Se recomputan porCiudad y los totales.
+  if (driverSummary && driverSummary.length) {
+    const norm = (n) => (n || '').trim().toLowerCase()
+    const ciudadDeChofer = {}
+    {
+      const mejor = {}
+      for (const c of Object.values(porChofer)) {
+        const pq = c.individuales + c.dobles
+        if (mejor[c.nombre] == null || pq > mejor[c.nombre]) { mejor[c.nombre] = pq; ciudadDeChofer[norm(c.nombre)] = c.ciudad }
+      }
+    }
+    // Nuevo porChofer basado en el Driver Summary.
+    const nuevoPorChofer = {}
+    for (const ds of driverSummary) {
+      const nombre = ds.nombre
+      const ciudad = ciudadDeChofer[norm(nombre)] != null ? ciudadDeChofer[norm(nombre)] : ''
+      const ck = `${nombre}||${ciudad}`
+      nuevoPorChofer[ck] = { nombre, ciudad, individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: Number(ds.ingreso) || 0, numClaims: 0 }
+    }
+    for (const k of Object.keys(porChofer)) delete porChofer[k]
+    Object.assign(porChofer, nuevoPorChofer)
+    // Recomputar porCiudad desde el nuevo porChofer (conservando el set de rutas).
+    const rutasCiudad = {}
+    for (const c of Object.values(porCiudad)) rutasCiudad[c.ubicacion] = c._rutas
+    for (const k of Object.keys(porCiudad)) delete porCiudad[k]
+    for (const c of Object.values(porChofer)) {
+      if (!porCiudad[c.ciudad]) porCiudad[c.ciudad] = { ubicacion: c.ciudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, _choferes: new Set(), _rutas: rutasCiudad[c.ciudad] || new Set() }
+      porCiudad[c.ciudad].individuales += c.individuales
+      porCiudad[c.ciudad].dobles += c.dobles
+      porCiudad[c.ciudad].paquetes += c.individuales + c.dobles
+      porCiudad[c.ciudad].ingreso += c.ingreso
+      porCiudad[c.ciudad]._choferes.add(c.nombre)
+    }
+    // Recomputar totales globales.
+    totalIndividuales = 0; totalDobles = 0; totalPaquetes = 0; ingresoTotal = 0
+    for (const c of Object.values(porChofer)) { totalIndividuales += c.individuales; totalDobles += c.dobles; totalPaquetes += c.individuales + c.dobles; ingresoTotal += c.ingreso }
   }
 
   // ruta principal de cada chofer (donde entrega más paquetes), para atribuir claims
@@ -563,7 +628,18 @@ export function construirResumen(detalles, claims, nombreMap) {
 export function combinarArchivos(procesados, nombreMap) {
   const detalles = procesados.flatMap((p) => p.detalles)
   const claims = procesados.flatMap((p) => p.claims)
-  const resumen = construirResumen(detalles, claims, nombreMap)
+  // Driver Summary combinado (suma por chofer) para usar como fuente de conteos.
+  const dsAcc = {}
+  for (const p of procesados) for (const ds of (p.driverSummary || [])) {
+    const k = (ds.nombre || '').trim().toLowerCase()
+    if (!k) continue
+    if (!dsAcc[k]) dsAcc[k] = { nombre: ds.nombre, individuales: 0, dobles: 0, ingreso: 0 }
+    dsAcc[k].individuales += ds.individuales || 0
+    dsAcc[k].dobles += ds.dobles || 0
+    dsAcc[k].ingreso += ds.ingreso || 0
+  }
+  const driverSummary = Object.values(dsAcc)
+  const resumen = construirResumen(detalles, claims, nombreMap, driverSummary)
 
   const sumaEntregas = procesados.reduce((a, p) => a + p.sumaEntregas, 0)
   const sumaOffset = procesados.reduce((a, p) => a + p.sumaOffset, 0)
