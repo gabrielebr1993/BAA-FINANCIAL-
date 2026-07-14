@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { collection, getDocs, query, where, doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
@@ -14,10 +14,11 @@ function permisosVacios() {
 const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudad: '', permissions: permisosVacios() }
 
 export default function Usuarios() {
-  const { activeCompanyId, empresaActiva, drivers, ciudadesEmpresa } = useData()
+  const { activeCompanyId, empresaActiva, drivers, ciudadesEmpresa, invoices } = useData()
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
+  const [filtroCiudadDriver, setFiltroCiudadDriver] = useState('') // filtro de ciudad para elegir chofer
   const [modoManual, setModoManual] = useState(false) // respaldo: crear con UID manual
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -50,6 +51,30 @@ export default function Usuarios() {
 
   // Nombre del chofer vinculado (para rol driver).
   const driverNombreDe = (id) => drivers.find((d) => d.id === id)?.nombre || ''
+
+  // Ciudad de cada chofer (por nombre): la ciudad donde tiene MÁS paquetes en las
+  // facturas cargadas. Sirve para el filtro por ciudad al elegir el chofer.
+  const ciudadDeDriverNombre = useMemo(() => {
+    const acc = {} // nombre -> { ciudad -> paquetes }
+    for (const inv of (invoices || [])) {
+      for (const ch of (inv.resumenChoferes || [])) {
+        if (!ch.ciudad) continue
+        const pq = (ch.individuales || 0) + (ch.dobles || 0)
+        acc[ch.nombre] = acc[ch.nombre] || {}
+        acc[ch.nombre][ch.ciudad] = (acc[ch.nombre][ch.ciudad] || 0) + pq
+      }
+    }
+    const out = {}
+    for (const [nombre, m] of Object.entries(acc)) out[nombre] = Object.keys(m).sort((a, b) => m[b] - m[a])[0] || ''
+    return out
+  }, [invoices])
+
+  // Choferes ordenados y filtrados por la ciudad elegida (si hay filtro).
+  const driversFiltrados = useMemo(() => {
+    const orden = [...drivers].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+    if (!filtroCiudadDriver) return orden
+    return orden.filter((d) => ciudadDeDriverNombre[d.nombre] === filtroCiudadDriver)
+  }, [drivers, filtroCiudadDriver, ciudadDeDriverNombre])
 
   const guardar = async () => {
     setError('')
@@ -145,14 +170,24 @@ export default function Usuarios() {
             </Select>
           </Campo>
           {form.role === 'driver' && (
-            <Campo label="Chofer vinculado">
-              <Select className="w-56" value={form.driverId} onChange={(e) => setF('driverId', e.target.value)}>
-                <option value="">— Elige el chofer —</option>
-                {[...drivers].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((d) => (
-                  <option key={d.id} value={d.id}>{d.nombre}</option>
-                ))}
-              </Select>
-            </Campo>
+            <>
+              <Campo label="Filtrar por ciudad">
+                <Select className="w-44" value={filtroCiudadDriver} onChange={(e) => setFiltroCiudadDriver(e.target.value)}>
+                  <option value="">Todas las ciudades</option>
+                  {[...(ciudadesEmpresa || [])].filter((c) => c.codigo).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((c) => (
+                    <option key={c.codigo} value={c.codigo}>{c.nombre}</option>
+                  ))}
+                </Select>
+              </Campo>
+              <Campo label="Chofer vinculado">
+                <Select className="w-56" value={form.driverId} onChange={(e) => setF('driverId', e.target.value)}>
+                  <option value="">— Elige el chofer —</option>
+                  {driversFiltrados.map((d) => (
+                    <option key={d.id} value={d.id}>{d.nombre}{ciudadDeDriverNombre[d.nombre] ? ` · ${ciudadDeDriverNombre[d.nombre]}` : ''}</option>
+                  ))}
+                </Select>
+              </Campo>
+            </>
           )}
           {form.role !== 'owner' && form.role !== 'driver' && (
             <Campo label="Ciudad asignada">

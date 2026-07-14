@@ -362,7 +362,21 @@ export default function CargarFactura() {
   // ---- modo POR RUTA: asignación manual de choferes a rutas ----
   const modoRuta = ajustes?.modoConfig === 'ruta'
   const rutasDef = useMemo(() => ajustes?.reglasRuta || {}, [ajustes])
-  const codigosRuta = useMemo(() => Object.keys(rutasDef).sort(), [rutasDef])
+  // Ciudades presentes en esta carga (las asignadas a cada archivo).
+  const ciudadesFactura = useMemo(() => new Set((ciudadPorArchivo || []).filter(Boolean)), [ciudadPorArchivo])
+  // Ciudad de cada chofer de la factura (para filtrar la lista por ruta/ciudad).
+  const ciudadDeChofer = useMemo(() => {
+    const m = {}
+    for (const c of (combinado?.resumenChoferes || [])) m[c.nombre] = c.ciudad
+    return m
+  }, [combinado])
+  // Rutas visibles: solo las de las ciudades de esta factura (las sin ciudad se ven
+  // siempre). Si ninguna calza, se muestran todas para no bloquear la asignación.
+  const codigosRuta = useMemo(() => {
+    const todas = Object.keys(rutasDef).sort()
+    const filtradas = todas.filter((code) => { const ciu = rutasDef[code]?.ciudad; return !ciu || ciudadesFactura.has(ciu) })
+    return filtradas.length > 0 ? filtradas : todas
+  }, [rutasDef, ciudadesFactura])
   const toggleDriverRuta = (driver, code) => setAsignacionRuta((a) => {
     const n = { ...a }
     if (n[driver] === code) delete n[driver]
@@ -993,6 +1007,14 @@ export default function CargarFactura() {
                     {codigosRuta.map((code) => {
                       const r = rutasDef[code] || {}
                       const enRuta = nombresFactura.filter((n) => asignacionRuta[n] === code)
+                      // Choferes que se ofrecen para esta ruta: si la ruta tiene ciudad,
+                      // solo los de esa ciudad; si no, todos. Si el filtro deja la lista
+                      // vacía, se muestran todos (para no impedir la asignación).
+                      const choferesRuta = (() => {
+                        if (!r.ciudad) return nombresFactura
+                        const soloCiudad = nombresFactura.filter((n) => ciudadDeChofer[n] === r.ciudad)
+                        return soloCiudad.length > 0 ? soloCiudad : nombresFactura
+                      })()
                       return (
                         <div key={code} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
                           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1003,7 +1025,7 @@ export default function CargarFactura() {
                             </span>
                           </div>
                           <div className="scroll-thin max-h-56 space-y-1 overflow-y-auto">
-                            {nombresFactura.map((n) => {
+                            {choferesRuta.map((n) => {
                               const asignadoAqui = asignacionRuta[n] === code
                               const asignadoOtra = asignacionRuta[n] && asignacionRuta[n] !== code
                               return (

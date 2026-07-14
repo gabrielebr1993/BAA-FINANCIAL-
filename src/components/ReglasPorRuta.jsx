@@ -13,7 +13,7 @@ const CATS = [...CATEGORIAS_CLAIM, { key: 'otro', label: 'Otro' }]
 const nuevaRegla = () => ({ nombre: '', tarifaInd: '', tarifaDoble: '', dobleMonto: '', claimFee: '', metodos: {}, montos: {} })
 
 export default function ReglasPorRuta() {
-  const { activeCompanyId, ajustes, reloadAjustes } = useData()
+  const { activeCompanyId, ajustes, reloadAjustes, ciudadesEmpresa } = useData()
   const [rutas, setRutas] = useState({}) // { code: regla }
   const [nuevoCode, setNuevoCode] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -43,6 +43,7 @@ export default function ReglasPorRuta() {
       const limpio = {}
       for (const [code, v] of Object.entries(rutas)) {
         const o = { nombre: (v.nombre || '').trim() }
+        if (v.ciudad) o.ciudad = v.ciudad // ciudad a la que pertenece la ruta (para filtrar al cargar)
         ;['tarifaInd', 'tarifaDoble', 'dobleMonto', 'claimFee'].forEach((k) => { if (v[k] !== '' && v[k] != null && isFinite(+v[k])) o[k] = +v[k] })
         const met = {}, mon = {}
         CATS.forEach((c) => {
@@ -72,6 +73,7 @@ export default function ReglasPorRuta() {
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
         Cada ruta define sus <b>tarifas</b> (individual/doble) y el <b>método</b> de cobro por categoría de claim (M1 cobra la multa · M2 cobra lo de Gofo · M3 perdón).
+        Asigna cada ruta a su <b>ciudad</b>: así, al cargar una factura y detectar la ciudad automáticamente, solo verás las rutas y los choferes de esa ciudad.
         Al cargar la factura asignarás manualmente qué choferes van a cada ruta y se les pagará con estas reglas.
       </p>
       <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
@@ -103,6 +105,15 @@ export default function ReglasPorRuta() {
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Badge color="gold">{code}</Badge>
                   <Input className="w-56" value={r.nombre || ''} onChange={(e) => setCampo(code, 'nombre', e.target.value)} placeholder="Nombre / descripción de la ruta" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">Ciudad</span>
+                    <Select className="w-40" value={r.ciudad || ''} onChange={(e) => setCampo(code, 'ciudad', e.target.value)}>
+                      <option value="">— Sin ciudad —</option>
+                      {(ciudadesEmpresa || []).filter((c) => c.codigo).map((c) => (
+                        <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
+                      ))}
+                    </Select>
+                  </div>
                   <Boton variant="ghost" onClick={() => eliminarRuta(code)} className="ml-auto px-2.5 py-1 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={14} strokeWidth={1.8} /> Quitar</Boton>
                 </div>
                 <div className="mb-3 flex flex-wrap gap-3">
