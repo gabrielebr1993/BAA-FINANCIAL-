@@ -274,6 +274,20 @@ export function DataProvider({ children }) {
     if (cities.length === 1 && selectedCity === TODAS) { autoCiudadHecha.current = true; setSelectedCity(cities[0].codigo) }
   }, [ajustes, ciudadBloqueada, selectedCity])
 
+  // CADA EMPRESA TIENE SUS CIUDADES. Si la ciudad seleccionada (se persiste por
+  // usuario) no pertenece a la empresa activa, se vuelve a "Todas" para no arrastrar
+  // la ciudad de otra empresa. Al cambiar de empresa se reinicia el auto-seleccionado.
+  const empresaCiudadRef = useRef(activeCompanyId)
+  useEffect(() => {
+    if (empresaCiudadRef.current !== activeCompanyId) { empresaCiudadRef.current = activeCompanyId; autoCiudadHecha.current = false }
+    if (ciudadBloqueada || selectedCity === TODAS) return
+    const disponibles = new Set([
+      ...((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean)),
+      ...invoices.flatMap((i) => (i.resumenCiudades || []).map((c) => c.ubicacion)),
+    ])
+    if (disponibles.size > 0 && !disponibles.has(selectedCity)) setSelectedCity(TODAS)
+  }, [activeCompanyId, ajustes, invoices, selectedCity, ciudadBloqueada])
+
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
   useEffect(() => {
