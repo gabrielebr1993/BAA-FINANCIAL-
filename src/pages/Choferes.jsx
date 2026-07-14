@@ -4,7 +4,7 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, where, s
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
-import { calcularPagos, buscarDriver } from '../utils/calc'
+import { calcularPagos, buscarDriver, TODAS } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
 import { Truck, Check, KeyRound, Trash2, FileSpreadsheet, Landmark } from 'lucide-react'
@@ -18,19 +18,44 @@ const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true 
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
-  const { drivers: driversAll, reloadDrivers, facturaRango, claims, activeCompanyId } = useData()
+  const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity } = useData()
   const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
 
-  // Usuario asignado a una ciudad: solo ve los choferes que operan en SU ciudad
-  // (por actividad del rango o por ciudad fija del chofer).
+  // Ciudad "de casa" de cada chofer (por nombre): donde tiene más paquetes en TODAS
+  // las facturas. Sirve para respetar el filtro de ciudad aunque el chofer no esté
+  // en el rango actual.
+  const ciudadDeDriverNombre = useMemo(() => {
+    const acc = {}
+    for (const inv of (invoices || [])) {
+      for (const ch of (inv.resumenChoferes || [])) {
+        if (!ch.ciudad) continue
+        const pq = (ch.individuales || 0) + (ch.dobles || 0)
+        acc[ch.nombre] = acc[ch.nombre] || {}
+        acc[ch.nombre][ch.ciudad] = (acc[ch.nombre][ch.ciudad] || 0) + pq
+      }
+    }
+    const out = {}
+    for (const [nombre, m] of Object.entries(acc)) out[nombre] = Object.keys(m).sort((a, b) => m[b] - m[a])[0] || ''
+    return out
+  }, [invoices])
+
+  // Lista de choferes respetando la CIUDAD seleccionada en la barra global:
+  //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
+  //  - Cualquiera con una ciudad elegida (≠ Todas): solo los de esa ciudad.
+  //  - "Todas": todos.
   const drivers = useMemo(() => {
-    if (!ciudadBloqueada) return driversAll
-    const enMiCiudad = new Set()
-    ;(facturaRango?.resumenChoferes || []).forEach((c) => { if (c.ciudad === ciudadUsuario) enMiCiudad.add((c.nombre || '').trim().toLowerCase()) })
-    return driversAll.filter((d) => (d.ciudad && d.ciudad === ciudadUsuario) || enMiCiudad.has((d.nombre || '').trim().toLowerCase()))
-  }, [driversAll, ciudadBloqueada, ciudadUsuario, facturaRango])
+    const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
+    if (!ciudadFiltro) return driversAll
+    const enEsaCiudad = new Set()
+    ;(facturaRango?.resumenChoferes || []).forEach((c) => { if (c.ciudad === ciudadFiltro) enEsaCiudad.add((c.nombre || '').trim().toLowerCase()) })
+    return driversAll.filter((d) =>
+      (d.ciudad && d.ciudad === ciudadFiltro) ||
+      ciudadDeDriverNombre[d.nombre] === ciudadFiltro ||
+      enEsaCiudad.has((d.nombre || '').trim().toLowerCase())
+    )
+  }, [driversAll, ciudadBloqueada, ciudadUsuario, selectedCity, facturaRango, ciudadDeDriverNombre])
 
   const [tab, setTab] = useState('choferes')
   // ---- alta de chofer ----
@@ -314,9 +339,10 @@ export default function Choferes() {
 
   // Choferes de la factura sin tarifa creada. Si el usuario está fijado a una
   // ciudad, solo cuenta los de SU ciudad (no los de toda la empresa).
+  const ciudadFiltroSinTarifa = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
   const sinTarifa = facturaRango
     ? [...new Set((facturaRango.resumenChoferes || [])
-        .filter((c) => !ciudadBloqueada || c.ciudad === ciudadUsuario)
+        .filter((c) => !ciudadFiltroSinTarifa || c.ciudad === ciudadFiltroSinTarifa)
         .map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n))
     : []
   const nSel = idsSel().length
