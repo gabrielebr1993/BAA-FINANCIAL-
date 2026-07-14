@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import {
   Truck, DollarSign, Package, AlertTriangle, Star, LogOut, FileText, Wallet, ShieldCheck, Sun, Moon,
-  Upload, CheckCircle2, Sparkles, Landmark, Home, BarChart3, Award, IdCard, Camera, Lock, Circle,
+  Upload, CheckCircle2, Sparkles, Landmark, Home, BarChart3, Award, IdCard, Camera, Lock, Circle, Eye, EyeOff,
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
@@ -26,6 +26,7 @@ const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
 const MENU = [
   { k: 'inicio', label: 'Inicio', icon: Home },
+  { k: 'financiero', label: 'Financiero', icon: DollarSign },
   { k: 'performance', label: 'Performance', icon: BarChart3 },
   { k: 'perfil', label: 'Mi perfil', icon: Award },
   { k: 'documentos', label: 'Documentos', icon: IdCard },
@@ -35,6 +36,7 @@ export default function DriverPortal() {
   const { perfil, companyId, driverId, driverNombre, driverKey, cerrarSesion } = useAuth()
   const { oscuro, alternar } = useTheme()
   const [vista, setVista] = useState('inicio')
+  const [verMontos, setVerMontos] = useState(false) // ojito: mostrar/ocultar montos de claims
   const [stats, setStats] = useState(null) // driverStats del chofer
   const [claims, setClaims] = useState([])
   const [payroll, setPayroll] = useState({}) // invoiceId -> estado
@@ -317,6 +319,85 @@ export default function DriverPortal() {
                         emptyText="No tienes claims registrados. ¡Bien!"
                         renderCell={(row, key) => {
                           if (key === 'montoGofo') return money(Math.abs(Number(row.montoGofo) || 0))
+                          if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
+                          if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                          return row[key] || '—'
+                        }}
+                      />
+                    </Card>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ---------- FINANCIERO ---------- */}
+            {vista === 'financiero' && (
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">Resumen financiero</h2>
+                  <button
+                    onClick={() => setVerMontos((v) => !v)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300"
+                    title={verMontos ? 'Ocultar montos de claims' : 'Mostrar montos de claims'}
+                  >
+                    {verMontos ? <EyeOff size={16} strokeWidth={1.9} /> : <Eye size={16} strokeWidth={1.9} />}
+                    {verMontos ? 'Ocultar montos' : 'Ver montos'}
+                  </button>
+                </div>
+
+                {semanasPagadas.length === 0 ? (
+                  <EstadoVacio titulo="Aún no tienes pagos" texto="Cuando tu empresa marque una semana como pagada, verás aquí tu resumen de pagos y claims." mostrarBoton={false} />
+                ) : (
+                  <>
+                    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <KPI label="Total pagado" value={money(totalPagado)} icon={Wallet} accent="green" />
+                      <KPI label="Semanas pagadas" value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
+                      <KPI label="Paquetes" value={num(totalPaquetes)} icon={Package} accent="navy" />
+                      <KPI label="Claims" value={num(totalClaims)} icon={AlertTriangle} accent="red" />
+                    </div>
+
+                    <Card className="mb-4 p-4">
+                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Pagos por semana</h3>
+                      <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+                        <table className="w-full min-w-[520px] border-collapse text-sm">
+                          <thead>
+                            <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                              <th className="px-3 py-2 text-left font-semibold">Semana</th>
+                              <th className="px-3 py-2 text-right font-semibold">Paquetes</th>
+                              <th className="px-3 py-2 text-right font-semibold">Te cobré por claims</th>
+                              <th className="px-3 py-2 text-right font-semibold">Descuento de Gofo</th>
+                              <th className="px-3 py-2 text-right font-semibold">Total pagado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {semanasPagadas.map((w) => (
+                              <tr key={w.invoiceId} className="border-t border-slate-100 dark:border-slate-700/50">
+                                <td className="px-3 py-2">{w.semana}</td>
+                                <td className="px-3 py-2 text-right">{num(w.paquetes || 0)}</td>
+                                <td className="px-3 py-2 text-right text-rose-600 dark:text-rose-400">{verMontos ? (Number(w.descuentoClaims) > 0 ? `−${money(w.descuentoClaims)}` : '—') : '••••'}</td>
+                                <td className="px-3 py-2 text-right text-slate-500">{verMontos ? (Number(w.descontadoGofo) > 0 ? `−${money(w.descontadoGofo)}` : '—') : '••••'}</td>
+                                <td className="px-3 py-2 text-right font-bold">{money(w.totalPagar || 0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-400">“Te cobré por claims” = lo que tu empresa te descontó · “Descuento de Gofo” = lo que Gofo le descontó a la empresa por esos claims. Toca “Ver montos” para mostrarlos u ocultarlos.</p>
+                    </Card>
+
+                    <Card className="p-4">
+                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis claims ({claims.length})</h3>
+                      <Tabla
+                        columns={[
+                          { key: 'semana', label: 'Semana' },
+                          { key: 'claimType', label: 'Tipo' },
+                          { key: 'montoGofo', label: 'Descuento de Gofo', align: 'right' },
+                          { key: 'estado', label: 'Estado', align: 'center' },
+                        ]}
+                        rows={claims.map((c) => ({ ...c, _key: c.id }))}
+                        emptyText="No tienes claims registrados. ¡Bien!"
+                        renderCell={(row, key) => {
+                          if (key === 'montoGofo') return verMontos ? `−${money(Math.abs(Number(row.montoGofo) || 0))}` : '••••'
                           if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
                           if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
                           return row[key] || '—'
