@@ -6,7 +6,7 @@ import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArchivoPrecios } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDobleDetalle, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
 import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
-import { guardarCiudadesEmpresa } from '../utils/empresaSettings'
+import { guardarCiudadesEmpresa, guardarReglasRuta } from '../utils/empresaSettings'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -377,11 +377,6 @@ export default function CargarFactura() {
     for (const r of (combinado?.resumenRutas || [])) { const v = String(r.ruta || '').trim(); if (v && v.toLowerCase() !== 'sin ruta') s.add(v.toUpperCase()) }
     return s
   }, [combinado])
-  // ¿una ruta configurada corresponde a alguna del archivo? (por su código o su nombre)
-  const rutaConfigEnArchivo = (code) => {
-    const r = rutasDef[code] || {}
-    return rutasArchivo.has(String(code).toUpperCase()) || rutasArchivo.has(String(r.nombre || '').trim().toUpperCase())
-  }
   // Ruta del archivo con más paquetes por chofer (para autoasignar).
   const rutaArchivoDeChofer = useMemo(() => {
     const best = {}, bestPq = {}
@@ -391,30 +386,34 @@ export default function CargarFactura() {
     }
     return best
   }, [combinado])
-  // Código de ruta CONFIGURADA que corresponde a una ruta del archivo (código o nombre).
-  const codeDeRutaArchivo = (fileRoute) => {
+  // Resuelve una ruta del archivo a un CÓDIGO usable: si coincide con una ruta
+  // configurada (por código o nombre) usa ese código; si no, usa la ruta del archivo
+  // tal cual (en mayúsculas) como código nuevo (se registrará sola al guardar).
+  const resolverRuta = (fileRoute) => {
     const fr = String(fileRoute || '').trim().toUpperCase()
     if (!fr) return null
     for (const code of Object.keys(rutasDef)) {
       if (String(code).toUpperCase() === fr) return code
       if (String(rutasDef[code]?.nombre || '').trim().toUpperCase() === fr) return code
     }
-    return null
+    return fr
   }
-  // Rutas visibles: SOLO las detectadas en el archivo. Si ninguna configurada calza,
-  // se cae a las de la ciudad (para no bloquear la asignación).
+  // Rutas visibles: SOLO las detectadas en el archivo (resueltas a código). Si el
+  // archivo no trae rutas, se cae a las configuradas de la ciudad (no bloquear).
   const codigosRuta = useMemo(() => {
+    if (rutasArchivo.size > 0) {
+      const set = new Set()
+      for (const fr of rutasArchivo) { const c = resolverRuta(fr); if (c) set.add(c) }
+      return [...set].sort()
+    }
     const todas = Object.keys(rutasDef).sort()
-    const detectadas = todas.filter(rutaConfigEnArchivo)
-    if (detectadas.length > 0) return detectadas
     const porCiudad = todas.filter((code) => { const ciu = rutasDef[code]?.ciudad; return !ciu || ciudadesFactura.has(ciu) })
     return porCiudad.length > 0 ? porCiudad : todas
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rutasDef, rutasArchivo, ciudadesFactura])
+  }, [rutasArchivo, rutasDef, ciudadesFactura])
 
-  // Autoasigna cada chofer a la ruta DETECTADA en su archivo (si aún no tiene una),
-  // resolviéndola a la ruta configurada por código o nombre. La ruta guardada
-  // (rutaDefault) tiene prioridad; esto llena el resto automáticamente.
+  // Autoasigna cada chofer a la ruta DETECTADA en su archivo (si aún no tiene una).
+  // La ruta guardada (rutaDefault) tiene prioridad; esto llena el resto.
   useEffect(() => {
     if (!modoRuta || !combinado) return
     setAsignacionRuta((prev) => {
@@ -422,13 +421,26 @@ export default function CargarFactura() {
       let changed = false
       for (const nombre of nombresFactura) {
         if (next[nombre]) continue
-        const code = codeDeRutaArchivo(rutaArchivoDeChofer[nombre])
+        const code = resolverRuta(rutaArchivoDeChofer[nombre])
         if (code) { next[nombre] = code; changed = true }
       }
       return changed ? next : prev
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modoRuta, combinado, nombresFactura, rutasDef])
+
+  // Rutas asignadas SIN tarifa (0/0): sus choferes se pagarían en $0. Aviso + solución.
+  const rutasSinTarifa = useMemo(() => {
+    if (!modoRuta) return []
+    const set = new Set()
+    for (const nombre of nombresFactura) {
+      const code = asignacionRuta[nombre]
+      if (!code) continue
+      const r = rutasDef[code]
+      if (!((Number(r?.tarifaInd) || 0) > 0 || (Number(r?.tarifaDoble) || 0) > 0)) set.add(code)
+    }
+    return [...set]
+  }, [modoRuta, nombresFactura, asignacionRuta, rutasDef])
   const toggleDriverRuta = (driver, code) => setAsignacionRuta((a) => {
     const n = { ...a }
     if (n[driver] === code) delete n[driver]
@@ -574,7 +586,16 @@ export default function CargarFactura() {
       const reglasAplicadas = Object.fromEntries((combinado.ciudades || []).map((c) => [c, resolverReglas(ajustes, c)]))
       // Modo POR RUTA: snapshot de las reglas de ruta y de la asignación chofer→ruta
       // guardados EN la factura (histórico consistente aunque cambie la config).
-      const reglasRutaAplicadas = modoRuta ? JSON.parse(JSON.stringify(rutasDef)) : null
+      // Reglas por ruta aplicadas: copia de la config + entradas VACÍAS para las rutas
+      // detectadas que aún no tienen config (así el histórico las reconoce; su tarifa
+      // queda en 0 hasta que se configure).
+      const reglasRutaAplicadas = modoRuta ? (() => {
+        const base = JSON.parse(JSON.stringify(rutasDef))
+        for (const code of new Set(Object.values(asignacionRuta))) {
+          if (code && !base[code]) base[code] = { nombre: '', tarifaInd: 0, tarifaDoble: 0, metodos: {}, montos: {} }
+        }
+        return base
+      })() : null
       const asignacionRutaFinal = modoRuta ? { ...asignacionRuta } : null
       const invoicePayload = {
         companyId: activeCompanyId,
@@ -616,6 +637,21 @@ export default function CargarFactura() {
           await reloadAjustes()
         }
       } catch { /* si falla el registro de ciudad no se bloquea el guardado de la factura */ }
+
+      // Registra en "Reglas por ruta" (Configuración) las rutas detectadas que aún no
+      // existan, para que solo tengas que ponerles el precio (tarifas vacías = 0).
+      if (modoRuta) {
+        try {
+          const rutasNuevas = {}
+          for (const code of new Set(Object.values(asignacionRuta))) {
+            if (code && !rutasDef[code]) rutasNuevas[code] = { nombre: '', ciudad: ciudadPrincipal || '', tarifaInd: '', tarifaDoble: '', metodos: {}, montos: {} }
+          }
+          if (Object.keys(rutasNuevas).length) {
+            await guardarReglasRuta(activeCompanyId, { ...rutasDef, ...rutasNuevas })
+            await reloadAjustes()
+          }
+        } catch { /* no bloquear el guardado por el registro de rutas */ }
+      }
 
       // Recuerda la ruta de cada chofer (modo POR RUTA): se guarda en su ficha para
       // precargarla la próxima factura y para que Pagos la tenga a mano.
@@ -1111,6 +1147,19 @@ export default function CargarFactura() {
                         <AlertTriangle size={15} strokeWidth={1.8} /> Faltan <b>{driversSinRuta.length}</b> chofer(es) sin ruta: {driversSinRuta.slice(0, 8).join(', ')}{driversSinRuta.length > 8 ? '…' : ''}
                       </span>
                     </Aviso>
+                  )}
+                  {rutasSinTarifa.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-500/40 dark:bg-amber-500/10">
+                      <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
+                        <AlertTriangle size={16} strokeWidth={1.9} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <b>Rutas sin tarifa:</b> {rutasSinTarifa.join(', ')}. Los choferes de estas rutas se pagarían en <b>$0</b>.
+                          <div className="mt-1 text-[13px] text-amber-700 dark:text-amber-300/90">
+                            <b>Solución:</b> puedes guardar igual (la ruta se registra sola en <b>Configuración → Reglas por ruta</b>) y luego ponle su <b>tarifa individual y doble</b>; al recargar los pagos se recalculan. Si ya la tienes creada con otro código, renómbrala o ponle como <b>nombre</b> el valor exacto de la ruta del archivo para que coincida.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </>
               )}
