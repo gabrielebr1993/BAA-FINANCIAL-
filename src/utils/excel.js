@@ -284,7 +284,9 @@ export function procesarArchivo(arrayBuffer, nombreArchivo) {
   const mayoria = (obj) => Object.keys(obj || {}).sort((a, b) => obj[b] - obj[a])[0] || ''
   for (const c of claims) c.ciudad = mayoria(ciudadPorChofer[c.courier]) || mayoria(conteoCiudad)
 
-  const ciudadesDetectadas = Object.keys(conteoCiudad).filter(Boolean).sort()
+  // "SIN RUTA" no es una ciudad: viene de entregas con la ruta (columna G) vacía.
+  // Se excluye de las ciudades detectadas para no ensuciar el selector ni la config.
+  const ciudadesDetectadas = Object.keys(conteoCiudad).filter((c) => c && c.toUpperCase() !== 'SIN RUTA').sort()
 
   // Diagnóstico (visible en la consola del navegador, F12): debe dar ~101024 y ~139.
   const choferesUnicos = [...new Set(detalles.map((d) => d.courier))]
