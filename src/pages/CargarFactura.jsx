@@ -6,6 +6,7 @@ import { useData } from '../DataContext'
 import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArchivoPrecios } from '../utils/excel'
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDoblePorRegla, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
 import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
+import { guardarCiudadesEmpresa } from '../utils/empresaSettings'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -16,7 +17,7 @@ import Verificacion from '../components/Verificacion'
 
 export default function CargarFactura() {
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadAjustes, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -491,6 +492,24 @@ export default function CargarFactura() {
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
+
+      // Registra en "Mis ciudades" (Configuración) cualquier ciudad de esta factura
+      // que aún no esté guardada, para que aparezca en el filtro y se pueda renombrar
+      // o eliminar si el nombre quedó mal. Se usa el nombre de la factura como nombre.
+      try {
+        const codigosExistentes = new Set((ciudadesEmpresa || []).map((c) => String(c.codigo || '').toUpperCase()))
+        const ciudadesNuevas = []
+        for (const code of (combinado.ciudades || [])) {
+          const cod = String(code || '').trim()
+          if (!cod || codigosExistentes.has(cod.toUpperCase())) continue
+          codigosExistentes.add(cod.toUpperCase())
+          ciudadesNuevas.push({ nombre: ciudadesMap[cod] || nombreCiudad(cod), codigo: cod })
+        }
+        if (ciudadesNuevas.length) {
+          await guardarCiudadesEmpresa(activeCompanyId, [...(ciudadesEmpresa || []), ...ciudadesNuevas])
+          await reloadAjustes()
+        }
+      } catch { /* si falla el registro de ciudad no se bloquea el guardado de la factura */ }
 
       // Recuerda la ruta de cada chofer (modo POR RUTA): se guarda en su ficha para
       // precargarla la próxima factura y para que Pagos la tenga a mano.
