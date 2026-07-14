@@ -119,7 +119,10 @@ export default function PerfilChofer() {
           {/* Cabecera (hero) */}
           <Card className="mb-4 overflow-hidden">
             {/* Banda superior con degradado + calificación destacada */}
-            <div className="relative bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel px-5 pb-16 pt-5 sm:px-7">
+            <div className="relative overflow-hidden bg-gradient-to-br from-brand-navy via-brand-navy to-brand-steel px-5 pb-16 pt-5 sm:px-7">
+              {/* Resplandor dorado suave y difuminado (decorativo) */}
+              <div className="pointer-events-none absolute -bottom-16 left-4 h-52 w-52 rounded-full bg-brand-gold/25 blur-3xl" aria-hidden />
+              <div className="pointer-events-none absolute -top-10 right-24 h-36 w-36 rounded-full bg-brand-gold/10 blur-3xl" aria-hidden />
               {calif && (
                 <div className="absolute right-4 top-4 flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15 backdrop-blur">
                   <span className="grid h-11 w-11 place-items-center rounded-full text-base font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
@@ -140,7 +143,13 @@ export default function PerfilChofer() {
             {/* Cuerpo con la foto sobrepuesta */}
             <div className="px-5 pb-5 sm:px-7">
               <div className="-mt-12 flex flex-wrap items-end gap-4">
-                <FotoPerfil url={driver?.fotoUrl} alt={decoded} icon={Truck} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
+                <div className="relative shrink-0">
+                  {/* Halo dorado difuminado detrás de la foto */}
+                  <div className="pointer-events-none absolute -inset-2.5 rounded-[1.4rem] bg-brand-gold/40 blur-xl dark:bg-brand-gold/30" aria-hidden />
+                  <div className="relative">
+                    <FotoPerfil url={driver?.fotoUrl} alt={decoded} icon={Truck} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" />
+                  </div>
+                </div>
                 <div className="min-w-0 flex-1 pb-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>

@@ -50,13 +50,16 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
     alertas.push({ id: `precio:${a.ruta}`, tipo: 'blue', categoria: 'Rutas', titulo: `Gofo cambió el precio en ${a.ruta}`, detalle: `Antes $${a.antesLb.toFixed(3)}/lb, ahora $${a.ahoraLb.toFixed(3)}/lb (${a.cambioLb >= 0 ? '+' : ''}${(a.cambioLb * 100).toFixed(1)}%).`, link: '/financiero' })
   )
 
-  // 6) Chofer nuevo / sin tarifa (aviso)
-  const sinTarifa = new Set()
-  ;(inv.resumenChoferes || []).forEach((c) => { if (!buscarDriver(drivers, c.nombre)) sinTarifa.add(c.nombre) })
-  ;(drivers || []).forEach((d) => { if (!(Number(d.precioIndividual) > 0) || !(Number(d.precioDoble) > 0)) sinTarifa.add(d.nombre) })
-  ;[...sinTarifa].forEach((n) =>
-    alertas.push({ id: `tarifa:${n}`, tipo: 'yellow', categoria: 'Choferes', titulo: `${n} sin tarifa`, detalle: 'Asígnale precio individual y doble en Choferes.', link: '/choferes' })
-  )
+  // 6) Chofer nuevo / sin tarifa (aviso). SOLO en modo estándar: en modo POR RUTA la
+  // tarifa la pone la ruta (el chofer no necesita precio individual/doble propio).
+  if (inv.modoConfig !== 'ruta') {
+    const sinTarifa = new Set()
+    ;(inv.resumenChoferes || []).forEach((c) => { if (!buscarDriver(drivers, c.nombre)) sinTarifa.add(c.nombre) })
+    ;(drivers || []).forEach((d) => { if (!(Number(d.precioIndividual) > 0) || !(Number(d.precioDoble) > 0)) sinTarifa.add(d.nombre) })
+    ;[...sinTarifa].forEach((n) =>
+      alertas.push({ id: `tarifa:${n}`, tipo: 'yellow', categoria: 'Choferes', titulo: `${n} sin tarifa`, detalle: 'Asígnale precio individual y doble en Choferes.', link: '/choferes' })
+    )
+  }
 
   // 7) Pagos pendientes sin marcar (info) — solo si se provee el conteo
   if (pendientes != null && pendientes > 0) {

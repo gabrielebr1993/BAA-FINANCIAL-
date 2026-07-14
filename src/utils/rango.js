@@ -190,6 +190,9 @@ export function combinarFacturas(invoices) {
     id: 'rango',
     semana: `${invoices.length} semanas`,
     facturas: invoices,
+    // Modo de configuración: si TODAS las facturas del rango son 'ruta', el combinado
+    // es 'ruta' (para que las reglas/alertas por ruta apliquen bien).
+    modoConfig: invoices.every((i) => i.modoConfig === 'ruta') ? 'ruta' : 'estandar',
     ciudadesMap,
     totalPaquetes: suma('totalPaquetes'),
     totalIndividuales: suma('totalIndividuales'),
