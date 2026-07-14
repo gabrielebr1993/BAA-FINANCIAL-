@@ -5,9 +5,10 @@ import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { calcularPagos, buscarDriver, TODAS } from '../utils/calc'
+import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
-import { Truck, Check, KeyRound, Trash2, FileSpreadsheet, Landmark } from 'lucide-react'
+import { Truck, Check, KeyRound, Trash2, FileSpreadsheet, Landmark, MapPin } from 'lucide-react'
 import { exportarExcel } from '../utils/exportar'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
@@ -18,7 +19,9 @@ const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true 
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
-  const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity } = useData()
+  const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity, ciudadesEmpresa } = useData()
+  // Nombre legible de una ciudad (config de la empresa primero, luego catálogo).
+  const nombreCiudadCorto = (cod) => (ciudadesEmpresa || []).find((c) => c.codigo === cod)?.nombre || nombreCiudad(cod)
   const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
@@ -464,7 +467,14 @@ export default function Choferes() {
                       ) : (
                         <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800"><Truck size={15} strokeWidth={1.8} /></span>
                       )}
-                      <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
+                      <div className="min-w-0">
+                        <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="block truncate font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
+                        {ciudadDeDriverNombre[d.nombre] && (
+                          <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700/60 dark:text-slate-300">
+                            <MapPin size={9} strokeWidth={2} /> {nombreCiudadCorto(ciudadDeDriverNombre[d.nombre])}
+                          </span>
+                        )}
+                      </div>
                       {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
                     </div>
                   </td>
