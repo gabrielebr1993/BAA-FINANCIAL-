@@ -257,11 +257,11 @@ export default function Dashboard() {
                 <BarCard title="Claims por ruta" data={claimsPorRuta} color="#c47f5a" fmt={num} />
               </div>
 
-              {selectedCity === TODAS && (
-                <div className="mb-4">
-                  <RankingCiudades compacto />
-                </div>
-              )}
+              {/* Ranking de ciudades: SIEMPRE visible (compara todas), resalta la
+                  ciudad filtrada y marca la primera (mejor) y la última (peor). */}
+              <div className="mb-4">
+                <RankingCiudades compacto />
+              </div>
 
               {selectedCity === TODAS && comparativoCiudades.length > 1 && (
                 <Card className="mb-4 p-4">

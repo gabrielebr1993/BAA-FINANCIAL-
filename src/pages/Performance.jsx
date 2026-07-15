@@ -441,14 +441,10 @@ export default function Performance() {
             <RankingCalificacion />
           </div>
 
-          {selectedCity === TODAS && (
-            <>
-              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
-              <div className="mb-4">
-                <RankingCiudades />
-              </div>
-            </>
-          )}
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
+          <div className="mb-4">
+            <RankingCiudades />
+          </div>
 
           <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo{fTipo ? ` · ${etiquetaTipoClaim(fTipo)}` : ''}</h2>
           <div className="mb-4">

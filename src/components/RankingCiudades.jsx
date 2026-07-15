@@ -4,9 +4,9 @@
 import { useMemo } from 'react'
 import { Building2 } from 'lucide-react'
 import { useData } from '../DataContext'
-import { rankingCiudades } from '../utils/calc'
+import { rankingCiudades, TODAS } from '../utils/calc'
 import { money, num, pct } from '../utils/format'
-import { Card, EstadoVacio } from './ui'
+import { Card, EstadoVacio, Badge } from './ui'
 import { BarCard } from './charts'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
@@ -23,7 +23,7 @@ function SemaforoCiudad({ c }) {
 }
 
 export default function RankingCiudades({ compacto = false }) {
-  const { facturaRango: inv, numSemanas, claims, drivers, managers, setSelectedCity } = useData()
+  const { facturaRango: inv, numSemanas, claims, drivers, managers, selectedCity, setSelectedCity } = useData()
   const ranking = useMemo(
     () => rankingCiudades(inv, claims, drivers, managers, numSemanas),
     [inv, claims, drivers, managers, numSemanas]
@@ -49,6 +49,7 @@ export default function RankingCiudades({ compacto = false }) {
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <th className="px-3 py-2.5 text-left font-semibold">#</th>
                 <th className="px-3 py-2.5 text-left font-semibold">Ciudad</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Paquetes</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Ingreso neto</th>
@@ -60,9 +61,20 @@ export default function RankingCiudades({ compacto = false }) {
               </tr>
             </thead>
             <tbody>
-              {ranking.map((c) => (
-                <tr key={c.code} onClick={() => setSelectedCity(c.code)} className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
-                  <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">{c.nombre}</td>
+              {ranking.map((c, i) => {
+                const esPrimera = i === 0
+                const esUltima = i === ranking.length - 1 && ranking.length > 1
+                const sel = selectedCity !== TODAS && c.code === selectedCity
+                return (
+                <tr key={c.code} onClick={() => setSelectedCity(c.code)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30 ${sel ? 'bg-brand-gold/10 dark:bg-brand-gold/10' : ''}`}>
+                  <td className="px-3 py-2 text-right font-bold text-slate-400">{i + 1}</td>
+                  <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">
+                    <span className="inline-flex items-center gap-2">
+                      {c.nombre}
+                      {esPrimera && <Badge color="gold">🥇 Mejor</Badge>}
+                      {esUltima && <Badge color="red">Peor</Badge>}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-right">{num(c.paquetes)}</td>
                   <td className="px-3 py-2 text-right">{money(c.ingresoNeto)}</td>
                   <td className={`px-3 py-2 text-right ${c.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{money(c.ganancia)}</td>
@@ -71,7 +83,8 @@ export default function RankingCiudades({ compacto = false }) {
                   <td className="px-3 py-2 text-right">{pct(c.pctClaims, 2)}</td>
                   <td className="px-3 py-2"><SemaforoCiudad c={c} /></td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
