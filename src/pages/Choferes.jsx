@@ -444,10 +444,10 @@ export default function Choferes() {
       )}
 
       {/* Tabla */}
-      <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+      <div className="scroll-thin max-h-[60vh] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
         <table className="w-full min-w-[900px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 [&>th]:bg-slate-100 dark:[&>th]:bg-slate-800">
               <th className="px-2 py-2.5"><input type="checkbox" checked={todosSel} onChange={toggleTodos} /></th>
               <th className="px-3 py-2.5 text-left font-semibold">Chofer</th>
               <th className="px-3 py-2.5 text-right font-semibold">Rate individual</th>

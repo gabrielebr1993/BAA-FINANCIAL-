@@ -124,10 +124,10 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
       </Card>
 
       <Card className="p-4">
-        <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+        <div className="scroll-thin max-h-[60vh] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
           <table className="w-full min-w-[860px] border-collapse text-[13.5px]">
-            <thead>
-              <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 [&>th]:bg-slate-100 dark:[&>th]:bg-slate-800">
                 <th className="px-2.5 py-2.5 text-left font-semibold">#</th>
                 <th className="cursor-pointer px-2.5 py-2.5 text-left font-semibold" onClick={() => cambiar('nombre')}>Chofer{flecha('nombre')}</th>
                 <th className="px-2.5 py-2.5 text-left font-semibold">Estrellas</th>
