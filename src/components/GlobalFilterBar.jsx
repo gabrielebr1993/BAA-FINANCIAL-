@@ -26,10 +26,10 @@ export default function GlobalFilterBar() {
     facturaRangoFull, ciudadBloqueada,
   } = useData()
 
-  // El MANAGER solo puede ver "Una factura" (no "Por período"): se le oculta el modo
-  // período y se le fuerza a factura (para que los pagos por factura funcionen bien).
-  const { perfil } = useAuth()
-  const soloFactura = perfil?.role === 'manager'
+  // SOLO el rol "manager" queda restringido a "Una factura" (no "Por período").
+  // Owner, admin y súper-admin conservan ambos modos SIEMPRE.
+  const { perfil, esSuperAdmin } = useAuth()
+  const soloFactura = !esSuperAdmin && perfil?.role === 'manager'
 
   // Modo derivado del único estado: 'factura' vs 'periodo'. Nunca coexisten.
   const modo = rango.preset === 'factura' ? 'factura' : 'periodo'
