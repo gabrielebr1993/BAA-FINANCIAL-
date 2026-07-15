@@ -122,20 +122,9 @@ export default function GlobalFilterBar() {
               {ATAJOS.map((p) => (
                 <button key={p.key} onClick={() => setPreset(p.key)} className={chip(rango.preset === p.key)}>{p.label}</button>
               ))}
-              <button onClick={() => setAbrirPers((o) => !o)} className={chip(rango.preset === 'personalizado')}>
+              <button onClick={() => setAbrirPers((o) => !o)} className={chip(abrirPers || rango.preset === 'personalizado')}>
                 <span className="inline-flex items-center gap-1"><CalendarRange size={13} strokeWidth={2} /> Personalizado</span>
               </button>
-              {abrirPers && (
-                <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
-                  <Calendar size={16} strokeWidth={1.8} className="text-slate-400" />
-                  <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label="Desde" />
-                  <span className="text-slate-400">–</span>
-                  <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label="Hasta" />
-                  <button onClick={buscar} disabled={!desde && !hasta} className="ml-1 inline-flex items-center gap-1 rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40 dark:bg-brand-gold dark:text-brand-navy">
-                    <Search size={13} strokeWidth={2.2} /> Buscar
-                  </button>
-                </div>
-              )}
               {varias && (
                 <div className="ml-1 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
                   {[{ k: 'combinado', l: 'Combinado' }, { k: 'porSemana', l: 'Por semana' }].map((v) => (
@@ -162,6 +151,20 @@ export default function GlobalFilterBar() {
             </div>
           )}
         </div>
+
+        {/* Fila propia para el rango PERSONALIZADO (así se ve completo, sin scroll). */}
+        {modo === 'periodo' && !soloFactura && abrirPers && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+            <Calendar size={16} strokeWidth={1.8} className="text-slate-400" />
+            <span className="text-xs text-slate-500 dark:text-slate-400">Desde</span>
+            <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label="Desde" />
+            <span className="text-xs text-slate-500 dark:text-slate-400">Hasta</span>
+            <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label="Hasta" />
+            <button onClick={buscar} disabled={!desde && !hasta} className="ml-1 inline-flex items-center gap-1 rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40 dark:bg-brand-gold dark:text-brand-navy">
+              <Search size={13} strokeWidth={2.2} /> Buscar
+            </button>
+          </div>
+        )}
 
         {/* 3) Refinar: ciudad + chofer + limpiar */}
         <div className="flex flex-wrap items-center gap-2">
