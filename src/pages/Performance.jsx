@@ -17,7 +17,7 @@ import RankingCalificacion from '../components/RankingCalificacion'
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
 export default function Performance() {
-  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, activeCompanyId, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, activeCompanyId, cargando } = useData()
   const navigate = useNavigate()
   const [sortKey, setSortKey] = useState('ingreso')
   const [asc, setAsc] = useState(false)
@@ -182,7 +182,7 @@ export default function Performance() {
     const masProblematico = [...pagos].filter((p) => p.claimsTotales > 0).sort((a, b) => b.claimsTotales - a.claimsTotales)[0] || null
     const gananciaClaims = pagos.reduce((a, p) => a + p.gananciaClaims, 0)
     const nominaChoferes = pagos.reduce((a, p) => a + p.totalPagar, 0)
-    const costoMgr = costoManagers(managers, Math.max(1, invoicesRango.length))
+    const costoMgr = costoManagers(managers, numSemanas)
     const ingresoBruto = pagos.reduce((a, p) => a + p.ingreso, 0)
     const paquetes = pagos.reduce((a, p) => a + p.individuales + p.dobles, 0)
     const rutasG = porCiudad(selectedInvoice?.resumenRutas || [], selectedCity).map((r) => ({

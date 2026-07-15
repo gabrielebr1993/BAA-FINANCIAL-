@@ -22,7 +22,7 @@ import RankingCalificacion from '../components/RankingCalificacion'
 import Onboarding from '../components/Onboarding'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, vista, cargando } = useData()
   const navigate = useNavigate()
   // Ojo: oculta las cifras de dinero (ingreso, costo, ganancia, margen) en pantalla.
   const [verDinero, setVerDinero] = useState(true)
@@ -33,7 +33,7 @@ export default function Dashboard() {
   const irA = (ruta, ciudad) => { if (ciudad !== undefined) setSelectedCity(ciudad); navigate(ruta) }
   // Navega al perfil completo de un chofer.
   const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
-  const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, Math.max(1, invoicesRango.length), ajustesPorChofer), [inv, claims, drivers, managers, selectedCity, invoicesRango, ajustesPorChofer])
+  const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer), [inv, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer])
   const esRango = !!inv?.esRango
   const variasSemanas = invoicesRango.length > 1
 

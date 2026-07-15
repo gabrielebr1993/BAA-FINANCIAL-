@@ -260,6 +260,11 @@ export function DataProvider({ children }) {
   const rangoKey = rangoIds.join(',')
   const rangoSemanas = invoicesRango.map((i) => i.semana).filter(Boolean)
   const rangoSemanasKey = [...new Set(rangoSemanas)].sort().join('|')
+  // Número de SEMANAS distintas del rango (por el campo `semana`, no por # de
+  // facturas). Se usa para multiplicar los gastos fijos semanales (managers): si una
+  // misma semana trae varias facturas (ej. una por ciudad), NO se debe cobrar el
+  // gasto fijo dos veces. Facturas sin `semana` cuentan por su id (una c/u).
+  const numSemanas = Math.max(1, new Set(invoicesRango.map((i) => i.semana || i.id)).size)
 
   // Claims EFECTIVOS: los de la colección + un respaldo EMBEBIDO en la factura
   // (inv.claimsData) para las facturas del rango que no trajeron ningún claim de la
@@ -412,6 +417,7 @@ export function DataProvider({ children }) {
     vista,
     setVista,
     invoicesRango,
+    numSemanas,
     facturaRango,
     facturaRangoFull,
     selectedDriver,

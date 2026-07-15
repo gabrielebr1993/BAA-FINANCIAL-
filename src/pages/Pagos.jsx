@@ -18,7 +18,7 @@ const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
   const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
-  const { facturaRango: selectedInvoice, invoicesRango, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, numSemanas, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   // El ADMIN tiene acceso COMPLETO a las opciones de pago (Stripe, ajustes de
   // préstamo/bono, marcar pagado) igual que el dueño, pero acotado a su ciudad.
   const puedePagar = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
@@ -116,9 +116,9 @@ export default function Pagos() {
   const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
   const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
 
-  // GASTOS FIJOS del periodo (managers activos de la ciudad × semanas del rango).
-  // También los pagas tú, por eso aparecen aquí para marcarlos como pagados.
-  const semanas = Math.max(1, invoicesRango.length)
+  // GASTOS FIJOS del periodo (managers activos de la ciudad × semanas DISTINTAS del
+  // rango). También los pagas tú, por eso aparecen aquí para marcarlos como pagados.
+  const semanas = numSemanas
   const gastosFijos = useMemo(() => {
     const activos = (managers || []).filter((m) => m.activo !== false)
     const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
@@ -279,7 +279,7 @@ export default function Pagos() {
             <>
               {esRango && (
                 <Aviso tipo="info">
-                  Estás viendo un <b>acumulado de {invoicesRango.length} semanas</b>. Los montos mostrados son la suma del periodo. Para <b>marcar pagos</b> (pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").
+                  Estás viendo un <b>acumulado de {numSemanas} semana(s)</b>. Los montos mostrados son la suma del periodo. Para <b>marcar pagos</b> (pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").
                 </Aviso>
               )}
               {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}

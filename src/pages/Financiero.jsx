@@ -12,8 +12,8 @@ import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 
 export default function Financiero() {
-  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, selectedCity, ajustesPorChofer, cargando } = useData()
-  const semanas = Math.max(1, invoicesRango.length)
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, ajustesPorChofer, cargando } = useData()
+  const semanas = numSemanas
   const gReal = useMemo(
     () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer),
     [selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer]
