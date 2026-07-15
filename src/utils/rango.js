@@ -169,6 +169,35 @@ export function facturaDeChofer(fact, chofer) {
   }
 }
 
+// ---- verificación de Gofo combinada -----------------------------------------
+
+// Suma la verificación de Gofo (Bruto→Neto + "Cuadra con Gofo") de varias facturas
+// en un solo objeto con la misma forma. Como cada factura es de UNA ciudad (Gofo
+// paga por ciudad), sirve tanto para el total (todas las facturas) como para UNA
+// ciudad (solo las facturas de esa ciudad). Devuelve null si no hay ninguna.
+export function combinarVerificacion(invoices) {
+  const lista = invoices || []
+  if (lista.length === 0) return null
+  const gofo = lista.reduce(
+    (a, i) => {
+      const g = i.verificacion?.gofo || {}
+      return {
+        totalGofo: a.totalGofo + (g.totalGofo || 0), claim: a.claim + (g.claim || 0), ajuste: a.ajuste + (g.ajuste || 0),
+        offset: a.offset + (g.offset || 0), disponible: a.disponible || !!g.disponible,
+      }
+    },
+    { totalGofo: 0, claim: 0, ajuste: 0, offset: 0, disponible: false }
+  )
+  const vSum = (campo) => lista.reduce((a, i) => a + (i.verificacion?.[campo] || 0), 0)
+  const netoCalculado = vSum('netoCalculado')
+  return {
+    sumaEntregas: vSum('sumaEntregas'), sumaOffset: vSum('sumaOffset'), sumaClaims: vSum('sumaClaims'), sumaAjustes: vSum('sumaAjustes'),
+    netoCalculado, gofo, diferencia: netoCalculado - gofo.totalGofo,
+    cuadra: gofo.disponible ? Math.abs(netoCalculado - gofo.totalGofo) < 0.01 : null,
+    porFactura: lista.map((i) => ({ semana: i.semana, v: i.verificacion })),
+  }
+}
+
 // ---- combinación de varias facturas ----------------------------------------
 
 // Suma varios resúmenes de facturas en un único objeto con la misma forma.
@@ -248,25 +277,8 @@ export function combinarFacturas(invoices) {
     for (const s of inv.fallidosSinAsociar || []) fallidosSinAsociar.push({ ...s, semana: inv.semana })
   }
 
-  // verificación combinada + por factura
-  const gofo = invoices.reduce(
-    (a, i) => {
-      const g = i.verificacion?.gofo || {}
-      return {
-        totalGofo: a.totalGofo + (g.totalGofo || 0), claim: a.claim + (g.claim || 0), ajuste: a.ajuste + (g.ajuste || 0),
-        offset: a.offset + (g.offset || 0), disponible: a.disponible || !!g.disponible,
-      }
-    },
-    { totalGofo: 0, claim: 0, ajuste: 0, offset: 0, disponible: false }
-  )
-  const vSum = (campo) => invoices.reduce((a, i) => a + (i.verificacion?.[campo] || 0), 0)
-  const netoCalculado = vSum('netoCalculado')
-  const verificacion = {
-    sumaEntregas: vSum('sumaEntregas'), sumaOffset: vSum('sumaOffset'), sumaClaims: vSum('sumaClaims'), sumaAjustes: vSum('sumaAjustes'),
-    netoCalculado, gofo, diferencia: netoCalculado - gofo.totalGofo,
-    cuadra: gofo.disponible ? Math.abs(netoCalculado - gofo.totalGofo) < 0.01 : null,
-    porFactura: invoices.map((i) => ({ semana: i.semana, v: i.verificacion })),
-  }
+  // verificación combinada + por factura (reutilizable por ciudad).
+  const verificacion = combinarVerificacion(invoices)
 
   return {
     esRango: true,

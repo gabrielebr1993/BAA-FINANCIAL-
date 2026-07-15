@@ -22,7 +22,7 @@ import RankingCalificacion from '../components/RankingCalificacion'
 import Onboarding from '../components/Onboarding'
 
 export default function Dashboard() {
-  const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, vista, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, verificacionCiudad, vista, cargando } = useData()
   const navigate = useNavigate()
   // Ojo: oculta las cifras de dinero (ingreso, costo, ganancia, margen) en pantalla.
   const [verDinero, setVerDinero] = useState(true)
@@ -214,16 +214,15 @@ export default function Dashboard() {
             /* -------- VISTA COMBINADA -------- */
             <>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* El desglose de Gofo es a nivel de FACTURA COMPLETA (Gofo paga por
-                    semana, no por ciudad). Con una ciudad elegida se OCULTA para no
-                    mezclar datos de otras ciudades; se ve solo en "Todas las ciudades". */}
-                {selectedCity === TODAS ? (
+                {/* Desglose de Gofo de la CIUDAD seleccionada (Gofo paga por ciudad;
+                    cada factura es de una sola ciudad). Con "Todas" es el del rango. */}
+                {verificacionCiudad ? (
                   <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                    <Verificacion v={inv.verificacion} compacto />
+                    <Verificacion v={verificacionCiudad} compacto />
                   </ClickWrap>
                 ) : (
                   <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                    El <b>desglose de pago de Gofo</b> es de la factura completa (Gofo paga por semana, no por ciudad). Elige <b>“Todas las ciudades”</b> para verlo.
+                    No hay desglose de pago de Gofo para esta ciudad en este período.
                   </div>
                 )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">

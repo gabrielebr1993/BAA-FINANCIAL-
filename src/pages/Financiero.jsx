@@ -12,7 +12,7 @@ import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 
 export default function Financiero() {
-  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, ajustesPorChofer, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, verificacionCiudad, ajustesPorChofer, cargando } = useData()
   const semanas = numSemanas
   const gReal = useMemo(
     () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer),
@@ -85,13 +85,13 @@ export default function Financiero() {
         <Cargando texto="Cargando datos…" />
       ) : (
         <>
-          {selectedInvoice && (selectedCity === TODAS ? (
-            <Verificacion v={selectedInvoice.verificacion} />
-          ) : (
+          {verificacionCiudad ? (
+            <Verificacion v={verificacionCiudad} />
+          ) : selectedInvoice && (
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-              El <b>desglose de pago de Gofo</b> (Bruto → Neto y “Cuadra con Gofo”) es de la <b>factura completa</b>; Gofo paga por semana, no por ciudad. Selecciona <b>“Todas las ciudades”</b> para verlo.
+              No hay desglose de pago de Gofo para esta ciudad en este período.
             </div>
-          ))}
+          )}
           {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} />}
 
           {/* Desglose de ganancia real por ciudad */}

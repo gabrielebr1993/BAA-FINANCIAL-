@@ -8,7 +8,7 @@ import { collection, getDocs, getDoc, doc, updateDoc, query, where } from 'fireb
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
 import { TODAS, TODOS } from './utils/calc'
-import { conFechas, invoicesEnRango, combinarFacturas, facturaDeChofer } from './utils/rango'
+import { conFechas, invoicesEnRango, combinarFacturas, combinarVerificacion, facturaDeChofer } from './utils/rango'
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
 import { subirBackupStorage } from './utils/backup'
@@ -256,6 +256,21 @@ export function DataProvider({ children }) {
     () => (hayChofer ? facturaDeChofer(facturaRangoFull, selectedDriver) : facturaRangoFull),
     [facturaRangoFull, hayChofer, selectedDriver]
   )
+  // Verificación de Gofo de la CIUDAD seleccionada. Como cada factura es de una sola
+  // ciudad (Gofo paga por ciudad), se suma la verificación de las facturas del rango
+  // que son EXACTAMENTE de esa ciudad → su "Cuadra con Gofo" real e independiente.
+  // Con "Todas" se usa la del rango completo. Si una factura es multi-ciudad (histórico
+  // combinado) no se puede atribuir a una sola → queda null (se avisa en la UI).
+  const verificacionCiudad = useMemo(() => {
+    if (!selectedCity || selectedCity === TODAS) return facturaRangoFull?.verificacion || null
+    const invs = invoicesRango.filter((i) => {
+      const cs = [...new Set((i.resumenCiudades || []).map((c) => c.ubicacion).filter(Boolean))]
+      if (cs.length === 0) return (i.ciudad || '') === selectedCity
+      return cs.length === 1 && cs[0] === selectedCity
+    })
+    return combinarVerificacion(invs)
+  }, [selectedCity, invoicesRango, facturaRangoFull])
+
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
   const rangoSemanas = invoicesRango.map((i) => i.semana).filter(Boolean)
@@ -420,6 +435,7 @@ export function DataProvider({ children }) {
     numSemanas,
     facturaRango,
     facturaRangoFull,
+    verificacionCiudad,
     selectedDriver,
     setSelectedDriver,
     invAnterior,
