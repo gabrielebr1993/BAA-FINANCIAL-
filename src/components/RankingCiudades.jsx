@@ -23,10 +23,10 @@ function SemaforoCiudad({ c }) {
 }
 
 export default function RankingCiudades({ compacto = false }) {
-  const { facturaRango: inv, invoicesRango, claims, drivers, managers, setSelectedCity } = useData()
+  const { facturaRango: inv, numSemanas, claims, drivers, managers, setSelectedCity } = useData()
   const ranking = useMemo(
-    () => rankingCiudades(inv, claims, drivers, managers, Math.max(1, invoicesRango.length)),
-    [inv, claims, drivers, managers, invoicesRango]
+    () => rankingCiudades(inv, claims, drivers, managers, numSemanas),
+    [inv, claims, drivers, managers, numSemanas]
   )
 
   if (!ranking.length) {

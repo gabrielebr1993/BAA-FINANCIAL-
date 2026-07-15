@@ -577,26 +577,22 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     const claimsGofo = porCiudad(claims || [], ciudad).reduce((a, c) => a + (c.montoGofo || 0), 0)
     ingresoNeto = entregas + claimsGofo
   }
-  // Costo de managers de la ciudad:
-  //   - un manager cuenta para la ciudad cuyo código coincide con el suyo;
-  //   - un manager SIN ciudad (campo vacío) se atribuye a la ciudad PRINCIPAL, para no
-  //     perderlo. Un manager con OTRA ciudad (aunque no esté en esta factura) NO se
-  //     mezcla aquí: es de su ciudad, no de esta.
+  // Costo de gastos fijos (managers) de la ciudad:
+  //   - "Todas": todos los gastos fijos activos.
+  //   - Una ciudad: SOLO los asignados a ESA ciudad. Los gastos SIN ciudad NO se cargan
+  //     a ninguna ciudad (antes caían en la primera alfabéticamente y hundían su
+  //     ganancia, ej. Austin). Cuentan solo en "Todas"; en Financiero la diferencia se
+  //     muestra como "ajuste". Asigna la ciudad a cada gasto fijo para que aparezca ahí.
   const activosMgr = (managers || []).filter((m) => m.activo !== false)
   const sueldoDe = (arr) => arr.reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0) * (semanas || 1)
   let cMgr
-  // Filtro por chofer: un solo chofer no carga el sueldo de los managers (es un costo
-  // de ciudad/empresa). Su ganancia = ingreso − pago − Gofo, sin overhead de managers.
   if (inv?.__choferScope) {
+    // Un solo chofer no carga el sueldo de los managers (es un costo de ciudad/empresa).
     cMgr = 0
   } else if (esTodas) {
     cMgr = sueldoDe(activosMgr)
   } else {
-    const ciudadesInv = ciudadesDeFactura(inv)
-    const principal = ciudadesInv[0]
-    const match = activosMgr.filter((m) => (m.ciudad || '') === ciudad)
-    const sinCiudad = ciudad === principal ? activosMgr.filter((m) => !(m.ciudad || '')) : []
-    cMgr = sueldoDe([...match, ...sinCiudad])
+    cMgr = sueldoDe(activosMgr.filter((m) => (m.ciudad || '') === ciudad))
   }
   const ganancia = ingresoNeto - costoChoferes - cMgr
   // Ajustes manuales incluidos en el pago a choferes (para transparencia contable).
