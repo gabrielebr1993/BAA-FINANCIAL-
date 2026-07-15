@@ -7,6 +7,7 @@
 import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, CATEGORIAS_CLAIM_KEYS, METODO_CLAIM_DEFAULT, UMBRAL_CAMBIO_PRECIO, nombreCiudad, PESOS_CALIF_CHOFER, PESOS_CALIF_CIUDAD, PESO_CALIDAD_CHOFER, UMBRALES_CALIF, UMBRALES_ESTRELLAS, CALIDAD_FACTOR, BASE_PROMEDIO } from '../constants'
 
 export const TODAS = 'todas'
+export const TODOS = 'todos' // filtro de chofer: "Todos los choferes"
 
 const clamp = (v, min = 0, max = 100) => Math.max(min, Math.min(max, v))
 
@@ -584,7 +585,11 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
   const activosMgr = (managers || []).filter((m) => m.activo !== false)
   const sueldoDe = (arr) => arr.reduce((a, m) => a + (Number(m.sueldoSemanal) || 0), 0) * (semanas || 1)
   let cMgr
-  if (esTodas) {
+  // Filtro por chofer: un solo chofer no carga el sueldo de los managers (es un costo
+  // de ciudad/empresa). Su ganancia = ingreso − pago − Gofo, sin overhead de managers.
+  if (inv?.__choferScope) {
+    cMgr = 0
+  } else if (esTodas) {
     cMgr = sueldoDe(activosMgr)
   } else {
     const ciudadesInv = ciudadesDeFactura(inv)

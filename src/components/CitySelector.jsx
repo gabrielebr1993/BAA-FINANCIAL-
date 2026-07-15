@@ -1,13 +1,14 @@
-// Selectores de ciudad y de factura/semana (siempre visibles).
+// Selectores de ciudad, chofer y de factura/semana (siempre visibles).
 import { MapPin } from 'lucide-react'
 import { useData } from '../DataContext'
-import { TODAS, ciudadesDeFactura, nombreCiudadDe } from '../utils/calc'
+import { TODAS, TODOS, ciudadesDeFactura, nombreCiudadDe } from '../utils/calc'
 import { Select } from './ui'
 
 export default function CitySelector() {
-  // El filtro de ciudad se basa en el RANGO de fechas seleccionado (facturaRango),
-  // así solo aparecen las ciudades presentes en esos días y la info corresponde a ellos.
-  const { facturaRango, selectedCity, setSelectedCity, ciudadBloqueada, ciudadUsuario, ciudadesEmpresa } = useData()
+  // La lista de ciudades se basa en el RANGO COMPLETO (facturaRangoFull), no en la
+  // versión reducida por chofer, para que el filtro de chofer no colapse las ciudades.
+  const { facturaRangoFull, selectedCity, setSelectedCity, ciudadBloqueada, ciudadUsuario, ciudadesEmpresa } = useData()
+  const facturaRango = facturaRangoFull
   const ciudades = ciudadesDeFactura(facturaRango)
 
   // Usuario bloqueado a su ciudad: no puede cambiarla; se muestra fija.
@@ -44,6 +45,23 @@ export default function CitySelector() {
       {[...porNombre.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([nombre, code]) => (
         <option key={code} value={code}>{nombre}</option>
       ))}
+    </Select>
+  )
+}
+
+// Filtro de CHOFER (Refinar). Solo lista los choferes presentes en el período (y en
+// la ciudad elegida). Acota todos los datos a ese chofer (ver DataContext).
+export function DriverSelector() {
+  const { facturaRangoFull, selectedCity, selectedDriver, setSelectedDriver } = useData()
+  const choferes = (facturaRangoFull?.resumenChoferes || [])
+    .filter((c) => selectedCity === TODAS || (c.ciudad || c.ubicacion) === selectedCity)
+  const nombres = [...new Set(choferes.map((c) => c.nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  // Nada que refinar si no hay choferes y no hay uno ya elegido.
+  if (nombres.length === 0 && (!selectedDriver || selectedDriver === TODOS)) return null
+  return (
+    <Select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} aria-label="Filtro de chofer">
+      <option value={TODOS}>Todos los choferes</option>
+      {nombres.map((n) => (<option key={n} value={n}>{n}</option>))}
     </Select>
   )
 }

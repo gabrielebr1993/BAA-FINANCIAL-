@@ -7,8 +7,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 import { collection, getDocs, getDoc, doc, updateDoc, query, where } from 'firebase/firestore'
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
-import { TODAS } from './utils/calc'
-import { conFechas, invoicesEnRango, combinarFacturas } from './utils/rango'
+import { TODAS, TODOS } from './utils/calc'
+import { conFechas, invoicesEnRango, combinarFacturas, facturaDeChofer } from './utils/rango'
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
 import { subirBackupStorage } from './utils/backup'
@@ -39,8 +39,14 @@ export function DataProvider({ children }) {
   const [rango, setRango] = useState(() => {
     try { const r = JSON.parse(localStorage.getItem('milepay_rango') || 'null'); return r && r.preset ? r : { preset: 'ultima', desde: '', hasta: '' } } catch { return { preset: 'ultima', desde: '', hasta: '' } }
   })
+  // Chofer seleccionado (filtro "Refinar"): "todos" por defecto. Persistido igual que
+  // la ciudad. Acota TODOS los datos a ese chofer (ver facturaRango más abajo).
+  const [selectedDriver, setSelectedDriver] = useState(() => {
+    try { return localStorage.getItem('milepay_selectedDriver') || TODOS } catch { return TODOS }
+  })
   useEffect(() => { try { localStorage.setItem('milepay_selectedCity', selectedCity) } catch { /* noop */ } }, [selectedCity])
   useEffect(() => { try { localStorage.setItem('milepay_rango', JSON.stringify(rango)) } catch { /* noop */ } }, [rango])
+  useEffect(() => { try { localStorage.setItem('milepay_selectedDriver', selectedDriver) } catch { /* noop */ } }, [selectedDriver])
 
   // Preferencias del filtro guardadas EN LA NUBE (por usuario): al iniciar sesión se
   // aplican (te siguen en cualquier dispositivo); al cambiar, se guardan (con
@@ -53,15 +59,16 @@ export function DataProvider({ children }) {
     if (p) {
       if (p.selectedCity) setSelectedCity(p.selectedCity)
       if (p.rango && p.rango.preset) setRango(p.rango)
+      if (p.selectedDriver) setSelectedDriver(p.selectedDriver)
     }
   }, [perfil])
   useEffect(() => {
     if (!user?.uid || esDriver || !prefsAplicadas.current) return
     const t = setTimeout(() => {
-      updateDoc(doc(db, 'users', user.uid), { prefFiltro: { selectedCity, rango } }).catch(() => {})
+      updateDoc(doc(db, 'users', user.uid), { prefFiltro: { selectedCity, rango, selectedDriver } }).catch(() => {})
     }, 700)
     return () => clearTimeout(t)
-  }, [selectedCity, rango, user, esDriver])
+  }, [selectedCity, rango, selectedDriver, user, esDriver])
   const [vista, setVista] = useState('combinado')
   // Estado persistido de cada alerta: { alertId: 'resuelta' | 'descartada' }.
   const [estadosAlertas, setEstadosAlertas] = useState({})
@@ -238,7 +245,17 @@ export function DataProvider({ children }) {
   }, [invoices, ciudadBloqueada, ciudadUsuario])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
-  const facturaRango = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
+  // Factura COMPLETA del rango (todos los choferes/ciudades): base para construir
+  // las listas de los selectores (ciudad/chofer) y para las alertas globales.
+  const facturaRangoFull = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
+  // Factura que CONSUMEN las páginas: si hay un chofer elegido, se reduce a ese
+  // chofer (recomputando ciudades/rutas/totales); si no, es la completa. Así todo el
+  // resto de la app (funciones de cálculo intactas) muestra solo sus datos.
+  const hayChofer = selectedDriver && selectedDriver !== TODOS
+  const facturaRango = useMemo(
+    () => (hayChofer ? facturaDeChofer(facturaRangoFull, selectedDriver) : facturaRangoFull),
+    [facturaRangoFull, hayChofer, selectedDriver]
+  )
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
   const rangoSemanas = invoicesRango.map((i) => i.semana).filter(Boolean)
@@ -258,6 +275,13 @@ export function DataProvider({ children }) {
     }
     return extra.length ? [...claims, ...extra] : claims
   }, [claims, invoicesRango])
+
+  // Claims que consumen las páginas: reducidos al chofer elegido (si lo hay), para
+  // que los claims/fallidos correspondan a la MISMA selección que el resto.
+  const claimsFiltrados = useMemo(
+    () => (hayChofer ? claimsEfectivos.filter((c) => c.courier === selectedDriver) : claimsEfectivos),
+    [claimsEfectivos, hayChofer, selectedDriver]
+  )
 
   // Ajustes manuales de pago (préstamo/bono) por chofer, SUMADOS sobre las facturas
   // del rango. Cada factura guarda inv.ajustesPago = { [driverKey]: {prestamo,bono} }.
@@ -310,15 +334,35 @@ export function DataProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangoKey, rangoSemanasKey, activeCompanyId, cargarClaimsDe])
 
+  // PREDICTIVO: si la selección persistida (una factura borrada, un rango personalizado
+  // sin facturas…) quedó SIN datos pero SÍ hay facturas, volver a "última semana" para
+  // no mostrar una pantalla vacía al abrir.
+  useEffect(() => {
+    if (cargando) return
+    if (invoicesVisibles.length > 0 && invoicesRango.length === 0 && rango.preset !== 'ultima') {
+      setRango({ preset: 'ultima', desde: '', hasta: '' })
+    }
+  }, [cargando, invoicesVisibles, invoicesRango, rango.preset])
+
+  // Si el chofer elegido ya no está en el período/ciudad actual (cambio de modo o de
+  // semana), volver a "Todos" para no arrastrar una selección residual.
+  useEffect(() => {
+    if (!hayChofer) return
+    const existe = (facturaRangoFull?.resumenChoferes || []).some((c) => c.nombre === selectedDriver)
+    if (!existe) setSelectedDriver(TODOS)
+  }, [hayChofer, facturaRangoFull, selectedDriver])
+
   const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null
 
+  // Alertas SIEMPRE globales (no dependen del filtro de chofer): se calculan sobre la
+  // factura completa del rango y todos sus claims.
   const invAnterior = useMemo(() => {
-    if (!facturaRango || facturaRango.esRango) return null
-    const idx = invoices.findIndex((i) => i.id === facturaRango.id)
+    if (!facturaRangoFull || facturaRangoFull.esRango) return null
+    const idx = invoices.findIndex((i) => i.id === facturaRangoFull.id)
     return idx >= 0 ? invoices[idx + 1] : null
-  }, [facturaRango, invoices])
+  }, [facturaRangoFull, invoices])
 
-  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRango, claims, drivers, invAnterior }), [facturaRango, claims, drivers, invAnterior])
+  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers, invAnterior }), [facturaRangoFull, claimsEfectivos, drivers, invAnterior])
   // Todas las alertas con su estado persistido adjunto.
   const alertasTodas = useMemo(
     () => alertasBase
@@ -355,7 +399,7 @@ export function DataProvider({ children }) {
     invoices: invoicesVisibles,
     drivers,
     managers,
-    claims: claimsEfectivos,
+    claims: claimsFiltrados,
     ajustesPorChofer,
     ajustes,
     ciudadesEmpresa: (ajustes?.ciudades || []),
@@ -369,6 +413,9 @@ export function DataProvider({ children }) {
     setVista,
     invoicesRango,
     facturaRango,
+    facturaRangoFull,
+    selectedDriver,
+    setSelectedDriver,
     invAnterior,
     alertasTodas,
     alertasVisibles,

@@ -25,7 +25,7 @@ function ThemeToggle() {
 }
 
 function BuscadorGlobal({ onNavigate }) {
-  const { drivers, facturaRango, claims } = useData()
+  const { drivers, facturaRangoFull, claims } = useData()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [abierto, setAbierto] = useState(false)
@@ -38,7 +38,7 @@ function BuscadorGlobal({ onNavigate }) {
     const term = raw.toLowerCase()
     if (!term) return []
     const chof = (drivers || []).filter((d) => (d.nombre || '').toLowerCase().includes(term)).slice(0, 5).map((d) => ({ tipo: 'Chofer', nombre: d.nombre, link: `/choferes/${encodeURIComponent(d.nombre)}` }))
-    const rutas = [...new Set((facturaRango?.resumenRutas || []).map((r) => r.ruta))].filter((r) => r.toLowerCase().includes(term)).slice(0, 5).map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
+    const rutas = [...new Set((facturaRangoFull?.resumenRutas || []).map((r) => r.ruta))].filter((r) => r.toLowerCase().includes(term)).slice(0, 5).map((r) => ({ tipo: 'Ruta', nombre: r, link: '/performance' }))
     // Trackings con claim que coinciden (de los claims cargados en el rango).
     const track = [...new Set((claims || []).map((c) => (c.waybill || '').trim()).filter(Boolean))]
       .filter((w) => w.toLowerCase().includes(term)).slice(0, 5)
@@ -47,7 +47,7 @@ function BuscadorGlobal({ onNavigate }) {
     const directo = pareceTracking(raw) && !track.some((t) => t.nombre.toLowerCase() === term)
       ? [{ tipo: 'Tracking', nombre: raw, link: `/tracking/${encodeURIComponent(raw)}` }] : []
     return [...track, ...directo, ...chof, ...rutas]
-  }, [q, drivers, facturaRango, claims])
+  }, [q, drivers, facturaRangoFull, claims])
 
   const ir = (r) => { setQ(''); setAbierto(false); onNavigate?.(); navigate(r.link) }
 

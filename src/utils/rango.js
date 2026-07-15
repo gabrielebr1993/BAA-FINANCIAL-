@@ -86,6 +86,89 @@ export function invoicesEnRango(invoices, rango) {
   })
 }
 
+// ---- filtro por chofer ------------------------------------------------------
+
+// Reduce una factura combinada (facturaRango) a UN solo chofer, recomputando
+// ciudades/rutas/totales desde SUS filas, para que TODA la app (funciones de cálculo
+// intactas) muestre solo los datos de ese chofer. No cambia ninguna fórmula: solo
+// acota los datos de entrada.
+//  - resumenChoferes/ChoferRuta: solo filas de ese chofer.
+//  - resumenRutas/Ciudades: recomputadas desde esas filas.
+//  - verificacion = null → gananciaRealDe usa el neto por entregas (por chofer),
+//    no el neto verificado de Gofo (que es a nivel de factura completa).
+//  - totalDescuentoGofo = 0 → la pérdida de Gofo por chofer entra vía sus claims
+//    (descontadoGofo en calcularPagos), no por el total de la factura.
+//  - __choferScope marca el ámbito (gananciaRealDe excluye el costo de managers).
+export function facturaDeChofer(fact, chofer) {
+  if (!fact || !chofer) return fact
+  const choferes = (fact.resumenChoferes || []).filter((c) => c.nombre === chofer)
+  const base = {
+    ...fact,
+    __choferScope: chofer,
+    numChoferes: choferes.length ? 1 : 0,
+    verificacion: null,
+    totalDescuentoGofo: 0,
+    fallidosPorChofer: (fact.fallidosPorChofer && fact.fallidosPorChofer[chofer] != null)
+      ? { [chofer]: fact.fallidosPorChofer[chofer] } : {},
+    fallidosSinAsociar: (fact.fallidosSinAsociar || []).filter((s) => s.chofer === chofer),
+  }
+  if (choferes.length === 0) {
+    return { ...base, resumenChoferes: [], resumenChoferRuta: [], resumenRutas: [], resumenCiudades: [],
+      totalIndividuales: 0, totalDobles: 0, totalPaquetes: 0, ingresoTotal: 0, totalClaims: 0, numRutas: 0, totalFallidos: 0 }
+  }
+  const choferRuta = (fact.resumenChoferRuta || []).filter((c) => c.nombre === chofer)
+
+  // Rutas EXACTAS desde el desglose chofer×ruta (facturas nuevas). Si la factura no
+  // lo trae (histórico), no se pueden separar por chofer → sin filas de ruta.
+  const porRuta = {}
+  for (const cr of choferRuta) {
+    const t = (porRuta[cr.ruta] = porRuta[cr.ruta] || { ruta: cr.ruta, ciudad: cr.ciudad, nombreCiudad: cr.nombreCiudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, pesoTotalLb: 0, numClaims: 0 })
+    t.individuales += cr.individuales || 0
+    t.dobles += cr.dobles || 0
+    t.paquetes += (cr.individuales || 0) + (cr.dobles || 0)
+    t.ingreso += cr.ingreso || 0
+    t.pesoTotalLb += cr.pesoTotalLb || 0
+    t.numClaims += cr.numClaims || 0
+  }
+  const resumenRutas = Object.values(porRuta).map((r) => ({
+    ...r,
+    precioPorLb: r.pesoTotalLb > 0 ? r.ingreso / r.pesoTotalLb : 0,
+    precioPorPaquete: r.paquetes > 0 ? r.ingreso / r.paquetes : 0,
+  }))
+
+  // Ciudades recomputadas desde las filas del chofer.
+  const porCiudad = {}
+  for (const c of choferes) {
+    const t = (porCiudad[c.ciudad] = porCiudad[c.ciudad] || { ubicacion: c.ciudad, nombreCiudad: c.nombreCiudad || nombreCiudad(c.ciudad), paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, _ru: new Set() })
+    t.individuales += c.individuales || 0
+    t.dobles += c.dobles || 0
+    t.paquetes += (c.individuales || 0) + (c.dobles || 0)
+    t.ingreso += c.ingreso || 0
+    t.numClaims += c.numClaims || 0
+  }
+  for (const r of resumenRutas) if (porCiudad[r.ciudad]) porCiudad[r.ciudad]._ru.add(r.ruta)
+  const resumenCiudades = Object.values(porCiudad).map((c) => ({
+    ubicacion: c.ubicacion, nombreCiudad: c.nombreCiudad, paquetes: c.paquetes, individuales: c.individuales,
+    dobles: c.dobles, ingreso: c.ingreso, numClaims: c.numClaims, numChoferes: 1, numRutas: c._ru.size,
+  }))
+
+  const suma = (campo) => choferes.reduce((a, c) => a + (c[campo] || 0), 0)
+  return {
+    ...base,
+    resumenChoferes: choferes,
+    resumenChoferRuta: choferRuta,
+    resumenRutas,
+    resumenCiudades,
+    totalIndividuales: suma('individuales'),
+    totalDobles: suma('dobles'),
+    totalPaquetes: suma('individuales') + suma('dobles'),
+    ingresoTotal: suma('ingreso'),
+    totalClaims: suma('numClaims'),
+    numRutas: resumenRutas.length,
+    totalFallidos: suma('fallidos'),
+  }
+}
+
 // ---- combinación de varias facturas ----------------------------------------
 
 // Suma varios resúmenes de facturas en un único objeto con la misma forma.
