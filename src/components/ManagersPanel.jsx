@@ -15,7 +15,7 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
   const navigate = useNavigate()
-  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, invoicesRango, selectedCity } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity } = useData()
   const { ciudadBloqueada, ciudadUsuario } = useAuth()
   // Gastos fijos visibles según la ciudad seleccionada en la barra global:
   //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
@@ -30,7 +30,7 @@ export default function ManagersPanel() {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
-  const semanas = Math.max(1, invoicesRango.length)
+  const semanas = numSemanas
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const cancelar = () => { setEditId(null); setForm(vacio); setError('') }
 

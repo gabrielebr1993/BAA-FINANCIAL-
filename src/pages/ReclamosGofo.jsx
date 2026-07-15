@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Scale, AlertTriangle, TrendingDown, FileWarning, Download, CheckCircle2 } from 'lucide-react'
 import { useData } from '../DataContext'
-import { claimsDeCiudad } from '../utils/calc'
+import { claimsDeCiudad, TODAS } from '../utils/calc'
 import { facturasQueNoCuadran, cambiosDePrecio, claimsSospechosos, totalEnDisputa, descargarReporteReclamo, descargarReporteConsolidado } from '../utils/reclamos'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
@@ -10,7 +10,12 @@ export default function ReclamosGofo() {
   const { facturaRango: inv, invoicesRango, invAnterior, claims, selectedCity, empresaActiva, cargando } = useData()
   const [generando, setGenerando] = useState(null)
 
-  const cuadres = useMemo(() => facturasQueNoCuadran(invoicesRango), [invoicesRango])
+  // Respeta el filtro de ciudad: solo las facturas de esa ciudad (cada factura es de
+  // una ciudad). Con "Todas" se revisan todas.
+  const cuadres = useMemo(() => facturasQueNoCuadran(
+    selectedCity === TODAS ? invoicesRango
+      : invoicesRango.filter((f) => (f.ciudad || '') === selectedCity || (f.resumenCiudades || []).some((c) => c.ubicacion === selectedCity))
+  ), [invoicesRango, selectedCity])
   const precios = useMemo(() => cambiosDePrecio(inv, invAnterior, selectedCity), [inv, invAnterior, selectedCity])
   const sospechosos = useMemo(() => claimsSospechosos(claimsDeCiudad(claims, selectedCity, inv)), [claims, selectedCity, inv])
   const total = totalEnDisputa(cuadres, precios, sospechosos)

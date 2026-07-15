@@ -35,7 +35,7 @@ export default function Dashboard() {
   const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
   const gReal = useMemo(() => gananciaRealDe(inv, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer), [inv, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer])
   const esRango = !!inv?.esRango
-  const variasSemanas = invoicesRango.length > 1
+  const variasSemanas = numSemanas > 1
 
   const rc = useMemo(() => rankingsChoferes(inv, claims, drivers, selectedCity), [inv, claims, drivers, selectedCity])
   const rr = useMemo(() => rankingsRutas(inv, drivers, selectedCity), [inv, drivers, selectedCity])

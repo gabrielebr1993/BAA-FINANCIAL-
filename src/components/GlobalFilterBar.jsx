@@ -20,7 +20,7 @@ const fmtMonto = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
 
 export default function GlobalFilterBar() {
   const {
-    rango, setRango, invoices, invoicesRango, vista, setVista,
+    rango, setRango, invoices, invoicesRango, numSemanas, vista, setVista,
     selectedCity, setSelectedCity, selectedDriver, setSelectedDriver,
     facturaRangoFull, ciudadBloqueada,
   } = useData()
@@ -71,7 +71,7 @@ export default function GlobalFilterBar() {
   }
   const ciudadLabel = selectedCity === TODAS ? 'Todas las ciudades' : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)
   const hayChofer = selectedDriver && selectedDriver !== TODOS
-  const varias = invoicesRango.length > 1
+  const varias = numSemanas > 1
 
   const seg = (activo) => `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-600 hover:text-brand-navy dark:text-slate-300 dark:hover:text-white'}`
   const chip = (activo) => `rounded-full px-3 py-1.5 text-xs font-medium transition ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`

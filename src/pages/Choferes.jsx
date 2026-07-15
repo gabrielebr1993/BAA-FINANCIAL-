@@ -135,9 +135,9 @@ export default function Choferes() {
 
   const pagoMap = useMemo(() => {
     const m = {}
-    calcularPagos(facturaRango, claims, drivers, 'todas').forEach((p) => (m[key(p.nombre)] = p))
+    calcularPagos(facturaRango, claims, drivers, selectedCity).forEach((p) => (m[key(p.nombre)] = p))
     return m
-  }, [facturaRango, claims, drivers])
+  }, [facturaRango, claims, drivers, selectedCity])
 
   // Filtra por nombre O por rate (individual/doble): escribir "1.6" muestra los que ganan 1.6.
   const filtrados = useMemo(() => {
