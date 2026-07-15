@@ -16,14 +16,21 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 export default function ManagersPanel() {
   const navigate = useNavigate()
   const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity } = useData()
-  const { ciudadBloqueada, ciudadUsuario } = useAuth()
-  // Gastos fijos visibles según la ciudad seleccionada en la barra global:
-  //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
+  const { ciudadBloqueada, ciudadesUsuario } = useAuth()
+  // Gastos fijos visibles según el filtro global + las ciudades del usuario:
   //  - Ciudad elegida (≠ Todas): solo los de esa ciudad.
-  //  - "Todas": todos.
-  const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
-  const managers = ciudadFiltro ? managersAll.filter((m) => (m.ciudad || '') === ciudadFiltro) : managersAll
-  const ciudadesForm = ciudadBloqueada ? (ciudadesEmpresa || []).filter((c) => c.codigo === ciudadUsuario) : (ciudadesEmpresa || []).filter((c) => c.codigo)
+  //  - "Todas" con usuario bloqueado: solo los de SUS ciudades.
+  //  - "Todas" sin bloqueo: todos.
+  const misCiudades = ciudadBloqueada ? new Set(ciudadesUsuario || []) : null
+  const managers = managersAll.filter((m) => {
+    const c = m.ciudad || ''
+    if (selectedCity && selectedCity !== TODAS) return c === selectedCity
+    if (misCiudades) return misCiudades.has(c)
+    return true
+  })
+  const ciudadesForm = ciudadBloqueada
+    ? (ciudadesEmpresa || []).filter((c) => c.codigo && (ciudadesUsuario || []).includes(c.codigo))
+    : (ciudadesEmpresa || []).filter((c) => c.codigo)
   const exportarBancarios = () => exportarDatosBancarios(managers.map((m) => ({ nombre: m.nombre, verificacion: m.verificacion })), `datos-bancarios-gastos-fijos_${new Date().toISOString().slice(0, 10)}`)
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
@@ -73,7 +80,9 @@ export default function ManagersPanel() {
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
-    const ciudadFinal = ciudadBloqueada ? ciudadUsuario : form.ciudad
+    // Ciudad del gasto fijo: usuario bloqueado a UNA ciudad → esa; si tiene varias
+    // (o no está bloqueado) → la que eligió en el formulario (limitada a las suyas).
+    const ciudadFinal = (ciudadBloqueada && (ciudadesUsuario || []).length === 1) ? (ciudadesUsuario[0] || '') : form.ciudad
     if (!ciudadFinal) return setError('Elige la ciudad a la que pertenece el gasto fijo.')
     if (Number(form.sueldoSemanal) < 0) return setError('El monto no puede ser negativo.')
     setGuardando(true); setError('')

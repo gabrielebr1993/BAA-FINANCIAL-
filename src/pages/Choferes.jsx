@@ -27,7 +27,13 @@ export default function Choferes() {
   const rateDeRuta = (d) => { const r = rutasDef[d?.rutaDefault] || {}; return { ind: Number(r.tarifaInd) || 0, dob: Number(r.tarifaDoble) || 0, ruta: d?.rutaDefault } }
   // Nombre legible de una ciudad (config de la empresa primero, luego catálogo).
   const nombreCiudadCorto = (cod) => (ciudadesEmpresa || []).find((c) => c.codigo === cod)?.nombre || nombreCiudad(cod)
-  const { ciudadBloqueada, ciudadUsuario, esSuperAdmin, perfil } = useAuth()
+  const { ciudadBloqueada, ciudadesUsuario, esSuperAdmin, perfil } = useAuth()
+  const ciudadesUsuarioKey = (ciudadesUsuario || []).join('|')
+  // Ciudades relevantes para filtrar listas: la elegida (si ≠ Todas); si no y el
+  // usuario está bloqueado, SUS ciudades; si no, null (todas).
+  const ciudadesRelevantes = (selectedCity && selectedCity !== TODAS)
+    ? new Set([selectedCity])
+    : (ciudadBloqueada ? new Set(ciudadesUsuarioKey ? ciudadesUsuarioKey.split('|') : []) : null)
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   // El dueño/súper-admin ven Gastos fijos de todas las ciudades; el ADMIN también
   // los gestiona pero solo de SU ciudad (ManagersPanel ya respeta ciudadBloqueada).
@@ -57,16 +63,16 @@ export default function Choferes() {
   //  - Cualquiera con una ciudad elegida (≠ Todas): solo los de esa ciudad.
   //  - "Todas": todos.
   const drivers = useMemo(() => {
-    const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
-    if (!ciudadFiltro) return driversAll
-    const enEsaCiudad = new Set()
-    ;(facturaRango?.resumenChoferes || []).forEach((c) => { if (c.ciudad === ciudadFiltro) enEsaCiudad.add((c.nombre || '').trim().toLowerCase()) })
+    if (!ciudadesRelevantes || ciudadesRelevantes.size === 0) return driversAll
+    const enEsasCiudades = new Set()
+    ;(facturaRango?.resumenChoferes || []).forEach((c) => { if (ciudadesRelevantes.has(c.ciudad)) enEsasCiudades.add((c.nombre || '').trim().toLowerCase()) })
     return driversAll.filter((d) =>
-      (d.ciudad && d.ciudad === ciudadFiltro) ||
-      ciudadDeDriverNombre[d.nombre] === ciudadFiltro ||
-      enEsaCiudad.has((d.nombre || '').trim().toLowerCase())
+      (d.ciudad && ciudadesRelevantes.has(d.ciudad)) ||
+      ciudadesRelevantes.has(ciudadDeDriverNombre[d.nombre]) ||
+      enEsasCiudades.has((d.nombre || '').trim().toLowerCase())
     )
-  }, [driversAll, ciudadBloqueada, ciudadUsuario, selectedCity, facturaRango, ciudadDeDriverNombre])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driversAll, ciudadesUsuarioKey, ciudadBloqueada, selectedCity, facturaRango, ciudadDeDriverNombre])
 
   const [tab, setTab] = useState('choferes')
   // ---- alta de chofer ----
@@ -348,12 +354,11 @@ export default function Choferes() {
     }
   }
 
-  // Choferes de la factura sin tarifa creada. Si el usuario está fijado a una
-  // ciudad, solo cuenta los de SU ciudad (no los de toda la empresa).
-  const ciudadFiltroSinTarifa = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
+  // Choferes de la factura sin tarifa creada. Se acota a las ciudades relevantes
+  // (la elegida, o las del usuario si está bloqueado).
   const sinTarifa = facturaRango
     ? [...new Set((facturaRango.resumenChoferes || [])
-        .filter((c) => !ciudadFiltroSinTarifa || c.ciudad === ciudadFiltroSinTarifa)
+        .filter((c) => !ciudadesRelevantes || ciudadesRelevantes.has(c.ciudad))
         .map((c) => c.nombre))].filter((n) => !buscarDriver(drivers, n))
     : []
   const nSel = idsSel().length

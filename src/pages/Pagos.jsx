@@ -17,7 +17,8 @@ import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, Est
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
-  const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
+  const { perfil, esSuperAdmin, ciudadBloqueada, ciudadesUsuario } = useAuth()
+  const ciudadesUsuarioKey = (ciudadesUsuario || []).join('|')
   const { facturaRango: selectedInvoice, invoicesRango, numSemanas, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   // El ADMIN tiene acceso COMPLETO a las opciones de pago (Stripe, ajustes de
   // préstamo/bono, marcar pagado) igual que el dueño, pero acotado a su ciudad.
@@ -121,12 +122,17 @@ export default function Pagos() {
   const semanas = numSemanas
   const gastosFijos = useMemo(() => {
     const activos = (managers || []).filter((m) => m.activo !== false)
-    const ciudadFiltro = ciudadBloqueada ? ciudadUsuario : (selectedCity && selectedCity !== TODAS ? selectedCity : null)
-    const filtrados = ciudadFiltro ? activos.filter((m) => (m.ciudad || '') === ciudadFiltro) : activos
+    const misCiudades = ciudadBloqueada ? new Set(ciudadesUsuarioKey ? ciudadesUsuarioKey.split('|') : []) : null
+    const filtrados = activos.filter((m) => {
+      const c = m.ciudad || ''
+      if (selectedCity && selectedCity !== TODAS) return c === selectedCity
+      if (misCiudades) return misCiudades.has(c)
+      return true
+    })
     return filtrados
       .map((m) => ({ ...m, monto: (Number(m.sueldoSemanal) || 0) * semanas, estado: (pagoInvoiceId && m.pagados && m.pagados[pagoInvoiceId] === 'pagado') ? 'pagado' : 'pendiente' }))
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
-  }, [managers, selectedCity, ciudadBloqueada, ciudadUsuario, semanas, pagoInvoiceId])
+  }, [managers, selectedCity, ciudadBloqueada, ciudadesUsuarioKey, semanas, pagoInvoiceId])
   const totGastosFijos = gastosFijos.reduce((a, g) => a + g.monto, 0)
   const gPag = gastosFijos.filter((g) => g.estado === 'pagado').length
   const gPend = gastosFijos.length - gPag

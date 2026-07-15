@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     const { getAuth, getFirestore, FieldValue } = a
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-    const { nombre, email, password, role, permissions, companyId, driverId, driverNombre, ciudad } = body
+    const { nombre, email, password, role, permissions, companyId, driverId, driverNombre, ciudad, ciudades } = body
 
     if (!nombre || !email || !password || !companyId) {
       return res.status(400).json({ ok: false, error: 'Faltan datos: nombre, email, contraseña y empresa son obligatorios.' })
@@ -114,14 +114,22 @@ export default async function handler(req, res) {
       // permisos de gestión. El resto de roles ignoran esos campos.
       const esDriver = role === 'driver'
       const dNombre = driverNombre ? String(driverNombre).trim() : ''
+      // Ciudades asignadas (roles de gestión): arreglo de códigos. [] = todas. Se
+      // acepta `ciudades` (varias) o el antiguo `ciudad` (una). Se guarda `ciudades`
+      // (arreglo) y `ciudad` = la primera, por compatibilidad con lecturas antiguas.
+      const asignaCiudad = !esDriver && role !== 'owner'
+      const listaCiudades = asignaCiudad
+        ? [...new Set((Array.isArray(ciudades) ? ciudades : (ciudad ? [ciudad] : [])).map((c) => String(c || '').trim()).filter(Boolean))]
+        : []
       const userDocData = {
         nombre: String(nombre).trim(),
         email: String(email).trim(),
         role: role || 'manager',
         permissions: esDriver ? {} : (permissions || {}),
         companyId,
-        // Ciudad asignada (roles de gestión): '' = todas. El owner/driver no aplica.
-        ciudad: (!esDriver && role !== 'owner') ? String(ciudad || '') : '',
+        // Ciudades asignadas: [] = todas. `ciudad` = primera (compatibilidad).
+        ciudades: listaCiudades,
+        ciudad: listaCiudades[0] || '',
         superAdmin: false,
         createdAt: FieldValue.serverTimestamp(),
       }

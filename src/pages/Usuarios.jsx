@@ -11,7 +11,7 @@ function permisosVacios() {
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudad: '', permissions: permisosVacios() }
+const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudades: [], permissions: permisosVacios() }
 
 export default function Usuarios() {
   const { activeCompanyId, empresaActiva, drivers, ciudadesEmpresa, invoices } = useData()
@@ -35,6 +35,10 @@ export default function Usuarios() {
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const togglePermiso = (k) => setForm((f) => ({ ...f, permissions: { ...f.permissions, [k]: !f.permissions[k] } }))
+  const toggleCiudad = (code) => setForm((f) => {
+    const has = (f.ciudades || []).includes(code)
+    return { ...f, ciudades: has ? f.ciudades.filter((c) => c !== code) : [...(f.ciudades || []), code] }
+  })
 
   const nuevo = () => {
     setEditId(null)
@@ -44,7 +48,7 @@ export default function Usuarios() {
   }
   const editar = (u) => {
     setEditId(u.id)
-    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', ciudad: u.ciudad || '', permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
+    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', ciudades: (Array.isArray(u.ciudades) && u.ciudades.length) ? u.ciudades : (u.ciudad ? [u.ciudad] : []), permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
     setError('')
     setOk('')
   }
@@ -87,22 +91,24 @@ export default function Usuarios() {
     const driverNombre = esDriver ? driverNombreDe(form.driverId) : ''
     const permisos = esDriver ? {} : form.permissions
     const extraDriver = esDriver ? { driverId: form.driverId, driverNombre, driverKey: driverNombre.toLowerCase() } : {}
-    // Ciudad asignada: solo para roles de gestión (manager/admin). '' = todas las
-    // ciudades (sin restricción). El owner ve todo; el driver no aplica.
+    // Ciudades asignadas: solo para roles de gestión (manager/admin). [] = todas las
+    // ciudades (sin restricción). El owner ve todo; el driver no aplica. Se guarda el
+    // arreglo `ciudades` y `ciudad` = la primera (compatibilidad con lo anterior).
     const asignaCiudad = form.role !== 'owner' && form.role !== 'driver'
-    const ciudadAsignada = asignaCiudad ? (form.ciudad || '') : ''
+    const ciudadesAsignadas = asignaCiudad ? [...new Set((form.ciudades || []).filter(Boolean))] : []
+    const campoCiudades = { ciudades: ciudadesAsignadas, ciudad: ciudadesAsignadas[0] || '' }
     setGuardando(true)
     try {
       if (editId) {
         // editar: solo actualiza el documento (permisos/rol), no toca Auth
-        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...extraDriver })
+        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...extraDriver })
         await cargar()
         setOk('Usuario actualizado.')
         nuevo()
       } else if (modoManual) {
         // respaldo: crear con UID manual (el acceso en Auth se crea aparte)
         if (!form.uid.trim()) return setError('Indica el UID de Firebase Auth del usuario.')
-        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...extraDriver })
+        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...extraDriver })
         await cargar()
         setOk('Usuario creado (modo manual).')
         nuevo()
@@ -110,7 +116,7 @@ export default function Usuarios() {
         // flujo principal: crear Auth + documento vía función serverless
         if (String(form.password).length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
         const token = await auth.currentUser.getIdToken()
-        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: permisos, companyId: activeCompanyId, ciudad: ciudadAsignada, ...(esDriver ? { driverId: form.driverId, driverNombre } : {}) }, token)
+        const data = await crearUsuarioApi({ nombre: form.nombre.trim(), email: form.email.trim(), password: form.password, role: form.role, permissions: permisos, companyId: activeCompanyId, ciudades: ciudadesAsignadas, ...(esDriver ? { driverId: form.driverId, driverNombre } : {}) }, token)
         if (!data.ok) {
           setError(data.error || 'No se pudo crear el usuario.')
           return
@@ -190,19 +196,27 @@ export default function Usuarios() {
             </>
           )}
           {form.role !== 'owner' && form.role !== 'driver' && (
-            <Campo label="Ciudad asignada">
-              <Select className="w-56" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
-                <option value="">Todas las ciudades</option>
-                {[...(ciudadesEmpresa || [])].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((c) => (
-                  <option key={c.codigo} value={c.codigo}>{c.nombre}</option>
-                ))}
-              </Select>
+            <Campo label="Ciudades asignadas">
+              <div className="flex max-w-[520px] flex-wrap gap-1.5">
+                {[...(ciudadesEmpresa || [])].filter((c) => c.codigo).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((c) => {
+                  const on = (form.ciudades || []).includes(c.codigo)
+                  return (
+                    <button type="button" key={c.codigo} onClick={() => toggleCiudad(c.codigo)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${on ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                      {on ? '✓ ' : ''}{c.nombre}
+                    </button>
+                  )
+                })}
+                {(ciudadesEmpresa || []).filter((c) => c.codigo).length === 0 && (
+                  <span className="text-xs text-slate-400">No hay ciudades configuradas. Ve a Configuración → Mis ciudades.</span>
+                )}
+              </div>
             </Campo>
           )}
         </div>
         {form.role !== 'owner' && form.role !== 'driver' && (
           <p className="-mt-2 mb-4 text-xs text-slate-400">
-            Si eliges una <b>ciudad</b>, este usuario <b>solo verá los datos de esa ciudad</b> (según sus permisos). Déjalo en <b>“Todas las ciudades”</b> para que vea todas.
+            Elige <b>una o más ciudades</b>: este usuario <b>solo verá los datos de esas ciudades</b> (según sus permisos) y podrá alternar entre ellas. <b>Sin ninguna seleccionada</b> = ve <b>todas</b> las ciudades.
           </p>
         )}
 
@@ -257,6 +271,7 @@ export default function Usuarios() {
           { key: 'nombre', label: 'Nombre' },
           { key: 'email', label: 'Email' },
           { key: 'role', label: 'Rol' },
+          { key: 'ciudades', label: 'Ciudades' },
           { key: 'permisos', label: 'Permisos', wrap: true },
           { key: 'acciones', label: '', align: 'right' },
         ]}
@@ -264,6 +279,13 @@ export default function Usuarios() {
         emptyText="No hay usuarios registrados."
         renderCell={(row, key) => {
           if (key === 'role') return <Badge color={row.role === 'owner' ? 'gold' : 'navy'}>{row.role}</Badge>
+          if (key === 'ciudades') {
+            if (row.role === 'owner' || row.role === 'driver') return <span className="text-slate-400">—</span>
+            const cs = (Array.isArray(row.ciudades) && row.ciudades.length) ? row.ciudades : (row.ciudad ? [row.ciudad] : [])
+            if (!cs.length) return <span className="text-slate-400">Todas</span>
+            const nom = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || code
+            return <div className="flex flex-wrap gap-1">{cs.map((c) => <Badge key={c}>{nom(c)}</Badge>)}</div>
+          }
           if (key === 'permisos') {
             if (row.role === 'owner') return <Badge color="gold">Todo (owner)</Badge>
             const activos = PERMISOS.filter((p) => row.permissions?.[p.key])

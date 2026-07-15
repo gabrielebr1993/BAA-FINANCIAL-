@@ -7,18 +7,30 @@ import { Select } from './ui'
 export default function CitySelector() {
   // La lista de ciudades se basa en el RANGO COMPLETO (facturaRangoFull), no en la
   // versión reducida por chofer, para que el filtro de chofer no colapse las ciudades.
-  const { facturaRangoFull, selectedCity, setSelectedCity, ciudadBloqueada, ciudadUsuario, ciudadesEmpresa } = useData()
+  const { facturaRangoFull, selectedCity, setSelectedCity, ciudadBloqueada, ciudadUsuario, ciudadesUsuario, ciudadesEmpresa } = useData()
   const facturaRango = facturaRangoFull
   const ciudades = ciudadesDeFactura(facturaRango)
+  const nombreDe = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || nombreCiudadDe(facturaRango, code) || code
 
-  // Usuario bloqueado a su ciudad: no puede cambiarla; se muestra fija.
+  // Usuario bloqueado a su(s) ciudad(es).
   if (ciudadBloqueada) {
-    const nom = (ciudadesEmpresa || []).find((c) => c.codigo === ciudadUsuario)?.nombre
-      || nombreCiudadDe(facturaRango, ciudadUsuario) || ciudadUsuario
+    const misCiudades = (ciudadesUsuario && ciudadesUsuario.length ? ciudadesUsuario : [ciudadUsuario]).filter(Boolean)
+    // Una sola ciudad: se muestra fija (no puede cambiarla).
+    if (misCiudades.length <= 1) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title="Tu cuenta está asignada a esta ciudad">
+          <MapPin size={15} strokeWidth={1.8} className="text-brand-gold" /> {nombreDe(misCiudades[0])}
+        </span>
+      )
+    }
+    // Varias ciudades: puede alternar entre las SUYAS o ver "Todas mis ciudades".
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title="Tu cuenta está asignada a esta ciudad">
-        <MapPin size={15} strokeWidth={1.8} className="text-brand-gold" /> {nom}
-      </span>
+      <Select value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)} aria-label="Filtro de ciudad">
+        <option value={TODAS}>Todas mis ciudades</option>
+        {[...misCiudades].sort((a, b) => nombreDe(a).localeCompare(nombreDe(b))).map((code) => (
+          <option key={code} value={code}>{nombreDe(code)}</option>
+        ))}
+      </Select>
     )
   }
 

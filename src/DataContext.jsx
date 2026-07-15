@@ -19,7 +19,8 @@ const DataContext = createContext()
 export const useData = () => useContext(DataContext)
 
 export function DataProvider({ children }) {
-  const { user, perfil, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth, ciudadUsuario, ciudadBloqueada } = useAuth()
+  const { user, perfil, companyId, esSuperAdmin, esDriver, cargando: cargandoAuth, ciudadUsuario, ciudadesUsuario, ciudadBloqueada } = useAuth()
+  const ciudadesUsuarioKey = (ciudadesUsuario || []).join('|')
   const [companies, setCompanies] = useState([])
   // Empresa activa PERSISTIDA: al refrescar se mantiene la que estabas viendo
   // (solo aplica al súper-admin, que puede cambiar de empresa).
@@ -237,12 +238,13 @@ export function DataProvider({ children }) {
   // de SU ciudad en TODAS las pantallas (filtro, dashboard, por factura, ganancias…).
   // El dueño y el súper-admin ven todo.
   const invoicesVisibles = useMemo(() => {
-    if (!ciudadBloqueada || !ciudadUsuario) return invoices
+    if (!ciudadBloqueada || !ciudadesUsuarioKey) return invoices
+    const set = new Set(ciudadesUsuarioKey.split('|'))
     return invoices.filter((inv) =>
-      (inv.ciudad || '') === ciudadUsuario ||
-      (inv.resumenCiudades || []).some((c) => c.ubicacion === ciudadUsuario)
+      set.has(inv.ciudad || '') ||
+      (inv.resumenCiudades || []).some((c) => set.has(c.ubicacion))
     )
-  }, [invoices, ciudadBloqueada, ciudadUsuario])
+  }, [invoices, ciudadBloqueada, ciudadesUsuarioKey])
 
   const invoicesRango = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
   // Factura COMPLETA del rango (todos los choferes/ciudades): base para construir
@@ -346,8 +348,16 @@ export function DataProvider({ children }) {
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
   useEffect(() => {
-    if (ciudadBloqueada && ciudadUsuario && selectedCity !== ciudadUsuario) setSelectedCity(ciudadUsuario)
-  }, [ciudadBloqueada, ciudadUsuario, selectedCity])
+    if (!ciudadBloqueada) return
+    const cs = ciudadesUsuarioKey ? ciudadesUsuarioKey.split('|') : []
+    if (cs.length === 1) {
+      // Una sola ciudad: vista fija en esa ciudad.
+      if (selectedCity !== cs[0]) setSelectedCity(cs[0])
+    } else if (cs.length > 1) {
+      // Varias ciudades: puede ver "Todas" (= todas SUS ciudades) o una de ellas.
+      if (selectedCity !== TODAS && !cs.includes(selectedCity)) setSelectedCity(TODAS)
+    }
+  }, [ciudadBloqueada, ciudadesUsuarioKey, selectedCity])
 
   useEffect(() => {
     cargarClaimsDe(rangoKey ? rangoKey.split(',') : [], rangoSemanas, activeCompanyId).catch((e) => setError('Error cargando claims: ' + e.message))
@@ -447,10 +457,14 @@ export function DataProvider({ children }) {
     reactivarAlerta,
     descartarAlerta,
     selectedCity,
-    // Si el usuario está bloqueado a su ciudad, ignoramos cualquier intento de cambio.
-    setSelectedCity: ciudadBloqueada ? () => {} : setSelectedCity,
+    // Usuario bloqueado a su(s) ciudad(es): solo puede elegir "Todas" (= todas SUS
+    // ciudades) o una de las suyas; cualquier otra se ignora.
+    setSelectedCity: ciudadBloqueada
+      ? (c) => { if (c === TODAS || (ciudadesUsuario || []).includes(c)) setSelectedCity(c) }
+      : setSelectedCity,
     ciudadBloqueada,
     ciudadUsuario,
+    ciudadesUsuario,
     cargando,
     error,
     reloadInvoices: () => cargarInvoices(activeCompanyId),
