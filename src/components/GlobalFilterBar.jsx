@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Search, FileText, CalendarRange, Eraser } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { PRESETS } from '../utils/rango'
 import { TODAS, TODOS, nombreCiudadDe } from '../utils/calc'
 import CitySelector, { DriverSelector } from './CitySelector'
@@ -24,6 +25,11 @@ export default function GlobalFilterBar() {
     selectedCity, setSelectedCity, selectedDriver, setSelectedDriver,
     facturaRangoFull, ciudadBloqueada,
   } = useData()
+
+  // El MANAGER solo puede ver "Una factura" (no "Por período"): se le oculta el modo
+  // período y se le fuerza a factura (para que los pagos por factura funcionen bien).
+  const { perfil } = useAuth()
+  const soloFactura = perfil?.role === 'manager'
 
   // Modo derivado del único estado: 'factura' vs 'periodo'. Nunca coexisten.
   const modo = rango.preset === 'factura' ? 'factura' : 'periodo'
@@ -44,6 +50,13 @@ export default function GlobalFilterBar() {
     const id = rango.invoiceId && invoices.some((i) => i.id === rango.invoiceId) ? rango.invoiceId : (invoices[0]?.id || '')
     if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' })
   }
+  // Manager: forzar modo "Una factura" (elige la más reciente si venía en período).
+  useEffect(() => {
+    if (!soloFactura || modo === 'factura') return
+    const id = rango.invoiceId && invoices.some((i) => i.id === rango.invoiceId) ? rango.invoiceId : (invoices[0]?.id || '')
+    if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soloFactura, modo, invoices])
   const setPreset = (preset) => { setAbrirPers(false); setRango({ preset, desde: '', hasta: '' }) }
   const buscar = () => {
     let d = desde, h = hasta
@@ -89,15 +102,22 @@ export default function GlobalFilterBar() {
           {hayChofer && (<><span className="text-slate-300 dark:text-slate-600">·</span><span className="text-slate-600 dark:text-slate-300">{selectedDriver}</span></>)}
         </div>
 
-        {/* 2) Selector principal (período ↔ factura, excluyentes) */}
+        {/* 2) Selector principal (período ↔ factura, excluyentes). El manager solo ve
+            "Una factura". */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">¿Qué quieres ver?</span>
-          <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
-            <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 Por período</button>
-            <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 Una factura</button>
-          </div>
+          {soloFactura ? (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-white"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> Una factura</span>
+          ) : (
+            <>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">¿Qué quieres ver?</span>
+              <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
+                <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 Por período</button>
+                <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 Una factura</button>
+              </div>
+            </>
+          )}
 
-          {modo === 'periodo' ? (
+          {(modo === 'periodo' && !soloFactura) ? (
             <div className="flex flex-wrap items-center gap-1">
               {ATAJOS.map((p) => (
                 <button key={p.key} onClick={() => setPreset(p.key)} className={chip(rango.preset === p.key)}>{p.label}</button>
