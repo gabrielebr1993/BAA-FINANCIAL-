@@ -1,13 +1,16 @@
 // Cálculo centralizado de alertas del negocio sobre la factura/periodo activo.
-import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims, claimsRepetidosPendientes } from './calc'
+import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims, claimsRepetidosPendientes, desgloseGananciaCiudades } from './calc'
 import { money } from './format'
+
+// Umbral de margen "bajo" (aviso amarillo) para una ciudad rentable pero flaca.
+const MARGEN_BAJO = 0.05
 
 // Categorías para agrupar las alertas en el panel y la campana.
 export const CATEGORIAS = ['Choferes', 'Rutas', 'Dinero', 'Pagos']
 
 // Devuelve un arreglo de alertas:
 //   { id, tipo:'red'|'yellow'|'blue', categoria, titulo, detalle, link }
-export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes }) {
+export function calcularAlertas({ inv, claims, drivers, managers, semanas = 1, invAnterior, pendientes }) {
   const alertas = []
   if (!inv) return alertas
 
@@ -24,6 +27,18 @@ export function calcularAlertas({ inv, claims, drivers, invAnterior, pendientes 
   // 2) Factura que no cuadra con Gofo (grave)
   if (inv.verificacion?.cuadra === false) {
     alertas.push({ id: 'cuadre', tipo: 'red', categoria: 'Dinero', titulo: 'La factura no cuadra con Gofo', detalle: `Diferencia de ${money(inv.verificacion.diferencia)} entre nuestro neto y el total de Gofo.`, link: '/financiero' })
+  }
+
+  // 2b) RENTABILIDAD por ciudad: ganancia real (ingreso neto − choferes − gastos
+  //     fijos) en pérdida (grave) o con margen muy bajo (aviso). Requiere managers.
+  if (managers != null) {
+    desgloseGananciaCiudades(inv, claims, drivers, managers, semanas || 1).forEach((c) => {
+      if (c.gananciaReal < 0) {
+        alertas.push({ id: `ciudadPerdida:${c.code}`, tipo: 'red', categoria: 'Dinero', titulo: `${c.nombreCiudad} da pérdida`, detalle: `Ganancia real ${money(c.gananciaReal)}: ingreso neto ${money(c.ingresoNeto)} − choferes ${money(c.costoChoferes)} − gastos fijos ${money(c.costoManagers)}.`, link: '/financiero' })
+      } else if (c.ingresoNeto > 0 && c.margen < MARGEN_BAJO) {
+        alertas.push({ id: `ciudadMargen:${c.code}`, tipo: 'yellow', categoria: 'Dinero', titulo: `${c.nombreCiudad} con margen bajo (${(c.margen * 100).toFixed(1)}%)`, detalle: `Ganancia real ${money(c.gananciaReal)} sobre ingreso ${money(c.ingresoNeto)}. Revisa tarifas o gastos fijos.`, link: '/financiero' })
+      }
+    })
   }
 
   const pagos = calcularPagos(inv, claims, drivers, 'todas')

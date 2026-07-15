@@ -26,6 +26,7 @@ export default function CargarFactura() {
   const [ciudadesExtra, setCiudadesExtra] = useState([]) // [{codigo, nombre}] añadidas por el usuario
   const [semana, setSemana] = useState('')
   const [avisos, setAvisos] = useState([])
+  const [confirmarDuplicado, setConfirmarDuplicado] = useState(false)
   const [errores, setErrores] = useState([])
   const [guardado, setGuardado] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -525,11 +526,30 @@ export default function CargarFactura() {
     finally { setCorrigiendoCiudad('') }
   }
 
+  // CONFIANZA DE DATOS — anti-duplicados: facturas ya cargadas para la MISMA semana +
+  // ciudad. Avisa antes de guardar para no duplicar la carga.
+  const facturasDuplicadas = useMemo(() => {
+    const sem = semana.trim()
+    if (!sem || !combinado) return []
+    const cities = new Set(combinado.ciudades || [])
+    return (invoices || []).filter((inv) =>
+      inv.companyId === activeCompanyId && (inv.semana || '').trim() === sem &&
+      (inv.resumenCiudades || []).some((c) => cities.has(c.ubicacion))
+    )
+  }, [invoices, activeCompanyId, semana, combinado])
+  // Validación: ¿el neto NO cuadra con Gofo? (diferencia significativa).
+  const noCuadra = combinado?.verificacion?.cuadra === false
+
   const guardar = async () => {
     if (!combinado) return
     if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
+    // Anti-duplicados: si ya existe factura de esa semana+ciudad, exige confirmación.
+    if (facturasDuplicadas.length > 0 && !confirmarDuplicado) {
+      const cual = facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')
+      return setErrores([`Ya existe una carga para esta semana y ciudad (${cual}). Si continúas se creará una factura NUEVA (no reemplaza la anterior) y los números se DUPLICARÁN. Marca la casilla "Guardar de todos modos" si de verdad quieres cargarla otra vez.`])
+    }
     if (!fallidosProc) return setErrores(['Falta el segundo archivo obligatorio: el Reporte de fallidos (GOFO).'])
     if (!modoRuta && choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
     if (modoRuta) {
@@ -1444,6 +1464,21 @@ export default function CargarFactura() {
           </Card>
 
           <Card className="p-4">
+            {/* CONFIANZA DE DATOS: avisos antes de guardar */}
+            {noCuadra && (
+              <Aviso tipo="warn" className="mb-3">
+                <b>El neto no cuadra con Gofo.</b> Diferencia de {money(combinado.verificacion.diferencia)} entre nuestro neto ({money(combinado.verificacion.netoCalculado)}) y el total de Gofo ({money(combinado.verificacion.gofo?.totalGofo)}). Revisa los archivos antes de guardar; igual puedes continuar.
+              </Aviso>
+            )}
+            {facturasDuplicadas.length > 0 && (
+              <Aviso tipo="error" className="mb-3">
+                <b>Posible duplicado.</b> Ya existe una carga para <b>{facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')}</b>. Guardar de nuevo crea una factura aparte y <b>duplica</b> los números.
+                <label className="mt-2 flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={confirmarDuplicado} onChange={(e) => setConfirmarDuplicado(e.target.checked)} />
+                  Guardar de todos modos (sé que se duplicará)
+                </label>
+              </Aviso>
+            )}
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm text-slate-500 dark:text-slate-400">Semana:</label>
               <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder="ej. 22_06_2026-28_06_2026" />

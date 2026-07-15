@@ -382,7 +382,7 @@ export function DataProvider({ children }) {
     return idx >= 0 ? invoices[idx + 1] : null
   }, [facturaRangoFull, invoices])
 
-  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers, invAnterior }), [facturaRangoFull, claimsEfectivos, drivers, invAnterior])
+  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers, managers, semanas: numSemanas, invAnterior }), [facturaRangoFull, claimsEfectivos, drivers, managers, numSemanas, invAnterior])
   // Todas las alertas con su estado persistido adjunto.
   const alertasTodas = useMemo(
     () => alertasBase
