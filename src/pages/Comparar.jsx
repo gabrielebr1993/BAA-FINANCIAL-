@@ -1,32 +1,53 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useData } from '../DataContext'
 import { resumenEstimado, variacion, nombreCiudadDe, TODAS, TODOS } from '../utils/calc'
-import { facturaDeChofer } from '../utils/rango'
+import { combinarFacturas, facturaDeChofer } from '../utils/rango'
 import { money, num, pct } from '../utils/format'
 import { PageTitle, Card, Select, Aviso, EstadoVacio } from '../components/ui'
 import { BarCard } from '../components/charts'
 
 export default function Comparar() {
   const { invoices, drivers, selectedCity, selectedDriver, facturaRangoFull } = useData()
-  const [idA, setIdA] = useState(invoices[1]?.id || invoices[0]?.id || '')
-  const [idB, setIdB] = useState(invoices[0]?.id || '')
-
-  const invA = invoices.find((i) => i.id === idA) || null
-  const invB = invoices.find((i) => i.id === idB) || null
-
-  // Respeta el filtro global de ciudad y chofer (Refinar): cada semana se acota al
-  // mismo chofer/ciudad para comparar lo mismo (no semanas completas si hay filtro).
   const hayChofer = selectedDriver && selectedDriver !== TODOS
-  const invAf = hayChofer ? facturaDeChofer(invA, selectedDriver) : invA
-  const invBf = hayChofer ? facturaDeChofer(invB, selectedDriver) : invB
-  const eA = useMemo(() => resumenEstimado(invAf, drivers, selectedCity), [invAf, drivers, selectedCity])
-  const eB = useMemo(() => resumenEstimado(invBf, drivers, selectedCity), [invBf, drivers, selectedCity])
 
-  if (invoices.length < 2) {
+  // SEMANAS DISTINTAS. Cada semana puede tener VARIAS facturas (una por ciudad, porque
+  // Gofo paga por ciudad). El selector muestra la semana UNA sola vez y al elegirla se
+  // combinan todas sus ciudades (y luego se aplica el filtro global).
+  const weeks = useMemo(() => {
+    const map = new Map()
+    for (const i of (invoices || [])) {
+      const wk = (i.semana || '').trim()
+      if (!wk) continue
+      if (!map.has(wk)) map.set(wk, { semana: wk, invs: [], t: i.fechaInicio instanceof Date ? i.fechaInicio.getTime() : 0 })
+      map.get(wk).invs.push(i)
+    }
+    return [...map.values()].sort((a, b) => b.t - a.t)
+  }, [invoices])
+
+  const [wkA, setWkA] = useState('')
+  const [wkB, setWkB] = useState('')
+  useEffect(() => {
+    if (!weeks.length) return
+    setWkB((prev) => (weeks.some((w) => w.semana === prev) ? prev : weeks[0].semana))
+    setWkA((prev) => (weeks.some((w) => w.semana === prev) ? prev : (weeks[1] || weeks[0]).semana))
+  }, [weeks])
+
+  // Combina TODAS las facturas (ciudades) de una semana en una sola; si hay un chofer
+  // filtrado, la reduce a ese chofer. El filtro de CIUDAD se aplica en resumenEstimado.
+  const combSemana = (wk) => {
+    const w = weeks.find((x) => x.semana === wk)
+    if (!w) return null
+    const comb = combinarFacturas(w.invs)
+    return hayChofer ? facturaDeChofer(comb, selectedDriver) : comb
+  }
+  const eA = useMemo(() => resumenEstimado(combSemana(wkA), drivers, selectedCity), [wkA, weeks, drivers, selectedCity, hayChofer, selectedDriver])
+  const eB = useMemo(() => resumenEstimado(combSemana(wkB), drivers, selectedCity), [wkB, weeks, drivers, selectedCity, hayChofer, selectedDriver])
+
+  if (weeks.length < 2) {
     return (
       <div>
         <PageTitle>Comparar semanas</PageTitle>
-        <EstadoVacio titulo="Necesitas al menos 2 facturas" texto="Carga al menos dos semanas para poder compararlas." />
+        <EstadoVacio titulo="Necesitas al menos 2 semanas" texto="Carga al menos dos semanas distintas para poder compararlas." />
       </div>
     )
   }
@@ -62,29 +83,29 @@ export default function Comparar() {
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Semana A</div>
-            <Select value={idA} onChange={(e) => setIdA(e.target.value)}>
-              {invoices.map((i) => (<option key={i.id} value={i.id}>{i.semana}</option>))}
+            <Select value={wkA} onChange={(e) => setWkA(e.target.value)}>
+              {weeks.map((w) => (<option key={w.semana} value={w.semana}>{w.semana}</option>))}
             </Select>
           </div>
           <div className="text-2xl text-slate-400">vs</div>
           <div>
             <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Semana B</div>
-            <Select value={idB} onChange={(e) => setIdB(e.target.value)}>
-              {invoices.map((i) => (<option key={i.id} value={i.id}>{i.semana}</option>))}
+            <Select value={wkB} onChange={(e) => setWkB(e.target.value)}>
+              {weeks.map((w) => (<option key={w.semana} value={w.semana}>{w.semana}</option>))}
             </Select>
           </div>
         </div>
       </Card>
 
-      {idA === idB && <Aviso tipo="warn">Estás comparando la misma semana. Elige dos semanas distintas.</Aviso>}
+      {wkA === wkB && <Aviso tipo="warn">Estás comparando la misma semana. Elige dos semanas distintas.</Aviso>}
 
       <Card className="mb-4 p-0">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               <th className="px-4 py-2.5 text-left font-semibold">Métrica</th>
-              <th className="px-4 py-2.5 text-right font-semibold">A · {invA?.semana}</th>
-              <th className="px-4 py-2.5 text-right font-semibold">B · {invB?.semana}</th>
+              <th className="px-4 py-2.5 text-right font-semibold">A · {wkA}</th>
+              <th className="px-4 py-2.5 text-right font-semibold">B · {wkB}</th>
               <th className="px-4 py-2.5 text-right font-semibold">Variación</th>
             </tr>
           </thead>
@@ -109,8 +130,8 @@ export default function Comparar() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <BarCard title={`Semana A · ${invA?.semana || ''}`} data={chartData} fmt={money} dataKey="A" color="#13233f" />
-        <BarCard title={`Semana B · ${invB?.semana || ''}`} data={chartData} fmt={money} dataKey="B" color="#c9a24b" />
+        <BarCard title={`Semana A · ${wkA || ''}`} data={chartData} fmt={money} dataKey="A" color="#13233f" />
+        <BarCard title={`Semana B · ${wkB || ''}`} data={chartData} fmt={money} dataKey="B" color="#c9a24b" />
       </div>
     </div>
   )
