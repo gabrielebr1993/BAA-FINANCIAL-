@@ -52,6 +52,23 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // El "shell" de la app (navegaciones → index.html) se pide SIEMPRE a la red
+        // cuando hay internet (con caída a caché si no hay conexión). Así un deploy
+        // nuevo se ve de INMEDIATO sin tener que borrar la caché — clave en iOS/Safari,
+        // que es terco actualizando el service worker. Los assets con hash siguen en
+        // caché (son inmutables); solo el index.html se revalida contra la red.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-shell',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 10 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
         // Nunca servir /api/* desde el SW (endpoints serverless siempre a la red).
         navigateFallbackDenylist: [/^\/__/, /^\/api\//],
       },
