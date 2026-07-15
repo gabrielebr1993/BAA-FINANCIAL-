@@ -85,7 +85,13 @@ export default function Financiero() {
         <Cargando texto="Cargando datos…" />
       ) : (
         <>
-          {selectedInvoice && <Verificacion v={selectedInvoice.verificacion} />}
+          {selectedInvoice && (selectedCity === TODAS ? (
+            <Verificacion v={selectedInvoice.verificacion} />
+          ) : (
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+              El <b>desglose de pago de Gofo</b> (Bruto → Neto y “Cuadra con Gofo”) es de la <b>factura completa</b>; Gofo paga por semana, no por ciudad. Selecciona <b>“Todas las ciudades”</b> para verlo.
+            </div>
+          ))}
           {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} />}
 
           {/* Desglose de ganancia real por ciudad */}

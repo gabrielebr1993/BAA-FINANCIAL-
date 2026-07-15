@@ -4,7 +4,7 @@ import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wal
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, claimsDeCiudad, costoManagers, etiquetaTipoClaim } from '../utils/calc'
+import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, claimsDeCiudad, costoManagers, etiquetaTipoClaim, TODAS } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
@@ -432,10 +432,14 @@ export default function Performance() {
             <RankingCalificacion />
           </div>
 
-          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
-          <div className="mb-4">
-            <RankingCiudades />
-          </div>
+          {selectedCity === TODAS && (
+            <>
+              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
+              <div className="mb-4">
+                <RankingCiudades />
+              </div>
+            </>
+          )}
 
           <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo{fTipo ? ` · ${etiquetaTipoClaim(fTipo)}` : ''}</h2>
           <div className="mb-4">

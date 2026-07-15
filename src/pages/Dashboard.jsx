@@ -214,12 +214,17 @@ export default function Dashboard() {
             /* -------- VISTA COMBINADA -------- */
             <>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* El desglose de Gofo es a nivel de factura; solo se muestra si la
-                    ciudad seleccionada tiene datos (en una ciudad vacía no aplica). */}
-                {(selectedCity === TODAS || est.paquetes > 0) && (
+                {/* El desglose de Gofo es a nivel de FACTURA COMPLETA (Gofo paga por
+                    semana, no por ciudad). Con una ciudad elegida se OCULTA para no
+                    mezclar datos de otras ciudades; se ve solo en "Todas las ciudades". */}
+                {selectedCity === TODAS ? (
                   <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
                     <Verificacion v={inv.verificacion} compacto />
                   </ClickWrap>
+                ) : (
+                  <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                    El <b>desglose de pago de Gofo</b> es de la factura completa (Gofo paga por semana, no por ciudad). Elige <b>“Todas las ciudades”</b> para verlo.
+                  </div>
                 )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
                   <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} />
