@@ -1,20 +1,26 @@
 import { useState, useMemo } from 'react'
 import { useData } from '../DataContext'
-import { resumenEstimado, variacion } from '../utils/calc'
+import { resumenEstimado, variacion, nombreCiudadDe, TODAS, TODOS } from '../utils/calc'
+import { facturaDeChofer } from '../utils/rango'
 import { money, num, pct } from '../utils/format'
 import { PageTitle, Card, Select, Aviso, EstadoVacio } from '../components/ui'
 import { BarCard } from '../components/charts'
 
 export default function Comparar() {
-  const { invoices, drivers } = useData()
+  const { invoices, drivers, selectedCity, selectedDriver, facturaRangoFull } = useData()
   const [idA, setIdA] = useState(invoices[1]?.id || invoices[0]?.id || '')
   const [idB, setIdB] = useState(invoices[0]?.id || '')
 
   const invA = invoices.find((i) => i.id === idA) || null
   const invB = invoices.find((i) => i.id === idB) || null
 
-  const eA = useMemo(() => resumenEstimado(invA, drivers, 'todas'), [invA, drivers])
-  const eB = useMemo(() => resumenEstimado(invB, drivers, 'todas'), [invB, drivers])
+  // Respeta el filtro global de ciudad y chofer (Refinar): cada semana se acota al
+  // mismo chofer/ciudad para comparar lo mismo (no semanas completas si hay filtro).
+  const hayChofer = selectedDriver && selectedDriver !== TODOS
+  const invAf = hayChofer ? facturaDeChofer(invA, selectedDriver) : invA
+  const invBf = hayChofer ? facturaDeChofer(invB, selectedDriver) : invB
+  const eA = useMemo(() => resumenEstimado(invAf, drivers, selectedCity), [invAf, drivers, selectedCity])
+  const eB = useMemo(() => resumenEstimado(invBf, drivers, selectedCity), [invBf, drivers, selectedCity])
 
   if (invoices.length < 2) {
     return (
@@ -43,6 +49,14 @@ export default function Comparar() {
   return (
     <div>
       <PageTitle>Comparar semanas</PageTitle>
+
+      {(selectedCity !== TODAS || hayChofer) && (
+        <div className="mb-3 flex items-center gap-1.5 text-[13px]">
+          <span className="text-slate-400 dark:text-slate-500">Filtro aplicado:</span>
+          <span className="font-semibold text-brand-navy dark:text-white">{selectedCity === TODAS ? 'Todas las ciudades' : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)}</span>
+          {hayChofer && (<><span className="text-slate-300 dark:text-slate-600">·</span><span className="text-slate-600 dark:text-slate-300">{selectedDriver}</span></>)}
+        </div>
+      )}
 
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center gap-4">
