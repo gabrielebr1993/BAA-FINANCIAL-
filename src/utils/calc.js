@@ -633,7 +633,14 @@ export function desgloseGananciaCiudades(inv, claims, drivers, managers, semanas
 export function economiaClaims(claims, inv) {
   const validos = claimsValidos(claims)
   const total = validos.length
-  const porMetodo = { M1: { n: 0, ganancia: 0 }, M2: { n: 0, ganancia: 0 }, M3: { n: 0, ganancia: 0 } }
+  // Por método: n (conteo), ganancia (fee−gofo), gofo (lo que Gofo descontó) y
+  // cobrado (lo que le cobras al chofer). gofo/cobrado son informativos (no cambian
+  // la ganancia); sirven para mostrar "lo que Gofo cobra" aunque la ganancia sea 0.
+  const porMetodo = {
+    M1: { n: 0, ganancia: 0, gofo: 0, cobrado: 0 },
+    M2: { n: 0, ganancia: 0, gofo: 0, cobrado: 0 },
+    M3: { n: 0, ganancia: 0, gofo: 0, cobrado: 0 },
+  }
   let cobradoChoferes = 0
   let descontadoGofo = 0
   let perdidaAbsorbida = 0
@@ -647,6 +654,8 @@ export function economiaClaims(claims, inv) {
     cobradoChoferes += fee
     porMetodo[m].n += 1
     porMetodo[m].ganancia += ganancia
+    porMetodo[m].gofo += gofo
+    porMetodo[m].cobrado += fee
     if (m === 'M3') perdidaAbsorbida += gofo
   }
   return {

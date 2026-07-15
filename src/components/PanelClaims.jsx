@@ -25,18 +25,30 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
       </div>
 
       <div className="space-y-1.5 text-sm">
-        {/* Desglose por método */}
+        {/* Desglose por método. En "Lo que Gofo cobra" (M2) se muestra el MONTO que
+            Gofo descontó por esos claims (lo que le cobras al chofer), no la ganancia
+            —que es 0 porque no ganas ni pierdes. */}
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">Manual · le cobras el monto ({num(pm.M1.n)} claim(s))</span>
           <span className={`font-semibold ${pm.M1.ganancia >= 0 ? '' : 'text-rose-600 dark:text-rose-400'}`}>{g(pm.M1.ganancia)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">Lo que Gofo cobra ({num(pm.M2.n)} claim(s))</span>
-          <span className="font-semibold text-slate-500 dark:text-slate-400">{g(pm.M2.ganancia)}</span>
+          <span className="text-slate-600 dark:text-slate-300">Lo que Gofo cobra ({num(pm.M2.n)} claim(s)) <span className="text-xs text-slate-400">· se lo cobras al chofer</span></span>
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{money(pm.M2.gofo)}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-slate-600 dark:text-slate-300">Perdón ({num(pm.M3.n)} claim(s))</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">{g(pm.M3.ganancia)}</span>
+        </div>
+
+        {/* Lo que Gofo te descontó en total (el dinero que Gofo te cobra por claims). */}
+        <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
+          <span className="text-slate-600 dark:text-slate-300">Lo que Gofo te descontó (total)</span>
+          <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(e.descontadoGofo)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600 dark:text-slate-300">Cobrado a choferes (total)</span>
+          <span className="font-semibold">{money(e.cobradoChoferes)}</span>
         </div>
 
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
@@ -44,9 +56,6 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
           <span className={`text-xl font-extrabold ${e.gananciaNetaClaims >= 0 ? 'text-brand-gold' : 'text-rose-600 dark:text-rose-400'}`}>
             {money(e.gananciaNetaClaims)}
           </span>
-        </div>
-        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Cobrado a choferes {money(e.cobradoChoferes)} − Descontado por Gofo {money(e.descontadoGofo)}</span>
         </div>
       </div>
 
