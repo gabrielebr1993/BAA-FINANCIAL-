@@ -1,14 +1,25 @@
 import { useState, useMemo } from 'react'
 import { Trash2, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
-import { nombreCiudadDe } from '../utils/calc'
+import { nombreCiudadDe, TODAS } from '../utils/calc'
 import { eliminarFacturaCascada } from '../utils/borrado'
 import { money } from '../utils/format'
 import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
   // `invoices` ya viene filtrado por ciudad para el rol admin (desde DataContext).
-  const { invoices, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, invoicesRango, selectedCity, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  // La lista RESPETA el filtro global de arriba (período + ciudad). Para verlas TODAS,
+  // pon "Todo" y "Todas las ciudades" en el filtro. El aviso de duplicados sí revisa
+  // todas las facturas (es una limpieza global).
+  const listaMostrada = useMemo(
+    () => (invoicesRango || []).filter((inv) =>
+      selectedCity === TODAS || (inv.ciudad || '') === selectedCity ||
+      (inv.resumenCiudades || []).some((c) => c.ubicacion === selectedCity)
+    ),
+    [invoicesRango, selectedCity]
+  )
+  const filtrando = selectedCity !== TODAS || (invoices || []).length !== listaMostrada.length
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total }
@@ -77,7 +88,12 @@ export default function Facturas() {
       )}
 
       <Card className="p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({invoices.length})</h3>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({listaMostrada.length})</h3>
+          {filtrando && (
+            <span className="text-xs text-slate-400">de {invoices.length} en total · según el filtro de arriba. Pon “Todo” y “Todas las ciudades” para verlas todas.</span>
+          )}
+        </div>
         <Tabla
           columns={[
             { key: 'semana', label: 'Semana' },
@@ -87,7 +103,7 @@ export default function Facturas() {
             { key: 'ingresoTotal', label: 'Total', align: 'right' },
             { key: 'acciones', label: '', align: 'right' },
           ]}
-          rows={invoices.map((inv) => ({ ...inv, _key: inv.id }))}
+          rows={listaMostrada.map((inv) => ({ ...inv, _key: inv.id }))}
           emptyText="No hay facturas cargadas. Ve a Cargar Factura para subir la primera."
           renderCell={(row, key) => {
             if (key === 'ingresoTotal') return money(row.ingresoTotal)

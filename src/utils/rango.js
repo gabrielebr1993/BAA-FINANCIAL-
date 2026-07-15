@@ -49,6 +49,19 @@ export const PRESETS = [
 function inicioMes(d) { return new Date(d.getFullYear(), d.getMonth(), 1) }
 function finMes(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59) }
 
+// Todas las facturas de las N SEMANAS más recientes (por `semana`), no las N
+// facturas más recientes. `lista` viene ordenada desc por fechaInicio.
+function invoicesDeUltimasSemanas(lista, n) {
+  const orden = []
+  const vistas = new Set()
+  for (const i of lista) {
+    const wk = i.semana || i.id
+    if (!vistas.has(wk)) { vistas.add(wk); orden.push(wk) }
+  }
+  const top = new Set(orden.slice(0, n))
+  return lista.filter((i) => top.has(i.semana || i.id))
+}
+
 // Devuelve las facturas (ya con fechas) que caen dentro del rango.
 // `invoices` debe venir ordenado desc por fechaInicio.
 export function invoicesEnRango(invoices, rango) {
@@ -62,8 +75,10 @@ export function invoicesEnRango(invoices, rango) {
     return sel ? [sel] : []
   }
   if (preset === 'todo') return lista
-  if (preset === 'ultima') return lista.slice(0, 1)
-  if (preset === 'ultimas4') return lista.slice(0, 4)
+  // "Última semana" / "Últimas 4 semanas" cuentan SEMANAS distintas (por `semana`),
+  // no facturas: con una factura por ciudad, una semana = varias facturas.
+  if (preset === 'ultima') return invoicesDeUltimasSemanas(lista, 1)
+  if (preset === 'ultimas4') return invoicesDeUltimasSemanas(lista, 4)
 
   const hoy = new Date()
   let desde, hasta
