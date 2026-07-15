@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wallet, Package, Route, Clock, UserX, FileSpreadsheet, FileText } from 'lucide-react'
+import { X, Search, Filter, RotateCcw, TrendingUp, AlertTriangle, Handshake, Wallet, Package, Route, Clock, UserX, FileSpreadsheet, FileText, Building2 } from 'lucide-react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
-import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, claimsDeCiudad, costoManagers, etiquetaTipoClaim, TODAS } from '../utils/calc'
+import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, contarClaimsValidos, claimsDeCiudad, costoManagers, etiquetaTipoClaim, rankingCiudades, TODAS } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
@@ -17,7 +17,7 @@ import RankingCalificacion from '../components/RankingCalificacion'
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
 export default function Performance() {
-  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, activeCompanyId, cargando } = useData()
+  const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, setSelectedCity, activeCompanyId, cargando } = useData()
   const navigate = useNavigate()
   const [sortKey, setSortKey] = useState('ingreso')
   const [asc, setAsc] = useState(false)
@@ -195,13 +195,16 @@ export default function Performance() {
     const sinTarifaN = (drivers || []).filter((d) => !(Number(d.precioIndividual) > 0) || !(Number(d.precioDoble) > 0)).length
     const entregaron = new Set(pagos.filter((p) => p.individuales + p.dobles > 0).map((p) => p.nombre))
     const inactivosN = (drivers || []).filter((d) => d.activo !== false && !entregaron.has(d.nombre)).length
+    // Mejor ciudad por calificación general (ganancia + rentabilidad + calidad…).
+    const rankCiu = rankingCiudades(selectedInvoice, claims, drivers, managers, numSemanas)
+    const mejorCiudad = rankCiu[0] || null
     return {
       masRentable, masProblematico, gananciaClaims,
       nominaChoferes, costoMgr, nominaTotal: nominaChoferes + costoMgr,
       ticket: paquetes > 0 ? ingresoBruto / paquetes : 0, paquetes,
-      rutaTop, rutaBottom, sinTarifaN, inactivosN,
+      rutaTop, rutaBottom, sinTarifaN, inactivosN, mejorCiudad,
     }
-  }, [pagos, managers, invoicesRango, selectedInvoice, selectedCity, avgTar, drivers])
+  }, [pagos, managers, invoicesRango, numSemanas, claims, selectedInvoice, selectedCity, avgTar, drivers])
 
   // Pagos pendientes (nómina no marcada como pagada) en el rango.
   const [pendientes, setPendientes] = useState({ monto: 0, choferes: 0 })
@@ -295,6 +298,12 @@ export default function Performance() {
               value={num(indic.sinTarifaN)}
               sub={`sin tarifa · ${num(indic.inactivosN)} sin entregas`}
               onClick={() => navigate('/choferes')}
+            />
+            <KpiPro
+              icon={Building2} accent="gold" label="Mejor ciudad"
+              value={indic.mejorCiudad ? indic.mejorCiudad.nombre : '—'}
+              sub={indic.mejorCiudad ? `Calificación ${indic.mejorCiudad.puntaje} · ganancia ${money(indic.mejorCiudad.ganancia)}` : 'Sin ciudades'}
+              onClick={indic.mejorCiudad ? () => setSelectedCity(indic.mejorCiudad.code) : undefined}
             />
           </div>
 
