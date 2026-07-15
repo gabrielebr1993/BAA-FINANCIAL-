@@ -91,6 +91,7 @@ export default function GlobalFilterBar() {
 
         {/* 2) Selector principal (período ↔ factura, excluyentes) */}
         <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">¿Qué quieres ver?</span>
           <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
             <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 Por período</button>
             <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 Una factura</button>
