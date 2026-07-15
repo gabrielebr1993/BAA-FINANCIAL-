@@ -14,13 +14,13 @@ const COLOR_PRIO = ['#c9a24b', '#c9a24b', '#d97706', '#64748b', '#64748b']
 
 export default function RecomendacionesJarvis() {
   const navigate = useNavigate()
-  const { perfil, esSuperAdmin, ciudadBloqueada, ciudadUsuario } = useAuth()
-  const { activeCompanyId, facturaRango } = useData()
-  // Dueño, súper-admin y admin (este último con recomendaciones SOLO de su ciudad,
-  // el backend acota los datos por la ciudad del admin).
+  const { perfil, esSuperAdmin } = useAuth()
+  const { activeCompanyId, facturaRango, selectedCity } = useData()
+  // Dueño, súper-admin y admin. Las recomendaciones dependen del FILTRO: se generan
+  // para la ciudad seleccionada en el selector global (el admin va fijo a la suya).
   const puede = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const semana = facturaRango?.semana || null
-  const ciudadCache = ciudadBloqueada ? ciudadUsuario : ''
+  const ciudadCache = selectedCity || 'todas'
 
   const [recs, setRecs] = useState([])
   const [cargando, setCargando] = useState(false)
@@ -37,14 +37,14 @@ export default function RecomendacionesJarvis() {
     if (!forzar) { const guardado = leerCache(); if (guardado) { setRecs(guardado); return } }
     setCargando(true); setError('')
     try {
-      const r = await obtenerRecomendaciones({ companyId: activeCompanyId, semana })
+      const r = await obtenerRecomendaciones({ companyId: activeCompanyId, semana, ciudad: selectedCity })
       if (!r.ok) { setError(r.error || 'No se pudieron generar.'); return }
       guardarCache(r.recomendaciones || [])
       setRecs(r.recomendaciones || [])
     } catch (e) { setError('Error: ' + e.message) } finally { setCargando(false) }
   }
 
-  useEffect(() => { if (puede) cargar() /* eslint-disable-next-line */ }, [activeCompanyId, semana, puede])
+  useEffect(() => { if (puede) cargar() /* eslint-disable-next-line */ }, [activeCompanyId, semana, selectedCity, puede])
 
   if (!puede || !semana) return null
 

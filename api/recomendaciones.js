@@ -135,14 +135,16 @@ export default async function handler(req, res) {
     }
     const auth = await autorizar(req, a)
     if (auth.error) return res.status(auth.code).json({ ok: false, error: auth.error })
-    const { companyId, semana } = req.body || {}
+    const { companyId, semana, ciudad } = req.body || {}
     if (!companyId) return res.status(400).json({ ok: false, error: 'Falta companyId.' })
     const mismaEmpresa = auth.caller && auth.caller.companyId === companyId
     const esOwner = mismaEmpresa && auth.caller.role === 'owner'
     const esAdmin = mismaEmpresa && auth.caller.role === 'admin'
     if (!auth.esSuper && !esOwner && !esAdmin) return res.status(403).json({ ok: false, error: 'No tienes permiso para ver recomendaciones.' })
-    // El admin queda ACOTADO a su ciudad.
-    const ciudadFiltro = (esAdmin && auth.caller.ciudad) ? auth.caller.ciudad : null
+    // El admin va SIEMPRE fijo a su ciudad (no puede pedir otra). El dueño/súper-admin
+    // reciben recomendaciones de la ciudad ELEGIDA en el filtro (o de todas si 'todas').
+    const ciudadPedida = (ciudad && ciudad !== 'todas') ? ciudad : null
+    const ciudadFiltro = esAdmin ? (auth.caller.ciudad || null) : ciudadPedida
 
     const invSnap = await auth.db.collection('invoices').where('companyId', '==', companyId).get()
     let invoices = invSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
