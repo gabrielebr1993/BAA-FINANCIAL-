@@ -5,6 +5,7 @@
 //   3) "Refinar:" — Ciudad + Chofer (opcionales, se aplican sobre lo elegido arriba) +
 //      "Limpiar".
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar, Search, FileText, CalendarRange, Eraser, ChevronDown, Check } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
@@ -180,12 +181,23 @@ export default function GlobalFilterBar() {
 // misma semana. Al menos una factura queda siempre elegida.
 function FacturaMultiSelect({ invoices, facturaIds, verMonto, onChange }) {
   const [abierto, setAbierto] = useState(false)
-  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+  const btnRef = useRef(null)
+  const panelRef = useRef(null)
+  const toggle = () => {
+    if (abierto) return setAbierto(false)
+    const r = btnRef.current.getBoundingClientRect()
+    const ancho = 320
+    setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - ancho - 8)), ancho })
+    setAbierto(true)
+  }
   useEffect(() => {
     if (!abierto) return
-    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false) }
+    const fuera = (e) => { if (btnRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return; setAbierto(false) }
+    const cerrar = () => setAbierto(false)
     document.addEventListener('mousedown', fuera)
-    return () => document.removeEventListener('mousedown', fuera)
+    window.addEventListener('resize', cerrar)
+    return () => { document.removeEventListener('mousedown', fuera); window.removeEventListener('resize', cerrar) }
   }, [abierto])
 
   const sel = new Set(facturaIds)
@@ -194,36 +206,43 @@ function FacturaMultiSelect({ invoices, facturaIds, verMonto, onChange }) {
     const fechas = rangoDias(fmtDia(inv.fechaInicio), fmtDia(inv.fechaFin)) || inv.semana || 's/f'
     return verMonto ? `${ciudad} · ${fechas} · ${fmtMonto(inv.ingresoTotal)}` : `${ciudad} · ${fechas}`
   }
-  const toggle = (id) => {
-    const s = new Set(facturaIds)
-    if (s.has(id)) { if (s.size === 1) return; s.delete(id) } else s.add(id)
-    onChange([...s])
-  }
   const label = facturaIds.length > 1
     ? `${facturaIds.length} facturas combinadas`
     : (() => { const inv = invoices.find((i) => i.id === facturaIds[0]); return inv ? etiquetaDe(inv) : 'Elegir factura' })()
 
+  const toggleFactura = (id) => {
+    const s = new Set(facturaIds)
+    if (s.has(id)) { if (s.size === 1) return; s.delete(id) } else s.add(id)
+    onChange([...s])
+  }
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setAbierto((o) => !o)}
+        onClick={toggle}
         className="flex items-center gap-1.5 rounded-xl border border-brand-navy bg-brand-navy/5 px-2.5 py-1.5 text-sm text-slate-700 dark:border-brand-gold dark:bg-brand-gold/10 dark:text-slate-100"
         aria-label="Elegir una o varias facturas"
+        aria-expanded={abierto}
       >
         <FileText size={16} strokeWidth={1.8} className="text-brand-gold" />
         <span className="max-w-[280px] truncate">{label}</span>
         <ChevronDown size={15} strokeWidth={2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
       </button>
-      {abierto && (
-        <div className="absolute left-0 z-30 mt-1 max-h-80 w-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+      {abierto && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.ancho, zIndex: 80 }}
+          className="max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+        >
           {invoices.map((inv) => {
             const on = sel.has(inv.id)
             return (
               <button
                 key={inv.id}
                 type="button"
-                onClick={() => toggle(inv.id)}
+                onClick={() => toggleFactura(inv.id)}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${on ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}
               >
                 <span className={`grid h-4 w-4 flex-shrink-0 place-items-center rounded border ${on ? 'border-brand-gold bg-brand-gold text-white' : 'border-slate-300 dark:border-slate-600'}`}>
@@ -236,8 +255,9 @@ function FacturaMultiSelect({ invoices, facturaIds, verMonto, onChange }) {
           {facturaIds.length >= 2 && (
             <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Viendo {facturaIds.length} facturas combinadas (sumadas).</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
