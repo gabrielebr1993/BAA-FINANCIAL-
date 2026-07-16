@@ -96,7 +96,10 @@ export default function Pagos() {
   // Modo POR RUTA: mostramos la ruta de cada chofer (de la factura, o su ruta guardada).
   const esRuta = selectedInvoice?.modoConfig === 'ruta'
   const rutaDe = (nombre) => selectedInvoice?.asignacionRuta?.[nombre] || buscarDriver(drivers, nombre)?.rutaDefault || '—'
-  const pagosConEstado = pagos.map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
+  // Ordenado ALFABÉTICO por nombre de chofer (aplica a la tabla y a los exports PDF/Excel).
+  const pagosConEstado = pagos
+    .map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   const filtrados = pagosConEstado.filter((p) => {
     if (fEstado === 'pendiente' && p.estado !== 'pendiente') return false
     if (fEstado === 'pagado' && p.estado !== 'pagado') return false

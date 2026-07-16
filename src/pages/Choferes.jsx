@@ -191,7 +191,8 @@ export default function Choferes() {
   // Exporta datos bancarios (Excel). Si hay selección → solo los seleccionados;
   // si no → los choferes mostrados (todos si no hay búsqueda).
   const exportarBancarios = () => {
-    const base = seleccion.size > 0 ? drivers.filter((d) => seleccion.has(d.id)) : filtrados
+    const base = (seleccion.size > 0 ? drivers.filter((d) => seleccion.has(d.id)) : filtrados)
+      .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
     exportarDatosBancarios(base.map((d) => ({ nombre: d.nombre, verificacion: d.verificacion })), `datos-bancarios-choferes_${new Date().toISOString().slice(0, 10)}`)
   }
 
