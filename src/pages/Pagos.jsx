@@ -216,6 +216,17 @@ export default function Pagos() {
     setOcupado(false)
   }
 
+  // Filas de "gastos fijos" (managers) con la MISMA forma que un pago de chofer, para
+  // que se exporten junto a los choferes y el archivo cuadre con lo que sale del banco.
+  const filasGastoFijo = gastosFijos.map((g) => ({
+    nombre: `${g.nombre} (fijo)`,
+    ruta: '',
+    nombreCiudad: g.ciudad || '',
+    individuales: '', dobles: '', claimsActivos: '', claimsPerdonados: '',
+    ingreso: '', tarifaInd: '', tarifaDoble: '', descuentoClaims: '',
+    totalPagar: g.monto, ganancia: '', estado: g.estado, __fijo: true,
+  }))
+
   const exportar = () => {
     // Con el ojito tapando, la columna se OMITE por completo del archivo (no sale
     // ni el encabezado ni el valor). Sin tapar, sale normal.
@@ -235,7 +246,19 @@ export default function Pagos() {
       ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => p.ganancia }]),
       { h: 'Estado', v: (p) => p.estado },
     ]
-    const aoa = [cols.map((c) => c.h), ...pagosConEstado.map((p) => cols.map((c) => c.v(p)))]
+    const idxTot = cols.findIndex((c) => c.h === 'Total a Pagar')
+    const filaResumen = (label, monto) => cols.map((c, i) => (i === 0 ? label : i === idxTot ? monto : ''))
+    // Choferes + gastos fijos (managers) en la misma tabla.
+    const cuerpo = [...pagosConEstado, ...filasGastoFijo].map((p) => cols.map((c) => c.v(p)))
+    const aoa = [
+      cols.map((c) => c.h),
+      ...cuerpo,
+      cols.map(() => ''),
+      filaResumen('TOTAL choferes (positivos)', money(totPagarPos)),
+      filaResumen('TOTAL gastos fijos (managers)', money(totGastosFijos)),
+      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos)),
+      ...(totPorCobrar > 0 ? [filaResumen('Por cobrar a choferes (saldos negativos)', money(totPorCobrar))] : []),
+    ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Pagos')
@@ -244,21 +267,31 @@ export default function Pagos() {
 
   const exportarPdf = () => {
     // Igual que el Excel: la columna se omite si el ojito la está tapando.
+    const m = (v) => (v === '' || v == null ? '' : money(v))
     const cols = [
       { h: 'Chofer', v: (p) => p.nombre },
       { h: 'Ciudad', v: (p) => p.nombreCiudad },
       { h: 'Ind.', v: (p) => p.individuales },
       { h: 'Dobles', v: (p) => p.dobles },
-      ...(!verIngreso || ocultarIngreso ? [] : [{ h: 'Ingreso', v: (p) => money(p.ingreso) }]),
-      { h: 'Total a pagar', v: (p) => money(p.totalPagar) },
-      ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => money(p.ganancia) }]),
+      ...(!verIngreso || ocultarIngreso ? [] : [{ h: 'Ingreso', v: (p) => m(p.ingreso) }]),
+      { h: 'Total a pagar', v: (p) => m(p.totalPagar) },
+      ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => m(p.ganancia) }]),
       { h: 'Estado', v: (p) => p.estado },
     ]
+    const idxTot = cols.findIndex((c) => c.h === 'Total a pagar')
+    const filaResumen = (label, monto) => cols.map((c, i) => (i === 0 ? label : i === idxTot ? monto : ''))
+    const body = [...pagosConEstado, ...filasGastoFijo].map((p) => cols.map((c) => c.v(p)))
+    body.push(
+      filaResumen('TOTAL choferes (positivos)', money(totPagarPos)),
+      filaResumen('TOTAL gastos fijos (managers)', money(totGastosFijos)),
+      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos)),
+    )
+    if (totPorCobrar > 0) body.push(filaResumen('Por cobrar a choferes (saldos negativos)', money(totPorCobrar)))
     exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
       {
         titulo: 'Pagos por chofer',
         head: cols.map((c) => c.h),
-        body: pagosConEstado.map((p) => cols.map((c) => c.v(p))),
+        body,
       },
     ])
   }
