@@ -1,14 +1,17 @@
 import { useState, useMemo } from 'react'
 import { Trash2, AlertTriangle } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { nombreCiudadDe, TODAS } from '../utils/calc'
 import { eliminarFacturaCascada } from '../utils/borrado'
+import { registrarAuditoria } from '../utils/auditoria'
 import { money } from '../utils/format'
 import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
   // `invoices` ya viene filtrado por ciudad para el rol admin (desde DataContext).
   const { invoices, invoicesRango, selectedCity, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
   // La lista RESPETA el filtro global de arriba (período + ciudad). Para verlas TODAS,
   // pon "Todo" y "Todas las ciudades" en el filtro. El aviso de duplicados sí revisa
   // todas las facturas (es una limpieza global).
@@ -44,6 +47,16 @@ export default function Facturas() {
     setError('')
     try {
       await eliminarFacturaCascada(activeCompanyId, porEliminar.id, (hechos, total) => setProgreso({ hechos, total }))
+      registrarAuditoria(activeCompanyId, {
+        accion: 'factura_borrada',
+        usuario: perfil?.email || perfil?.nombre || 'usuario',
+        rol: perfil?.role || (esSuperAdmin ? 'superadmin' : ''),
+        entidad: porEliminar.ciudadNombre || porEliminar.ciudad || '',
+        detalle: `Factura ${porEliminar.ciudadNombre || porEliminar.ciudad || ''} borrada`,
+        ciudad: porEliminar.ciudad || '',
+        semana: porEliminar.semana || '',
+        monto: Number(porEliminar.ingresoTotal) || 0,
+      })
       const eraSeleccionada = selectedInvoiceId === porEliminar.id
       const restantes = await reloadInvoices()
       if (eraSeleccionada) setSelectedInvoiceId(restantes && restantes[0] ? restantes[0].id : null)

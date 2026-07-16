@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { calcularPagos, porCiudad, claimsDeCiudad, feeDeClaim, buscarDriver, TODAS } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
+import { registrarAuditoria } from '../utils/auditoria'
 import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
@@ -48,6 +49,10 @@ export default function Pagos() {
   const lIngreso = (t) => (ocultarIngreso ? OCULTO : t)
   const lGanancia = (t) => (ocultarGanancia ? OCULTO : t)
 
+  // Identidad para el registro de auditoría (quién hizo el cambio).
+  const audit = { usuario: perfil?.email || perfil?.nombre || 'usuario', rol: perfil?.role || (esSuperAdmin ? 'superadmin' : ''), semana: undefined }
+  const logAudit = (entrada) => registrarAuditoria(activeCompanyId, { ...audit, semana: selectedInvoice?.semana || '', ...entrada })
+
   // Los pagos se marcan por factura individual: solo con una semana seleccionada.
   const pagoInvoiceId = invoicesRango.length === 1 ? invoicesRango[0].id : null
   const esRango = invoicesRango.length > 1
@@ -88,6 +93,7 @@ export default function Pagos() {
       const skey = k.replace(/[^a-z0-9]+/g, '_').slice(0, 80)
       await setDoc(doc(db, 'driverStats', `${invActual.id}__${skey}`), { prestamo, bono }, { merge: true }).catch(() => {})
       await reloadInvoices()
+      logAudit({ accion: 'ajuste_guardado', entidad: nombre, detalle: `${nombre}: préstamo ${money(prestamo)} · bono ${money(bono)}`, monto: bono - prestamo })
       setEditAjuste((s) => { const n = { ...s }; delete n[nombre]; return n })
     } finally { setGuardandoAjuste(null) }
   }
@@ -153,6 +159,7 @@ export default function Pagos() {
     if (!pagoInvoiceId) return
     await updateDoc(doc(db, 'managers', m.id), { [`pagados.${pagoInvoiceId}`]: estado })
     await reloadManagers()
+    logAudit({ accion: estado === 'pagado' ? 'gasto_marcado' : 'gasto_desmarcado', entidad: m.nombre, detalle: `Gasto fijo de ${m.nombre}`, ciudad: m.ciudad || '', monto: (Number(m.sueldoSemanal) || 0) * numSemanas })
   }
   const nPend = pagosConEstado.filter((p) => p.estado === 'pendiente').length
   const nPag = pagosConEstado.filter((p) => p.estado === 'pagado').length
@@ -175,6 +182,7 @@ export default function Pagos() {
     if (existente) await updateDoc(doc(db, 'payroll', existente.id), payload)
     else await addDoc(collection(db, 'payroll'), payload)
     await cargarPayroll()
+    logAudit({ accion: estado === 'pagado' ? 'pago_marcado' : 'pago_desmarcado', entidad: p.nombre, detalle: `Pago a ${p.nombre}`, monto: p.totalPagar })
   }
 
   // Pago por Stripe (SOLO modo TEST; el servidor rechaza pagos reales). Requiere que
@@ -188,6 +196,7 @@ export default function Pagos() {
       const r = await stripePagar({ companyId: activeCompanyId, driverId: driver.id, monto: p.totalPagar, semana: selectedInvoice?.semana || '' })
       if (!r.ok) return setStripeMsg({ tipo: 'error', txt: `${p.nombre}: ${r.error}` })
       setStripeMsg({ tipo: 'ok', txt: `Pago TEST enviado a ${p.nombre} (${money(p.totalPagar)}). Transfer: ${r.transferId}` })
+      logAudit({ accion: 'pago_stripe', entidad: p.nombre, detalle: `Stripe (TEST) a ${p.nombre}`, monto: p.totalPagar })
     } catch (e) {
       setStripeMsg({ tipo: 'error', txt: `${p.nombre}: ${e.message}` })
     } finally { setPagandoStripe(null) }
@@ -208,6 +217,7 @@ export default function Pagos() {
     setOcupado(true)
     await perdonarClaim(claim, motivo, perfil)
     await reloadClaims()
+    logAudit({ accion: 'claim_perdonado', entidad: claim.courier || claim.waybill, detalle: `Claim ${claim.waybill || ''} de ${claim.courier || '—'}${motivo ? ` — ${motivo}` : ''}`, ciudad: claim.ciudad || '', monto: Number(claim.montoGofo) || 0 })
     setPerdonandoId(null)
     setMotivo('')
     setOcupado(false)
@@ -216,6 +226,7 @@ export default function Pagos() {
     setOcupado(true)
     await quitarPerdon(claim)
     await reloadClaims()
+    logAudit({ accion: 'claim_restaurado', entidad: claim.courier || claim.waybill, detalle: `Claim ${claim.waybill || ''} de ${claim.courier || '—'}`, ciudad: claim.ciudad || '' })
     setOcupado(false)
   }
 

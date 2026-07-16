@@ -7,6 +7,7 @@ import { procesarArchivo, combinarArchivos, procesarReporteFallidos, procesarArc
 import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsValidos, calcularPagos, promediosFlota, calificarChofer, resolverReglas, esDobleDetalle, metodoDe, categoriaClaim, TODAS } from '../utils/calc'
 import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
 import { guardarCiudadesEmpresa, guardarReglasRuta } from '../utils/empresaSettings'
+import { registrarAuditoria } from '../utils/auditoria'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
@@ -672,6 +673,16 @@ export default function CargarFactura() {
         ...resumen,
       }
       const ref = await addDoc(collection(db, 'invoices'), invoicePayload)
+      registrarAuditoria(activeCompanyId, {
+        accion: 'factura_subida',
+        usuario: perfil?.email || perfil?.nombre || 'usuario',
+        rol: perfil?.role || '',
+        entidad: invoicePayload.ciudadNombre || ciudadPrincipal || '',
+        detalle: `Factura ${invoicePayload.ciudadNombre || ciudadPrincipal || ''} cargada`,
+        ciudad: ciudadPrincipal || '',
+        semana: semana.trim(),
+        monto: Number(resumen.ingresoTotal) || 0,
+      })
 
       // Registra en "Mis ciudades" (Configuración) cualquier ciudad de esta factura
       // que aún no esté guardada, para que aparezca en el filtro y se pueda renombrar

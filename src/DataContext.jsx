@@ -484,6 +484,16 @@ export function DataProvider({ children }) {
     }
   }, [ciudadBloqueada, ciudadesUsuario])
 
+  // Poda el subconjunto si alguna ciudad ya no existe (p.ej. al cambiar de empresa),
+  // para no dejar el filtro apuntando a ciudades ausentes (pantalla vacía).
+  useEffect(() => {
+    if (!subsetActivo || ciudadesDisponibles.length === 0) return
+    const disp = new Set(ciudadesDisponibles)
+    const filtradas = selectedCities.filter((c) => disp.has(c))
+    if (filtradas.length !== selectedCities.length) setSelectedCities(filtradas.length ? filtradas : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subsetActivo, selectedCitiesKey, ciudadesDisponibles])
+
   const value = {
     // multi-empresa
     companies,

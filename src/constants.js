@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
-  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck,
 } from 'lucide-react'
 
 // Marca de color
@@ -133,6 +133,7 @@ export const SECCIONES = [
   { path: '/rutas', label: 'Rutas', permiso: 'verDashboard', icon: Route },
   { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: TrendingUp },
   { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: BarChart3 },
+  { path: '/auditorias', label: 'Auditorías', permiso: 'verFinanzas', icon: ShieldCheck },
   { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell },
   { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users },
   { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings },
