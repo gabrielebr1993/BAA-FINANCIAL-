@@ -116,6 +116,11 @@ export default function Pagos() {
   const totIngreso = filtrados.reduce((a, p) => a + p.ingreso, 0)
   const totPagar = filtrados.reduce((a, p) => a + p.totalPagar, 0)
   const totGanancia = filtrados.reduce((a, p) => a + p.ganancia, 0)
+  // "Total a pagar" REAL = solo los saldos POSITIVOS (lo que sale del banco). Los
+  // saldos NEGATIVOS (el chofer debe: sus claims/préstamos superaron lo ganado) no se
+  // pagan por ACH, se muestran aparte como "Por cobrar a choferes".
+  const totPagarPos = filtrados.filter((p) => p.totalPagar > 0).reduce((a, p) => a + p.totalPagar, 0)
+  const totPorCobrar = filtrados.filter((p) => p.totalPagar < 0).reduce((a, p) => a + Math.abs(p.totalPagar), 0)
   const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
   const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
   const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
@@ -268,7 +273,8 @@ export default function Pagos() {
         <>
           <div className="mb-2 flex flex-wrap gap-3">
             {verIngreso && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label="Total a pagar" value={money(totPagar + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagar)} + fijos ${money(totGastosFijos)}` : subAjustes} />
+            <KPI label="Total a pagar" value={money(totPagarPos + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagarPos)} + fijos ${money(totGastosFijos)}` : (subAjustes || 'lo que sale del banco (saldos positivos)')} />
+            {totPorCobrar > 0 && <KPI label="Por cobrar a choferes" value={money(totPorCobrar)} icon={Wallet} accent="red" sub="saldos negativos: te deben (no se pagan por ACH)" />}
             {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub="managers / renta / etc." />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia('Ganancia real')} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
