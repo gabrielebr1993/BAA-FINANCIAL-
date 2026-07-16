@@ -30,6 +30,9 @@ export default function GlobalFilterBar() {
   // Owner, admin y súper-admin conservan ambos modos SIEMPRE.
   const { perfil, esSuperAdmin } = useAuth()
   const soloFactura = !esSuperAdmin && perfil?.role === 'manager'
+  // Ver el MONTO (ingreso) de la factura: solo owner/admin/súper-admin. Al manager se
+  // le oculta para que no pueda deducir la ganancia (ingreso − lo que paga).
+  const verMonto = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
 
   // Modo derivado del único estado: 'factura' vs 'periodo'. Nunca coexisten.
   const modo = rango.preset === 'factura' ? 'factura' : 'periodo'
@@ -145,7 +148,8 @@ export default function GlobalFilterBar() {
                 {invoices.map((inv) => {
                   const ciudad = inv.ciudadNombre || nombreCiudadDe(inv, inv.ciudad) || 'Sin ciudad'
                   const fechas = rangoDias(fmtDia(inv.fechaInicio), fmtDia(inv.fechaFin)) || inv.semana || 's/f'
-                  return <option key={inv.id} value={inv.id}>{`${ciudad} · ${fechas} · ${fmtMonto(inv.ingresoTotal)}`}</option>
+                  const etiqueta = verMonto ? `${ciudad} · ${fechas} · ${fmtMonto(inv.ingresoTotal)}` : `${ciudad} · ${fechas}`
+                  return <option key={inv.id} value={inv.id}>{etiqueta}</option>
                 })}
               </select>
             </div>
