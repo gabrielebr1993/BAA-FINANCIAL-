@@ -45,6 +45,19 @@ export function DataProvider({ children }) {
   const [selectedDriver, setSelectedDriver] = useState(() => {
     try { return localStorage.getItem('milepay_selectedDriver') || TODOS } catch { return TODOS }
   })
+  // MULTISELECCIÓN de ciudades: subconjunto de ciudades a ver COMBINADAS (sumadas).
+  // - vacío o 1 → se usa selectedCity normal (Todas / una).
+  // - 2+ → modo "subconjunto": se filtran las facturas a esas ciudades y se combinan
+  //   (la ciudad efectiva pasa a ser TODAS sobre ese subconjunto).
+  const [selectedCities, setSelectedCities] = useState(() => {
+    try { const a = JSON.parse(localStorage.getItem('milepay_selectedCities') || '[]'); return Array.isArray(a) ? a.filter(Boolean) : [] } catch { return [] }
+  })
+  useEffect(() => { try { localStorage.setItem('milepay_selectedCities', JSON.stringify(selectedCities)) } catch { /* noop */ } }, [selectedCities])
+  const selectedCitiesKey = [...selectedCities].sort().join('|')
+  const subsetActivo = selectedCities.length >= 2
+  // Ciudad EFECTIVA que consumen las páginas y las funciones de cálculo: en modo
+  // subconjunto es TODAS (se combina sobre las facturas ya filtradas al subconjunto).
+  const selectedCityEff = subsetActivo ? TODAS : selectedCity
   useEffect(() => { try { localStorage.setItem('milepay_selectedCity', selectedCity) } catch { /* noop */ } }, [selectedCity])
   useEffect(() => { try { localStorage.setItem('milepay_rango', JSON.stringify(rango)) } catch { /* noop */ } }, [rango])
   useEffect(() => { try { localStorage.setItem('milepay_selectedDriver', selectedDriver) } catch { /* noop */ } }, [selectedDriver])
@@ -246,7 +259,19 @@ export function DataProvider({ children }) {
     )
   }, [invoices, ciudadBloqueada, ciudadesUsuarioKey])
 
-  const invoicesRango = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
+  const invoicesRangoBase = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
+  // En modo subconjunto, se dejan SOLO las facturas de las ciudades elegidas (una
+  // factura pertenece si su ciudad —o alguna de sus ciudades— está en el subconjunto).
+  const invoicesRango = useMemo(() => {
+    if (!subsetActivo) return invoicesRangoBase
+    const set = new Set(selectedCities)
+    return invoicesRangoBase.filter((i) => {
+      const cs = [...new Set((i.resumenCiudades || []).map((c) => c.ubicacion).filter(Boolean))]
+      if (cs.length === 0) return set.has(i.ciudad || '')
+      return cs.some((c) => set.has(c))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoicesRangoBase, subsetActivo, selectedCitiesKey])
   // Factura COMPLETA del rango (todos los choferes/ciudades): base para construir
   // las listas de los selectores (ciudad/chofer) y para las alertas globales.
   const facturaRangoFull = useMemo(() => combinarFacturas(invoicesRango), [invoicesRango])
@@ -264,14 +289,14 @@ export function DataProvider({ children }) {
   // Con "Todas" se usa la del rango completo. Si una factura es multi-ciudad (histórico
   // combinado) no se puede atribuir a una sola → queda null (se avisa en la UI).
   const verificacionCiudad = useMemo(() => {
-    if (!selectedCity || selectedCity === TODAS) return facturaRangoFull?.verificacion || null
+    if (!selectedCityEff || selectedCityEff === TODAS) return facturaRangoFull?.verificacion || null
     const invs = invoicesRango.filter((i) => {
       const cs = [...new Set((i.resumenCiudades || []).map((c) => c.ubicacion).filter(Boolean))]
-      if (cs.length === 0) return (i.ciudad || '') === selectedCity
-      return cs.length === 1 && cs[0] === selectedCity
+      if (cs.length === 0) return (i.ciudad || '') === selectedCityEff
+      return cs.length === 1 && cs[0] === selectedCityEff
     })
     return combinarVerificacion(invs)
-  }, [selectedCity, invoicesRango, facturaRangoFull])
+  }, [selectedCityEff, invoicesRango, facturaRangoFull])
 
   const rangoIds = invoicesRango.map((i) => i.id)
   const rangoKey = rangoIds.join(',')
@@ -418,6 +443,47 @@ export function DataProvider({ children }) {
 
   const empresaActiva = companies.find((c) => c.id === activeCompanyId) || null
 
+  // Lista de códigos de ciudad disponibles (configuradas + detectadas en facturas),
+  // acotada a las del usuario si está bloqueado. Base para el multiselector.
+  const ciudadesDisponibles = useMemo(() => {
+    const set = new Set([
+      ...((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean)),
+      ...invoicesVisibles.flatMap((i) => [...(i.resumenCiudades || []).map((c) => c.ubicacion), i.ciudad]).filter(Boolean),
+    ])
+    let arr = [...set]
+    if (ciudadBloqueada && ciudadesUsuarioKey) {
+      const permit = new Set(ciudadesUsuarioKey.split('|'))
+      arr = arr.filter((c) => permit.has(c))
+    }
+    return arr
+  }, [ajustes, invoicesVisibles, ciudadBloqueada, ciudadesUsuarioKey])
+
+  // Conjunto de ciudades EN VISTA ahora mismo (para filtrar managers/gastos fijos):
+  //  - subconjunto → las elegidas; una ciudad → [esa]; Todas → todas las disponibles.
+  const ciudadesActivas = useMemo(() => {
+    if (subsetActivo) return selectedCities
+    if (selectedCity && selectedCity !== TODAS) return [selectedCity]
+    return ciudadesDisponibles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subsetActivo, selectedCitiesKey, selectedCity, ciudadesDisponibles])
+
+  // Fija el subconjunto de ciudades (multiselección). Colapsa a selección simple
+  // cuando quedan 0 (→ Todas) o 1 (→ esa ciudad). Respeta el bloqueo por ciudad.
+  const setSelectedCitiesSafe = useCallback((arr) => {
+    let lista = [...new Set((arr || []).filter(Boolean))]
+    if (ciudadBloqueada) {
+      const permit = new Set((ciudadesUsuario || []))
+      lista = lista.filter((c) => permit.has(c))
+    }
+    if (lista.length <= 1) {
+      setSelectedCities([])
+      const uno = lista[0] || TODAS
+      if (!ciudadBloqueada || uno === TODAS || (ciudadesUsuario || []).includes(uno)) setSelectedCity(uno)
+    } else {
+      setSelectedCities(lista)
+    }
+  }, [ciudadBloqueada, ciudadesUsuario])
+
   const value = {
     // multi-empresa
     companies,
@@ -456,12 +522,22 @@ export function DataProvider({ children }) {
     marcarAlerta,
     reactivarAlerta,
     descartarAlerta,
-    selectedCity,
+    // Ciudad EFECTIVA (en subconjunto = TODAS sobre las ciudades elegidas).
+    selectedCity: selectedCityEff,
     // Usuario bloqueado a su(s) ciudad(es): solo puede elegir "Todas" (= todas SUS
-    // ciudades) o una de las suyas; cualquier otra se ignora.
-    setSelectedCity: ciudadBloqueada
-      ? (c) => { if (c === TODAS || (ciudadesUsuario || []).includes(c)) setSelectedCity(c) }
-      : setSelectedCity,
+    // ciudades) o una de las suyas; cualquier otra se ignora. Elegir una ciudad simple
+    // limpia el subconjunto de multiselección.
+    setSelectedCity: (c) => {
+      if (ciudadBloqueada && !(c === TODAS || (ciudadesUsuario || []).includes(c))) return
+      setSelectedCities([])
+      setSelectedCity(c)
+    },
+    // Multiselección de ciudades (ver varias combinadas).
+    selectedCities,
+    setSelectedCities: setSelectedCitiesSafe,
+    subsetCiudades: subsetActivo,
+    ciudadesActivas,
+    ciudadesDisponibles,
     ciudadBloqueada,
     ciudadUsuario,
     ciudadesUsuario,

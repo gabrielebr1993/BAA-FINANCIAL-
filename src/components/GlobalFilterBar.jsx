@@ -5,7 +5,7 @@
 //   3) "Refinar:" — Ciudad + Chofer (opcionales, se aplican sobre lo elegido arriba) +
 //      "Limpiar".
 import { useState, useEffect, useRef } from 'react'
-import { Calendar, Search, FileText, CalendarRange, Eraser } from 'lucide-react'
+import { Calendar, Search, FileText, CalendarRange, Eraser, ChevronDown, Check } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { PRESETS } from '../utils/rango'
@@ -22,9 +22,11 @@ const fmtMonto = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
 export default function GlobalFilterBar() {
   const {
     rango, setRango, invoices, invoicesRango, numSemanas, vista, setVista,
-    selectedCity, setSelectedCity, selectedDriver, setSelectedDriver,
+    selectedCity, setSelectedCity, selectedCities, selectedDriver, setSelectedDriver,
     facturaRangoFull, ciudadBloqueada,
   } = useData()
+  // Facturas elegidas a mano (multiselección): array de ids con respaldo a la única.
+  const facturaIds = Array.isArray(rango.invoiceIds) && rango.invoiceIds.length ? rango.invoiceIds : (rango.invoiceId ? [rango.invoiceId] : [])
 
   // SOLO el rol "manager" queda restringido a "Una factura" (no "Por período").
   // Owner, admin y súper-admin conservan ambos modos SIEMPRE.
@@ -76,16 +78,20 @@ export default function GlobalFilterBar() {
   }
 
   // ---- indicador "Mostrando: …" ----
-  const facturaSel = modo === 'factura' ? invoices.find((i) => i.id === rango.invoiceId) : null
+  const facturaSel = modo === 'factura' && facturaIds.length === 1 ? invoices.find((i) => i.id === facturaIds[0]) : null
   let periodoLabel
   if (modo === 'factura') {
-    periodoLabel = facturaSel ? `Factura ${rangoDias(fmtDia(facturaSel.fechaInicio), fmtDia(facturaSel.fechaFin)) || facturaSel.semana || ''}` : 'Una factura'
+    periodoLabel = facturaIds.length > 1
+      ? `${facturaIds.length} facturas`
+      : facturaSel ? `Factura ${rangoDias(fmtDia(facturaSel.fechaInicio), fmtDia(facturaSel.fechaFin)) || facturaSel.semana || ''}` : 'Una factura'
   } else if (rango.preset === 'personalizado' && (rango.desde || rango.hasta)) {
     periodoLabel = `${fmtISO(rango.desde) || '…'}–${fmtISO(rango.hasta) || '…'}`
   } else {
     periodoLabel = (PRESETS.find((p) => p.key === rango.preset) || {}).label || 'Última semana'
   }
-  const ciudadLabel = selectedCity === TODAS ? 'Todas las ciudades' : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)
+  const ciudadLabel = (selectedCities && selectedCities.length >= 2)
+    ? `${selectedCities.length} ciudades`
+    : selectedCity === TODAS ? 'Todas las ciudades' : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)
   const hayChofer = selectedDriver && selectedDriver !== TODOS
   const varias = numSemanas > 1
 
@@ -137,22 +143,7 @@ export default function GlobalFilterBar() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 rounded-xl border border-brand-navy bg-brand-navy/5 px-2 py-1 dark:border-brand-gold dark:bg-brand-gold/10">
-              <FileText size={16} strokeWidth={1.8} className="text-brand-gold" />
-              <select
-                value={rango.invoiceId || ''}
-                onChange={(e) => { const id = e.target.value; if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' }) }}
-                className="max-w-[280px] rounded-lg bg-transparent px-1 py-1.5 text-sm text-slate-700 outline-none dark:text-slate-100"
-                aria-label="Elegir una factura"
-              >
-                {invoices.map((inv) => {
-                  const ciudad = inv.ciudadNombre || nombreCiudadDe(inv, inv.ciudad) || 'Sin ciudad'
-                  const fechas = rangoDias(fmtDia(inv.fechaInicio), fmtDia(inv.fechaFin)) || inv.semana || 's/f'
-                  const etiqueta = verMonto ? `${ciudad} · ${fechas} · ${fmtMonto(inv.ingresoTotal)}` : `${ciudad} · ${fechas}`
-                  return <option key={inv.id} value={inv.id}>{etiqueta}</option>
-                })}
-              </select>
-            </div>
+            <FacturaMultiSelect invoices={invoices} facturaIds={facturaIds} verMonto={verMonto} onChange={(ids) => setRango({ preset: 'factura', invoiceIds: ids, invoiceId: ids[0] || '', desde: '', hasta: '' })} />
           )}
         </div>
 
@@ -180,6 +171,73 @@ export default function GlobalFilterBar() {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Selector de UNA o VARIAS facturas (se ven combinadas/sumadas). Cada ciudad es una
+// factura aparte, así que aquí puedes juntar, por ej., Houston 1 + Houston 2 de la
+// misma semana. Al menos una factura queda siempre elegida.
+function FacturaMultiSelect({ invoices, facturaIds, verMonto, onChange }) {
+  const [abierto, setAbierto] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!abierto) return
+    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false) }
+    document.addEventListener('mousedown', fuera)
+    return () => document.removeEventListener('mousedown', fuera)
+  }, [abierto])
+
+  const sel = new Set(facturaIds)
+  const etiquetaDe = (inv) => {
+    const ciudad = inv.ciudadNombre || nombreCiudadDe(inv, inv.ciudad) || 'Sin ciudad'
+    const fechas = rangoDias(fmtDia(inv.fechaInicio), fmtDia(inv.fechaFin)) || inv.semana || 's/f'
+    return verMonto ? `${ciudad} · ${fechas} · ${fmtMonto(inv.ingresoTotal)}` : `${ciudad} · ${fechas}`
+  }
+  const toggle = (id) => {
+    const s = new Set(facturaIds)
+    if (s.has(id)) { if (s.size === 1) return; s.delete(id) } else s.add(id)
+    onChange([...s])
+  }
+  const label = facturaIds.length > 1
+    ? `${facturaIds.length} facturas combinadas`
+    : (() => { const inv = invoices.find((i) => i.id === facturaIds[0]); return inv ? etiquetaDe(inv) : 'Elegir factura' })()
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setAbierto((o) => !o)}
+        className="flex items-center gap-1.5 rounded-xl border border-brand-navy bg-brand-navy/5 px-2.5 py-1.5 text-sm text-slate-700 dark:border-brand-gold dark:bg-brand-gold/10 dark:text-slate-100"
+        aria-label="Elegir una o varias facturas"
+      >
+        <FileText size={16} strokeWidth={1.8} className="text-brand-gold" />
+        <span className="max-w-[280px] truncate">{label}</span>
+        <ChevronDown size={15} strokeWidth={2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+      </button>
+      {abierto && (
+        <div className="absolute left-0 z-30 mt-1 max-h-80 w-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+          {invoices.map((inv) => {
+            const on = sel.has(inv.id)
+            return (
+              <button
+                key={inv.id}
+                type="button"
+                onClick={() => toggle(inv.id)}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${on ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}
+              >
+                <span className={`grid h-4 w-4 flex-shrink-0 place-items-center rounded border ${on ? 'border-brand-gold bg-brand-gold text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                  {on && <Check size={11} strokeWidth={3} />}
+                </span>
+                <span className="truncate">{etiquetaDe(inv)}</span>
+              </button>
+            )
+          })}
+          {facturaIds.length >= 2 && (
+            <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Viendo {facturaIds.length} facturas combinadas (sumadas).</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

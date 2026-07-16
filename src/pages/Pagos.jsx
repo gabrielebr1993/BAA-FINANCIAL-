@@ -19,7 +19,7 @@ const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 export default function Pagos() {
   const { perfil, esSuperAdmin, ciudadBloqueada, ciudadesUsuario } = useAuth()
   const ciudadesUsuarioKey = (ciudadesUsuario || []).join('|')
-  const { facturaRango: selectedInvoice, invoicesRango, numSemanas, claims, drivers, managers, reloadManagers, selectedCity, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
+  const { facturaRango: selectedInvoice, invoicesRango, numSemanas, claims, drivers, managers, reloadManagers, selectedCity, selectedCities, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
   // El ADMIN tiene acceso COMPLETO a las opciones de pago (Stripe, ajustes de
   // préstamo/bono, marcar pagado) igual que el dueño, pero acotado a su ciudad.
   const puedePagar = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
@@ -131,8 +131,11 @@ export default function Pagos() {
   const gastosFijos = useMemo(() => {
     const activos = (managers || []).filter((m) => m.activo !== false)
     const misCiudades = ciudadBloqueada ? new Set(ciudadesUsuarioKey ? ciudadesUsuarioKey.split('|') : []) : null
+    // Subconjunto de ciudades (multiselección): solo los managers de esas ciudades.
+    const subset = (selectedCities || []).length >= 2 ? new Set(selectedCities) : null
     const filtrados = activos.filter((m) => {
       const c = m.ciudad || ''
+      if (subset) return subset.has(c)
       if (selectedCity && selectedCity !== TODAS) return c === selectedCity
       if (misCiudades) return misCiudades.has(c)
       return true
@@ -140,7 +143,7 @@ export default function Pagos() {
     return filtrados
       .map((m) => ({ ...m, monto: (Number(m.sueldoSemanal) || 0) * semanas, estado: (pagoInvoiceId && m.pagados && m.pagados[pagoInvoiceId] === 'pagado') ? 'pagado' : 'pendiente' }))
       .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
-  }, [managers, selectedCity, ciudadBloqueada, ciudadesUsuarioKey, semanas, pagoInvoiceId])
+  }, [managers, selectedCity, selectedCities, ciudadBloqueada, ciudadesUsuarioKey, semanas, pagoInvoiceId])
   const totGastosFijos = gastosFijos.reduce((a, g) => a + g.monto, 0)
   const gPag = gastosFijos.filter((g) => g.estado === 'pagado').length
   const gPend = gastosFijos.length - gPag

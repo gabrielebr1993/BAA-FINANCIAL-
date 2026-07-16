@@ -15,15 +15,17 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
   const navigate = useNavigate()
-  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity, selectedCities } = useData()
   const { ciudadBloqueada, ciudadesUsuario } = useAuth()
   // Gastos fijos visibles según el filtro global + las ciudades del usuario:
   //  - Ciudad elegida (≠ Todas): solo los de esa ciudad.
   //  - "Todas" con usuario bloqueado: solo los de SUS ciudades.
   //  - "Todas" sin bloqueo: todos.
   const misCiudades = ciudadBloqueada ? new Set(ciudadesUsuario || []) : null
+  const subset = (selectedCities || []).length >= 2 ? new Set(selectedCities) : null
   const managers = managersAll.filter((m) => {
     const c = m.ciudad || ''
+    if (subset) return subset.has(c)
     if (selectedCity && selectedCity !== TODAS) return c === selectedCity
     if (misCiudades) return misCiudades.has(c)
     return true

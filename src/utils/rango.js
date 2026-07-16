@@ -69,10 +69,14 @@ export function invoicesEnRango(invoices, rango) {
   if (lista.length === 0) return []
   const { preset } = rango || { preset: 'ultima' }
 
-  // Por factura: una sola factura elegida a mano (por id).
+  // Por factura: una o VARIAS facturas elegidas a mano (por id). `invoiceIds` (array,
+  // multiselección) tiene prioridad; si no, `invoiceId` (una sola, compatibilidad).
   if (preset === 'factura') {
-    const sel = lista.find((i) => i.id === rango.invoiceId)
-    return sel ? [sel] : []
+    const ids = Array.isArray(rango.invoiceIds) && rango.invoiceIds.length
+      ? rango.invoiceIds
+      : (rango.invoiceId ? [rango.invoiceId] : [])
+    const set = new Set(ids)
+    return lista.filter((i) => set.has(i.id))
   }
   if (preset === 'todo') return lista
   // "Última semana" / "Últimas 4 semanas" cuentan SEMANAS distintas (por `semana`),
