@@ -52,15 +52,15 @@ export default function Rutas() {
   const exportarE = () =>
     exportarExcel(nombreExp, [{ nombre: 'Rutas', rows: rows.map((r) => ({
       Ruta: r.ruta, Ciudad: r.nombreCiudad, Paquetes: r.paquetes, Individuales: r.individuales, Dobles: r.dobles,
-      Ingreso: Math.round(r.ingreso), '$/paquete': Number((r.precioPorPaquete || 0).toFixed(2)), '$/lb': Number((r.precioPorLb || 0).toFixed(3)),
-      'Costo choferes': Math.round(r.costoChoferes), Ganancia: Math.round(r.ganancia), Claims: r.numClaims || 0,
+      Ingreso: Math.round(r.ingreso), '$/paq (paga Gofo)': Number((r.precioPorPaquete || 0).toFixed(2)), '$/lb': Number((r.precioPorLb || 0).toFixed(3)),
+      'Costo choferes': Math.round(r.costoChoferes), Ganancia: Math.round(r.ganancia), 'Ganancia/paquete': Number((r.gananciaPorPaquete || 0).toFixed(2)), Claims: r.numClaims || 0,
       'Calidad (%)': r.calidad != null ? Number((r.calidad * 100).toFixed(1)) : '',
     })) }])
   const exportarP = () =>
     exportarPDF(nombreExp, 'Rutas', inv?.semana || '', [{
       titulo: `Rutas (${rows.length})`,
-      head: ['Ruta', 'Ciudad', 'Paq.', 'Ind.', 'Dobles', 'Ingreso', '$/paq', '$/lb', 'Costo chof.', 'Ganancia', 'Claims', 'Calidad'],
-      body: rows.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), num(r.individuales), num(r.dobles), money(r.ingreso), money(r.precioPorPaquete), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoChoferes), money(r.ganancia), num(r.numClaims || 0), pct(r.calidad, 1)]),
+      head: ['Ruta', 'Ciudad', 'Paq.', 'Ind.', 'Dobles', 'Ingreso', '$/paq Gofo', '$/lb', 'Costo chof.', 'Ganancia', 'Gan/paq', 'Claims', 'Calidad'],
+      body: rows.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), num(r.individuales), num(r.dobles), money(r.ingreso), money(r.precioPorPaquete), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoChoferes), money(r.ganancia), money(r.gananciaPorPaquete), num(r.numClaims || 0), pct(r.calidad, 1)]),
     }])
 
   const cols = [
@@ -69,10 +69,11 @@ export default function Rutas() {
     { k: 'individuales', label: 'Ind.' },
     { k: 'dobles', label: 'Dobles' },
     { k: 'ingreso', label: 'Ingreso' },
-    { k: 'precioPorPaquete', label: '$/paq' },
+    { k: 'precioPorPaquete', label: '$/paq Gofo' },
     { k: 'precioPorLb', label: '$/lb' },
     { k: 'costoChoferes', label: 'Costo choferes' },
     { k: 'ganancia', label: 'Ganancia' },
+    { k: 'gananciaPorPaquete', label: 'Gan/paq' },
     { k: 'numClaims', label: 'Claims' },
     { k: 'calidad', label: 'Calidad' },
   ]
@@ -149,7 +150,7 @@ export default function Rutas() {
               <span className="ml-auto text-xs text-slate-400">Costo de choferes estimado con la tarifa promedio de su ciudad</span>
             </div>
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
-              <table className="w-full min-w-[900px] border-collapse text-[13.5px]">
+              <table className="w-full min-w-[1000px] border-collapse text-[13.5px]">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                     {cols.map((c) => (
@@ -174,6 +175,7 @@ export default function Rutas() {
                       <td className="px-2.5 py-2 text-right">${(r.precioPorLb || 0).toFixed(3)}</td>
                       <td className="px-2.5 py-2 text-right text-brand-navy dark:text-slate-200">{money(r.costoChoferes)}</td>
                       <td className={`px-2.5 py-2 text-right font-semibold ${nivel.texto}`}>{money(r.ganancia)}</td>
+                      <td className={`px-2.5 py-2 text-right font-semibold ${nivel.texto}`}>{money(r.gananciaPorPaquete)}</td>
                       <td className="px-2.5 py-2 text-right">{num(r.numClaims || 0)}</td>
                       <td className="px-2.5 py-2 text-right">{pct(r.calidad, 1)}</td>
                     </tr>

@@ -849,6 +849,9 @@ export function rutasConGanancia(inv, drivers, ciudad) {
       tarifaDobleProm: t.dob,
       costoChoferes,
       ganancia,
+      // Ganancia NETA por paquete (lo que te queda por paquete tras pagar al chofer).
+      // Distinta de precioPorPaquete, que es lo que Gofo te PAGA por paquete.
+      gananciaPorPaquete: paquetes > 0 ? ganancia / paquetes : 0,
       margen: r.ingreso > 0 ? ganancia / r.ingreso : 0,
       calidad: paquetes > 0 ? 1 - (r.numClaims || 0) / paquetes : 1,
       nombreCiudad: r.nombreCiudad || nombreCiudad(r.ciudad),

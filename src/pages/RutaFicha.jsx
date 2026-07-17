@@ -68,9 +68,10 @@ export default function RutaFicha() {
         { Métrica: 'Ruta', Valor: decoded },
         { Métrica: 'Paquetes', Valor: rutaActual.paquetes },
         { Métrica: 'Ingreso', Valor: Math.round(rutaActual.ingreso) },
-        { Métrica: '$/paquete', Valor: rutaActual.precioPorPaquete },
+        { Métrica: '$/paquete (paga Gofo)', Valor: Number((rutaActual.precioPorPaquete || 0).toFixed(2)) },
         { Métrica: 'Costo choferes', Valor: Math.round(rutaActual.costoChoferes) },
         { Métrica: 'Ganancia', Valor: Math.round(rutaActual.ganancia) },
+        { Métrica: 'Ganancia/paquete', Valor: Number((rutaActual.gananciaPorPaquete || 0).toFixed(2)) },
         { Métrica: 'Claims', Valor: rutaActual.numClaims || 0 },
       ] }] : []),
       ...(choferesRuta.length ? [{ nombre: 'Choferes', rows: choferesRuta.map((p) => ({ Chofer: p.nombre, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles, Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales })) }] : []),
@@ -79,8 +80,8 @@ export default function RutaFicha() {
   const exportarP = () =>
     exportarPDF(nombreExp, `Ruta ${decoded}`, inv?.semana || '', [
       ...(rutaActual ? [{ titulo: 'Resumen de la ruta', head: ['Métrica', 'Valor'], body: [
-        ['Paquetes', num(rutaActual.paquetes)], ['Ingreso (Gofo)', money(rutaActual.ingreso)], ['$/paquete', money(rutaActual.precioPorPaquete)],
-        ['Costo choferes', money(rutaActual.costoChoferes)], ['Ganancia', money(rutaActual.ganancia)], ['Claims', num(rutaActual.numClaims || 0)],
+        ['Paquetes', num(rutaActual.paquetes)], ['Ingreso (Gofo)', money(rutaActual.ingreso)], ['$/paquete (paga Gofo)', money(rutaActual.precioPorPaquete)],
+        ['Costo choferes', money(rutaActual.costoChoferes)], ['Ganancia', money(rutaActual.ganancia)], ['Ganancia/paquete', money(rutaActual.gananciaPorPaquete)], ['Claims', num(rutaActual.numClaims || 0)],
       ] }] : []),
       ...(choferesRuta.length ? [{ titulo: `Choferes de la ruta (${choferesRuta.length})`, head: ['Chofer', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims'], body: choferesRuta.map((p) => [p.nombre, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales)]) }] : []),
     ])
@@ -125,10 +126,11 @@ export default function RutaFicha() {
             <div className="mb-4 flex flex-wrap gap-3">
               <KPI label="Paquetes" value={num(rutaActual.paquetes)} icon={Package} accent="navy" sub={`${num(rutaActual.individuales)} ind · ${num(rutaActual.dobles)} dob`} />
               <KPI label="Ingreso (Gofo)" value={money(rutaActual.ingreso)} icon={DollarSign} accent="green" />
-              <KPI label="$/paquete" value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" />
+              <KPI label="$/paquete (te paga Gofo)" value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" sub="ingreso por paquete" />
               <KPI label="$/lb" value={`$${(rutaActual.precioPorLb || 0).toFixed(3)}`} icon={Scale} accent="steel" />
               <KPI label="Costo choferes" value={money(rutaActual.costoChoferes)} icon={Users} accent="navy" />
               <KPI label="Ganancia" value={money(rutaActual.ganancia)} icon={TrendingUp} accent={rutaActual.ganancia >= 0 ? 'gold' : 'red'} valueColor={rutaActual.ganancia >= 0 ? undefined : 'text-rose-600'} sub={pct(rutaActual.margen)} />
+              <KPI label="Ganancia / paquete" value={money(rutaActual.gananciaPorPaquete)} icon={TrendingUp} accent={rutaActual.gananciaPorPaquete >= 0 ? 'green' : 'red'} valueColor={rutaActual.gananciaPorPaquete >= 0 ? undefined : 'text-rose-600'} sub="lo que te queda por paquete" />
               <KPI label="Claims" value={num(rutaActual.numClaims || 0)} icon={AlertTriangle} accent="red" sub={`Calidad ${pct(rutaActual.calidad, 1)}`} />
             </div>
           )}
