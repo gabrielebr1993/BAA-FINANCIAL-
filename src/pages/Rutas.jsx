@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText } from 'lucide-react'
+import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, SlidersHorizontal } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { rutasConGanancia } from '../utils/calc'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Input, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
+import Simulador from './Simulador'
 
 export default function Rutas() {
   const { facturaRango: inv, drivers, selectedCity, cargando } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
+  const [tab, setTab] = useState('rutas')
   const [sortKey, setSortKey] = useState('ganancia')
   const [asc, setAsc] = useState(false)
   const [busca, setBusca] = useState('')
@@ -82,7 +87,23 @@ export default function Rutas() {
     <div>
       <PageTitle>Rutas</PageTitle>
 
-      {cargando ? (
+      {esDueno && (
+        <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700/60">
+          {[{ k: 'rutas', l: 'Rutas', Icon: RouteIcon }, { k: 'simulador', l: 'Simulador', Icon: SlidersHorizontal }].map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setTab(t.k)}
+              className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition ${tab === t.k ? 'border-brand-gold text-brand-navy dark:text-white' : 'border-transparent text-slate-500 hover:text-brand-navy dark:text-slate-400 dark:hover:text-white'}`}
+            >
+              <t.Icon size={15} strokeWidth={1.9} /> {t.l}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {esDueno && tab === 'simulador' ? (
+        <Simulador />
+      ) : cargando ? (
         <Cargando texto="Cargando rutas…" />
       ) : !inv ? (
         <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango seleccionado para analizar rutas." />

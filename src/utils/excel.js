@@ -441,6 +441,21 @@ function nombreDe(code, nombreMap) {
   return nombreCiudad(code)
 }
 
+// Rango de peso estándar (para el Simulador) a partir del peso de asentamiento (lb).
+// Coincide con los tramos que factura Gofo: 0-1, 1-5, 5-10, 10-20, 20-30, 30-40, 40+.
+export const RANGOS_PESO = ['0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
+export function rangoDePeso(lb) {
+  const p = Number(lb)
+  if (!isFinite(p)) return 'N/D'
+  if (p <= 1) return '0-1lb'
+  if (p <= 5) return '1-5lb'
+  if (p <= 10) return '5-10lb'
+  if (p <= 20) return '10-20lb'
+  if (p <= 30) return '20-30lb'
+  if (p <= 40) return '30-40lb'
+  return '40+lb'
+}
+
 // A partir de una lista de detalles + claims (posiblemente de varios archivos),
 // construye todo el resumen que se guarda/usa en la app.
 export function construirResumen(detalles, claims, nombreMap, driverSummary = null) {
@@ -607,6 +622,30 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
 
   const resumenChoferes = Object.values(porChofer).map((c) => ({ ...c, nombreCiudad: nombreDe(c.ciudad, nombreMap) }))
 
+  // DESGLOSE ruta × rango de peso (para el Simulador de precios). Por cada ruta y
+  // tramo de peso: la MODA del "total expenses" de las PRIMERAS entregas (no dobles)
+  // = precio típico por paquete, más la cantidad y el ingreso. Los DOBLES (envío
+  // subsiguiente, $0.50) se guardan como una fila aparte por ruta (rango 'DOBLE').
+  const rpAcc = {}
+  for (const d of detalles) {
+    const rango = d.esDoble ? 'DOBLE' : rangoDePeso(d.peso)
+    const k = `${d.ruta}||${rango}`
+    if (!rpAcc[k]) rpAcc[k] = { ruta: d.ruta, ciudad: d.ciudad, rango, doble: !!d.esDoble, cantidad: 0, ingreso: 0, freq: {} }
+    const a = rpAcc[k]
+    a.cantidad += 1
+    a.ingreso += d.monto
+    const p = Math.round((Number(d.monto) || 0) * 100) / 100
+    a.freq[p] = (a.freq[p] || 0) + 1
+  }
+  const resumenRutaPeso = Object.values(rpAcc).map((a) => {
+    let precio = 0, mejorFreq = -1
+    for (const [p, c] of Object.entries(a.freq)) {
+      const val = Number(p)
+      if (c > mejorFreq || (c === mejorFreq && val > precio)) { mejorFreq = c; precio = val }
+    }
+    return { ruta: a.ruta, ciudad: a.ciudad, rango: a.rango, doble: a.doble, cantidad: a.cantidad, ingreso: Math.round(a.ingreso * 100) / 100, precio }
+  })
+
   const totalClaims = claims.length
   const totalDescuentoGofo = claims.reduce((a, c) => a + c.montoGofo, 0)
 
@@ -622,6 +661,7 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
     resumenChoferes,
     resumenChoferRuta: Object.values(porChoferRuta),
     resumenRutas,
+    resumenRutaPeso,
     resumenCiudades,
   }
 }
