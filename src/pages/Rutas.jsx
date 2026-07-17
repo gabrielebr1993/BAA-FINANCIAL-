@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Route as RouteIcon, Search, TrendingUp, TrendingDown } from 'lucide-react'
+import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText } from 'lucide-react'
 import { useData } from '../DataContext'
 import { rutasConGanancia } from '../utils/calc'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
-import { Card, PageTitle, Input, Badge, Cargando, EstadoVacio } from '../components/ui'
+import { Card, PageTitle, Input, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
 
 export default function Rutas() {
   const { facturaRango: inv, drivers, selectedCity, cargando } = useData()
@@ -25,6 +26,22 @@ export default function Rutas() {
   })
   const cambiar = (k) => { if (sortKey === k) setAsc((v) => !v); else { setSortKey(k); setAsc(false) } }
   const flecha = (k) => (sortKey === k ? (asc ? ' ▲' : ' ▼') : '')
+
+  // Exportaciones (respetan el orden y la búsqueda actuales: exportan lo que se ve).
+  const nombreExp = `rutas_${(selectedCity !== 'todas' ? selectedCity : '') || inv?.semana || 'periodo'}`.replace(/[^\w-]+/g, '_')
+  const exportarE = () =>
+    exportarExcel(nombreExp, [{ nombre: 'Rutas', rows: rows.map((r) => ({
+      Ruta: r.ruta, Ciudad: r.nombreCiudad, Paquetes: r.paquetes, Individuales: r.individuales, Dobles: r.dobles,
+      Ingreso: Math.round(r.ingreso), '$/paquete': Number((r.precioPorPaquete || 0).toFixed(2)), '$/lb': Number((r.precioPorLb || 0).toFixed(3)),
+      'Costo choferes': Math.round(r.costoChoferes), Ganancia: Math.round(r.ganancia), Claims: r.numClaims || 0,
+      'Calidad (%)': r.calidad != null ? Number((r.calidad * 100).toFixed(1)) : '',
+    })) }])
+  const exportarP = () =>
+    exportarPDF(nombreExp, 'Rutas', inv?.semana || '', [{
+      titulo: `Rutas (${rows.length})`,
+      head: ['Ruta', 'Ciudad', 'Paq.', 'Ind.', 'Dobles', 'Ingreso', '$/paq', '$/lb', 'Costo chof.', 'Ganancia', 'Claims', 'Calidad'],
+      body: rows.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), num(r.individuales), num(r.dobles), money(r.ingreso), money(r.precioPorPaquete), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoChoferes), money(r.ganancia), num(r.numClaims || 0), pct(r.calidad, 1)]),
+    }])
 
   const cols = [
     { k: 'ruta', label: 'Ruta', txt: true },
@@ -74,6 +91,8 @@ export default function Rutas() {
                 <Input className="w-56 pl-8" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar ruta…" />
               </div>
               <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{rows.length} ruta(s)</span>
+              <Boton variant="ghost" onClick={exportarE} disabled={rows.length === 0} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
+              <Boton variant="gold" onClick={exportarP} disabled={rows.length === 0} className="px-3 py-1.5 text-xs"><FileText size={15} strokeWidth={1.8} /> PDF</Boton>
             </div>
           </Card>
 
