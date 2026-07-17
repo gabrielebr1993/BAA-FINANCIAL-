@@ -5,17 +5,45 @@
 //      facturas), leída de settings.auditLog.
 //   3) Datos: anomalías (facturas que no cuadran con Gofo, choferes en pérdida,
 //      alertas de rentabilidad) para vigilar la confianza de los datos.
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { calcularPagos, TODAS } from '../utils/calc'
-import { parseExtractoBanco, conciliar } from '../utils/conciliacionBanco'
+import { parseExtractoBanco, conciliar, tokensNombre } from '../utils/conciliacionBanco'
 import { ACCIONES, limpiarAuditoria } from '../utils/auditoria'
 import { money } from '../utils/format'
-import { Card, KPI, PageTitle, Boton, Badge, Aviso, EstadoVacio } from '../components/ui'
+import { Card, KPI, PageTitle, Boton, Badge, Aviso, EstadoVacio, Spinner } from '../components/ui'
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
-import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText } from 'lucide-react'
+import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText, FileSpreadsheet } from 'lucide-react'
+
+// Lee un extracto (Excel o CSV) a matriz de filas. Usa SheetJS y, si el CSV no se
+// interpreta, cae a un parseo de texto simple (comillas + comas).
+async function leerExtracto(file) {
+  const buf = await file.arrayBuffer()
+  let aoa = []
+  try {
+    const wb = XLSX.read(buf, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    if (ws) aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+  } catch { aoa = [] }
+  if ((!aoa || aoa.length < 2) && /\.csv$/i.test(file.name)) {
+    const txt = await file.text()
+    aoa = txt.split(/\r?\n/).filter((l) => l.trim() !== '').map((linea) => {
+      const celdas = []
+      let cur = '', dentro = false
+      for (let i = 0; i < linea.length; i++) {
+        const ch = linea[i]
+        if (ch === '"') { if (dentro && linea[i + 1] === '"') { cur += '"'; i++ } else dentro = !dentro }
+        else if (ch === ',' && !dentro) { celdas.push(cur); cur = '' }
+        else cur += ch
+      }
+      celdas.push(cur)
+      return celdas.map((c) => { const n = parseFloat(c); return c.trim() !== '' && isFinite(n) && String(n) === c.trim() ? n : c.trim() })
+    })
+  }
+  return aoa || []
+}
 
 const TABS = [
   { key: 'financiera', label: 'Financiera (banco)', icon: Landmark },
@@ -67,6 +95,28 @@ function useGastosFijos() {
   }, [managers, numSemanas, selectedCity, selectedCities])
 }
 
+// Zona para arrastrar/soltar o hacer clic para elegir el extracto del banco.
+function Dropzone({ onArchivo, cargando, banco }) {
+  const [drag, setDrag] = useState(false)
+  const inputRef = useRef(null)
+  const soltar = (e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) onArchivo(f) }
+  return (
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={soltar}
+      className={`mb-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition ${drag ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 bg-white hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800'}`}
+    >
+      {cargando ? <Spinner /> : <Upload size={26} strokeWidth={1.8} className="text-brand-gold" />}
+      <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{cargando ? 'Leyendo…' : (banco ? 'Arrastra otro extracto o haz clic para cambiarlo' : 'Arrastra el extracto del banco aquí')}</div>
+      <div className="text-xs text-slate-400">o haz clic para elegir un archivo · .xlsx, .xls, .csv</div>
+      {banco && <div className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-700/50 dark:text-slate-300"><FileSpreadsheet size={13} strokeWidth={1.9} /> {banco.nombreArchivo} · {banco.movimientos.length} pagos · {money(banco.total)}</div>}
+      <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onArchivo(f) }} />
+    </div>
+  )
+}
+
 // ============================ TAB 1: FINANCIERA ============================
 function TabFinanciera() {
   const { facturaRango, claims, drivers, selectedCity, ajustesPorChofer } = useData()
@@ -92,43 +142,49 @@ function TabFinanciera() {
   }, [facturaRango, claims, drivers, selectedCity, ajustesPorChofer, gastosFijos])
 
   const res = useMemo(() => (banco ? conciliar(milePay, banco.movimientos) : null), [banco, milePay])
+  // El banco oculta los nombres (cuentas enmascaradas tipo ####1234): no se puede
+  // casar por nombre, solo por MONTO y por el TOTAL. Se detecta si la MAYORÍA de los
+  // movimientos no tienen letras en el beneficiario.
+  const sinNombres = banco && banco.movimientos.length > 0 &&
+    (banco.movimientos.filter((m) => tokensNombre(m.nombre).length === 0).length / banco.movimientos.length) > 0.6
 
-  const onFile = async (e) => {
+  const [cargando, setCargando] = useState(false)
+  const procesar = async (file) => {
     setError('')
-    const file = e.target.files?.[0]
     if (!file) return
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { setError('Formato no soportado. Sube un archivo .xlsx, .xls o .csv del banco.'); return }
+    setCargando(true)
     try {
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      const aoa = await leerExtracto(file)
       const parsed = parseExtractoBanco(aoa)
-      if (!parsed.movimientos.length) { setError('No se detectaron movimientos de pago en el archivo. Revisa que tenga columnas de descripción y monto.'); return }
+      if (!parsed.movimientos.length) { setError(`No se detectaron pagos en "${file.name}". Revisa que el archivo tenga columnas de descripción y monto (débitos).`); setBanco(null); return }
       setBanco({ ...parsed, nombreArchivo: file.name })
     } catch (err) {
       setError('No se pudo leer el archivo: ' + err.message)
+    } finally {
+      setCargando(false)
     }
-    e.target.value = ''
   }
 
   return (
     <div>
       <Aviso tipo="info" className="mb-4">
-        Sube el <b>extracto del banco</b> (Excel/CSV con la actividad de la cuenta). MilePay lo cruza con lo que
+        Sube el <b>extracto del banco</b> (Excel o CSV con la actividad de la cuenta). MilePay lo cruza con lo que
         <b> debe salir</b> del banco según el filtro actual (choferes con saldo positivo + gastos fijos) y te muestra si <b>cuadra</b>.
-        Cambia el filtro de arriba (semana/ciudad) para conciliar el periodo que corresponde al extracto.
+        Ajusta el filtro de arriba (semana/ciudad) para que coincida con el periodo del extracto.
       </Aviso>
 
-      <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-navy transition hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-        <Upload size={16} strokeWidth={1.9} className="text-brand-gold" />
-        {banco ? 'Cambiar extracto' : 'Subir extracto del banco'}
-        <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} className="hidden" />
-      </label>
-      {banco && <span className="ml-3 text-sm text-slate-500">{banco.nombreArchivo} · {banco.movimientos.length} movimientos</span>}
+      <Dropzone onArchivo={procesar} cargando={cargando} banco={banco} />
       {error && <Aviso tipo="error" className="mb-4">{error}</Aviso>}
+      {banco && milePay.length === 0 && (
+        <Aviso tipo="warn" className="mb-4">El extracto se cargó ({banco.movimientos.length} pagos · {money(banco.total)}), pero el <b>filtro actual no tiene pagos calculados</b>. Elige arriba la semana y la(s) ciudad(es) que correspondan a este extracto para poder conciliar.</Aviso>
+      )}
+      {sinNombres && (
+        <Aviso tipo="info" className="mb-4">Este banco <b>no muestra los nombres</b> de los beneficiarios (cuentas enmascaradas). La conciliación se hace por <b>monto</b> y por el <b>total</b>; los nombres no se pueden emparejar.</Aviso>
+      )}
 
       {!res ? (
-        <EstadoVacio titulo="Sin extracto cargado" texto="Sube el extracto del banco para ver la conciliación." mostrarBoton={false} />
+        <EstadoVacio titulo="Sin extracto cargado" texto="Arrastra el extracto del banco o haz clic para elegirlo." mostrarBoton={false} />
       ) : (
         <>
           <div className="mb-4 mt-4 flex flex-wrap gap-3">
