@@ -1,8 +1,11 @@
-import { useState, useMemo } from 'react'
-import { Trash2, AlertTriangle } from 'lucide-react'
+import { useState, useMemo, useRef } from 'react'
+import { updateDoc, doc } from 'firebase/firestore'
+import { Trash2, AlertTriangle, Scale } from 'lucide-react'
+import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { nombreCiudadDe, TODAS } from '../utils/calc'
+import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { eliminarFacturaCascada } from '../utils/borrado'
 import { registrarAuditoria } from '../utils/auditoria'
 import { money } from '../utils/format'
@@ -27,6 +30,43 @@ export default function Facturas() {
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total }
   const [error, setError] = useState('')
+
+  // Reprocesar: re-subir el Excel de una factura vieja para EXTRAERLE el desglose por
+  // peso (resumenRutaPeso). SOLO se escribe ese campo: totales, pagos y claims no cambian.
+  const [reproId, setReproId] = useState(null)
+  const [objetivo, setObjetivo] = useState(null)
+  const [reproMsg, setReproMsg] = useState(null) // { tipo, txt }
+  const fileRef = useRef(null)
+  const pedirArchivo = (inv) => { setObjetivo(inv); setReproMsg(null); fileRef.current?.click() }
+  const onArchivos = async (e) => {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    const inv = objetivo
+    if (!files.length || !inv) return
+    setReproId(inv.id)
+    try {
+      const procs = []
+      for (const f of files) procs.push(procesarArchivo(await f.arrayBuffer(), f.name, inv.modoConfig || 'estandar'))
+      const comb = combinarArchivos(procs)
+      const rp = comb.resumenRutaPeso || []
+      if (!rp.length) { setReproMsg({ tipo: 'error', txt: 'El archivo no trae desglose por peso (o no es una factura válida de Gofo).' }); return }
+      // Verificación: el total del archivo debe coincidir con esta factura (±2%).
+      const ref = Number(inv.ingresoTotal) || 0
+      const difPct = ref ? Math.abs(comb.ingresoTotal - ref) / ref : 0
+      if (difPct > 0.02) {
+        setReproMsg({ tipo: 'warn', txt: `El total del archivo (${money(comb.ingresoTotal)}) no coincide con esta factura (${money(ref)}). Parece ser otro Excel — NO se guardó nada. Sube el archivo original de esta semana/ciudad.` })
+        return
+      }
+      // SOLO se actualiza resumenRutaPeso (no se toca ningún otro dato).
+      await updateDoc(doc(db, 'invoices', inv.id), { resumenRutaPeso: rp })
+      await reloadInvoices()
+      setReproMsg({ tipo: 'ok', txt: `Precios por peso extraídos para ${inv.ciudadNombre || inv.ciudad || ''} · ${inv.semana}. Ya se ven en Rutas → “Precios por ruta” y en Proyección. (El total no cambió: ${money(ref)}.)` })
+    } catch (err) {
+      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar el archivo: ' + err.message })
+    } finally {
+      setReproId(null); setObjetivo(null)
+    }
+  }
 
   // Posibles DUPLICADOS: facturas con la misma ciudad + semana. Suele pasar al re-subir
   // sin borrar la anterior. Se avisa para que borres las sobrantes (deja una por semana).
@@ -83,6 +123,8 @@ export default function Facturas() {
     <div>
       <PageTitle>Facturas</PageTitle>
       {error && <Aviso tipo="error">{error}</Aviso>}
+      {reproMsg && <Aviso tipo={reproMsg.tipo}>{reproMsg.txt}</Aviso>}
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onArchivos} className="hidden" />
 
       {duplicados.length > 0 && (
         <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
@@ -124,7 +166,16 @@ export default function Facturas() {
             if (key === 'ciudades') return (row.resumenCiudades || []).map((c) => nombreCiudadDe(row, c.ubicacion)).join(', ') || row.ciudadNombre || '—'
             if (key === 'archivoNombre') return <span className="text-xs text-slate-500 dark:text-slate-400">{row.archivoNombre}</span>
             if (key === 'acciones')
-              return <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs"><Trash2 size={14} strokeWidth={1.8} /> Eliminar</Boton>
+              return (
+                <div className="flex justify-end gap-1.5">
+                  {!(row.resumenRutaPeso && row.resumenRutaPeso.length) && (
+                    <Boton variant="ghost" onClick={() => pedirArchivo(row)} disabled={reproId === row.id} className="px-2.5 py-1 text-xs" title="Re-subir el Excel de esta factura para extraerle los precios por peso (no cambia totales ni pagos)">
+                      {reproId === row.id ? <Spinner /> : <><Scale size={13} strokeWidth={1.8} /> Extraer peso</>}
+                    </Boton>
+                  )}
+                  <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs"><Trash2 size={14} strokeWidth={1.8} /> Eliminar</Boton>
+                </div>
+              )
             return row[key]
           }}
         />
