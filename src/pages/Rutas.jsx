@@ -1,19 +1,41 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, DollarSign } from 'lucide-react'
+import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, DollarSign, Scale } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { rutasConGanancia } from '../utils/calc'
+import { reprocesarFactura } from '../utils/reprocesar'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
-import { Card, PageTitle, Input, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
+import { Card, PageTitle, Input, Boton, Badge, Aviso, Spinner, Cargando, EstadoVacio } from '../components/ui'
 
 const RANGOS_ORD = ['0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
 
 export default function Rutas() {
-  const { facturaRango: inv, drivers, selectedCity, cargando } = useData()
+  const { facturaRango: inv, invoicesRango, drivers, selectedCity, cargando, reloadInvoices } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const navigate = useNavigate()
   const [tab, setTab] = useState('resumen')
   const [sortKey, setSortKey] = useState('ganancia')
+
+  // Reprocesar (solo dueño): extrae el desglose por peso de la factura seleccionada.
+  const facturaUnica = (invoicesRango || []).length === 1 ? invoicesRango[0] : null
+  const fileRef = useRef(null)
+  const [reproMsg, setReproMsg] = useState(null)
+  const [reprocesando, setReprocesando] = useState(false)
+  const onReprocesar = async (e) => {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    if (!files.length) return
+    setReproMsg(null); setReprocesando(true)
+    try {
+      const r = await reprocesarFactura(facturaUnica, files)
+      if (r) { setReproMsg(r); if (r.tipo === 'ok') await reloadInvoices() }
+    } catch (err) {
+      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message })
+    } finally { setReprocesando(false) }
+  }
 
   // Desglose de PRECIO POR PESO por ruta (dato real de la factura). Vacío en facturas
   // viejas sin el desglose (se avisa y se usa el promedio en la pestaña Resumen).
@@ -120,11 +142,22 @@ export default function Rutas() {
       ) : tab === 'precios' ? (
         !preciosPeso.hay ? (
           <Card className="p-4">
-            <div className="mb-1 font-semibold text-brand-navy dark:text-slate-100">Precio real por peso</div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Esta factura no trae el desglose por rango de peso (0-1lb, 1-5lb…). Se empieza a guardar al cargar facturas nuevas.
-              Mientras tanto, en la pestaña <b>Resumen</b> ves el precio promedio por paquete de cada ruta.
-            </p>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
+            {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-3">{reproMsg.txt}</Aviso>}
+            <div className="flex flex-wrap items-center gap-3">
+              <Scale size={22} strokeWidth={1.8} className="text-amber-500" />
+              <div className="min-w-[240px] flex-1">
+                <div className="font-semibold text-brand-navy dark:text-slate-100">Sin desglose por peso todavía</div>
+                <p className="m-0 text-sm text-slate-500 dark:text-slate-400">
+                  Esta factura no trae el precio por rango de peso (0-1lb, 1-5lb…). {esDueno ? 'Reprocésala para extraerlo (solo alimenta Rutas y el simulador; no cambia pagos ni totales).' : 'Se guarda al cargar facturas nuevas.'} Mientras tanto, en <b>Resumen</b> ves el precio promedio por ruta.
+                </p>
+              </div>
+              {esDueno && (
+                facturaUnica
+                  ? <Boton variant="gold" onClick={() => fileRef.current?.click()} disabled={reprocesando} className="px-4 py-2 text-sm">{reprocesando ? <><Spinner /> Procesando…</> : <><Scale size={15} strokeWidth={1.8} /> Reprocesar factura para peso</>}</Boton>
+                  : <span className="text-xs text-slate-400">Elige arriba <b>Una factura</b> (una sola semana/ciudad) para poder reprocesarla.</span>
+              )}
+            </div>
           </Card>
         ) : (
           <Card className="p-4">
