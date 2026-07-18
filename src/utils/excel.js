@@ -622,10 +622,11 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
 
   const resumenChoferes = Object.values(porChofer).map((c) => ({ ...c, nombreCiudad: nombreDe(c.ciudad, nombreMap) }))
 
-  // DESGLOSE ruta × rango de peso (para el Simulador de precios). Por cada ruta y
-  // tramo de peso: la MODA del "total expenses" de las PRIMERAS entregas (no dobles)
-  // = precio típico por paquete, más la cantidad y el ingreso. Los DOBLES (envío
-  // subsiguiente, $0.50) se guardan como una fila aparte por ruta (rango 'DOBLE').
+  // DESGLOSE ruta × rango de peso — EXCLUSIVO del Simulador (campo `simuladorDesglose`).
+  // Es un dato ADICIONAL y AISLADO: ninguna fórmula de pago/ganancia/claims/totales lo
+  // lee. Por cada ruta y tramo de peso: la MODA del "total expenses" de las PRIMERAS
+  // entregas (no dobles) = precio típico por paquete, más la cantidad y el ingreso.
+  // Los DOBLES (envío subsiguiente, $0.50) van como una fila aparte por ruta ('DOBLE').
   const rpAcc = {}
   for (const d of detalles) {
     const rango = d.esDoble ? 'DOBLE' : rangoDePeso(d.peso)
@@ -637,7 +638,7 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
     const p = Math.round((Number(d.monto) || 0) * 100) / 100
     a.freq[p] = (a.freq[p] || 0) + 1
   }
-  const resumenRutaPeso = Object.values(rpAcc).map((a) => {
+  const simuladorDesglose = Object.values(rpAcc).map((a) => {
     let precio = 0, mejorFreq = -1
     for (const [p, c] of Object.entries(a.freq)) {
       const val = Number(p)
@@ -661,7 +662,7 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
     resumenChoferes,
     resumenChoferRuta: Object.values(porChoferRuta),
     resumenRutas,
-    resumenRutaPeso,
+    simuladorDesglose,
     resumenCiudades,
   }
 }

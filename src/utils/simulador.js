@@ -14,7 +14,8 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 // ruta×peso (resumenRutaPeso) si la factura lo trae; si no (facturas viejas), cae a
 // nivel de ruta con un precio PROMEDIO por primera entrega (una sola "celda").
 export function construirBase(inv, ciudad) {
-  const rp = (inv?.resumenRutaPeso || []).filter((x) => (x.ciudad || '') === ciudad)
+  // `simuladorDesglose` = campo dedicado y aislado del simulador (respaldo al antiguo).
+  const rp = ((inv?.simuladorDesglose || inv?.resumenRutaPeso) || []).filter((x) => (x.ciudad || '') === ciudad)
   const tieneDetalle = rp.length > 0
   const map = {}
   if (tieneDetalle) {

@@ -3,17 +3,20 @@
 // edita precios (por %, por rango de peso o por celda) → "Generar proyección" →
 // resumen con KPIs, gráficas y recomendaciones. La ganancia real usa las tarifas
 // reales de los choferes (fijas: el pago no cambia cuando Gofo cambia sus precios).
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { updateDoc, doc } from 'firebase/firestore'
+import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { calcularPagos, rutasConGanancia } from '../utils/calc'
 import { construirBase, proyectar } from '../utils/simulador'
+import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
-import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle } from '../components/ui'
+import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
-import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info } from 'lucide-react'
+import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale } from 'lucide-react'
 
 const TODAS_SIM = '__todas__'
 const MENSUAL = 4.3 // semanas por mes (aprox) para el estimado mensual
@@ -51,7 +54,7 @@ const NIVEL_UI = {
 }
 
 export default function Simulador() {
-  const { invoices, drivers, ciudadesEmpresa } = useData()
+  const { invoices, drivers, ciudadesEmpresa, reloadInvoices } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
 
@@ -61,6 +64,11 @@ export default function Simulador() {
   const [pesoFijo, setPesoFijo] = useState({})
   const [celda, setCelda] = useState({})
   const [generado, setGenerado] = useState(false)
+  // Reprocesar SOLO para el simulador: extrae el desglose por peso del Excel y lo guarda
+  // en el campo dedicado `simuladorDesglose` (aislado; no toca pagos/ganancias/totales).
+  const [reproMsg, setReproMsg] = useState(null)
+  const [reprocesando, setReprocesando] = useState(false)
+  const fileRef = useRef(null)
 
   const nombreDeCiudad = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || nombreCiudad(code)
 
@@ -131,6 +139,34 @@ export default function Simulador() {
   }, [proyTodas])
 
   const resetear = () => { setPctGlobal(0); setPesoFijo({}); setCelda({}) }
+
+  // Reprocesa la factura seleccionada: re-lee su Excel y le extrae el desglose por peso.
+  const onReprocesar = async (e) => {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    if (!files.length || !invSel) return
+    setReproMsg(null); setReprocesando(true)
+    try {
+      const procs = []
+      for (const f of files) procs.push(procesarArchivo(await f.arrayBuffer(), f.name, invSel.modoConfig || 'estandar'))
+      const comb = combinarArchivos(procs)
+      const rp = comb.simuladorDesglose || comb.resumenRutaPeso || []
+      if (!rp.length) { setReproMsg({ tipo: 'error', txt: 'El archivo no trae desglose por peso (o no es una factura válida de Gofo).' }); return }
+      const ref = Number(invSel.ingresoTotal) || 0
+      if (ref && Math.abs(comb.ingresoTotal - ref) / ref > 0.02) {
+        setReproMsg({ tipo: 'warn', txt: `El total del archivo (${money(comb.ingresoTotal)}) no coincide con esta factura (${money(ref)}). Parece ser otro Excel — NO se guardó nada.` })
+        return
+      }
+      // SOLO se escribe el campo dedicado del simulador. Nada más cambia.
+      await updateDoc(doc(db, 'invoices', invSel.id), { simuladorDesglose: rp })
+      await reloadInvoices()
+      setReproMsg({ tipo: 'ok', txt: `Desglose por peso extraído. Ya ves los precios reales por peso. (El total no cambió: ${money(ref)}.)` })
+    } catch (err) {
+      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar el archivo: ' + err.message })
+    } finally {
+      setReprocesando(false)
+    }
+  }
   const hayCambios = pctGlobal !== 0 || Object.values(pesoFijo).some((v) => v !== '' && v != null) || Object.values(celda).some((v) => v !== '' && v != null)
   const pctTxt = `${pctGlobal > 0 ? '+' : ''}${Math.round(pctGlobal * 100)}%`
   const hayResultado = esTodas ? proyTodas.length > 0 : base.rutas.length > 0
@@ -183,6 +219,9 @@ export default function Simulador() {
             </div>
           )}
           <span className="text-xs text-slate-400">{esTodas ? `${proyTodas.length} ciudad(es) · factura más reciente de cada una` : `${base.rutas.length} ruta(s) en ${nombreDeCiudad(ciudadSim)}`}</span>
+          {!esTodas && invSel && (base.tieneDetalle
+            ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
+            : <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700/50 dark:text-slate-300"><Scale size={12} strokeWidth={2} /> usando promedio</span>)}
           {hayResultado && (
             <div className="ml-auto flex gap-2">
               <Boton variant="ghost" onClick={() => exportar('excel')} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
@@ -191,6 +230,19 @@ export default function Simulador() {
           )}
         </div>
       </Card>
+
+      {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-4">{reproMsg.txt}</Aviso>}
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
+      {!esTodas && invSel && !base.tieneDetalle && (
+        <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-amber-400 p-4">
+          <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
+          <div className="min-w-[220px] flex-1">
+            <div className="font-semibold text-brand-navy dark:text-slate-100">Esta factura usa el precio PROMEDIO por ruta</div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso (0-1lb, 1-5lb…). Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+          </div>
+          <Boton variant="gold" onClick={() => fileRef.current?.click()} disabled={reprocesando} className="px-4 py-2 text-sm">{reprocesando ? <><Spinner /> Procesando…</> : <><Scale size={15} strokeWidth={1.8} /> Reprocesar factura para simulador</>}</Boton>
+        </Card>
+      )}
 
       {!hayResultado ? (
         <EstadoVacio titulo="Sin rutas" texto="No hay rutas para simular con esta selección." mostrarBoton={false} />

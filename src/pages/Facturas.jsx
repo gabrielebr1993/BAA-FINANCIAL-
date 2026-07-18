@@ -48,7 +48,7 @@ export default function Facturas() {
       const procs = []
       for (const f of files) procs.push(procesarArchivo(await f.arrayBuffer(), f.name, inv.modoConfig || 'estandar'))
       const comb = combinarArchivos(procs)
-      const rp = comb.resumenRutaPeso || []
+      const rp = comb.simuladorDesglose || comb.resumenRutaPeso || []
       if (!rp.length) { setReproMsg({ tipo: 'error', txt: 'El archivo no trae desglose por peso (o no es una factura válida de Gofo).' }); return }
       // Verificación: el total del archivo debe coincidir con esta factura (±2%).
       const ref = Number(inv.ingresoTotal) || 0
@@ -57,8 +57,8 @@ export default function Facturas() {
         setReproMsg({ tipo: 'warn', txt: `El total del archivo (${money(comb.ingresoTotal)}) no coincide con esta factura (${money(ref)}). Parece ser otro Excel — NO se guardó nada. Sube el archivo original de esta semana/ciudad.` })
         return
       }
-      // SOLO se actualiza resumenRutaPeso (no se toca ningún otro dato).
-      await updateDoc(doc(db, 'invoices', inv.id), { resumenRutaPeso: rp })
+      // SOLO se actualiza el campo dedicado del simulador (no se toca ningún otro dato).
+      await updateDoc(doc(db, 'invoices', inv.id), { simuladorDesglose: rp })
       await reloadInvoices()
       setReproMsg({ tipo: 'ok', txt: `Precios por peso extraídos para ${inv.ciudadNombre || inv.ciudad || ''} · ${inv.semana}. Ya se ven en Rutas → “Precios por ruta” y en Proyección. (El total no cambió: ${money(ref)}.)` })
     } catch (err) {
@@ -168,7 +168,7 @@ export default function Facturas() {
             if (key === 'acciones')
               return (
                 <div className="flex justify-end gap-1.5">
-                  {!(row.resumenRutaPeso && row.resumenRutaPeso.length) && (
+                  {!((row.simuladorDesglose || row.resumenRutaPeso || []).length) && (
                     <Boton variant="ghost" onClick={() => pedirArchivo(row)} disabled={reproId === row.id} className="px-2.5 py-1 text-xs" title="Re-subir el Excel de esta factura para extraerle los precios por peso (no cambia totales ni pagos)">
                       {reproId === row.id ? <Spinner /> : <><Scale size={13} strokeWidth={1.8} /> Extraer peso</>}
                     </Boton>
