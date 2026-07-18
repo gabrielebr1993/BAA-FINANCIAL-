@@ -12,12 +12,13 @@ import { useAuth } from '../AuthContext'
 import { calcularPagos, rutasConGanancia, gananciaRealDe } from '../utils/calc'
 import { construirBase, proyectar } from '../utils/simulador'
 import { reprocesarFactura } from '../utils/reprocesar'
+import { guardarProyeccion, borrarProyeccion } from '../utils/proyeccionesGuardadas'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
-import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check } from 'lucide-react'
+import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen } from 'lucide-react'
 
 const MENSUAL = 4.3
 const ORDEN_RANGO = ['(promedio)', '0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
@@ -53,10 +54,13 @@ const NIVEL_UI = {
 }
 
 export default function Simulador({ embed = false }) {
-  const { invoices, drivers, managers, ciudadesEmpresa, activeCompanyId, reloadInvoices } = useData()
+  const { invoices, drivers, managers, ciudadesEmpresa, activeCompanyId, ajustes, reloadAjustes, reloadInvoices } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const [dragRepro, setDragRepro] = useState(false)
+  const [verHist, setVerHist] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const cargarRef = useRef(false)
 
   const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas (resumen); 1+ = detalle editable
   const [abreCiudades, setAbreCiudades] = useState(false)
@@ -119,8 +123,11 @@ export default function Simulador({ embed = false }) {
   }, [facturasCiudad, facturaSimId, ciudadUnica])
 
   // El resumen se OCULTA solo al cambiar el ALCANCE (ciudad/factura). Los cambios de
-  // precio NO lo esconden: se actualiza en vivo y el botón queda siempre visible.
-  useEffect(() => { setGenerado(false) }, [ciudadesSelKey, facturaSimId])
+  // precio NO lo esconden. Al CARGAR una proyección guardada no se oculta (flag).
+  useEffect(() => {
+    if (cargarRef.current) { cargarRef.current = false; return }
+    setGenerado(false)
+  }, [ciudadesSelKey, facturaSimId])
   useEffect(() => {
     if (!abreCiudades) return
     const fuera = (e) => { if (cRef.current && !cRef.current.contains(e.target)) setAbreCiudades(false) }
@@ -261,6 +268,42 @@ export default function Simulador({ embed = false }) {
     { name: 'Ganancia', Actual: Math.round(resumen.gananciaBase), Proyectado: Math.round(resumen.gananciaProy) },
   ]
   const impacto = [...filas].map((f) => ({ name: f.name, valor: Math.round(f.gananciaProy - f.gananciaBase) })).sort((a, b) => a.valor - b.valor).slice(0, 12)
+
+  // --- Historial de proyecciones guardadas ---
+  const proyeccionesGuardadas = [...(ajustes?.proyecciones || [])].sort((a, b) => (a.ts < b.ts ? 1 : -1))
+  const fmtFechaHist = (ts) => { try { return new Date(ts).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' }) } catch { return ts } }
+  const guardar = async () => {
+    const sug = `${resumen.label} ${pctTxt} · ${new Date().toLocaleDateString('es')}`
+    const nombre = window.prompt('Nombre de la proyección:', sug)
+    if (nombre == null) return
+    setGuardando(true)
+    try {
+      await guardarProyeccion(activeCompanyId, {
+        usuario: perfil?.email || perfil?.nombre || 'usuario',
+        nombre: nombre.trim() || sug,
+        ciudades: ciudadesSel, facturaSimId, pctGlobal, pesoFijo, celda,
+        resumen: { label: resumen.label, ingresoBase: resumen.ingresoBase, ingresoProy: resumen.ingresoProy, gananciaBase: resumen.gananciaBase, gananciaProy: resumen.gananciaProy, margenBase: resumen.margenBase, margenProy: resumen.margenProy, pct: pctTxt },
+      })
+      await reloadAjustes()
+      setReproMsg({ tipo: 'ok', txt: 'Proyección guardada en el historial.' })
+    } catch (e) { setReproMsg({ tipo: 'error', txt: 'No se pudo guardar: ' + e.message }) }
+    finally { setGuardando(false) }
+  }
+  const cargar = (p) => {
+    cargarRef.current = true
+    setCiudadesSel(p.ciudades || [])
+    if (p.facturaSimId) setFacturaSimId(p.facturaSimId)
+    setPctGlobal(p.pctGlobal || 0)
+    setPesoFijo(p.pesoFijo || {})
+    setCelda(p.celda || {})
+    setGenerado(true)
+    setVerHist(false)
+  }
+  const borrar = async (id) => {
+    if (!window.confirm('¿Eliminar esta proyección guardada?')) return
+    await borrarProyeccion(activeCompanyId, proyeccionesGuardadas, id)
+    await reloadAjustes()
+  }
 
   if (!esDueno) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
   if (!ciudades.length) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<EstadoVacio titulo="Sin facturas" texto="Carga una factura para poder simular precios." mostrarBoton={false} /></div>
@@ -553,11 +596,42 @@ export default function Simulador({ embed = false }) {
             </Card>
           )}
 
-          <div className="mb-4 flex justify-center">
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
             <button onClick={() => setGenerado(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-base font-bold text-white shadow-sm transition hover:brightness-110 dark:bg-brand-gold dark:text-brand-navy">
               <Zap size={20} strokeWidth={2} /> {generado ? 'Actualizar proyección' : 'Generar proyección'}
             </button>
+            <Boton variant="gold" onClick={guardar} disabled={guardando} className="px-4 py-3 text-sm">{guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.9} /> Guardar</>}</Boton>
+            <Boton variant="ghost" onClick={() => setVerHist((v) => !v)} className="px-4 py-3 text-sm"><History size={16} strokeWidth={1.9} /> Historial ({proyeccionesGuardadas.length})</Boton>
           </div>
+
+          {verHist && (
+            <Card className="mb-4 p-4">
+              <div className="mb-2 flex items-center gap-2"><History size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de proyecciones ({proyeccionesGuardadas.length})</h3></div>
+              {proyeccionesGuardadas.length === 0 ? (
+                <div className="text-sm text-slate-400">Aún no has guardado proyecciones. Ajusta precios y dale a <b>Guardar</b> para tenerlas aquí.</div>
+              ) : (
+                <div className="scroll-thin overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-sm">
+                    <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Nombre</th><th>Fecha</th><th>Alcance</th><th className="text-right">Ganancia real (actual → proy.)</th><th></th></tr></thead>
+                    <tbody>
+                      {proyeccionesGuardadas.map((p) => (
+                        <tr key={p.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                          <td className="py-2 font-medium text-brand-navy dark:text-slate-100">{p.nombre}</td>
+                          <td className="whitespace-nowrap text-slate-500">{fmtFechaHist(p.ts)}</td>
+                          <td className="text-slate-500">{p.resumen?.label} · {p.resumen?.pct}</td>
+                          <td className="whitespace-nowrap text-right">{money(p.resumen?.gananciaBase)} → <b className={p.resumen?.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-200'}>{money(p.resumen?.gananciaProy)}</b></td>
+                          <td className="whitespace-nowrap text-right">
+                            <Boton variant="ghost" onClick={() => cargar(p)} className="px-2 py-1 text-xs"><FolderOpen size={13} strokeWidth={1.8} /> Cargar</Boton>
+                            {esDueno && <button onClick={() => borrar(p.id)} className="ml-1 rounded-lg px-1.5 py-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" title="Eliminar"><Trash2 size={14} strokeWidth={1.8} /></button>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )}
 
           {generado && (
             <>
