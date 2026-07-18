@@ -202,7 +202,7 @@ export default function Simulador({ embed = false }) {
     const p = proyectar(b, { pct: pctGlobal }, costoDe(rc.inv, rc.codigo, b))
     const delta = r2(p.ingresoProy - p.ingresoBase)
     const ganBase = rc.gananciaReal, ganProy = r2(rc.gananciaReal + delta)
-    const ingBase = rc.ingresoNeto, ingProy = r2(rc.ingresoNeto + delta)
+    const ingBase = p.ingresoBase, ingProy = p.ingresoProy // bruto entregas (lo que paga Gofo)
     const beMax = p.ingresoIndTotal > 0 ? -rc.gananciaReal / p.ingresoIndTotal : 0
     return { codigo: rc.codigo, nombre: rc.nombre, semana: rc.semana, tieneDetalle: b.tieneDetalle, ingresoBase: ingBase, ingresoProy: ingProy, gananciaBase: ganBase, gananciaProy: ganProy, bePctCiudad: beMax }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,19 +231,24 @@ export default function Simulador({ embed = false }) {
   const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; reprocesarInv(targetInvRef.current || invSel, f) }
   const tieneDesglose = (inv, ciudad) => ((inv?.simuladorDesglose || inv?.resumenRutaPeso) || []).some((x) => x.ciudad === ciudad)
 
-  // Resumen REAL (anclado a la ganancia real; el cambio de precios mueve solo entregas).
-  const delta = r2(proj.ingresoProy - proj.ingresoBase)
-  const ingresoBase = real.ingresoNeto
-  const ingresoProy = r2(real.ingresoNeto + delta)
+  // Resumen REAL. El "Ingreso Gofo" mostrado es el BRUTO de ENTREGAS (lo que paga Gofo
+  // por entregar = suma de precios×paquetes de todas las rutas). El neto (para la
+  // ganancia real, igual que Financiero) resta los claims que Gofo descuenta.
+  const entregasBruto = proj.ingresoBase          // = lo que paga Gofo (suma de rutas)
+  const entregasProy = proj.ingresoProy
+  const delta = r2(entregasProy - entregasBruto)
+  const claimsGofo = r2(real.ingresoNeto - entregasBruto) // negativo (descuento de Gofo)
+  const netoBase = real.ingresoNeto
+  const netoProy = r2(real.ingresoNeto + delta)
   const gananciaBase = real.gananciaReal
   const gananciaProy = r2(real.gananciaReal + delta)
   const bePct = baseMulti.ingresoIndTotal > 0 ? -real.gananciaReal / baseMulti.ingresoIndTotal : 0
   const resumen = {
     label: ciudadesSel.length === 0 ? 'el negocio' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadUnica) : 'las ciudades elegidas',
-    ingresoBase, ingresoProy, gananciaBase, gananciaProy,
-    margenBase: ingresoBase > 0 ? gananciaBase / ingresoBase : 0,
-    margenProy: ingresoProy > 0 ? gananciaProy / ingresoProy : 0,
-    bePct, pago: real.pago, gastos: real.gastos,
+    ingresoBase: entregasBruto, ingresoProy: entregasProy, gananciaBase, gananciaProy,
+    margenBase: netoBase > 0 ? gananciaBase / netoBase : 0,
+    margenProy: netoProy > 0 ? gananciaProy / netoProy : 0,
+    bePct, pago: real.pago, gastos: real.gastos, claimsGofo, netoBase, netoProy,
   }
   const difIngreso = resumen.ingresoProy - resumen.ingresoBase
   const difGanancia = resumen.gananciaProy - resumen.gananciaBase
@@ -398,12 +403,18 @@ export default function Simulador({ embed = false }) {
         <EstadoVacio titulo="Sin rutas" texto="No hay rutas para simular con esta selección." mostrarBoton={false} />
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap gap-3">
-            <KPI label="Ingreso Gofo (actual)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" sub="ingreso neto" />
+          <div className="mb-2 flex flex-wrap gap-3">
+            <KPI label="Ingreso Gofo (entregas)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" sub="lo que paga Gofo" />
+            {Math.abs(resumen.claimsGofo) > 0.01 && <KPI label="Claims (Gofo descuenta)" value={money(resumen.claimsGofo)} icon={AlertTriangle} accent="red" sub="rebaja de Gofo por claims" />}
             <KPI label="Pago a choferes REAL (fijo)" value={money(resumen.pago)} icon={Receipt} accent="navy" sub="tarifa real · no cambia" />
             <KPI label="Gastos fijos" value={money(resumen.gastos)} icon={Building2} accent="slate" sub="managers de la(s) ciudad(es)" />
             <KPI label="Ganancia REAL actual" value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`margen ${pct(resumen.margenBase)}`} />
           </div>
+          <p className="mb-4 text-xs text-slate-400">
+            Cuadre: Ingreso Gofo <b>{money(resumen.ingresoBase)}</b>
+            {Math.abs(resumen.claimsGofo) > 0.01 && <> − claims <b>{money(-resumen.claimsGofo)}</b></>}
+            {' '}− pago choferes <b>{money(resumen.pago)}</b> − gastos fijos <b>{money(resumen.gastos)}</b> = <b className="text-brand-navy dark:text-slate-200">{money(resumen.gananciaBase)}</b> de ganancia real.
+          </p>
 
           <Card className={`mb-4 flex items-start gap-3 p-4 ${resumen.bePct > -0.05 ? 'border-l-4 border-l-rose-500' : ''}`}>
             <Target size={20} strokeWidth={1.8} className={resumen.bePct > -0.05 ? 'text-rose-500' : 'text-amber-500'} />
