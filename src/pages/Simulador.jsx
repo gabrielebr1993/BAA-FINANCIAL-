@@ -1,14 +1,15 @@
-// Proyección de precios de Gofo (menú "Proyección"). SOLO simulación/lectura: no
-// cambia ningún precio, tarifa ni dato real. Elige una o VARIAS ciudades (multiselección)
-// → factura → edita precios (por %, por rango de peso o por celda) → "Generar
-// proyección" → resumen con KPIs, gráficas y recomendaciones. La ganancia usa el pago
-// REAL a choferes (tarifas reales, fijas: no cambia cuando Gofo cambia sus precios).
+// Proyección de precios de Gofo (menú "Proyección" / pestaña en Rutas). SOLO
+// simulación/lectura: no cambia ningún precio, tarifa ni dato real. Elige una o VARIAS
+// ciudades → (cada ciudad usa SU factura) → edita precios de las rutas de todas ellas →
+// "Generar proyección" → resumen con KPIs, gráficas y recomendaciones.
+// La GANANCIA mostrada es la REAL (igual que Financiero): ingreso neto − pago real a
+// choferes − gastos fijos. El pago a choferes es fijo (no cambia con los precios de Gofo).
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { updateDoc, doc } from 'firebase/firestore'
+import { updateDoc, doc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
-import { calcularPagos, rutasConGanancia } from '../utils/calc'
+import { calcularPagos, rutasConGanancia, gananciaRealDe } from '../utils/calc'
 import { construirBase, proyectar } from '../utils/simulador'
 import { reprocesarFactura } from '../utils/reprocesar'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -19,23 +20,23 @@ import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
 import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check } from 'lucide-react'
 
 const MENSUAL = 4.3
+const ORDEN_RANGO = ['(promedio)', '0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 const fFecha = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '')
 const bePctTxt = (p) => `−${Math.abs(Math.round((p || 0) * 1000) / 10)}%`
 
-function recomendar(r, filas, esAgregado) {
+function recomendar(r, filas, esResumen) {
   const recs = []
   const dif = r.gananciaProy - r.gananciaBase
   const mensual = dif * MENSUAL
-  const uni = esAgregado ? 'ciudad(es)' : 'ruta(s)'
-  if (r.gananciaProy < 0) recs.push({ nivel: 'critico', texto: `Con estos precios, ${r.label} quedaría en PÉRDIDA (${money(r.gananciaProy)}). No es sostenible.` })
-  else if (r.margenProy < 0.05) recs.push({ nivel: 'aviso', texto: `El margen de ${r.label} bajaría a ${pct(r.margenProy)} (menos de 5%). Queda muy justo.` })
-  else recs.push({ nivel: 'ok', texto: `${r.label} seguiría en positivo: ${money(r.gananciaProy)} de ganancia (margen ${pct(r.margenProy)}).` })
+  const uni = esResumen ? 'ciudad(es)' : 'ruta(s)'
+  if (r.gananciaProy < 0) recs.push({ nivel: 'critico', texto: `Con estos precios, ${r.label} quedaría en PÉRDIDA (${money(r.gananciaProy)} de ganancia real). No es sostenible.` })
+  else if (r.margenProy < 0.05) recs.push({ nivel: 'aviso', texto: `El margen real de ${r.label} bajaría a ${pct(r.margenProy)} (menos de 5%). Queda muy justo.` })
+  else recs.push({ nivel: 'ok', texto: `${r.label} seguiría en positivo: ${money(r.gananciaProy)} de ganancia real (margen ${pct(r.margenProy)}).` })
   if (dif < -0.01) recs.push({ nivel: 'aviso', texto: `Dejarías de ganar ${money(Math.abs(dif))} por semana ≈ ${money(Math.abs(mensual))} al mes.` })
   else if (dif > 0.01) recs.push({ nivel: 'ok', texto: `Ganarías ${money(dif)} más por semana ≈ ${money(mensual)} al mes.` })
   const perd = filas.filter((f) => f.gananciaProy < 0)
-  if (perd.length) recs.push({ nivel: 'critico', texto: `${perd.length} ${uni} quedarían en pérdida: ${perd.slice(0, 4).map((f) => f.name).join(', ')}${perd.length > 4 ? '…' : ''}.` })
-  const bajo = filas.filter((f) => f.gananciaProy >= 0 && f.ingresoProy > 0 && f.gananciaProy / f.ingresoProy < 0.05)
-  if (bajo.length) recs.push({ nivel: 'aviso', texto: `${bajo.length} ${uni} con margen bajo (<5%): ${bajo.slice(0, 4).map((f) => f.name).join(', ')}${bajo.length > 4 ? '…' : ''}.` })
+  if (perd.length) recs.push({ nivel: 'critico', texto: `${perd.length} ${uni} con entregas por debajo de su costo: ${perd.slice(0, 4).map((f) => f.name).join(', ')}${perd.length > 4 ? '…' : ''}.` })
   if (filas.length > 1) {
     const peor = [...filas].sort((a, b) => (a.gananciaProy - a.gananciaBase) - (b.gananciaProy - b.gananciaBase))[0]
     const d = peor.gananciaProy - peor.gananciaBase
@@ -52,12 +53,12 @@ const NIVEL_UI = {
 }
 
 export default function Simulador({ embed = false }) {
-  const { invoices, drivers, ciudadesEmpresa, reloadInvoices } = useData()
+  const { invoices, drivers, managers, ciudadesEmpresa, activeCompanyId, reloadInvoices } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const [dragRepro, setDragRepro] = useState(false)
 
-  const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas; 1 = detalle; 2+ = subconjunto
+  const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas (resumen); 1+ = detalle editable
   const [abreCiudades, setAbreCiudades] = useState(false)
   const [facturaSimId, setFacturaSimId] = useState('')
   const [pctGlobal, setPctGlobal] = useState(0)
@@ -66,6 +67,7 @@ export default function Simulador({ embed = false }) {
   const [generado, setGenerado] = useState(false)
   const [reproMsg, setReproMsg] = useState(null)
   const [reprocesando, setReprocesando] = useState(false)
+  const [claimsInv, setClaimsInv] = useState([])
   const fileRef = useRef(null)
   const cRef = useRef(null)
   const defHecho = useRef(false)
@@ -82,18 +84,27 @@ export default function Simulador({ embed = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, ciudadesEmpresa])
 
-  // Modelo de selección: 1 ciudad → detalle editable; 0 (todas) o 2+ → agregado.
-  const ciudadUnica = ciudadesSel.length === 1 ? ciudadesSel[0] : ''
-  const esAgregado = ciudadesSel.length !== 1
-  const ciudadesAgg = ciudadesSel.length ? ciudadesSel : ciudades.map((c) => c.codigo)
+  const esResumen = ciudadesSel.length === 0        // "Todas" → resumen por ciudad (solo %)
+  const unaCiudad = ciudadesSel.length === 1        // detalle con selector de factura
+  const ciudadUnica = unaCiudad ? ciudadesSel[0] : ''
   const ciudadesSelKey = [...ciudadesSel].sort().join('|')
 
   const facturasDe = (codigo) => (invoices || [])
     .filter((i) => (i.resumenRutas || []).some((r) => r.ciudad === codigo) || i.ciudad === codigo)
     .sort((a, b) => (b.fechaInicio?.getTime?.() || 0) - (a.fechaInicio?.getTime?.() || 0))
   const facturasCiudad = useMemo(() => (ciudadUnica ? facturasDe(ciudadUnica) : []), [invoices, ciudadUnica]) // eslint-disable-line react-hooks/exhaustive-deps
+  const invSel = useMemo(() => (invoices || []).find((i) => i.id === facturaSimId) || null, [invoices, facturaSimId])
 
-  // Default: primera ciudad (vista detalle) una sola vez.
+  // Unidades = (ciudad, factura) del alcance. Cada ciudad usa SU factura: la elegida si
+  // es una sola ciudad; la más reciente de cada ciudad si son varias (o "Todas").
+  const unidades = useMemo(() => {
+    const cods = esResumen ? ciudades.map((c) => c.codigo) : ciudadesSel
+    return cods.map((code) => ({ ciudad: code, inv: (unaCiudad && invSel) ? invSel : facturasDe(code)[0] })).filter((u) => u.inv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esResumen, ciudadesSelKey, ciudades, invSel, unaCiudad, invoices])
+  const unidadesKey = unidades.map((u) => u.inv.id).join(',')
+
+  // Defaults
   useEffect(() => { if (!defHecho.current && ciudades.length) { defHecho.current = true; setCiudadesSel([ciudades[0].codigo]) } }, [ciudades])
   useEffect(() => {
     if (!ciudadUnica) return
@@ -104,13 +115,33 @@ export default function Simulador({ embed = false }) {
   const pesoKey = JSON.stringify(pesoFijo)
   const celdaKey = JSON.stringify(celda)
   useEffect(() => { setGenerado(false) }, [pctGlobal, pesoKey, celdaKey, ciudadesSelKey, facturaSimId])
-
   useEffect(() => {
     if (!abreCiudades) return
     const fuera = (e) => { if (cRef.current && !cRef.current.contains(e.target)) setAbreCiudades(false) }
     document.addEventListener('mousedown', fuera)
     return () => document.removeEventListener('mousedown', fuera)
   }, [abreCiudades])
+
+  // Claims de las facturas del alcance (para la ganancia REAL, igual que Financiero).
+  useEffect(() => {
+    let cancel = false
+    const ids = unidades.map((u) => u.inv.id).filter(Boolean)
+    const sems = [...new Set(unidades.map((u) => u.inv.semana).filter(Boolean))]
+    if (!activeCompanyId || (!ids.length && !sems.length)) { setClaimsInv([]); return }
+    ;(async () => {
+      try {
+        const qs = [
+          ...ids.map((id) => getDocs(query(collection(db, 'claims'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', id)))),
+          ...sems.map((s) => getDocs(query(collection(db, 'claims'), where('companyId', '==', activeCompanyId), where('semana', '==', s)))),
+        ]
+        const snaps = await Promise.all(qs)
+        const map = {}
+        for (const snap of snaps) for (const d of snap.docs) map[d.id] = { id: d.id, ...d.data() }
+        if (!cancel) setClaimsInv(Object.values(map))
+      } catch { if (!cancel) setClaimsInv([]) }
+    })()
+    return () => { cancel = true }
+  }, [activeCompanyId, unidadesKey])
 
   const costoDe = (inv, ciudad, base) => {
     const rg = rutasConGanancia(inv, drivers, ciudad)
@@ -124,37 +155,57 @@ export default function Simulador({ embed = false }) {
     return out
   }
 
-  const invSel = useMemo(() => (invoices || []).find((i) => i.id === facturaSimId) || null, [invoices, facturaSimId])
-  const base = useMemo(() => (!esAgregado && invSel && ciudadUnica ? construirBase(invSel, ciudadUnica) : { rutas: [], rangos: [], tieneDetalle: false }), [invSel, ciudadUnica, esAgregado])
-  const costoPorRuta = useMemo(() => (invSel && !esAgregado ? costoDe(invSel, ciudadUnica, base) : {}), [invSel, ciudadUnica, esAgregado, base]) // eslint-disable-line react-hooks/exhaustive-deps
-  const ov = useMemo(() => ({ pct: pctGlobal, peso: pesoFijo, celda }), [pctGlobal, pesoFijo, celda])
-  const proj = useMemo(() => proyectar(base, ov, costoPorRuta), [base, ov, costoPorRuta])
-
-  // Agregado: por cada ciudad elegida, su factura más reciente, con el % global.
-  const proyAgg = useMemo(() => {
-    if (!esAgregado) return []
-    return ciudadesAgg.map((code) => {
-      const inv = facturasDe(code)[0]
-      if (!inv) return null
-      const b = construirBase(inv, code)
-      if (!b.rutas.length) return null
-      const p = proyectar(b, { pct: pctGlobal }, costoDe(inv, code, b))
-      return { codigo: code, nombre: nombreDeCiudad(code), semana: inv.semana, tieneDetalle: b.tieneDetalle, ...p }
-    }).filter(Boolean)
+  // Base combinada: rutas de TODAS las ciudades del alcance (clave única ciudad::ruta).
+  const baseMulti = useMemo(() => {
+    const rutas = []; const rangosSet = new Set(); const costo = {}; let tieneDetalle = false; let ingresoIndTotal = 0
+    for (const u of unidades) {
+      const b = construirBase(u.inv, u.ciudad)
+      const c = costoDe(u.inv, u.ciudad, b)
+      if (b.tieneDetalle) tieneDetalle = true
+      for (const r of b.rutas) {
+        const key = `${u.ciudad}::${r.ruta}`
+        rutas.push({ ...r, ruta: key, rutaNombre: r.ruta, ciudad: u.ciudad, nombreCiudad: nombreDeCiudad(u.ciudad) })
+        costo[key] = c[r.ruta] || 0
+        ingresoIndTotal += r.ingresoInd || 0
+        Object.keys(r.celdas).forEach((rg) => rangosSet.add(rg))
+      }
+    }
+    return { rutas, rangos: ORDEN_RANGO.filter((rg) => rangosSet.has(rg)), tieneDetalle, costo, ingresoIndTotal: r2(ingresoIndTotal) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esAgregado, ciudadesSelKey, ciudades, pctGlobal, invoices, drivers])
+  }, [unidadesKey])
 
-  const totAgg = useMemo(() => {
-    const s = { ingresoBase: 0, ingresoProy: 0, gananciaBase: 0, gananciaProy: 0, pagoCiudad: 0, ingresoIndTotal: 0, ingresoDoblesTotal: 0 }
-    for (const c of proyAgg) { s.ingresoBase += c.ingresoBase; s.ingresoProy += c.ingresoProy; s.gananciaBase += c.gananciaBase; s.gananciaProy += c.gananciaProy; s.pagoCiudad += c.pagoCiudad; s.ingresoIndTotal += c.ingresoIndTotal; s.ingresoDoblesTotal += c.ingresoDoblesTotal }
-    const r2 = (n) => Math.round(n * 100) / 100
-    return { ...s, ingresoBase: r2(s.ingresoBase), ingresoProy: r2(s.ingresoProy), gananciaBase: r2(s.gananciaBase), gananciaProy: r2(s.gananciaProy), margenBase: s.ingresoBase > 0 ? s.gananciaBase / s.ingresoBase : 0, margenProy: s.ingresoProy > 0 ? s.gananciaProy / s.ingresoProy : 0, bePctGlobal: s.ingresoIndTotal > 0 ? (s.pagoCiudad - s.ingresoDoblesTotal) / s.ingresoIndTotal - 1 : 0 }
-  }, [proyAgg])
+  const ov = useMemo(() => ({ pct: pctGlobal, peso: pesoFijo, celda }), [pctGlobal, pesoFijo, celda])
+  const proj = useMemo(() => proyectar({ rutas: baseMulti.rutas, rangos: baseMulti.rangos, tieneDetalle: baseMulti.tieneDetalle }, ov, baseMulti.costo), [baseMulti, ov])
+
+  // Ganancia REAL del alcance (suma por ciudad, como Financiero) + delta por entregas.
+  const real = useMemo(() => {
+    let gan = 0, neto = 0, pago = 0, gastos = 0
+    const porCiudad = []
+    for (const u of unidades) {
+      const g = gananciaRealDe(u.inv, claimsInv, drivers, managers, u.ciudad)
+      gan += g.gananciaReal; neto += g.ingresoNeto; pago += g.costoChoferes; gastos += g.costoManagers
+      porCiudad.push({ codigo: u.ciudad, nombre: nombreDeCiudad(u.ciudad), semana: u.inv.semana, inv: u.inv, ...g })
+    }
+    return { gananciaReal: r2(gan), ingresoNeto: r2(neto), pago: r2(pago), gastos: r2(gastos), porCiudad }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unidadesKey, claimsInv, drivers, managers])
+
+  // Delta de entregas por ciudad (para el resumen por ciudad en modo "Todas").
+  const proyCiudad = useMemo(() => real.porCiudad.map((rc) => {
+    const b = construirBase(rc.inv, rc.codigo)
+    const p = proyectar(b, { pct: pctGlobal }, costoDe(rc.inv, rc.codigo, b))
+    const delta = r2(p.ingresoProy - p.ingresoBase)
+    const ganBase = rc.gananciaReal, ganProy = r2(rc.gananciaReal + delta)
+    const ingBase = rc.ingresoNeto, ingProy = r2(rc.ingresoNeto + delta)
+    const beMax = p.ingresoIndTotal > 0 ? -rc.gananciaReal / p.ingresoIndTotal : 0
+    return { codigo: rc.codigo, nombre: rc.nombre, semana: rc.semana, tieneDetalle: b.tieneDetalle, ingresoBase: ingBase, ingresoProy: ingProy, gananciaBase: ganBase, gananciaProy: ganProy, bePctCiudad: beMax }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [real, pctGlobal])
 
   const resetear = () => { setPctGlobal(0); setPesoFijo({}); setCelda({}) }
   const hayCambios = pctGlobal !== 0 || Object.values(pesoFijo).some((v) => v !== '' && v != null) || Object.values(celda).some((v) => v !== '' && v != null)
   const pctTxt = `${pctGlobal > 0 ? '+' : ''}${Math.round(pctGlobal * 100)}%`
-  const hayResultado = esAgregado ? proyAgg.length > 0 : base.rutas.length > 0
+  const hayResultado = baseMulti.rutas.length > 0
 
   const etiquetaCiudades = ciudadesSel.length === 0 ? 'Todas las ciudades' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadesSel[0]) : `${ciudadesSel.length} ciudades`
   const toggleCiudad = (code) => { setCiudadesSel((s) => (s.includes(code) ? s.filter((x) => x !== code) : [...s, code])); resetear() }
@@ -164,23 +215,33 @@ export default function Simulador({ embed = false }) {
     if (!files.length || !invSel) return
     setReproMsg(null); setReprocesando(true)
     try {
-      const r = await reprocesarFactura(invSel, files)
-      if (r) { setReproMsg(r); if (r.tipo === 'ok') await reloadInvoices() }
-    } catch (err) {
-      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message })
-    } finally { setReprocesando(false) }
+      const rr = await reprocesarFactura(invSel, files)
+      if (rr) { setReproMsg(rr); if (rr.tipo === 'ok') await reloadInvoices() }
+    } catch (err) { setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message }) }
+    finally { setReprocesando(false) }
   }
   const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; procesarArchivos(f) }
 
-  const resumen = esAgregado
-    ? { label: ciudadesSel.length === 0 ? 'el negocio' : 'las ciudades elegidas', ingresoBase: totAgg.ingresoBase, ingresoProy: totAgg.ingresoProy, gananciaBase: totAgg.gananciaBase, gananciaProy: totAgg.gananciaProy, margenBase: totAgg.margenBase, margenProy: totAgg.margenProy, bePct: totAgg.bePctGlobal, pagoCiudad: totAgg.pagoCiudad }
-    : { label: nombreDeCiudad(ciudadUnica), ingresoBase: proj.ingresoBase, ingresoProy: proj.ingresoProy, gananciaBase: proj.gananciaBase, gananciaProy: proj.gananciaProy, margenBase: proj.margenBase, margenProy: proj.margenProy, bePct: proj.bePctCiudad, pagoCiudad: proj.pagoCiudad }
-  const filas = esAgregado
-    ? proyAgg.map((c) => ({ name: c.nombre, gananciaBase: c.gananciaBase, gananciaProy: c.gananciaProy, ingresoProy: c.ingresoProy }))
-    : proj.rutas.map((r) => ({ name: r.ruta, gananciaBase: r.gananciaBase, gananciaProy: r.gananciaProy, ingresoProy: r.ingresoProy }))
+  // Resumen REAL (anclado a la ganancia real; el cambio de precios mueve solo entregas).
+  const delta = r2(proj.ingresoProy - proj.ingresoBase)
+  const ingresoBase = real.ingresoNeto
+  const ingresoProy = r2(real.ingresoNeto + delta)
+  const gananciaBase = real.gananciaReal
+  const gananciaProy = r2(real.gananciaReal + delta)
+  const bePct = baseMulti.ingresoIndTotal > 0 ? -real.gananciaReal / baseMulti.ingresoIndTotal : 0
+  const resumen = {
+    label: ciudadesSel.length === 0 ? 'el negocio' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadUnica) : 'las ciudades elegidas',
+    ingresoBase, ingresoProy, gananciaBase, gananciaProy,
+    margenBase: ingresoBase > 0 ? gananciaBase / ingresoBase : 0,
+    margenProy: ingresoProy > 0 ? gananciaProy / ingresoProy : 0,
+    bePct, pago: real.pago, gastos: real.gastos,
+  }
   const difIngreso = resumen.ingresoProy - resumen.ingresoBase
   const difGanancia = resumen.gananciaProy - resumen.gananciaBase
-  const recs = generado ? recomendar(resumen, filas, esAgregado) : []
+  const filas = esResumen
+    ? proyCiudad.map((c) => ({ name: c.nombre, gananciaBase: c.gananciaBase, gananciaProy: c.gananciaProy, ingresoProy: c.ingresoProy }))
+    : proj.rutas.map((r) => ({ name: baseMulti.rutas.find((x) => x.ruta === r.ruta)?.rutaNombre || r.ruta, gananciaBase: r.gananciaBase, gananciaProy: r.gananciaProy, ingresoProy: r.ingresoProy }))
+  const recs = generado ? recomendar(resumen, filas, esResumen) : []
   const comparativo = [
     { name: 'Ingreso', Actual: Math.round(resumen.ingresoBase), Proyectado: Math.round(resumen.ingresoProy) },
     { name: 'Ganancia', Actual: Math.round(resumen.gananciaBase), Proyectado: Math.round(resumen.gananciaProy) },
@@ -193,27 +254,28 @@ export default function Simulador({ embed = false }) {
   const colorCelda = (proyec, actual) => (proyec < actual - 0.001 ? 'text-rose-600 border-rose-300 dark:text-rose-400' : proyec > actual + 0.001 ? 'text-emerald-600 border-emerald-300 dark:text-emerald-400' : 'text-slate-600 border-slate-200 dark:text-slate-300')
 
   function exportar(tipo) {
-    if (esAgregado) {
-      const filasX = proyAgg.map((c) => ({ Ciudad: c.nombre, Semana: c.semana || '', 'Ingreso actual': Math.round(c.ingresoBase), 'Ingreso proyectado': Math.round(c.ingresoProy), 'Ganancia actual': Math.round(c.gananciaBase), 'Ganancia proyectada': Math.round(c.gananciaProy), 'Δ Ganancia': Math.round(c.gananciaProy - c.gananciaBase), Equilibrio: bePctTxt(c.bePctCiudad) }))
+    if (esResumen) {
+      const filasX = proyCiudad.map((c) => ({ Ciudad: c.nombre, Semana: c.semana || '', 'Ingreso actual': Math.round(c.ingresoBase), 'Ingreso proyectado': Math.round(c.ingresoProy), 'Ganancia real actual': Math.round(c.gananciaBase), 'Ganancia real proyectada': Math.round(c.gananciaProy), 'Δ': Math.round(c.gananciaProy - c.gananciaBase), Equilibrio: bePctTxt(c.bePctCiudad) }))
       const nombre = `proyeccion_${etiquetaCiudades}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
       if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Ciudades', rows: filasX }])
-      return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ciudad', head: ['Ciudad', 'Semana', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proyAgg.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
+      return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ciudad', head: ['Ciudad', 'Semana', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ', 'Equilibrio'], body: proyCiudad.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
     }
-    const filasX = proj.rutas.map((r) => ({ Ruta: r.ruta, 'Ingreso actual': Math.round(r.ingresoBase), 'Ingreso proyectado': Math.round(r.ingresoProy), 'Ganancia actual': Math.round(r.gananciaBase), 'Ganancia proyectada': Math.round(r.gananciaProy), 'Δ Ganancia': Math.round(r.gananciaProy - r.gananciaBase), Equilibrio: bePctTxt(r.bePct) }))
-    const nombre = `proyeccion_${nombreDeCiudad(ciudadUnica)}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
+    const filasX = proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return { Ciudad: b.nombreCiudad || '', Ruta: b.rutaNombre || r.ruta, 'Ingreso actual': Math.round(r.ingresoBase), 'Ingreso proyectado': Math.round(r.ingresoProy), 'Ganancia (ruta) proy.': Math.round(r.gananciaProy), 'Δ ruta': Math.round(r.gananciaProy - r.gananciaBase) } })
+    const nombre = `proyeccion_${etiquetaCiudades}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
     if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Rutas', rows: filasX }])
-    return exportarPDF(nombre, `Proyección · ${nombreDeCiudad(ciudadUnica)} (${pctTxt})`, invSel?.semana || '', [{ titulo: 'Proyección por ruta', head: ['Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proj.rutas.map((r) => [r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaBase), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase), bePctTxt(r.bePct)]) }])
+    return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ruta', head: ['Ciudad', 'Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. ruta proy.', 'Δ ruta'], body: proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return [b.nombreCiudad || '', b.rutaNombre || r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase)] }) }])
   }
+
+  const variasCiudades = unidades.length > 1
 
   return (
     <div>
       {!embed && <PageTitle>Proyección</PageTitle>}
       <Aviso tipo="info" className="mb-4">
-        <b>Simulador de precios.</b> Proyecta qué pasa con tu ingreso y tu ganancia si Gofo cambia sus precios. Es
-        <b> solo simulación</b>: no cambia ningún precio, tarifa ni dato real. El pago a los choferes usa la <b>tarifa real</b> de cada chofer y es fijo (no cambia con los precios de Gofo).
+        <b>Simulador de precios.</b> Proyecta tu ingreso y tu <b>ganancia REAL</b> (igual que Financiero: ingreso neto − pago a choferes − gastos fijos) si Gofo cambia sus precios. Es
+        <b> solo simulación</b>: no cambia ningún dato. El pago a los choferes usa la <b>tarifa real</b> y es fijo.
       </Aviso>
 
-      {/* Selectores: multiselección de ciudades + factura */}
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="relative" ref={cRef}>
@@ -236,11 +298,11 @@ export default function Simulador({ embed = false }) {
                     </button>
                   )
                 })}
-                {ciudadesSel.length >= 2 && <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Proyectando {ciudadesSel.length} ciudades combinadas.</div>}
+                {ciudadesSel.length >= 2 && <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Editas las rutas de {ciudadesSel.length} ciudades y ves su proyección combinada.</div>}
               </div>
             )}
           </div>
-          {!esAgregado && (
+          {unaCiudad && (
             <div>
               <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Receipt size={13} /> Factura</div>
               <Select value={facturaSimId} onChange={(e) => { setFacturaSimId(e.target.value); resetear() }} className="min-w-[220px]">
@@ -248,8 +310,8 @@ export default function Simulador({ embed = false }) {
               </Select>
             </div>
           )}
-          <span className="text-xs text-slate-400">{esAgregado ? `${proyAgg.length} ciudad(es) · factura más reciente de cada una` : `${base.rutas.length} ruta(s) en ${nombreDeCiudad(ciudadUnica)}`}</span>
-          {!esAgregado && invSel && (base.tieneDetalle
+          <span className="text-xs text-slate-400">{esResumen ? `${unidades.length} ciudad(es) · factura más reciente de cada una` : `${baseMulti.rutas.length} ruta(s) · ${unidades.length} ciudad(es)`}</span>
+          {unaCiudad && invSel && (baseMulti.tieneDetalle
             ? (
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
@@ -268,13 +330,13 @@ export default function Simulador({ embed = false }) {
 
       {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-4">{reproMsg.txt}</Aviso>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
-      {!esAgregado && invSel && !base.tieneDetalle && (
+      {unaCiudad && invSel && !baseMulti.tieneDetalle && (
         <Card className="mb-4 p-4">
           <div className="mb-3 flex items-center gap-2">
             <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
             <div>
               <div className="font-semibold text-brand-navy dark:text-slate-100">Esta factura usa el precio PROMEDIO por ruta</div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso (0-1lb, 1-5lb…). Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso. Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
             </div>
           </div>
           <div
@@ -296,16 +358,17 @@ export default function Simulador({ embed = false }) {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap gap-3">
-            <KPI label="Ingreso Gofo (actual)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" />
-            <KPI label="Pago a choferes REAL (fijo)" value={money(resumen.pagoCiudad)} icon={Receipt} accent="navy" sub="tarifa real · no cambia con los precios" />
-            <KPI label="Ganancia actual" value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`margen ${pct(resumen.margenBase)}`} />
+            <KPI label="Ingreso Gofo (actual)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" sub="ingreso neto" />
+            <KPI label="Pago a choferes REAL (fijo)" value={money(resumen.pago)} icon={Receipt} accent="navy" sub="tarifa real · no cambia" />
+            <KPI label="Gastos fijos" value={money(resumen.gastos)} icon={Building2} accent="slate" sub="managers de la(s) ciudad(es)" />
+            <KPI label="Ganancia REAL actual" value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`margen ${pct(resumen.margenBase)}`} />
           </div>
 
           <Card className={`mb-4 flex items-start gap-3 p-4 ${resumen.bePct > -0.05 ? 'border-l-4 border-l-rose-500' : ''}`}>
             <Target size={20} strokeWidth={1.8} className={resumen.bePct > -0.05 ? 'text-rose-500' : 'text-amber-500'} />
             <div>
               <div className="font-semibold text-brand-navy dark:text-slate-100">Punto de equilibrio de {resumen.label}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">Si Gofo baja sus precios <b>más de {Math.abs(Math.round(resumen.bePct * 1000) / 10)}%</b> (sobre las primeras entregas), la ganancia llega a <b>$0</b>. Ese es tu margen para negociar.</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">Si Gofo baja sus precios <b>más de {Math.abs(Math.round(resumen.bePct * 1000) / 10)}%</b> (sobre las primeras entregas), la <b>ganancia real</b> llega a <b>$0</b>. Ese es tu margen para negociar.</div>
             </div>
           </Card>
 
@@ -326,11 +389,11 @@ export default function Simulador({ embed = false }) {
                 <button onClick={() => setPctGlobal(0)} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300">0%</button>
               </div>
             </div>
-            {!esAgregado && base.tieneDetalle && (
+            {!esResumen && baseMulti.tieneDetalle && (
               <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
                 <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Fijar precio por rango de peso (todas las rutas):</div>
                 <div className="flex flex-wrap gap-2">
-                  {base.rangos.map((rg) => (
+                  {baseMulti.rangos.filter((rg) => rg !== '(promedio)').map((rg) => (
                     <div key={rg} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 dark:border-slate-700">
                       <span className="text-xs font-medium text-slate-500">{rg}</span>
                       <Input type="number" step="0.01" min="0" className="w-20" placeholder="$" value={pesoFijo[rg] ?? ''} onChange={(e) => setPesoFijo((s) => ({ ...s, [rg]: e.target.value }))} />
@@ -340,40 +403,41 @@ export default function Simulador({ embed = false }) {
                 <p className="mt-1.5 text-[11px] text-slate-400">Prioridad: precio de una celda &gt; precio fijo por peso &gt; % global &gt; precio actual.</p>
               </div>
             )}
-            {esAgregado && <p className="mt-2 text-[11px] text-slate-400">Con varias ciudades se aplica el % global a la factura más reciente de cada una. Para editar precios por ruta o por peso, elige una sola ciudad.</p>}
+            {esResumen && <p className="mt-2 text-[11px] text-slate-400">En "Todas las ciudades" se aplica el % global a la factura más reciente de cada una. Elige ciudades específicas para editar precios por ruta.</p>}
           </Card>
 
-          {!esAgregado ? (
+          {!esResumen ? (
             <Card className="mb-4 p-4">
-              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Precios por ruta</h3>
+              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Precios por ruta{variasCiudades ? ` · ${unidades.length} ciudades` : ''}</h3>
               <p className="mb-3 text-xs text-slate-400">
-                El <b>precio actual</b> (grande) es el dato real de la factura. Escribe abajo el <b>precio nuevo</b>. <span className="text-rose-600">Rojo</span> = Gofo baja · <span className="text-emerald-600">verde</span> = sube.
-                {!base.tieneDetalle && ' Esta factura no trae desglose por peso; se usa el precio promedio por ruta.'}
+                El <b>precio actual</b> (grande) es el dato real de la factura de cada ciudad. Escribe el <b>precio nuevo</b>. <span className="text-rose-600">Rojo</span> = baja · <span className="text-emerald-600">verde</span> = sube. La ganancia por ruta es a nivel de entregas (los gastos fijos entran en el total).
               </p>
               <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      {variasCiudades && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
                       <th className="px-2.5 py-2.5 text-left font-semibold">Ruta</th>
-                      {base.rangos.map((rg) => <th key={rg} className="px-2 py-2.5 text-center font-semibold">{rg === '(promedio)' ? 'Precio/paq' : rg}</th>)}
+                      {baseMulti.rangos.map((rg) => <th key={rg} className="px-2 py-2.5 text-center font-semibold">{rg === '(promedio)' ? 'Precio/paq' : rg}</th>)}
                       <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Δ Gan.</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">Δ Ingreso</th>
                     </tr>
                   </thead>
                   <tbody>
                     {proj.rutas.map((r) => {
-                      const dG = r.gananciaProy - r.gananciaBase
+                      const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}
+                      const dI = r.ingresoProy - r.ingresoBase
                       return (
-                        <tr key={r.ruta} className={`border-t border-slate-100 dark:border-slate-700/50 ${r.gananciaProy < 0 ? 'bg-rose-50/60 dark:bg-rose-500/5' : ''}`}>
-                          <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{r.ruta}</td>
-                          {base.rangos.map((rg) => {
+                        <tr key={r.ruta} className="border-t border-slate-100 dark:border-slate-700/50">
+                          {variasCiudades && <td className="px-2.5 py-2 text-xs text-slate-500">{b.nombreCiudad}</td>}
+                          <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{b.rutaNombre}</td>
+                          {baseMulti.rangos.map((rg) => {
                             const c = r.celdas[rg]
                             if (!c) return <td key={rg} className="px-2 py-2 text-center text-slate-300">—</td>
                             const k = `${r.ruta}||${rg}`
                             const val = celda[k]
                             const proyec = (val != null && val !== '' && isFinite(Number(val))) ? Number(val)
-                              : (base.tieneDetalle && pesoFijo[rg] != null && pesoFijo[rg] !== '' ? Number(pesoFijo[rg]) : c.precio * (1 + pctGlobal))
+                              : (baseMulti.tieneDetalle && pesoFijo[rg] != null && pesoFijo[rg] !== '' ? Number(pesoFijo[rg]) : c.precio * (1 + pctGlobal))
                             return (
                               <td key={rg} className="px-2 py-1.5 text-center">
                                 <div className="text-[15px] font-bold text-brand-navy dark:text-slate-100">{money(c.precio)}</div>
@@ -383,8 +447,7 @@ export default function Simulador({ embed = false }) {
                             )
                           })}
                           <td className="px-2.5 py-2 text-right">{money(r.ingresoProy)}</td>
-                          <td className={`px-2.5 py-2 text-right font-semibold ${r.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-200'}`}>{money(r.gananciaProy)}</td>
-                          <td className={`px-2.5 py-2 text-right font-semibold ${dG < -0.01 ? 'text-rose-600' : dG > 0.01 ? 'text-emerald-600' : 'text-slate-400'}`}>{dG >= 0 ? '+' : ''}{money(dG)}</td>
+                          <td className={`px-2.5 py-2 text-right font-semibold ${dI < -0.01 ? 'text-rose-600' : dI > 0.01 ? 'text-emerald-600' : 'text-slate-400'}`}>{dI >= 0 ? '+' : ''}{money(dI)}</td>
                         </tr>
                       )
                     })}
@@ -394,8 +457,8 @@ export default function Simulador({ embed = false }) {
             </Card>
           ) : (
             <Card className="mb-4 p-4">
-              <div className="mb-1 flex items-center gap-2"><Globe size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Impacto por ciudad ({pctTxt})</h3></div>
-              <p className="mb-3 text-xs text-slate-400">Cada ciudad con su factura más reciente. El % global se aplica a todas.</p>
+              <div className="mb-1 flex items-center gap-2"><Globe size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real por ciudad ({pctTxt})</h3></div>
+              <p className="mb-3 text-xs text-slate-400">Cada ciudad con su factura más reciente. Ganancia real = ingreso neto − pago choferes − gastos fijos.</p>
               <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full min-w-[720px] border-collapse text-[13px]">
                   <thead>
@@ -403,13 +466,13 @@ export default function Simulador({ embed = false }) {
                       <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>
                       <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso actual</th>
                       <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia actual</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia real</th>
                       <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Δ Gan.</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">Δ</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {proyAgg.map((c) => {
+                    {proyCiudad.map((c) => {
                       const dG = c.gananciaProy - c.gananciaBase
                       return (
                         <tr key={c.codigo} className={`border-t border-slate-100 dark:border-slate-700/50 ${c.gananciaProy < 0 ? 'bg-rose-50/60 dark:bg-rose-500/5' : ''}`}>
@@ -426,10 +489,10 @@ export default function Simulador({ embed = false }) {
                   <tfoot>
                     <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
                       <td className="px-2.5 py-2.5">Total</td>
-                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.ingresoBase)}</td>
-                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.ingresoProy)}</td>
-                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.gananciaBase)}</td>
-                      <td className={`px-2.5 py-2.5 text-right ${totAgg.gananciaProy < 0 ? 'text-rose-600' : ''}`}>{money(totAgg.gananciaProy)}</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(resumen.ingresoBase)}</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(resumen.ingresoProy)}</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(resumen.gananciaBase)}</td>
+                      <td className={`px-2.5 py-2.5 text-right ${resumen.gananciaProy < 0 ? 'text-rose-600' : ''}`}>{money(resumen.gananciaProy)}</td>
                       <td className={`px-2.5 py-2.5 text-right ${difGanancia < -0.01 ? 'text-rose-600' : difGanancia > 0.01 ? 'text-emerald-600' : ''}`}>{difGanancia >= 0 ? '+' : ''}{money(difGanancia)}</td>
                     </tr>
                   </tfoot>
@@ -455,7 +518,7 @@ export default function Simulador({ embed = false }) {
                   <div className={`text-sm font-semibold ${difIngreso < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{difIngreso >= 0 ? '+' : ''}{money(difIngreso)}/sem</div>
                 </Card>
                 <Card className={`p-4 ${difGanancia < 0 ? 'border-l-4 border-l-rose-500' : difGanancia > 0 ? 'border-l-4 border-l-emerald-500' : ''}`}>
-                  <div className="text-xs text-slate-400">Ganancia real · actual → proyectada</div>
+                  <div className="text-xs text-slate-400">Ganancia REAL · actual → proyectada</div>
                   <div className={`text-lg font-bold ${resumen.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-100'}`}>{money(resumen.gananciaBase)} → {money(resumen.gananciaProy)}</div>
                   <div className={`text-sm font-semibold ${difGanancia < 0 ? 'text-rose-600' : difGanancia > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{difGanancia < -0.01 ? `Dejarías de ganar ${money(Math.abs(difGanancia))}` : difGanancia > 0.01 ? `Ganarías ${money(difGanancia)}` : 'Sin cambio'}/sem</div>
                 </Card>
@@ -467,13 +530,13 @@ export default function Simulador({ embed = false }) {
               </div>
 
               <div className="mb-4 grid gap-4 lg:grid-cols-2">
-                <ComparativoCard title="Ingreso y ganancia · Actual vs Proyectado" data={comparativo} fmt={(v) => money(v)} />
-                <ImpactoCard title="Impacto por ruta/ciudad (Δ ganancia)" subtitle="Rojo = cae · verde = sube" data={impacto} fmt={(v) => money(v)} />
+                <ComparativoCard title="Ingreso y ganancia real · Actual vs Proyectado" data={comparativo} fmt={(v) => money(v)} />
+                <ImpactoCard title={esResumen ? 'Impacto por ciudad (Δ ganancia)' : 'Impacto por ruta (Δ ingreso)'} subtitle="Rojo = cae · verde = sube" data={impacto} fmt={(v) => money(v)} />
               </div>
 
               <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                <GaugeCard title="Margen actual" value={Math.max(0, resumen.margenBase)} color="#13233f" />
-                <GaugeCard title="Margen proyectado" value={Math.max(0, resumen.margenProy)} color={resumen.margenProy < 0.05 ? '#e11d48' : '#c9a24b'} />
+                <GaugeCard title="Margen real actual" value={Math.max(0, resumen.margenBase)} color="#13233f" />
+                <GaugeCard title="Margen real proyectado" value={Math.max(0, resumen.margenProy)} color={resumen.margenProy < 0.05 ? '#e11d48' : '#c9a24b'} />
               </div>
 
               <Card className="p-4">
