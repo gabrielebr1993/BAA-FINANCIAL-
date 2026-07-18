@@ -1,8 +1,8 @@
 // Proyección de precios de Gofo (menú "Proyección"). SOLO simulación/lectura: no
-// cambia ningún precio, tarifa ni dato real. Elige ciudad (o "Todas") → factura →
-// edita precios (por %, por rango de peso o por celda) → "Generar proyección" →
-// resumen con KPIs, gráficas y recomendaciones. La ganancia real usa las tarifas
-// reales de los choferes (fijas: el pago no cambia cuando Gofo cambia sus precios).
+// cambia ningún precio, tarifa ni dato real. Elige una o VARIAS ciudades (multiselección)
+// → factura → edita precios (por %, por rango de peso o por celda) → "Generar
+// proyección" → resumen con KPIs, gráficas y recomendaciones. La ganancia usa el pago
+// REAL a choferes (tarifas reales, fijas: no cambia cuando Gofo cambia sus precios).
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { updateDoc, doc } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -10,25 +10,23 @@ import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { calcularPagos, rutasConGanancia } from '../utils/calc'
 import { construirBase, proyectar } from '../utils/simulador'
-import { procesarArchivo, combinarArchivos } from '../utils/excel'
+import { reprocesarFactura } from '../utils/reprocesar'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
-import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale } from 'lucide-react'
+import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check } from 'lucide-react'
 
-const TODAS_SIM = '__todas__'
-const MENSUAL = 4.3 // semanas por mes (aprox) para el estimado mensual
+const MENSUAL = 4.3
 const fFecha = (d) => (d instanceof Date && !isNaN(d) ? d.toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '')
 const bePctTxt = (p) => `−${Math.abs(Math.round((p || 0) * 1000) / 10)}%`
 
-// Recomendaciones automáticas a partir del resumen y las filas (rutas o ciudades).
-function recomendar(r, filas, esTodas) {
+function recomendar(r, filas, esAgregado) {
   const recs = []
   const dif = r.gananciaProy - r.gananciaBase
   const mensual = dif * MENSUAL
-  const uni = esTodas ? 'ciudad(es)' : 'ruta(s)'
+  const uni = esAgregado ? 'ciudad(es)' : 'ruta(s)'
   if (r.gananciaProy < 0) recs.push({ nivel: 'critico', texto: `Con estos precios, ${r.label} quedaría en PÉRDIDA (${money(r.gananciaProy)}). No es sostenible.` })
   else if (r.margenProy < 0.05) recs.push({ nivel: 'aviso', texto: `El margen de ${r.label} bajaría a ${pct(r.margenProy)} (menos de 5%). Queda muy justo.` })
   else recs.push({ nivel: 'ok', texto: `${r.label} seguiría en positivo: ${money(r.gananciaProy)} de ganancia (margen ${pct(r.margenProy)}).` })
@@ -58,17 +56,18 @@ export default function Simulador() {
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
 
-  const [ciudadSim, setCiudadSim] = useState('')
+  const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas; 1 = detalle; 2+ = subconjunto
+  const [abreCiudades, setAbreCiudades] = useState(false)
   const [facturaSimId, setFacturaSimId] = useState('')
   const [pctGlobal, setPctGlobal] = useState(0)
   const [pesoFijo, setPesoFijo] = useState({})
   const [celda, setCelda] = useState({})
   const [generado, setGenerado] = useState(false)
-  // Reprocesar SOLO para el simulador: extrae el desglose por peso del Excel y lo guarda
-  // en el campo dedicado `simuladorDesglose` (aislado; no toca pagos/ganancias/totales).
   const [reproMsg, setReproMsg] = useState(null)
   const [reprocesando, setReprocesando] = useState(false)
   const fileRef = useRef(null)
+  const cRef = useRef(null)
+  const defHecho = useRef(false)
 
   const nombreDeCiudad = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || nombreCiudad(code)
 
@@ -82,23 +81,35 @@ export default function Simulador() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, ciudadesEmpresa])
 
-  const esTodas = ciudadSim === TODAS_SIM
+  // Modelo de selección: 1 ciudad → detalle editable; 0 (todas) o 2+ → agregado.
+  const ciudadUnica = ciudadesSel.length === 1 ? ciudadesSel[0] : ''
+  const esAgregado = ciudadesSel.length !== 1
+  const ciudadesAgg = ciudadesSel.length ? ciudadesSel : ciudades.map((c) => c.codigo)
+  const ciudadesSelKey = [...ciudadesSel].sort().join('|')
+
   const facturasDe = (codigo) => (invoices || [])
     .filter((i) => (i.resumenRutas || []).some((r) => r.ciudad === codigo) || i.ciudad === codigo)
     .sort((a, b) => (b.fechaInicio?.getTime?.() || 0) - (a.fechaInicio?.getTime?.() || 0))
-  const facturasCiudad = useMemo(() => (esTodas ? [] : facturasDe(ciudadSim)), [invoices, ciudadSim, esTodas]) // eslint-disable-line react-hooks/exhaustive-deps
+  const facturasCiudad = useMemo(() => (ciudadUnica ? facturasDe(ciudadUnica) : []), [invoices, ciudadUnica]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { if (!ciudadSim && ciudades.length) setCiudadSim(ciudades[0].codigo) }, [ciudades, ciudadSim])
+  // Default: primera ciudad (vista detalle) una sola vez.
+  useEffect(() => { if (!defHecho.current && ciudades.length) { defHecho.current = true; setCiudadesSel([ciudades[0].codigo]) } }, [ciudades])
   useEffect(() => {
-    if (esTodas) return
+    if (!ciudadUnica) return
     if (facturasCiudad.length && !facturasCiudad.some((f) => f.id === facturaSimId)) setFacturaSimId(facturasCiudad[0].id)
     if (!facturasCiudad.length) setFacturaSimId('')
-  }, [facturasCiudad, facturaSimId, esTodas])
+  }, [facturasCiudad, facturaSimId, ciudadUnica])
 
-  // Al cambiar CUALQUIER entrada, se oculta el resumen para regenerarlo con lo nuevo.
   const pesoKey = JSON.stringify(pesoFijo)
   const celdaKey = JSON.stringify(celda)
-  useEffect(() => { setGenerado(false) }, [pctGlobal, pesoKey, celdaKey, ciudadSim, facturaSimId])
+  useEffect(() => { setGenerado(false) }, [pctGlobal, pesoKey, celdaKey, ciudadesSelKey, facturaSimId])
+
+  useEffect(() => {
+    if (!abreCiudades) return
+    const fuera = (e) => { if (cRef.current && !cRef.current.contains(e.target)) setAbreCiudades(false) }
+    document.addEventListener('mousedown', fuera)
+    return () => document.removeEventListener('mousedown', fuera)
+  }, [abreCiudades])
 
   const costoDe = (inv, ciudad, base) => {
     const rg = rutasConGanancia(inv, drivers, ciudad)
@@ -113,74 +124,62 @@ export default function Simulador() {
   }
 
   const invSel = useMemo(() => (invoices || []).find((i) => i.id === facturaSimId) || null, [invoices, facturaSimId])
-  const base = useMemo(() => (!esTodas && invSel && ciudadSim ? construirBase(invSel, ciudadSim) : { rutas: [], rangos: [], tieneDetalle: false }), [invSel, ciudadSim, esTodas])
-  const costoPorRuta = useMemo(() => (invSel && !esTodas ? costoDe(invSel, ciudadSim, base) : {}), [invSel, ciudadSim, esTodas, base]) // eslint-disable-line react-hooks/exhaustive-deps
+  const base = useMemo(() => (!esAgregado && invSel && ciudadUnica ? construirBase(invSel, ciudadUnica) : { rutas: [], rangos: [], tieneDetalle: false }), [invSel, ciudadUnica, esAgregado])
+  const costoPorRuta = useMemo(() => (invSel && !esAgregado ? costoDe(invSel, ciudadUnica, base) : {}), [invSel, ciudadUnica, esAgregado, base]) // eslint-disable-line react-hooks/exhaustive-deps
   const ov = useMemo(() => ({ pct: pctGlobal, peso: pesoFijo, celda }), [pctGlobal, pesoFijo, celda])
   const proj = useMemo(() => proyectar(base, ov, costoPorRuta), [base, ov, costoPorRuta])
 
-  const proyTodas = useMemo(() => {
-    if (!esTodas) return []
-    return ciudades.map((c) => {
-      const inv = facturasDe(c.codigo)[0]
+  // Agregado: por cada ciudad elegida, su factura más reciente, con el % global.
+  const proyAgg = useMemo(() => {
+    if (!esAgregado) return []
+    return ciudadesAgg.map((code) => {
+      const inv = facturasDe(code)[0]
       if (!inv) return null
-      const b = construirBase(inv, c.codigo)
+      const b = construirBase(inv, code)
       if (!b.rutas.length) return null
-      const p = proyectar(b, { pct: pctGlobal }, costoDe(inv, c.codigo, b))
-      return { codigo: c.codigo, nombre: c.nombre, semana: inv.semana, tieneDetalle: b.tieneDetalle, ...p }
+      const p = proyectar(b, { pct: pctGlobal }, costoDe(inv, code, b))
+      return { codigo: code, nombre: nombreDeCiudad(code), semana: inv.semana, tieneDetalle: b.tieneDetalle, ...p }
     }).filter(Boolean)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esTodas, ciudades, pctGlobal, invoices, drivers])
+  }, [esAgregado, ciudadesSelKey, ciudades, pctGlobal, invoices, drivers])
 
-  const totTodas = useMemo(() => {
+  const totAgg = useMemo(() => {
     const s = { ingresoBase: 0, ingresoProy: 0, gananciaBase: 0, gananciaProy: 0, pagoCiudad: 0, ingresoIndTotal: 0, ingresoDoblesTotal: 0 }
-    for (const c of proyTodas) { s.ingresoBase += c.ingresoBase; s.ingresoProy += c.ingresoProy; s.gananciaBase += c.gananciaBase; s.gananciaProy += c.gananciaProy; s.pagoCiudad += c.pagoCiudad; s.ingresoIndTotal += c.ingresoIndTotal; s.ingresoDoblesTotal += c.ingresoDoblesTotal }
+    for (const c of proyAgg) { s.ingresoBase += c.ingresoBase; s.ingresoProy += c.ingresoProy; s.gananciaBase += c.gananciaBase; s.gananciaProy += c.gananciaProy; s.pagoCiudad += c.pagoCiudad; s.ingresoIndTotal += c.ingresoIndTotal; s.ingresoDoblesTotal += c.ingresoDoblesTotal }
     const r2 = (n) => Math.round(n * 100) / 100
     return { ...s, ingresoBase: r2(s.ingresoBase), ingresoProy: r2(s.ingresoProy), gananciaBase: r2(s.gananciaBase), gananciaProy: r2(s.gananciaProy), margenBase: s.ingresoBase > 0 ? s.gananciaBase / s.ingresoBase : 0, margenProy: s.ingresoProy > 0 ? s.gananciaProy / s.ingresoProy : 0, bePctGlobal: s.ingresoIndTotal > 0 ? (s.pagoCiudad - s.ingresoDoblesTotal) / s.ingresoIndTotal - 1 : 0 }
-  }, [proyTodas])
+  }, [proyAgg])
 
   const resetear = () => { setPctGlobal(0); setPesoFijo({}); setCelda({}) }
+  const hayCambios = pctGlobal !== 0 || Object.values(pesoFijo).some((v) => v !== '' && v != null) || Object.values(celda).some((v) => v !== '' && v != null)
+  const pctTxt = `${pctGlobal > 0 ? '+' : ''}${Math.round(pctGlobal * 100)}%`
+  const hayResultado = esAgregado ? proyAgg.length > 0 : base.rutas.length > 0
 
-  // Reprocesa la factura seleccionada: re-lee su Excel y le extrae el desglose por peso.
+  const etiquetaCiudades = ciudadesSel.length === 0 ? 'Todas las ciudades' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadesSel[0]) : `${ciudadesSel.length} ciudades`
+  const toggleCiudad = (code) => { setCiudadesSel((s) => (s.includes(code) ? s.filter((x) => x !== code) : [...s, code])); resetear() }
+
   const onReprocesar = async (e) => {
     const files = [...(e.target.files || [])]
     e.target.value = ''
     if (!files.length || !invSel) return
     setReproMsg(null); setReprocesando(true)
     try {
-      const procs = []
-      for (const f of files) procs.push(procesarArchivo(await f.arrayBuffer(), f.name, invSel.modoConfig || 'estandar'))
-      const comb = combinarArchivos(procs)
-      const rp = comb.simuladorDesglose || comb.resumenRutaPeso || []
-      if (!rp.length) { setReproMsg({ tipo: 'error', txt: 'El archivo no trae desglose por peso (o no es una factura válida de Gofo).' }); return }
-      const ref = Number(invSel.ingresoTotal) || 0
-      if (ref && Math.abs(comb.ingresoTotal - ref) / ref > 0.02) {
-        setReproMsg({ tipo: 'warn', txt: `El total del archivo (${money(comb.ingresoTotal)}) no coincide con esta factura (${money(ref)}). Parece ser otro Excel — NO se guardó nada.` })
-        return
-      }
-      // SOLO se escribe el campo dedicado del simulador. Nada más cambia.
-      await updateDoc(doc(db, 'invoices', invSel.id), { simuladorDesglose: rp })
-      await reloadInvoices()
-      setReproMsg({ tipo: 'ok', txt: `Desglose por peso extraído. Ya ves los precios reales por peso. (El total no cambió: ${money(ref)}.)` })
+      const r = await reprocesarFactura(invSel, files)
+      if (r) { setReproMsg(r); if (r.tipo === 'ok') await reloadInvoices() }
     } catch (err) {
-      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar el archivo: ' + err.message })
-    } finally {
-      setReprocesando(false)
-    }
+      setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message })
+    } finally { setReprocesando(false) }
   }
-  const hayCambios = pctGlobal !== 0 || Object.values(pesoFijo).some((v) => v !== '' && v != null) || Object.values(celda).some((v) => v !== '' && v != null)
-  const pctTxt = `${pctGlobal > 0 ? '+' : ''}${Math.round(pctGlobal * 100)}%`
-  const hayResultado = esTodas ? proyTodas.length > 0 : base.rutas.length > 0
 
-  // Resumen unificado + filas (rutas o ciudades) para gráficas/recomendaciones.
-  const resumen = esTodas
-    ? { label: 'el negocio', ingresoBase: totTodas.ingresoBase, ingresoProy: totTodas.ingresoProy, gananciaBase: totTodas.gananciaBase, gananciaProy: totTodas.gananciaProy, margenBase: totTodas.margenBase, margenProy: totTodas.margenProy, bePct: totTodas.bePctGlobal }
-    : { label: nombreDeCiudad(ciudadSim), ingresoBase: proj.ingresoBase, ingresoProy: proj.ingresoProy, gananciaBase: proj.gananciaBase, gananciaProy: proj.gananciaProy, margenBase: proj.margenBase, margenProy: proj.margenProy, bePct: proj.bePctCiudad }
-  const filas = esTodas
-    ? proyTodas.map((c) => ({ name: c.nombre, gananciaBase: c.gananciaBase, gananciaProy: c.gananciaProy, ingresoProy: c.ingresoProy }))
+  const resumen = esAgregado
+    ? { label: ciudadesSel.length === 0 ? 'el negocio' : 'las ciudades elegidas', ingresoBase: totAgg.ingresoBase, ingresoProy: totAgg.ingresoProy, gananciaBase: totAgg.gananciaBase, gananciaProy: totAgg.gananciaProy, margenBase: totAgg.margenBase, margenProy: totAgg.margenProy, bePct: totAgg.bePctGlobal, pagoCiudad: totAgg.pagoCiudad }
+    : { label: nombreDeCiudad(ciudadUnica), ingresoBase: proj.ingresoBase, ingresoProy: proj.ingresoProy, gananciaBase: proj.gananciaBase, gananciaProy: proj.gananciaProy, margenBase: proj.margenBase, margenProy: proj.margenProy, bePct: proj.bePctCiudad, pagoCiudad: proj.pagoCiudad }
+  const filas = esAgregado
+    ? proyAgg.map((c) => ({ name: c.nombre, gananciaBase: c.gananciaBase, gananciaProy: c.gananciaProy, ingresoProy: c.ingresoProy }))
     : proj.rutas.map((r) => ({ name: r.ruta, gananciaBase: r.gananciaBase, gananciaProy: r.gananciaProy, ingresoProy: r.ingresoProy }))
   const difIngreso = resumen.ingresoProy - resumen.ingresoBase
   const difGanancia = resumen.gananciaProy - resumen.gananciaBase
-  const recs = generado ? recomendar(resumen, filas, esTodas) : []
+  const recs = generado ? recomendar(resumen, filas, esAgregado) : []
   const comparativo = [
     { name: 'Ingreso', Actual: Math.round(resumen.ingresoBase), Proyectado: Math.round(resumen.ingresoProy) },
     { name: 'Ganancia', Actual: Math.round(resumen.gananciaBase), Proyectado: Math.round(resumen.gananciaProy) },
@@ -192,25 +191,55 @@ export default function Simulador() {
 
   const colorCelda = (proyec, actual) => (proyec < actual - 0.001 ? 'text-rose-600 border-rose-300 dark:text-rose-400' : proyec > actual + 0.001 ? 'text-emerald-600 border-emerald-300 dark:text-emerald-400' : 'text-slate-600 border-slate-200 dark:text-slate-300')
 
+  function exportar(tipo) {
+    if (esAgregado) {
+      const filasX = proyAgg.map((c) => ({ Ciudad: c.nombre, Semana: c.semana || '', 'Ingreso actual': Math.round(c.ingresoBase), 'Ingreso proyectado': Math.round(c.ingresoProy), 'Ganancia actual': Math.round(c.gananciaBase), 'Ganancia proyectada': Math.round(c.gananciaProy), 'Δ Ganancia': Math.round(c.gananciaProy - c.gananciaBase), Equilibrio: bePctTxt(c.bePctCiudad) }))
+      const nombre = `proyeccion_${etiquetaCiudades}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
+      if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Ciudades', rows: filasX }])
+      return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ciudad', head: ['Ciudad', 'Semana', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proyAgg.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
+    }
+    const filasX = proj.rutas.map((r) => ({ Ruta: r.ruta, 'Ingreso actual': Math.round(r.ingresoBase), 'Ingreso proyectado': Math.round(r.ingresoProy), 'Ganancia actual': Math.round(r.gananciaBase), 'Ganancia proyectada': Math.round(r.gananciaProy), 'Δ Ganancia': Math.round(r.gananciaProy - r.gananciaBase), Equilibrio: bePctTxt(r.bePct) }))
+    const nombre = `proyeccion_${nombreDeCiudad(ciudadUnica)}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
+    if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Rutas', rows: filasX }])
+    return exportarPDF(nombre, `Proyección · ${nombreDeCiudad(ciudadUnica)} (${pctTxt})`, invSel?.semana || '', [{ titulo: 'Proyección por ruta', head: ['Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proj.rutas.map((r) => [r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaBase), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase), bePctTxt(r.bePct)]) }])
+  }
+
   return (
     <div>
       <PageTitle>Proyección</PageTitle>
       <Aviso tipo="info" className="mb-4">
         <b>Simulador de precios.</b> Proyecta qué pasa con tu ingreso y tu ganancia si Gofo cambia sus precios. Es
-        <b> solo simulación</b>: no cambia ningún precio, tarifa ni dato real. El pago a los choferes es fijo (depende de sus tarifas, no de Gofo).
+        <b> solo simulación</b>: no cambia ningún precio, tarifa ni dato real. El pago a los choferes usa la <b>tarifa real</b> de cada chofer y es fijo (no cambia con los precios de Gofo).
       </Aviso>
 
-      {/* Selectores */}
+      {/* Selectores: multiselección de ciudades + factura */}
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Building2 size={13} /> Ciudad</div>
-            <Select value={ciudadSim} onChange={(e) => { setCiudadSim(e.target.value); resetear() }} className="min-w-[190px]">
-              <option value={TODAS_SIM}>🌎 Todas las ciudades</option>
-              {ciudades.map((c) => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}
-            </Select>
+          <div className="relative" ref={cRef}>
+            <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Building2 size={13} /> Ciudad(es)</div>
+            <button type="button" onClick={() => setAbreCiudades((o) => !o)} className="inline-flex min-w-[190px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <Building2 size={15} strokeWidth={1.8} className="text-brand-gold" />
+              <span className="flex-1 truncate text-left">{etiquetaCiudades}</span>
+              <ChevronDown size={15} strokeWidth={2} className={`transition-transform ${abreCiudades ? 'rotate-180' : ''}`} />
+            </button>
+            {abreCiudades && (
+              <div className="absolute left-0 z-30 mt-1 max-h-72 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                <button type="button" onClick={() => { setCiudadesSel([]); resetear() }} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${ciudadesSel.length === 0 ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}>🌎 Todas las ciudades{ciudadesSel.length === 0 && <Check size={15} strokeWidth={2.4} className="text-brand-gold" />}</button>
+                <div className="my-1 border-t border-slate-100 dark:border-slate-700/60" />
+                {ciudades.map((c) => {
+                  const on = ciudadesSel.includes(c.codigo)
+                  return (
+                    <button key={c.codigo} type="button" onClick={() => toggleCiudad(c.codigo)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${on ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}>
+                      <span className={`grid h-4 w-4 flex-shrink-0 place-items-center rounded border ${on ? 'border-brand-gold bg-brand-gold text-white' : 'border-slate-300 dark:border-slate-600'}`}>{on && <Check size={11} strokeWidth={3} />}</span>
+                      <span className="truncate">{c.nombre}</span>
+                    </button>
+                  )
+                })}
+                {ciudadesSel.length >= 2 && <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Proyectando {ciudadesSel.length} ciudades combinadas.</div>}
+              </div>
+            )}
           </div>
-          {!esTodas && (
+          {!esAgregado && (
             <div>
               <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Receipt size={13} /> Factura</div>
               <Select value={facturaSimId} onChange={(e) => { setFacturaSimId(e.target.value); resetear() }} className="min-w-[220px]">
@@ -218,8 +247,8 @@ export default function Simulador() {
               </Select>
             </div>
           )}
-          <span className="text-xs text-slate-400">{esTodas ? `${proyTodas.length} ciudad(es) · factura más reciente de cada una` : `${base.rutas.length} ruta(s) en ${nombreDeCiudad(ciudadSim)}`}</span>
-          {!esTodas && invSel && (base.tieneDetalle
+          <span className="text-xs text-slate-400">{esAgregado ? `${proyAgg.length} ciudad(es) · factura más reciente de cada una` : `${base.rutas.length} ruta(s) en ${nombreDeCiudad(ciudadUnica)}`}</span>
+          {!esAgregado && invSel && (base.tieneDetalle
             ? (
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
@@ -238,7 +267,7 @@ export default function Simulador() {
 
       {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-4">{reproMsg.txt}</Aviso>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
-      {!esTodas && invSel && !base.tieneDetalle && (
+      {!esAgregado && invSel && !base.tieneDetalle && (
         <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-amber-400 p-4">
           <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
           <div className="min-w-[220px] flex-1">
@@ -253,14 +282,12 @@ export default function Simulador() {
         <EstadoVacio titulo="Sin rutas" texto="No hay rutas para simular con esta selección." mostrarBoton={false} />
       ) : (
         <>
-          {/* Base actual */}
           <div className="mb-4 flex flex-wrap gap-3">
             <KPI label="Ingreso Gofo (actual)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" />
-            <KPI label="Pago a choferes (fijo)" value={money(esTodas ? totTodas.pagoCiudad : proj.pagoCiudad)} icon={Receipt} accent="navy" sub="no cambia con los precios" />
+            <KPI label="Pago a choferes REAL (fijo)" value={money(resumen.pagoCiudad)} icon={Receipt} accent="navy" sub="tarifa real · no cambia con los precios" />
             <KPI label="Ganancia actual" value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`margen ${pct(resumen.margenBase)}`} />
           </div>
 
-          {/* Punto de equilibrio */}
           <Card className={`mb-4 flex items-start gap-3 p-4 ${resumen.bePct > -0.05 ? 'border-l-4 border-l-rose-500' : ''}`}>
             <Target size={20} strokeWidth={1.8} className={resumen.bePct > -0.05 ? 'text-rose-500' : 'text-amber-500'} />
             <div>
@@ -269,7 +296,6 @@ export default function Simulador() {
             </div>
           </Card>
 
-          {/* Ajuste masivo */}
           <Card className="mb-4 p-4">
             <div className="mb-3 flex items-center gap-2">
               <SlidersHorizontal size={17} strokeWidth={1.9} className="text-brand-gold" />
@@ -287,7 +313,7 @@ export default function Simulador() {
                 <button onClick={() => setPctGlobal(0)} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300">0%</button>
               </div>
             </div>
-            {!esTodas && base.tieneDetalle && (
+            {!esAgregado && base.tieneDetalle && (
               <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
                 <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Fijar precio por rango de peso (todas las rutas):</div>
                 <div className="flex flex-wrap gap-2">
@@ -301,11 +327,10 @@ export default function Simulador() {
                 <p className="mt-1.5 text-[11px] text-slate-400">Prioridad: precio de una celda &gt; precio fijo por peso &gt; % global &gt; precio actual.</p>
               </div>
             )}
-            {esTodas && <p className="mt-2 text-[11px] text-slate-400">En "Todas las ciudades" se aplica el % global a la factura más reciente de cada ciudad. Para editar precios por ruta o por peso, elige una ciudad.</p>}
+            {esAgregado && <p className="mt-2 text-[11px] text-slate-400">Con varias ciudades se aplica el % global a la factura más reciente de cada una. Para editar precios por ruta o por peso, elige una sola ciudad.</p>}
           </Card>
 
-          {/* Tabla editable (una ciudad) o resumen por ciudad (todas) */}
-          {!esTodas ? (
+          {!esAgregado ? (
             <Card className="mb-4 p-4">
               <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Precios por ruta</h3>
               <p className="mb-3 text-xs text-slate-400">
@@ -371,7 +396,7 @@ export default function Simulador() {
                     </tr>
                   </thead>
                   <tbody>
-                    {proyTodas.map((c) => {
+                    {proyAgg.map((c) => {
                       const dG = c.gananciaProy - c.gananciaBase
                       return (
                         <tr key={c.codigo} className={`border-t border-slate-100 dark:border-slate-700/50 ${c.gananciaProy < 0 ? 'bg-rose-50/60 dark:bg-rose-500/5' : ''}`}>
@@ -385,12 +410,21 @@ export default function Simulador() {
                       )
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                      <td className="px-2.5 py-2.5">Total</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.ingresoBase)}</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.ingresoProy)}</td>
+                      <td className="px-2.5 py-2.5 text-right">{money(totAgg.gananciaBase)}</td>
+                      <td className={`px-2.5 py-2.5 text-right ${totAgg.gananciaProy < 0 ? 'text-rose-600' : ''}`}>{money(totAgg.gananciaProy)}</td>
+                      <td className={`px-2.5 py-2.5 text-right ${difGanancia < -0.01 ? 'text-rose-600' : difGanancia > 0.01 ? 'text-emerald-600' : ''}`}>{difGanancia >= 0 ? '+' : ''}{money(difGanancia)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </Card>
           )}
 
-          {/* Botón GENERAR */}
           {!generado && (
             <div className="mb-4 flex justify-center">
               <button onClick={() => setGenerado(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-base font-bold text-white shadow-sm transition hover:brightness-110 dark:bg-brand-gold dark:text-brand-navy">
@@ -399,7 +433,6 @@ export default function Simulador() {
             </div>
           )}
 
-          {/* RESUMEN generado: KPIs + gráficas + recomendaciones */}
           {generado && (
             <>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -450,18 +483,4 @@ export default function Simulador() {
       )}
     </div>
   )
-
-  // Exportaciones (definidas aquí abajo para cerrar sobre el estado actual).
-  function exportar(tipo) {
-    if (esTodas) {
-      const filasX = proyTodas.map((c) => ({ Ciudad: c.nombre, Semana: c.semana || '', 'Ingreso actual': Math.round(c.ingresoBase), 'Ingreso proyectado': Math.round(c.ingresoProy), 'Ganancia actual': Math.round(c.gananciaBase), 'Ganancia proyectada': Math.round(c.gananciaProy), 'Δ Ganancia': Math.round(c.gananciaProy - c.gananciaBase), Equilibrio: bePctTxt(c.bePctCiudad) }))
-      const nombre = `proyeccion_todas_${pctTxt.replace('%', 'pct')}`
-      if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Todas las ciudades', rows: filasX }])
-      return exportarPDF(nombre, `Proyección · Todas las ciudades (${pctTxt})`, '', [{ titulo: 'Proyección por ciudad', head: ['Ciudad', 'Semana', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proyTodas.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
-    }
-    const filasX = proj.rutas.map((r) => ({ Ruta: r.ruta, 'Ingreso actual': Math.round(r.ingresoBase), 'Ingreso proyectado': Math.round(r.ingresoProy), 'Ganancia actual': Math.round(r.gananciaBase), 'Ganancia proyectada': Math.round(r.gananciaProy), 'Δ Ganancia': Math.round(r.gananciaProy - r.gananciaBase), Equilibrio: bePctTxt(r.bePct) }))
-    const nombre = `proyeccion_${nombreDeCiudad(ciudadSim)}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
-    if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Rutas', rows: filasX }])
-    return exportarPDF(nombre, `Proyección · ${nombreDeCiudad(ciudadSim)} (${pctTxt})`, invSel?.semana || '', [{ titulo: 'Proyección por ruta', head: ['Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ Ganancia', 'Equilibrio'], body: proj.rutas.map((r) => [r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaBase), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase), bePctTxt(r.bePct)]) }])
-  }
 }

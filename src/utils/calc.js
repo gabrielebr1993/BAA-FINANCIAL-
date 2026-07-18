@@ -831,14 +831,32 @@ export function tarifaPromedio(drivers, resumenChoferes, ciudad) {
   return { ind, dob }
 }
 
-// Rutas con costo de choferes estimado, ganancia, $/paquete, $/lb y calidad.
+// Rutas con costo de choferes, ganancia, $/paquete, $/lb y calidad.
+// Costo de choferes REAL cuando la factura trae el desglose chofer×ruta
+// (resumenChoferRuta): se usa la tarifa REAL de cada chofer en esa ruta. Si no lo
+// trae (facturas viejas), se ESTIMA con la tarifa promedio de la ciudad. `costoExacto`
+// indica cuál se usó. Esto NO altera el pago real a choferes (calcularPagos); solo
+// mejora la precisión del costo/ganancia mostrado por ruta.
 export function rutasConGanancia(inv, drivers, ciudad) {
   const rutas = porCiudad(inv?.resumenRutas || [], ciudad)
   const rc = inv?.resumenChoferes || []
+  const crr = inv?.resumenChoferRuta || []
   return rutas.map((r) => {
     const paquetes = r.paquetes || (r.individuales + r.dobles)
     const t = tarifaPromedio(drivers, rc, r.ciudad)
-    const costoChoferes = r.individuales * t.ind + r.dobles * t.dob
+    const filasRuta = crr.filter((x) => x.ruta === r.ruta)
+    let costoChoferes, costoExacto
+    if (filasRuta.length) {
+      // REAL: tarifa de cada chofer aplicada a sus paquetes en ESTA ruta.
+      costoChoferes = filasRuta.reduce((a, x) => {
+        const d = buscarDriver(drivers, x.nombre)
+        return a + (x.individuales || 0) * (Number(d?.precioIndividual) || 0) + (x.dobles || 0) * (Number(d?.precioDoble) || 0)
+      }, 0)
+      costoExacto = true
+    } else {
+      costoChoferes = r.individuales * t.ind + r.dobles * t.dob
+      costoExacto = false
+    }
     const ganancia = r.ingreso - costoChoferes
     return {
       ...r,
@@ -848,6 +866,7 @@ export function rutasConGanancia(inv, drivers, ciudad) {
       tarifaIndProm: t.ind,
       tarifaDobleProm: t.dob,
       costoChoferes,
+      costoExacto,
       ganancia,
       // Ganancia NETA por paquete (lo que te queda por paquete tras pagar al chofer).
       // Distinta de precioPorPaquete, que es lo que Gofo te PAGA por paquete.

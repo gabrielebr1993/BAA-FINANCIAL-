@@ -261,7 +261,7 @@ export default function Rutas() {
             <div className="mb-2 flex items-center gap-2">
               <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Todas las rutas</h3>
-              <span className="ml-auto text-xs text-slate-400">Costo de choferes estimado con la tarifa promedio de su ciudad</span>
+              <span className="ml-auto text-xs text-slate-400">{rows.length && rows.every((r) => r.costoExacto) ? 'Costo de choferes REAL (tarifa de cada chofer en la ruta)' : 'Costo de choferes estimado con la tarifa promedio (facturas nuevas traen el real)'}</span>
             </div>
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[1000px] border-collapse text-[13.5px]">
