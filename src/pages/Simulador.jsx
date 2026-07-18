@@ -112,9 +112,9 @@ export default function Simulador({ embed = false }) {
     if (!facturasCiudad.length) setFacturaSimId('')
   }, [facturasCiudad, facturaSimId, ciudadUnica])
 
-  const pesoKey = JSON.stringify(pesoFijo)
-  const celdaKey = JSON.stringify(celda)
-  useEffect(() => { setGenerado(false) }, [pctGlobal, pesoKey, celdaKey, ciudadesSelKey, facturaSimId])
+  // El resumen se OCULTA solo al cambiar el ALCANCE (ciudad/factura). Los cambios de
+  // precio NO lo esconden: se actualiza en vivo y el botón queda siempre visible.
+  useEffect(() => { setGenerado(false) }, [ciudadesSelKey, facturaSimId])
   useEffect(() => {
     if (!abreCiudades) return
     const fuera = (e) => { if (cRef.current && !cRef.current.contains(e.target)) setAbreCiudades(false) }
@@ -330,13 +330,13 @@ export default function Simulador({ embed = false }) {
 
       {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-4">{reproMsg.txt}</Aviso>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
-      {unaCiudad && invSel && !baseMulti.tieneDetalle && (
-        <Card className="mb-4 p-4">
+      {unaCiudad && invSel && (
+        <Card className={`mb-4 p-4 ${baseMulti.tieneDetalle ? '' : 'border-l-4 border-l-amber-400'}`}>
           <div className="mb-3 flex items-center gap-2">
-            <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
+            <Scale size={20} strokeWidth={1.8} className={baseMulti.tieneDetalle ? 'text-emerald-500' : 'text-amber-500'} />
             <div>
-              <div className="font-semibold text-brand-navy dark:text-slate-100">Esta factura usa el precio PROMEDIO por ruta</div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso. Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+              <div className="font-semibold text-brand-navy dark:text-slate-100">{baseMulti.tieneDetalle ? 'Desglose por peso disponible ✓' : 'Esta factura usa el precio PROMEDIO por ruta'}</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">{baseMulti.tieneDetalle ? 'Ya tienes los precios reales por peso. Puedes volver a subir el Excel para actualizarlos.' : 'Reprocesa su Excel para obtener los precios reales por peso.'} Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
             </div>
           </div>
           <div
@@ -347,7 +347,7 @@ export default function Simulador({ embed = false }) {
             className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${dragRepro ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 hover:border-brand-gold dark:border-slate-600'}`}
           >
             {reprocesando ? <Spinner /> : <Scale size={22} strokeWidth={1.8} className="text-brand-gold" />}
-            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : 'Arrastra el Excel de esta factura aquí'}</div>
+            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : (baseMulti.tieneDetalle ? 'Arrastra el Excel aquí para actualizar el desglose' : 'Arrastra el Excel de esta factura aquí')}</div>
             <div className="text-xs text-slate-400">o haz clic para elegirlo · .xlsx, .xls</div>
           </div>
         </Card>
@@ -501,13 +501,11 @@ export default function Simulador({ embed = false }) {
             </Card>
           )}
 
-          {!generado && (
-            <div className="mb-4 flex justify-center">
-              <button onClick={() => setGenerado(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-base font-bold text-white shadow-sm transition hover:brightness-110 dark:bg-brand-gold dark:text-brand-navy">
-                <Zap size={20} strokeWidth={2} /> Generar proyección
-              </button>
-            </div>
-          )}
+          <div className="mb-4 flex justify-center">
+            <button onClick={() => setGenerado(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-base font-bold text-white shadow-sm transition hover:brightness-110 dark:bg-brand-gold dark:text-brand-navy">
+              <Zap size={20} strokeWidth={2} /> {generado ? 'Actualizar proyección' : 'Generar proyección'}
+            </button>
+          </div>
 
           {generado && (
             <>
