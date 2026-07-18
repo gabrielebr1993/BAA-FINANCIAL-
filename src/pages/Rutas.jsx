@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, DollarSign, Scale } from 'lucide-react'
+import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, DollarSign, Scale, SlidersHorizontal } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { rutasConGanancia } from '../utils/calc'
@@ -8,6 +8,7 @@ import { reprocesarFactura } from '../utils/reprocesar'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Input, Boton, Badge, Aviso, Spinner, Cargando, EstadoVacio } from '../components/ui'
+import Simulador from './Simulador'
 
 const RANGOS_ORD = ['0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
 
@@ -24,9 +25,9 @@ export default function Rutas() {
   const fileRef = useRef(null)
   const [reproMsg, setReproMsg] = useState(null)
   const [reprocesando, setReprocesando] = useState(false)
-  const onReprocesar = async (e) => {
-    const files = [...(e.target.files || [])]
-    e.target.value = ''
+  const [dragRepro, setDragRepro] = useState(false)
+  const procesarArchivos = async (fileList) => {
+    const files = [...(fileList || [])]
     if (!files.length) return
     setReproMsg(null); setReprocesando(true)
     try {
@@ -36,6 +37,7 @@ export default function Rutas() {
       setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message })
     } finally { setReprocesando(false) }
   }
+  const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; procesarArchivos(f) }
 
   // Desglose de PRECIO POR PESO por ruta (dato real de la factura). Vacío en facturas
   // viejas sin el desglose (se avisa y se usa el promedio en la pestaña Resumen).
@@ -124,7 +126,11 @@ export default function Rutas() {
       <PageTitle>Rutas</PageTitle>
 
       <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700/60">
-        {[{ k: 'resumen', l: 'Resumen', Icon: RouteIcon }, { k: 'precios', l: 'Precios por ruta', Icon: DollarSign }].map((t) => (
+        {[
+          { k: 'resumen', l: 'Resumen', Icon: RouteIcon },
+          { k: 'precios', l: 'Precios por ruta', Icon: DollarSign },
+          ...(esDueno ? [{ k: 'proyeccion', l: 'Proyección', Icon: SlidersHorizontal }] : []),
+        ].map((t) => (
           <button
             key={t.k}
             onClick={() => setTab(t.k)}
@@ -135,7 +141,9 @@ export default function Rutas() {
         ))}
       </div>
 
-      {cargando ? (
+      {esDueno && tab === 'proyeccion' ? (
+        <Simulador embed />
+      ) : cargando ? (
         <Cargando texto="Cargando rutas…" />
       ) : !inv ? (
         <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango seleccionado para analizar rutas." />
@@ -144,20 +152,32 @@ export default function Rutas() {
           <Card className="p-4">
             <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
             {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-3">{reproMsg.txt}</Aviso>}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="mb-3 flex items-center gap-3">
               <Scale size={22} strokeWidth={1.8} className="text-amber-500" />
-              <div className="min-w-[240px] flex-1">
+              <div>
                 <div className="font-semibold text-brand-navy dark:text-slate-100">Sin desglose por peso todavía</div>
                 <p className="m-0 text-sm text-slate-500 dark:text-slate-400">
                   Esta factura no trae el precio por rango de peso (0-1lb, 1-5lb…). {esDueno ? 'Reprocésala para extraerlo (solo alimenta Rutas y el simulador; no cambia pagos ni totales).' : 'Se guarda al cargar facturas nuevas.'} Mientras tanto, en <b>Resumen</b> ves el precio promedio por ruta.
                 </p>
               </div>
-              {esDueno && (
-                facturaUnica
-                  ? <Boton variant="gold" onClick={() => fileRef.current?.click()} disabled={reprocesando} className="px-4 py-2 text-sm">{reprocesando ? <><Spinner /> Procesando…</> : <><Scale size={15} strokeWidth={1.8} /> Reprocesar factura para peso</>}</Boton>
-                  : <span className="text-xs text-slate-400">Elige arriba <b>Una factura</b> (una sola semana/ciudad) para poder reprocesarla.</span>
-              )}
             </div>
+            {esDueno && (
+              facturaUnica
+                ? (
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setDragRepro(true) }}
+                    onDragLeave={() => setDragRepro(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragRepro(false); procesarArchivos(e.dataTransfer.files) }}
+                    className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${dragRepro ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 hover:border-brand-gold dark:border-slate-600'}`}
+                  >
+                    {reprocesando ? <Spinner /> : <Scale size={22} strokeWidth={1.8} className="text-brand-gold" />}
+                    <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : 'Arrastra el Excel de esta factura aquí'}</div>
+                    <div className="text-xs text-slate-400">o haz clic para elegirlo · .xlsx, .xls</div>
+                  </div>
+                )
+                : <span className="text-xs text-slate-400">Elige arriba <b>Una factura</b> (una sola semana/ciudad) para poder reprocesarla.</span>
+            )}
           </Card>
         ) : (
           <Card className="p-4">

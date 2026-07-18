@@ -51,10 +51,11 @@ const NIVEL_UI = {
   ok: { Icon: CheckCircle2, cls: 'border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/5', ico: 'text-emerald-500' },
 }
 
-export default function Simulador() {
+export default function Simulador({ embed = false }) {
   const { invoices, drivers, ciudadesEmpresa, reloadInvoices } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
+  const [dragRepro, setDragRepro] = useState(false)
 
   const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas; 1 = detalle; 2+ = subconjunto
   const [abreCiudades, setAbreCiudades] = useState(false)
@@ -158,9 +159,8 @@ export default function Simulador() {
   const etiquetaCiudades = ciudadesSel.length === 0 ? 'Todas las ciudades' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadesSel[0]) : `${ciudadesSel.length} ciudades`
   const toggleCiudad = (code) => { setCiudadesSel((s) => (s.includes(code) ? s.filter((x) => x !== code) : [...s, code])); resetear() }
 
-  const onReprocesar = async (e) => {
-    const files = [...(e.target.files || [])]
-    e.target.value = ''
+  const procesarArchivos = async (fileList) => {
+    const files = [...(fileList || [])]
     if (!files.length || !invSel) return
     setReproMsg(null); setReprocesando(true)
     try {
@@ -170,6 +170,7 @@ export default function Simulador() {
       setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message })
     } finally { setReprocesando(false) }
   }
+  const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; procesarArchivos(f) }
 
   const resumen = esAgregado
     ? { label: ciudadesSel.length === 0 ? 'el negocio' : 'las ciudades elegidas', ingresoBase: totAgg.ingresoBase, ingresoProy: totAgg.ingresoProy, gananciaBase: totAgg.gananciaBase, gananciaProy: totAgg.gananciaProy, margenBase: totAgg.margenBase, margenProy: totAgg.margenProy, bePct: totAgg.bePctGlobal, pagoCiudad: totAgg.pagoCiudad }
@@ -186,8 +187,8 @@ export default function Simulador() {
   ]
   const impacto = [...filas].map((f) => ({ name: f.name, valor: Math.round(f.gananciaProy - f.gananciaBase) })).sort((a, b) => a.valor - b.valor).slice(0, 12)
 
-  if (!esDueno) return <div><PageTitle>Proyección</PageTitle><Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
-  if (!ciudades.length) return <div><PageTitle>Proyección</PageTitle><EstadoVacio titulo="Sin facturas" texto="Carga una factura para poder simular precios." mostrarBoton={false} /></div>
+  if (!esDueno) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
+  if (!ciudades.length) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<EstadoVacio titulo="Sin facturas" texto="Carga una factura para poder simular precios." mostrarBoton={false} /></div>
 
   const colorCelda = (proyec, actual) => (proyec < actual - 0.001 ? 'text-rose-600 border-rose-300 dark:text-rose-400' : proyec > actual + 0.001 ? 'text-emerald-600 border-emerald-300 dark:text-emerald-400' : 'text-slate-600 border-slate-200 dark:text-slate-300')
 
@@ -206,7 +207,7 @@ export default function Simulador() {
 
   return (
     <div>
-      <PageTitle>Proyección</PageTitle>
+      {!embed && <PageTitle>Proyección</PageTitle>}
       <Aviso tipo="info" className="mb-4">
         <b>Simulador de precios.</b> Proyecta qué pasa con tu ingreso y tu ganancia si Gofo cambia sus precios. Es
         <b> solo simulación</b>: no cambia ningún precio, tarifa ni dato real. El pago a los choferes usa la <b>tarifa real</b> de cada chofer y es fijo (no cambia con los precios de Gofo).
@@ -268,13 +269,25 @@ export default function Simulador() {
       {reproMsg && <Aviso tipo={reproMsg.tipo} className="mb-4">{reproMsg.txt}</Aviso>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onReprocesar} className="hidden" />
       {!esAgregado && invSel && !base.tieneDetalle && (
-        <Card className="mb-4 flex flex-wrap items-center gap-3 border-l-4 border-l-amber-400 p-4">
-          <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
-          <div className="min-w-[220px] flex-1">
-            <div className="font-semibold text-brand-navy dark:text-slate-100">Esta factura usa el precio PROMEDIO por ruta</div>
-            <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso (0-1lb, 1-5lb…). Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Scale size={20} strokeWidth={1.8} className="text-amber-500" />
+            <div>
+              <div className="font-semibold text-brand-navy dark:text-slate-100">Esta factura usa el precio PROMEDIO por ruta</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">Reprocesa su Excel para obtener los precios reales por peso (0-1lb, 1-5lb…). Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+            </div>
           </div>
-          <Boton variant="gold" onClick={() => fileRef.current?.click()} disabled={reprocesando} className="px-4 py-2 text-sm">{reprocesando ? <><Spinner /> Procesando…</> : <><Scale size={15} strokeWidth={1.8} /> Reprocesar factura para simulador</>}</Boton>
+          <div
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragRepro(true) }}
+            onDragLeave={() => setDragRepro(false)}
+            onDrop={(e) => { e.preventDefault(); setDragRepro(false); procesarArchivos(e.dataTransfer.files) }}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${dragRepro ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 hover:border-brand-gold dark:border-slate-600'}`}
+          >
+            {reprocesando ? <Spinner /> : <Scale size={22} strokeWidth={1.8} className="text-brand-gold" />}
+            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : 'Arrastra el Excel de esta factura aquí'}</div>
+            <div className="text-xs text-slate-400">o haz clic para elegirlo · .xlsx, .xls</div>
+          </div>
         </Card>
       )}
 
