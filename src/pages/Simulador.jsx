@@ -67,10 +67,13 @@ export default function Simulador({ embed = false }) {
   const [generado, setGenerado] = useState(false)
   const [reproMsg, setReproMsg] = useState(null)
   const [reprocesando, setReprocesando] = useState(false)
+  const [reproTargetId, setReproTargetId] = useState(null)
+  const [dragCiudad, setDragCiudad] = useState(null)
   const [claimsInv, setClaimsInv] = useState([])
   const fileRef = useRef(null)
   const cRef = useRef(null)
   const defHecho = useRef(false)
+  const targetInvRef = useRef(null)
 
   const nombreDeCiudad = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || nombreCiudad(code)
 
@@ -210,17 +213,20 @@ export default function Simulador({ embed = false }) {
   const etiquetaCiudades = ciudadesSel.length === 0 ? 'Todas las ciudades' : ciudadesSel.length === 1 ? nombreDeCiudad(ciudadesSel[0]) : `${ciudadesSel.length} ciudades`
   const toggleCiudad = (code) => { setCiudadesSel((s) => (s.includes(code) ? s.filter((x) => x !== code) : [...s, code])); resetear() }
 
-  const procesarArchivos = async (fileList) => {
+  // Reprocesa una factura CONCRETA (para poder reprocesar la de cada ciudad).
+  const reprocesarInv = async (inv, fileList) => {
     const files = [...(fileList || [])]
-    if (!files.length || !invSel) return
-    setReproMsg(null); setReprocesando(true)
+    if (!files.length || !inv) return
+    setReproMsg(null); setReprocesando(true); setReproTargetId(inv.id)
     try {
-      const rr = await reprocesarFactura(invSel, files)
+      const rr = await reprocesarFactura(inv, files)
       if (rr) { setReproMsg(rr); if (rr.tipo === 'ok') await reloadInvoices() }
     } catch (err) { setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message }) }
-    finally { setReprocesando(false) }
+    finally { setReprocesando(false); setReproTargetId(null) }
   }
-  const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; procesarArchivos(f) }
+  const pedirArchivo = (inv) => { targetInvRef.current = inv; fileRef.current?.click() }
+  const onReprocesar = (e) => { const f = e.target.files; e.target.value = ''; reprocesarInv(targetInvRef.current || invSel, f) }
+  const tieneDesglose = (inv, ciudad) => ((inv?.simuladorDesglose || inv?.resumenRutaPeso) || []).some((x) => x.ciudad === ciudad)
 
   // Resumen REAL (anclado a la ganancia real; el cambio de precios mueve solo entregas).
   const delta = r2(proj.ingresoProy - proj.ingresoBase)
@@ -340,15 +346,47 @@ export default function Simulador({ embed = false }) {
             </div>
           </div>
           <div
-            onClick={() => fileRef.current?.click()}
+            onClick={() => pedirArchivo(invSel)}
             onDragOver={(e) => { e.preventDefault(); setDragRepro(true) }}
             onDragLeave={() => setDragRepro(false)}
-            onDrop={(e) => { e.preventDefault(); setDragRepro(false); procesarArchivos(e.dataTransfer.files) }}
+            onDrop={(e) => { e.preventDefault(); setDragRepro(false); reprocesarInv(invSel, e.dataTransfer.files) }}
             className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${dragRepro ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 hover:border-brand-gold dark:border-slate-600'}`}
           >
             {reprocesando ? <Spinner /> : <Scale size={22} strokeWidth={1.8} className="text-brand-gold" />}
             <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : (baseMulti.tieneDetalle ? 'Arrastra el Excel aquí para actualizar el desglose' : 'Arrastra el Excel de esta factura aquí')}</div>
             <div className="text-xs text-slate-400">o haz clic para elegirlo · .xlsx, .xls</div>
+          </div>
+        </Card>
+      )}
+
+      {/* Multi-ciudad: reprocesar la factura de CADA ciudad para tener sus precios por peso. */}
+      {!esResumen && variasCiudades && (
+        <Card className="mb-4 p-4">
+          <div className="mb-1 flex items-center gap-2"><Scale size={18} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precios por peso · factura de cada ciudad</h3></div>
+          <p className="mb-3 text-xs text-slate-400">Sube o <b>arrastra</b> el Excel de la factura de cada ciudad para tener los precios reales por peso de todas sus rutas. Solo alimenta el simulador — no cambia pagos ni totales.</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {unidades.map((u) => {
+              const ok = tieneDesglose(u.inv, u.ciudad)
+              const proc = reproTargetId === u.inv.id
+              return (
+                <div
+                  key={u.ciudad}
+                  onClick={() => pedirArchivo(u.inv)}
+                  onDragOver={(e) => { e.preventDefault(); setDragCiudad(u.ciudad) }}
+                  onDragLeave={() => setDragCiudad(null)}
+                  onDrop={(e) => { e.preventDefault(); setDragCiudad(null); reprocesarInv(u.inv, e.dataTransfer.files) }}
+                  className={`cursor-pointer rounded-xl border-2 border-dashed p-3 text-center transition ${dragCiudad === u.ciudad ? 'border-brand-gold bg-brand-gold/5' : ok ? 'border-emerald-300 hover:border-brand-gold dark:border-emerald-500/40' : 'border-amber-300 hover:border-brand-gold dark:border-amber-500/40'}`}
+                >
+                  <div className="font-semibold text-brand-navy dark:text-slate-100">{nombreDeCiudad(u.ciudad)}</div>
+                  <div className="text-[11px] text-slate-400">{u.inv.semana || fFecha(u.inv.fechaInicio)}</div>
+                  <div className="mt-1.5 text-xs">
+                    {proc ? <span className="inline-flex items-center gap-1 text-slate-500"><Spinner /> Procesando…</span>
+                      : ok ? <span className="inline-flex items-center gap-1 font-medium text-emerald-600"><CheckCircle2 size={13} strokeWidth={2.2} /> desglose por peso</span>
+                        : <span className="font-medium text-amber-600">sin desglose · arrastra o clic</span>}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </Card>
       )}
