@@ -1,16 +1,35 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText } from 'lucide-react'
+import { Route as RouteIcon, Search, TrendingUp, TrendingDown, FileSpreadsheet, FileText, DollarSign } from 'lucide-react'
 import { useData } from '../DataContext'
 import { rutasConGanancia } from '../utils/calc'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Input, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
 
+const RANGOS_ORD = ['0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
+
 export default function Rutas() {
   const { facturaRango: inv, drivers, selectedCity, cargando } = useData()
   const navigate = useNavigate()
+  const [tab, setTab] = useState('resumen')
   const [sortKey, setSortKey] = useState('ganancia')
+
+  // Desglose de PRECIO POR PESO por ruta (dato real de la factura). Vacío en facturas
+  // viejas sin el desglose (se avisa y se usa el promedio en la pestaña Resumen).
+  const preciosPeso = useMemo(() => {
+    const rp = (inv?.resumenRutaPeso || []).filter((x) => selectedCity === 'todas' || x.ciudad === selectedCity)
+    const map = {}
+    const rangosSet = new Set()
+    for (const x of rp) {
+      const r = map[x.ruta] || (map[x.ruta] = { ruta: x.ruta, ciudad: x.ciudad, nombreCiudad: x.nombreCiudad, celdas: {}, dobles: 0, ingresoDobles: 0, individuales: 0, ingreso: 0 })
+      if (x.doble) { r.dobles += x.cantidad || 0; r.ingresoDobles += x.ingreso || 0 }
+      else { r.celdas[x.rango] = { precio: x.precio, cantidad: x.cantidad || 0, ingreso: x.ingreso || 0 }; r.individuales += x.cantidad || 0; rangosSet.add(x.rango) }
+      r.ingreso += x.ingreso || 0
+    }
+    const rutas = Object.values(map).sort((a, b) => String(a.ruta).localeCompare(String(b.ruta)))
+    return { rutas, rangos: RANGOS_ORD.filter((rg) => rangosSet.has(rg)), hay: rutas.length > 0 }
+  }, [inv, selectedCity])
   const [asc, setAsc] = useState(false)
   const [busca, setBusca] = useState('')
 
@@ -82,10 +101,72 @@ export default function Rutas() {
     <div>
       <PageTitle>Rutas</PageTitle>
 
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700/60">
+        {[{ k: 'resumen', l: 'Resumen', Icon: RouteIcon }, { k: 'precios', l: 'Precios por ruta', Icon: DollarSign }].map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition ${tab === t.k ? 'border-brand-gold text-brand-navy dark:text-white' : 'border-transparent text-slate-500 hover:text-brand-navy dark:text-slate-400 dark:hover:text-white'}`}
+          >
+            <t.Icon size={15} strokeWidth={1.9} /> {t.l}
+          </button>
+        ))}
+      </div>
+
       {cargando ? (
         <Cargando texto="Cargando rutas…" />
       ) : !inv ? (
         <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango seleccionado para analizar rutas." />
+      ) : tab === 'precios' ? (
+        !preciosPeso.hay ? (
+          <Card className="p-4">
+            <div className="mb-1 font-semibold text-brand-navy dark:text-slate-100">Precio real por peso</div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Esta factura no trae el desglose por rango de peso (0-1lb, 1-5lb…). Se empieza a guardar al cargar facturas nuevas.
+              Mientras tanto, en la pestaña <b>Resumen</b> ves el precio promedio por paquete de cada ruta.
+            </p>
+          </Card>
+        ) : (
+          <Card className="p-4">
+            <div className="mb-1 flex items-center gap-2">
+              <DollarSign size={18} strokeWidth={1.8} className="text-brand-gold" />
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precio real por peso</h3>
+              <span className="ml-auto text-xs text-slate-400">{preciosPeso.rutas.length} ruta(s) · lo que paga Gofo por paquete según el peso</span>
+            </div>
+            <p className="mb-3 text-xs text-slate-400">Cada celda: <b>precio por paquete</b> (grande) y cantidad de paquetes en ese tramo de peso. Los dobles (envío al mismo domicilio) pagan $0.50 fijo.</p>
+            <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+              <table className="w-full min-w-[820px] border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <th className="px-2.5 py-2.5 text-left font-semibold">Ruta</th>
+                    {preciosPeso.rangos.map((rg) => <th key={rg} className="px-2 py-2.5 text-center font-semibold">{rg}</th>)}
+                    <th className="px-2.5 py-2.5 text-center font-semibold">Dobles</th>
+                    <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso ruta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preciosPeso.rutas.map((r) => (
+                    <tr key={r.ruta} className="border-t border-slate-100 dark:border-slate-700/50">
+                      <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{r.ruta} {selectedCity === 'todas' && <span className="text-xs text-slate-400">{r.nombreCiudad || r.ciudad}</span>}</td>
+                      {preciosPeso.rangos.map((rg) => {
+                        const c = r.celdas[rg]
+                        if (!c) return <td key={rg} className="px-2 py-2 text-center text-slate-300">—</td>
+                        return (
+                          <td key={rg} className="px-2 py-1.5 text-center">
+                            <div className="text-[15px] font-bold text-brand-navy dark:text-slate-100">{money(c.precio)}</div>
+                            <div className="text-[11px] text-slate-400">{num(c.cantidad)} paq</div>
+                          </td>
+                        )
+                      })}
+                      <td className="px-2.5 py-2 text-center text-slate-500">{r.dobles ? `${num(r.dobles)} × $0.50` : '—'}</td>
+                      <td className="px-2.5 py-2 text-right font-semibold text-brand-navy dark:text-slate-200">{money(r.ingreso)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )
       ) : (
         <>
           {(mejor || peor) && (

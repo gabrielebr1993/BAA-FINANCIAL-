@@ -101,6 +101,46 @@ export function BarCard({ title, subtitle, data, dataKey = 'valor', color, horiz
   )
 }
 
+// Barras AGRUPADAS Actual vs Proyectado (comparativo del simulador).
+export function ComparativoCard({ title, subtitle, data, fmt = (v) => v, height = 260 }) {
+  const t = useChartTheme()
+  return (
+    <Widget title={title} subtitle={subtitle}>
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 11, fill: t.axis }} />
+          <YAxis tick={{ fontSize: 11, fill: t.axis }} width={52} tickFormatter={fmt} />
+          <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
+          <Legend wrapperStyle={{ fontSize: 12, color: t.axis }} />
+          <Bar dataKey="Actual" fill={t.navy} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="Proyectado" fill={t.gold} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </Widget>
+  )
+}
+
+// Barras horizontales con color por SIGNO (impacto por ruta/ciudad: rojo cae, verde sube).
+export function ImpactoCard({ title, subtitle, data, fmt = (v) => v, height = 300 }) {
+  const t = useChartTheme()
+  return (
+    <Widget title={title} subtitle={subtitle}>
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={t.grid} horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickFormatter={fmt} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: t.axis }} width={100} />
+          <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
+          <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
+            {data.map((d, i) => <Cell key={i} fill={d.valor < 0 ? '#e11d48' : '#059669'} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </Widget>
+  )
+}
+
 // Barras apiladas (ej. individuales vs dobles).
 export function StackedBarCard({ title, subtitle, data, series, fmt = (v) => v, height = 260 }) {
   const t = useChartTheme()

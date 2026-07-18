@@ -299,6 +299,21 @@ export function combinarFacturas(invoices) {
   // verificación combinada + por factura (reutilizable por ciudad).
   const verificacion = combinarVerificacion(invoices)
 
+  // Desglose ruta×peso combinado (para "Precios por ruta" y el Simulador en rangos):
+  // se suman cantidad e ingreso por ciudad×ruta×rango; el precio típico se toma de la
+  // factura que aportó MÁS paquetes a ese tramo (aprox. de la moda combinada).
+  const rpMap = {}
+  for (const inv of invoices) {
+    for (const x of (inv.resumenRutaPeso || [])) {
+      const k = `${x.ciudad}||${x.ruta}||${x.rango}`
+      const t = (rpMap[k] = rpMap[k] || { ruta: x.ruta, ciudad: x.ciudad, rango: x.rango, doble: !!x.doble, cantidad: 0, ingreso: 0, precio: 0, _max: -1 })
+      t.cantidad += x.cantidad || 0
+      t.ingreso += x.ingreso || 0
+      if ((x.cantidad || 0) > t._max) { t._max = x.cantidad || 0; t.precio = x.precio }
+    }
+  }
+  const resumenRutaPeso = Object.values(rpMap).map(({ _max, ...r }) => ({ ...r, ingreso: Math.round(r.ingreso * 100) / 100 }))
+
   return {
     esRango: true,
     id: 'rango',
@@ -318,6 +333,7 @@ export function combinarFacturas(invoices) {
     numRutas: resumenRutas.length,
     resumenChoferes,
     resumenRutas,
+    resumenRutaPeso,
     resumenCiudades,
     reglaEmpresa,
     reglasAplicadas,
