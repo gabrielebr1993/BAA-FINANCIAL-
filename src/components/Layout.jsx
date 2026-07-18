@@ -2,7 +2,7 @@
 // buscador global, badge de alertas, selector de empresa y toggle de tema.
 import { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown } from 'lucide-react'
+import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
@@ -157,6 +157,7 @@ function SidebarContent({ onNavigate }) {
   const location = useLocation()
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
+  const esDueno = esSuperAdmin || perfil?.role === 'owner'
 
   return (
     <aside className="flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
@@ -175,6 +176,9 @@ function SidebarContent({ onNavigate }) {
         {secciones.map((s) => (
           <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={s.path === '/alertas' ? numAlertas : 0} />
         ))}
+        {esDueno && (
+          <ItemMenu s={{ path: '/proyeccion', label: 'Proyección', icon: SlidersHorizontal }} activo={location.pathname === '/proyeccion'} onNavigate={onNavigate} badge={0} />
+        )}
         {puedeIA && <MenuIA onNavigate={onNavigate} esSuperAdmin={esSuperAdmin} />}
         {esSuperAdmin && (
           <ItemMenu s={{ path: '/empresas', label: 'Empresas', icon: Building2 }} activo={location.pathname === '/empresas'} onNavigate={onNavigate} badge={0} />

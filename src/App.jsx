@@ -27,6 +27,7 @@ const Performance = lazy(() => import('./pages/Performance'))
 const Alertas = lazy(() => import('./pages/Alertas'))
 const Comparar = lazy(() => import('./pages/Comparar'))
 const Auditorias = lazy(() => import('./pages/Auditorias'))
+const Simulador = lazy(() => import('./pages/Simulador'))
 const Empresas = lazy(() => import('./pages/Empresas'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 const Backups = lazy(() => import('./pages/Backups'))
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />
               <Route path="/comparar" element={<Page filtro="verDashboard"><Comparar /></Page>} />
               <Route path="/auditorias" element={<Page filtro="verFinanzas"><Auditorias /></Page>} />
+              <Route path="/proyeccion" element={<Page roles={['owner']}><Simulador /></Page>} />
               <Route path="/empresas" element={<Page soloSuperAdmin><Empresas /></Page>} />
               <Route path="/usuarios" element={<Page filtro="gestionarUsuarios"><Usuarios /></Page>} />
               <Route path="/backups" element={<Page filtro="gestionarConfiguracion"><Backups /></Page>} />
