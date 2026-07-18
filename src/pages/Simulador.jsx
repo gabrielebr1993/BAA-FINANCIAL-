@@ -220,8 +220,13 @@ export default function Simulador() {
           )}
           <span className="text-xs text-slate-400">{esTodas ? `${proyTodas.length} ciudad(es) · factura más reciente de cada una` : `${base.rutas.length} ruta(s) en ${nombreDeCiudad(ciudadSim)}`}</span>
           {!esTodas && invSel && (base.tieneDetalle
-            ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
-            : <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700/50 dark:text-slate-300"><Scale size={12} strokeWidth={2} /> usando promedio</span>)}
+            ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
+                <button onClick={() => fileRef.current?.click()} disabled={reprocesando} className="text-xs text-slate-400 underline underline-offset-2 hover:text-brand-navy disabled:opacity-50 dark:hover:text-white">{reprocesando ? 'actualizando…' : 'actualizar'}</button>
+              </span>
+            )
+            : <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><Scale size={12} strokeWidth={2} /> Sin desglose — reprocesar</span>)}
           {hayResultado && (
             <div className="ml-auto flex gap-2">
               <Boton variant="ghost" onClick={() => exportar('excel')} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
