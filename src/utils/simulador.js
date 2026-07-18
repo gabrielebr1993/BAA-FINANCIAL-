@@ -15,7 +15,12 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 // nivel de ruta con un precio PROMEDIO por primera entrega (una sola "celda").
 export function construirBase(inv, ciudad) {
   // `simuladorDesglose` = campo dedicado y aislado del simulador (respaldo al antiguo).
-  const rp = ((inv?.simuladorDesglose || inv?.resumenRutaPeso) || []).filter((x) => (x.ciudad || '') === ciudad)
+  const todos = (inv?.simuladorDesglose || inv?.resumenRutaPeso) || []
+  // Se filtra por ciudad; pero si NINGUNA entrada calza con el código de ciudad
+  // (facturas viejas cuyo código difiere del actual) se usa TODO el desglose de la
+  // factura —que ya es de esa ciudad—, para no perder el detalle por peso.
+  const conCiudad = todos.filter((x) => (x.ciudad || '') === ciudad)
+  const rp = conCiudad.length ? conCiudad : todos
   const tieneDetalle = rp.length > 0
   const map = {}
   if (tieneDetalle) {

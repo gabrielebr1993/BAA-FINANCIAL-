@@ -105,7 +105,10 @@ export default function Simulador({ embed = false }) {
     return cods.map((code) => ({ ciudad: code, inv: (unaCiudad && invSel) ? invSel : facturasDe(code)[0] })).filter((u) => u.inv)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [esResumen, ciudadesSelKey, ciudades, invSel, unaCiudad, invoices])
-  const unidadesKey = unidades.map((u) => u.inv.id).join(',')
+  // Clave para queries de claims (solo ids). La clave de DATOS incluye el tamaño del
+  // desglose por peso, para que al REPROCESAR (mismo id, datos nuevos) todo se recalcule.
+  const unidadesIdKey = unidades.map((u) => u.inv.id).join(',')
+  const unidadesKey = unidades.map((u) => `${u.inv.id}:${((u.inv.simuladorDesglose || u.inv.resumenRutaPeso) || []).length}`).join(',')
 
   // Defaults
   useEffect(() => { if (!defHecho.current && ciudades.length) { defHecho.current = true; setCiudadesSel([ciudades[0].codigo]) } }, [ciudades])
@@ -144,7 +147,7 @@ export default function Simulador({ embed = false }) {
       } catch { if (!cancel) setClaimsInv([]) }
     })()
     return () => { cancel = true }
-  }, [activeCompanyId, unidadesKey])
+  }, [activeCompanyId, unidadesIdKey])
 
   const costoDe = (inv, ciudad, base) => {
     const rg = rutasConGanancia(inv, drivers, ciudad)

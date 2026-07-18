@@ -23,5 +23,6 @@ export async function reprocesarFactura(inv, files) {
   }
   // SOLO se escribe el campo dedicado del simulador. Nada más cambia.
   await updateDoc(doc(db, 'invoices', inv.id), { simuladorDesglose: rp })
-  return { tipo: 'ok', txt: `Desglose por peso extraído y guardado (el total no cambió: ${money(ref)}).`, rp }
+  const nRutas = new Set(rp.filter((x) => !x.doble).map((x) => x.ruta)).size
+  return { tipo: 'ok', txt: `Desglose por peso extraído: ${nRutas} ruta(s) con precios por peso. Ya puedes editar los precios (actual vs nuevo). (El total no cambió: ${money(ref)}.)`, rp }
 }

@@ -42,7 +42,10 @@ export default function Rutas() {
   // Desglose de PRECIO POR PESO por ruta (dato real de la factura). Vacío en facturas
   // viejas sin el desglose (se avisa y se usa el promedio en la pestaña Resumen).
   const preciosPeso = useMemo(() => {
-    const rp = ((inv?.simuladorDesglose || inv?.resumenRutaPeso) || []).filter((x) => selectedCity === 'todas' || x.ciudad === selectedCity)
+    const todos = (inv?.simuladorDesglose || inv?.resumenRutaPeso) || []
+    const conCiudad = todos.filter((x) => selectedCity === 'todas' || x.ciudad === selectedCity)
+    // Respaldo: si el filtro por ciudad queda vacío pero hay desglose, se usa todo.
+    const rp = (conCiudad.length || selectedCity === 'todas') ? conCiudad : todos
     const map = {}
     const rangosSet = new Set()
     for (const x of rp) {
