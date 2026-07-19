@@ -395,7 +395,9 @@ export default function Simulador({ embed = false }) {
         usuario: perfil?.email || perfil?.nombre || 'usuario',
         nombre: nombre.trim() || sug,
         ciudades: ciudadesSel, facturaSimId, pctGlobal, pesoFijo, celda,
-        resumen: { label: resumen.label, ingresoBase: resumen.ingresoBase, ingresoProy: resumen.ingresoProy, gananciaBase: resumen.gananciaBase, gananciaProy: resumen.gananciaProy, margenBase: resumen.margenBase, margenProy: resumen.margenProy, pct: pctTxt },
+        // Pago al driver: margen objetivo, vista (ruta/driver) y los "Sugerido $/paq" editados a mano.
+        margenObj, modoPago, pagoManual,
+        resumen: { label: resumen.label, ingresoBase: resumen.ingresoBase, ingresoProy: resumen.ingresoProy, gananciaBase: resumen.gananciaBase, gananciaProy: resumen.gananciaProy, margenBase: resumen.margenBase, margenProy: resumen.margenProy, pct: pctTxt, pagoEditado: hayManual, pagoEff: r2(effFlat), gananciaSiSigo: r2(gananciaSiSigo) },
       })
       await reloadAjustes()
       setReproMsg({ tipo: 'ok', txt: 'Proyección guardada en el historial.' })
@@ -409,6 +411,10 @@ export default function Simulador({ embed = false }) {
     setPctGlobal(p.pctGlobal || 0)
     setPesoFijo(p.pesoFijo || {})
     setCelda(p.celda || {})
+    // Restaura el pago al driver: margen objetivo, vista y los "Sugerido $/paq" editados.
+    if (p.margenObj != null) setMargenObj(p.margenObj)
+    if (p.modoPago) setModoPago(p.modoPago)
+    setPagoManual(p.pagoManual || {})
     setGenerado(true)
     setVerHist(false)
   }
@@ -857,7 +863,7 @@ export default function Simulador({ embed = false }) {
                         <tr key={p.id} className="border-t border-slate-100 dark:border-slate-700/50">
                           <td className="py-2 font-medium text-brand-navy dark:text-slate-100">{p.nombre}</td>
                           <td className="whitespace-nowrap text-slate-500">{fmtFechaHist(p.ts)}</td>
-                          <td className="text-slate-500">{p.resumen?.label} · {p.resumen?.pct}</td>
+                          <td className="text-slate-500">{p.resumen?.label} · {p.resumen?.pct}{p.resumen?.pagoEditado ? <span className="ml-1 rounded bg-brand-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-gold">pago {money(p.resumen?.pagoEff)}/paq</span> : null}</td>
                           <td className="whitespace-nowrap text-right">{money(p.resumen?.gananciaBase)} → <b className={p.resumen?.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-200'}>{money(p.resumen?.gananciaProy)}</b></td>
                           <td className="whitespace-nowrap text-right">
                             <Boton variant="ghost" onClick={() => cargar(p)} className="px-2 py-1 text-xs"><FolderOpen size={13} strokeWidth={1.8} /> Cargar</Boton>
