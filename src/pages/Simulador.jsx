@@ -62,6 +62,7 @@ export default function Simulador({ embed = false }) {
   const [guardando, setGuardando] = useState(false)
   const [margenObj, setMargenObj] = useState(0.2) // margen objetivo para sugerir pago al driver
   const [pagoManual, setPagoManual] = useState({}) // rate $/paq editado por el usuario, por ruta/driver
+  const [gofoManual, setGofoManual] = useState({}) // Gofo $/paq editado a mano, por ruta/driver
   const [modoPago, setModoPago] = useState('ruta') // 'ruta' | 'driver': cómo agrupar el pago
   // Visibilidad de columnas de la tabla de pago (ojito): oculta en pantalla y en el export.
   const [colsPago, setColsPago] = useState({ ciudad: true, paquetes: true, gofo: true, actual: true, sugerido: true, max: true, margen: true, ganancia: true })
@@ -357,30 +358,42 @@ export default function Simulador({ embed = false }) {
   // Fuente activa según el modo elegido (por ruta o por driver).
   const fuente = modoPago === 'driver' ? sugPorDriver : sugPagoDriver
 
-  // ESCENARIO: rate por fila = valor editado a mano (si lo hay) o el sugerido. De ahí
-  // sale el pago, la ganancia y el margen por fila con los valores que el usuario prueba.
+  // ESCENARIO: por fila se puede editar el Gofo $/paq (lo que Gofo paga) y el rate al
+  // driver. De ahí salen el pago, el ingreso, la ganancia y el margen con los valores
+  // que el usuario prueba. `gofoBase` guarda el valor original para el placeholder.
   const pagoManualKey = JSON.stringify(pagoManual)
+  const gofoManualKey = JSON.stringify(gofoManual)
   const escenario = useMemo(() => {
     const rows = fuente.rows.map((f) => {
+      const rawG = gofoManual[f.key]
+      const gManual = rawG != null && rawG !== '' && Number.isFinite(Number(rawG))
+      const gofoPq = gManual ? Math.max(0, Number(rawG)) : f.gofoPq   // Gofo $/paq efectivo
+      const sugPq = gofoPq * (1 - margenObj)                          // sugerido sobre el Gofo efectivo
+      const maxPq = gofoPq                                            // equilibrio = Gofo efectivo
       const raw = pagoManual[f.key]
       const manual = raw != null && raw !== '' && Number.isFinite(Number(raw))
-      const rate = manual ? Math.max(0, Number(raw)) : f.sugPq
-      const I = f.gofoPq * f.P            // ingreso Gofo de la ruta (= lo que pagan por sus paquetes)
+      const rate = manual ? Math.max(0, Number(raw)) : sugPq
+      const I = gofoPq * f.P              // ingreso Gofo de la fila (Gofo efectivo × paquetes)
       const pago = rate * f.P
       const gan = I - pago
       const margen = I > 0 ? gan / I : 0
-      return { ...f, manual, rate, pago, gan, margen }
+      return { ...f, gofoBase: f.gofoPq, gofoPq, gManual, sugPq, maxPq, manual, rate, pago, gan, margen, I }
     })
     const totalPay = rows.reduce((a, f) => a + f.pago, 0)
-    return { rows, totalPay }
-  }, [fuente, pagoManualKey])
+    const totalIng = rows.reduce((a, f) => a + f.I, 0)      // ingreso Gofo del escenario
+    return { rows, totalPay, totalIng }
+  }, [fuente, pagoManualKey, gofoManualKey, margenObj])
   const hayManual = escenario.rows.some((f) => f.manual)
-  // Impacto en la GANANCIA REAL de seguir el escenario (pagar el rate mostrado):
-  // solo cambia el pago a choferes; el resto (neto, gastos, claims) queda fijo.
+  const hayGofoManual = escenario.rows.some((f) => f.gManual)
+  // Impacto en la GANANCIA REAL de seguir el escenario. Cambian el pago a choferes y, si
+  // editaste el Gofo, también el ingreso; gastos y claims quedan fijos.
   const pagoSugTotal = r2(escenario.totalPay)
-  const difPago = r2(fuente.totalCosto - pagoSugTotal)   // + = pagarías MENOS
-  const gananciaSiSigo = r2(real.gananciaReal + difPago)
-  const margenSiSigo = real.ingresoNeto > 0 ? gananciaSiSigo / real.ingresoNeto : 0
+  const difPago = r2(fuente.totalCosto - pagoSugTotal)          // + = pagarías MENOS al driver
+  const deltaIngreso = r2(escenario.totalIng - fuente.totalI)   // + = Gofo pagaría MÁS
+  const difTotal = r2(difPago + deltaIngreso)                  // cambio total en la ganancia real
+  const gananciaSiSigo = r2(real.gananciaReal + difTotal)
+  const netoSiSigo = real.ingresoNeto + deltaIngreso
+  const margenSiSigo = netoSiSigo > 0 ? gananciaSiSigo / netoSiSigo : 0
   const effFlat = fuente.totalP > 0 ? escenario.totalPay / fuente.totalP : 0
   const etiquetaFila = modoPago === 'driver' ? 'driver' : 'ruta'   // texto en minúscula
   const EtiquetaFila = modoPago === 'driver' ? 'Driver' : 'Ruta'   // encabezado de columna
@@ -411,8 +424,8 @@ export default function Simulador({ embed = false }) {
         usuario: perfil?.email || perfil?.nombre || 'usuario',
         nombre: nombre.trim() || sug,
         ciudades: ciudadesSel, facturaSimId, pctGlobal, pesoFijo, celda,
-        // Pago al driver: margen objetivo, vista (ruta/driver) y los "Sugerido $/paq" editados a mano.
-        margenObj, modoPago, pagoManual,
+        // Pago al driver: margen objetivo, vista (ruta/driver) y los valores editados a mano.
+        margenObj, modoPago, pagoManual, gofoManual,
         resumen: { label: resumen.label, ingresoBase: resumen.ingresoBase, ingresoProy: resumen.ingresoProy, gananciaBase: resumen.gananciaBase, gananciaProy: resumen.gananciaProy, margenBase: resumen.margenBase, margenProy: resumen.margenProy, pct: pctTxt, pagoEditado: hayManual, pagoEff: r2(effFlat), gananciaSiSigo: r2(gananciaSiSigo) },
       })
       await reloadAjustes()
@@ -431,6 +444,7 @@ export default function Simulador({ embed = false }) {
     if (p.margenObj != null) setMargenObj(p.margenObj)
     if (p.modoPago) setModoPago(p.modoPago)
     setPagoManual(p.pagoManual || {})
+    setGofoManual(p.gofoManual || {})
     setGenerado(true)
     setVerHist(false)
   }
@@ -451,8 +465,9 @@ export default function Simulador({ embed = false }) {
       { Concepto: 'Pago al driver del escenario ($/paq)', Valor: Number(effFlat.toFixed(2)) },
       { Concepto: 'Ganancia real hoy', Valor: Math.round(real.gananciaReal) },
       { Concepto: 'Ganancia real con este escenario', Valor: Math.round(gananciaSiSigo) },
-      { Concepto: 'Diferencia por semana', Valor: Math.round(difPago) },
-      { Concepto: 'Diferencia por mes (~4.3 sem)', Valor: Math.round(difPago * MENSUAL) },
+      ...(hayGofoManual ? [{ Concepto: 'Cambio de ingreso Gofo (editado)', Valor: Math.round(deltaIngreso) }] : []),
+      { Concepto: 'Diferencia por semana', Valor: Math.round(difTotal) },
+      { Concepto: 'Diferencia por mes (~4.3 sem)', Valor: Math.round(difTotal * MENSUAL) },
     ]
     // Solo se exportan las columnas visibles (ojito). La columna ruta/driver siempre va.
     if (tipo === 'excel') {
@@ -808,7 +823,7 @@ export default function Simulador({ embed = false }) {
                   <span className="text-slate-500 dark:text-slate-400">Margen objetivo</span>
                   <Input type="number" step="1" min="0" max="90" className="w-16" value={Math.round(margenObj * 100)} onChange={(e) => setMargenObj(Math.max(0, Math.min(0.9, (Number(e.target.value) || 0) / 100)))} />
                   <span className="text-slate-500">%</span>
-                  {hayManual && <Boton variant="ghost" onClick={() => setPagoManual({})} className="px-2.5 py-1 text-xs"><RotateCcw size={14} strokeWidth={1.8} /> Restablecer</Boton>}
+                  {(hayManual || hayGofoManual) && <Boton variant="ghost" onClick={() => { setPagoManual({}); setGofoManual({}) }} className="px-2.5 py-1 text-xs"><RotateCcw size={14} strokeWidth={1.8} /> Restablecer</Boton>}
                   <div className="relative">
                     <Boton variant="ghost" onClick={() => setVerColsPago((v) => !v)} className="px-2.5 py-1 text-xs"><Eye size={14} strokeWidth={1.8} /> Columnas</Boton>
                     {verColsPago && (
@@ -830,26 +845,26 @@ export default function Simulador({ embed = false }) {
                   <Boton variant="gold" onClick={() => exportarPagoDriver('pdf')} className="px-2.5 py-1 text-xs"><FileText size={14} strokeWidth={1.8} /> PDF</Boton>
                 </div>
               </div>
-              <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Con las pestañas de arriba ves el pago agrupado <b>por ruta</b> o <b>por driver individual</b>. Aquí ves cuánto te paga Gofo por paquete en cada {etiquetaFila} y el rate sugerido para dejar el <b>{pct(margenObj)}</b> de margen. Puedes <b>editar el "Sugerido $/paq"</b> a mano para probar otros valores: el margen, la ganancia y el total se recalculan al instante. El <b>máximo</b> es el punto de equilibrio: por encima de eso, se pierde.</p>
+              <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Con las pestañas de arriba ves el pago agrupado <b>por ruta</b> o <b>por driver individual</b>. Puedes <b>editar tanto el "Gofo $/paq"</b> (lo que te paga Gofo) <b>como el "Sugerido $/paq"</b> (lo que le pagas al driver) a mano: el sugerido, el máximo, el margen, la ganancia y el impacto en la ganancia real se recalculan al instante. El <b>máximo</b> es el punto de equilibrio: por encima de eso, se pierde.</p>
               {/* Impacto en la ganancia real de seguir el escenario (sugerido o editado a mano) */}
               <div className="mb-3 grid gap-3 sm:grid-cols-3">
                 <Card className="p-3">
-                  <div className="text-[11px] text-slate-400">Pago al driver · hoy → {hayManual ? 'escenario' : 'sugerido'}</div>
+                  <div className="text-[11px] text-slate-400">Pago al driver · hoy → {(hayManual || hayGofoManual) ? 'escenario' : 'sugerido'}</div>
                   <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(fuente.linealFlat)} → {money(effFlat)}<span className="text-xs font-normal text-slate-400"> /paq</span></div>
                   <div className="text-xs text-slate-400">total {money(fuente.totalCosto)} → {money(pagoSugTotal)}</div>
                 </Card>
-                <Card className={`p-3 ${difPago > 0.01 ? 'border-l-4 border-l-emerald-500' : difPago < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
+                <Card className={`p-3 ${difTotal > 0.01 ? 'border-l-4 border-l-emerald-500' : difTotal < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
                   <div className="text-[11px] text-slate-400">Ganancia REAL · hoy → con este escenario</div>
                   <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(real.gananciaReal)} → {money(gananciaSiSigo)}</div>
-                  <div className="text-xs text-slate-400">margen {pct(resumen.margenBase)} → {pct(margenSiSigo)}</div>
+                  <div className="text-xs text-slate-400">margen {pct(resumen.margenBase)} → {pct(margenSiSigo)}{hayGofoManual ? ` · Gofo ${deltaIngreso >= 0 ? '+' : ''}${money(deltaIngreso)}` : ''}</div>
                 </Card>
-                <Card className={`p-3 ${difPago > 0.01 ? 'border-l-4 border-l-emerald-500' : difPago < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
+                <Card className={`p-3 ${difTotal > 0.01 ? 'border-l-4 border-l-emerald-500' : difTotal < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
                   <div className="text-[11px] text-slate-400">Diferencia con este escenario</div>
-                  <div className={`text-base font-bold ${difPago > 0.01 ? 'text-emerald-600' : difPago < -0.01 ? 'text-rose-600' : 'text-slate-500'}`}>{difPago >= 0 ? '+' : ''}{money(difPago)}/sem</div>
-                  <div className="text-xs text-slate-400">{difPago > 0.01 ? `Ganarías ${money(difPago * MENSUAL)} más al mes` : difPago < -0.01 ? `Hoy ya ganas ${money(-difPago)} más que el objetivo` : 'Igual que hoy'}</div>
+                  <div className={`text-base font-bold ${difTotal > 0.01 ? 'text-emerald-600' : difTotal < -0.01 ? 'text-rose-600' : 'text-slate-500'}`}>{difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem</div>
+                  <div className="text-xs text-slate-400">{difTotal > 0.01 ? `Ganarías ${money(difTotal * MENSUAL)} más al mes` : difTotal < -0.01 ? `Perderías ${money(-difTotal * MENSUAL)} al mes` : 'Igual que hoy'}</div>
                 </Card>
               </div>
-              <Aviso tipo="ok" className="mb-3">{hayManual ? <>Con los rates que pusiste, pagarías <b>{money(effFlat)} por paquete</b> en promedio → ganancia real <b>{money(gananciaSiSigo)}</b> ({difPago >= 0 ? '+' : ''}{money(difPago)}/sem vs hoy). Edita cada {etiquetaFila} o pulsa <b>Restablecer</b> para volver al sugerido.</> : <>Sugerencia: paga <b>{money(fuente.sugFlat)} por paquete</b> (hoy ~{money(fuente.linealFlat)}) → ganancia real <b>{money(gananciaSiSigo)}</b> ({difPago >= 0 ? '+' : ''}{money(difPago)}/sem vs hoy). Sube o baja el <b>margen objetivo</b> o edita cada {etiquetaFila} abajo para probar escenarios.</>}</Aviso>
+              <Aviso tipo="ok" className="mb-3">{(hayManual || hayGofoManual) ? <>Con lo que pusiste, pagarías <b>{money(effFlat)} por paquete</b> en promedio → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Edita el Gofo o el sugerido de cada {etiquetaFila}, o pulsa <b>Restablecer</b> para volver al original.</> : <>Sugerencia: paga <b>{money(fuente.sugFlat)} por paquete</b> (hoy ~{money(fuente.linealFlat)}) → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Sube o baja el <b>margen objetivo</b> o edita el Gofo/sugerido de cada {etiquetaFila} abajo para probar escenarios.</>}</Aviso>
               <div className="scroll-thin max-h-[420px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
@@ -857,7 +872,7 @@ export default function Simulador({ embed = false }) {
                       {variasCiudades && verCol('ciudad') && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
                       <th className="px-2.5 py-2.5 text-left font-semibold">{EtiquetaFila}</th>
                       {verCol('paquetes') && <th className="px-2.5 py-2.5 text-right font-semibold">Paquetes</th>}
-                      {verCol('gofo') && <th className="px-2.5 py-2.5 text-right font-semibold">Gofo $/paq</th>}
+                      {verCol('gofo') && <th className="px-2.5 py-2.5 text-right font-semibold">Gofo $/paq <span className="font-normal text-slate-400">(editable)</span></th>}
                       {verCol('actual') && <th className="px-2.5 py-2.5 text-right font-semibold">Pago actual $/paq</th>}
                       {verCol('sugerido') && <th className="px-2.5 py-2.5 text-right font-semibold">Sugerido $/paq <span className="font-normal text-slate-400">(editable)</span></th>}
                       {verCol('max') && <th className="px-2.5 py-2.5 text-right font-semibold">Máx $/paq</th>}
@@ -877,7 +892,14 @@ export default function Simulador({ embed = false }) {
                           {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2 text-xs text-slate-500">{f.ciudad}</td>}
                           <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{f.ruta}</td>
                           {verCol('paquetes') && <td className="px-2.5 py-2 text-right">{num(f.P)}</td>}
-                          {verCol('gofo') && <td className="px-2.5 py-2 text-right">{money(f.gofoPq)}</td>}
+                          {verCol('gofo') && (
+                            <td className="px-2.5 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-slate-400">$</span>
+                                <Input type="number" step="0.05" min="0" className={`w-20 text-right ${f.gManual ? 'border-brand-gold font-bold text-brand-navy dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}`} value={f.gManual ? gofoManual[f.key] : ''} placeholder={f.gofoBase.toFixed(2)} onChange={(e) => { const v = e.target.value; setGofoManual((m) => { const n = { ...m }; if (v === '') delete n[f.key]; else n[f.key] = v; return n }) }} />
+                              </div>
+                            </td>
+                          )}
                           {verCol('actual') && <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? 'Tarifa lineal (0–1 lb) del driver asignado a la ruta' : 'Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes'}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>}
                           {verCol('sugerido') && (
                             <td className="px-2.5 py-2 text-right">
@@ -899,17 +921,17 @@ export default function Simulador({ embed = false }) {
                       {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2.5 text-xs text-slate-500">Total</td>}
                       <td className="px-2.5 py-2.5 text-brand-navy dark:text-slate-100">{variasCiudades && verCol('ciudad') ? '' : 'Total'}</td>
                       {verCol('paquetes') && <td className="px-2.5 py-2.5 text-right">{num(fuente.totalP)}</td>}
-                      {verCol('gofo') && <td className="px-2.5 py-2.5 text-right text-slate-500">{money(fuente.totalP > 0 ? fuente.totalI / fuente.totalP : 0)}</td>}
+                      {verCol('gofo') && <td className="px-2.5 py-2.5 text-right text-slate-500">{money(fuente.totalP > 0 ? escenario.totalIng / fuente.totalP : 0)}</td>}
                       {verCol('actual') && <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(fuente.linealFlat)}</td>}
                       {verCol('sugerido') && <td className="px-2.5 py-2.5 text-right text-brand-navy dark:text-slate-100">{money(effFlat)}</td>}
                       {verCol('max') && <td className="px-2.5 py-2.5"></td>}
-                      {verCol('margen') && <td className={`px-2.5 py-2.5 text-right ${margenSiSigo < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct(fuente.totalI > 0 ? (fuente.totalI - escenario.totalPay) / fuente.totalI : 0)}</td>}
-                      {verCol('ganancia') && <td className={`px-2.5 py-2.5 text-right ${fuente.totalI - escenario.totalPay < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(fuente.totalI - escenario.totalPay)}</td>}
+                      {verCol('margen') && <td className={`px-2.5 py-2.5 text-right ${escenario.totalIng - escenario.totalPay < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct(escenario.totalIng > 0 ? (escenario.totalIng - escenario.totalPay) / escenario.totalIng : 0)}</td>}
+                      {verCol('ganancia') && <td className={`px-2.5 py-2.5 text-right ${escenario.totalIng - escenario.totalPay < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(escenario.totalIng - escenario.totalPay)}</td>}
                     </tr>
                   </tfoot>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-slate-400"><b>"Pago actual $/paq"</b> = la tarifa lineal (0–1 lb) del driver, o sea lo que realmente le pagas por paquete (un <b>~</b> indica que se estimó porque la factura no trae el desglose chofer×ruta). {modoPago === 'driver' ? 'En la vista por driver, el ingreso de Gofo se reparte entre los choferes de cada ruta según sus paquetes.' : ''} Edita el <b>Sugerido $/paq</b> de cualquier {etiquetaFila} para probar tu propio rate; el <span className="text-amber-600">margen en ámbar</span> rinde menos que tu objetivo ({pct(margenObj)}) y en <span className="text-rose-600">rojo</span> se pierde (pagas por encima del equilibrio). "Margen" y "Ganancia" son sobre el ingreso de Gofo de ese {etiquetaFila}.</p>
+              <p className="mt-2 text-[11px] text-slate-400"><b>"Pago actual $/paq"</b> = la tarifa lineal (0–1 lb) del driver, o sea lo que realmente le pagas por paquete (un <b>~</b> indica que se estimó porque la factura no trae el desglose chofer×ruta). {modoPago === 'driver' ? 'En la vista por driver, el ingreso de Gofo se reparte entre los choferes de cada ruta según sus paquetes.' : ''} Edita el <b>Gofo $/paq</b> (simula que Gofo pague más/menos) o el <b>Sugerido $/paq</b> (tu pago al driver) de cualquier {etiquetaFila}; el <span className="text-amber-600">margen en ámbar</span> rinde menos que tu objetivo ({pct(margenObj)}) y en <span className="text-rose-600">rojo</span> se pierde (pagas por encima del equilibrio). "Margen" y "Ganancia" son sobre el ingreso de Gofo de ese {etiquetaFila}.</p>
             </Card>
           )}
 
