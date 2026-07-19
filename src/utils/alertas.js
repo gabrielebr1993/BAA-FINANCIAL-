@@ -1,5 +1,5 @@
 // Cálculo centralizado de alertas del negocio sobre la factura/periodo activo.
-import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims, claimsRepetidosPendientes, desgloseGananciaCiudades } from './calc'
+import { calcularPagos, buscarDriver, alertasCambioPrecio, economiaClaims, claimsRepetidosPendientes, desgloseGananciaCiudades, rutasConGanancia } from './calc'
 import { money } from './format'
 
 // Umbral de margen "bajo" (aviso amarillo) para una ciudad rentable pero flaca.
@@ -59,6 +59,21 @@ export function calcularAlertas({ inv, claims, drivers, managers, semanas = 1, i
     if (r.ingreso - costo < 0)
       alertas.push({ id: `ruta:${r.ruta}`, tipo: 'yellow', categoria: 'Rutas', titulo: `Ruta ${r.ruta} no es rentable`, detalle: `Ingreso ${money(r.ingreso)} < costo estimado ${money(costo)}.`, link: '/financiero' })
   })
+
+  // 4b) PAGO AL DRIVER: rutas rentables pero con margen BAJO (<10%) — señal de que
+  //     pagas mucho al driver por paquete. Se resume en UNA alerta con la peor ruta y
+  //     una sugerencia (pagar hasta el 80% de lo que paga Gofo por paquete = ~20% margen).
+  const rutasBajas = rutasConGanancia(inv, drivers, 'todas').filter((r) => {
+    const P = r.paquetes || (r.individuales + r.dobles)
+    return P > 0 && r.ingreso > 0 && r.margen >= 0 && r.margen < 0.10
+  })
+  if (rutasBajas.length) {
+    const peor = [...rutasBajas].sort((a, b) => a.margen - b.margen)[0]
+    const P = peor.paquetes || (peor.individuales + peor.dobles)
+    const gofoPq = peor.ingreso / P
+    const actualPq = (peor.costoChoferes || 0) / P
+    alertas.push({ id: 'pagoDriverRutas', tipo: 'yellow', categoria: 'Rutas', titulo: `${rutasBajas.length} ruta(s) con margen bajo por el pago al driver`, detalle: `Ej.: ${peor.ruta} deja ${(peor.margen * 100).toFixed(1)}% — pagas ~${money(actualPq)}/paquete; para ~20% de margen paga hasta ${money(gofoPq * 0.8)}/paquete (Gofo te da ${money(gofoPq)}/paq). Detalle en Proyección → pago al driver.`, link: '/rutas' })
+  }
 
   // 5) Cambio de precio de Gofo vs. semana anterior (info)
   alertasCambioPrecio(inv, invAnterior).forEach((a) =>

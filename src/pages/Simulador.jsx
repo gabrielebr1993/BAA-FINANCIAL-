@@ -322,6 +322,13 @@ export default function Simulador({ embed = false }) {
     await borrarProyeccion(activeCompanyId, proyeccionesGuardadas, id)
     await reloadAjustes()
   }
+  const exportarPagoDriver = (tipo) => {
+    const nombre = `pago_driver_${etiquetaCiudades}_margen${Math.round(margenObj * 100)}`.replace(/[^\w-]+/g, '_')
+    if (tipo === 'excel') {
+      return exportarExcel(nombre, [{ nombre: 'Pago al driver', rows: sugPagoDriver.rows.map((f) => ({ Ciudad: f.ciudad, Ruta: f.ruta, Paquetes: f.P, 'Gofo $/paq': Number(f.gofoPq.toFixed(2)), 'Pago actual $/paq': Number(f.actualPq.toFixed(2)), [`Sugerido $/paq (margen ${Math.round(margenObj * 100)}%)`]: Number(f.sugPq.toFixed(2)), 'Máximo $/paq (equilibrio)': Number(f.maxPq.toFixed(2)) })) }])
+    }
+    return exportarPDF(nombre, `Pago al driver por paquete · margen ${pct(margenObj)}`, etiquetaCiudades, [{ titulo: 'Sugerencia de pago por paquete (lineal)', head: ['Ciudad', 'Ruta', 'Paq.', 'Gofo $/paq', 'Actual $/paq', 'Sugerido $/paq', 'Máx $/paq'], body: sugPagoDriver.rows.map((f) => [f.ciudad, f.ruta, num(f.P), money(f.gofoPq), money(f.actualPq), money(f.sugPq), money(f.maxPq)]) }])
+  }
 
   if (!esDueno) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
   if (!ciudades.length) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<EstadoVacio titulo="Sin facturas" texto="Carga una factura para poder simular precios." mostrarBoton={false} /></div>
@@ -619,10 +626,12 @@ export default function Simulador({ embed = false }) {
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <TrendingUp size={17} strokeWidth={1.9} className="text-brand-gold" />
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cuánto pagar al driver por paquete (pago lineal)</h3>
-                <div className="ml-auto flex items-center gap-1.5 text-sm">
+                <div className="ml-auto flex items-center gap-2 text-sm">
                   <span className="text-slate-500 dark:text-slate-400">Margen objetivo</span>
                   <Input type="number" step="1" min="0" max="90" className="w-16" value={Math.round(margenObj * 100)} onChange={(e) => setMargenObj(Math.max(0, Math.min(0.9, (Number(e.target.value) || 0) / 100)))} />
                   <span className="text-slate-500">%</span>
+                  <Boton variant="ghost" onClick={() => exportarPagoDriver('excel')} className="px-2.5 py-1 text-xs"><FileSpreadsheet size={14} strokeWidth={1.8} /> Excel</Boton>
+                  <Boton variant="gold" onClick={() => exportarPagoDriver('pdf')} className="px-2.5 py-1 text-xs"><FileText size={14} strokeWidth={1.8} /> PDF</Boton>
                 </div>
               </div>
               <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Aquí ves cuánto te paga Gofo por paquete en cada ruta y hasta cuánto pagarle para dejar el <b>{pct(margenObj)}</b> de margen. El <b>máximo</b> es el punto de equilibrio: por encima de eso, la ruta pierde.</p>
