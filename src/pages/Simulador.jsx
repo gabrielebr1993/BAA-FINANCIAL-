@@ -9,7 +9,7 @@ import { updateDoc, doc, collection, getDocs, query, where } from 'firebase/fire
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
-import { calcularPagos, rutasConGanancia, gananciaRealDe } from '../utils/calc'
+import { calcularPagos, rutasConGanancia, gananciaRealDe, tarifaDriver } from '../utils/calc'
 import { construirBase, proyectar } from '../utils/simulador'
 import { reprocesarFactura } from '../utils/reprocesar'
 import { guardarProyeccion, borrarProyeccion } from '../utils/proyeccionesGuardadas'
@@ -170,9 +170,25 @@ export default function Simulador({ embed = false }) {
     return out
   }
 
+  // Tarifa LINEAL por paquete que realmente le pagas al/los driver(s) asignado(s) a una
+  // ruta: su `precioIndividual` (0–1 lb), tomado del chofer asociado a la ruta vía
+  // resumenChoferRuta. Si varios choferes cubren la ruta, se pondera por sus paquetes.
+  // Devuelve null si la factura no trae el desglose chofer×ruta (facturas viejas).
+  const tarifaLinealRuta = (inv, rutaRaw) => {
+    const filas = (inv?.resumenChoferRuta || []).filter((x) => x.ruta === rutaRaw)
+    if (!filas.length) return null
+    let paq = 0, suma = 0
+    for (const x of filas) {
+      const rate = tarifaDriver(inv, drivers, x.nombre).tarifaInd || 0
+      const n = (x.individuales || 0) + (x.dobles || 0)
+      paq += n; suma += rate * n
+    }
+    return paq > 0 ? suma / paq : null
+  }
+
   // Base combinada: rutas de TODAS las ciudades del alcance (clave única ciudad::ruta).
   const baseMulti = useMemo(() => {
-    const rutas = []; const rangosSet = new Set(); const costo = {}; let tieneDetalle = false; let ingresoIndTotal = 0
+    const rutas = []; const rangosSet = new Set(); const costo = {}; const tarifaLineal = {}; let tieneDetalle = false; let ingresoIndTotal = 0
     for (const u of unidades) {
       const b = construirBase(u.inv, u.ciudad)
       const c = costoDe(u.inv, u.ciudad, b)
@@ -181,13 +197,14 @@ export default function Simulador({ embed = false }) {
         const key = `${u.ciudad}::${r.ruta}`
         rutas.push({ ...r, ruta: key, rutaNombre: r.ruta, ciudad: u.ciudad, nombreCiudad: nombreDeCiudad(u.ciudad) })
         costo[key] = c[r.ruta] || 0
+        tarifaLineal[key] = tarifaLinealRuta(u.inv, r.ruta)
         ingresoIndTotal += r.ingresoInd || 0
         Object.keys(r.celdas).forEach((rg) => rangosSet.add(rg))
       }
     }
-    return { rutas, rangos: ORDEN_RANGO.filter((rg) => rangosSet.has(rg)), tieneDetalle, costo, ingresoIndTotal: r2(ingresoIndTotal) }
+    return { rutas, rangos: ORDEN_RANGO.filter((rg) => rangosSet.has(rg)), tieneDetalle, costo, tarifaLineal, ingresoIndTotal: r2(ingresoIndTotal) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unidadesKey])
+  }, [unidadesKey, drivers])
 
   const ov = useMemo(() => ({ pct: pctGlobal, peso: pesoFijo, celda }), [pctGlobal, pesoFijo, celda])
   const proj = useMemo(() => proyectar({ rutas: baseMulti.rutas, rangos: baseMulti.rangos, tieneDetalle: baseMulti.tieneDetalle }, ov, baseMulti.costo), [baseMulti, ov])
@@ -279,13 +296,22 @@ export default function Simulador({ embed = false }) {
       const P = (r.individuales || 0) + (r.dobles || 0)
       const I = r.ingresoBase || 0
       const gofoPq = P > 0 ? I / P : 0
-      const actualPq = P > 0 ? (baseMulti.costo[r.ruta] || 0) / P : 0
-      return { key: r.ruta, ciudad: r.nombreCiudad, ruta: r.rutaNombre, P, gofoPq, actualPq, maxPq: gofoPq, sugPq: gofoPq * (1 - margenObj) }
+      // "Pago actual $/paq" = tarifa LINEAL del driver asignado a la ruta (su precio de
+      // 0–1 lb). Si la factura no trae el desglose chofer×ruta, se estima con el costo
+      // real de la ruta ÷ sus paquetes (promedio, marcado como estimado).
+      const lineal = baseMulti.tarifaLineal[r.ruta]
+      const exacto = lineal != null
+      const actualPq = exacto ? lineal : (P > 0 ? (baseMulti.costo[r.ruta] || 0) / P : 0)
+      return { key: r.ruta, ciudad: r.nombreCiudad, ruta: r.rutaNombre, P, gofoPq, actualPq, actualExacto: exacto, maxPq: gofoPq, sugPq: gofoPq * (1 - margenObj) }
     }).sort((a, b) => a.ciudad.localeCompare(b.ciudad) || String(a.ruta).localeCompare(String(b.ruta)))
     const totalP = rows.reduce((a, f) => a + f.P, 0)
     const totalI = baseMulti.rutas.reduce((a, r) => a + (r.ingresoBase || 0), 0)
+    // Costo actual total = pago REAL a choferes (calcularPagos), para que el impacto en la
+    // ganancia real quede exacto. La columna por ruta muestra la tarifa lineal del driver.
     const totalCosto = baseMulti.rutas.reduce((a, r) => a + (baseMulti.costo[r.ruta] || 0), 0)
-    return { rows, totalP, totalI, totalCosto, sugFlat: totalP > 0 ? (totalI * (1 - margenObj)) / totalP : 0, actualFlat: totalP > 0 ? totalCosto / totalP : 0 }
+    // Promedio de la tarifa lineal por paquete (lo que muestra la columna), ponderado.
+    const linealFlat = totalP > 0 ? rows.reduce((a, f) => a + f.actualPq * f.P, 0) / totalP : 0
+    return { rows, totalP, totalI, totalCosto, linealFlat, sugFlat: totalP > 0 ? (totalI * (1 - margenObj)) / totalP : 0, actualFlat: totalP > 0 ? totalCosto / totalP : 0 }
   }, [baseMulti, margenObj])
   // ESCENARIO: rate por ruta = valor editado a mano (si lo hay) o el sugerido. De ahí
   // sale el pago, la ganancia y el margen POR RUTA con los valores que el usuario prueba.
@@ -722,7 +748,7 @@ export default function Simulador({ embed = false }) {
                           <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{f.ruta}</td>
                           <td className="px-2.5 py-2 text-right">{num(f.P)}</td>
                           <td className="px-2.5 py-2 text-right">{money(f.gofoPq)}</td>
-                          <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">{money(f.actualPq)}</td>
+                          <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? 'Tarifa lineal (0–1 lb) del driver asignado a la ruta' : 'Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes'}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>
                           <td className="px-2.5 py-2 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <span className="text-slate-400">$</span>
@@ -742,7 +768,7 @@ export default function Simulador({ embed = false }) {
                       <td className={`px-2.5 py-2.5 text-brand-navy dark:text-slate-100 ${variasCiudades ? '' : ''}`}>{variasCiudades ? '' : 'Total'}</td>
                       <td className="px-2.5 py-2.5 text-right">{num(sugPagoDriver.totalP)}</td>
                       <td className="px-2.5 py-2.5 text-right text-slate-500">{money(sugPagoDriver.totalP > 0 ? sugPagoDriver.totalI / sugPagoDriver.totalP : 0)}</td>
-                      <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(sugPagoDriver.actualFlat)}</td>
+                      <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(sugPagoDriver.linealFlat)}</td>
                       <td className="px-2.5 py-2.5 text-right text-brand-navy dark:text-slate-100">{money(effFlat)}</td>
                       <td className="px-2.5 py-2.5"></td>
                       <td className={`px-2.5 py-2.5 text-right ${margenSiSigo < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct(sugPagoDriver.totalI > 0 ? (sugPagoDriver.totalI - escenario.totalPay) / sugPagoDriver.totalI : 0)}</td>
@@ -751,7 +777,7 @@ export default function Simulador({ embed = false }) {
                   </tfoot>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-slate-400">Edita el <b>Sugerido $/paq</b> de cualquier ruta para probar tu propio rate; el <span className="text-amber-600">margen en ámbar</span> rinde menos que tu objetivo ({pct(margenObj)}) y en <span className="text-rose-600">rojo</span> la ruta pierde (pagas por encima del equilibrio). "Margen ruta" y "Ganancia ruta" son sobre el ingreso de Gofo de esa ruta. El pago al driver NO cambia con los precios de Gofo — esto es una guía para fijar tu tarifa lineal.</p>
+              <p className="mt-2 text-[11px] text-slate-400"><b>"Pago actual $/paq"</b> = la tarifa lineal (0–1 lb) del driver asignado a esa ruta, o sea lo que realmente le pagas por paquete (un <b>~</b> indica que se estimó porque la factura no trae el desglose chofer×ruta). Edita el <b>Sugerido $/paq</b> de cualquier ruta para probar tu propio rate; el <span className="text-amber-600">margen en ámbar</span> rinde menos que tu objetivo ({pct(margenObj)}) y en <span className="text-rose-600">rojo</span> la ruta pierde (pagas por encima del equilibrio). "Margen ruta" y "Ganancia ruta" son sobre el ingreso de Gofo de esa ruta.</p>
             </Card>
           )}
 
