@@ -120,6 +120,7 @@ export default function Simulador({ embed = false }) {
   // desglose por peso, para que al REPROCESAR (mismo id, datos nuevos) todo se recalcule.
   const unidadesIdKey = unidades.map((u) => u.inv.id).join(',')
   const unidadesKey = unidades.map((u) => `${u.inv.id}:${((u.inv.simuladorDesglose || u.inv.resumenRutaPeso) || []).length}`).join(',')
+  const variasCiudades = unidades.length > 1
 
   // Defaults
   useEffect(() => { if (!defHecho.current && ciudades.length) { defHecho.current = true; setCiudadesSel([ciudades[0].codigo]) } }, [ciudades])
@@ -535,8 +536,6 @@ export default function Simulador({ embed = false }) {
     if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Rutas', rows: filasX }])
     return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ruta', head: ['Ciudad', 'Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. ruta proy.', 'Δ ruta'], body: proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return [b.nombreCiudad || '', b.rutaNombre || r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase)] }) }])
   }
-
-  const variasCiudades = unidades.length > 1
 
   return (
     <div>
