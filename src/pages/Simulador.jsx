@@ -284,8 +284,14 @@ export default function Simulador({ embed = false }) {
     const totalP = rows.reduce((a, f) => a + f.P, 0)
     const totalI = baseMulti.rutas.reduce((a, r) => a + (r.ingresoBase || 0), 0)
     const totalCosto = baseMulti.rutas.reduce((a, r) => a + (baseMulti.costo[r.ruta] || 0), 0)
-    return { rows, totalP, sugFlat: totalP > 0 ? (totalI * (1 - margenObj)) / totalP : 0, actualFlat: totalP > 0 ? totalCosto / totalP : 0 }
+    return { rows, totalP, totalI, totalCosto, sugFlat: totalP > 0 ? (totalI * (1 - margenObj)) / totalP : 0, actualFlat: totalP > 0 ? totalCosto / totalP : 0 }
   }, [baseMulti, margenObj])
+  // Impacto en la GANANCIA REAL de seguir la recomendación (pagar el sugerido):
+  // solo cambia el pago a choferes; el resto (neto, gastos, claims) queda fijo.
+  const pagoSugTotal = r2(sugPagoDriver.totalI * (1 - margenObj))
+  const difPago = r2(sugPagoDriver.totalCosto - pagoSugTotal)   // + = pagarías MENOS
+  const gananciaSiSigo = r2(real.gananciaReal + difPago)
+  const margenSiSigo = real.ingresoNeto > 0 ? gananciaSiSigo / real.ingresoNeto : 0
 
   // --- Historial de proyecciones guardadas ---
   const proyeccionesGuardadas = [...(ajustes?.proyecciones || [])].sort((a, b) => (a.ts < b.ts ? 1 : -1))
@@ -324,10 +330,25 @@ export default function Simulador({ embed = false }) {
   }
   const exportarPagoDriver = (tipo) => {
     const nombre = `pago_driver_${etiquetaCiudades}_margen${Math.round(margenObj * 100)}`.replace(/[^\w-]+/g, '_')
+    const resumenRows = [
+      { Concepto: 'Margen objetivo', Valor: `${Math.round(margenObj * 100)}%` },
+      { Concepto: 'Pago al driver actual ($/paq)', Valor: Number(sugPagoDriver.actualFlat.toFixed(2)) },
+      { Concepto: 'Pago al driver sugerido ($/paq)', Valor: Number(sugPagoDriver.sugFlat.toFixed(2)) },
+      { Concepto: 'Ganancia real hoy', Valor: Math.round(real.gananciaReal) },
+      { Concepto: 'Ganancia real si sigues la recomendación', Valor: Math.round(gananciaSiSigo) },
+      { Concepto: 'Diferencia por semana', Valor: Math.round(difPago) },
+      { Concepto: 'Diferencia por mes (~4.3 sem)', Valor: Math.round(difPago * MENSUAL) },
+    ]
     if (tipo === 'excel') {
-      return exportarExcel(nombre, [{ nombre: 'Pago al driver', rows: sugPagoDriver.rows.map((f) => ({ Ciudad: f.ciudad, Ruta: f.ruta, Paquetes: f.P, 'Gofo $/paq': Number(f.gofoPq.toFixed(2)), 'Pago actual $/paq': Number(f.actualPq.toFixed(2)), [`Sugerido $/paq (margen ${Math.round(margenObj * 100)}%)`]: Number(f.sugPq.toFixed(2)), 'Máximo $/paq (equilibrio)': Number(f.maxPq.toFixed(2)) })) }])
+      return exportarExcel(nombre, [
+        { nombre: 'Resumen', rows: resumenRows },
+        { nombre: 'Pago al driver', rows: sugPagoDriver.rows.map((f) => ({ Ciudad: f.ciudad, Ruta: f.ruta, Paquetes: f.P, 'Gofo $/paq': Number(f.gofoPq.toFixed(2)), 'Pago actual $/paq': Number(f.actualPq.toFixed(2)), [`Sugerido $/paq (margen ${Math.round(margenObj * 100)}%)`]: Number(f.sugPq.toFixed(2)), 'Máximo $/paq (equilibrio)': Number(f.maxPq.toFixed(2)) })) },
+      ])
     }
-    return exportarPDF(nombre, `Pago al driver por paquete · margen ${pct(margenObj)}`, etiquetaCiudades, [{ titulo: 'Sugerencia de pago por paquete (lineal)', head: ['Ciudad', 'Ruta', 'Paq.', 'Gofo $/paq', 'Actual $/paq', 'Sugerido $/paq', 'Máx $/paq'], body: sugPagoDriver.rows.map((f) => [f.ciudad, f.ruta, num(f.P), money(f.gofoPq), money(f.actualPq), money(f.sugPq), money(f.maxPq)]) }])
+    return exportarPDF(nombre, `Pago al driver por paquete · margen ${pct(margenObj)}`, etiquetaCiudades, [
+      { titulo: 'Impacto en la ganancia real', head: ['Concepto', 'Valor'], body: resumenRows.map((r) => [r.Concepto, typeof r.Valor === 'number' ? money(r.Valor) : r.Valor]) },
+      { titulo: 'Sugerencia de pago por paquete (lineal)', head: ['Ciudad', 'Ruta', 'Paq.', 'Gofo $/paq', 'Actual $/paq', 'Sugerido $/paq', 'Máx $/paq'], body: sugPagoDriver.rows.map((f) => [f.ciudad, f.ruta, num(f.P), money(f.gofoPq), money(f.actualPq), money(f.sugPq), money(f.maxPq)]) },
+    ])
   }
 
   if (!esDueno) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
@@ -634,8 +655,26 @@ export default function Simulador({ embed = false }) {
                   <Boton variant="gold" onClick={() => exportarPagoDriver('pdf')} className="px-2.5 py-1 text-xs"><FileText size={14} strokeWidth={1.8} /> PDF</Boton>
                 </div>
               </div>
-              <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Aquí ves cuánto te paga Gofo por paquete en cada ruta y hasta cuánto pagarle para dejar el <b>{pct(margenObj)}</b> de margen. El <b>máximo</b> es el punto de equilibrio: por encima de eso, la ruta pierde.</p>
-              <Aviso tipo="ok" className="mb-3">Sugerencia general: con un pago de <b>{money(sugPagoDriver.sugFlat)} por paquete</b> tendrías ~{pct(margenObj)} de margen en promedio (sobre {num(sugPagoDriver.totalP)} paquetes). Pago actual estimado: <b>{money(sugPagoDriver.actualFlat)}/paquete</b>.</Aviso>
+              <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Aquí ves cuánto te paga Gofo por paquete en cada ruta y hasta cuánto pagarle para dejar el <b>{pct(margenObj)}</b> de margen (sobre lo que paga Gofo). El <b>máximo</b> es el punto de equilibrio: por encima de eso, la ruta pierde.</p>
+              {/* Impacto en la ganancia real de seguir la recomendación */}
+              <div className="mb-3 grid gap-3 sm:grid-cols-3">
+                <Card className="p-3">
+                  <div className="text-[11px] text-slate-400">Pago al driver · hoy → sugerido</div>
+                  <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(sugPagoDriver.actualFlat)} → {money(sugPagoDriver.sugFlat)}<span className="text-xs font-normal text-slate-400"> /paq</span></div>
+                  <div className="text-xs text-slate-400">total {money(sugPagoDriver.totalCosto)} → {money(pagoSugTotal)}</div>
+                </Card>
+                <Card className={`p-3 ${difPago > 0.01 ? 'border-l-4 border-l-emerald-500' : difPago < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
+                  <div className="text-[11px] text-slate-400">Ganancia REAL · hoy → si sigues</div>
+                  <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(real.gananciaReal)} → {money(gananciaSiSigo)}</div>
+                  <div className="text-xs text-slate-400">margen {pct(resumen.margenBase)} → {pct(margenSiSigo)}</div>
+                </Card>
+                <Card className={`p-3 ${difPago > 0.01 ? 'border-l-4 border-l-emerald-500' : difPago < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
+                  <div className="text-[11px] text-slate-400">Diferencia si sigues la recomendación</div>
+                  <div className={`text-base font-bold ${difPago > 0.01 ? 'text-emerald-600' : difPago < -0.01 ? 'text-rose-600' : 'text-slate-500'}`}>{difPago >= 0 ? '+' : ''}{money(difPago)}/sem</div>
+                  <div className="text-xs text-slate-400">{difPago > 0.01 ? `Ganarías ${money(difPago * MENSUAL)} más al mes` : difPago < -0.01 ? `Hoy ya ganas ${money(-difPago)} más que el objetivo` : 'Igual que hoy'}</div>
+                </Card>
+              </div>
+              <Aviso tipo="ok" className="mb-3">Sugerencia: paga <b>{money(sugPagoDriver.sugFlat)} por paquete</b> (hoy ~{money(sugPagoDriver.actualFlat)}) → ganancia real <b>{money(gananciaSiSigo)}</b> ({difPago >= 0 ? '+' : ''}{money(difPago)}/sem vs hoy). Sube o baja el <b>margen objetivo</b> arriba para ver otros escenarios.</Aviso>
               <div className="scroll-thin max-h-[420px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
