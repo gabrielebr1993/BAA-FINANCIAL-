@@ -18,7 +18,7 @@ import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
-import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen, Eye, EyeOff } from 'lucide-react'
+import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen, Eye, EyeOff, Search, X } from 'lucide-react'
 
 const MENSUAL = 4.3
 const ORDEN_RANGO = ['(promedio)', '0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
@@ -67,6 +67,7 @@ export default function Simulador({ embed = false }) {
   // Visibilidad de columnas de la tabla de pago (ojito): oculta en pantalla y en el export.
   const [colsPago, setColsPago] = useState({ ciudad: true, paquetes: true, gofo: true, actual: true, sugerido: true, max: true, margen: true, ganancia: true })
   const [verColsPago, setVerColsPago] = useState(false)
+  const [buscarPago, setBuscarPago] = useState('') // filtro por nombre de driver/ruta en la tabla de pago
   const cargarRef = useRef(false)
 
   const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas (resumen); 1+ = detalle editable
@@ -411,6 +412,10 @@ export default function Simulador({ embed = false }) {
   ].filter((c) => c.disponible)
   const verCol = (k) => colsPago[k] !== false
   const nColsPago = 1 + COLS_PAGO.filter((c) => verCol(c.key)).length // +1 = columna de ruta/driver (fija)
+  // Filtro del buscador: solo cambia las filas mostradas; totales e impacto siguen sobre TODO.
+  const filasPago = buscarPago.trim()
+    ? escenario.rows.filter((f) => `${f.ruta} ${f.ciudad}`.toLowerCase().includes(buscarPago.trim().toLowerCase()))
+    : escenario.rows
 
   // --- Historial de proyecciones guardadas ---
   const proyeccionesGuardadas = [...(ajustes?.proyecciones || [])].sort((a, b) => (a.ts < b.ts ? 1 : -1))
@@ -864,6 +869,15 @@ export default function Simulador({ embed = false }) {
                 </Card>
               </div>
               <Aviso tipo="ok" className="mb-3">{(hayManual || hayGofoManual) ? <>Con lo que pusiste, pagarías <b>{money(effFlat)} por paquete</b> en promedio → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Edita el Gofo o el sugerido de cada {etiquetaFila}, o pulsa <b>Restablecer</b> para volver al original.</> : <>Sugerencia: paga <b>{money(fuente.sugFlat)} por paquete</b> (hoy ~{money(fuente.linealFlat)}) → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Sube o baja el <b>margen objetivo</b> o edita el Gofo/sugerido de cada {etiquetaFila} abajo para probar escenarios.</>}</Aviso>
+              {/* Buscador para editar rápido un solo driver/ruta */}
+              <div className="mb-2 flex items-center gap-2">
+                <div className="relative flex-1 sm:max-w-xs">
+                  <Search size={15} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input type="text" value={buscarPago} onChange={(e) => setBuscarPago(e.target.value)} placeholder={modoPago === 'driver' ? 'Buscar driver…' : 'Buscar ruta…'} className="w-full pl-8 pr-8" />
+                  {buscarPago && <button onClick={() => setBuscarPago('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="Limpiar"><X size={14} strokeWidth={2} /></button>}
+                </div>
+                {buscarPago.trim() && <span className="text-xs text-slate-400">{filasPago.length} de {escenario.rows.length}</span>}
+              </div>
               <div className="scroll-thin max-h-[420px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
@@ -883,7 +897,10 @@ export default function Simulador({ embed = false }) {
                     {escenario.rows.length === 0 && (
                       <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">Esta factura no trae el desglose chofer×ruta necesario para agrupar por driver. Reprocesa la factura arriba, o usa la vista <b>Por ruta</b>.</td></tr>
                     )}
-                    {escenario.rows.map((f) => {
+                    {escenario.rows.length > 0 && filasPago.length === 0 && (
+                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">Sin resultados para “{buscarPago}”. <button onClick={() => setBuscarPago('')} className="text-brand-gold underline">Limpiar</button></td></tr>
+                    )}
+                    {filasPago.map((f) => {
                       const over = f.rate > f.maxPq + 0.001            // paga por encima del equilibrio → pierde
                       const bajoObj = f.margen < margenObj - 0.001      // rinde menos que el margen objetivo
                       return (
