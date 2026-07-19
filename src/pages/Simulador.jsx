@@ -18,7 +18,7 @@ import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
-import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen } from 'lucide-react'
+import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen, Eye, EyeOff } from 'lucide-react'
 
 const MENSUAL = 4.3
 const ORDEN_RANGO = ['(promedio)', '0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
@@ -63,6 +63,9 @@ export default function Simulador({ embed = false }) {
   const [margenObj, setMargenObj] = useState(0.2) // margen objetivo para sugerir pago al driver
   const [pagoManual, setPagoManual] = useState({}) // rate $/paq editado por el usuario, por ruta/driver
   const [modoPago, setModoPago] = useState('ruta') // 'ruta' | 'driver': cómo agrupar el pago
+  // Visibilidad de columnas de la tabla de pago (ojito): oculta en pantalla y en el export.
+  const [colsPago, setColsPago] = useState({ ciudad: true, paquetes: true, gofo: true, actual: true, sugerido: true, max: true, margen: true, ganancia: true })
+  const [verColsPago, setVerColsPago] = useState(false)
   const cargarRef = useRef(false)
 
   const [ciudadesSel, setCiudadesSel] = useState([]) // [] = todas (resumen); 1+ = detalle editable
@@ -381,6 +384,19 @@ export default function Simulador({ embed = false }) {
   const effFlat = fuente.totalP > 0 ? escenario.totalPay / fuente.totalP : 0
   const etiquetaFila = modoPago === 'driver' ? 'driver' : 'ruta'   // texto en minúscula
   const EtiquetaFila = modoPago === 'driver' ? 'Driver' : 'Ruta'   // encabezado de columna
+  // Columnas de métricas que se pueden ocultar con el ojito (la ciudad depende de si hay varias).
+  const COLS_PAGO = [
+    { key: 'ciudad', label: 'Ciudad', disponible: variasCiudades },
+    { key: 'paquetes', label: 'Paquetes', disponible: true },
+    { key: 'gofo', label: 'Gofo $/paq', disponible: true },
+    { key: 'actual', label: 'Pago actual $/paq', disponible: true },
+    { key: 'sugerido', label: 'Sugerido $/paq', disponible: true },
+    { key: 'max', label: 'Máx $/paq', disponible: true },
+    { key: 'margen', label: 'Margen', disponible: true },
+    { key: 'ganancia', label: 'Ganancia', disponible: true },
+  ].filter((c) => c.disponible)
+  const verCol = (k) => colsPago[k] !== false
+  const nColsPago = 1 + COLS_PAGO.filter((c) => verCol(c.key)).length // +1 = columna de ruta/driver (fija)
 
   // --- Historial de proyecciones guardadas ---
   const proyeccionesGuardadas = [...(ajustes?.proyecciones || [])].sort((a, b) => (a.ts < b.ts ? 1 : -1))
@@ -438,15 +454,52 @@ export default function Simulador({ embed = false }) {
       { Concepto: 'Diferencia por semana', Valor: Math.round(difPago) },
       { Concepto: 'Diferencia por mes (~4.3 sem)', Valor: Math.round(difPago * MENSUAL) },
     ]
+    // Solo se exportan las columnas visibles (ojito). La columna ruta/driver siempre va.
     if (tipo === 'excel') {
+      const rows = escenario.rows.map((f) => {
+        const o = {}
+        if (verCol('ciudad') && variasCiudades) o.Ciudad = f.ciudad
+        o[etiquetaCol] = f.ruta
+        if (verCol('paquetes')) o.Paquetes = f.P
+        if (verCol('gofo')) o['Gofo $/paq'] = Number(f.gofoPq.toFixed(2))
+        if (verCol('actual')) o['Pago actual $/paq'] = Number(f.actualPq.toFixed(2))
+        if (verCol('sugerido')) { o[`Sugerido $/paq (margen ${Math.round(margenObj * 100)}%)`] = Number(f.sugPq.toFixed(2)); o['Rate usado $/paq'] = Number(f.rate.toFixed(2)) }
+        if (verCol('max')) o['Máximo $/paq (equilibrio)'] = Number(f.maxPq.toFixed(2))
+        if (verCol('margen')) o['Margen'] = `${(f.margen * 100).toFixed(1)}%`
+        if (verCol('ganancia')) o['Ganancia'] = Math.round(f.gan)
+        return o
+      })
       return exportarExcel(nombre, [
         { nombre: 'Resumen', rows: resumenRows },
-        { nombre: porDrv ? 'Pago por driver' : 'Pago por ruta', rows: escenario.rows.map((f) => ({ Ciudad: f.ciudad, [etiquetaCol]: f.ruta, Paquetes: f.P, 'Gofo $/paq': Number(f.gofoPq.toFixed(2)), 'Pago actual $/paq': Number(f.actualPq.toFixed(2)), [`Sugerido $/paq (margen ${Math.round(margenObj * 100)}%)`]: Number(f.sugPq.toFixed(2)), 'Rate usado $/paq': Number(f.rate.toFixed(2)), 'Ganancia': Math.round(f.gan), 'Margen': `${(f.margen * 100).toFixed(1)}%`, 'Máximo $/paq (equilibrio)': Number(f.maxPq.toFixed(2)) })) },
+        { nombre: porDrv ? 'Pago por driver' : 'Pago por ruta', rows },
       ])
     }
+    const head = []
+    if (verCol('ciudad') && variasCiudades) head.push('Ciudad')
+    head.push(etiquetaCol)
+    if (verCol('paquetes')) head.push('Paq.')
+    if (verCol('gofo')) head.push('Gofo $/paq')
+    if (verCol('actual')) head.push('Actual $/paq')
+    if (verCol('sugerido')) head.push('Sugerido $/paq', 'Rate usado')
+    if (verCol('max')) head.push('Máx $/paq')
+    if (verCol('margen')) head.push('Margen')
+    if (verCol('ganancia')) head.push('Ganancia')
+    const body = escenario.rows.map((f) => {
+      const r = []
+      if (verCol('ciudad') && variasCiudades) r.push(f.ciudad)
+      r.push(f.ruta)
+      if (verCol('paquetes')) r.push(num(f.P))
+      if (verCol('gofo')) r.push(money(f.gofoPq))
+      if (verCol('actual')) r.push(money(f.actualPq))
+      if (verCol('sugerido')) r.push(money(f.sugPq), money(f.rate))
+      if (verCol('max')) r.push(money(f.maxPq))
+      if (verCol('margen')) r.push(`${(f.margen * 100).toFixed(1)}%`)
+      if (verCol('ganancia')) r.push(money(f.gan))
+      return r
+    })
     return exportarPDF(nombre, `Pago por paquete (${porDrv ? 'por driver' : 'por ruta'}) · margen ${pct(margenObj)}`, etiquetaCiudades, [
       { titulo: 'Impacto en la ganancia real', head: ['Concepto', 'Valor'], body: resumenRows.map((r) => [r.Concepto, typeof r.Valor === 'number' ? money(r.Valor) : r.Valor]) },
-      { titulo: `Pago por paquete (lineal) por ${porDrv ? 'driver' : 'ruta'}`, head: ['Ciudad', etiquetaCol, 'Paq.', 'Gofo $/paq', 'Actual $/paq', 'Sugerido $/paq', 'Rate usado', 'Ganancia', 'Margen'], body: escenario.rows.map((f) => [f.ciudad, f.ruta, num(f.P), money(f.gofoPq), money(f.actualPq), money(f.sugPq), money(f.rate), money(f.gan), `${(f.margen * 100).toFixed(1)}%`]) },
+      { titulo: `Pago por paquete (lineal) por ${porDrv ? 'driver' : 'ruta'}`, head, body },
     ])
   }
 
@@ -756,6 +809,23 @@ export default function Simulador({ embed = false }) {
                   <Input type="number" step="1" min="0" max="90" className="w-16" value={Math.round(margenObj * 100)} onChange={(e) => setMargenObj(Math.max(0, Math.min(0.9, (Number(e.target.value) || 0) / 100)))} />
                   <span className="text-slate-500">%</span>
                   {hayManual && <Boton variant="ghost" onClick={() => setPagoManual({})} className="px-2.5 py-1 text-xs"><RotateCcw size={14} strokeWidth={1.8} /> Restablecer</Boton>}
+                  <div className="relative">
+                    <Boton variant="ghost" onClick={() => setVerColsPago((v) => !v)} className="px-2.5 py-1 text-xs"><Eye size={14} strokeWidth={1.8} /> Columnas</Boton>
+                    {verColsPago && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setVerColsPago(false)} />
+                        <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          <div className="px-2 py-1 text-[11px] font-semibold uppercase text-slate-400">Mostrar en tabla y export</div>
+                          {COLS_PAGO.map((c) => (
+                            <button key={c.key} onClick={() => setColsPago((s) => ({ ...s, [c.key]: !verCol(c.key) }))} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700/60">
+                              <span className={verCol(c.key) ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 line-through'}>{c.label}</span>
+                              {verCol(c.key) ? <Eye size={15} strokeWidth={1.8} className="text-brand-gold" /> : <EyeOff size={15} strokeWidth={1.8} className="text-slate-400" />}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <Boton variant="ghost" onClick={() => exportarPagoDriver('excel')} className="px-2.5 py-1 text-xs"><FileSpreadsheet size={14} strokeWidth={1.8} /> Excel</Boton>
                   <Boton variant="gold" onClick={() => exportarPagoDriver('pdf')} className="px-2.5 py-1 text-xs"><FileText size={14} strokeWidth={1.8} /> PDF</Boton>
                 </div>
@@ -784,55 +854,57 @@ export default function Simulador({ embed = false }) {
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      {variasCiudades && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
+                      {variasCiudades && verCol('ciudad') && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
                       <th className="px-2.5 py-2.5 text-left font-semibold">{EtiquetaFila}</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Paquetes</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Gofo $/paq</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Pago actual $/paq</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Sugerido $/paq <span className="font-normal text-slate-400">(editable)</span></th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Máx $/paq</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Margen</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia</th>
+                      {verCol('paquetes') && <th className="px-2.5 py-2.5 text-right font-semibold">Paquetes</th>}
+                      {verCol('gofo') && <th className="px-2.5 py-2.5 text-right font-semibold">Gofo $/paq</th>}
+                      {verCol('actual') && <th className="px-2.5 py-2.5 text-right font-semibold">Pago actual $/paq</th>}
+                      {verCol('sugerido') && <th className="px-2.5 py-2.5 text-right font-semibold">Sugerido $/paq <span className="font-normal text-slate-400">(editable)</span></th>}
+                      {verCol('max') && <th className="px-2.5 py-2.5 text-right font-semibold">Máx $/paq</th>}
+                      {verCol('margen') && <th className="px-2.5 py-2.5 text-right font-semibold">Margen</th>}
+                      {verCol('ganancia') && <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {escenario.rows.length === 0 && (
-                      <tr><td colSpan={variasCiudades ? 9 : 8} className="px-2.5 py-6 text-center text-sm text-slate-400">Esta factura no trae el desglose chofer×ruta necesario para agrupar por driver. Reprocesa la factura arriba, o usa la vista <b>Por ruta</b>.</td></tr>
+                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">Esta factura no trae el desglose chofer×ruta necesario para agrupar por driver. Reprocesa la factura arriba, o usa la vista <b>Por ruta</b>.</td></tr>
                     )}
                     {escenario.rows.map((f) => {
                       const over = f.rate > f.maxPq + 0.001            // paga por encima del equilibrio → pierde
                       const bajoObj = f.margen < margenObj - 0.001      // rinde menos que el margen objetivo
                       return (
                         <tr key={f.key} className={`border-t border-slate-100 dark:border-slate-700/50 ${over ? 'bg-rose-50/50 dark:bg-rose-500/5' : ''}`}>
-                          {variasCiudades && <td className="px-2.5 py-2 text-xs text-slate-500">{f.ciudad}</td>}
+                          {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2 text-xs text-slate-500">{f.ciudad}</td>}
                           <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{f.ruta}</td>
-                          <td className="px-2.5 py-2 text-right">{num(f.P)}</td>
-                          <td className="px-2.5 py-2 text-right">{money(f.gofoPq)}</td>
-                          <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? 'Tarifa lineal (0–1 lb) del driver asignado a la ruta' : 'Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes'}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>
-                          <td className="px-2.5 py-2 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="text-slate-400">$</span>
-                              <Input type="number" step="0.05" min="0" className={`w-20 text-right ${f.manual ? 'border-brand-gold font-bold text-brand-navy dark:text-slate-100' : 'font-bold text-emerald-600 dark:text-emerald-400'}`} value={f.manual ? pagoManual[f.key] : ''} placeholder={f.sugPq.toFixed(2)} onChange={(e) => { const v = e.target.value; setPagoManual((m) => { const n = { ...m }; if (v === '') delete n[f.key]; else n[f.key] = v; return n }) }} />
-                            </div>
-                          </td>
-                          <td className="px-2.5 py-2 text-right text-slate-500">{money(f.maxPq)}</td>
-                          <td className={`px-2.5 py-2 text-right font-semibold ${f.margen < 0 ? 'text-rose-600' : bajoObj ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{(f.margen * 100).toFixed(1)}%</td>
-                          <td className={`px-2.5 py-2 text-right font-semibold ${f.gan < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(f.gan)}</td>
+                          {verCol('paquetes') && <td className="px-2.5 py-2 text-right">{num(f.P)}</td>}
+                          {verCol('gofo') && <td className="px-2.5 py-2 text-right">{money(f.gofoPq)}</td>}
+                          {verCol('actual') && <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? 'Tarifa lineal (0–1 lb) del driver asignado a la ruta' : 'Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes'}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>}
+                          {verCol('sugerido') && (
+                            <td className="px-2.5 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-slate-400">$</span>
+                                <Input type="number" step="0.05" min="0" className={`w-20 text-right ${f.manual ? 'border-brand-gold font-bold text-brand-navy dark:text-slate-100' : 'font-bold text-emerald-600 dark:text-emerald-400'}`} value={f.manual ? pagoManual[f.key] : ''} placeholder={f.sugPq.toFixed(2)} onChange={(e) => { const v = e.target.value; setPagoManual((m) => { const n = { ...m }; if (v === '') delete n[f.key]; else n[f.key] = v; return n }) }} />
+                              </div>
+                            </td>
+                          )}
+                          {verCol('max') && <td className="px-2.5 py-2 text-right text-slate-500">{money(f.maxPq)}</td>}
+                          {verCol('margen') && <td className={`px-2.5 py-2 text-right font-semibold ${f.margen < 0 ? 'text-rose-600' : bajoObj ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{(f.margen * 100).toFixed(1)}%</td>}
+                          {verCol('ganancia') && <td className={`px-2.5 py-2 text-right font-semibold ${f.gan < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(f.gan)}</td>}
                         </tr>
                       )
                     })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold dark:border-slate-700 dark:bg-slate-800/60">
-                      {variasCiudades && <td className="px-2.5 py-2.5 text-xs text-slate-500">Total</td>}
-                      <td className={`px-2.5 py-2.5 text-brand-navy dark:text-slate-100 ${variasCiudades ? '' : ''}`}>{variasCiudades ? '' : 'Total'}</td>
-                      <td className="px-2.5 py-2.5 text-right">{num(fuente.totalP)}</td>
-                      <td className="px-2.5 py-2.5 text-right text-slate-500">{money(fuente.totalP > 0 ? fuente.totalI / fuente.totalP : 0)}</td>
-                      <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(fuente.linealFlat)}</td>
-                      <td className="px-2.5 py-2.5 text-right text-brand-navy dark:text-slate-100">{money(effFlat)}</td>
-                      <td className="px-2.5 py-2.5"></td>
-                      <td className={`px-2.5 py-2.5 text-right ${margenSiSigo < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct(fuente.totalI > 0 ? (fuente.totalI - escenario.totalPay) / fuente.totalI : 0)}</td>
-                      <td className={`px-2.5 py-2.5 text-right ${fuente.totalI - escenario.totalPay < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(fuente.totalI - escenario.totalPay)}</td>
+                      {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2.5 text-xs text-slate-500">Total</td>}
+                      <td className="px-2.5 py-2.5 text-brand-navy dark:text-slate-100">{variasCiudades && verCol('ciudad') ? '' : 'Total'}</td>
+                      {verCol('paquetes') && <td className="px-2.5 py-2.5 text-right">{num(fuente.totalP)}</td>}
+                      {verCol('gofo') && <td className="px-2.5 py-2.5 text-right text-slate-500">{money(fuente.totalP > 0 ? fuente.totalI / fuente.totalP : 0)}</td>}
+                      {verCol('actual') && <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(fuente.linealFlat)}</td>}
+                      {verCol('sugerido') && <td className="px-2.5 py-2.5 text-right text-brand-navy dark:text-slate-100">{money(effFlat)}</td>}
+                      {verCol('max') && <td className="px-2.5 py-2.5"></td>}
+                      {verCol('margen') && <td className={`px-2.5 py-2.5 text-right ${margenSiSigo < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{pct(fuente.totalI > 0 ? (fuente.totalI - escenario.totalPay) / fuente.totalI : 0)}</td>}
+                      {verCol('ganancia') && <td className={`px-2.5 py-2.5 text-right ${fuente.totalI - escenario.totalPay < 0 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>{money(fuente.totalI - escenario.totalPay)}</td>}
                     </tr>
                   </tfoot>
                 </table>
