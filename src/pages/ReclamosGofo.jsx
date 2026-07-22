@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Scale, AlertTriangle, TrendingDown, FileWarning, Download, CheckCircle2 } from 'lucide-react'
+import { Scale, AlertTriangle, TrendingDown, FileWarning, Download, CheckCircle2, Lock } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { claimsDeCiudad, TODAS } from '../utils/calc'
 import { facturasQueNoCuadran, cambiosDePrecio, claimsSospechosos, totalEnDisputa, descargarReporteReclamo, descargarReporteConsolidado } from '../utils/reclamos'
 import { money, num, pct } from '../utils/format'
@@ -8,6 +9,9 @@ import { Card, PageTitle, Boton, Badge, Cargando, EstadoVacio } from '../compone
 
 export default function ReclamosGofo() {
   const { facturaRango: inv, invoicesRango, invAnterior, claims, selectedCity, empresaActiva, cargando } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  // Este módulo muestra los montos que Gofo descuenta/disputa: solo owner/admin/superadmin.
+  const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const [generando, setGenerando] = useState(null)
 
   // Respeta el filtro de ciudad: solo las facturas de esa ciudad (cada factura es de
@@ -46,7 +50,13 @@ export default function ReclamosGofo() {
     <div>
       <PageTitle>Reclamos a Gofo</PageTitle>
 
-      {cargando ? (
+      {!verGofo ? (
+        <Card className="p-8 text-center">
+          <Lock size={38} strokeWidth={1.5} className="mx-auto text-slate-400" />
+          <h3 className="mt-2 text-lg font-bold text-brand-navy dark:text-slate-100">Sección no disponible para tu rol</h3>
+          <p className="text-slate-500 dark:text-slate-400">Los montos en disputa y descuentos de Gofo solo están disponibles para la administración.</p>
+        </Card>
+      ) : cargando ? (
         <Cargando texto="Analizando facturación…" />
       ) : !inv ? (
         <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango seleccionado para revisar reclamos." />

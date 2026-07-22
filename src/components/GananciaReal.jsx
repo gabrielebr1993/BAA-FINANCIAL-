@@ -2,7 +2,7 @@
 import { money, pct } from '../utils/format'
 import { Card } from './ui'
 
-export default function GananciaReal({ g, ciudadLabel, claims, oculto = false }) {
+export default function GananciaReal({ g, ciudadLabel, claims, oculto = false, verGofo = true }) {
   if (!g) return null
   const neto = claims ? Number(claims.gananciaNetaClaims) || 0 : null
   const OCULTO = '••••••'
@@ -38,7 +38,7 @@ export default function GananciaReal({ g, ciudadLabel, claims, oculto = false })
 
       {/* El efecto de los claims YA está dentro (en el ingreso neto y el pago a
           choferes). Se muestra aquí solo para transparencia; no se vuelve a sumar. */}
-      {neto != null && (
+      {neto != null && verGofo && (
         <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-xs dark:bg-slate-800/60">
           <span className="text-slate-500 dark:text-slate-400">Incluye neto de claims (ya contado)</span>
           <span className={`font-semibold ${neto >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>

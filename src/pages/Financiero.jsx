@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { calcularPagos, porCiudad, claimsDeCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
@@ -14,6 +15,10 @@ import HistorialReconciliacion from '../components/HistorialReconciliacion'
 
 export default function Financiero() {
   const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, verificacionCiudad, ajustesPorChofer, cargando } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  // Solo owner/admin/superadmin ven la info de descuentos de Gofo (panel de claims y la
+  // línea "Gofo descontado" de la ganancia real). El manager no.
+  const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const semanas = numSemanas
   const gReal = useMemo(
     () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer),
@@ -93,7 +98,7 @@ export default function Financiero() {
               No hay desglose de pago de Gofo para esta ciudad en este período.
             </div>
           )}
-          {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} />}
+          {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} verGofo={verGofo} />}
 
           {/* Desglose de ganancia real por ciudad */}
           {selectedInvoice && desgloseCiudades.length > 0 && (
@@ -128,7 +133,7 @@ export default function Financiero() {
             </Card>
           )}
 
-          {selectedInvoice && <PanelClaims claims={claimsDeCiudad(claims, selectedCity, selectedInvoice)} inv={selectedInvoice} />}
+          {selectedInvoice && verGofo && <PanelClaims claims={claimsDeCiudad(claims, selectedCity, selectedInvoice)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <KPI label="Ingreso neto (Gofo)" value={money(ingresoNetoT)} icon={DollarSign} accent="green" />

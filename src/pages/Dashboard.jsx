@@ -231,7 +231,7 @@ export default function Dashboard() {
                   </div>
                 )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
-                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} />
+                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} verGofo={verGofo} />
                 </ClickWrap>
               </div>
 
