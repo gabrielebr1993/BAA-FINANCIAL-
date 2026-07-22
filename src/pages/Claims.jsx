@@ -11,9 +11,11 @@ import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, Est
 
 export default function Claims() {
   const { perfil, esSuperAdmin } = useAuth()
-  // El MANAGER no ve la info financiera de Gofo: se le ocultan la columna Categoría·Método
-  // y Monto Gofo, y las tarjetas de "Descuento a choferes" y "Te descontó Gofo".
-  const ocultarGofo = !esSuperAdmin && perfil?.role === 'manager'
+  // Solo owner/admin/superadmin ven la info financiera de Gofo (igual que el resto de la
+  // app). Al MANAGER se le ocultan la columna Categoría·Método y Monto Gofo, y las tarjetas
+  // de "Descuento a choferes" y "Te descontó Gofo".
+  const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
+  const ocultarGofo = !verGofo
   const { claims, facturaRango: selectedInvoice, selectedCity, reloadClaims, cargando } = useData()
   const [fCourier, setFCourier] = useState('')
   const [fTipo, setFTipo] = useState('')
