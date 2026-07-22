@@ -10,7 +10,10 @@ import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } 
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 
 export default function Claims() {
-  const { perfil } = useAuth()
+  const { perfil, esSuperAdmin } = useAuth()
+  // El MANAGER no ve la info financiera de Gofo: se le ocultan la columna Categoría·Método
+  // y Monto Gofo, y las tarjetas de "Descuento a choferes" y "Te descontó Gofo".
+  const ocultarGofo = !esSuperAdmin && perfil?.role === 'manager'
   const { claims, facturaRango: selectedInvoice, selectedCity, reloadClaims, cargando } = useData()
   const [fCourier, setFCourier] = useState('')
   const [fTipo, setFTipo] = useState('')
@@ -133,8 +136,8 @@ export default function Claims() {
             <KPI label="Total claims" value={num(totalClaims)} icon={AlertTriangle} accent="navy" />
             <KPI label="Perdonados" value={num(perdonados)} icon={Handshake} accent="green" />
             <KPI label="Activos" value={num(activos)} icon={Ban} accent="red" />
-            <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} claim(s) activo(s)`} />
-            <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />
+            {!ocultarGofo && <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} claim(s) activo(s)`} />}
+            {!ocultarGofo && <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
           </div>
 
           {pendientesRepetidos.length > 0 && (
@@ -161,7 +164,7 @@ export default function Claims() {
                     <div className="mt-2 flex flex-wrap gap-2">
                       {caso.claims.map((c, i) => (
                         <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${Number(c.montoGofo) < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'}`}>
-                          {money(c.montoGofo)} · {c.claimType || 'sin tipo'}
+                          {ocultarGofo ? (c.claimType || 'sin tipo') : <>{money(c.montoGofo)} · {c.claimType || 'sin tipo'}</>}
                         </span>
                       ))}
                     </div>
@@ -242,13 +245,13 @@ export default function Claims() {
                   { key: 'courier', label: 'Chofer' },
                   { key: 'date', label: 'Fecha' },
                   { key: 'claimType', label: 'Tipo' },
-                  { key: 'metodo', label: 'Categoría · Método', align: 'center' },
+                  !ocultarGofo && { key: 'metodo', label: 'Categoría · Método', align: 'center' },
                   { key: 'ciudad', label: 'Ciudad' },
-                  { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
+                  !ocultarGofo && { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
                   { key: 'revision', label: 'Revisión', align: 'center' },
                   { key: 'estado', label: 'Estado', align: 'center' },
                   { key: 'acciones', label: 'Acción', align: 'right' },
-                ]}
+                ].filter(Boolean)}
                 rows={filtrados.map((c) => ({ ...c, _key: c.id }))}
                 emptyText="Sin claims con estos filtros."
                 renderCell={(row, key) => {
@@ -295,9 +298,11 @@ export default function Claims() {
                     return row.perdonado ? (
                       <div className="flex items-center justify-end gap-1.5">
                         {row.motivo && <span className="self-center text-xs text-slate-400" title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
-                        <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title="Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)">
-                          te costó {money(Math.abs(Number(row.montoGofo) || 0))}
-                        </span>
+                        {!ocultarGofo && (
+                          <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title="Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)">
+                            te costó {money(Math.abs(Number(row.montoGofo) || 0))}
+                          </span>
+                        )}
                         <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} className="px-2.5 py-1 text-xs">Quitar perdón</Boton>
                       </div>
                     ) : (
