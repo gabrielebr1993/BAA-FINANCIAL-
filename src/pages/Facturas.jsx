@@ -13,23 +13,41 @@ import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
   // `invoices` ya viene filtrado por ciudad para el rol admin (desde DataContext).
-  const { invoices, invoicesRango, selectedCity, selectedCities, subsetCiudades, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, invoicesRango, selectedCity, selectedCities, ciudadesEmpresa, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   // Ciudades EN VISTA: subconjunto (2+) → las elegidas; una ciudad → [esa]; Todas → null
   // (no filtra). Se usa el subconjunto REAL porque en modo subconjunto la ciudad efectiva
   // pasa a ser "Todas", y sin esto la lista mostraría todas las ciudades.
-  const filtroCiudades = subsetCiudades
+  const filtroCiudades = (selectedCities && selectedCities.length)
     ? selectedCities
     : (selectedCity && selectedCity !== TODAS ? [selectedCity] : null)
-  const filtroKey = (filtroCiudades || []).join('|')
+  // Se compara por CÓDIGO y por NOMBRE (normalizados), y contra la ciudad PRINCIPAL de la
+  // factura (no su desglose), para que "Dallas" muestre solo facturas cuya ciudad es Dallas
+  // aunque los códigos de la factura y del filtro no coincidan exactamente.
+  const norm = (s) => String(s || '').trim().toLowerCase()
+  const nombreDeCode = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || code
+  const selKeys = new Set((filtroCiudades || []).flatMap((code) => [norm(code), norm(nombreDeCode(code))]).filter(Boolean))
+  const filtroKey = [...selKeys].sort().join('|')
+  const clavesFactura = (inv) => {
+    const ks = []
+    if (inv.ciudad) ks.push(norm(inv.ciudad), norm(nombreDeCode(inv.ciudad)))
+    if (inv.ciudadNombre) ks.push(norm(inv.ciudadNombre))
+    // Solo si NO tiene ciudad principal (facturas antiguas) se mira su desglose.
+    if (!inv.ciudad && !inv.ciudadNombre) {
+      (inv.resumenCiudades || []).forEach((c) => {
+        if (c.ubicacion) ks.push(norm(c.ubicacion), norm(nombreDeCode(c.ubicacion)))
+        if (c.nombreCiudad) ks.push(norm(c.nombreCiudad))
+      })
+    }
+    return ks.filter(Boolean)
+  }
   // La lista RESPETA el filtro global de arriba (período + ciudad). Para verlas TODAS,
   // pon "Todo" y "Todas las ciudades" en el filtro. El aviso de duplicados sí revisa
   // todas las facturas (es una limpieza global).
   const listaMostrada = useMemo(
     () => (invoicesRango || []).filter((inv) => {
       if (!filtroCiudades) return true
-      return filtroCiudades.includes(inv.ciudad || '') ||
-        (inv.resumenCiudades || []).some((c) => filtroCiudades.includes(c.ubicacion))
+      return clavesFactura(inv).some((k) => selKeys.has(k))
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [invoicesRango, filtroKey]
