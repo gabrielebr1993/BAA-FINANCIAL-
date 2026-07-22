@@ -13,19 +13,28 @@ import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
   // `invoices` ya viene filtrado por ciudad para el rol admin (desde DataContext).
-  const { invoices, invoicesRango, selectedCity, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, invoicesRango, selectedCity, selectedCities, subsetCiudades, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
   const { perfil, esSuperAdmin } = useAuth()
+  // Ciudades EN VISTA: subconjunto (2+) → las elegidas; una ciudad → [esa]; Todas → null
+  // (no filtra). Se usa el subconjunto REAL porque en modo subconjunto la ciudad efectiva
+  // pasa a ser "Todas", y sin esto la lista mostraría todas las ciudades.
+  const filtroCiudades = subsetCiudades
+    ? selectedCities
+    : (selectedCity && selectedCity !== TODAS ? [selectedCity] : null)
+  const filtroKey = (filtroCiudades || []).join('|')
   // La lista RESPETA el filtro global de arriba (período + ciudad). Para verlas TODAS,
   // pon "Todo" y "Todas las ciudades" en el filtro. El aviso de duplicados sí revisa
   // todas las facturas (es una limpieza global).
   const listaMostrada = useMemo(
-    () => (invoicesRango || []).filter((inv) =>
-      selectedCity === TODAS || (inv.ciudad || '') === selectedCity ||
-      (inv.resumenCiudades || []).some((c) => c.ubicacion === selectedCity)
-    ),
-    [invoicesRango, selectedCity]
+    () => (invoicesRango || []).filter((inv) => {
+      if (!filtroCiudades) return true
+      return filtroCiudades.includes(inv.ciudad || '') ||
+        (inv.resumenCiudades || []).some((c) => filtroCiudades.includes(c.ubicacion))
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [invoicesRango, filtroKey]
   )
-  const filtrando = selectedCity !== TODAS || (invoices || []).length !== listaMostrada.length
+  const filtrando = !!filtroCiudades || (invoices || []).length !== listaMostrada.length
   const [porEliminar, setPorEliminar] = useState(null)
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total }
