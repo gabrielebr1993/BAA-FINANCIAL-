@@ -24,10 +24,36 @@ export default function GlobalFilterBar() {
   const {
     rango, setRango, invoices, invoicesRango, numSemanas, vista, setVista,
     selectedCity, setSelectedCity, selectedCities, selectedDriver, setSelectedDriver,
-    facturaRangoFull, ciudadBloqueada,
+    facturaRangoFull, ciudadBloqueada, ciudadesEmpresa,
   } = useData()
   // Facturas elegidas a mano (multiselección): array de ids con respaldo a la única.
   const facturaIds = Array.isArray(rango.invoiceIds) && rango.invoiceIds.length ? rango.invoiceIds : (rango.invoiceId ? [rango.invoiceId] : [])
+
+  // El SELECTOR de facturas respeta el filtro de ciudad: si eliges "Dallas", solo lista
+  // facturas de Dallas. Compara por código Y por nombre (normalizados) contra la ciudad
+  // principal de la factura, para no colar otras ciudades aunque los códigos no coincidan.
+  const filtroCiu = (selectedCities && selectedCities.length)
+    ? selectedCities
+    : (selectedCity && selectedCity !== TODAS ? [selectedCity] : null)
+  const normC = (s) => String(s || '').trim().toLowerCase()
+  const nombreCode = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || code
+  const selKeysCiu = new Set((filtroCiu || []).flatMap((c) => [normC(c), normC(nombreCode(c))]).filter(Boolean))
+  const clavesFac = (inv) => {
+    const ks = []
+    if (inv.ciudad) ks.push(normC(inv.ciudad), normC(nombreCode(inv.ciudad)))
+    if (inv.ciudadNombre) ks.push(normC(inv.ciudadNombre))
+    if (!inv.ciudad && !inv.ciudadNombre) {
+      (inv.resumenCiudades || []).forEach((c) => {
+        if (c.ubicacion) ks.push(normC(c.ubicacion), normC(nombreCode(c.ubicacion)))
+        if (c.nombreCiudad) ks.push(normC(c.nombreCiudad))
+      })
+    }
+    return ks.filter(Boolean)
+  }
+  // Siempre se dejan las ya seleccionadas (para no romper la etiqueta ni la selección).
+  const invoicesSelector = filtroCiu
+    ? invoices.filter((inv) => facturaIds.includes(inv.id) || clavesFac(inv).some((k) => selKeysCiu.has(k)))
+    : invoices
 
   // SOLO el rol "manager" queda restringido a "Una factura" (no "Por período").
   // Owner, admin y súper-admin conservan ambos modos SIEMPRE.
@@ -144,7 +170,7 @@ export default function GlobalFilterBar() {
               )}
             </div>
           ) : (
-            <FacturaMultiSelect invoices={invoices} facturaIds={facturaIds} verMonto={verMonto} onChange={(ids) => setRango({ preset: 'factura', invoiceIds: ids, invoiceId: ids[0] || '', desde: '', hasta: '' })} />
+            <FacturaMultiSelect invoices={invoicesSelector} facturaIds={facturaIds} verMonto={verMonto} onChange={(ids) => setRango({ preset: 'factura', invoiceIds: ids, invoiceId: ids[0] || '', desde: '', hasta: '' })} />
           )}
         </div>
 
