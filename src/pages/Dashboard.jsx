@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
   porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, economiaClaims, nombreCiudadDe, contarClaimsValidos, claimsDeCiudad, TODAS,
@@ -23,6 +24,10 @@ import Onboarding from '../components/Onboarding'
 
 export default function Dashboard() {
   const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, verificacionCiudad, vista, cargando } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  // Solo owner/admin/superadmin ven la info financiera de Gofo (descuentos). Al manager se
+  // le oculta el panel "Ganancia por claims" (muestra "Lo que Gofo te descontó").
+  const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const navigate = useNavigate()
   // Ojo: oculta las cifras de dinero (ingreso, costo, ganancia, margen) en pantalla.
   const [verDinero, setVerDinero] = useState(true)
@@ -230,9 +235,11 @@ export default function Dashboard() {
                 </ClickWrap>
               </div>
 
-              <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
-                <PanelClaims claims={claimsDeCiudad(claims, selectedCity, inv)} inv={inv} compacto />
-              </ClickWrap>
+              {verGofo && (
+                <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
+                  <PanelClaims claims={claimsDeCiudad(claims, selectedCity, inv)} inv={inv} compacto />
+                </ClickWrap>
+              )}
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
