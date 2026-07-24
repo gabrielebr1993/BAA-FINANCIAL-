@@ -50,6 +50,16 @@ export function calcularAlertas({ inv, claims, drivers, managers, semanas = 1, i
       alertas.push({ id: `perdida:${p.nombre}`, tipo: 'yellow', categoria: 'Choferes', titulo: `${p.nombre} te cuesta más de lo que produce`, detalle: `Pago ${money(p.totalPagar)} vs ingreso ${money(p.ingreso)}.`, link: '/pagos' })
     )
 
+  // 3b) MODO POR RUTA: rutas trabajadas SIN tarifa configurada. Esos paquetes se pagan
+  //     $0 (por acuerdo), así que se avisa para configurar el precio de la ruta.
+  if (inv?.modoConfig === 'ruta') {
+    const rutasSin = new Set()
+    pagos.forEach((p) => (p.rutasSinTarifa || []).forEach((r) => rutasSin.add(r)))
+    if (rutasSin.size) {
+      alertas.push({ id: 'rutasSinTarifa', tipo: 'red', categoria: 'Pagos', titulo: `${rutasSin.size} ruta(s) trabajada(s) sin tarifa`, detalle: `Se pagó $0 por los paquetes de estas rutas (no tienen precio configurado): ${[...rutasSin].join(', ')}. Asígnales tarifa en las reglas por ruta.`, link: '/pagos' })
+    }
+  }
+
   // 4) Ruta no rentable (aviso) — costo estimado con tarifa promedio
   const act = (drivers || []).filter((d) => d.activo !== false)
   const avgInd = act.reduce((a, d) => a + (Number(d.precioIndividual) || 0), 0) / (act.length || 1)

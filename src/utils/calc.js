@@ -362,6 +362,48 @@ export function claimsValidosPorChofer(claims) {
 // `ajustesPorChofer` (opcional): mapa nombre.toLowerCase() -> { prestamo, bono }.
 // Se aplica UNA vez por chofer (a su fila principal si tiene varias ciudades):
 //   totalPagar = pagoBase − descuentoClaims − prestamo + bono.
+// Pago base de un chofer en modo POR RUTA calculado con las rutas REALES que trabajó
+// (resumenChoferRuta, detectado al cargar la factura). Cada ruta paga a SU tarifa
+// (reglasRutaAplicadas): si un driver hizo 2 rutas con precios distintos, cada tramo se
+// paga a su precio y se suman. Reglas acordadas:
+//   · Ruta trabajada SIN tarifa configurada → esos paquetes pagan $0 y la ruta se lista
+//     en `rutasSinTarifa` (para avisar).
+//   · Si el chofer NO aparece en el desglose → devuelve null y el caller usa el respaldo
+//     (asignación manual / tarifaDriver). Igual para paquetes no atribuidos a una ruta.
+// Devuelve tarifaInd/tarifaDoble como el promedio ponderado por paquetes, de modo que
+// `individuales*tarifaInd + dobles*tarifaDoble` reproduce exactamente el pago por ruta.
+function pagoPorRutaChofer(inv, drivers, ch) {
+  const crr = (inv?.resumenChoferRuta || []).filter((r) => r.nombre === ch.nombre && (r.ciudad || '') === (ch.ciudad || ''))
+  if (!crr.length) return null
+  let pagoInd = 0, pagoDob = 0, indTot = 0, dobTot = 0
+  const rutasSinTarifa = []
+  for (const r of crr) {
+    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[r.ruta]
+    const tInd = rr ? Number(rr.tarifaInd) || 0 : 0
+    const tDob = rr ? Number(rr.tarifaDoble) || 0 : 0
+    const ri = Number(r.individuales) || 0, rd = Number(r.dobles) || 0
+    pagoInd += ri * tInd; pagoDob += rd * tDob
+    indTot += ri; dobTot += rd
+    if ((ri > 0 && tInd <= 0) || (rd > 0 && tDob <= 0)) rutasSinTarifa.push(r.ruta)
+  }
+  // Paquetes del chofer no atribuidos a ninguna ruta del desglose → respaldo manual/perfil.
+  const rInd = Math.max(0, (Number(ch.individuales) || 0) - indTot)
+  const rDob = Math.max(0, (Number(ch.dobles) || 0) - dobTot)
+  if (rInd > 0 || rDob > 0) {
+    const t = tarifaDriver(inv, drivers, ch.nombre)
+    pagoInd += rInd * (Number(t.tarifaInd) || 0)
+    pagoDob += rDob * (Number(t.tarifaDoble) || 0)
+  }
+  const individuales = Number(ch.individuales) || 0
+  const dobles = Number(ch.dobles) || 0
+  return {
+    tarifaInd: individuales > 0 ? pagoInd / individuales : 0,
+    tarifaDoble: dobles > 0 ? pagoDob / dobles : 0,
+    sinTarifa: rutasSinTarifa.length > 0,
+    rutasSinTarifa: [...new Set(rutasSinTarifa)],
+  }
+}
+
 export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = null) {
   const choferesFull = inv?.resumenChoferes || []
   const choferes = porCiudad(choferesFull, ciudad)
@@ -390,7 +432,16 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
   }
 
   const filas = choferes.map((ch) => {
-    const { tarifaInd, tarifaDoble, sinTarifa } = tarifaDriver(inv, drivers, ch.nombre)
+    // Modo POR RUTA: pago según las rutas reales del chofer (cada ruta a su precio). Si no
+    // se detecta en el desglose, respaldo a la tarifa por asignación manual / perfil.
+    let tarifaInd, tarifaDoble, sinTarifa, rutasSinTarifa = []
+    const pr = inv?.modoConfig === 'ruta' ? pagoPorRutaChofer(inv, drivers, ch) : null
+    if (pr) {
+      tarifaInd = pr.tarifaInd; tarifaDoble = pr.tarifaDoble; sinTarifa = pr.sinTarifa; rutasSinTarifa = pr.rutasSinTarifa
+    } else {
+      const t = tarifaDriver(inv, drivers, ch.nombre)
+      tarifaInd = t.tarifaInd; tarifaDoble = t.tarifaDoble; sinTarifa = t.sinTarifa
+    }
     const key = K(ch.nombre, ch.ciudad)
     const misActivos = activosDet[key] || []
     const claimsActivos = misActivos.length
@@ -419,6 +470,7 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
       tarifaInd,
       tarifaDoble,
       sinTarifa,
+      rutasSinTarifa,
       claimFee,
       claimsTotales,
       claimsActivos,
