@@ -9,18 +9,32 @@ const EMAIL = (process.argv[2] || 'gabriele.brandonisio.o@gmail.com').toLowerCas
 
 ;(async () => {
   const u = await admin.auth().getUserByEmail(EMAIL)
-  const d = await admin.firestore().doc('bulk_users/' + u.uid).get()
-  const p = d.exists ? d.data() : {}
-  const claims = { bulkTenant: p.tenantId || null, bulkRole: p.rol || 'super_admin' }
+  const ref = admin.firestore().doc('bulk_users/' + u.uid)
+  const d = await ref.get()
+  let p = d.exists ? d.data() : null
+  let creado = false
+  if (!p) {
+    // El perfil no existe (usuario quedó a medias): lo creamos como super admin.
+    const tenantId = 't_' + u.uid.slice(0, 10).toLowerCase()
+    p = {
+      nombre: u.displayName || 'Super Admin',
+      email: EMAIL, rol: 'super_admin', tenantId,
+      empresa: process.argv[3] || 'B&A American group', activo: true,
+      creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    await ref.set(p, { merge: true })
+    creado = true
+  }
+  const claims = { bulkTenant: p.tenantId, bulkRole: p.rol || 'super_admin' }
   if (p.clienteId) claims.bulkClienteId = p.clienteId
   if (p.carrierId) claims.bulkCarrierId = p.carrierId
   await admin.auth().setCustomUserClaims(u.uid, claims)
   console.log('=========================================')
-  console.log('OK — claims aplicados a', EMAIL)
+  console.log('OK — usuario listo:', EMAIL)
   console.log('uid:', u.uid)
-  console.log('docExiste:', d.exists)
+  console.log('perfil ' + (creado ? 'CREADO' : 'ya existía'))
   console.log('claims:', JSON.stringify(claims))
-  console.log('Ahora cierra sesión en Bulk y vuelve a entrar.')
+  console.log('>> Cierra sesión en Bulk (Salir) y vuelve a entrar.')
   console.log('=========================================')
   process.exit(0)
 })().catch((e) => { console.error('ERROR:', e.message); process.exit(1) })
