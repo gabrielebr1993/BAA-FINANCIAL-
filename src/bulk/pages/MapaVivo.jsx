@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Navigation, Gauge, Route as RouteIcon, Clock } from 'lucide-react'
+import { MapPin, Navigation, Gauge, Route as RouteIcon, Clock, MessageSquare } from 'lucide-react'
+import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -46,6 +47,7 @@ export default function MapaVivo() {
   const { datos: geocercas } = useColeccion('geofences')
   const [sel, setSel] = useState('')
   const [track, setTrack] = useState([])
+  const [verChat, setVerChat] = useState(false)
 
   const activas = useMemo(() => ordenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado)), [ordenes])
   const orden = activas.find((o) => o.id === sel) || activas[0] || null
@@ -83,7 +85,9 @@ export default function MapaVivo() {
                   <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
                   <Badge color="gold">{ORDEN_ESTADO_LABEL[orden.estado]}</Badge>
                   <span className="text-xs text-slate-400">{orden.choferNombre}</span>
+                  <button onClick={() => setVerChat((v) => !v)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> {verChat ? 'Ocultar chat' : 'Chat'}</button>
                 </div>
+                {verChat && <div className="mb-3"><ChatOrden orden={orden} alto={280} /></div>}
                 <RutaSVG puntos={track} geocercas={geocercas} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Metrica icon={RouteIcon} label="Recorrido" val={`${met.km} km`} />

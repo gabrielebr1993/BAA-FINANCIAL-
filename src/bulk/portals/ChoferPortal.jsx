@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare } from 'lucide-react'
+import ChatOrden from '../components/ChatOrden'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -169,7 +170,11 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
 
   return (
     <Card className="p-4">
-      <div className="flex items-center gap-2"><span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span><Badge color="navy">{ORDEN_ESTADO_LABEL[orden.estado]}</Badge></div>
+      <div className="flex items-center gap-2">
+        <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
+        <Badge color="navy">{ORDEN_ESTADO_LABEL[orden.estado]}</Badge>
+        <button onClick={() => setModal('chat')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> Chat</button>
+      </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
       <div className="mt-1 text-sm font-semibold text-emerald-600">Tu pago: {money(orden.pagoChofer)}</div>
 
@@ -196,6 +201,13 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
           <div className="mt-1 text-xs text-slate-400">Esperando liberación…</div>
         </div>
       ) : null}
+
+      {/* Chat de la orden */}
+      {modal === 'chat' && (
+        <Modal onClose={() => setModal(null)} titulo={`Chat · ${orden.numero}`}>
+          <ChatOrden orden={orden} alto={360} />
+        </Modal>
+      )}
 
       {/* Modal ticket de carga */}
       {modal === 'ticket' && (
