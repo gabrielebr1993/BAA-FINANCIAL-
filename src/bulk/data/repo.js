@@ -12,7 +12,7 @@ import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
   query, where, orderBy, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore'
-import { db } from '../../firebase'
+import { dbBulk as db } from '../firebaseBulk'
 
 const PREFIJO = 'bulk_'
 export const col = (nombre) => collection(db, PREFIJO + nombre)

@@ -3,6 +3,7 @@
 // sea independiente de la de Package (login separado real).
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 import { getFunctions } from 'firebase/functions'
 
 const cfg = {
@@ -16,6 +17,10 @@ const cfg = {
 
 const appBulk = getApps().find((a) => a.name === 'bulk') || initializeApp(cfg, 'bulk')
 export const authBulk = getAuth(appBulk)
+// Firestore ligado a ESTA app: así las peticiones llevan el token del usuario Bulk
+// (con bulkTenant/bulkRole). Antes se usaba la BD de la app por defecto, cuyo login
+// no tiene esos claims → todo daba permission-denied.
+export const dbBulk = getFirestore(appBulk)
 // Región por defecto us-central1; si despliegas las functions en otra región,
 // cámbiala aquí: getFunctions(appBulk, 'us-east1').
 export const funcsBulk = getFunctions(appBulk)
