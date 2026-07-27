@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
-import { Eye, EyeOff, ArrowLeft, FileText, Lock, Check } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, FileText, Lock, Check, LayoutGrid } from 'lucide-react'
 import { auth } from './firebase'
 import { Spinner } from './components/ui'
 
@@ -72,6 +73,7 @@ function Ticker({ compacto = false }) {
 }
 
 export default function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [verPass, setVerPass] = useState(false)
@@ -136,6 +138,12 @@ export default function Login() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">
           <div className="w-full max-w-sm">
+            <button
+              onClick={() => navigate('/elegir')}
+              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-brand-navy dark:hover:text-slate-200"
+            >
+              <LayoutGrid size={15} strokeWidth={1.9} /> Cambiar de módulo
+            </button>
             {/* logo */}
             <div className="mb-8 flex items-center gap-3">
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-navy shadow-sm">
