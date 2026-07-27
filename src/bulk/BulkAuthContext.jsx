@@ -70,6 +70,16 @@ export function BulkAuthProvider({ children }) {
     await signInWithEmailAndPassword(authBulk, String(email).trim().toLowerCase(), password)
   }, [])
 
+  // Auto-repara los permisos del propio usuario (re-aplica claims desde su perfil)
+  // y refresca el token. Si la función aún no está desplegada, solo refresca.
+  const repararPermisos = useCallback(async () => {
+    try {
+      const fn = httpsCallable(funcsBulk, 'repararMisClaims')
+      await fn({})
+    } catch { /* función no desplegada: seguimos igual */ }
+    try { if (authBulk.currentUser) await authBulk.currentUser.getIdToken(true) } catch { /* noop */ }
+  }, [])
+
   // Alta de usuarios (staff crea cualquiera; transportista crea sus choferes) vía backend.
   const crearUsuario = useCallback(async (datos) => {
     // Refresca el token para que lleve los claims más recientes (bulkTenant/bulkRole).
@@ -85,7 +95,7 @@ export function BulkAuthProvider({ children }) {
     existeSuperAdmin: true, // el backend valida el primer arranque (idempotente)
     tenantId: usuario?.tenantId || null,
     rol: usuario?.rol || null,
-    iniciarSesion, cerrarSesion, crearSuperAdmin, crearUsuario,
+    iniciarSesion, cerrarSesion, crearSuperAdmin, crearUsuario, repararPermisos,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

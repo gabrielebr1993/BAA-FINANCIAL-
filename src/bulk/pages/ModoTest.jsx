@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
-import { authBulk } from '../firebaseBulk'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 
@@ -16,7 +15,7 @@ const PORTALES = [
 ]
 
 export default function ModoTest() {
-  const { tenantId, crearUsuario, iniciarSesion } = useBulkAuth()
+  const { tenantId, crearUsuario, iniciarSesion, repararPermisos } = useBulkAuth()
   const { datos: ordenes } = useColeccion('orders')
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
@@ -27,11 +26,11 @@ export default function ModoTest() {
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
 
-  // Asegura que el token lleve los permisos más recientes antes de leer/escribir.
-  const asegurarToken = async () => { try { await authBulk.currentUser?.getIdToken(true) } catch { /* noop */ } }
+  // Auto-repara y refresca los permisos antes de leer/escribir.
+  const asegurarToken = async () => { try { await repararPermisos() } catch { /* noop */ } }
   const esPermiso = (m) => /permission|denied|insufficient|no autorizado/i.test(m || '')
 
-  // Refresca los permisos de la sesión sin tener que salir y volver a entrar.
+  // Repara permisos y recarga (sin tener que salir y volver a entrar).
   const refrescarSesion = async () => {
     setRefrescando(true)
     await asegurarToken()

@@ -76,6 +76,41 @@ exports.bootstrapMasterBulk = onCall(async (req) => {
 })
 
 // ============================================================================
+// repararMisClaims — el usuario autenticado re-aplica sus propios custom claims
+// (bulkTenant/bulkRole) a partir de su perfil en bulk_users. Arregla el caso en que
+// los claims se asignaron después del último login o el perfil quedó a medias.
+// Seguro: solo actúa sobre el propio uid; no puede promover a otros.
+// ============================================================================
+exports.repararMisClaims = onCall(async (req) => {
+  const auth = req.auth
+  if (!auth || !auth.uid) throw new HttpsError('unauthenticated', 'Inicia sesión primero.')
+  const uid = auth.uid
+  const email = String(auth.token.email || '').toLowerCase()
+  const usersCol = db.collection('bulk_users')
+
+  let snap = await usersCol.doc(uid).get()
+  let perfil = snap.exists ? snap.data() : null
+  // Si no hay perfil bajo este uid, búscalo por correo (usuario recreado / uid distinto).
+  if (!perfil && email) {
+    const q = await usersCol.where('email', '==', email).limit(1).get()
+    if (!q.empty) perfil = q.docs[0].data()
+  }
+  // Sin perfil: solo crea super_admin si aún NO existe ninguno (primer arranque).
+  if (!perfil) {
+    const yaSuper = await usersCol.where('rol', '==', 'super_admin').limit(1).get()
+    if (!yaSuper.empty) throw new HttpsError('failed-precondition', 'Tu usuario no tiene perfil. Pide a un administrador que te cree.')
+    perfil = { nombre: auth.token.name || 'Super Admin', email, rol: 'super_admin', tenantId: 't_' + uid.slice(0, 10).toLowerCase(), activo: true, empresa: 'B&A American group', creadoEn: admin.firestore.FieldValue.serverTimestamp() }
+  }
+  // Refleja el perfil bajo el uid actual y aplica los claims al token.
+  await usersCol.doc(uid).set(perfil, { merge: true })
+  const claims = { bulkTenant: perfil.tenantId, bulkRole: perfil.rol || 'super_admin' }
+  if (perfil.clienteId) claims.bulkClienteId = perfil.clienteId
+  if (perfil.carrierId) claims.bulkCarrierId = perfil.carrierId
+  await admin.auth().setCustomUserClaims(uid, claims)
+  return { ok: true, rol: claims.bulkRole, tenantId: claims.bulkTenant }
+})
+
+// ============================================================================
 // procesarNotificacion — dispara al crearse un doc en bulk_notificaciones.
 // Envía SMS (Twilio) o Push (FCM) y marca `enviado`.
 // ============================================================================
