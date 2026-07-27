@@ -1,7 +1,7 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight, ShieldCheck } from 'lucide-react'
+import { FileText, Truck, ArrowRight } from 'lucide-react'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
 export function getModulo() { try { return localStorage.getItem('mp_module') } catch { return null } }
@@ -17,13 +17,15 @@ const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow 
     </div>
     <div className="relative mt-4 text-2xl font-black text-white">{titulo}</div>
     <div className="relative mt-1 text-sm leading-relaxed text-slate-300">{desc}</div>
-    <ul className="relative mt-4 space-y-1.5">
-      {features.map((f) => (
-        <li key={f} className="flex items-center gap-2 text-[13px] text-slate-400">
-          <span className={`h-1.5 w-1.5 rounded-full ${acento}`} /> {f}
-        </li>
-      ))}
-    </ul>
+    {features?.length > 0 && (
+      <ul className="relative mt-4 space-y-1.5">
+        {features.map((f) => (
+          <li key={f} className="flex items-center gap-2 text-[13px] text-slate-400">
+            <span className={`h-1.5 w-1.5 rounded-full ${acento}`} /> {f}
+          </li>
+        ))}
+      </ul>
+    )}
     <div className="relative mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-white">
       Entrar <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
     </div>
@@ -43,29 +45,45 @@ export default function ModuleSelector() {
       </div>
 
       <div className="relative w-full max-w-4xl">
-        <div className="mb-10 text-center">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-300">
-            <ShieldCheck size={13} className="text-amber-400" /> Plataforma unificada
+        <div className="mb-10 flex justify-center">
+          <div className="ms-scene relative h-16 w-full max-w-sm overflow-hidden" aria-hidden="true">
+            <div className="ms-road" />
+            <span className="ms-item ms-truck"><Truck size={26} strokeWidth={2} /></span>
+            <span className="ms-item ms-box" style={{ animationDelay: '-0.7s' }} />
+            <span className="ms-item ms-box" style={{ animationDelay: '-1.4s' }} />
+            <span className="ms-item ms-box ms-box-amber" style={{ animationDelay: '-2.1s' }} />
           </div>
-          <h1 className="m-0 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-4xl font-black text-transparent sm:text-5xl">My Pay</h1>
-          <p className="mx-auto mt-2 max-w-md text-slate-400">Elige el módulo con el que quieres trabajar. Cada uno es un producto independiente.</p>
         </div>
 
         <div className="flex flex-col items-stretch justify-center gap-5 sm:flex-row">
           <OpcionCard
             onClick={() => elegir('package')} icon={FileText} acento="bg-brand-navy" glow="bg-brand-navy"
-            titulo="Package" desc="Gestión de facturas, pagos, choferes y claims. El sistema actual."
-            features={['Facturación y conciliación', 'Pagos y proyecciones', 'Claims y reportes a Gofo']}
+            titulo="Package" desc="Facturas, pagos y claims."
           />
           <OpcionCard
             onClick={() => elegir('bulk')} icon={Truck} acento="bg-amber-500" glow="bg-amber-500"
-            titulo="Freight" desc="Transporte de materiales de construcción, de la orden a la entrega."
-            features={['Órdenes, GPS y geocercas en vivo', 'Portales de chofer, cliente y transportista', 'Chat, POD y prueba de entrega']}
+            titulo="Freight" desc="Fletes de materiales, en vivo."
           />
         </div>
 
         <p className="mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} My Pay · Puedes cambiar de módulo en cualquier momento.</p>
       </div>
+
+      <style>{`
+        .ms-road { position:absolute; left:0; right:0; bottom:18px; height:2px;
+          background:repeating-linear-gradient(90deg, rgba(148,163,184,.35) 0 12px, transparent 12px 24px);
+          animation: ms-flow .8s linear infinite; }
+        .ms-item { position:absolute; bottom:20px; animation: ms-drive 5s linear infinite; }
+        .ms-truck { color:#f59e0b; bottom:22px; filter:drop-shadow(0 3px 5px rgba(0,0,0,.5)); }
+        .ms-box { width:13px; height:13px; border-radius:3px; background:#1e3a8a; box-shadow:0 2px 6px rgba(0,0,0,.45); }
+        .ms-box-amber { background:#f59e0b; }
+        @keyframes ms-flow { to { background-position-x:-24px; } }
+        @keyframes ms-drive { 0% { left:-12%; opacity:0; } 6% { opacity:1; } 94% { opacity:1; } 100% { left:108%; opacity:0; } }
+        @media (prefers-reduced-motion: reduce) {
+          .ms-road, .ms-item { animation:none; }
+          .ms-truck { left:44%; } .ms-box { display:none; }
+        }
+      `}</style>
     </div>
   )
 }
