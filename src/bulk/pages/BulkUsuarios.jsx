@@ -15,18 +15,25 @@ const ROLES_ASIGNABLES = [
 export default function BulkUsuarios() {
   const { tenantId, usuario, rol, hashPass } = useBulkAuth()
   const { datos: usuarios, cargando } = useColeccion('users')
-  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER })
+  const { datos: clientes } = useColeccion('clients')
+  const { datos: carriers } = useColeccion('carriers')
+  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
   const [msg, setMsg] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const necesitaCliente = f.rol === BULK_ROLES.CLIENTE
+  const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA || f.rol === BULK_ROLES.CHOFER
 
   const agregar = async () => {
     setMsg(null)
     const email = f.email.trim().toLowerCase()
     if (!f.nombre.trim() || !email || !f.password) { setMsg({ tipo: 'warn', txt: 'Completa nombre, correo y contraseña.' }); return }
     if (usuarios.some((u) => (u.email || '').toLowerCase() === email)) { setMsg({ tipo: 'error', txt: 'Ese correo ya existe.' }); return }
-    await crear('users', tenantId, { nombre: f.nombre.trim(), email, rol: f.rol, passHash: await hashPass(f.password), activo: true })
+    if (necesitaCliente && !f.vinculo) { setMsg({ tipo: 'warn', txt: 'Selecciona el cliente al que pertenece.' }); return }
+    if (necesitaCarrier && !f.vinculo) { setMsg({ tipo: 'warn', txt: 'Selecciona el transportista al que pertenece.' }); return }
+    const extra = necesitaCliente ? { clienteId: f.vinculo } : necesitaCarrier ? { carrierId: f.vinculo } : {}
+    await crear('users', tenantId, { nombre: f.nombre.trim(), email, rol: f.rol, passHash: await hashPass(f.password), activo: true, ...extra })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})` })
-    setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER })
+    setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
     setMsg({ tipo: 'ok', txt: 'Usuario creado.' })
   }
   const borrar = async (u) => {
@@ -47,10 +54,19 @@ export default function BulkUsuarios() {
           <Input placeholder="Nombre" value={f.nombre} onChange={set('nombre')} />
           <Input type="email" placeholder="Correo" value={f.email} onChange={set('email')} />
           <Input type="password" placeholder="Contraseña" value={f.password} onChange={set('password')} />
-          <Select value={f.rol} onChange={set('rol')}>
+          <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '' }))}>
             {ROLES_ASIGNABLES.map((r) => <option key={r} value={r}>{BULK_ROLES_LABEL[r]}</option>)}
           </Select>
         </div>
+        {(necesitaCliente || necesitaCarrier) && (
+          <div className="mt-3 max-w-xs">
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{necesitaCliente ? 'Cliente al que pertenece' : 'Transportista al que pertenece'}</div>
+            <Select value={f.vinculo} onChange={set('vinculo')}>
+              <option value="">— Seleccionar —</option>
+              {(necesitaCliente ? clientes : carriers).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+            </Select>
+          </div>
+        )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><UserPlus size={16} /> Crear usuario</Boton></div>
       </Card>
 

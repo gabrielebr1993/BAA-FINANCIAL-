@@ -14,6 +14,18 @@ const Transportistas = lazy(() => import('./pages/Transportistas'))
 const Materiales = lazy(() => import('./pages/Materiales'))
 const Equipos = lazy(() => import('./pages/Equipos'))
 const BulkUsuarios = lazy(() => import('./pages/BulkUsuarios'))
+const ChoferPortal = lazy(() => import('./portals/ChoferPortal'))
+const ClientePortal = lazy(() => import('./portals/ClientePortal'))
+const TransportistaPortal = lazy(() => import('./portals/TransportistaPortal'))
+const SupervisorPortal = lazy(() => import('./portals/SupervisorPortal'))
+
+// Cada rol operativo entra a SU propio portal (no al panel de staff).
+const PORTALES = {
+  chofer: ChoferPortal,
+  cliente: ClientePortal,
+  transportista: TransportistaPortal,
+  supervisor_planta: SupervisorPortal,
+}
 
 // Envuelve una página con verificación de rol + layout de Bulk.
 function P({ roles, children }) {
@@ -23,9 +35,12 @@ function P({ roles, children }) {
 }
 
 function Interno() {
-  const { usuario, cargando } = useBulkAuth()
+  const { usuario, cargando, rol } = useBulkAuth()
   if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Bulk…" /></div>
   if (!usuario) return <BulkLogin />
+  // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
+  const Portal = PORTALES[rol]
+  if (Portal) return <Suspense fallback={<Cargando texto="Cargando…" />}><Portal /></Suspense>
   const R = ['super_admin', 'admin', 'dispatcher']
   const CAT = ['super_admin', 'admin']
   return (
