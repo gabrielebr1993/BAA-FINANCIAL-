@@ -15,8 +15,8 @@ export default function BulkLayout({ children }) {
         <div className="mb-4 flex items-center gap-2 px-2 py-1">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={19} strokeWidth={2} /></div>
           <div>
-            <div className="text-base font-extrabold leading-none">Bulk</div>
-            <div className="text-[11px] text-slate-400">Freight de materiales</div>
+            <div className="text-base font-extrabold leading-none">Freight</div>
+            <div className="text-[11px] text-slate-400">Transporte de materiales</div>
           </div>
         </div>
         <nav className="flex-1 space-y-0.5">

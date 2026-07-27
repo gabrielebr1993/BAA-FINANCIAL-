@@ -13,7 +13,7 @@ const ESTADO_COLOR = { enviada: 'gold', firmada: 'green', pagada: 'navy' }
 
 export default function Facturacion() {
   const { tenantId, usuario, rol } = useBulkAuth()
-  const empresa = usuario?.empresa || 'Bulk'
+  const empresa = usuario?.empresa || 'Freight'
   const { datos: clientes } = useColeccion('clients')
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: facturas } = useColeccion('invoices')

@@ -1,4 +1,4 @@
-// Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Bulk
+// Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
 import { useNavigate } from 'react-router-dom'
 import { FileText, Truck, ArrowRight, ShieldCheck } from 'lucide-react'
@@ -59,7 +59,7 @@ export default function ModuleSelector() {
           />
           <OpcionCard
             onClick={() => elegir('bulk')} icon={Truck} acento="bg-amber-500" glow="bg-amber-500"
-            titulo="Bulk" desc="Transporte de materiales de construcción, de la orden a la entrega."
+            titulo="Freight" desc="Transporte de materiales de construcción, de la orden a la entrega."
             features={['Órdenes, GPS y geocercas en vivo', 'Portales de chofer, cliente y transportista', 'Chat, POD y prueba de entrega']}
           />
         </div>

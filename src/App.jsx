@@ -107,7 +107,7 @@ function PackageApp() {
 function TopBranch() {
   const { pathname } = useLocation()
   if (pathname === '/bulk' || pathname.startsWith('/bulk/')) {
-    return <Suspense fallback={<Cargando texto="Cargando Bulk…" />}><BulkApp /></Suspense>
+    return <Suspense fallback={<Cargando texto="Cargando Freight…" />}><BulkApp /></Suspense>
   }
   if (pathname === '/elegir' || (!getModulo() && pathname === '/')) return <ModuleSelector />
   return <PackageApp />

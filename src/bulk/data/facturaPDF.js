@@ -11,7 +11,7 @@ export async function generarFacturaPDF(factura, { clienteNombre, empresa }) {
 
   doc.setFillColor(...NAVY); doc.rect(0, 0, W, 28, 'F')
   doc.setTextColor(255); doc.setFontSize(18); doc.setFont(undefined, 'bold')
-  doc.text(empresa || 'Bulk', 14, 15)
+  doc.text(empresa || 'Freight', 14, 15)
   doc.setFontSize(10); doc.setFont(undefined, 'normal')
   doc.text('FACTURA', 14, 22)
   doc.setTextColor(...GOLD); doc.setFontSize(12); doc.setFont(undefined, 'bold')

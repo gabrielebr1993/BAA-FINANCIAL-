@@ -42,7 +42,7 @@ function P({ roles, children }) {
 
 function Interno() {
   const { usuario, cargando, rol } = useBulkAuth()
-  if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Bulk…" /></div>
+  if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Freight…" /></div>
   if (!usuario) return <BulkLogin />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]

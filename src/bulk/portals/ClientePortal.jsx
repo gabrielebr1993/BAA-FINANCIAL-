@@ -47,7 +47,7 @@ export default function ClientePortal() {
     if (!firma || !firmando) return
     const datos = { estado: 'firmada', firma, firmante: usuario?.nombre || usuario?.email, firmadaEn: new Date().toISOString() }
     await guardar('invoices', firmando.id, datos)
-    generarFacturaPDF({ ...firmando, ...datos }, { clienteNombre: firmando.clienteNombre, empresa: 'Bulk' })
+    generarFacturaPDF({ ...firmando, ...datos }, { clienteNombre: firmando.clienteNombre, empresa: 'Freight' })
     setFirmando(null); setFirma(null)
   }
 
@@ -112,7 +112,7 @@ export default function ClientePortal() {
                     if (k === 'acciones') return (
                       <div className="flex justify-end gap-1.5">
                         {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> Revisar y firmar</Boton>}
-                        <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Bulk' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
+                        <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Freight' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
                       </div>
                     )
                     return r[k]

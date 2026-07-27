@@ -28,7 +28,7 @@ export default function BulkLogin() {
         <div className="pointer-events-none absolute -right-24 top-1/3 h-80 w-80 rounded-full bg-amber-500/20 blur-[100px]" />
         <div className="relative flex items-center gap-3">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-500 text-slate-900"><Truck size={24} strokeWidth={2} /></div>
-          <div><div className="text-2xl font-black text-white">Bulk</div><div className="text-xs text-slate-400">Transporte de materiales</div></div>
+          <div><div className="text-2xl font-black text-white">Freight</div><div className="text-xs text-slate-400">Transporte de materiales</div></div>
         </div>
         <div className="relative my-auto max-w-sm">
           <h2 className="text-3xl font-black leading-tight text-white">De la orden a la entrega, en una sola plataforma.</h2>
@@ -47,7 +47,7 @@ export default function BulkLogin() {
           <Link to="/elegir" className="mb-6 inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"><ArrowLeft size={15} /> Cambiar de módulo</Link>
           <div className="mb-1 flex items-center gap-2 lg:hidden">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={20} /></div>
-            <div className="text-xl font-black text-white">Bulk</div>
+            <div className="text-xl font-black text-white">Freight</div>
           </div>
           <h1 className="m-0 text-2xl font-extrabold text-white">{setup ? 'Crear administrador' : 'Bienvenido de vuelta'}</h1>
           <p className="mb-6 mt-1 text-sm text-slate-400">{setup ? 'Configura el primer super administrador.' : 'Inicia sesión para continuar.'}</p>
