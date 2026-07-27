@@ -5,34 +5,50 @@ import { crear, eliminar } from '../data/repo'
 import { where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
+import { money } from '../../utils/format'
 
 function Plantas({ cliente }) {
   const { tenantId } = useBulkAuth()
   const { datos: plantas } = useColeccion('plants', [where('clienteId', '==', cliente.id)])
   const { datos: materiales } = useColeccion('materials')
-  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horario: '', materiales: [] })
+  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [] })
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
-  const toggleMat = (m) => setF((s) => ({ ...s, materiales: s.materiales.includes(m) ? s.materiales.filter((x) => x !== m) : [...s.materiales, m] }))
+  const tieneMat = (m) => f.ofertas.some((o) => o.material === m)
+  const toggleMat = (m) => setF((s) => tieneMat(m)
+    ? ({ ...s, ofertas: s.ofertas.filter((o) => o.material !== m) })
+    : ({ ...s, ofertas: [...s.ofertas, { material: m, precio: '', po: '' }] }))
+  const setOferta = (m, k, v) => setF((s) => ({ ...s, ofertas: s.ofertas.map((o) => (o.material === m ? { ...o, [k]: v } : o)) }))
 
   const agregar = async () => {
     if (!f.nombre.trim()) return
+    const ofertas = f.ofertas.map((o) => ({ material: o.material, precio: Number(o.precio) || 0, po: (o.po || '').trim() }))
     await crear('plants', tenantId, {
       clienteId: cliente.id, nombre: f.nombre.trim(), direccion: f.direccion.trim(),
       gps: (f.lat && f.lng) ? { lat: Number(f.lat), lng: Number(f.lng) } : null,
-      horario: f.horario.trim(), materiales: f.materiales, activo: true,
+      horario: f.horario.trim(), ofertas, materiales: ofertas.map((o) => o.material), activo: true,
     })
-    setF({ nombre: '', direccion: '', lat: '', lng: '', horario: '', materiales: [] })
+    setF({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [] })
   }
+  const matsActivos = materiales.filter((m) => m.activo !== false)
 
   return (
     <div className="mt-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
       <div className="mb-2 text-xs font-semibold uppercase text-slate-400">Plantas de {cliente.nombre}</div>
       {plantas.map((p) => (
-        <div key={p.id} className="mb-1 flex items-center gap-2 text-sm">
-          <MapPin size={14} className="text-amber-500" />
-          <span className="font-medium">{p.nombre}</span>
-          <span className="text-slate-400">{p.direccion}{p.gps ? ` · ${p.gps.lat}, ${p.gps.lng}` : ''}</span>
-          <button onClick={() => eliminar('plants', p.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={13} /></button>
+        <div key={p.id} className="mb-1.5 rounded-lg border border-slate-100 p-2 dark:border-slate-700/50">
+          <div className="flex items-center gap-2 text-sm">
+            <MapPin size={14} className="text-amber-500" />
+            <span className="font-medium">{p.nombre}</span>
+            <span className="text-slate-400">{p.direccion}{p.gps ? ` · ${p.gps.lat}, ${p.gps.lng}` : ''}</span>
+            <button onClick={() => eliminar('plants', p.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={13} /></button>
+          </div>
+          {((p.ofertas && p.ofertas.length) || (p.materiales || []).length) > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(p.ofertas && p.ofertas.length ? p.ofertas : (p.materiales || []).map((m) => ({ material: m }))).map((o) => (
+                <Badge key={o.material} color="green">{o.material}{o.precio ? ` · ${money(o.precio)}` : ''}{o.po ? ` · PO ${o.po}` : ''}</Badge>
+              ))}
+            </div>
+          )}
         </div>
       ))}
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -42,11 +58,25 @@ function Plantas({ cliente }) {
         <Input placeholder="Lng (GPS)" value={f.lng} onChange={set('lng')} />
         <Input placeholder="Horario (ej. 6am–4pm)" value={f.horario} onChange={set('horario')} />
       </div>
-      {materiales.filter((m) => m.activo !== false).length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {materiales.filter((m) => m.activo !== false).map((m) => (
-            <button key={m.id} type="button" onClick={() => toggleMat(m.nombre)} className={`rounded-lg border px-2.5 py-1 text-xs ${f.materiales.includes(m.nombre) ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>{m.nombre}</button>
-          ))}
+      {matsActivos.length > 0 && (
+        <div className="mt-2">
+          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Materiales que ofrece esta planta (precio y PO por material)</div>
+          <div className="flex flex-wrap gap-1.5">
+            {matsActivos.map((m) => (
+              <button key={m.id} type="button" onClick={() => toggleMat(m.nombre)} className={`rounded-lg border px-2.5 py-1 text-xs ${tieneMat(m.nombre) ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>{m.nombre}</button>
+            ))}
+          </div>
+          {f.ofertas.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              {f.ofertas.map((o) => (
+                <div key={o.material} className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="w-28 font-medium text-brand-navy dark:text-slate-100">{o.material}</span>
+                  <Input type="number" step="0.01" placeholder="Precio" value={o.precio} onChange={(e) => setOferta(o.material, 'precio', e.target.value)} className="w-24 py-1" />
+                  <Input placeholder="PO" value={o.po} onChange={(e) => setOferta(o.material, 'po', e.target.value)} className="w-28 py-1" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       <div className="mt-2"><Boton variant="ghost" onClick={agregar} disabled={!f.nombre.trim()} className="text-xs"><Plus size={14} /> Agregar planta</Boton></div>

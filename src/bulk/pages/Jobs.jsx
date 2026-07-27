@@ -27,10 +27,13 @@ export default function Jobs() {
   const crearJob = async () => {
     if (!f.nombre.trim() || !f.clienteId) { setMsg({ tipo: 'warn', txt: 'Nombre y cliente son obligatorios.' }); return }
     const codigo = `J${Date.now().toString(36).toUpperCase().slice(-5)}`
+    // Si no escribió PO, toma el de la oferta de la planta para el primer material.
+    const plantaSel = plantas.find((p) => p.id === f.plantaId)
+    const oferta = (plantaSel?.ofertas || []).find((o) => o.material === f.materiales[0])
     await crear('jobs', tenantId, {
       codigo, nombre: f.nombre.trim(), clienteId: f.clienteId, plantaId: f.plantaId,
       tipoEquipo: f.tipoEquipo, materiales: f.materiales, transportistasAutorizados: f.transportistas,
-      destino: f.destino.trim(), po: f.po.trim(), activo: true,
+      destino: f.destino.trim(), po: f.po.trim() || oferta?.po || '', activo: true,
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear', entidad: 'job', detalle: `Job ${codigo} · ${f.nombre}` })
     setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
@@ -69,9 +72,18 @@ export default function Jobs() {
           </div>
           <div>
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">PO / orden de compra</div>
-            <Input placeholder="Opcional" value={f.po} onChange={set('po')} />
+            <Input placeholder="Auto de la planta si vacío" value={f.po} onChange={set('po')} />
           </div>
         </div>
+        {(() => {
+          const ps = plantas.find((p) => p.id === f.plantaId)
+          const ofs = ps?.ofertas || []
+          return ofs.length > 0 ? (
+            <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+              <span className="font-semibold">Ofrece {ps.nombre}:</span> {ofs.map((o) => `${o.material}${o.precio ? ` · $${o.precio}` : ''}${o.po ? ` · PO ${o.po}` : ''}`).join('  |  ')}
+            </div>
+          ) : null
+        })()}
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div>
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Materiales permitidos</div>

@@ -122,10 +122,12 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     { ci: 3, nombre: 'Planta Katy', direccion: '2100 Katy Fwy, Katy, TX', gps: { lat: 29.7858, lng: -95.8245 }, horario: '6am–5pm', materiales: ['Concreto', 'Arena'] },
   ]
   const plantas = []
-  for (const p of plantasDef) {
+  for (let pi = 0; pi < plantasDef.length; pi++) {
+    const p = plantasDef[pi]
+    const ofertas = p.materiales.map((m, k) => ({ material: m, precio: RATE[m] || 20, po: `PO-P${pi}${k}` }))
     plantas.push(await crear('plants', tenantId, {
       clienteId: clientes[p.ci].id, nombre: p.nombre, direccion: p.direccion, gps: p.gps,
-      horario: p.horario, materiales: p.materiales, activo: true, demo: true,
+      horario: p.horario, materiales: p.materiales, ofertas, activo: true, demo: true,
     }))
   }
   conteo.plantas = plantas.length
