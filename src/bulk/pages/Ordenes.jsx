@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare } from 'lucide-react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -112,10 +112,11 @@ export default function Ordenes() {
         <Chip label="Entregadas" val={entregadasN} color="green" />
       </div>
 
-      <Card className="mb-4 p-4">
-        <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cola en tiempo real ({cola.length})</h3></div>
+      <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="p-4">
+        <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cola · por asignar ({cola.length})</h3></div>
         {cola.length === 0 ? <p className="text-sm text-slate-400">No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).</p> : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-2">
             {cola.map((o) => {
               const compat = transportistasCompatibles(carriers, o.tipoEquipo)
               const fin = desgloseVisible(o, rol)
@@ -175,35 +176,38 @@ export default function Ordenes() {
       </Card>
 
       <Card className="p-4">
-        <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">En proceso / finalizadas ({activas.length})</h3></div>
-        {activas.length === 0 ? <EstadoVacio texto="Cuando un chofer acepte una orden, saldrá de la cola y aparecerá aquí." mostrarBoton={false} /> : (
-          <div className="scroll-thin overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Orden</th><th>Ton</th><th>Equipo</th><th>Transportista</th><th>Estado</th><th>Avance</th><th>Chat</th></tr></thead>
-              <tbody>
-                {activas.map((o) => (
-                  <tr key={o.id} className="border-t border-slate-100 dark:border-slate-700/50">
-                    <td className="py-2 font-mono font-medium text-brand-navy dark:text-slate-100">{o.numero}</td>
-                    <td className="tabular-nums">{o.pesoReal ?? o.pesoEstimado}</td>
-                    <td>{o.tipoEquipo || '—'}</td>
-                    <td>{nombreCarrier(o.transportistaId)}</td>
-                    <td><Badge color={COLOR_ESTADO[o.estado] || 'slate'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge></td>
-                    <td className="w-32">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
-                          <div className={`h-full rounded-full ${o.estado === E.CERRADA ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${avance(o)}%` }} />
-                        </div>
-                        <span className="text-[10px] tabular-nums text-slate-400">{avance(o)}%</span>
-                      </div>
-                    </td>
-                    <td><button onClick={() => setChatOrden(o)} title="Chat de la orden" className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> Abrir</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Asignación en vivo ({activas.length})</h3></div>
+        {activas.length === 0 ? <EstadoVacio texto="Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real." mostrarBoton={false} /> : (
+          <div className="space-y-2">
+            {activas.map((o) => {
+              const enRuta = o.estado === E.EN_RUTA
+              const fin = FINALES.includes(o.estado)
+              return (
+                <div key={o.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 flex-shrink-0 rounded-full ${enRuta ? 'animate-pulse bg-emerald-500' : fin ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Badge color={COLOR_ESTADO[o.estado] || 'navy'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge>
+                    <button onClick={() => setChatOrden(o)} title="Chat de la orden" className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                    <User size={13} className="text-amber-500" />
+                    <span className="font-semibold text-brand-navy dark:text-slate-100">{o.choferNombre || nombreCarrier(o.transportistaId)}</span>
+                    <span className="text-slate-400">· {o.material} · {o.pesoReal ?? o.pesoEstimado} ton</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
+                      <div className={`h-full rounded-full ${fin ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${avance(o)}%` }} />
+                    </div>
+                    <span className="text-[10px] tabular-nums text-slate-400">{avance(o)}%</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>
+      </div>
 
       {chatOrden && (
         <ModalChat titulo={`Chat · ${chatOrden.numero}`} onClose={() => setChatOrden(null)}>
