@@ -2,11 +2,14 @@
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
 import { useNavigate } from 'react-router-dom'
 import { FileText, Truck, ArrowRight, Route } from 'lucide-react'
+import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
 export function getModulo() { try { return localStorage.getItem('mp_module') } catch { return null } }
 
-const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow }) => (
+const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow }) => {
+  const { t } = useLang()
+  return (
   <button
     onClick={onClick}
     className="group relative flex w-full max-w-sm flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-left backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.08]"
@@ -27,17 +30,20 @@ const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow 
       </ul>
     )}
     <div className="relative mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-white">
-      Entrar <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+      {t('Entrar')} <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
     </div>
   </button>
-)
+  )
+}
 
 export default function ModuleSelector() {
   const navigate = useNavigate()
+  const { t } = useLang()
   const elegir = (m) => { setModulo(m); navigate(m === 'bulk' ? '/bulk' : '/', { replace: true }) }
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-4">
+      <div className="absolute right-4 top-4 z-10"><LangToggle /></div>
       {/* fondo decorativo */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/4 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-brand-navy/40 blur-[120px]" />
@@ -52,7 +58,7 @@ export default function ModuleSelector() {
             </div>
             <div className="text-[2.1rem] font-black leading-none tracking-tight text-white">Mile<span className="text-amber-400">Pay</span></div>
           </div>
-          <div className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">Plataforma de logística</div>
+          <div className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">{t('Plataforma de logística')}</div>
         </div>
 
         <div className="ms-in ms-in-2 mb-9 flex justify-center">
@@ -68,15 +74,15 @@ export default function ModuleSelector() {
         <div className="ms-in ms-in-3 flex flex-col items-stretch justify-center gap-5 sm:flex-row">
           <OpcionCard
             onClick={() => elegir('package')} icon={FileText} acento="bg-brand-navy" glow="bg-blue-600"
-            titulo="Package" desc="Facturas, pagos y claims."
+            titulo="Package" desc={t('Facturas, pagos y claims.')}
           />
           <OpcionCard
             onClick={() => elegir('bulk')} icon={Truck} acento="bg-amber-500" glow="bg-amber-500"
-            titulo="Freight" desc="Fletes de materiales, en vivo."
+            titulo="Freight" desc={t('Fletes de materiales, en vivo.')}
           />
         </div>
 
-        <p className="ms-in ms-in-3 mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} MilePay · Puedes cambiar de módulo en cualquier momento.</p>
+        <p className="ms-in ms-in-3 mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} MilePay · {t('Puedes cambiar de módulo en cualquier momento.')}</p>
       </div>
 
       <style>{`

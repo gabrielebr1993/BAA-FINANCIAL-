@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './AuthContext'
 import { ThemeProvider } from './ThemeContext'
+import { LangProvider } from './i18n'
 import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
@@ -116,9 +117,11 @@ function TopBranch() {
 export default function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <TopBranch />
-      </BrowserRouter>
+      <LangProvider>
+        <BrowserRouter>
+          <TopBranch />
+        </BrowserRouter>
+      </LangProvider>
     </ThemeProvider>
   )
 }

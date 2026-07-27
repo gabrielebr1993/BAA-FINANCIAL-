@@ -6,6 +6,7 @@ import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, Chevron
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
+import { useLang, LangToggle } from '../i18n'
 import { SECCIONES } from '../constants'
 import CampanaAlertas from './CampanaAlertas'
 import GlobalFilterBar from './GlobalFilterBar'
@@ -100,6 +101,7 @@ function CompanySwitcher() {
 
 function ItemMenu({ s, activo, onNavigate, badge }) {
   const Icon = s.icon
+  const { t } = useLang()
   return (
     <Link
       to={s.path}
@@ -111,7 +113,7 @@ function ItemMenu({ s, activo, onNavigate, badge }) {
       }`}
     >
       {Icon && <Icon size={19} strokeWidth={1.8} className="flex-shrink-0" />}
-      <span className="flex-1">{s.label}</span>
+      <span className="flex-1">{t(s.label)}</span>
       {badge > 0 && (
         <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white">{badge}</span>
       )}
@@ -122,6 +124,7 @@ function ItemMenu({ s, activo, onNavigate, badge }) {
 // Sección desplegable "IA": JARVIS (owner/súper-admin) + Panel de Control (súper-admin).
 function MenuIA({ onNavigate, esSuperAdmin }) {
   const location = useLocation()
+  const { t } = useLang()
   const enIA = location.pathname.startsWith('/ia')
   const [abierto, setAbierto] = useState(enIA)
   const subs = [
@@ -137,7 +140,7 @@ function MenuIA({ onNavigate, esSuperAdmin }) {
         }`}
       >
         <Sparkles size={19} strokeWidth={1.8} className="flex-shrink-0 text-brand-gold" />
-        <span className="flex-1 text-left">IA</span>
+        <span className="flex-1 text-left">{t('IA')}</span>
         <ChevronDown size={16} strokeWidth={2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
       </button>
       {abierto && (
@@ -154,6 +157,7 @@ function MenuIA({ onNavigate, esSuperAdmin }) {
 function SidebarContent({ onNavigate }) {
   const { perfil, puede, cerrarSesion, esSuperAdmin } = useAuth()
   const { numAlertas } = useData()
+  const { t } = useLang()
   const location = useLocation()
   const navigate = useNavigate()
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
@@ -166,7 +170,7 @@ function SidebarContent({ onNavigate }) {
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
         <div>
           <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
-          <div className="text-[11px] text-slate-400">Gestión de facturas</div>
+          <div className="text-[11px] text-slate-400">{t('Gestión de facturas')}</div>
         </div>
       </div>
 
@@ -187,16 +191,16 @@ function SidebarContent({ onNavigate }) {
       </nav>
 
       <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700/60">
-        <ThemeToggle />
+        <div className="flex items-center justify-between gap-2"><ThemeToggle /><LangToggle /></div>
         <div>
-          <div className="font-semibold text-slate-700 dark:text-slate-200">{perfil?.nombre || 'Usuario'}</div>
+          <div className="font-semibold text-slate-700 dark:text-slate-200">{perfil?.nombre || t('Usuario')}</div>
           <div className="truncate text-xs text-slate-400">{perfil?.role || 'usuario'} · {perfil?.email}</div>
         </div>
         <button onClick={() => navigate('/elegir')} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
-          <LayoutGrid size={16} strokeWidth={1.8} /> Cambiar módulo
+          <LayoutGrid size={16} strokeWidth={1.8} /> {t('Cambiar módulo')}
         </button>
         <button onClick={cerrarSesion} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
-          <LogOut size={16} strokeWidth={1.8} /> Cerrar sesión
+          <LogOut size={16} strokeWidth={1.8} /> {t('Cerrar sesión')}
         </button>
       </div>
     </aside>
