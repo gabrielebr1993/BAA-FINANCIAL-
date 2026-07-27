@@ -1,11 +1,15 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AuthProvider } from './AuthContext'
 import { ThemeProvider } from './ThemeContext'
 import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
 import { Cargando } from './components/ui'
+import ModuleSelector, { getModulo } from './ModuleSelector'
+
+// Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
+const BulkApp = lazy(() => import('./bulk/BulkApp'))
 
 // Páginas cargadas bajo demanda (code-splitting por ruta): cada una es su propio
 // chunk, así el arranque solo descarga lo imprescindible y cada pantalla se baja
@@ -58,12 +62,12 @@ function PortalPage({ children }) {
   )
 }
 
-export default function App() {
+// Package (MyPay): EXACTAMENTE el sistema actual — mismos providers y mismas rutas.
+// No cambia nada de su funcionamiento; solo se anida bajo el router de arriba.
+function PackageApp() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <DataProvider>
-          <BrowserRouter>
+    <AuthProvider>
+      <DataProvider>
             <Routes>
               <Route path="/portal" element={<PortalPage><DriverPortal /></PortalPage>} />
               <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
@@ -93,9 +97,28 @@ export default function App() {
               <Route path="/ia/panel" element={<Page soloSuperAdmin><PanelControl /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>
-          </BrowserRouter>
-        </DataProvider>
-      </AuthProvider>
+      </DataProvider>
+    </AuthProvider>
+  )
+}
+
+// Ramifica en el nivel más alto por la URL: /bulk → módulo Bulk (independiente);
+// /elegir o primera visita sin elección → selector; el resto → Package (intacto).
+function TopBranch() {
+  const { pathname } = useLocation()
+  if (pathname === '/bulk' || pathname.startsWith('/bulk/')) {
+    return <Suspense fallback={<Cargando texto="Cargando Bulk…" />}><BulkApp /></Suspense>
+  }
+  if (pathname === '/elegir' || (!getModulo() && pathname === '/')) return <ModuleSelector />
+  return <PackageApp />
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <BrowserRouter>
+        <TopBranch />
+      </BrowserRouter>
     </ThemeProvider>
   )
 }
