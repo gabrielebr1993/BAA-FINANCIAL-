@@ -9,12 +9,33 @@ import { transportistasCompatibles, transportistaCompatible } from '../domain/or
 import { recomendarTransportistas } from '../domain/asignacion'
 import { enviarPush } from '../integraciones/notificaciones'
 import { desgloseVisible } from '../domain/pagos'
-import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
+import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton } from '../../components/ui'
 import { money } from '../../utils/format'
 
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
 const ACTIVAS_EST = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
+
+// Color semántico por estado (mismos nombres que acepta <Badge/>).
+const COLOR_ESTADO = {
+  creada: 'slate', en_cola: 'slate', notificando: 'gold', aceptada: 'navy', en_planta: 'navy',
+  cargando: 'navy', en_ruta: 'blue', en_destino: 'blue', entregada: 'green', liberada: 'green',
+  cerrada: 'green', cancelada: 'red', rechazada: 'red',
+}
+
+function Chip({ label, val, color }) {
+  const c = {
+    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    gold: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+    navy: 'bg-brand-navy/10 text-brand-navy dark:bg-white/10 dark:text-slate-100',
+    green: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  }[color]
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${c}`}>
+      {label}<span className="tabular-nums">{val}</span>
+    </span>
+  )
+}
 
 export default function Ordenes() {
   const { tenantId, usuario, rol } = useBulkAuth()
@@ -74,10 +95,22 @@ export default function Ordenes() {
 
   if (cargando) return <Cargando />
   const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
+  const FINALES = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
+  const notifN = cola.filter((o) => o.estado === E.NOTIFICANDO).length
+  const enProcesoN = activas.filter((o) => !FINALES.includes(o.estado)).length
+  const entregadasN = activas.filter((o) => FINALES.includes(o.estado)).length
+  const avance = (o) => { const h = o.hitos || {}; const done = ORDEN_HITOS.filter((k) => h[k.key]).length; return Math.round((done / ORDEN_HITOS.length) * 100) }
 
   return (
     <div>
       <PageTitle>Órdenes / Cola</PageTitle>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Chip label="En cola" val={cola.length - notifN} color="slate" />
+        <Chip label="Notificando" val={notifN} color="gold" />
+        <Chip label="En proceso" val={enProcesoN} color="navy" />
+        <Chip label="Entregadas" val={entregadasN} color="green" />
+      </div>
 
       <Card className="mb-4 p-4">
         <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cola en tiempo real ({cola.length})</h3></div>
@@ -146,15 +179,23 @@ export default function Ordenes() {
         {activas.length === 0 ? <EstadoVacio texto="Cuando un chofer acepte una orden, saldrá de la cola y aparecerá aquí." mostrarBoton={false} /> : (
           <div className="scroll-thin overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Orden</th><th>Ton</th><th>Equipo</th><th>Transportista</th><th>Estado</th><th>Chat</th></tr></thead>
+              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Orden</th><th>Ton</th><th>Equipo</th><th>Transportista</th><th>Estado</th><th>Avance</th><th>Chat</th></tr></thead>
               <tbody>
                 {activas.map((o) => (
                   <tr key={o.id} className="border-t border-slate-100 dark:border-slate-700/50">
                     <td className="py-2 font-mono font-medium text-brand-navy dark:text-slate-100">{o.numero}</td>
-                    <td>{o.pesoReal ?? o.pesoEstimado}</td>
+                    <td className="tabular-nums">{o.pesoReal ?? o.pesoEstimado}</td>
                     <td>{o.tipoEquipo || '—'}</td>
                     <td>{nombreCarrier(o.transportistaId)}</td>
-                    <td><Badge color={o.estado === E.CERRADA ? 'green' : 'gold'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge></td>
+                    <td><Badge color={COLOR_ESTADO[o.estado] || 'slate'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge></td>
+                    <td className="w-32">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
+                          <div className={`h-full rounded-full ${o.estado === E.CERRADA ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${avance(o)}%` }} />
+                        </div>
+                        <span className="text-[10px] tabular-nums text-slate-400">{avance(o)}%</span>
+                      </div>
+                    </td>
                     <td><button onClick={() => setChatOrden(o)} title="Chat de la orden" className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> Abrir</button></td>
                   </tr>
                 ))}
