@@ -24,40 +24,53 @@ export default function ModoTest() {
   const [refrescando, setRefrescando] = useState(false)
   const [msg, setMsg] = useState(null)
 
-  // Refresca los permisos de la sesión sin tener que salir y volver a entrar.
-  const refrescarSesion = async () => {
-    setRefrescando(true)
-    try { await authBulk.currentUser?.getIdToken(true) } catch { /* noop */ }
-    window.location.reload()
-  }
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
 
+  // Asegura que el token lleve los permisos más recientes antes de leer/escribir.
+  const asegurarToken = async () => { try { await authBulk.currentUser?.getIdToken(true) } catch { /* noop */ } }
+  const esPermiso = (m) => /permission|denied|insufficient|no autorizado/i.test(m || '')
+
+  // Refresca los permisos de la sesión sin tener que salir y volver a entrar.
+  const refrescarSesion = async () => {
+    setRefrescando(true)
+    await asegurarToken()
+    window.location.reload()
+  }
+
   const activar = async () => {
-    const yaHay = await hayDemo(tenantId)
-    if (yaHay > 0 && !window.confirm('Ya hay datos de prueba. ¿Cargar otro paquete encima?')) return
-    setFase('sembrando'); setMsg(null)
+    setMsg(null)
+    await asegurarToken()
     try {
+      const yaHay = await hayDemo(tenantId)
+      if (yaHay > 0 && !window.confirm('Ya hay datos de prueba. ¿Cargar otro paquete encima?')) return
+      setFase('sembrando')
       await sembrarDemo(tenantId)
       setMsg({ tipo: 'ok', txt: '¡Listo! Ya puedes recorrer el menú (Dashboard, Órdenes, Mapa en vivo, Facturación…) y verlo todo funcionando.' })
-    } catch (e) { setMsg({ tipo: 'error', txt: 'No se pudo cargar: ' + e.message }) }
-    finally { setFase('idle') }
+    } catch (e) {
+      const m = e?.message || ''
+      setMsg({ tipo: 'error', txt: esPermiso(m) ? 'Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.' : 'No se pudo cargar: ' + m })
+    } finally { setFase('idle') }
   }
 
   const borrar = async () => {
     if (!window.confirm('Se borran solo los datos de prueba; tus datos reales no se tocan. ¿Continuar?')) return
     setFase('borrando'); setMsg(null)
+    await asegurarToken()
     try {
       const n = await borrarDemo(tenantId)
       setMsg({ tipo: 'ok', txt: `Listo. Se borraron ${n} registros de prueba.` })
-    } catch (e) { setMsg({ tipo: 'error', txt: 'No se pudo borrar: ' + e.message }) }
-    finally { setFase('idle') }
+    } catch (e) {
+      const m = e?.message || ''
+      setMsg({ tipo: 'error', txt: esPermiso(m) ? 'Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.' : 'No se pudo borrar: ' + m })
+    } finally { setFase('idle') }
   }
 
   // Un toque: prepara la cuenta del portal (si hace falta) y entra directo a esa vista.
   const entrarA = async (p) => {
     setEntrando(p.rol); setMsg(null)
     try {
+      await asegurarToken()
       if (demoOrdenes === 0) await sembrarDemo(tenantId)
       const vinc = await datosVinculoDemo(tenantId, p.rol)
       try {
