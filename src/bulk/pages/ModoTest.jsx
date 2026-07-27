@@ -47,8 +47,9 @@ export default function ModoTest() {
       await sembrarDemo(tenantId)
       setMsg({ tipo: 'ok', txt: '¡Listo! Ya puedes recorrer el menú (Dashboard, Órdenes, Mapa en vivo, Facturación…) y verlo todo funcionando.' })
     } catch (e) {
-      const m = e?.message || ''
-      setMsg({ tipo: 'error', txt: esPermiso(m) ? 'Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.' : 'No se pudo cargar: ' + m })
+      const m = e?.message || String(e)
+      const hint = esPermiso(m) ? 'Parece un bloqueo de reglas/permisos de Firestore. ' : ''
+      setMsg({ tipo: 'error', txt: `${hint}Detalle técnico: ${m}` })
     } finally { setFase('idle') }
   }
 
