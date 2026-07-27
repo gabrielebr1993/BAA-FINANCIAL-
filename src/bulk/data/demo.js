@@ -91,7 +91,13 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     { nombre: 'Concretos Express', contacto: '214-555-0200', equipos: ['Concrete Mixer'], calificacion: 4.5 },
   ]
   const carriers = []
-  for (const c of carriersDef) carriers.push(await crear('carriers', tenantId, { ...c, activo: true, demo: true }))
+  for (let i = 0; i < carriersDef.length; i++) {
+    const c = carriersDef[i]
+    // 2 choferes por transporte (guardados en el propio documento del transporte).
+    const choferes = [CHOFERES[(i * 2) % CHOFERES.length], CHOFERES[(i * 2 + 1) % CHOFERES.length]]
+      .map((nombre, k) => ({ id: `d_${i}${k}`, nombre, telefono: `214-555-0${100 + i * 2 + k}`, licencia: `TX-${10000 + i * 2 + k}`, activo: true }))
+    carriers.push(await crear('carriers', tenantId, { ...c, choferes, activo: true, demo: true }))
+  }
   conteo.transportistas = carriers.length
   const compatCarriers = (tipo) => carriers.filter((c) => c.equipos.map((e) => e.toLowerCase()).includes(tipo.toLowerCase())).map((c) => c.id)
 

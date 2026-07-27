@@ -21,7 +21,11 @@ export default function TransportistaPerfil() {
 
   const carrier = useMemo(() => carriers.find((c) => c.id === id) || null, [carriers, id])
   const misOrdenes = useMemo(() => ordenes.filter((o) => o.transportistaId === id), [ordenes, id])
-  const choferes = useMemo(() => [...new Set(misOrdenes.map((o) => o.choferNombre).filter(Boolean))], [misOrdenes])
+  const choferes = useMemo(() => {
+    const gestion = (carrier?.choferes || []).map((d) => d.nombre)
+    const deOrdenes = misOrdenes.map((o) => o.choferNombre).filter(Boolean)
+    return [...new Set([...gestion, ...deOrdenes])]
+  }, [carrier, misOrdenes])
   const docs = useMemo(() => documentos.filter((d) => d.carrierId === id).map((d) => ({ ...d, ...estadoDocumento(d.vence) })), [documentos, id])
 
   if (cargando) return <Cargando />
