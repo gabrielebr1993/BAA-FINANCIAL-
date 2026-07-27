@@ -141,5 +141,75 @@ service cloud.firestore {
       allow create: if isStaff(request.resource.data.companyId);
       allow update, delete: if isStaff(resource.data.companyId);
     }
+
+    // =========================================================================
+    // MÓDULO BULK — namespace `bulk_*` (independiente de Package).
+    // Requiere Firebase Auth con CUSTOM CLAIMS puestas por el backend
+    // (functions: crearUsuarioBulk / bootstrapMasterBulk):
+    //   token.bulkTenant, token.bulkRole, token.bulkClienteId?, token.bulkCarrierId?
+    // Aislamiento estricto por bulkTenant. Los usuarios se crean por el backend
+    // (Admin SDK), por eso `bulk_users` no acepta escritura directa del cliente.
+    // =========================================================================
+    function bT() { return request.auth != null ? request.auth.token.bulkTenant : null; }
+    function bRole() { return request.auth != null ? request.auth.token.bulkRole : null; }
+    function bSigned() { return request.auth != null && bT() != null; }
+    function bSame(cid) { return bSigned() && bT() == cid; }
+    function bStaff(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin', 'dispatcher']); }
+    function bAdmin(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin']); }
+    function bCliente() { return request.auth != null ? request.auth.token.bulkClienteId : null; }
+    function bCarrier() { return request.auth != null ? request.auth.token.bulkCarrierId : null; }
+
+    // Perfiles Bulk: lee el propio o admin del tenant. Alta/edición: backend (Admin SDK).
+    match /bulk_users/{id} {
+      allow read: if bSame(resource.data.tenantId) && (request.auth.uid == id || bAdmin(resource.data.tenantId));
+      allow write: if false;
+    }
+
+    // Catálogos y entidades gestionadas por staff del tenant.
+    match /bulk_clients/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    match /bulk_plants/{id}    { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    match /bulk_materials/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_equipment/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_geofences/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_tariffs/{id}   { allow read: if bStaff(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_incidents/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update: if bStaff(request.resource.data.tenantId) || bStaff(resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_documents/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+
+    // Órdenes: staff todo; chofer las suyas; transportista las de su carrier; cliente las suyas.
+    match /bulk_orders/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (
+             (bRole() == 'chofer' && resource.data.choferId == request.auth.uid)
+          || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
+          || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
+          || (bRole() == 'supervisor_planta')));
+      allow create: if bStaff(request.resource.data.tenantId);
+      allow update: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (
+             (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier()))
+          || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
+          || (bRole() == 'supervisor_planta')));
+      allow delete: if bAdmin(resource.data.tenantId);
+    }
+
+    // Facturas: staff crea; cliente lee/firma las suyas.
+    match /bulk_invoices/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
+      allow create: if bStaff(request.resource.data.tenantId);
+      allow update: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
+      allow delete: if bAdmin(resource.data.tenantId);
+    }
+
+    // Mensajes de orden y GPS: cualquier miembro autenticado del tenant.
+    match /bulk_messages/{id}    { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update: if bSame(resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
+
+    // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.
+    match /bulk_notificaciones/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
+
+    // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
+    match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }
 }
