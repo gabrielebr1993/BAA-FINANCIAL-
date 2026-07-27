@@ -170,12 +170,12 @@ service cloud.firestore {
     match /bulk_plants/{id}    { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
-    match /bulk_materials/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
-    match /bulk_equipment/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
-    match /bulk_geofences/{id} { allow read: if bSame(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
-    match /bulk_tariffs/{id}   { allow read: if bStaff(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_materials/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_equipment/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_geofences/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_tariffs/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
     match /bulk_incidents/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update: if bStaff(request.resource.data.tenantId) || bStaff(resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
-    match /bulk_documents/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update, delete: if bAdmin(resource.data.tenantId); }
+    match /bulk_documents/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
 
     // Órdenes: staff todo; chofer las suyas; transportista las de su carrier; cliente las suyas.
     match /bulk_orders/{id} {
