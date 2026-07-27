@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { Plus, Trash2, MapPin } from 'lucide-react'
+import { Plus, Trash2, MapPin, MousePointerClick } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
+import MapaLeaflet from '../components/MapaLeaflet'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio } from '../../components/ui'
 
 const TIPOS = [
   { v: 'planta', l: 'Planta' }, { v: 'destino', l: 'Destino' },
   { v: 'patio', l: 'Patio' }, { v: 'proyecto', l: 'Proyecto' },
 ]
+const COLOR = { planta: '#c9a24b', destino: '#2563eb', patio: '#64748b', proyecto: '#10b981' }
 
 export default function Geocercas() {
   const { tenantId } = useBulkAuth()
@@ -26,23 +28,42 @@ export default function Geocercas() {
     if (!p.gps) return
     await crear('geofences', tenantId, { nombre: p.nombre, tipo: 'planta', lat: p.gps.lat, lng: p.gps.lng, radio: 200, plantaId: p.id })
   }
+  const elegirDelMapa = ({ lat, lng }) => setF((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6) }))
 
   if (cargando) return <Cargando />
   const plantasSinGeocerca = plantas.filter((p) => p.gps && !geocercas.some((g) => g.plantaId === p.id))
+  // Marcador de la geocerca que se está creando (para verla antes de guardar).
+  const preview = f.lat && f.lng ? [{ lat: Number(f.lat), lng: Number(f.lng), label: f.nombre || 'Nueva geocerca', color: COLOR[f.tipo] }] : []
 
   return (
     <div>
       <PageTitle>Geocercas</PageTitle>
+
+      {/* Mapa con todas las geocercas + clic para marcar */}
+      <Card className="mb-4 p-3">
+        <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+          <MousePointerClick size={14} className="text-amber-500" /> Toca el mapa para marcar la ubicación de una nueva geocerca.
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            {TIPOS.map((t) => <span key={t.v} className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR[t.v] }} /> {t.l}</span>)}
+          </span>
+        </div>
+        <MapaLeaflet geocercas={geocercas} marcadores={preview} onPick={elegirDelMapa} alto="52vh" />
+      </Card>
+
+      {/* Formulario */}
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">Nueva geocerca</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Input placeholder="Nombre" value={f.nombre} onChange={set('nombre')} />
           <Select value={f.tipo} onChange={set('tipo')}>{TIPOS.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}</Select>
-          <Input placeholder="Lat" value={f.lat} onChange={set('lat')} />
-          <Input placeholder="Lng" value={f.lng} onChange={set('lng')} />
+          <Input placeholder="Lat (o toca el mapa)" value={f.lat} onChange={set('lat')} />
+          <Input placeholder="Lng (o toca el mapa)" value={f.lng} onChange={set('lng')} />
           <Input placeholder="Radio (m)" value={f.radio} onChange={set('radio')} />
         </div>
-        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim() || !f.lat || !f.lng}><Plus size={16} /> Agregar</Boton></div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim() || !f.lat || !f.lng}><Plus size={16} /> Agregar</Boton>
+          {f.lat && f.lng && <span className="text-xs text-slate-400">Marcado: {Number(f.lat).toFixed(4)}, {Number(f.lng).toFixed(4)}</span>}
+        </div>
         {plantasSinGeocerca.length > 0 && (
           <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Crear desde planta (usa su GPS)</div>
@@ -53,11 +74,11 @@ export default function Geocercas() {
         )}
       </Card>
 
-      {geocercas.length === 0 ? <EstadoVacio titulo="Sin geocercas" texto="Crea la primera arriba o desde una planta con GPS." mostrarBoton={false} /> : (
+      {geocercas.length === 0 ? <EstadoVacio titulo="Sin geocercas" texto="Toca el mapa de arriba para marcar la primera, o créala desde una planta con GPS." mostrarBoton={false} /> : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {geocercas.map((g) => (
             <Card key={g.id} className="p-3">
-              <div className="flex items-center gap-2"><MapPin size={16} className="text-amber-500" /><span className="font-semibold text-brand-navy dark:text-slate-100">{g.nombre}</span><Badge color="navy">{g.tipo}</Badge><button onClick={() => window.confirm(`¿Eliminar geocerca "${g.nombre}"?`) && eliminar('geofences', g.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button></div>
+              <div className="flex items-center gap-2"><MapPin size={16} style={{ color: COLOR[g.tipo] || '#c9a24b' }} /><span className="font-semibold text-brand-navy dark:text-slate-100">{g.nombre}</span><Badge color="navy">{g.tipo}</Badge><button onClick={() => window.confirm(`¿Eliminar geocerca "${g.nombre}"?`) && eliminar('geofences', g.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button></div>
               <div className="mt-1 text-xs text-slate-400">{g.lat.toFixed(5)}, {g.lng.toFixed(5)} · radio {g.radio} m</div>
             </Card>
           ))}

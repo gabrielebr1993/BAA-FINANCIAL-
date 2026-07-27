@@ -7,17 +7,22 @@ import 'leaflet/dist/leaflet.css'
 
 // puntos: track de UNA orden (polilínea + posición). marcadores: varios choferes a
 // la vez [{lat,lng,label,color}]. geocercas: círculos de planta/destino.
-export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320 }) {
+export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null }) {
   const cont = useRef(null)
   const map = useRef(null)
   const capas = useRef([])
+  const onPickRef = useRef(onPick)
+  onPickRef.current = onPick
 
   useEffect(() => {
     if (!cont.current) return
     if (!map.current) {
       map.current = L.map(cont.current, { zoomControl: true }).setView([39.5, -98.35], 4)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current)
+      // Clic en el mapa → devuelve la coordenada (para elegir ubicación).
+      map.current.on('click', (e) => { if (onPickRef.current) onPickRef.current({ lat: e.latlng.lat, lng: e.latlng.lng }) })
     }
+    if (onPickRef.current && cont.current) cont.current.style.cursor = 'crosshair'
     const m = map.current
     capas.current.forEach((c) => m.removeLayer(c)); capas.current = []
     const bounds = []
