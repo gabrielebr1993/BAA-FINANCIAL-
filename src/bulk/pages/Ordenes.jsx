@@ -1,27 +1,46 @@
-import { useMemo } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { transportistasCompatibles, transportistaCompatible } from '../domain/ordenes'
+import { recomendarTransportistas } from '../domain/asignacion'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select } from '../../components/ui'
+import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton } from '../../components/ui'
 import { money } from '../../utils/format'
 
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
+const ACTIVAS_EST = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
 
 export default function Ordenes() {
   const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: plants } = useColeccion('plants')
+  const [verSug, setVerSug] = useState('') // orderId con panel de sugerencia abierto
 
   const { cola, activas } = useMemo(() => {
     const cola = ordenes.filter((o) => EN_COLA.includes(o.estado))
     const activas = ordenes.filter((o) => !EN_COLA.includes(o.estado) && o.estado !== E.CANCELADA)
     return { cola, activas }
   }, [ordenes])
+
+  // Stats por transportista para el motor de asignación (disponibilidad, desempeño, posición).
+  const statsPorCarrier = useMemo(() => {
+    const m = {}
+    for (const c of carriers) m[c.id] = { activas: 0, completadas: 0, rechazos: 0, pos: null, posTs: '' }
+    for (const o of ordenes) {
+      const cid = o.transportistaId; if (!cid || !m[cid]) continue
+      if (ACTIVAS_EST.includes(o.estado)) m[cid].activas++
+      if ([E.LIBERADA, E.CERRADA].includes(o.estado)) m[cid].completadas++
+      if (o.ultimaPos?.ts && o.ultimaPos.ts > m[cid].posTs) { m[cid].pos = { lat: o.ultimaPos.lat, lng: o.ultimaPos.lng }; m[cid].posTs = o.ultimaPos.ts }
+    }
+    return m
+  }, [ordenes, carriers])
+  const plantaGps = (o) => plants.find((p) => p.id === o.plantaId)?.gps || null
+  const sugerir = (o) => recomendarTransportistas(o, carriers, statsPorCarrier, plantaGps(o))
 
   const asignar = async (orden, carrierId) => {
     const carrier = carriers.find((c) => c.id === carrierId)
@@ -31,6 +50,13 @@ export default function Ordenes() {
     }
     await guardar('orders', orden.id, { transportistaId: carrierId, estado: E.NOTIFICANDO })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_orden', entidad: 'orden', entidadId: orden.id, detalle: `Asignada a ${carrier?.nombre} · notificando` })
+  }
+  const autoAsignar = async (orden) => {
+    const rank = sugerir(orden)
+    if (!rank.length) { window.alert('No hay transportistas compatibles disponibles.'); return }
+    await guardar('orders', orden.id, { transportistaId: rank[0].carrier.id, estado: E.NOTIFICANDO, asignacionAuto: { score: rank[0].score, motivo: rank[0].detalle } })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'auto_asignar', entidad: 'orden', entidadId: orden.id, detalle: `Auto → ${rank[0].carrier.nombre} (score ${rank[0].score})` })
+    setVerSug('')
   }
   const aceptar = async (orden) => {
     await guardar('orders', orden.id, { estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: new Date().toISOString() } })
@@ -72,6 +98,30 @@ export default function Ordenes() {
                       {compat.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                     </Select>
                   </div>
+                  {compat.length > 0 && (
+                    <div className="mt-2 flex gap-1.5">
+                      <Boton variant="gold" onClick={() => autoAsignar(o)} className="flex-1 justify-center px-2 py-1 text-xs"><Zap size={13} /> Auto-asignar</Boton>
+                      <Boton variant="ghost" onClick={() => setVerSug(verSug === o.id ? '' : o.id)} className="px-2 py-1 text-xs"><Sparkles size={13} /> Sugerir</Boton>
+                    </div>
+                  )}
+                  {verSug === o.id && (
+                    <div className="mt-2 space-y-1.5 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">
+                      <div className="text-[10px] font-semibold uppercase text-slate-400">Recomendación por reglas</div>
+                      {sugerir(o).slice(0, 3).map((r, i) => (
+                        <div key={r.carrier.id} className="rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+                          <div className="flex items-center gap-1.5">
+                            {i === 0 && <Sparkles size={12} className="text-amber-500" />}
+                            <span className="text-xs font-semibold text-brand-navy dark:text-slate-100">{r.carrier.nombre}</span>
+                            <Badge color={i === 0 ? 'gold' : 'slate'}>{Math.round(r.score * 100)}</Badge>
+                            <button onClick={() => asignar(o, r.carrier.id)} className="ml-auto rounded bg-brand-navy px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-amber-500 dark:text-slate-900">Asignar</button>
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-slate-400">
+                            cercanía {r.detalle.cercania}{r.detalle.distKm != null ? ` (${r.detalle.distKm} km)` : ''} · dispon. {r.detalle.disponibilidad} · calif. {r.detalle.calificacion} · desemp. {r.detalle.desempeno}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {notificando && (
                     <div className="mt-2 flex gap-1.5">
                       <button onClick={() => aceptar(o)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-semibold text-white"><CheckCircle2 size={13} /> Aceptar</button>
