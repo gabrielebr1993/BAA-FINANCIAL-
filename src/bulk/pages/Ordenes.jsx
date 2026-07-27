@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap } from 'lucide-react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare } from 'lucide-react'
+import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -21,6 +22,7 @@ export default function Ordenes() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plants } = useColeccion('plants')
   const [verSug, setVerSug] = useState('') // orderId con panel de sugerencia abierto
+  const [chatOrden, setChatOrden] = useState(null) // orden con el chat abierto
 
   const { cola, activas } = useMemo(() => {
     const cola = ordenes.filter((o) => EN_COLA.includes(o.estado))
@@ -91,6 +93,7 @@ export default function Ordenes() {
                     <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                     <Badge color="navy">{o.pesoEstimado} ton</Badge>
                     {o.tipoEquipo && <Badge color="slate">{o.tipoEquipo}</Badge>}
+                    <button onClick={() => setChatOrden(o)} title="Chat de la orden" className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">{o.material || 'material s/e'} · {ORDEN_ESTADO_LABEL[o.estado]}</div>
                   {'precioCliente' in fin && fin.precioCliente != null && <div className="mt-1 text-xs">Cliente: {money(fin.precioCliente)}</div>}
@@ -143,7 +146,7 @@ export default function Ordenes() {
         {activas.length === 0 ? <EstadoVacio texto="Cuando un chofer acepte una orden, saldrá de la cola y aparecerá aquí." mostrarBoton={false} /> : (
           <div className="scroll-thin overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Orden</th><th>Ton</th><th>Equipo</th><th>Transportista</th><th>Estado</th></tr></thead>
+              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Orden</th><th>Ton</th><th>Equipo</th><th>Transportista</th><th>Estado</th><th>Chat</th></tr></thead>
               <tbody>
                 {activas.map((o) => (
                   <tr key={o.id} className="border-t border-slate-100 dark:border-slate-700/50">
@@ -152,6 +155,7 @@ export default function Ordenes() {
                     <td>{o.tipoEquipo || '—'}</td>
                     <td>{nombreCarrier(o.transportistaId)}</td>
                     <td><Badge color={o.estado === E.CERRADA ? 'green' : 'gold'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge></td>
+                    <td><button onClick={() => setChatOrden(o)} title="Chat de la orden" className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 hover:text-amber-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> Abrir</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -159,6 +163,23 @@ export default function Ordenes() {
           </div>
         )}
       </Card>
+
+      {chatOrden && (
+        <ModalChat titulo={`Chat · ${chatOrden.numero}`} onClose={() => setChatOrden(null)}>
+          <ChatOrden orden={chatOrden} alto={380} />
+        </ModalChat>
+      )}
+    </div>
+  )
+}
+
+function ModalChat({ titulo, children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-2xl bg-white p-4 dark:bg-slate-900 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</h3>
+        {children}
+      </div>
     </div>
   )
 }
