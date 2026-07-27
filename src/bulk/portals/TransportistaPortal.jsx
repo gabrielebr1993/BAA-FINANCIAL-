@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2, UserPlus, ClipboardList, Users, DollarSign, Package } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { crear, guardar, where } from '../data/repo'
+import { guardar, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ahora } from '../domain/flujo'
@@ -14,7 +14,7 @@ import { money } from '../../utils/format'
 const ENTREGADAS = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 
 export default function TransportistaPortal() {
-  const { usuario, cerrarSesion, tenantId, rol, hashPass } = useBulkAuth()
+  const { usuario, cerrarSesion, tenantId, rol, crearUsuario } = useBulkAuth()
   const navigate = useNavigate()
   const carrierId = usuario?.carrierId || '__none__'
   const { datos: ordenes, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
@@ -35,9 +35,11 @@ export default function TransportistaPortal() {
   const crearChofer = async () => {
     setMsg(null)
     if (!f.nombre.trim() || !f.email.trim() || !f.password) { setMsg({ tipo: 'warn', txt: 'Completa nombre, correo y contraseña.' }); return }
-    await crear('users', tenantId, { nombre: f.nombre.trim(), email: f.email.trim().toLowerCase(), rol: BULK_ROLES.CHOFER, carrierId, passHash: await hashPass(f.password), activo: true })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_chofer', entidad: 'usuario', detalle: f.email })
-    setF({ nombre: '', email: '', password: '' }); setMsg({ tipo: 'ok', txt: 'Chofer creado.' })
+    try {
+      await crearUsuario({ nombre: f.nombre.trim(), email: f.email.trim().toLowerCase(), password: f.password, rol: BULK_ROLES.CHOFER, carrierId })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_chofer', entidad: 'usuario', detalle: f.email })
+      setF({ nombre: '', email: '', password: '' }); setMsg({ tipo: 'ok', txt: 'Chofer creado.' })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || 'No se pudo crear (¿backend desplegado?).' }) }
   }
   const asignarChofer = async (orden, choferId) => {
     const ch = choferes.find((c) => c.id === choferId)

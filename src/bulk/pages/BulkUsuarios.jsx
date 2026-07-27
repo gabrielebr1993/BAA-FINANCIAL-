@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { UserPlus, Trash2, ShieldCheck } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { crear, eliminar, guardar } from '../data/repo'
+import { eliminar, guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
@@ -13,7 +13,7 @@ const ROLES_ASIGNABLES = [
 ]
 
 export default function BulkUsuarios() {
-  const { tenantId, usuario, rol, hashPass } = useBulkAuth()
+  const { tenantId, usuario, rol, crearUsuario } = useBulkAuth()
   const { datos: usuarios, cargando } = useColeccion('users')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
@@ -30,11 +30,16 @@ export default function BulkUsuarios() {
     if (usuarios.some((u) => (u.email || '').toLowerCase() === email)) { setMsg({ tipo: 'error', txt: 'Ese correo ya existe.' }); return }
     if (necesitaCliente && !f.vinculo) { setMsg({ tipo: 'warn', txt: 'Selecciona el cliente al que pertenece.' }); return }
     if (necesitaCarrier && !f.vinculo) { setMsg({ tipo: 'warn', txt: 'Selecciona el transportista al que pertenece.' }); return }
-    const extra = necesitaCliente ? { clienteId: f.vinculo } : necesitaCarrier ? { carrierId: f.vinculo } : {}
-    await crear('users', tenantId, { nombre: f.nombre.trim(), email, rol: f.rol, passHash: await hashPass(f.password), activo: true, ...extra })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})` })
-    setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
-    setMsg({ tipo: 'ok', txt: 'Usuario creado.' })
+    try {
+      await crearUsuario({
+        nombre: f.nombre.trim(), email, password: f.password, rol: f.rol,
+        clienteId: necesitaCliente ? f.vinculo : undefined,
+        carrierId: necesitaCarrier ? f.vinculo : undefined,
+      })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})` })
+      setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
+      setMsg({ tipo: 'ok', txt: 'Usuario creado.' })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || 'No se pudo crear (¿backend desplegado?).' }) }
   }
   const borrar = async (u) => {
     if (u.rol === BULK_ROLES.SUPER_ADMIN) return

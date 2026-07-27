@@ -35,9 +35,12 @@ function claimsDe(perfil) {
 // ============================================================================
 exports.crearUsuarioBulk = onCall(async (req) => {
   const t = req.auth && req.auth.token
-  if (!esAdminClaim(t)) throw new HttpsError('permission-denied', 'Solo administradores.')
+  if (!t || !t.bulkTenant) throw new HttpsError('permission-denied', 'No autorizado.')
   const { nombre, email, password, rol, clienteId, carrierId } = req.data || {}
   if (!email || !password || !ROLES.includes(rol)) throw new HttpsError('invalid-argument', 'Datos inválidos.')
+  // Admin crea cualquiera; un transportista solo puede crear CHOFERES de su propio carrier.
+  const esTransCreandoChofer = t.bulkRole === 'transportista' && rol === 'chofer' && carrierId && carrierId === t.bulkCarrierId
+  if (!esAdminClaim(t) && !esTransCreandoChofer) throw new HttpsError('permission-denied', 'Sin permiso para crear este usuario.')
 
   let user
   try { user = await admin.auth().createUser({ email: String(email).toLowerCase(), password, displayName: nombre }) }

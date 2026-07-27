@@ -5,7 +5,7 @@ import { useBulkAuth } from './BulkAuthContext'
 import { Boton, Input, Aviso, Spinner } from '../components/ui'
 
 export default function BulkLogin() {
-  const { iniciarSesion, crearSuperAdmin, existeSuperAdmin } = useBulkAuth()
+  const { iniciarSesion, crearSuperAdmin } = useBulkAuth()
   const [modo, setModo] = useState('login')
   const [form, setForm] = useState({ email: '', password: '', nombre: '', empresa: '' })
   const [error, setError] = useState('')
@@ -53,9 +53,6 @@ export default function BulkLogin() {
           <p className="mb-6 mt-1 text-sm text-slate-400">{setup ? 'Configura el primer super administrador.' : 'Inicia sesión para continuar.'}</p>
 
           {error && <Aviso tipo="error" className="mb-3">{error}</Aviso>}
-          {!existeSuperAdmin && !setup && (
-            <Aviso tipo="info" className="mb-3">No hay administrador aún. <button className="font-semibold underline" onClick={() => setModo('setup')}>Crear el primero</button>.</Aviso>
-          )}
 
           <form onSubmit={enviar} className="space-y-3">
             {setup && <Input placeholder="Tu nombre" value={form.nombre} onChange={set('nombre')} required />}
@@ -73,7 +70,9 @@ export default function BulkLogin() {
             </Boton>
           </form>
 
-          {setup && <button onClick={() => setModo('login')} className="mt-4 w-full text-center text-sm text-slate-400 hover:text-slate-200">← Volver a iniciar sesión</button>}
+          {setup
+            ? <button onClick={() => setModo('login')} className="mt-4 w-full text-center text-sm text-slate-400 hover:text-slate-200">← Volver a iniciar sesión</button>
+            : <button onClick={() => setModo('setup')} className="mt-4 w-full text-center text-xs text-slate-500 hover:text-slate-300">¿Primer arranque? Crear administrador</button>}
         </div>
       </div>
     </div>

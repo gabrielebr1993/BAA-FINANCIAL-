@@ -1,0 +1,21 @@
+// App de Firebase SECUNDARIA para Bulk: misma configuración/proyecto, pero una
+// instancia con nombre propio ('bulk') para que la SESIÓN de autenticación de Bulk
+// sea independiente de la de Package (login separado real).
+import { initializeApp, getApps } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
+import { getFunctions } from 'firebase/functions'
+
+const cfg = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+}
+
+const appBulk = getApps().find((a) => a.name === 'bulk') || initializeApp(cfg, 'bulk')
+export const authBulk = getAuth(appBulk)
+// Región por defecto us-central1; si despliegas las functions en otra región,
+// cámbiala aquí: getFunctions(appBulk, 'us-east1').
+export const funcsBulk = getFunctions(appBulk)

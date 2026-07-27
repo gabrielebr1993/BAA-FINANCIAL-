@@ -1,120 +1,88 @@
 // ============================================================================
-// BULK · Autenticación INDEPENDIENTE
-// Login, usuarios, roles y sesión propios — sin relación con el login de Package.
-// Los usuarios viven en `bulk_users` (namespace separado) y la sesión se guarda
-// aparte (`bulk_session`).
-//
-// ⚠️ NOTA DE SEGURIDAD: esta verificación de credenciales es del lado del cliente
-// (hash SHA-256 + reglas de Firestore) para levantar el módulo sin backend. Para
-// PRODUCCIÓN debe moverse a un backend real (Cloud Function / proyecto Auth
-// separado) que verifique la contraseña en el servidor y emita el token. La
-// arquitectura ya está preparada: solo se reemplaza `verificar()` y `hashPass()`.
+// BULK · Autenticación con FIREBASE AUTH (sesión propia, independiente de Package).
+// Los usuarios se crean por el backend (Cloud Functions: bootstrapMasterBulk /
+// crearUsuarioBulk) que además pone los CUSTOM CLAIMS (bulkTenant, bulkRole,
+// bulkClienteId, bulkCarrierId). Aquí solo iniciamos sesión y leemos esos claims;
+// las reglas de Firestore aíslan por tenant/rol.
 // ============================================================================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { getDocs, query, where } from 'firebase/firestore'
-import { col, ref, crearConId, guardar } from './data/repo'
 import { getDoc } from 'firebase/firestore'
-import { BULK_ROLES } from './domain/constants'
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth'
+import { httpsCallable } from 'firebase/functions'
+import { authBulk, funcsBulk } from './firebaseBulk'
+import { ref } from './data/repo'
 
 const Ctx = createContext(null)
 export const useBulkAuth = () => useContext(Ctx)
 
-const SESION_KEY = 'bulk_session'
-
-// Usuario MASTER (super administrador) que se auto-crea si no existe. Se guarda solo el
-// HASH SHA-256 de la contraseña, nunca el texto plano. (Cámbiala en producción.)
-const MASTER = {
-  id: 'u_master',
-  tenantId: 't_master',
-  nombre: 'Gabriele Brandonisio',
-  email: 'gabriele.brandonisio.o@gmail.com',
-  passHash: 'c7463b8739e3a8a066ad5ff1a810caca9fca02b1cf0eae0e54f89cd7aeea6845',
-}
-
-async function hashPass(texto) {
-  const data = new TextEncoder().encode(String(texto))
-  const buf = await crypto.subtle.digest('SHA-256', data)
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function buscarPorEmail(email) {
-  const snap = await getDocs(query(col('users'), where('email', '==', String(email).trim().toLowerCase())))
-  const d = snap.docs[0]
-  return d ? { id: d.id, ...d.data() } : null
-}
-
 export function BulkAuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null)
   const [cargando, setCargando] = useState(true)
-  const [existeSuperAdmin, setExisteSuperAdmin] = useState(true)
 
-  // Restaura la sesión guardada y revisa si hay que hacer el "primer arranque".
+  // La sesión la maneja Firebase Auth (persistente). Al cambiar, cargamos claims + perfil.
   useEffect(() => {
-    (async () => {
-      // Semilla del usuario master (idempotente: solo si no existe ya).
+    const off = onAuthStateChanged(authBulk, async (fb) => {
+      if (!fb) { setUsuario(null); setCargando(false); return }
       try {
-        if (!(await buscarPorEmail(MASTER.email))) {
-          await crearConId('users', MASTER.id, MASTER.tenantId, {
-            nombre: MASTER.nombre, email: MASTER.email, rol: BULK_ROLES.SUPER_ADMIN,
-            passHash: MASTER.passHash, empresa: 'MyPay', activo: true,
-          })
-        }
-      } catch { /* noop */ }
-      try {
-        const raw = localStorage.getItem(SESION_KEY)
-        if (raw) {
-          const { id } = JSON.parse(raw)
-          const s = await getDoc(ref('users', id))
-          if (s.exists() && s.data().activo !== false) setUsuario({ id: s.id, ...s.data() })
-          else localStorage.removeItem(SESION_KEY)
-        }
-      } catch { /* noop */ }
-      try {
-        const sa = await getDocs(query(col('users'), where('rol', '==', BULK_ROLES.SUPER_ADMIN)))
-        setExisteSuperAdmin(!sa.empty)
-      } catch { setExisteSuperAdmin(true) }
+        const tok = await fb.getIdTokenResult(true)
+        const c = tok.claims || {}
+        let perfil = {}
+        try { const s = await getDoc(ref('users', fb.uid)); if (s.exists()) perfil = s.data() } catch { /* reglas */ }
+        setUsuario({
+          id: fb.uid,
+          email: fb.email,
+          nombre: perfil.nombre || fb.displayName || fb.email,
+          empresa: perfil.empresa || '',
+          rol: c.bulkRole || perfil.rol || null,
+          tenantId: c.bulkTenant || perfil.tenantId || null,
+          clienteId: c.bulkClienteId || perfil.clienteId || null,
+          carrierId: c.bulkCarrierId || perfil.carrierId || null,
+        })
+      } catch { setUsuario(null) }
       setCargando(false)
-    })()
+    })
+    return off
   }, [])
 
   const iniciarSesion = useCallback(async (email, password) => {
-    const u = await buscarPorEmail(email)
-    if (!u) throw new Error('Usuario no encontrado.')
-    if (u.activo === false) throw new Error('Usuario inactivo.')
-    const h = await hashPass(password)
-    if (h !== u.passHash) throw new Error('Contraseña incorrecta.')
-    localStorage.setItem(SESION_KEY, JSON.stringify({ id: u.id }))
-    setUsuario(u)
-    return u
+    try {
+      await signInWithEmailAndPassword(authBulk, String(email).trim().toLowerCase(), password)
+    } catch (e) {
+      if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') throw new Error('Correo o contraseña incorrectos.')
+      if (e.code === 'auth/operation-not-allowed') throw new Error('Habilita el proveedor Email/Contraseña en Firebase Auth.')
+      throw new Error(e.message)
+    }
   }, [])
 
-  const cerrarSesion = useCallback(() => {
-    localStorage.removeItem(SESION_KEY)
-    setUsuario(null)
-  }, [])
+  const cerrarSesion = useCallback(() => signOut(authBulk), [])
 
-  // Primer arranque: crea el Super Administrador y su tenant (empresa dueña).
+  // Primer arranque: crea el super administrador vía backend y deja la sesión iniciada.
   const crearSuperAdmin = useCallback(async ({ nombre, email, password, empresa }) => {
-    const existente = await buscarPorEmail(email)
-    if (existente) throw new Error('Ese correo ya está registrado.')
-    const tenantId = `t_${Date.now().toString(36)}`
-    const id = `u_${Date.now().toString(36)}`
-    await crearConId('users', id, tenantId, {
-      nombre, email: String(email).trim().toLowerCase(),
-      rol: BULK_ROLES.SUPER_ADMIN, passHash: await hashPass(password),
-      empresa: empresa || 'Mi empresa', activo: true,
-    })
-    setExisteSuperAdmin(true)
-    localStorage.setItem(SESION_KEY, JSON.stringify({ id }))
-    const u = await getDoc(ref('users', id))
-    setUsuario({ id, ...u.data() })
+    try {
+      const fn = httpsCallable(funcsBulk, 'bootstrapMasterBulk')
+      await fn({ nombre, email, password, empresa })
+    } catch (e) {
+      const msg = e?.message || ''
+      if (e?.code === 'functions/failed-precondition' || /ya existe/i.test(msg)) throw new Error('Ya hay un administrador. Inicia sesión.')
+      if (e?.code === 'functions/not-found' || /not.?found/i.test(msg)) throw new Error('El backend (Cloud Functions) aún no está desplegado.')
+      throw new Error(msg || 'No se pudo crear el administrador.')
+    }
+    await signInWithEmailAndPassword(authBulk, String(email).trim().toLowerCase(), password)
+  }, [])
+
+  // Alta de usuarios (staff crea cualquiera; transportista crea sus choferes) vía backend.
+  const crearUsuario = useCallback(async (datos) => {
+    const fn = httpsCallable(funcsBulk, 'crearUsuarioBulk')
+    const r = await fn(datos)
+    return r.data
   }, [])
 
   const value = {
-    usuario, cargando, existeSuperAdmin,
+    usuario, cargando,
+    existeSuperAdmin: true, // el backend valida el primer arranque (idempotente)
     tenantId: usuario?.tenantId || null,
     rol: usuario?.rol || null,
-    iniciarSesion, cerrarSesion, crearSuperAdmin, hashPass,
+    iniciarSesion, cerrarSesion, crearSuperAdmin, crearUsuario,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
