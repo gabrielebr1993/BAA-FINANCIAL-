@@ -15,7 +15,7 @@ const PORTALES = [
 ]
 
 export default function ModoTest() {
-  const { tenantId, crearUsuario, iniciarSesion, repararPermisos } = useBulkAuth()
+  const { usuario, tenantId, rol, crearUsuario, iniciarSesion, repararPermisos } = useBulkAuth()
   const { datos: ordenes } = useColeccion('orders')
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
@@ -91,6 +91,23 @@ export default function ModoTest() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageTitle>Modo test</PageTitle>
+
+      {/* Diagnóstico de sesión — dinos qué muestra esto */}
+      <Card className="mb-4 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Diagnóstico de sesión</span>
+          <button onClick={refrescarSesion} disabled={refrescando} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">
+            {refrescando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Actualizar
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-1.5 break-all font-mono text-xs sm:grid-cols-2">
+          <div>Correo: <b className="text-brand-navy dark:text-slate-100">{usuario?.email || '—'}</b></div>
+          <div>UID: <b className="text-brand-navy dark:text-slate-100">{usuario?.id || '—'}</b></div>
+          <div>Rol: <b className={rol ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{rol || 'SIN ROL ⚠'}</b></div>
+          <div>Tenant: <b className={tenantId ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{tenantId || 'SIN TENANT ⚠'}</b></div>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Si “Tenant” o “Rol” salen en rojo, tu sesión no cargó los permisos. Toca <b>Actualizar</b>; si siguen en rojo, dímelo.</p>
+      </Card>
 
       <Card className="mb-4 p-6 text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-500"><FlaskConical size={26} /></div>
