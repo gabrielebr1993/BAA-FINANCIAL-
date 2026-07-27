@@ -42,7 +42,7 @@ export default function Materiales() {
       </Card>
 
       {materiales.length === 0 ? <EstadoVacio titulo="Sin materiales" texto="Agrega el primero arriba." mostrarBoton={false} /> : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {materiales.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((m) => (
             <Card key={m.id} className="p-3">
               <div className="flex items-center gap-2">

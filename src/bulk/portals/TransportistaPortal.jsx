@@ -110,7 +110,7 @@ export default function TransportistaPortal() {
               </div>
               <div className="mt-3"><Boton variant="gold" onClick={crearChofer} disabled={!usuario?.carrierId}><UserPlus size={16} /> Crear chofer</Boton></div>
             </Card>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {choferes.map((c) => (
                 <Card key={c.id} className="p-3"><div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div><div className="text-xs text-slate-400">{c.email}</div><Badge color={c.activo === false ? 'slate' : 'green'}>{c.activo === false ? 'Inactivo' : 'Activo'}</Badge></Card>
               ))}

@@ -75,7 +75,7 @@ export default function Geocercas() {
       </Card>
 
       {geocercas.length === 0 ? <EstadoVacio titulo="Sin geocercas" texto="Toca el mapa de arriba para marcar la primera, o créala desde una planta con GPS." mostrarBoton={false} /> : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {geocercas.map((g) => (
             <Card key={g.id} className="p-3">
               <div className="flex items-center gap-2"><MapPin size={16} style={{ color: COLOR[g.tipo] || '#c9a24b' }} /><span className="font-semibold text-brand-navy dark:text-slate-100">{g.nombre}</span><Badge color="navy">{g.tipo}</Badge><button onClick={() => window.confirm(`¿Eliminar geocerca "${g.nombre}"?`) && eliminar('geofences', g.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button></div>

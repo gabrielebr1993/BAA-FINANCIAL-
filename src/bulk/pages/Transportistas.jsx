@@ -53,7 +53,7 @@ export default function Transportistas() {
       </Card>
 
       {carriers.length === 0 ? <EstadoVacio titulo="Sin transportistas" texto="Agrega el primero arriba." mostrarBoton={false} /> : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {carriers.map((c) => (
             <Card key={c.id} className="p-4">
               <div className="mb-1 flex items-center gap-2">

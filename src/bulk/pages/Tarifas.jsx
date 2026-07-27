@@ -70,7 +70,7 @@ export default function Tarifas() {
       </Card>
 
       {reglas.length === 0 ? <EstadoVacio titulo="Sin reglas de tarifa" texto="Crea la primera arriba. Al generar órdenes, el precio se calculará solo." mostrarBoton={false} /> : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {reglas.slice().sort((a, b) => (b.prioridad || 0) - (a.prioridad || 0)).map((r) => (
             <Card key={r.id} className="p-3">
               <div className="flex items-center gap-2">
