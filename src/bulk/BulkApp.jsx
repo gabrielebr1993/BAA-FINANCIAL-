@@ -8,6 +8,8 @@ import { Cargando } from '../components/ui'
 
 const BulkDashboard = lazy(() => import('./pages/BulkDashboard'))
 const Ordenes = lazy(() => import('./pages/Ordenes'))
+const MapaVivo = lazy(() => import('./pages/MapaVivo'))
+const Geocercas = lazy(() => import('./pages/Geocercas'))
 const Jobs = lazy(() => import('./pages/Jobs'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const Transportistas = lazy(() => import('./pages/Transportistas'))
@@ -47,6 +49,8 @@ function Interno() {
     <Routes>
       <Route path="/bulk" element={<P roles={R}><BulkDashboard /></P>} />
       <Route path="/bulk/ordenes" element={<P roles={R}><Ordenes /></P>} />
+      <Route path="/bulk/mapa" element={<P roles={R}><MapaVivo /></P>} />
+      <Route path="/bulk/geocercas" element={<P roles={CAT}><Geocercas /></P>} />
       <Route path="/bulk/jobs" element={<P roles={R}><Jobs /></P>} />
       <Route path="/bulk/clientes" element={<P roles={R}><Clientes /></P>} />
       <Route path="/bulk/transportistas" element={<P roles={R}><Transportistas /></P>} />

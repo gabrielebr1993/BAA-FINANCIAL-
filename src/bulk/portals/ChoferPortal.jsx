@@ -8,6 +8,7 @@ import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { leerFotoReducida } from '../components/foto'
+import { useGpsTracker } from './useGpsTracker'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
@@ -23,12 +24,14 @@ export default function ChoferPortal() {
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
   const { datos: ordenes } = useColeccion('orders')
+  const { datos: geocercas } = useColeccion('geofences')
   const [tab, setTab] = useState('ordenes')
 
   const carrierId = usuario?.carrierId || null
   const misOrdenes = useMemo(() => ordenes.filter((o) => o.choferId === usuario?.id), [ordenes, usuario])
   const disponibles = useMemo(() => ordenes.filter((o) => o.transportistaId && o.transportistaId === carrierId && o.estado === E.NOTIFICANDO && !o.choferId), [ordenes, carrierId])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
+  useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
   const historial = misOrdenes.filter((o) => ESTADOS_HISTORIAL.includes(o.estado))
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
