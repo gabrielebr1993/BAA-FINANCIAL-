@@ -5,6 +5,7 @@ import { crear, eliminar, crearLote, listar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
+import { calcularTarifa } from '../domain/tarifas'
 import { MAX_TON_POR_VIAJE } from '../domain/constants'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio, Aviso, Spinner } from '../../components/ui'
 
@@ -92,12 +93,14 @@ export default function Jobs() {
 }
 
 function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
+  const { datos: reglas } = useColeccion('tariffs')
   const [cant, setCant] = useState('')
   const [material, setMaterial] = useState((job.materiales || [])[0] || '')
   const [precioCliente, setPrecioCliente] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [res, setRes] = useState(null)
   const viajes = cant ? contarViajes(cant) : 0
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
   const generar = async () => {
     const total = Number(cant) || 0
@@ -105,13 +108,19 @@ function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
     setOcupado(true); setRes(null)
     // Continúa la numeración desde las órdenes existentes del job.
     const existentes = await listar('orders', tenantId, [where('jobId', '==', job.id)])
-    const nuevas = generarOrdenesDeJob(job, total, {
-      material, seqInicial: existentes.length + 1,
-      precioCliente: precioCliente ? Number(precioCliente) : null,
+    const nuevas = generarOrdenesDeJob(job, total, { material, seqInicial: existentes.length + 1 })
+    // Precio: manual (override) o AUTOMÁTICO con el motor de tarifas, por cada orden.
+    const manual = precioCliente ? Number(precioCliente) : null
+    let conTarifa = 0
+    const conPrecio = nuevas.map((o) => {
+      if (manual != null) return { ...o, precioCliente: manual, precioTransportista: r2(manual * 0.72), pagoChofer: r2(manual * 0.72 * 0.8) }
+      const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: job.tipoEquipo, clienteId: job.clienteId, plantaId: job.plantaId, ton: o.pesoEstimado })
+      if (t) { conTarifa++; return { ...o, precioCliente: t.precioCliente, precioTransportista: t.precioTransportista, pagoChofer: t.pagoChofer } }
+      return o
     })
-    await crearLote('orders', tenantId, nuevas)
+    await crearLote('orders', tenantId, conPrecio)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_ordenes', entidad: 'job', entidadId: job.id, detalle: `${nuevas.length} órdenes (${total} ton) para ${job.codigo}` })
-    setRes({ n: nuevas.length, total }); setCant(''); setOcupado(false)
+    setRes({ n: nuevas.length, total, tarifa: manual != null ? 'manual' : (conTarifa ? 'auto' : 'sin_tarifa') }); setCant(''); setOcupado(false)
   }
 
   return (
@@ -138,15 +147,15 @@ function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
           </div>
         )}
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Precio cliente / viaje (opc.)</div>
-          <Input type="number" className="w-32" placeholder="$" value={precioCliente} onChange={(e) => setPrecioCliente(e.target.value)} />
+          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Precio cliente / viaje (opc. — auto si vacío)</div>
+          <Input type="number" className="w-32" placeholder="auto" value={precioCliente} onChange={(e) => setPrecioCliente(e.target.value)} />
         </div>
         <Boton variant="gold" onClick={generar} disabled={ocupado || !(Number(cant) > 0)}>
           {ocupado ? <><Spinner /> Generando…</> : <><Wand2 size={16} /> Generar órdenes</>}
         </Boton>
         {cant > 0 && <span className="text-xs text-slate-500 dark:text-slate-400">→ {viajes} viaje(s) de máx {MAX_TON_POR_VIAJE} ton</span>}
       </div>
-      {res && <Aviso tipo="ok" className="mt-2">Se generaron <b>{res.n} órdenes</b> ({res.total} ton) — visibles en Órdenes / Cola.</Aviso>}
+      {res && <Aviso tipo="ok" className="mt-2">Se generaron <b>{res.n} órdenes</b> ({res.total} ton){res.tarifa === 'auto' ? ' con precios del motor de tarifas' : res.tarifa === 'manual' ? ' con precio manual' : ' (sin tarifa configurada aún)'} — visibles en Órdenes / Cola.</Aviso>}
     </Card>
   )
 }

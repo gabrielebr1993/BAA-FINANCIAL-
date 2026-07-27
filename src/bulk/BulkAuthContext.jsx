@@ -21,6 +21,16 @@ export const useBulkAuth = () => useContext(Ctx)
 
 const SESION_KEY = 'bulk_session'
 
+// Usuario MASTER (super administrador) que se auto-crea si no existe. Se guarda solo el
+// HASH SHA-256 de la contraseña, nunca el texto plano. (Cámbiala en producción.)
+const MASTER = {
+  id: 'u_master',
+  tenantId: 't_master',
+  nombre: 'Gabriele Brandonisio',
+  email: 'gabriele.brandonisio.o@gmail.com',
+  passHash: 'c7463b8739e3a8a066ad5ff1a810caca9fca02b1cf0eae0e54f89cd7aeea6845',
+}
+
 async function hashPass(texto) {
   const data = new TextEncoder().encode(String(texto))
   const buf = await crypto.subtle.digest('SHA-256', data)
@@ -41,6 +51,15 @@ export function BulkAuthProvider({ children }) {
   // Restaura la sesión guardada y revisa si hay que hacer el "primer arranque".
   useEffect(() => {
     (async () => {
+      // Semilla del usuario master (idempotente: solo si no existe ya).
+      try {
+        if (!(await buscarPorEmail(MASTER.email))) {
+          await crearConId('users', MASTER.id, MASTER.tenantId, {
+            nombre: MASTER.nombre, email: MASTER.email, rol: BULK_ROLES.SUPER_ADMIN,
+            passHash: MASTER.passHash, empresa: 'MyPay', activo: true,
+          })
+        }
+      } catch { /* noop */ }
       try {
         const raw = localStorage.getItem(SESION_KEY)
         if (raw) {
