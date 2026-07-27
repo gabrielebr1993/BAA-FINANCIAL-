@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { ClipboardList, Truck, Building2, Weight, DollarSign, Timer, AlertTriangle, FileWarning, Award } from 'lucide-react'
+import { ClipboardList, Truck, Building2, Weight, DollarSign, Timer, AlertTriangle, FileWarning, Award, FlaskConical, Layers } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useColeccion } from '../data/useColeccion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
@@ -45,7 +46,7 @@ export default function BulkDashboard() {
   return (
     <div>
       <PageTitle>Dashboard</PageTitle>
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <KPI label="Órdenes abiertas" value={s.abiertas} icon={ClipboardList} accent="navy" />
         <KPI label="En cola" value={s.enCola} icon={ClipboardList} accent="gold" />
         <KPI label="Toneladas entregadas" value={Math.round(s.ton)} icon={Weight} accent="green" />
@@ -63,7 +64,17 @@ export default function BulkDashboard() {
       )}
 
       {s.entregadas === 0 ? (
-        <Card className="p-6 text-center text-sm text-slate-400">Aún no hay entregas. Crea un Trabajo (Job), genera órdenes y complétalas para ver métricas.</Card>
+        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-500"><FlaskConical size={26} /></div>
+          <div>
+            <div className="text-base font-bold text-brand-navy dark:text-slate-100">Aún no hay datos que mostrar</div>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-400">Activa el Modo test para llenarlo con un negocio de ejemplo, o crea tu primer Trabajo y genera órdenes.</p>
+          </div>
+          <div className="mt-1 flex flex-wrap justify-center gap-2">
+            <Link to="/bulk/demo" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-slate-900 transition hover:brightness-105"><FlaskConical size={15} /> Activar modo test</Link>
+            <Link to="/bulk/jobs" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"><Layers size={15} /> Crear trabajo</Link>
+          </div>
+        </Card>
       ) : (
         <>
           <div className="mb-4 grid gap-4 lg:grid-cols-2">
