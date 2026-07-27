@@ -8,7 +8,7 @@
 // Cada documento lleva `demo: true`. `borrarDemo` solo elimina esos documentos,
 // así que NUNCA toca datos reales del tenant.
 // ============================================================================
-import { crear, crearLote, listar, eliminar, where } from './repo'
+import { crear, crearLote, listar, eliminar, guardar, where } from './repo'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 
 // ---- utilidades -----------------------------------------------------------
@@ -309,4 +309,29 @@ export async function borrarDemo(tenantId, onProgress = () => {}) {
 export async function hayDemo(tenantId) {
   const docs = await listar('orders', tenantId, [where('demo', '==', true)])
   return docs.length
+}
+
+// Vínculo demo para un usuario de prueba según su rol (para que su portal tenga datos).
+export async function datosVinculoDemo(tenantId, rol) {
+  if (rol === 'cliente') {
+    const cs = await listar('clients', tenantId, [where('demo', '==', true)])
+    return cs.length ? { clienteId: cs[0].id } : {}
+  }
+  if (rol === 'transportista' || rol === 'chofer') {
+    const cs = await listar('carriers', tenantId, [where('demo', '==', true)])
+    return cs.length ? { carrierId: cs[0].id } : {}
+  }
+  return {}
+}
+
+// Prepara el portal del chofer de prueba: le deja UNA orden activa (para avanzar los
+// hitos, ticket y POD) y UNA por aceptar de su transportista.
+export async function prepararChoferDemo(tenantId, uid, nombre, carrierId) {
+  if (!carrierId) return
+  const orders = await listar('orders', tenantId, [where('demo', '==', true)])
+  const activos = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
+  let activa = orders.find((o) => o.transportistaId === carrierId && activos.includes(o.estado)) || orders.find((o) => activos.includes(o.estado))
+  if (activa) await guardar('orders', activa.id, { transportistaId: carrierId, choferId: uid, choferNombre: nombre })
+  const porAceptar = orders.find((o) => o.estado === E.NOTIFICANDO && o.id !== activa?.id)
+  if (porAceptar) await guardar('orders', porAceptar.id, { transportistaId: carrierId, choferId: null })
 }

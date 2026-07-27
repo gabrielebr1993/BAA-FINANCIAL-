@@ -1,12 +1,17 @@
 import { useState } from 'react'
-import { FlaskConical, Database, Trash2, Loader2, ShieldCheck, ArrowRight } from 'lucide-react'
+import { FlaskConical, Database, Trash2, Loader2, ShieldCheck, ArrowRight, UserPlus, KeyRound } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
-import { sembrarDemo, borrarDemo, hayDemo } from '../data/demo'
-import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
+import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
+import { BULK_ROLES_LABEL } from '../domain/constants'
+import { PageTitle, Card, Boton, Select, Aviso } from '../../components/ui'
+
+const TEST_EMAIL = 'test@test.com'
+const TEST_PASS = 'testtest'
+const ROLES_TEST = ['admin', 'dispatcher', 'cliente', 'transportista', 'chofer', 'supervisor_planta']
 
 export default function ModoTest() {
-  const { tenantId } = useBulkAuth()
+  const { tenantId, crearUsuario } = useBulkAuth()
   const { datos: ordenes } = useColeccion('orders')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
@@ -17,6 +22,10 @@ export default function ModoTest() {
   const [log, setLog] = useState([])
   const [msg, setMsg] = useState(null)
   const ocupado = fase !== 'idle'
+
+  const [rolTest, setRolTest] = useState('admin')
+  const [creandoU, setCreandoU] = useState(false)
+  const [msgU, setMsgU] = useState(null)
 
   const demoOrdenes = ordenes.filter((o) => o.demo).length
 
@@ -42,6 +51,25 @@ export default function ModoTest() {
     } catch (e) {
       setMsg({ tipo: 'error', txt: 'No se pudieron borrar: ' + e.message })
     } finally { setFase('idle') }
+  }
+
+  const necesitaDemo = ['cliente', 'transportista', 'chofer'].includes(rolTest)
+  const crearUsuarioTest = async () => {
+    setMsgU(null)
+    if (necesitaDemo && demoOrdenes === 0) {
+      if (!window.confirm('Para ese rol conviene cargar primero los datos de demostración (si no, su portal saldrá vacío). ¿Crear el usuario de todos modos?')) return
+    }
+    setCreandoU(true)
+    try {
+      const vinc = await datosVinculoDemo(tenantId, rolTest)
+      const r = await crearUsuario({ nombre: 'Usuario de prueba', email: TEST_EMAIL, password: TEST_PASS, rol: rolTest, clienteId: vinc.clienteId, carrierId: vinc.carrierId })
+      if (rolTest === 'chofer') await prepararChoferDemo(tenantId, r.uid, 'Usuario de prueba', vinc.carrierId)
+      setMsgU({ tipo: 'ok', txt: `Usuario de prueba creado como ${BULK_ROLES_LABEL[rolTest]}. Cierra sesión (Salir) y entra con estas credenciales.` })
+    } catch (e) {
+      const m = e?.message || ''
+      if (/already|exists|email.?exists|correo/i.test(m)) setMsgU({ tipo: 'warn', txt: `El correo ${TEST_EMAIL} ya existe. Entra con ${TEST_EMAIL} / ${TEST_PASS}, o bórralo en "Usuarios y roles" para recrearlo con otro rol.` })
+      else setMsgU({ tipo: 'error', txt: 'No se pudo crear: ' + m })
+    } finally { setCreandoU(false) }
   }
 
   return (
@@ -74,6 +102,38 @@ export default function ModoTest() {
         </div>
 
         {msg && <Aviso tipo={msg.tipo} className="mt-4">{msg.txt}</Aviso>}
+      </Card>
+
+      {/* Usuario de prueba */}
+      <Card className="mb-4 p-5">
+        <div className="flex items-start gap-3">
+          <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-brand-navy/10 text-brand-navy dark:bg-amber-500/15 dark:text-amber-500"><UserPlus size={22} /></div>
+          <div className="min-w-0">
+            <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Usuario de prueba</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Crea una cuenta para entrar y probar cada vista. Elige el rol: <b>Administrador</b> ve todo el panel; <b>Chofer</b>, <b>Cliente</b>
+              {' '}y <b>Transportista</b> abren su portal (los enlazo a los datos demo para que no salgan vacíos).
+            </p>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <KeyRound size={13} className="text-amber-500" /> {TEST_EMAIL} &nbsp;·&nbsp; {TEST_PASS}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Rol</div>
+            <Select value={rolTest} onChange={(e) => setRolTest(e.target.value)} className="w-56">
+              {ROLES_TEST.map((r) => <option key={r} value={r}>{BULK_ROLES_LABEL[r]}</option>)}
+            </Select>
+          </div>
+          <Boton variant="gold" onClick={crearUsuarioTest} disabled={creandoU}>
+            {creandoU ? <><Loader2 size={16} className="animate-spin" /> Creando…</> : <><UserPlus size={16} /> Crear usuario de prueba</>}
+          </Boton>
+        </div>
+
+        {msgU && <Aviso tipo={msgU.tipo} className="mt-4">{msgU.txt}</Aviso>}
+        <p className="mt-3 text-[11px] text-slate-400">Nota: Firebase exige correo y contraseña de 6+ caracteres, por eso es <b>{TEST_EMAIL}</b> / <b>{TEST_PASS}</b>. Puedes borrar este usuario cuando quieras en “Usuarios y roles”.</p>
       </Card>
 
       {/* Resumen de lo que hay ahora mismo */}
