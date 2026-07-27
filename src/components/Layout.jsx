@@ -2,7 +2,7 @@
 // buscador global, badge de alertas, selector de empresa y toggle de tema.
 import { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal, LayoutGrid } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
@@ -155,6 +155,7 @@ function SidebarContent({ onNavigate }) {
   const { perfil, puede, cerrarSesion, esSuperAdmin } = useAuth()
   const { numAlertas } = useData()
   const location = useLocation()
+  const navigate = useNavigate()
   const secciones = SECCIONES.filter((s) => puede(s.permiso))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
@@ -191,6 +192,9 @@ function SidebarContent({ onNavigate }) {
           <div className="font-semibold text-slate-700 dark:text-slate-200">{perfil?.nombre || 'Usuario'}</div>
           <div className="truncate text-xs text-slate-400">{perfil?.role || 'usuario'} · {perfil?.email}</div>
         </div>
+        <button onClick={() => navigate('/elegir')} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
+          <LayoutGrid size={16} strokeWidth={1.8} /> Cambiar módulo
+        </button>
         <button onClick={cerrarSesion} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
           <LogOut size={16} strokeWidth={1.8} /> Cerrar sesión
         </button>
