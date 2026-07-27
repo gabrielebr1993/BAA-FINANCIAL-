@@ -1,7 +1,7 @@
 // BULK · Navegación por rol. Cada usuario solo ve lo que le corresponde.
 import {
   LayoutDashboard, Package, Boxes, Truck, Building2, Users, ClipboardList,
-  Layers, Navigation, MapPin, Calculator, FileText, AlertTriangle, FileWarning, FlaskConical,
+  Layers, Navigation, MapPin, Calculator, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare,
 } from 'lucide-react'
 import { BULK_ROLES as R } from './domain/constants'
 
@@ -10,6 +10,7 @@ export const NAV = [
   { path: '', label: 'Dashboard', icon: LayoutDashboard, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'ordenes', label: 'Órdenes / Cola', icon: ClipboardList, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'mapa', label: 'Mapa en vivo', icon: Navigation, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { path: 'mensajes', label: 'Mensajes', icon: MessageSquare, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'jobs', label: 'Trabajos (Jobs)', icon: Layers, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'clientes', label: 'Clientes y Plantas', icon: Building2, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'transportistas', label: 'Transportistas', icon: Truck, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },

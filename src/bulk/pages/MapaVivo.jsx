@@ -80,72 +80,65 @@ export default function MapaVivo() {
           </div>
           <Link to="/bulk/demo" className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gold px-4 py-2 text-sm font-semibold text-slate-900 transition hover:brightness-105"><FlaskConical size={15} /> Activar modo test</Link>
         </Card>
-      ) : verTodos ? (
-        /* ---- VER TODOS: un mapa grande con cada chofer ---- */
-        <Card className="p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Todos los choferes y rutas</span>
-            <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> En ruta</span>
-            <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> En destino</span>
-            <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> En planta / cargando</span>
-          </div>
-          <MapaLeaflet marcadores={marcadores} geocercas={geocercas} alto={560} />
-          {marcadores.length === 0 && <p className="mt-2 text-xs text-slate-400">Ningún chofer tiene posición GPS todavía. En cuanto empiecen a moverse, aparecerán aquí.</p>}
-        </Card>
       ) : (
-        /* ---- DETALLE: lista + una orden ---- */
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-1">
-            <div className="mb-2 text-xs font-semibold uppercase text-slate-400">Órdenes activas ({filtradas.length})</div>
-            <div className="space-y-2">
-              {filtradas.map((o) => (
-                <button key={o.id} onClick={() => setSel(o.id)} className={`block w-full rounded-xl border p-3 text-left transition ${orden?.id === o.id ? 'border-amber-500 bg-amber-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
-                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                    <Badge color={COLOR_EST[o.estado] || 'navy'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge>
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-400">{o.choferNombre || 'sin chofer'} · {o.material}</div>
-                </button>
-              ))}
-              {filtradas.length === 0 && <p className="text-sm text-slate-400">Ninguna orden coincide con el filtro.</p>}
-            </div>
-          </div>
-
-          <div className="lg:col-span-2">
-            {orden && (
-              <Card className="p-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
+        <>
+          {/* ===== MAPA A PANTALLA ===== */}
+          <Card className="mb-4 p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
+              {verTodos ? (
+                <>
+                  <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Todos los choferes ({marcadores.length})</span>
+                  <span className="ml-2 flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> En ruta</span>
+                  <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> En destino</span>
+                  <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> En planta</span>
+                </>
+              ) : orden ? (
+                <>
                   <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
                   <Badge color={COLOR_EST[orden.estado] || 'gold'}>{ORDEN_ESTADO_LABEL[orden.estado]}</Badge>
                   {orden.estado === E.EN_RUTA && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> En vivo</span>}
                   <span className="text-xs text-slate-400">{orden.choferNombre}</span>
                   <Link to={`/bulk/ordenes/${orden.id}`} className="text-xs font-semibold text-amber-600 hover:underline">Ver ficha →</Link>
                   <button onClick={() => setVerChat((v) => !v)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> {verChat ? 'Ocultar chat' : 'Chat'}</button>
-                </div>
-                {verChat && <div className="mb-3"><ChatOrden orden={orden} alto={280} /></div>}
-                <MapaLeaflet puntos={track} geocercas={geocercas} alto={460} />
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Metrica icon={RouteIcon} label="Recorrido" val={`${met.km} km`} />
-                  <Metrica icon={Gauge} label="Vel. máx / prom" val={`${met.velMaxKmh}/${met.velPromKmh} km/h`} />
-                  <Metrica icon={Clock} label="En movimiento" val={`${met.minMovimiento} min`} />
-                  <Metrica icon={Clock} label="Detenido" val={`${met.minDetenido} min`} />
-                </div>
-                {(orden.geoEventos || []).length > 0 && (
-                  <div className="mt-3">
-                    <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Eventos de geocerca</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {orden.geoEventos.map((ev, i) => (
-                        <Badge key={i} color={ev.evento === 'entrada' ? 'green' : 'slate'}><MapPin size={11} className="mr-0.5 inline" />{ev.evento} · {ev.geocerca} · {new Date(ev.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <p className="mt-3 text-[11px] text-slate-400">Mapa real (OpenStreetMap). Para Google/Apple Maps se cambia la capa de tiles + su key.</p>
-              </Card>
+                </>
+              ) : null}
+            </div>
+            {!verTodos && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
+            <MapaLeaflet marcadores={verTodos ? marcadores : []} puntos={verTodos ? [] : track} geocercas={geocercas} alto="62vh" />
+            {!verTodos && orden && (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Metrica icon={RouteIcon} label="Recorrido" val={`${met.km} km`} />
+                <Metrica icon={Gauge} label="Vel. máx / prom" val={`${met.velMaxKmh}/${met.velPromKmh} km/h`} />
+                <Metrica icon={Clock} label="En movimiento" val={`${met.minMovimiento} min`} />
+                <Metrica icon={Clock} label="Detenido" val={`${met.minDetenido} min`} />
+              </div>
             )}
-          </div>
-        </div>
+            {verTodos && marcadores.length === 0 && <p className="mt-2 px-1 text-xs text-slate-400">Ningún chofer tiene posición GPS todavía. En cuanto empiecen a moverse, aparecerán aquí.</p>}
+          </Card>
+
+          {/* ===== LISTA DE ÓRDENES DEBAJO ===== */}
+          <div className="mb-2 text-xs font-semibold uppercase text-slate-400">Órdenes activas ({filtradas.length}) — toca una para verla en el mapa</div>
+          {filtradas.length === 0 ? <p className="text-sm text-slate-400">Ninguna orden coincide con el filtro.</p> : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filtradas.map((o) => {
+                const activa = !verTodos && orden?.id === o.id
+                return (
+                  <div key={o.id} className={`rounded-xl border p-3 transition ${activa ? 'border-amber-500 bg-amber-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
+                    <button onClick={() => { setVerTodos(false); setSel(o.id) }} className="block w-full text-left">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
+                        <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                        <Badge color={COLOR_EST[o.estado] || 'navy'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-slate-400">{o.choferNombre || 'sin chofer'} · {o.material}</div>
+                    </button>
+                    <Link to={`/bulk/ordenes/${o.id}`} className="mt-1.5 inline-block text-[11px] font-semibold text-amber-600 hover:underline">Ver ficha →</Link>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
