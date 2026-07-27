@@ -1,7 +1,7 @@
 // BULK · Navegación por rol. Cada usuario solo ve lo que le corresponde.
 import {
   LayoutDashboard, Package, Boxes, Truck, Building2, Users, ClipboardList,
-  Layers, Navigation, MapPin, Calculator, FileText, AlertTriangle, FileWarning,
+  Layers, Navigation, MapPin, Calculator, FileText, AlertTriangle, FileWarning, FlaskConical,
 } from 'lucide-react'
 import { BULK_ROLES as R } from './domain/constants'
 
@@ -21,6 +21,7 @@ export const NAV = [
   { path: 'materiales', label: 'Materiales', icon: Boxes, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'equipos', label: 'Tipos de equipo', icon: Package, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'usuarios', label: 'Usuarios y roles', icon: Users, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { path: 'demo', label: 'Modo test', icon: FlaskConical, roles: [R.SUPER_ADMIN, R.ADMIN] },
 ]
 
 export const puedeVer = (rol, roles) => !roles || roles.includes(rol)

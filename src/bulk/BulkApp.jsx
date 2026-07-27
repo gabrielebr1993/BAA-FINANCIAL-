@@ -20,6 +20,7 @@ const Transportistas = lazy(() => import('./pages/Transportistas'))
 const Materiales = lazy(() => import('./pages/Materiales'))
 const Equipos = lazy(() => import('./pages/Equipos'))
 const BulkUsuarios = lazy(() => import('./pages/BulkUsuarios'))
+const ModoTest = lazy(() => import('./pages/ModoTest'))
 const ChoferPortal = lazy(() => import('./portals/ChoferPortal'))
 const ClientePortal = lazy(() => import('./portals/ClientePortal'))
 const TransportistaPortal = lazy(() => import('./portals/TransportistaPortal'))
@@ -65,6 +66,7 @@ function Interno() {
       <Route path="/bulk/materiales" element={<P roles={CAT}><Materiales /></P>} />
       <Route path="/bulk/equipos" element={<P roles={CAT}><Equipos /></P>} />
       <Route path="/bulk/usuarios" element={<P roles={CAT}><BulkUsuarios /></P>} />
+      <Route path="/bulk/demo" element={<P roles={CAT}><ModoTest /></P>} />
       <Route path="/bulk/*" element={<Navigate to="/bulk" replace />} />
     </Routes>
   )
