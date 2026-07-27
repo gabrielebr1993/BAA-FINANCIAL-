@@ -3,6 +3,7 @@ import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCh
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
+import { crear, eliminar } from '../data/repo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 
 const PASS = 'testtest'
@@ -22,6 +23,7 @@ export default function ModoTest() {
   const [entrando, setEntrando] = useState(null) // rol en proceso
   const [refrescando, setRefrescando] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [prueba, setPrueba] = useState(null)
 
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
@@ -35,6 +37,19 @@ export default function ModoTest() {
     setRefrescando(true)
     await asegurarToken()
     window.location.reload()
+  }
+
+  // Prueba de escritura: crea (y borra) UN material para revelar el error exacto.
+  const probar = async () => {
+    setPrueba({ estado: 'probando' })
+    try {
+      await asegurarToken()
+      const r = await crear('materials', tenantId, { nombre: '__diagnostico__', demo: true, activo: true })
+      try { await eliminar('materials', r.id) } catch { /* noop */ }
+      setPrueba({ estado: 'ok' })
+    } catch (e) {
+      setPrueba({ estado: 'error', code: e?.code || '(sin code)', msg: e?.message || String(e) })
+    }
   }
 
   const activar = async () => {
@@ -106,7 +121,19 @@ export default function ModoTest() {
           <div>Rol: <b className={rol ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{rol || 'SIN ROL ⚠'}</b></div>
           <div>Tenant: <b className={tenantId ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{tenantId || 'SIN TENANT ⚠'}</b></div>
         </div>
-        <p className="mt-2 text-[11px] text-slate-400">Si “Tenant” o “Rol” salen en rojo, tu sesión no cargó los permisos. Toca <b>Actualizar</b>; si siguen en rojo, dímelo.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button onClick={probar} disabled={prueba?.estado === 'probando'} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-navy px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50 dark:bg-amber-500 dark:text-slate-900">
+            {prueba?.estado === 'probando' ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />} Probar escritura
+          </button>
+          {prueba?.estado === 'ok' && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ Escritura OK — los permisos funcionan.</span>}
+        </div>
+        {prueba?.estado === 'error' && (
+          <div className="mt-2 rounded-lg bg-rose-50 p-2 font-mono text-[11px] leading-relaxed text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+            <div className="break-all"><b>code:</b> {prueba.code}</div>
+            <div className="break-all"><b>msg:</b> {prueba.msg}</div>
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-slate-400">Toca <b>Probar escritura</b> y mándame captura del resultado (verde = OK; rojo = me muestra el error exacto).</p>
       </Card>
 
       <Card className="mb-4 p-6 text-center">
