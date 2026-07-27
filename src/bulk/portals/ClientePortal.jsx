@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, LogOut, Grid2x2, Weight, DollarSign, ClipboardList } from 'lucide-react'
+import { Building2, LogOut, Grid2x2, Weight, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { where } from '../data/repo'
+import { where, guardar } from '../data/repo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { Card, KPI, Badge, Cargando, EstadoVacio, Tabla } from '../../components/ui'
+import { generarFacturaPDF } from '../data/facturaPDF'
+import FirmaPad from '../components/FirmaPad'
+import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
 import { money } from '../../utils/format'
 
 const ENTREGADAS = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
@@ -17,7 +19,9 @@ export default function ClientePortal() {
   const navigate = useNavigate()
   const clienteId = usuario?.clienteId || '__none__'
   const { datos: ordenes, cargando } = useColeccion('orders', [where('clienteId', '==', clienteId)])
-  const { datos: materiales } = useColeccion('materials')
+  const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
+  const [firmando, setFirmando] = useState(null) // factura en firma
+  const [firma, setFirma] = useState(null)
 
   const stats = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
@@ -38,6 +42,14 @@ export default function ClientePortal() {
       porMaterial: Object.values(porMaterial).sort((a, b) => b.gasto - a.gasto),
     }
   }, [ordenes])
+
+  const firmarFactura = async () => {
+    if (!firma || !firmando) return
+    const datos = { estado: 'firmada', firma, firmante: usuario?.nombre || usuario?.email, firmadaEn: new Date().toISOString() }
+    await guardar('invoices', firmando.id, datos)
+    generarFacturaPDF({ ...firmando, ...datos }, { clienteNombre: firmando.clienteNombre, empresa: 'Bulk' })
+    setFirmando(null); setFirma(null)
+  }
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
@@ -87,9 +99,49 @@ export default function ClientePortal() {
                   }} />
               )}
             </Card>
+
+            <Card className="mt-4 p-4">
+              <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Facturas</h3></div>
+              {facturas.length === 0 ? <p className="text-sm text-slate-400">Aún no tienes facturas.</p> : (
+                <Tabla columns={[{ key: 'numero', label: 'Factura' }, { key: 'periodo', label: 'Periodo' }, { key: 'total', label: 'Total', align: 'right' }, { key: 'estado', label: 'Estado', align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
+                  rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
+                  renderCell={(r, k) => {
+                    if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
+                    if (k === 'total') return money(r.total)
+                    if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : 'gold'}>{r.estado}</Badge>
+                    if (k === 'acciones') return (
+                      <div className="flex justify-end gap-1.5">
+                        {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> Revisar y firmar</Boton>}
+                        <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Bulk' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
+                      </div>
+                    )
+                    return r[k]
+                  }} />
+              )}
+            </Card>
           </>
         )}
       </main>
+
+      {firmando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setFirmando(null)}>
+          <Card className="w-full max-w-lg p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">Revisar factura {firmando.numero}</h3>
+            <div className="scroll-thin mb-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
+              <Tabla columns={[{ key: 'numero', label: 'Orden' }, { key: 'material', label: 'Material' }, { key: 'ton', label: 'Ton', align: 'right' }, { key: 'precio', label: 'Precio', align: 'right' }]}
+                rows={(firmando.lineas || []).map((l, i) => ({ ...l, _key: i }))}
+                renderCell={(l, k) => k === 'precio' ? money(l.precio) : l[k]} minWidth="min-w-[360px]" />
+            </div>
+            <div className="mb-2 text-right text-lg font-bold text-brand-navy dark:text-slate-100">Total: {money(firmando.total)}</div>
+            <div className="mb-1 text-xs font-semibold text-slate-500">Firma de aprobación</div>
+            <FirmaPad onChange={setFirma} />
+            <div className="mt-3 flex justify-end gap-2">
+              <Boton variant="ghost" onClick={() => setFirmando(null)}>Cancelar</Boton>
+              <Boton variant="gold" onClick={firmarFactura} disabled={!firma}><PenLine size={15} /> Aprobar y firmar</Boton>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
