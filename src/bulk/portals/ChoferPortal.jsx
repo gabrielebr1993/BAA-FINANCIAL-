@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare, ScanLine } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -10,6 +10,8 @@ import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/co
 import { siguientePasoChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
+import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
+import { leerTicket } from '../integraciones/ocr'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
@@ -33,6 +35,17 @@ export default function ChoferPortal() {
   const disponibles = useMemo(() => ordenes.filter((o) => o.transportistaId && o.transportistaId === carrierId && o.estado === E.NOTIFICANDO && !o.choferId), [ordenes, carrierId])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
+
+  // Alerta local: al asignarle una orden nueva, suena y muestra notificación.
+  const prevIds = useRef(null)
+  useEffect(() => { pedirPermisoNotif() }, [])
+  useEffect(() => {
+    const ids = new Set(disponibles.map((o) => o.id))
+    if (prevIds.current && [...ids].some((id) => !prevIds.current.has(id))) {
+      beep(); notificar('Nueva orden asignada', 'Tienes una orden nueva por aceptar.')
+    }
+    prevIds.current = ids
+  }, [disponibles])
   const historial = misOrdenes.filter((o) => ESTADOS_HISTORIAL.includes(o.estado))
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
@@ -129,6 +142,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
   const [foto, setFoto] = useState(null)
   const [firma, setFirma] = useState(null)
   const [coment, setComent] = useState('')
+  const [ocr, setOcr] = useState(null) // {cargando, progreso, msg}
 
   const avanzar = async () => {
     if (!paso) return
@@ -218,7 +232,22 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
             <Camera size={18} /> {foto ? 'Foto lista ✓' : 'Tomar foto del ticket'}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
           </label>
-          <p className="mb-2 text-[11px] text-slate-400">El peso real reemplaza al estimado. (Fase 5: OCR leerá el ticket automáticamente.)</p>
+          {foto && (
+            <button type="button" disabled={ocr?.cargando}
+              onClick={async () => {
+                setOcr({ cargando: true, progreso: 0 })
+                try {
+                  const r = await leerTicket(foto, (p) => setOcr({ cargando: true, progreso: p }))
+                  if (r) { if (r.pesoNeto) setPeso(String(r.pesoNeto)); if (r.ticket) setTicketNum(r.ticket) }
+                  setOcr({ cargando: false, msg: r ? 'Leído — revisa y corrige (las unidades pueden variar).' : 'No se pudo leer el ticket.' })
+                } catch { setOcr({ cargando: false, msg: 'No se pudo leer el ticket.' }) }
+              }}
+              className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-amber-500 dark:text-slate-900">
+              {ocr?.cargando ? <><Spinner /> Leyendo… {ocr.progreso || 0}%</> : <><ScanLine size={15} /> Leer con OCR</>}
+            </button>
+          )}
+          {ocr?.msg && <p className="mb-1 text-[11px] text-amber-600 dark:text-amber-400">{ocr.msg}</p>}
+          <p className="mb-2 text-[11px] text-slate-400">El peso real reemplaza al estimado. El OCR pre-llena; confirma el valor.</p>
           <Boton variant="gold" onClick={guardarTicket} disabled={ocupado || !peso} className="w-full justify-center">{ocupado ? <Spinner /> : 'Confirmar carga'}</Boton>
         </Modal>
       )}

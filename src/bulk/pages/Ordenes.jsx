@@ -6,6 +6,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { transportistasCompatibles, transportistaCompatible } from '../domain/ordenes'
 import { recomendarTransportistas } from '../domain/asignacion'
+import { enviarPush } from '../integraciones/notificaciones'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton } from '../../components/ui'
@@ -50,6 +51,7 @@ export default function Ordenes() {
     }
     await guardar('orders', orden.id, { transportistaId: carrierId, estado: E.NOTIFICANDO })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_orden', entidad: 'orden', entidadId: orden.id, detalle: `Asignada a ${carrier?.nombre} · notificando` })
+    enviarPush(tenantId, `carrier:${carrierId}`, 'Nueva orden', `Orden ${orden.numero} — ${orden.pesoEstimado} ton (${orden.tipoEquipo})`)
   }
   const autoAsignar = async (orden) => {
     const rank = sugerir(orden)

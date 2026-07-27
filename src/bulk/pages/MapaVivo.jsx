@@ -7,39 +7,8 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { metricasRecorrido } from '../domain/geo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ESTADOS_ACTIVOS_CHOFER } from '../domain/flujo'
+import MapaLeaflet from '../components/MapaLeaflet'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
-
-// Mapa esquemático (proyección local). La integración con mapas reales (Google/Apple)
-// llega en la fase de APIs; aquí se grafican ruta y geocercas a escala.
-function RutaSVG({ puntos, geocercas }) {
-  const W = 560, H = 320, P = 24
-  const coords = [...puntos, ...geocercas.map((g) => ({ lat: g.lat, lng: g.lng }))].filter((c) => c && c.lat != null)
-  if (coords.length === 0) return <div className="grid h-64 place-items-center text-sm text-slate-400">Sin posiciones todavía.</div>
-  let minLat = Math.min(...coords.map((c) => c.lat)), maxLat = Math.max(...coords.map((c) => c.lat))
-  let minLng = Math.min(...coords.map((c) => c.lng)), maxLng = Math.max(...coords.map((c) => c.lng))
-  if (maxLat - minLat < 0.002) { minLat -= 0.001; maxLat += 0.001 }
-  if (maxLng - minLng < 0.002) { minLng -= 0.001; maxLng += 0.001 }
-  const sx = (W - 2 * P) / (maxLng - minLng), sy = (H - 2 * P) / (maxLat - minLat)
-  const X = (lng) => P + (lng - minLng) * sx
-  const Y = (lat) => H - P - (lat - minLat) * sy
-  const rPx = (m) => Math.max(3, (m / 111320) * sy)
-  const linea = puntos.map((p) => `${X(p.lng).toFixed(1)},${Y(p.lat).toFixed(1)}`).join(' ')
-  const ultimo = puntos[puntos.length - 1]
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40">
-      {geocercas.map((g) => (
-        <g key={g.id}>
-          <circle cx={X(g.lng)} cy={Y(g.lat)} r={rPx(g.radio)} fill="rgba(201,162,75,0.12)" stroke="#c9a24b" strokeDasharray="4 3" />
-          <text x={X(g.lng)} y={Y(g.lat) - rPx(g.radio) - 3} textAnchor="middle" className="fill-slate-400" fontSize="10">{g.nombre}</text>
-        </g>
-      ))}
-      {puntos.length > 1 && <polyline points={linea} fill="none" stroke="#13233f" strokeWidth="2.5" strokeLinejoin="round" />}
-      {puntos.map((p, i) => <circle key={i} cx={X(p.lng)} cy={Y(p.lat)} r="2.5" fill="#94a3b8" />)}
-      {ultimo && <circle cx={X(ultimo.lng)} cy={Y(ultimo.lat)} r="7" fill="#f59e0b" stroke="#fff" strokeWidth="2" />}
-    </svg>
-  )
-}
 
 export default function MapaVivo() {
   const { tenantId } = useBulkAuth()
@@ -88,7 +57,7 @@ export default function MapaVivo() {
                   <button onClick={() => setVerChat((v) => !v)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> {verChat ? 'Ocultar chat' : 'Chat'}</button>
                 </div>
                 {verChat && <div className="mb-3"><ChatOrden orden={orden} alto={280} /></div>}
-                <RutaSVG puntos={track} geocercas={geocercas} />
+                <MapaLeaflet puntos={track} geocercas={geocercas} alto={320} />
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <Metrica icon={RouteIcon} label="Recorrido" val={`${met.km} km`} />
                   <Metrica icon={Gauge} label="Vel. máx / prom" val={`${met.velMaxKmh}/${met.velPromKmh} km/h`} />
