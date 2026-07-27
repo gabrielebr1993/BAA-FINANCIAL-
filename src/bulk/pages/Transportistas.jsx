@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, Trash2, Truck } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, guardar, eliminar } from '../data/repo'
@@ -57,13 +58,14 @@ export default function Transportistas() {
             <Card key={c.id} className="p-4">
               <div className="mb-1 flex items-center gap-2">
                 <Truck size={17} className="text-amber-500" />
-                <span className="font-bold text-brand-navy dark:text-slate-100">{c.nombre}</span>
+                <Link to={`/bulk/transportistas/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 <button onClick={() => borrar(c)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
               </div>
               {c.contacto && <div className="mb-2 text-xs text-slate-400">{c.contacto}</div>}
               <div className="flex flex-wrap gap-1.5">
                 {(c.equipos || []).length ? (c.equipos || []).map((e) => <Badge key={e} color="navy">{e}</Badge>) : <span className="text-xs text-slate-400">Sin equipos registrados</span>}
               </div>
+              <Link to={`/bulk/transportistas/${c.id}`} className="mt-2 inline-block text-xs font-semibold text-amber-600 hover:underline">Ver perfil →</Link>
             </Card>
           ))}
         </div>

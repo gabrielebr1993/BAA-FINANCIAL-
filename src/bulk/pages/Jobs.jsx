@@ -18,7 +18,7 @@ export default function Jobs() {
   const { datos: equipos } = useColeccion('equipment')
   const { datos: carriers } = useColeccion('carriers')
 
-  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [] })
+  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
   const [msg, setMsg] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const plantasCliente = plantas.filter((p) => p.clienteId === f.clienteId)
@@ -29,10 +29,11 @@ export default function Jobs() {
     const codigo = `J${Date.now().toString(36).toUpperCase().slice(-5)}`
     await crear('jobs', tenantId, {
       codigo, nombre: f.nombre.trim(), clienteId: f.clienteId, plantaId: f.plantaId,
-      tipoEquipo: f.tipoEquipo, materiales: f.materiales, transportistasAutorizados: f.transportistas, activo: true,
+      tipoEquipo: f.tipoEquipo, materiales: f.materiales, transportistasAutorizados: f.transportistas,
+      destino: f.destino.trim(), po: f.po.trim(), activo: true,
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear', entidad: 'job', detalle: `Job ${codigo} · ${f.nombre}` })
-    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [] })
+    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
     setMsg({ tipo: 'ok', txt: `Trabajo ${codigo} creado.` })
   }
 
@@ -60,6 +61,16 @@ export default function Jobs() {
             <option value="">— Tipo de equipo requerido —</option>
             {equipos.filter((e) => e.activo !== false).map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
           </Select>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Dirección de entrega <span className="normal-case text-slate-400">(lo que ve el driver en la app)</span></div>
+            <Input placeholder="Ej. 4500 Bayway Dr, Baytown, TX" value={f.destino} onChange={set('destino')} />
+          </div>
+          <div>
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">PO / orden de compra</div>
+            <Input placeholder="Opcional" value={f.po} onChange={set('po')} />
+          </div>
         </div>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div>

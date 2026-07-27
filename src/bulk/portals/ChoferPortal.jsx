@@ -191,6 +191,16 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
       <div className="mt-1 text-sm font-semibold text-emerald-600">Tu pago: {money(orden.pagoChofer)}</div>
+      {orden.direccionEntrega && (
+        <a href={`https://maps.google.com/?q=${encodeURIComponent(orden.direccionEntrega)}`} target="_blank" rel="noreferrer" className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <MapPin size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">Llevar a</div>
+            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{orden.direccionEntrega}</div>
+            {orden.po && <div className="text-xs text-slate-500">PO: {orden.po}</div>}
+          </div>
+        </a>
+      )}
 
       {/* Hitos registrados */}
       <div className="mt-3 space-y-1">

@@ -81,6 +81,8 @@ export default function OrdenDetalle() {
           <div className="space-y-2.5 text-sm">
             <Dato icon={Building2} label="Cliente" val={cliente?.nombre || '—'} />
             <Dato icon={MapPin} label="Planta / origen" val={planta ? `${planta.nombre}${planta.direccion ? ` · ${planta.direccion}` : ''}` : '—'} />
+            <Dato icon={MapPin} label="Entrega (lo que ve el driver)" val={orden.direccionEntrega || '—'} />
+            {orden.po && <Dato icon={FileText} label="PO" val={orden.po} />}
             <Dato icon={Truck} label="Transporte" val={carrier?.nombre || 'sin asignar'} />
             <Dato icon={User} label="Chofer" val={orden.choferNombre || 'sin asignar'} />
             {'precioCliente' in fin && fin.precioCliente != null && <Dato icon={DollarSign} label="Precio cliente" val={money(fin.precioCliente)} />}

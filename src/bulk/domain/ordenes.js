@@ -59,6 +59,9 @@ export function generarOrdenesDeJob(job, cantidadTon, opts = {}) {
     jobId: job.id,
     clienteId: job.clienteId,
     plantaId: job.plantaId,
+    // Dirección de entrega (lo que ve el chofer) y PO, heredados del trabajo.
+    direccionEntrega: job.destino || '',
+    po: job.po || '',
     material: opts.material || (job.materiales || [])[0] || '',
     tipoEquipo: job.tipoEquipo || '',
     pesoEstimado: peso,

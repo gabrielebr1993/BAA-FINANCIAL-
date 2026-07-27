@@ -19,6 +19,8 @@ const Documentos = lazy(() => import('./pages/Documentos'))
 const Jobs = lazy(() => import('./pages/Jobs'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const Transportistas = lazy(() => import('./pages/Transportistas'))
+const TransportistaPerfil = lazy(() => import('./pages/TransportistaPerfil'))
+const ChoferPerfil = lazy(() => import('./pages/ChoferPerfil'))
 const Materiales = lazy(() => import('./pages/Materiales'))
 const Equipos = lazy(() => import('./pages/Equipos'))
 const BulkUsuarios = lazy(() => import('./pages/BulkUsuarios'))
@@ -67,6 +69,8 @@ function Interno() {
       <Route path="/bulk/jobs" element={<P roles={R}><Jobs /></P>} />
       <Route path="/bulk/clientes" element={<P roles={R}><Clientes /></P>} />
       <Route path="/bulk/transportistas" element={<P roles={R}><Transportistas /></P>} />
+      <Route path="/bulk/transportistas/:id" element={<P roles={R}><TransportistaPerfil /></P>} />
+      <Route path="/bulk/chofer/:nombre" element={<P roles={R}><ChoferPerfil /></P>} />
       <Route path="/bulk/materiales" element={<P roles={CAT}><Materiales /></P>} />
       <Route path="/bulk/equipos" element={<P roles={CAT}><Equipos /></P>} />
       <Route path="/bulk/usuarios" element={<P roles={CAT}><BulkUsuarios /></P>} />

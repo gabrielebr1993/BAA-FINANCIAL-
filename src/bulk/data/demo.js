@@ -57,10 +57,10 @@ const CHOFERES = ['Juan Pérez', 'Miguel Torres', 'Carlos Ruiz', 'Luis Gómez', 
 
 // Destinos (obras) para recorridos y eventos de geocerca.
 const DESTINOS = [
-  { nombre: 'Obra Downtown Dallas', lat: 32.7810, lng: -96.7970 },
-  { nombre: 'Proyecto Grand Pkwy', lat: 29.8000, lng: -95.6000 },
-  { nombre: 'Autopista Denton FM', lat: 33.1900, lng: -97.0900 },
-  { nombre: 'Puerto Houston Fase 2', lat: 29.7200, lng: -95.2300 },
+  { nombre: 'Obra Downtown Dallas', direccion: '1500 Main St, Dallas, TX', lat: 32.7810, lng: -96.7970 },
+  { nombre: 'Proyecto Grand Pkwy', direccion: '9000 Grand Pkwy, Katy, TX', lat: 29.8000, lng: -95.6000 },
+  { nombre: 'Autopista Denton FM', direccion: 'FM 1173 & I-35, Denton, TX', lat: 33.1900, lng: -97.0900 },
+  { nombre: 'Puerto Houston Fase 2', direccion: '2000 Port Rd, Houston, TX', lat: 29.7200, lng: -95.2300 },
 ]
 
 // ============================================================================
@@ -74,7 +74,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     { nombre: 'Arena', unidad: 'ton' }, { nombre: 'Piedra', unidad: 'ton' }, { nombre: 'Grava', unidad: 'ton' },
     { nombre: 'Tierra', unidad: 'ton' }, { nombre: 'Concreto', unidad: 'ton' }, { nombre: 'Asfalto', unidad: 'ton' },
     { nombre: 'Material reciclado', unidad: 'ton' },
-  ].map((m) => ({ ...m, activo: true, demo: true }))
+  ].map((m) => ({ ...m, precio: RATE[m.nombre] || 20, activo: true, demo: true }))
   await crearLote('materials', tenantId, materiales)
   const equipos = ['End Dump', 'Belly Dump', 'Dump Truck', 'Concrete Mixer', 'Flatbed', 'Lowboy', 'Side Dump']
     .map((nombre) => ({ nombre, activo: true, demo: true }))
@@ -164,7 +164,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     const codigo = 'J' + (1001 + i).toString(36).toUpperCase()
     jobs.push(await crear('jobs', tenantId, {
       codigo, nombre: j.nombre, clienteId: clientes[j.ci].id, plantaId: plantas[j.pi].id,
-      tipoEquipo: j.tipoEquipo, materiales: j.materiales,
+      tipoEquipo: j.tipoEquipo, materiales: j.materiales, destino: DESTINOS[j.dest].direccion, po: `PO-${2500 + i}`,
       transportistasAutorizados: compatCarriers(j.tipoEquipo), activo: true, demo: true,
     }))
   }
@@ -189,6 +189,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     const o = {
       numero: `${job.codigo}-${String(seq).padStart(4, '0')}`,
       jobId: job.id, clienteId: job.clienteId, plantaId: job.plantaId,
+      direccionEntrega: dest.direccion, po: `PO-${2500 + jIdx}`,
       material, tipoEquipo: jd.tipoEquipo,
       pesoEstimado: Math.min(25, ton), pesoReal: terminado ? ton : null,
       transportistaId: asignado ? carrierId : null,
