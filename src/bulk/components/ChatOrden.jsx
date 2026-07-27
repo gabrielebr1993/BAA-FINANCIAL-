@@ -9,7 +9,7 @@ import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Input } from '../../components/ui'
 
-export default function ChatOrden({ orden, alto = 340 }) {
+export default function ChatOrden({ orden, alto = 340, fill = false }) {
   const { usuario, tenantId } = useBulkAuth()
   const [msgs, setMsgs] = useState([])
   const [texto, setTexto] = useState('')
@@ -44,8 +44,8 @@ export default function ChatOrden({ orden, alto = 340 }) {
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60">
-      <div className="scroll-thin space-y-2 overflow-y-auto p-3" style={{ maxHeight: alto }}>
+    <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
+      <div className={`scroll-thin space-y-2 overflow-y-auto p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
         {msgs.length === 0 && <div className="py-6 text-center text-xs text-slate-400">Sin mensajes. Escribe el primero.</div>}
         {msgs.map((m) => {
           const mio = m.autorId === usuario?.id

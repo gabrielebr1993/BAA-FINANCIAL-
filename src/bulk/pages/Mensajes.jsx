@@ -27,19 +27,19 @@ export default function Mensajes() {
   if (cargando) return <Cargando />
 
   return (
-    <div>
+    <div className="flex h-[calc(100vh-6.5rem)] flex-col">
       <PageTitle>Mensajes</PageTitle>
       {lista.length === 0 ? (
         <EstadoVacio titulo="Sin conversaciones" texto="Cuando tengas órdenes asignadas o en proceso, podrás chatear con el chofer aquí." mostrarBoton={false} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-3">
           {/* Lista de conversaciones */}
-          <Card className="p-3 lg:col-span-1">
+          <Card className="flex min-h-0 flex-col p-3 lg:col-span-1">
             <div className="relative mb-2">
               <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar orden o chofer…" className="w-full pl-8" />
             </div>
-            <div className="scroll-thin max-h-[64vh] space-y-1 overflow-y-auto">
+            <div className="scroll-thin min-h-0 flex-1 space-y-1 overflow-y-auto">
               {lista.map((o) => (
                 <button key={o.id} onClick={() => setSel(o.id)} className={`flex w-full items-center gap-2 rounded-xl border p-2.5 text-left transition ${orden?.id === o.id ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                   <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800"><MessageSquare size={16} /></div>
@@ -56,15 +56,15 @@ export default function Mensajes() {
           </Card>
 
           {/* Conversación */}
-          <div className="lg:col-span-2">
+          <div className="min-h-0 lg:col-span-2">
             {orden && (
-              <Card className="p-4">
+              <Card className="flex h-full flex-col p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
                   <Badge color={COLOR_EST[orden.estado] || 'navy'}>{ORDEN_ESTADO_LABEL[orden.estado]}</Badge>
                   <span className="text-xs text-slate-400">{orden.choferNombre || 'sin chofer'}</span>
                 </div>
-                <ChatOrden orden={orden} alto={440} />
+                <div className="min-h-0 flex-1"><ChatOrden orden={orden} fill /></div>
               </Card>
             )}
           </div>
