@@ -1,7 +1,7 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight } from 'lucide-react'
+import { FileText, Truck, ArrowRight, Route } from 'lucide-react'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
 export function getModulo() { try { return localStorage.getItem('mp_module') } catch { return null } }
@@ -45,19 +45,29 @@ export default function ModuleSelector() {
       </div>
 
       <div className="relative w-full max-w-4xl">
-        <div className="mb-10 flex justify-center">
-          <div className="ms-scene relative h-16 w-full max-w-sm overflow-hidden" aria-hidden="true">
+        <div className="ms-in mb-7 flex flex-col items-center">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-900 shadow-lg shadow-amber-500/25">
+              <Route size={22} strokeWidth={2.4} />
+            </div>
+            <div className="text-[2.1rem] font-black leading-none tracking-tight text-white">Mile<span className="text-amber-400">Pay</span></div>
+          </div>
+          <div className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">Plataforma de logística</div>
+        </div>
+
+        <div className="ms-in ms-in-2 mb-9 flex justify-center">
+          <div className="ms-scene relative h-14 w-full max-w-sm overflow-hidden" aria-hidden="true">
             <div className="ms-road" />
-            <span className="ms-item ms-truck"><Truck size={26} strokeWidth={2} /></span>
+            <span className="ms-item ms-truck"><Truck size={24} strokeWidth={2} /></span>
             <span className="ms-item ms-box" style={{ animationDelay: '-0.7s' }} />
             <span className="ms-item ms-box" style={{ animationDelay: '-1.4s' }} />
             <span className="ms-item ms-box ms-box-amber" style={{ animationDelay: '-2.1s' }} />
           </div>
         </div>
 
-        <div className="flex flex-col items-stretch justify-center gap-5 sm:flex-row">
+        <div className="ms-in ms-in-3 flex flex-col items-stretch justify-center gap-5 sm:flex-row">
           <OpcionCard
-            onClick={() => elegir('package')} icon={FileText} acento="bg-brand-navy" glow="bg-brand-navy"
+            onClick={() => elegir('package')} icon={FileText} acento="bg-brand-navy" glow="bg-blue-600"
             titulo="Package" desc="Facturas, pagos y claims."
           />
           <OpcionCard
@@ -66,7 +76,7 @@ export default function ModuleSelector() {
           />
         </div>
 
-        <p className="mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} My Pay · Puedes cambiar de módulo en cualquier momento.</p>
+        <p className="ms-in ms-in-3 mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} MilePay · Puedes cambiar de módulo en cualquier momento.</p>
       </div>
 
       <style>{`
@@ -79,9 +89,14 @@ export default function ModuleSelector() {
         .ms-box-amber { background:#f59e0b; }
         @keyframes ms-flow { to { background-position-x:-24px; } }
         @keyframes ms-drive { 0% { left:-12%; opacity:0; } 6% { opacity:1; } 94% { opacity:1; } 100% { left:108%; opacity:0; } }
+        .ms-in { opacity:0; animation: ms-rise .6s cubic-bezier(.2,.7,.3,1) forwards; }
+        .ms-in-2 { animation-delay:.12s; }
+        .ms-in-3 { animation-delay:.24s; }
+        @keyframes ms-rise { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform:none; } }
         @media (prefers-reduced-motion: reduce) {
           .ms-road, .ms-item { animation:none; }
           .ms-truck { left:44%; } .ms-box { display:none; }
+          .ms-in { opacity:1; animation:none; }
         }
       `}</style>
     </div>
