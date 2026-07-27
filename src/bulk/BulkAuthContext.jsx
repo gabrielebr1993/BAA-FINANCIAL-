@@ -72,6 +72,9 @@ export function BulkAuthProvider({ children }) {
 
   // Alta de usuarios (staff crea cualquiera; transportista crea sus choferes) vía backend.
   const crearUsuario = useCallback(async (datos) => {
+    // Refresca el token para que lleve los claims más recientes (bulkTenant/bulkRole).
+    // Evita el "No autorizado" cuando los permisos se asignaron después del último login.
+    try { if (authBulk.currentUser) await authBulk.currentUser.getIdToken(true) } catch { /* noop */ }
     const fn = httpsCallable(funcsBulk, 'crearUsuarioBulk')
     const r = await fn(datos)
     return r.data

@@ -29,7 +29,18 @@ export default function BulkDashboard() {
     const desvios = ordenes.reduce((a, o) => a + ((o.geoEventos || []).length ? 0 : 0), 0)
     const docsAlerta = documentos.map((d) => estadoDocumento(d.vence)).filter((x) => x.estado === 'vencido' || x.estado === 'proximo').length
     const incAbiertas = incidencias.filter((i) => i.estado !== 'resuelta').length
+    // Tendencia real: últimos 7 días vs. los 7 anteriores (por fecha de entrega).
+    const fEnt = (o) => (o?.hitos?.entrega ? new Date(o.hitos.entrega).getTime() : null)
+    const now = Date.now(); const D = 86400000
+    const enVentana = (o, a, b) => { const f = fEnt(o); return f != null && (now - f) >= a * D && (now - f) < b * D }
+    const cur = entregadas.filter((o) => enVentana(o, 0, 7))
+    const prev = entregadas.filter((o) => enVentana(o, 7, 14))
+    const suma = (arr, k) => arr.reduce((x, o) => x + n(k(o)), 0)
+    const tend = (c, p) => (p > 0 ? (c - p) / p : null)
+    const trIngresos = tend(suma(cur, (o) => o.precioCliente), suma(prev, (o) => o.precioCliente))
+    const trTon = tend(suma(cur, (o) => o.pesoReal ?? o.pesoEstimado), suma(prev, (o) => o.pesoReal ?? o.pesoEstimado))
     return {
+      trIngresos, trTon,
       abiertas: ordenes.filter((o) => ![E.CERRADA, E.CANCELADA].includes(o.estado)).length,
       enCola: enCola.length, entregadas: entregadas.length, ton, ingresos,
       tPromEntrega: tiempoPromedioEntregaMin(entregadas),
@@ -43,17 +54,26 @@ export default function BulkDashboard() {
 
   if (cargando) return <Cargando texto="Cargando panel…" />
 
+  const hoy = new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })
+  const fechaTxt = hoy.charAt(0).toUpperCase() + hoy.slice(1)
+
   return (
     <div>
-      <PageTitle>Dashboard</PageTitle>
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <PageTitle right={<span className="text-sm text-slate-400">{fechaTxt}</span>}>Dashboard</PageTitle>
+
+      <Grupo titulo="Operación" />
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <KPI label="Órdenes abiertas" value={s.abiertas} icon={ClipboardList} accent="navy" />
         <KPI label="En cola" value={s.enCola} icon={ClipboardList} accent="gold" />
-        <KPI label="Toneladas entregadas" value={Math.round(s.ton)} icon={Weight} accent="green" />
-        <KPI label="Ingresos" value={money(s.ingresos)} icon={DollarSign} accent="blue" />
-        <KPI label="T. prom. entrega" value={`${s.tPromEntrega} min`} icon={Timer} accent="navy" />
-        <KPI label="Clientes" value={clientes.length} icon={Building2} accent="gold" />
-        <KPI label="Transportistas" value={carriers.length} icon={Truck} accent="navy" />
+        <KPI label="T. prom. entrega" value={`${s.tPromEntrega} min`} icon={Timer} accent="navy" sub="tomada → entrega" />
+      </div>
+
+      <Grupo titulo="Negocio" />
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KPI label="Ingresos" value={money(s.ingresos)} icon={DollarSign} accent="blue" trend={s.trIngresos} sub={s.trIngresos != null ? 'vs. 7 días previos' : undefined} />
+        <KPI label="Toneladas entregadas" value={Math.round(s.ton)} icon={Weight} accent="green" trend={s.trTon} sub={s.trTon != null ? 'vs. 7 días previos' : undefined} />
+        <KPI label="Clientes" value={clientes.length} icon={Building2} accent="slate" />
+        <KPI label="Transportistas" value={carriers.length} icon={Truck} accent="slate" />
       </div>
 
       {(s.docsAlerta > 0 || s.incAbiertas > 0) && (
@@ -97,6 +117,15 @@ export default function BulkDashboard() {
           </Card>
         </>
       )}
+    </div>
+  )
+}
+
+function Grupo({ titulo }) {
+  return (
+    <div className="mb-2 flex items-center gap-3">
+      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{titulo}</span>
+      <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
     </div>
   )
 }

@@ -57,7 +57,11 @@ export default function ModoTest() {
       } catch { /* ya existe: seguimos a iniciar sesión */ }
       await iniciarSesion(p.email, PASS) // cambia de sesión → abre ese portal
     } catch (e) {
-      setMsg({ tipo: 'error', txt: 'No se pudo abrir el portal: ' + (e?.message || '') })
+      const m = e?.message || ''
+      const txt = /no autorizado|permission|denied/i.test(m)
+        ? 'Tu sesión no tiene permisos actualizados. Toca Salir, vuelve a entrar con tu cuenta de administrador e inténtalo de nuevo.'
+        : 'No se pudo abrir el portal: ' + m
+      setMsg({ tipo: 'error', txt })
       setEntrando(null)
     }
   }
