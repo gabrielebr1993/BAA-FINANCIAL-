@@ -5,7 +5,9 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-export default function MapaLeaflet({ puntos = [], geocercas = [], alto = 320 }) {
+// puntos: track de UNA orden (polilínea + posición). marcadores: varios choferes a
+// la vez [{lat,lng,label,color}]. geocercas: círculos de planta/destino.
+export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320 }) {
   const cont = useRef(null)
   const map = useRef(null)
   const capas = useRef([])
@@ -30,9 +32,16 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], alto = 320 })
     ll.forEach((x) => bounds.push(x))
     const last = ll[ll.length - 1]
     if (last) { const mk = L.circleMarker(last, { radius: 8, color: '#fff', weight: 2, fillColor: '#f59e0b', fillOpacity: 1 }).addTo(m); mk.bindTooltip('Posición actual'); capas.current.push(mk) }
+    // Múltiples choferes a la vez
+    for (const mk of marcadores) {
+      if (mk == null || mk.lat == null) continue
+      const c = L.circleMarker([mk.lat, mk.lng], { radius: 8, color: '#fff', weight: 2, fillColor: mk.color || '#f59e0b', fillOpacity: 1 }).addTo(m)
+      c.bindTooltip(mk.label || '', { permanent: false, direction: 'top' })
+      capas.current.push(c); bounds.push([mk.lat, mk.lng])
+    }
     if (bounds.length) { try { m.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 }) } catch { /* noop */ } }
     setTimeout(() => m.invalidateSize(), 50)
-  }, [puntos, geocercas])
+  }, [puntos, geocercas, marcadores])
 
   useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null } }, [])
 

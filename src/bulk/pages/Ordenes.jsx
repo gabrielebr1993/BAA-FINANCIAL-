@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User } from 'lucide-react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -44,6 +46,7 @@ export default function Ordenes() {
   const { datos: plants } = useColeccion('plants')
   const [verSug, setVerSug] = useState('') // orderId con panel de sugerencia abierto
   const [chatOrden, setChatOrden] = useState(null) // orden con el chat abierto
+  const [buscar, setBuscar] = useState('')
 
   const { cola, activas } = useMemo(() => {
     const cola = ordenes.filter((o) => EN_COLA.includes(o.estado))
@@ -100,31 +103,39 @@ export default function Ordenes() {
   const enProcesoN = activas.filter((o) => !FINALES.includes(o.estado)).length
   const entregadasN = activas.filter((o) => FINALES.includes(o.estado)).length
   const avance = (o) => { const h = o.hitos || {}; const done = ORDEN_HITOS.filter((k) => h[k.key]).length; return Math.round((done / ORDEN_HITOS.length) * 100) }
+  const q = buscar.trim().toLowerCase()
+  const coincide = (o) => !q || (o.numero || '').toLowerCase().includes(q) || (o.choferNombre || '').toLowerCase().includes(q) || (nombreCarrier(o.transportistaId) || '').toLowerCase().includes(q)
+  const colaF = cola.filter(coincide)
+  const activasF = activas.filter(coincide)
 
   return (
     <div>
       <PageTitle>Órdenes / Cola</PageTitle>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Chip label="En cola" val={cola.length - notifN} color="slate" />
         <Chip label="Notificando" val={notifN} color="gold" />
         <Chip label="En proceso" val={enProcesoN} color="navy" />
         <Chip label="Entregadas" val={entregadasN} color="green" />
+        <div className="relative ml-auto">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar N.º de orden o chofer…" className="w-60 pl-8" />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cola · por asignar ({cola.length})</h3></div>
-        {cola.length === 0 ? <p className="text-sm text-slate-400">No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).</p> : (
+        {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar ? 'Ninguna orden en cola coincide con la búsqueda.' : 'No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).'}</p> : (
           <div className="space-y-2">
-            {cola.map((o) => {
+            {colaF.map((o) => {
               const compat = transportistasCompatibles(carriers, o.tipoEquipo)
               const fin = desgloseVisible(o, rol)
               const notificando = o.estado === E.NOTIFICANDO
               return (
                 <div key={o.id} className={`rounded-xl border p-3 ${notificando ? 'animate-pulse border-amber-400 bg-amber-50 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700/60'}`}>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                     <Badge color="navy">{o.pesoEstimado} ton</Badge>
                     {o.tipoEquipo && <Badge color="slate">{o.tipoEquipo}</Badge>}
                     <button onClick={() => setChatOrden(o)} title="Chat de la orden" className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
@@ -177,16 +188,16 @@ export default function Ordenes() {
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Asignación en vivo ({activas.length})</h3></div>
-        {activas.length === 0 ? <EstadoVacio texto="Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real." mostrarBoton={false} /> : (
+        {activasF.length === 0 ? <EstadoVacio texto={buscar ? 'Ninguna orden asignada coincide con la búsqueda.' : 'Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real.'} mostrarBoton={false} /> : (
           <div className="space-y-2">
-            {activas.map((o) => {
+            {activasF.map((o) => {
               const enRuta = o.estado === E.EN_RUTA
               const fin = FINALES.includes(o.estado)
               return (
                 <div key={o.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
                   <div className="flex items-center gap-2">
                     <span className={`h-2 w-2 flex-shrink-0 rounded-full ${enRuta ? 'animate-pulse bg-emerald-500' : fin ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                     <Badge color={COLOR_ESTADO[o.estado] || 'navy'}>{ORDEN_ESTADO_LABEL[o.estado]}</Badge>
                     <button onClick={() => setChatOrden(o)} title="Chat de la orden" className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
                   </div>
