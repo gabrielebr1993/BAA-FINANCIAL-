@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCheck, ArrowRight } from 'lucide-react'
+import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
+import { authBulk } from '../firebaseBulk'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 
@@ -20,7 +21,15 @@ export default function ModoTest() {
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
   const [entrando, setEntrando] = useState(null) // rol en proceso
+  const [refrescando, setRefrescando] = useState(false)
   const [msg, setMsg] = useState(null)
+
+  // Refresca los permisos de la sesión sin tener que salir y volver a entrar.
+  const refrescarSesion = async () => {
+    setRefrescando(true)
+    try { await authBulk.currentUser?.getIdToken(true) } catch { /* noop */ }
+    window.location.reload()
+  }
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
 
@@ -59,7 +68,7 @@ export default function ModoTest() {
     } catch (e) {
       const m = e?.message || ''
       const txt = /no autorizado|permission|denied/i.test(m)
-        ? 'Tu sesión no tiene permisos actualizados. Toca Salir, vuelve a entrar con tu cuenta de administrador e inténtalo de nuevo.'
+        ? 'Tu sesión trae permisos viejos. Toca “Actualizar sesión” aquí abajo y vuelve a intentarlo.'
         : 'No se pudo abrir el portal: ' + m
       setMsg({ tipo: 'error', txt })
       setEntrando(null)
@@ -91,8 +100,13 @@ export default function ModoTest() {
 
       {/* Portales por rol: un toque entra directo (opcional) */}
       <Card className="p-5">
-        <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">Ver los portales por rol</h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Un toque te abre esa vista. Para volver como administrador, toca <b>Salir</b> y entra con tu cuenta.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">Ver los portales por rol</h3>
+          <button onClick={refrescarSesion} disabled={refrescando} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">
+            {refrescando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Actualizar sesión
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Un toque te abre esa vista. Para volver a tu cuenta, toca <b>Salir</b> y entra con tu correo de siempre. Si algún portal dice “sin permisos”, toca <b>Actualizar sesión</b>.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {PORTALES.map((p) => (
             <button key={p.rol} onClick={() => entrarA(p)} disabled={ocupado}
