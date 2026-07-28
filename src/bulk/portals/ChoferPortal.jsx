@@ -15,6 +15,7 @@ import { leerTicket } from '../integraciones/ocr'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
+import { useLang } from '../../i18n'
 
 const capturarGPS = () => new Promise((res) => {
   if (!navigator.geolocation) return res(null)
@@ -24,6 +25,7 @@ const capturarGPS = () => new Promise((res) => {
 })
 
 export default function ChoferPortal() {
+  const { t } = useLang()
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
   const { datos: ordenes } = useColeccion('orders')
@@ -42,7 +44,7 @@ export default function ChoferPortal() {
   useEffect(() => {
     const ids = new Set(disponibles.map((o) => o.id))
     if (prevIds.current && [...ids].some((id) => !prevIds.current.has(id))) {
-      beep(); notificar('Nueva orden asignada', 'Tienes una orden nueva por aceptar.')
+      beep(); notificar(t('Nueva orden asignada'), t('Tienes una orden nueva por aceptar.'))
     }
     prevIds.current = ids
   }, [disponibles])
@@ -53,47 +55,47 @@ export default function ChoferPortal() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-100 dark:bg-slate-950">
       <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={18} /></div>
-        <div className="min-w-0"><div className="truncate text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">Chofer</div></div>
-        <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10" title="Cambiar módulo"><Grid2x2 size={18} /></button>
-        <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10" title="Salir"><LogOut size={18} /></button>
+        <div className="min-w-0"><div className="truncate text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Chofer')}</div></div>
+        <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10" title={t('Cambiar módulo')}><Grid2x2 size={18} /></button>
+        <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10" title={t('Salir')}><LogOut size={18} /></button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-3 pb-20">
         {tab === 'ordenes' && (
           <>
-            {!carrierId && <Aviso tipo="warn" className="mb-3">Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.</Aviso>}
+            {!carrierId && <Aviso tipo="warn" className="mb-3">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</Aviso>}
             {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} />
-              : disponibles.length === 0 ? <VacioMsg icon={ClipboardList} texto="No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará." />
+              : disponibles.length === 0 ? <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />
               : disponibles.map((o) => <TarjetaNueva key={o.id} orden={o} usuario={usuario} tenantId={tenantId} rol={rol} />)}
           </>
         )}
         {tab === 'historial' && (
-          historial.length === 0 ? <VacioMsg icon={Clock} texto="Aún no tienes entregas cerradas." />
+          historial.length === 0 ? <VacioMsg icon={Clock} texto={t('Aún no tienes entregas cerradas.')} />
             : historial.map((o) => (
               <Card key={o.id} className="mb-2 p-3">
-                <div className="flex items-center gap-2"><span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="green">{ORDEN_ESTADO_LABEL[o.estado]}</Badge><span className="ml-auto text-sm font-semibold">{money(o.pagoChofer)}</span></div>
+                <div className="flex items-center gap-2"><span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="green">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge><span className="ml-auto text-sm font-semibold">{money(o.pagoChofer)}</span></div>
                 <div className="mt-1 text-xs text-slate-400">{o.material} · {o.pesoReal ?? o.pesoEstimado} ton</div>
               </Card>
             ))
         )}
         {tab === 'ganancias' && (
           <Card className="p-5 text-center">
-            <div className="text-xs uppercase text-slate-400">Ganancias acumuladas</div>
+            <div className="text-xs uppercase text-slate-400">{t('Ganancias acumuladas')}</div>
             <div className="mt-1 text-4xl font-black text-amber-500">{money(ganancias)}</div>
-            <div className="mt-1 text-xs text-slate-400">{historial.length} entrega(s) cerrada(s)</div>
+            <div className="mt-1 text-xs text-slate-400">{historial.length} {t('entrega(s) cerrada(s)')}</div>
           </Card>
         )}
         {tab === 'perfil' && (
           <Card className="p-4">
             <div className="text-sm"><b>{usuario?.nombre}</b></div>
             <div className="text-xs text-slate-400">{usuario?.email}</div>
-            <div className="mt-2 text-xs text-slate-400">Rol: Chofer · Transportista: {carrierId ? carrierId : '—'}</div>
+            <div className="mt-2 text-xs text-slate-400">{t('Rol: Chofer · Transportista:')} {carrierId ? carrierId : '—'}</div>
           </Card>
         )}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        {[{ k: 'ordenes', l: 'Órdenes', I: ClipboardList }, { k: 'historial', l: 'Historial', I: Clock }, { k: 'ganancias', l: 'Ganancias', I: DollarSign }, { k: 'perfil', l: 'Perfil', I: User }].map((t) => (
+        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((t) => (
           <button key={t.k} onClick={() => setTab(t.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === t.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
             <t.I size={20} strokeWidth={tab === t.k ? 2.4 : 1.8} /> {t.l}
           </button>
@@ -108,6 +110,7 @@ function VacioMsg({ icon: Icon, texto }) {
 }
 
 function TarjetaNueva({ orden, usuario, tenantId, rol }) {
+  const { t } = useLang()
   const [ocupado, setOcupado] = useState(false)
   const aceptar = async () => {
     setOcupado(true)
@@ -115,25 +118,26 @@ function TarjetaNueva({ orden, usuario, tenantId, rol }) {
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
   }
   const rechazar = async () => {
-    const motivo = window.prompt('Motivo del rechazo:') || 'Sin motivo'
+    const motivo = window.prompt(t('Motivo del rechazo:')) || 'Sin motivo'
     setOcupado(true)
     await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, rechazo: { por: usuario.nombre, motivo, ts: ahora() } })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: motivo })
   }
   return (
     <Card className="mb-3 animate-pulse border-2 border-amber-400 p-4">
-      <div className="flex items-center gap-2"><span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span><Badge color="gold">Nueva</Badge></div>
+      <div className="flex items-center gap-2"><span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span><Badge color="gold">{t('Nueva')}</Badge></div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
-      <div className="mt-1 text-sm font-semibold text-emerald-600">Tu pago: {money(orden.pagoChofer)}</div>
+      <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>
       <div className="mt-3 flex gap-2">
-        <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center"><CheckCircle2 size={16} /> Aceptar</Boton>
-        <Boton variant="danger" onClick={rechazar} disabled={ocupado} className="flex-1 justify-center"><XCircle size={16} /> Rechazar</Boton>
+        <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center"><CheckCircle2 size={16} /> {t('Aceptar')}</Boton>
+        <Boton variant="danger" onClick={rechazar} disabled={ocupado} className="flex-1 justify-center"><XCircle size={16} /> {t('Rechazar')}</Boton>
       </div>
     </Card>
   )
 }
 
 function OrdenActiva({ orden, tenantId, usuario, rol }) {
+  const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
   const [modal, setModal] = useState(null) // 'ticket' | 'pod'
   const [ocupado, setOcupado] = useState(false)
@@ -169,7 +173,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
   }
 
   const guardarPOD = async () => {
-    if (!firma) { window.alert('Falta la firma.'); return }
+    if (!firma) { window.alert(t('Falta la firma.')); return }
     setOcupado(true)
     const gps = await capturarGPS()
     await guardar('orders', orden.id, {
@@ -186,16 +190,16 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
     <Card className="p-4">
       <div className="flex items-center gap-2">
         <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
-        <Badge color="navy">{ORDEN_ESTADO_LABEL[orden.estado]}</Badge>
-        <button onClick={() => setModal('chat')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> Chat</button>
+        <Badge color="navy">{t(ORDEN_ESTADO_LABEL[orden.estado])}</Badge>
+        <button onClick={() => setModal('chat')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> {t('Chat')}</button>
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
-      <div className="mt-1 text-sm font-semibold text-emerald-600">Tu pago: {money(orden.pagoChofer)}</div>
+      <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>
       {orden.direccionEntrega && (
         <a href={`https://maps.google.com/?q=${encodeURIComponent(orden.direccionEntrega)}`} target="_blank" rel="noreferrer" className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
           <MapPin size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">Llevar a</div>
+            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('Llevar a')}</div>
             <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{orden.direccionEntrega}</div>
             {orden.po && <div className="text-xs text-slate-500">PO: {orden.po}</div>}
           </div>
@@ -207,7 +211,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
         {ORDEN_HITOS.map((h) => (
           <div key={h.key} className="flex items-center gap-2 text-xs">
             {orden.hitos?.[h.key] ? <CheckCircle2 size={14} className="text-emerald-500" /> : <div className="h-3.5 w-3.5 rounded-full border border-slate-300 dark:border-slate-600" />}
-            <span className={orden.hitos?.[h.key] ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400'}>{h.label}</span>
+            <span className={orden.hitos?.[h.key] ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400'}>{t(h.label)}</span>
             {orden.hitos?.[h.key] && <span className="ml-auto text-slate-400">{new Date(orden.hitos[h.key]).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
         ))}
@@ -215,31 +219,31 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
 
       {paso ? (
         <Boton variant="gold" onClick={avanzar} disabled={ocupado} className="mt-4 w-full justify-center py-2.5">
-          {ocupado ? <><Spinner /> Guardando…</> : paso.label}
+          {ocupado ? <><Spinner /> {t('Guardando…')}</> : t(paso.label)}
         </Boton>
       ) : orden.estado === E.ENTREGADA ? (
         <div className="mt-4 rounded-xl border-2 border-dashed border-amber-400 p-4 text-center">
           <QrCode size={40} className="mx-auto text-amber-500" />
-          <div className="mt-1 text-xs text-slate-400">Muestra este código al supervisor para liberar la carga</div>
+          <div className="mt-1 text-xs text-slate-400">{t('Muestra este código al supervisor para liberar la carga')}</div>
           <div className="mt-1 text-2xl font-black tracking-widest text-brand-navy dark:text-slate-100">{orden.numero}</div>
-          <div className="mt-1 text-xs text-slate-400">Esperando liberación…</div>
+          <div className="mt-1 text-xs text-slate-400">{t('Esperando liberación…')}</div>
         </div>
       ) : null}
 
       {/* Chat de la orden */}
       {modal === 'chat' && (
-        <Modal onClose={() => setModal(null)} titulo={`Chat · ${orden.numero}`}>
+        <Modal onClose={() => setModal(null)} titulo={`${t('Chat')} · ${orden.numero}`}>
           <ChatOrden orden={orden} alto={360} />
         </Modal>
       )}
 
       {/* Modal ticket de carga */}
       {modal === 'ticket' && (
-        <Modal onClose={() => setModal(null)} titulo="Ticket de carga">
-          <Input type="number" placeholder="Peso real (ton)" value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-2" />
-          <Input placeholder="N° de ticket (opcional)" value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
+        <Modal onClose={() => setModal(null)} titulo={t('Ticket de carga')}>
+          <Input type="number" placeholder={t('Peso real (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-2" />
+          <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
           <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
-            <Camera size={18} /> {foto ? 'Foto lista ✓' : 'Tomar foto del ticket'}
+            <Camera size={18} /> {foto ? t('Foto lista ✓') : t('Tomar foto del ticket')}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
           </label>
           {foto && (
@@ -249,31 +253,31 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
                 try {
                   const r = await leerTicket(foto, (p) => setOcr({ cargando: true, progreso: p }))
                   if (r) { if (r.pesoNeto) setPeso(String(r.pesoNeto)); if (r.ticket) setTicketNum(r.ticket) }
-                  setOcr({ cargando: false, msg: r ? 'Leído — revisa y corrige (las unidades pueden variar).' : 'No se pudo leer el ticket.' })
-                } catch { setOcr({ cargando: false, msg: 'No se pudo leer el ticket.' }) }
+                  setOcr({ cargando: false, msg: r ? t('Leído — revisa y corrige (las unidades pueden variar).') : t('No se pudo leer el ticket.') })
+                } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket.') }) }
               }}
               className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-amber-500 dark:text-slate-900">
-              {ocr?.cargando ? <><Spinner /> Leyendo… {ocr.progreso || 0}%</> : <><ScanLine size={15} /> Leer con OCR</>}
+              {ocr?.cargando ? <><Spinner /> {t('Leyendo…')} {ocr.progreso || 0}%</> : <><ScanLine size={15} /> {t('Leer con OCR')}</>}
             </button>
           )}
           {ocr?.msg && <p className="mb-1 text-[11px] text-amber-600 dark:text-amber-400">{ocr.msg}</p>}
-          <p className="mb-2 text-[11px] text-slate-400">El peso real reemplaza al estimado. El OCR pre-llena; confirma el valor.</p>
-          <Boton variant="gold" onClick={guardarTicket} disabled={ocupado || !peso} className="w-full justify-center">{ocupado ? <Spinner /> : 'Confirmar carga'}</Boton>
+          <p className="mb-2 text-[11px] text-slate-400">{t('El peso real reemplaza al estimado. El OCR pre-llena; confirma el valor.')}</p>
+          <Boton variant="gold" onClick={guardarTicket} disabled={ocupado || !peso} className="w-full justify-center">{ocupado ? <Spinner /> : t('Confirmar carga')}</Boton>
         </Modal>
       )}
 
       {/* Modal POD */}
       {modal === 'pod' && (
-        <Modal onClose={() => setModal(null)} titulo="Prueba de entrega (POD)">
+        <Modal onClose={() => setModal(null)} titulo={t('Prueba de entrega (POD)')}>
           <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
-            <Camera size={18} /> {foto ? 'Foto lista ✓' : 'Foto de la entrega'}
+            <Camera size={18} /> {foto ? t('Foto lista ✓') : t('Foto de la entrega')}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
           </label>
-          <div className="mb-1 text-xs font-semibold text-slate-500">Firma de quien recibe</div>
+          <div className="mb-1 text-xs font-semibold text-slate-500">{t('Firma de quien recibe')}</div>
           <FirmaPad onChange={setFirma} />
-          <Input placeholder="Comentarios (opcional)" value={coment} onChange={(e) => setComent(e.target.value)} className="my-2" />
-          <div className="mb-2 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={12} /> Se guardará tu GPS, fecha y hora automáticamente.</div>
-          <Boton variant="gold" onClick={guardarPOD} disabled={ocupado} className="w-full justify-center">{ocupado ? <Spinner /> : 'Confirmar entrega'}</Boton>
+          <Input placeholder={t('Comentarios (opcional)')} value={coment} onChange={(e) => setComent(e.target.value)} className="my-2" />
+          <div className="mb-2 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={12} /> {t('Se guardará tu GPS, fecha y hora automáticamente.')}</div>
+          <Boton variant="gold" onClick={guardarPOD} disabled={ocupado} className="w-full justify-center">{ocupado ? <Spinner /> : t('Confirmar entrega')}</Boton>
         </Modal>
       )}
     </Card>

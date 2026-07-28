@@ -5,8 +5,10 @@ import { useColeccion } from '../data/useColeccion'
 import { crear, guardar, eliminar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Badge, Cargando, EstadoVacio } from '../../components/ui'
+import { useLang } from '../../i18n'
 
 export default function Transportistas() {
+  const { t } = useLang()
   const { tenantId } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: equipos } = useColeccion('equipment')
@@ -22,22 +24,22 @@ export default function Transportistas() {
     await crear('carriers', tenantId, { nombre: form.nombre.trim(), contacto: form.contacto.trim(), equipos: form.equipos, activo: true })
     setForm({ nombre: '', contacto: '', equipos: [] }); setOcupado(false)
   }
-  const borrar = async (c) => { if (window.confirm(`¿Eliminar transportista "${c.nombre}"?`)) await eliminar('carriers', c.id) }
+  const borrar = async (c) => { if (window.confirm(`${t('¿Eliminar transportista')} "${c.nombre}"?`)) await eliminar('carriers', c.id) }
 
   if (cargando) return <Cargando />
   return (
     <div>
-      <PageTitle>Transportistas</PageTitle>
+      <PageTitle>{t('Transportistas')}</PageTitle>
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">Nuevo transportista</h3>
+        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo transportista')}</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Input placeholder="Nombre / empresa" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} />
-          <Input placeholder="Contacto (tel / email)" value={form.contacto} onChange={(e) => setForm((f) => ({ ...f, contacto: e.target.value }))} />
+          <Input placeholder={t('Nombre / empresa')} value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} />
+          <Input placeholder={t('Contacto (tel / email)')} value={form.contacto} onChange={(e) => setForm((f) => ({ ...f, contacto: e.target.value }))} />
         </div>
         <div className="mt-3">
-          <div className="mb-1.5 text-xs font-semibold uppercase text-slate-400">Tipos de equipo disponibles</div>
+          <div className="mb-1.5 text-xs font-semibold uppercase text-slate-400">{t('Tipos de equipo disponibles')}</div>
           {tiposActivos.length === 0 ? (
-            <p className="text-xs text-slate-400">Primero crea tipos de equipo en el catálogo.</p>
+            <p className="text-xs text-slate-400">{t('Primero crea tipos de equipo en el catálogo.')}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {tiposActivos.map((t) => (
@@ -49,10 +51,10 @@ export default function Transportistas() {
             </div>
           )}
         </div>
-        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={ocupado || !form.nombre.trim()}><Plus size={16} /> Agregar transportista</Boton></div>
+        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={ocupado || !form.nombre.trim()}><Plus size={16} /> {t('Agregar transportista')}</Boton></div>
       </Card>
 
-      {carriers.length === 0 ? <EstadoVacio titulo="Sin transportistas" texto="Agrega el primero arriba." mostrarBoton={false} /> : (
+      {carriers.length === 0 ? <EstadoVacio titulo={t('Sin transportistas')} texto={t('Agrega el primero arriba.')} mostrarBoton={false} /> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {carriers.map((c) => (
             <Card key={c.id} className="p-4">
@@ -63,9 +65,9 @@ export default function Transportistas() {
               </div>
               {c.contacto && <div className="mb-2 text-xs text-slate-400">{c.contacto}</div>}
               <div className="flex flex-wrap gap-1.5">
-                {(c.equipos || []).length ? (c.equipos || []).map((e) => <Badge key={e} color="navy">{e}</Badge>) : <span className="text-xs text-slate-400">Sin equipos registrados</span>}
+                {(c.equipos || []).length ? (c.equipos || []).map((e) => <Badge key={e} color="navy">{e}</Badge>) : <span className="text-xs text-slate-400">{t('Sin equipos registrados')}</span>}
               </div>
-              <Link to={`/bulk/transportistas/${c.id}`} className="mt-2 inline-block text-xs font-semibold text-amber-600 hover:underline">Ver perfil →</Link>
+              <Link to={`/bulk/transportistas/${c.id}`} className="mt-2 inline-block text-xs font-semibold text-amber-600 hover:underline">{t('Ver perfil')} →</Link>
             </Card>
           ))}
         </div>

@@ -1,8 +1,10 @@
 // Pad de firma digital sobre <canvas> (sin librerías). Devuelve un dataURL PNG.
 import { useRef, useState, useEffect } from 'react'
 import { Eraser } from 'lucide-react'
+import { useLang } from '../../i18n'
 
 export default function FirmaPad({ onChange, alto = 160 }) {
+  const { t } = useLang()
   const ref = useRef(null)
   const dibujando = useRef(false)
   const [vacio, setVacio] = useState(true)
@@ -30,8 +32,8 @@ export default function FirmaPad({ onChange, alto = 160 }) {
         onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
         onTouchStart={start} onTouchMove={move} onTouchEnd={end} />
       <div className="mt-1 flex items-center justify-between text-xs text-slate-400">
-        <span>{vacio ? 'Firma aquí' : 'Firmado'}</span>
-        <button type="button" onClick={limpiar} className="inline-flex items-center gap-1 hover:text-slate-600"><Eraser size={12} /> Borrar</button>
+        <span>{vacio ? t('Firma aquí') : t('Firmado')}</span>
+        <button type="button" onClick={limpiar} className="inline-flex items-center gap-1 hover:text-slate-600"><Eraser size={12} /> {t('Borrar')}</button>
       </div>
     </div>
   )

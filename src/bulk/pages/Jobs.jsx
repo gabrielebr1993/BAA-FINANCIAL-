@@ -8,8 +8,10 @@ import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
 import { calcularTarifa } from '../domain/tarifas'
 import { MAX_TON_POR_VIAJE } from '../domain/constants'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio, Aviso, Spinner } from '../../components/ui'
+import { useLang } from '../../i18n'
 
 export default function Jobs() {
+  const { t } = useLang()
   const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: jobs, cargando } = useColeccion('jobs')
   const { datos: clientes } = useColeccion('clients')
@@ -25,7 +27,7 @@ export default function Jobs() {
   const toggleArr = (k, v) => setF((s) => ({ ...s, [k]: s[k].includes(v) ? s[k].filter((x) => x !== v) : [...s[k], v] }))
 
   const crearJob = async () => {
-    if (!f.nombre.trim() || !f.clienteId) { setMsg({ tipo: 'warn', txt: 'Nombre y cliente son obligatorios.' }); return }
+    if (!f.nombre.trim() || !f.clienteId) { setMsg({ tipo: 'warn', txt: t('Nombre y cliente son obligatorios.') }); return }
     const codigo = `J${Date.now().toString(36).toUpperCase().slice(-5)}`
     // Si no escribió PO, toma el de la oferta de la planta para el primer material.
     const plantaSel = plantas.find((p) => p.id === f.plantaId)
@@ -37,7 +39,7 @@ export default function Jobs() {
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear', entidad: 'job', detalle: `Job ${codigo} · ${f.nombre}` })
     setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
-    setMsg({ tipo: 'ok', txt: `Trabajo ${codigo} creado.` })
+    setMsg({ tipo: 'ok', txt: `${t('Trabajo')} ${codigo} ${t('creado.')}` })
   }
 
   if (cargando) return <Cargando />
@@ -45,34 +47,34 @@ export default function Jobs() {
 
   return (
     <div>
-      <PageTitle>Trabajos (Jobs)</PageTitle>
+      <PageTitle>{t('Trabajos (Jobs)')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">Nuevo trabajo</h3>
+        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo trabajo')}</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Input placeholder="Nombre del trabajo" value={f.nombre} onChange={set('nombre')} />
+          <Input placeholder={t('Nombre del trabajo')} value={f.nombre} onChange={set('nombre')} />
           <Select value={f.clienteId} onChange={(e) => setF((s) => ({ ...s, clienteId: e.target.value, plantaId: '' }))}>
-            <option value="">— Cliente —</option>
+            <option value="">{t('— Cliente —')}</option>
             {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </Select>
           <Select value={f.plantaId} onChange={set('plantaId')} disabled={!f.clienteId}>
-            <option value="">— Planta —</option>
+            <option value="">{t('— Planta —')}</option>
             {plantasCliente.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </Select>
           <Select value={f.tipoEquipo} onChange={set('tipoEquipo')}>
-            <option value="">— Tipo de equipo requerido —</option>
+            <option value="">{t('— Tipo de equipo requerido —')}</option>
             {equipos.filter((e) => e.activo !== false).map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
           </Select>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Dirección de entrega <span className="normal-case text-slate-400">(lo que ve el driver en la app)</span></div>
-            <Input placeholder="Ej. 4500 Bayway Dr, Baytown, TX" value={f.destino} onChange={set('destino')} />
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Dirección de entrega')} <span className="normal-case text-slate-400">{t('(lo que ve el driver en la app)')}</span></div>
+            <Input placeholder={t('Ej. 4500 Bayway Dr, Baytown, TX')} value={f.destino} onChange={set('destino')} />
           </div>
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">PO / orden de compra</div>
-            <Input placeholder="Auto de la planta si vacío" value={f.po} onChange={set('po')} />
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('PO / orden de compra')}</div>
+            <Input placeholder={t('Auto de la planta si vacío')} value={f.po} onChange={set('po')} />
           </div>
         </div>
         {(() => {
@@ -80,33 +82,33 @@ export default function Jobs() {
           const ofs = ps?.ofertas || []
           return ofs.length > 0 ? (
             <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
-              <span className="font-semibold">Ofrece {ps.nombre}:</span> {ofs.map((o) => `${o.material}${o.precio ? ` · $${o.precio}` : ''}${o.po ? ` · PO ${o.po}` : ''}`).join('  |  ')}
+              <span className="font-semibold">{t('Ofrece')} {ps.nombre}:</span> {ofs.map((o) => `${o.material}${o.precio ? ` · $${o.precio}` : ''}${o.po ? ` · PO ${o.po}` : ''}`).join('  |  ')}
             </div>
           ) : null
         })()}
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Materiales permitidos</div>
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Materiales permitidos')}</div>
             <div className="flex flex-wrap gap-1.5">
               {materiales.filter((m) => m.activo !== false).map((m) => (
-                <button key={m.id} type="button" onClick={() => toggleArr('materiales', m.nombre)} className={`rounded-lg border px-2.5 py-1 text-xs ${f.materiales.includes(m.nombre) ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>{m.nombre}</button>
+                <button key={m.id} type="button" onClick={() => toggleArr('materiales', m.nombre)} className={`rounded-lg border px-2.5 py-1 text-xs ${f.materiales.includes(m.nombre) ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>{t(m.nombre)}</button>
               ))}
             </div>
           </div>
           <div>
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Transportistas autorizados {f.tipoEquipo && <span className="normal-case text-slate-400">(solo compatibles con {f.tipoEquipo})</span>}</div>
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Transportistas autorizados')} {f.tipoEquipo && <span className="normal-case text-slate-400">({t('solo compatibles con')} {f.tipoEquipo})</span>}</div>
             <div className="flex flex-wrap gap-1.5">
               {carriers.filter((c) => !f.tipoEquipo || (c.equipos || []).map((x) => x.toLowerCase()).includes(f.tipoEquipo.toLowerCase())).map((c) => (
                 <button key={c.id} type="button" onClick={() => toggleArr('transportistas', c.id)} className={`rounded-lg border px-2.5 py-1 text-xs ${f.transportistas.includes(c.id) ? 'border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>{c.nombre}</button>
               ))}
-              {f.tipoEquipo && carriers.filter((c) => (c.equipos || []).map((x) => x.toLowerCase()).includes(f.tipoEquipo.toLowerCase())).length === 0 && <span className="text-xs text-rose-500">Ningún transportista tiene ese equipo.</span>}
+              {f.tipoEquipo && carriers.filter((c) => (c.equipos || []).map((x) => x.toLowerCase()).includes(f.tipoEquipo.toLowerCase())).length === 0 && <span className="text-xs text-rose-500">{t('Ningún transportista tiene ese equipo.')}</span>}
             </div>
           </div>
         </div>
-        <div className="mt-3"><Boton variant="gold" onClick={crearJob}><Plus size={16} /> Crear trabajo</Boton></div>
+        <div className="mt-3"><Boton variant="gold" onClick={crearJob}><Plus size={16} /> {t('Crear trabajo')}</Boton></div>
       </Card>
 
-      {jobs.length === 0 ? <EstadoVacio titulo="Sin trabajos" texto="Crea el primero arriba." mostrarBoton={false} /> : (
+      {jobs.length === 0 ? <EstadoVacio titulo={t('Sin trabajos')} texto={t('Crea el primero arriba.')} mostrarBoton={false} /> : (
         <div className="space-y-3">
           {jobs.map((j) => <JobCard key={j.id} job={j} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
         </div>
@@ -116,6 +118,7 @@ export default function Jobs() {
 }
 
 function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
+  const { t } = useLang()
   const { datos: reglas } = useColeccion('tariffs')
   const [cant, setCant] = useState('')
   const [material, setMaterial] = useState((job.materiales || [])[0] || '')
@@ -152,33 +155,33 @@ function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
         <Layers size={17} className="text-amber-500" />
         <span className="font-bold text-brand-navy dark:text-slate-100">{job.nombre}</span>
         <Badge color="slate">{job.codigo}</Badge>
-        <span className="text-xs text-slate-400">Cliente: {nombreCliente(job.clienteId)}</span>
-        {job.tipoEquipo && <Badge color="navy">Equipo: {job.tipoEquipo}</Badge>}
-        <button onClick={() => window.confirm(`¿Eliminar trabajo "${job.nombre}"? (no borra órdenes ya generadas)`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
+        <span className="text-xs text-slate-400">{t('Cliente')}: {nombreCliente(job.clienteId)}</span>
+        {job.tipoEquipo && <Badge color="navy">{t('Equipo:')} {job.tipoEquipo}</Badge>}
+        <button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
       </div>
-      {(job.materiales || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{job.materiales.map((m) => <Badge key={m} color="green">{m}</Badge>)}</div>}
+      {(job.materiales || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{job.materiales.map((m) => <Badge key={m} color="green">{t(m)}</Badge>)}</div>}
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Cantidad (ton)</div>
+          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{t('Cantidad (ton)')}</div>
           <Input type="number" className="w-28" placeholder="500" value={cant} onChange={(e) => setCant(e.target.value)} />
         </div>
         {(job.materiales || []).length > 1 && (
           <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Material</div>
-            <Select value={material} onChange={(e) => setMaterial(e.target.value)}>{job.materiales.map((m) => <option key={m} value={m}>{m}</option>)}</Select>
+            <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{t('Material')}</div>
+            <Select value={material} onChange={(e) => setMaterial(e.target.value)}>{job.materiales.map((m) => <option key={m} value={m}>{t(m)}</option>)}</Select>
           </div>
         )}
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">Precio cliente / viaje (opc. — auto si vacío)</div>
-          <Input type="number" className="w-32" placeholder="auto" value={precioCliente} onChange={(e) => setPrecioCliente(e.target.value)} />
+          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{t('Precio cliente / viaje (opc. — auto si vacío)')}</div>
+          <Input type="number" className="w-32" placeholder={t('auto')} value={precioCliente} onChange={(e) => setPrecioCliente(e.target.value)} />
         </div>
         <Boton variant="gold" onClick={generar} disabled={ocupado || !(Number(cant) > 0)}>
-          {ocupado ? <><Spinner /> Generando…</> : <><Wand2 size={16} /> Generar órdenes</>}
+          {ocupado ? <><Spinner /> {t('Generando…')}</> : <><Wand2 size={16} /> {t('Generar órdenes')}</>}
         </Boton>
-        {cant > 0 && <span className="text-xs text-slate-500 dark:text-slate-400">→ {viajes} viaje(s) de máx {MAX_TON_POR_VIAJE} ton</span>}
+        {cant > 0 && <span className="text-xs text-slate-500 dark:text-slate-400">→ {viajes} {t('viaje(s) de máx')} {MAX_TON_POR_VIAJE} ton</span>}
       </div>
-      {res && <Aviso tipo="ok" className="mt-2">Se generaron <b>{res.n} órdenes</b> ({res.total} ton){res.tarifa === 'auto' ? ' con precios del motor de tarifas' : res.tarifa === 'manual' ? ' con precio manual' : ' (sin tarifa configurada aún)'} — visibles en Órdenes / Cola.</Aviso>}
+      {res && <Aviso tipo="ok" className="mt-2">{t('Se generaron')} <b>{res.n} {t('órdenes')}</b> ({res.total} ton){res.tarifa === 'auto' ? ` ${t('con precios del motor de tarifas')}` : res.tarifa === 'manual' ? ` ${t('con precio manual')}` : ` ${t('(sin tarifa configurada aún)')}`} {t('— visibles en')} {t('Órdenes / Cola')}.</Aviso>}
     </Card>
   )
 }

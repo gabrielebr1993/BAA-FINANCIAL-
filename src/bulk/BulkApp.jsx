@@ -5,6 +5,7 @@ import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import { puedeVer } from './nav'
 import { Cargando } from '../components/ui'
+import { useLang } from '../i18n'
 
 const BulkDashboard = lazy(() => import('./pages/BulkDashboard'))
 const Ordenes = lazy(() => import('./pages/Ordenes'))
@@ -41,18 +42,20 @@ const PORTALES = {
 
 // Envuelve una página con verificación de rol + layout de Bulk.
 function P({ roles, children }) {
+  const { t } = useLang()
   const { rol } = useBulkAuth()
-  if (roles && !puedeVer(rol, roles)) return <BulkLayout><div className="p-6 text-slate-400">No tienes acceso a esta sección.</div></BulkLayout>
-  return <BulkLayout><Suspense fallback={<Cargando texto="Cargando…" />}>{children}</Suspense></BulkLayout>
+  if (roles && !puedeVer(rol, roles)) return <BulkLayout><div className="p-6 text-slate-400">{t('No tienes acceso a esta sección.')}</div></BulkLayout>
+  return <BulkLayout><Suspense fallback={<Cargando texto={t('Cargando…')} />}>{children}</Suspense></BulkLayout>
 }
 
 function Interno() {
+  const { t } = useLang()
   const { usuario, cargando, rol } = useBulkAuth()
-  if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Freight…" /></div>
+  if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto={t('Cargando Freight…')} /></div>
   if (!usuario) return <BulkLogin />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
-  if (Portal) return <Suspense fallback={<Cargando texto="Cargando…" />}><Portal /></Suspense>
+  if (Portal) return <Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense>
   const R = ['super_admin', 'admin', 'dispatcher']
   const CAT = ['super_admin', 'admin']
   return (
