@@ -71,7 +71,7 @@ function Interno() {
       <Route path="/bulk/clientes" element={<P roles={R}><Clientes /></P>} />
       <Route path="/bulk/transportistas" element={<P roles={R}><Transportistas /></P>} />
       <Route path="/bulk/transportistas/:id" element={<P roles={R}><TransportistaPerfil /></P>} />
-      <Route path="/bulk/choferes" element={<P roles={R}><GestionChoferes /></P>} />
+      <Route path="/bulk/choferes" element={<P roles={CAT}><GestionChoferes /></P>} />
       <Route path="/bulk/chofer/:nombre" element={<P roles={R}><ChoferPerfil /></P>} />
       <Route path="/bulk/materiales" element={<P roles={CAT}><Materiales /></P>} />
       <Route path="/bulk/equipos" element={<P roles={CAT}><Equipos /></P>} />

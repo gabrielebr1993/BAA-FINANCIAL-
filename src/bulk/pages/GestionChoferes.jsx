@@ -18,6 +18,9 @@ export default function GestionChoferes() {
   const agregar = async () => {
     const c = carriers.find((x) => x.id === f.carrierId)
     if (!c || !f.nombre.trim()) return
+    // Un chofer solo puede estar en UN transporte.
+    const yaExiste = carriers.some((x) => (x.choferes || []).some((d) => (d.nombre || '').toLowerCase() === f.nombre.trim().toLowerCase()))
+    if (yaExiste) { window.alert('Ese chofer ya está en un transporte. Un chofer solo puede estar en uno; usa “Reasignar” para moverlo.'); return }
     const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), activo: true }
     await guardar('carriers', c.id, { choferes: [...(c.choferes || []), chofer] })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'alta_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${c.nombre}` })

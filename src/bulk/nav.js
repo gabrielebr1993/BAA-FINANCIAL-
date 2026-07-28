@@ -14,7 +14,7 @@ export const NAV = [
   { path: 'jobs', label: 'Trabajos (Jobs)', icon: Layers, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'clientes', label: 'Clientes y Plantas', icon: Building2, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'transportistas', label: 'Transportistas', icon: Truck, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { path: 'choferes', label: 'Choferes', icon: Contact, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { path: 'choferes', label: 'Choferes', icon: Contact, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'facturacion', label: 'Facturación', icon: FileText, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'incidencias', label: 'Incidencias', icon: AlertTriangle, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'documentos', label: 'Documentos', icon: FileWarning, roles: [R.SUPER_ADMIN, R.ADMIN] },
