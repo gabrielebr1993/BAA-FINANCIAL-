@@ -15,8 +15,10 @@ import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, 
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Combobox from '../components/Combobox'
 import Verificacion from '../components/Verificacion'
+import { useLang } from '../i18n'
 
 export default function CargarFactura() {
+  const { t } = useLang()
   const { perfil } = useAuth()
   const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadAjustes, setSelectedInvoiceId } = useData()
 
@@ -894,12 +896,12 @@ export default function CargarFactura() {
   // Motivo EXACTO por el que el botón de procesar está deshabilitado (null = todo ok).
   // Se evalúa campo por campo para poder mostrárselo al usuario (nada en silencio).
   const motivoBloqueo = (() => {
-    if (guardando) return 'Guardando…'
-    if (!semana.trim()) return 'Falta indicar la semana.'
-    if (!todasCiudadesAsignadas) return 'Falta asignar la ciudad de cada archivo.'
-    if (!fallidosProc) return 'Falta subir el Reporte de fallidos (GOFO).'
+    if (guardando) return t('Guardando…')
+    if (!semana.trim()) return t('Falta indicar la semana.')
+    if (!todasCiudadesAsignadas) return t('Falta asignar la ciudad de cada archivo.')
+    if (!fallidosProc) return t('Falta subir el Reporte de fallidos (GOFO).')
     if (modoRuta) {
-      if (codigosRuta.length === 0) return 'Modo “Por ruta”: no hay rutas configuradas en Configuración.'
+      if (codigosRuta.length === 0) return t('Modo “Por ruta”: no hay rutas configuradas en Configuración.')
       if (!todosDriversRuta) return `Modo “Por ruta”: faltan ${driversSinRuta.length} chofer(es) por asignar a una ruta.`
     } else if (choferesNuevos.length > 0 && !todosConPrecio) {
       const faltan = choferesNuevos.filter((n) => !(Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0))
@@ -921,7 +923,7 @@ export default function CargarFactura() {
 
   return (
     <div>
-      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>Cargar Factura</PageTitle>
+      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>{t('Cargar Factura')}</PageTitle>
 
       {!activeCompanyId && (
         <Aviso tipo="warn">No hay una empresa activa. Ve a <b>Empresas</b> (o pide a tu administrador que te asigne una) antes de cargar facturas.</Aviso>
@@ -947,10 +949,10 @@ export default function CargarFactura() {
           <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand-navy px-2.5 py-0.5 text-[11px] font-bold text-white">1 · Obligatorio</div>
           <Upload size={34} strokeWidth={1.5} className="mt-1 text-brand-gold" />
           <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Factura de pagos (GOFO)</div>
-          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">El Excel “Details of Delivery Fees”. Uno o varios .xlsx (uno por ciudad).</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('El Excel “Details of Delivery Fees”. Uno o varios .xlsx (uno por ciudad).')}</div>
           {procesados.length > 0 && <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {procesados.length} archivo(s) cargado(s)</div>}
           <button type="button" onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white">
-            <FolderOpen size={16} strokeWidth={1.8} /> Seleccionar factura
+            <FolderOpen size={16} strokeWidth={1.8} /> {t('Seleccionar factura')}
           </button>
           <input ref={inputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={(e) => manejarArchivos(e.target.files)} />
         </div>
@@ -967,14 +969,14 @@ export default function CargarFactura() {
           <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-bold text-white">2 · Obligatorio</div>
           <PackageX size={34} strokeWidth={1.5} className="mt-1 text-rose-500" />
           <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Reporte de fallidos (GOFO)</div>
-          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">El Excel con hoja “sheet”. Solo se usan los <b>“Failed delivery”</b> por chofer.</div>
+          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('El Excel con hoja “sheet”. Solo se usan los “Failed delivery” por chofer.')}</div>
           {procesandoFallidos ? (
-            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500"><Spinner className="text-rose-500" /> Procesando…</div>
+            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500"><Spinner className="text-rose-500" /> {t('Procesando…')}</div>
           ) : fallidosProc && (
             <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(fallidosProc.totalFailed)} “Failed delivery” · {fallidosProc.archivoNombre}</div>
           )}
           <button type="button" onClick={(e) => { e.stopPropagation(); inputFallidosRef.current?.click() }} className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white">
-            <FolderOpen size={16} strokeWidth={1.8} /> Seleccionar reporte
+            <FolderOpen size={16} strokeWidth={1.8} /> {t('Seleccionar reporte')}
           </button>
           <input ref={inputFallidosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarFallidos(e.target.files)} />
         </div>
@@ -982,7 +984,7 @@ export default function CargarFactura() {
 
       {procesando && (
         <Aviso tipo="info">
-          <span className="inline-flex items-center gap-2"><Spinner className="text-brand-gold" /> Procesando archivo(s)…</span>
+          <span className="inline-flex items-center gap-2"><Spinner className="text-brand-gold" /> {t('Procesando archivo(s)…')}</span>
         </Aviso>
       )}
       {errores.map((e, i) => <Aviso key={i} tipo="error">{e}</Aviso>)}
@@ -993,7 +995,7 @@ export default function CargarFactura() {
         <>
           {/* Ciudad por archivo: automática (detectada) con opción de cambiarla */}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ciudad de cada archivo</h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ciudad de cada archivo')}</h3>
             <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
               La ciudad se detecta <strong>automáticamente</strong> desde la factura. Si es una ciudad nueva, se <strong>crea y se guarda sola</strong> en tu configuración (Mis ciudades) al guardar la factura, con sus reglas por defecto. Puedes cambiarla si hace falta; si la cambias a mano, se marca como <strong>Manual</strong>.
             </p>
@@ -1001,9 +1003,9 @@ export default function CargarFactura() {
               <table className="w-full min-w-[560px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <th className="px-3 py-2 text-left font-semibold">Archivo</th>
-                    <th className="px-3 py-2 text-left font-semibold">Semana</th>
-                    <th className="px-3 py-2 text-left font-semibold">Ciudad detectada</th>
+                    <th className="px-3 py-2 text-left font-semibold">{t('Archivo')}</th>
+                    <th className="px-3 py-2 text-left font-semibold">{t('Semana')}</th>
+                    <th className="px-3 py-2 text-left font-semibold">{t('Ciudad detectada')}</th>
                     {modoRuta && <th className="px-3 py-2 text-left font-semibold">Ruta(s) detectada(s)</th>}
                     <th className="px-3 py-2 text-left font-semibold">Ciudad (automática) *</th>
                   </tr>
@@ -1094,7 +1096,7 @@ export default function CargarFactura() {
             <Card className="mb-4 border-2 border-rose-300/70 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <PackageX size={18} strokeWidth={1.8} className="text-rose-500" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reporte de fallidos</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Reporte de fallidos')}</h3>
                 <Badge color="red">{num(fallidosProc.totalFailed)} Failed delivery</Badge>
                 <Badge color="green">{num(fallidosAsoc.asociados)} choferes</Badge>
                 {fallidosAsoc.sinAsociar.length > 0 && <Badge color="gold">{num(fallidosAsoc.sinAsociar.length)} sin asociar</Badge>}
@@ -1165,10 +1167,10 @@ export default function CargarFactura() {
           )}
 
           <div className="mb-4 flex flex-wrap gap-3">
-            <KPI label="Paquetes" value={num(combinado.totalPaquetes)} icon={Package} accent="navy" />
+            <KPI label={t('Paquetes')} value={num(combinado.totalPaquetes)} icon={Package} accent="navy" />
             <KPI label="Individuales" value={num(combinado.totalIndividuales)} icon={Layers} accent="blue" />
             <KPI label="Dobles" value={num(combinado.totalDobles)} accent="gold" />
-            <KPI label="Ingreso total" value={money(combinado.ingresoTotal)} icon={DollarSign} accent="green" />
+            <KPI label={t('Ingreso total')} value={money(combinado.ingresoTotal)} icon={DollarSign} accent="green" />
             <KPI label="Choferes" value={num(combinado.numChoferes)} icon={Truck} accent="slate" />
             <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
             <KPI label="Claims válidos" value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} filas · ${casosRepetidos.length} repetido(s)` : `${combinado.totalClaims} filas`} />
@@ -1179,7 +1181,7 @@ export default function CargarFactura() {
             <Card className="mb-4 border-2 border-brand-gold/60 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Asigna cada chofer a su ruta</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Asigna cada chofer a su ruta')}</h3>
                 <Badge color={todosDriversRuta ? 'green' : 'gold'}>{nombresFactura.length - driversSinRuta.length}/{nombresFactura.length} asignados</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
@@ -1283,9 +1285,9 @@ export default function CargarFactura() {
                 }`}
               >
                 <Upload size={26} strokeWidth={1.5} className="text-brand-gold" />
-                <div className="text-sm text-slate-500 dark:text-slate-400"><b>Arrastra el Excel aquí</b> o haz clic para seleccionarlo</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400"><b>{t('Arrastra el Excel aquí')}</b> o haz clic para seleccionarlo</div>
                 <Boton variant="gold" onClick={(e) => { e.stopPropagation(); inputPreciosRef.current?.click() }} disabled={procesandoPrecios}>
-                  {procesandoPrecios ? <><Spinner /> Leyendo…</> : <><Upload size={16} strokeWidth={1.8} /> Cargar rates / precios desde Excel</>}
+                  {procesandoPrecios ? <><Spinner /> {t('Leyendo…')}</> : <><Upload size={16} strokeWidth={1.8} /> {t('Cargar rates / precios desde Excel')}</>}
                 </Boton>
                 <input ref={inputPreciosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarArchivoPrecios(e.target.files)} />
                 {preciosResumen && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(preciosResumen.total)} choferes en la lista · {preciosResumen.archivoNombre}</span>}
@@ -1298,7 +1300,7 @@ export default function CargarFactura() {
             <Card className="mb-4 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Unificación de nombres</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Unificación de nombres')}</h3>
                 <Badge color="green">{num(rawCouriers.length)} → {num(unif.totalReal)} choferes</Badge>
                 {unif.unidas > 0 && <Badge color="gold">{num(unif.unidas)} variantes unidas</Badge>}
                 {unif.sinAsociar.length > 0 && <Badge color="red">{num(unif.sinAsociar.length)} sin asociar</Badge>}
@@ -1319,7 +1321,7 @@ export default function CargarFactura() {
                           value={mapaManual[raw] || ''}
                           onChange={(v) => asignarManual(raw, v)}
                           options={opcionesChofer}
-                          placeholder="— Revisar / elegir —"
+                          placeholder={t('— Revisar / elegir —')}
                           searchPlaceholder="Escribe un nombre (ej. figue)…"
                         />
                       </div>
@@ -1363,7 +1365,7 @@ export default function CargarFactura() {
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <div className="relative">
                       <Users size={14} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <Input className="w-64 pl-8" value={filtroExist} onChange={(e) => setFiltroExist(e.target.value)} placeholder="Filtrar por nombre o rate (ej. 1.6)" />
+                      <Input className="w-64 pl-8" value={filtroExist} onChange={(e) => setFiltroExist(e.target.value)} placeholder={t('Filtrar por nombre o rate (ej. 1.6)')} />
                     </div>
                     {filtroExist && <Boton variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setFiltroExist('')}><X size={13} strokeWidth={2} /> Limpiar</Boton>}
                     <span className="text-xs text-slate-500 dark:text-slate-400">{reconocidosFiltrados.length} de {reconocidos.length}</span>
@@ -1371,9 +1373,9 @@ export default function CargarFactura() {
                   <div className="scroll-thin max-h-80 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                     <table className="w-full border-collapse text-sm">
                       <thead className="sticky top-0"><tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                        <th className="px-3 py-2 text-left font-semibold">Chofer</th>
-                        <th className="px-3 py-2 text-right font-semibold">Rate individual</th>
-                        <th className="px-3 py-2 text-right font-semibold">Rate doble</th>
+                        <th className="px-3 py-2 text-left font-semibold">{t('Chofer')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Rate individual')}</th>
+                        <th className="px-3 py-2 text-right font-semibold">{t('Rate doble')}</th>
                       </tr></thead>
                       <tbody>
                         {reconocidosFiltrados.map((n, i) => (
@@ -1391,7 +1393,7 @@ export default function CargarFactura() {
                   </div>
                   <div className="mt-3">
                     <Boton variant="gold" disabled={guardandoExist || Object.keys(editExist).length === 0} onClick={guardarExistentes}>
-                      {guardandoExist ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> Guardar cambios de tarifas</>}
+                      {guardandoExist ? <><Spinner /> {t('Guardando…')}</> : <><Save size={16} strokeWidth={1.8} /> {t('Guardar cambios de tarifas')}</>}
                     </Boton>
                   </div>
                 </div>
@@ -1410,7 +1412,7 @@ export default function CargarFactura() {
                 Cada chofer tiene su propia tarifa. Asigna precio individual y doble (&gt; 0) a todos antes de guardar.
               </p>
               <div className="mb-3 flex flex-wrap items-end gap-2">
-                <Input className="w-56" placeholder="Buscar por nombre o rate (ej. 1.6)…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                <Input className="w-56" placeholder={t('Buscar por nombre o rate (ej. 1.6)…')} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <div className="ml-auto flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
                   <div>
                     <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar: individual</div>
@@ -1420,16 +1422,16 @@ export default function CargarFactura() {
                     <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">doble</div>
                     <Input className="w-24" type="number" step="0.01" value={bulk.doble} onChange={(e) => setBulk((b) => ({ ...b, doble: e.target.value }))} />
                   </div>
-                  <Boton variant="ghost" onClick={aplicarBulk}>Aplicar a vacíos</Boton>
+                  <Boton variant="ghost" onClick={aplicarBulk}>{t('Aplicar a vacíos')}</Boton>
                 </div>
               </div>
               <div className="scroll-thin max-h-96 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-sm">
                   <thead className="sticky top-0">
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      <th className="px-3 py-2 text-left font-semibold">Chofer</th>
-                      <th className="px-3 py-2 text-right font-semibold">Rate individual</th>
-                      <th className="px-3 py-2 text-right font-semibold">Rate doble</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t('Chofer')}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t('Rate individual')}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t('Rate doble')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1457,14 +1459,14 @@ export default function CargarFactura() {
           )}
 
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Resumen por ciudad</h3>
+            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Resumen por ciudad')}</h3>
             <Tabla
               columns={[
                 { key: 'nombreCiudad', label: 'Ciudad' },
-                { key: 'paquetes', label: 'Paquetes', align: 'right' },
+                { key: 'paquetes', label: t('Paquetes'), align: 'right' },
                 { key: 'individuales', label: 'Ind.', align: 'right' },
                 { key: 'dobles', label: 'Dobles', align: 'right' },
-                { key: 'ingreso', label: 'Ingreso (bruto)', align: 'right' },
+                { key: 'ingreso', label: t('Ingreso (bruto)'), align: 'right' },
                 { key: 'numChoferes', label: 'Choferes', align: 'right' },
                 { key: 'numRutas', label: 'Rutas', align: 'right' },
                 { key: 'numClaims', label: 'Claims', align: 'right' },
@@ -1500,16 +1502,16 @@ export default function CargarFactura() {
                   </span>
                 )}
                 <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" title={motivoBloqueo || 'Procesar factura'}>
-                  {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? 'Guardar tarifas y procesar' : 'Guardar en base de datos'}</>}
+                  {guardando ? <><Spinner /> {t('Guardando…')}</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? t('Guardar tarifas y procesar') : t('Guardar en base de datos')}</>}
                 </Boton>
-                <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">Descartar</Boton>
+                <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">{t('Descartar')}</Boton>
               </div>
             </div>
           </Card>
         </>
       )}
 
-      <p className="mt-4 text-xs text-slate-400">El historial de facturas y su eliminación están en la sección <b>Facturas</b>.</p>
+      <p className="mt-4 text-xs text-slate-400">{t('El historial de facturas y su eliminación están en la sección')} <b>{t('Facturas')}</b>.</p>
     </div>
   )
 }
