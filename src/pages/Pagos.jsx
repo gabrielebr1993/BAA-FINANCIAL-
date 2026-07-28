@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
+import { useLang } from '../i18n'
 import { calcularPagos, porCiudad, claimsDeCiudad, feeDeClaim, buscarDriver, TODAS } from '../utils/calc'
 import { perdonarClaim, quitarPerdon } from '../utils/claims'
 import { registrarAuditoria } from '../utils/auditoria'
@@ -18,6 +19,7 @@ import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, Est
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
 export default function Pagos() {
+  const { t } = useLang()
   const { perfil, esSuperAdmin, ciudadBloqueada, ciudadesUsuario } = useAuth()
   const ciudadesUsuarioKey = (ciudadesUsuario || []).join('|')
   const { facturaRango: selectedInvoice, invoicesRango, numSemanas, claims, drivers, managers, reloadManagers, selectedCity, selectedCities, activeCompanyId, reloadClaims, reloadInvoices, ajustesPorChofer, cargando, ajustes, empresaActiva } = useData()
@@ -312,20 +314,20 @@ export default function Pagos() {
 
   return (
     <div>
-      <PageTitle>Pagos a Choferes</PageTitle>
+      <PageTitle>{t('Pagos a Choferes')}</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando pagos…" />
+        <Cargando texto={t('Cargando pagos…')} />
       ) : (
         <>
           <div className="mb-2 flex flex-wrap gap-3">
-            {verIngreso && <KPI label={lIngreso('Ingreso total')} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label="Total a pagar" value={money(totPagarPos + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagarPos)} + fijos ${money(totGastosFijos)}` : (subAjustes || 'lo que sale del banco (saldos positivos)')} />
-            {totPorCobrar > 0 && <KPI label="Por cobrar a choferes" value={money(totPorCobrar)} icon={Wallet} accent="red" sub="saldos negativos: te deben (no se pagan por ACH)" />}
-            {totGastosFijos > 0 && <KPI label="Gastos fijos" value={money(totGastosFijos)} icon={Landmark} accent="slate" sub="managers / renta / etc." />}
-            {(totPrestamo > 0 || totBono > 0) && <KPI label="Ajustes (préstamo / bono)" value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
-            {verGanancia && <KPI label={lGanancia('Ganancia real')} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
-            <KPI label="Pendientes / Pagados" value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
+            {verIngreso && <KPI label={lIngreso(t('Ingreso total'))} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
+            <KPI label={t('Total a pagar')} value={money(totPagarPos + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagarPos)} + fijos ${money(totGastosFijos)}` : (subAjustes || t('lo que sale del banco (saldos positivos)'))} />
+            {totPorCobrar > 0 && <KPI label={t('Por cobrar a choferes')} value={money(totPorCobrar)} icon={Wallet} accent="red" sub={t('saldos negativos: te deben (no se pagan por ACH)')} />}
+            {totGastosFijos > 0 && <KPI label={t('Gastos fijos')} value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={t('managers / renta / etc.')} />}
+            {(totPrestamo > 0 || totBono > 0) && <KPI label={t('Ajustes (préstamo / bono)')} value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
+            {verGanancia && <KPI label={lGanancia(t('Ganancia real'))} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
+            <KPI label={t('Pendientes / Pagados')} value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
           </div>
           {verGanancia ? (
             <p className="mb-5 text-xs text-slate-400">
@@ -336,7 +338,7 @@ export default function Pagos() {
           )}
 
           {!selectedInvoice ? (
-            <EstadoVacio texto="Cuando cargues una factura verás aquí el pago calculado de cada chofer." />
+            <EstadoVacio texto={t('Cuando cargues una factura verás aquí el pago calculado de cada chofer.')} />
           ) : (
             <>
               {esRango && (
@@ -348,18 +350,18 @@ export default function Pagos() {
               <Card className="mb-4 p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
-                    <option value="">Ver todos</option>
-                    <option value="pendiente">Solo pendientes</option>
-                    <option value="pagado">Solo pagados</option>
+                    <option value="">{t('Ver todos')}</option>
+                    <option value="pendiente">{t('Solo pendientes')}</option>
+                    <option value="pagado">{t('Solo pagados')}</option>
                   </Select>
                   <div className="flex items-center gap-1">
-                    <Input className="w-56" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o rate (ej. 1.6)…" />
+                    <Input className="w-56" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder={t('Buscar por nombre o rate (ej. 1.6)…')} />
                     {busqueda && <Boton variant="ghost" className="px-2 py-1 text-xs" onClick={() => setBusqueda('')}><X size={13} strokeWidth={2} /></Boton>}
                   </div>
                   {verIngreso && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label="Ingreso Gofo" />
-                      {verGanancia && <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label="Ganancia" />}
+                      <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label={t('Ingreso Gofo')} />
+                      {verGanancia && <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label={t('Ganancia')} />}
                     </div>
                   )}
                   <div className="ml-auto flex gap-2">
@@ -374,11 +376,11 @@ export default function Pagos() {
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {[
-                        'Chofer', ...(esRuta ? ['Ruta'] : []), 'Ind.', 'Dobles', 'Claims (act/tot)',
-                        ...(verIngreso ? [lIngreso('Ingreso Gofo')] : []),
-                        'T.Ind', 'T.Doble', 'Desc. Claims', 'Total a Pagar',
-                        ...(verGanancia ? [lGanancia('Ganancia')] : []),
-                        'Estado', '',
+                        t('Chofer'), ...(esRuta ? [t('Ruta')] : []), t('Ind.'), t('Dobles'), t('Claims (act/tot)'),
+                        ...(verIngreso ? [lIngreso(t('Ingreso Gofo'))] : []),
+                        t('T.Ind'), t('T.Doble'), t('Desc. Claims'), t('Total a Pagar'),
+                        ...(verGanancia ? [lGanancia(t('Ganancia'))] : []),
+                        t('Estado'), '',
                       ].map((h, i) => (
                         <th key={i} className="px-2.5 py-2.5 text-left font-semibold whitespace-nowrap">{h}</th>
                       ))}
@@ -386,7 +388,7 @@ export default function Pagos() {
                   </thead>
                   <tbody>
                     {filtrados.length === 0 && (
-                      <tr><td colSpan={10 + (esRuta ? 1 : 0) + (verIngreso ? 1 : 0) + (verGanancia ? 1 : 0)} className="px-4 py-6 text-center text-slate-400">Sin choferes con este filtro.</td></tr>
+                      <tr><td colSpan={10 + (esRuta ? 1 : 0) + (verIngreso ? 1 : 0) + (verGanancia ? 1 : 0)} className="px-4 py-6 text-center text-slate-400">{t('Sin choferes con este filtro.')}</td></tr>
                     )}
                     {filtrados.map((p) => (
                       <FilaChofer
@@ -445,17 +447,17 @@ export default function Pagos() {
                 <Card className="mt-4 p-4">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Landmark size={18} strokeWidth={1.8} className="text-brand-gold" />
-                    <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Gastos fijos del periodo</h3>
+                    <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Gastos fijos del periodo')}</h3>
                     <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Total: <b className="text-brand-navy dark:text-slate-100">{money(totGastosFijos)}</b></span>
                   </div>
                   <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                     <table className="w-full min-w-[480px] border-collapse text-sm">
                       <thead>
                         <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          <th className="px-3 py-2 text-left font-semibold">Gasto fijo</th>
-                          <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
-                          <th className="px-3 py-2 text-right font-semibold">Monto ({semanas} sem.)</th>
-                          <th className="px-3 py-2 text-center font-semibold">Estado</th>
+                          <th className="px-3 py-2 text-left font-semibold">{t('Gasto fijo')}</th>
+                          <th className="px-3 py-2 text-left font-semibold">{t('Ciudad')}</th>
+                          <th className="px-3 py-2 text-right font-semibold">{t('Monto')} ({semanas} sem.)</th>
+                          <th className="px-3 py-2 text-center font-semibold">{t('Estado')}</th>
                           <th className="px-3 py-2 text-right font-semibold"></th>
                         </tr>
                       </thead>
@@ -465,18 +467,18 @@ export default function Pagos() {
                             <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">{g.nombre}</td>
                             <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{nombreCiudad(g.ciudad)}</td>
                             <td className="px-3 py-2 text-right font-bold">{money(g.monto)}</td>
-                            <td className="px-3 py-2 text-center">{g.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
+                            <td className="px-3 py-2 text-center">{g.estado === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>}</td>
                             <td className="px-3 py-2 text-right">
                               {esRango ? <span className="text-xs text-slate-400">—</span> : g.estado === 'pagado'
-                                ? <Boton variant="ghost" onClick={() => marcarGasto(g, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
-                                : <Boton variant="success" onClick={() => marcarGasto(g, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>}
+                                ? <Boton variant="ghost" onClick={() => marcarGasto(g, 'pendiente')} className="px-2 py-1 text-xs">{t('Marcar pendiente')}</Boton>
+                                : <Boton variant="success" onClick={() => marcarGasto(g, 'pagado')} className="px-2 py-1 text-xs">{t('Marcar pagado')}</Boton>}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="bg-slate-100 font-bold dark:bg-slate-800">
-                          <td className="px-3 py-2.5" colSpan={2}>TOTAL gastos fijos</td>
+                          <td className="px-3 py-2.5" colSpan={2}>{t('TOTAL gastos fijos')}</td>
                           <td className="px-3 py-2.5 text-right text-brand-gold">{money(totGastosFijos)}</td>
                           <td colSpan={2}></td>
                         </tr>
@@ -498,11 +500,12 @@ export default function Pagos() {
 
 // Botón-ojito para ocultar/mostrar un dato sensible en pantalla.
 function OjoToggle({ activo, onClick, label }) {
+  const { t } = useLang()
   return (
     <button
       type="button"
       onClick={onClick}
-      title={activo ? `Ocultar ${label}` : `Mostrar ${label}`}
+      title={activo ? `${t('Ocultar')} ${label}` : `${t('Mostrar')} ${label}`}
       className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
         activo
           ? 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -515,6 +518,7 @@ function OjoToggle({ activo, onClick, label }) {
 }
 
 function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verIngreso, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
+  const { t } = useLang()
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
   return (
@@ -524,7 +528,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
           <button onClick={onToggle} className="font-semibold text-brand-navy dark:text-slate-100">
             {abierto ? '▾' : '▸'} {p.nombre}
           </button>{' '}
-          {p.sinTarifa && <Badge color="red">sin tarifa</Badge>}
+          {p.sinTarifa && <Badge color="red">{t('sin tarifa')}</Badge>}
         </td>
         {esRuta && <td className={TD}>{p.ruta ? <Badge color="gold">{p.ruta}</Badge> : '—'}</td>}
         <td className={TD}>{num(p.individuales)}</td>
@@ -544,14 +548,14 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
           )}
         </td>
         {verGanancia && <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>}
-        <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
+        <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>}</td>
         <td className={TD}>
           <div className="flex items-center justify-end gap-1.5">
             {!puedeMarcar ? (
               <span className="text-xs text-slate-400">—</span>
             ) : p.estado === 'pagado' ? (
               <>
-                <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">Marcar pendiente</Boton>
+                <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">{t('Marcar pendiente')}</Boton>
                 {avisoPago && (
                   <span className="inline-flex items-center gap-0.5" title={`Avisar a ${p.nombre} que se le transfirió ${money(p.totalPagar)}`}>
                     <a href={avisoPago.sms} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title="Avisar por SMS"><MessageSquare size={13} strokeWidth={1.9} /></a>
@@ -561,7 +565,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
                 )}
               </>
             ) : (
-              <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">Marcar pagado</Boton>
+              <Boton variant="success" onClick={() => onMarcar(p, 'pagado')} className="px-2 py-1 text-xs">{t('Marcar pagado')}</Boton>
             )}
             {puedePagar && (
               <Boton
@@ -571,7 +575,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
                 className="px-2 py-1 text-xs"
                 title={verificado ? 'Pagar por Stripe (modo TEST)' : 'El chofer aún no tiene su banco verificado en Stripe'}
               >
-                {pagandoStripe ? <Spinner /> : <CreditCard size={13} strokeWidth={1.9} />} {verificado ? 'Pagar (Stripe)' : 'Sin banco'}
+                {pagandoStripe ? <Spinner /> : <CreditCard size={13} strokeWidth={1.9} />} {verificado ? t('Pagar (Stripe)') : t('Sin banco')}
               </Boton>
             )}
           </div>
@@ -583,18 +587,18 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
             {/* Ajustes: préstamo (se descuenta) y bono (se suma) */}
             {puedeEditarAjuste && (
               <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
-                <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-slate-100">Ajustes de pago de {p.nombre}</div>
+                <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-slate-100">{t('Ajustes de pago de')} {p.nombre}</div>
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Préstamo / descuento ($)</div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Préstamo / descuento ($)')}</div>
                     <Input type="number" step="0.01" min="0" className="w-32" value={editAjuste?.prestamo ?? (p.prestamo || '')} onChange={(e) => setEditAjuste('prestamo', e.target.value)} placeholder="0" />
                   </div>
                   <div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Bono ($)</div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Bono ($)')}</div>
                     <Input type="number" step="0.01" min="0" className="w-32" value={editAjuste?.bono ?? (p.bono || '')} onChange={(e) => setEditAjuste('bono', e.target.value)} placeholder="0" />
                   </div>
                   <Boton variant="gold" disabled={guardandoAjuste} onClick={onGuardarAjuste} className="px-3 py-2 text-sm">
-                    {guardandoAjuste ? <Spinner /> : 'Guardar ajuste'}
+                    {guardandoAjuste ? <Spinner /> : t('Guardar ajuste')}
                   </Boton>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
                     Se resta el préstamo y se suma el bono al <b>Total a Pagar</b>. Se refleja en el dashboard, finanzas y el perfil del chofer.
@@ -602,9 +606,9 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
                 </div>
               </div>
             )}
-            <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Claims de {p.nombre} ({claimsChofer.length})</div>
+            <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('Claims de')} {p.nombre} ({claimsChofer.length})</div>
             {claimsChofer.length === 0 ? (
-              <div className="text-sm text-slate-400">Sin claims.</div>
+              <div className="text-sm text-slate-400">{t('Sin claims.')}</div>
             ) : (
               <table className="w-full border-collapse text-[13px]">
                 <tbody>
@@ -615,19 +619,19 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
                       <td className="px-2 py-1.5">{c.claimType}</td>
                       <td className="px-2 py-1.5">{money(c.montoGofo)}</td>
                       <td className="px-2 py-1.5">
-                        {c.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo (−{money(feeDeClaim(invoice, c.ciudad, c))})</Badge>}
+                        {c.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')} (−{money(feeDeClaim(invoice, c.ciudad, c))})</Badge>}
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         {perdonandoId === c.id ? (
                           <span className="inline-flex gap-1.5">
-                            <Input autoFocus className="w-32" placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+                            <Input autoFocus className="w-32" placeholder={t('Motivo…')} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
                             <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(c)} className="px-2 py-1 text-xs">OK</Boton>
                             <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2 py-1 text-xs"><X size={13} strokeWidth={2.2} /></Boton>
                           </span>
                         ) : c.perdonado ? (
-                          <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(c)} className="px-2 py-1 text-xs">Quitar perdón</Boton>
+                          <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(c)} className="px-2 py-1 text-xs">{t('Quitar perdón')}</Boton>
                         ) : (
-                          <Boton variant="ghost" onClick={() => { setPerdonandoId(c.id); setMotivo('') }} className="px-2 py-1 text-xs">Perdonar</Boton>
+                          <Boton variant="ghost" onClick={() => { setPerdonandoId(c.id); setMotivo('') }} className="px-2 py-1 text-xs">{t('Perdonar')}</Boton>
                         )}
                       </td>
                     </tr>

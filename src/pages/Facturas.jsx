@@ -4,6 +4,7 @@ import { Trash2, AlertTriangle, Scale } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
+import { useLang } from '../i18n'
 import { nombreCiudadDe, TODAS } from '../utils/calc'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { eliminarFacturaCascada } from '../utils/borrado'
@@ -12,6 +13,7 @@ import { money } from '../utils/format'
 import { Card, PageTitle, Boton, Tabla, Aviso, Spinner } from '../components/ui'
 
 export default function Facturas() {
+  const { t } = useLang()
   // `invoices` ya viene filtrado por ciudad para el rol admin (desde DataContext).
   const { invoices, invoicesRango, selectedCity, selectedCities, ciudadesEmpresa, selectedInvoiceId, activeCompanyId, reloadInvoices, reloadClaims, setSelectedInvoiceId } = useData()
   const { perfil, esSuperAdmin } = useAuth()
@@ -148,7 +150,7 @@ export default function Facturas() {
 
   return (
     <div>
-      <PageTitle>Facturas</PageTitle>
+      <PageTitle>{t('Facturas')}</PageTitle>
       {error && <Aviso tipo="error">{error}</Aviso>}
       {reproMsg && <Aviso tipo={reproMsg.tipo}>{reproMsg.txt}</Aviso>}
       <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple onChange={onArchivos} className="hidden" />
@@ -171,22 +173,22 @@ export default function Facturas() {
 
       <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Facturas cargadas ({listaMostrada.length})</h3>
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas cargadas')} ({listaMostrada.length})</h3>
           {filtrando && (
             <span className="text-xs text-slate-400">de {invoices.length} en total · según el filtro de arriba. Pon “Todo” y “Todas las ciudades” para verlas todas.</span>
           )}
         </div>
         <Tabla
           columns={[
-            { key: 'semana', label: 'Semana' },
-            { key: 'ciudades', label: 'Ciudad(es)' },
-            { key: 'fechaCarga', label: 'Cargada' },
-            { key: 'archivoNombre', label: 'Archivo', wrap: true },
-            { key: 'ingresoTotal', label: 'Total', align: 'right' },
+            { key: 'semana', label: t('Semana') },
+            { key: 'ciudades', label: t('Ciudad(es)') },
+            { key: 'fechaCarga', label: t('Cargada') },
+            { key: 'archivoNombre', label: t('Archivo'), wrap: true },
+            { key: 'ingresoTotal', label: t('Total'), align: 'right' },
             { key: 'acciones', label: '', align: 'right' },
           ]}
           rows={listaMostrada.map((inv) => ({ ...inv, _key: inv.id }))}
-          emptyText="No hay facturas cargadas. Ve a Cargar Factura para subir la primera."
+          emptyText={t('No hay facturas cargadas. Ve a Cargar Factura para subir la primera.')}
           renderCell={(row, key) => {
             if (key === 'ingresoTotal') return money(row.ingresoTotal)
             if (key === 'fechaCarga') return fmtFecha(row.fechaCarga)
@@ -197,10 +199,10 @@ export default function Facturas() {
                 <div className="flex justify-end gap-1.5">
                   {!((row.simuladorDesglose || row.resumenRutaPeso || []).length) && (
                     <Boton variant="ghost" onClick={() => pedirArchivo(row)} disabled={reproId === row.id} className="px-2.5 py-1 text-xs" title="Re-subir el Excel de esta factura para extraerle los precios por peso (no cambia totales ni pagos)">
-                      {reproId === row.id ? <Spinner /> : <><Scale size={13} strokeWidth={1.8} /> Extraer peso</>}
+                      {reproId === row.id ? <Spinner /> : <><Scale size={13} strokeWidth={1.8} /> {t('Extraer peso')}</>}
                     </Boton>
                   )}
-                  <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs"><Trash2 size={14} strokeWidth={1.8} /> Eliminar</Boton>
+                  <Boton variant="danger" onClick={() => setPorEliminar(row)} className="px-3 py-1 text-xs"><Trash2 size={14} strokeWidth={1.8} /> {t('Eliminar')}</Boton>
                 </div>
               )
             return row[key]
@@ -211,7 +213,7 @@ export default function Facturas() {
       {porEliminar && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
           <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="m-0 mb-2 text-lg font-bold text-brand-navy dark:text-slate-100">Eliminar factura</h3>
+            <h3 className="m-0 mb-2 text-lg font-bold text-brand-navy dark:text-slate-100">{t('Eliminar factura')}</h3>
             <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
               ¿Seguro que quieres eliminar la factura de <b>{porEliminar.ciudadNombre || (porEliminar.resumenCiudades || []).map((c) => nombreCiudadDe(porEliminar, c.ubicacion)).join(', ')}</b> — <b>{porEliminar.semana}</b>?
               Se borrarán también sus <b>claims</b> y <b>pagos</b> asociados. Esta acción no se puede deshacer.
@@ -228,8 +230,8 @@ export default function Facturas() {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
-              <Boton variant="danger" onClick={eliminar} disabled={eliminando}>{eliminando ? <><Spinner /> Eliminando…</> : 'Sí, eliminar'}</Boton>
+              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>{t('Cancelar')}</Boton>
+              <Boton variant="danger" onClick={eliminar} disabled={eliminando}>{eliminando ? <><Spinner /> {t('Eliminando…')}</> : t('Sí, eliminar')}</Boton>
             </div>
           </Card>
         </div>
