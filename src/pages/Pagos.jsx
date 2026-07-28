@@ -12,7 +12,7 @@ import { stripePagar } from '../utils/stripe'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { PLANTILLA_PAGO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } from '../utils/mensajes'
-import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet, Landmark } from 'lucide-react'
+import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet, Landmark, ShieldCheck } from 'lucide-react'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
 
@@ -77,6 +77,10 @@ export default function Pagos() {
   const invActual = invoicesRango.length === 1 ? invoicesRango[0] : null
   const [editAjuste, setEditAjuste] = useState({}) // nombre -> { prestamo, bono }
   const [guardandoAjuste, setGuardandoAjuste] = useState(null)
+  // Seguro repartido: un monto total que se divide en partes iguales entre TODOS los
+  // choferes de la factura y se descuenta del pago de cada uno. Se guarda en la factura.
+  const [editSeguro, setEditSeguro] = useState('')
+  const [guardandoSeguro, setGuardandoSeguro] = useState(false)
   const driverKey = (n) => (n || '').trim().toLowerCase()
   const guardarAjuste = async (nombre) => {
     if (!invActual) return
@@ -100,13 +104,34 @@ export default function Pagos() {
     } finally { setGuardandoAjuste(null) }
   }
 
+  // Al cambiar de factura, precargo el monto del seguro guardado en ella.
+  useEffect(() => {
+    setEditSeguro(invActual?.seguroTotal ? String(invActual.seguroTotal) : '')
+  }, [invActual?.id, invActual?.seguroTotal])
+
+  const guardarSeguro = async () => {
+    if (!invActual) return
+    setGuardandoSeguro(true)
+    try {
+      const val = Math.max(0, Number(editSeguro) || 0)
+      await updateDoc(doc(db, 'invoices', invActual.id), { seguroTotal: val })
+      await reloadInvoices()
+      logAudit({ accion: 'seguro_guardado', entidad: 'Seguro', detalle: `Seguro repartido: ${money(val)}`, monto: val })
+    } finally { setGuardandoSeguro(false) }
+  }
+
   const pagos = useMemo(() => calcularPagos(selectedInvoice, claims, drivers, selectedCity, ajustesPorChofer), [selectedInvoice, claims, drivers, selectedCity, ajustesPorChofer])
   // Modo POR RUTA: mostramos la ruta de cada chofer (de la factura, o su ruta guardada).
   const esRuta = selectedInvoice?.modoConfig === 'ruta'
   const rutaDe = (nombre) => selectedInvoice?.asignacionRuta?.[nombre] || buscarDriver(drivers, nombre)?.rutaDefault || '—'
+  // Seguro guardado en la factura, repartido en partes iguales entre TODOS los choferes
+  // de la factura. Cada chofer absorbe su parte (se le descuenta del pago).
+  const seguroTotal = Math.max(0, Number(invActual?.seguroTotal) || 0)
+  const nCho = pagos.length
+  const seguroPorChofer = nCho > 0 ? seguroTotal / nCho : 0
   // Ordenado ALFABÉTICO por nombre de chofer (aplica a la tabla y a los exports PDF/Excel).
   const pagosConEstado = pagos
-    .map((p) => ({ ...p, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
+    .map((p) => ({ ...p, seguro: seguroPorChofer, totalPagar: p.totalPagar - seguroPorChofer, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
     .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   const filtrados = pagosConEstado.filter((p) => {
     if (fEstado === 'pendiente' && p.estado !== 'pendiente') return false
@@ -129,6 +154,7 @@ export default function Pagos() {
   // pagan por ACH, se muestran aparte como "Por cobrar a choferes".
   const totPagarPos = filtrados.filter((p) => p.totalPagar > 0).reduce((a, p) => a + p.totalPagar, 0)
   const totPorCobrar = filtrados.filter((p) => p.totalPagar < 0).reduce((a, p) => a + Math.abs(p.totalPagar), 0)
+  const totSeguro = filtrados.reduce((a, p) => a + (p.seguro || 0), 0)
   const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
   const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
   const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
@@ -258,6 +284,7 @@ export default function Pagos() {
       { h: 'Tarifa Ind', v: (p) => p.tarifaInd },
       { h: 'Tarifa Doble', v: (p) => p.tarifaDoble },
       { h: 'Descuento Claims', v: (p) => p.descuentoClaims },
+      ...(totSeguro > 0 ? [{ h: 'Seguro', v: (p) => p.seguro || '' }] : []),
       { h: 'Total a Pagar', v: (p) => p.totalPagar },
       ...(!verGanancia || ocultarGanancia ? [] : [{ h: 'Ganancia', v: (p) => p.ganancia }]),
       { h: 'Estado', v: (p) => p.estado },
@@ -272,7 +299,8 @@ export default function Pagos() {
       cols.map(() => ''),
       filaResumen('TOTAL choferes (positivos)', money(totPagarPos)),
       filaResumen('TOTAL gastos fijos (managers)', money(totGastosFijos)),
-      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos)),
+      ...(totSeguro > 0 ? [filaResumen('Seguro repartido (póliza)', money(totSeguro))] : []),
+      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos + totSeguro)),
       ...(totPorCobrar > 0 ? [filaResumen('Por cobrar a choferes (saldos negativos)', money(totPorCobrar))] : []),
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
@@ -300,7 +328,8 @@ export default function Pagos() {
     body.push(
       filaResumen('TOTAL choferes (positivos)', money(totPagarPos)),
       filaResumen('TOTAL gastos fijos (managers)', money(totGastosFijos)),
-      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos)),
+      ...(totSeguro > 0 ? [filaResumen('Seguro repartido (póliza)', money(totSeguro))] : []),
+      filaResumen('TOTAL que sale del banco', money(totPagarPos + totGastosFijos + totSeguro)),
     )
     if (totPorCobrar > 0) body.push(filaResumen('Por cobrar a choferes (saldos negativos)', money(totPorCobrar)))
     exportarPDF(`pagos_${selectedInvoice?.semana || 'factura'}`, 'Pagos a Choferes', selectedInvoice?.semana || '', [
@@ -322,9 +351,10 @@ export default function Pagos() {
         <>
           <div className="mb-2 flex flex-wrap gap-3">
             {verIngreso && <KPI label={lIngreso(t('Ingreso total'))} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label={t('Total a pagar')} value={money(totPagarPos + totGastosFijos)} icon={Receipt} accent="navy" sub={totGastosFijos > 0 ? `choferes ${money(totPagarPos)} + fijos ${money(totGastosFijos)}` : (subAjustes || t('lo que sale del banco (saldos positivos)'))} />
+            <KPI label={t('Total a pagar')} value={money(totPagarPos + totGastosFijos + totSeguro)} icon={Receipt} accent="navy" sub={(totGastosFijos > 0 || totSeguro > 0) ? [`choferes ${money(totPagarPos)}`, totGastosFijos > 0 ? `fijos ${money(totGastosFijos)}` : '', totSeguro > 0 ? `seguro ${money(totSeguro)}` : ''].filter(Boolean).join(' + ') : (subAjustes || t('lo que sale del banco (saldos positivos)'))} />
             {totPorCobrar > 0 && <KPI label={t('Por cobrar a choferes')} value={money(totPorCobrar)} icon={Wallet} accent="red" sub={t('saldos negativos: te deben (no se pagan por ACH)')} />}
             {totGastosFijos > 0 && <KPI label={t('Gastos fijos')} value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={t('managers / renta / etc.')} />}
+            {totSeguro > 0 && <KPI label={t('Seguro')} value={money(totSeguro)} icon={ShieldCheck} accent="slate" sub={`${money(seguroPorChofer)} ${t('c/u')} × ${num(nCho)}`} />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label={t('Ajustes (préstamo / bono)')} value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia(t('Ganancia real'))} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
             <KPI label={t('Pendientes / Pagados')} value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
@@ -370,6 +400,28 @@ export default function Pagos() {
                   </div>
                 </div>
               </Card>
+
+              {/* SEGURO: monto total repartido en partes iguales entre todos los choferes. */}
+              {puedePagar && !esRango && (
+                <Card className="mb-4 p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <ShieldCheck size={16} strokeWidth={1.9} className="text-brand-gold" />
+                    <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Seguro (repartido entre choferes)')}</h3>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Monto total del seguro ($)')}</div>
+                      <Input type="number" step="0.01" min="0" className="w-40" value={editSeguro} onChange={(e) => setEditSeguro(e.target.value)} placeholder="0" />
+                    </div>
+                    <Boton variant="gold" disabled={guardandoSeguro} onClick={guardarSeguro} className="px-3 py-2 text-sm">{guardandoSeguro ? <Spinner /> : t('Guardar seguro')}</Boton>
+                    <span className="max-w-md text-xs text-slate-500 dark:text-slate-400">
+                      {seguroTotal > 0 && nCho > 0
+                        ? <>{money(seguroTotal)} ÷ {num(nCho)} {t('choferes')} = <b className="text-brand-navy dark:text-slate-100">{money(seguroPorChofer)}</b> {t('c/u')}. {t('Se descuenta del pago de cada chofer.')}</>
+                        : t('Escribe un monto: se reparte en partes iguales entre todos los choferes y se descuenta del pago de cada uno.')}
+                    </span>
+                  </div>
+                </Card>
+              )}
 
               <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full min-w-[980px] border-collapse text-[13.5px]">
@@ -540,8 +592,9 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
         <td className={`${TD} text-rose-600 dark:text-rose-400`}>{money(p.descuentoClaims)}</td>
         <td className={`${TD} font-bold`}>
           {money(p.totalPagar)}
-          {(p.prestamo > 0 || p.bono > 0) && (
+          {(p.prestamo > 0 || p.bono > 0 || p.seguro > 0) && (
             <div className="text-[10px] font-medium">
+              {p.seguro > 0 && <span className="text-rose-500">−{money(p.seguro)} {t('seguro')} </span>}
               {p.prestamo > 0 && <span className="text-rose-500">−{money(p.prestamo)} préstamo </span>}
               {p.bono > 0 && <span className="text-emerald-500">+{money(p.bono)} bono</span>}
             </div>

@@ -1852,6 +1852,15 @@ const EN = {
   "en": "in",
   "¿Eliminar documento?": "Delete document?",
 
+  // — Pagos · Seguro repartido —
+  "Seguro (repartido entre choferes)": "Insurance (split among drivers)",
+  "Monto total del seguro ($)": "Total insurance amount ($)",
+  "Guardar seguro": "Save insurance",
+  "c/u": "each",
+  "seguro": "insurance",
+  "Se descuenta del pago de cada chofer.": "It is deducted from each driver’s pay.",
+  "Escribe un monto: se reparte en partes iguales entre todos los choferes y se descuenta del pago de cada uno.": "Enter an amount: it is split equally among all drivers and deducted from each one’s pay.",
+
 }
 
 const Ctx = createContext(null)
