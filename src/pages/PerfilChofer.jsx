@@ -14,6 +14,7 @@ import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso, Boton
 import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
 import FotoPerfil from '../components/FotoPerfil'
+import { useLang } from '../i18n'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -31,6 +32,7 @@ function Pill({ icon: Icon, label, value }) {
 export default function PerfilChofer() {
   const { nombre } = useParams()
   const navigate = useNavigate()
+  const { t } = useLang()
   const decoded = decodeURIComponent(nombre || '')
   const { facturaRango: inv, invoicesRango, claims, drivers, selectedCity, activeCompanyId, empresaActiva, reloadDrivers, cargando, ajustes, ajustesPorChofer } = useData()
   const modoRuta = (inv?.modoConfig || ajustes?.modoConfig) === 'ruta'
@@ -148,15 +150,15 @@ export default function PerfilChofer() {
     <div>
       <PageTitle>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
-          <ArrowLeft size={16} strokeWidth={2} /> Volver
+          <ArrowLeft size={16} strokeWidth={2} /> {t('Volver')}
         </button>
-        Perfil del chofer
+        {t('Perfil del chofer')}
       </PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando perfil…" />
+        <Cargando texto={t('Cargando perfil…')} />
       ) : !pago && !driver ? (
-        <EstadoVacio titulo={decoded} texto="Este chofer no tiene datos en el rango de fechas / ciudad seleccionados, y no está guardado como chofer. Cámbialo en el filtro o créalo en Choferes." />
+        <EstadoVacio titulo={decoded} texto={t('Este chofer no tiene datos en el rango de fechas / ciudad seleccionados, y no está guardado como chofer. Cámbialo en el filtro o créalo en Choferes.')} />
       ) : (
         <>
           {/* Cabecera (hero) */}
@@ -197,18 +199,18 @@ export default function PerfilChofer() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>
                     {driver ? (
-                      driver.activo === false ? <Badge color="slate">Inactivo</Badge> : <Badge color="green">Activo</Badge>
-                    ) : <Badge color="red">Sin tarifa</Badge>}
+                      driver.activo === false ? <Badge color="slate">{t('Inactivo')}</Badge> : <Badge color="green">{t('Activo')}</Badge>
+                    ) : <Badge color="red">{t('Sin tarifa')}</Badge>}
                   </div>
                 </div>
               </div>
               {/* Datos rápidos en pills */}
               <div className="mt-4 flex flex-wrap gap-2">
-                <Pill icon={MapPin} label="Ciudad" value={ciudades.join(', ') || '—'} />
-                <Pill icon={Settings2} label="Modo de pago" value={modoRuta ? 'Por ruta' : 'Estándar (por ciudad)'} />
-                {modoRuta && <Pill icon={Route} label="Ruta" value={inv?.asignacionRuta?.[decoded] || driver?.rutaDefault || '—'} />}
-                <Pill label="Tarifa individual" value={money(tarInd)} />
-                <Pill label="Tarifa doble" value={money(tarDob)} />
+                <Pill icon={MapPin} label={t('Ciudad')} value={ciudades.join(', ') || '—'} />
+                <Pill icon={Settings2} label={t('Modo de pago')} value={modoRuta ? t('Por ruta') : t('Estándar (por ciudad)')} />
+                {modoRuta && <Pill icon={Route} label={t('Ruta')} value={inv?.asignacionRuta?.[decoded] || driver?.rutaDefault || '—'} />}
+                <Pill label={t('Tarifa individual')} value={money(tarInd)} />
+                <Pill label={t('Tarifa doble')} value={money(tarDob)} />
               </div>
             </div>
           </Card>
@@ -216,23 +218,23 @@ export default function PerfilChofer() {
           {/* Sin actividad en el rango: igual se puede verificar/registrar el pago. */}
           {!pago && (
             <div className="mb-4">
-              <Aviso tipo="info">Este chofer no tiene actividad en el rango de fechas / ciudad seleccionados. Aún así puedes completar su <b>verificación y registro de pago</b> aquí abajo.</Aviso>
+              <Aviso tipo="info">{t('Este chofer no tiene actividad en el rango de fechas / ciudad seleccionados. Aún así puedes completar su ')}<b>{t('verificación y registro de pago')}</b>{t(' aquí abajo.')}</Aviso>
             </div>
           )}
 
           {/* Métricas del periodo */}
           {pago && (
             <div className="mb-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Resumen del periodo</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Resumen del periodo')}</h3>
               <div className="flex flex-wrap gap-3">
-              <KPI label="Entregas" value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ind · ${num(pago.dobles)} dob`} />
-              <KPI label="Ingreso generado" value={money(pago.ingreso)} icon={DollarSign} accent="green" />
-              <KPI label="Se le pagó" value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={[pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} claims` : '', pago.prestamo > 0 ? `−${money(pago.prestamo)} préstamo` : '', pago.bono > 0 ? `+${money(pago.bono)} bono` : ''].filter(Boolean).join(' · ') || undefined} />
-              <KPI label="Ganancia que deja" value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
-              <KPI label="Préstamo (loan)" value={pago.prestamo > 0 ? `−${money(pago.prestamo)}` : money(0)} icon={HandCoins} accent="red" sub="descuento" />
-              <KPI label="Bono" value={pago.bono > 0 ? `+${money(pago.bono)}` : money(0)} icon={Gift} accent="green" sub="a favor" />
-              <KPI label="Claims" value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} perdonados` : undefined} />
-              <KPI label="Paquetes fallidos" value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} de sus entregas` : 'sin fallidos'} />
+              <KPI label={t('Entregas')} value={num(pago.individuales + pago.dobles)} icon={Package} accent="navy" sub={`${num(pago.individuales)} ${t('ind')} · ${num(pago.dobles)} ${t('dob')}`} />
+              <KPI label={t('Ingreso generado')} value={money(pago.ingreso)} icon={DollarSign} accent="green" />
+              <KPI label={t('Se le pagó')} value={money(pago.totalPagar)} icon={Wallet} accent="gold" sub={[pago.descuentoClaims > 0 ? `−${money(pago.descuentoClaims)} ${t('claims')}` : '', pago.prestamo > 0 ? `−${money(pago.prestamo)} ${t('préstamo')}` : '', pago.bono > 0 ? `+${money(pago.bono)} ${t('bono')}` : ''].filter(Boolean).join(' · ') || undefined} />
+              <KPI label={t('Ganancia que deja')} value={money(pago.ganancia)} icon={TrendingUp} accent="blue" sub={pct(pago.ingreso > 0 ? pago.ganancia / pago.ingreso : 0)} />
+              <KPI label={t('Préstamo (loan)')} value={pago.prestamo > 0 ? `−${money(pago.prestamo)}` : money(0)} icon={HandCoins} accent="red" sub={t('descuento')} />
+              <KPI label={t('Bono')} value={pago.bono > 0 ? `+${money(pago.bono)}` : money(0)} icon={Gift} accent="green" sub={t('a favor')} />
+              <KPI label={t('Claims')} value={num(pago.claimsTotales)} icon={AlertTriangle} accent="red" sub={pago.claimsPerdonados > 0 ? `${num(pago.claimsPerdonados)} ${t('perdonados')}` : undefined} />
+              <KPI label={t('Paquetes fallidos')} value={num(pago.fallidos || 0)} icon={PackageX} accent="amber" sub={(pago.fallidos || 0) > 0 ? `${pct(pago.pctFallidos || 0)} ${t('de sus entregas')}` : t('sin fallidos')} />
               </div>
             </div>
           )}
@@ -241,24 +243,24 @@ export default function PerfilChofer() {
               por defecto (información personal, bancaria y Stripe): se muestran con el ojo. */}
           <div className="mb-4">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-400">Datos personales, bancarios y Stripe</h3>
-              <button onClick={() => setVerDatos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verDatos ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}>
+              <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Datos personales, bancarios y Stripe')}</h3>
+              <button onClick={() => setVerDatos((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verDatos ? t('Ocultar datos sensibles') : t('Mostrar datos sensibles')}>
                 {verDatos ? <EyeOff size={15} strokeWidth={1.9} /> : <Eye size={15} strokeWidth={1.9} />}
-                {verDatos ? 'Ocultar datos' : 'Ver datos'}
+                {verDatos ? t('Ocultar datos') : t('Ver datos')}
               </button>
             </div>
             {verDatos ? (
               <VerificacionChofer driver={driver} activeCompanyId={activeCompanyId} onReload={reloadDrivers} />
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-800/40">
-                Información personal, bancaria y de Stripe oculta. Toca <b>“Ver datos”</b> para mostrarla.
+                {t('Información personal, bancaria y de Stripe oculta. Toca ')}<b>{t('“Ver datos”')}</b>{t(' para mostrarla.')}
               </div>
             )}
           </div>
 
           {pago && tiposChofer.length > 0 && (
             <Card className="mb-4 p-4">
-              <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h3>
+              <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">{t('Claims por tipo')}</h3>
               <div className="flex flex-wrap gap-2">
                 {tiposChofer.map(([tipo, n]) => (
                   <span key={tipo} className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm dark:bg-slate-800">
@@ -273,13 +275,13 @@ export default function PerfilChofer() {
           {trendData.length > 1 && (
             <div className="mb-4">
               <TrendCard
-                title="Evolución semana a semana"
-                subtitle="Entregas y claims por semana"
+                title={t('Evolución semana a semana')}
+                subtitle={t('Entregas y claims por semana')}
                 data={trendData}
                 fmt={num}
                 series={[
-                  { key: 'entregas', label: 'Entregas', color: '#13233f' },
-                  { key: 'claims', label: 'Claims', color: '#ef4444' },
+                  { key: 'entregas', label: t('Entregas'), color: '#13233f' },
+                  { key: 'claims', label: t('Claims'), color: '#ef4444' },
                 ]}
               />
             </div>
@@ -289,9 +291,9 @@ export default function PerfilChofer() {
           {(pago || historial.length > 0 || claimsChofer.length > 0) && (<>
           <Card className="mb-4 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de pagos</h3>
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Historial de pagos')}</h3>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="text-sm text-slate-500 dark:text-slate-400">Total pagado en el rango: <b className="text-brand-navy dark:text-slate-100">{money(totalPagadoAcumulado)}</b></span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">{t('Total pagado en el rango:')} <b className="text-brand-navy dark:text-slate-100">{money(totalPagadoAcumulado)}</b></span>
                 {historial.length > 0 && (
                   <>
                     <Boton variant="ghost" onClick={exportarPagoExcel} className="px-2.5 py-1 text-xs"><FileSpreadsheet size={13} strokeWidth={1.8} /> Excel</Boton>
@@ -301,21 +303,21 @@ export default function PerfilChofer() {
               </div>
             </div>
             <p className="mb-3 text-[11px] text-slate-400">
-              El export usa el <b>rango de fechas de la barra de arriba</b> (elige “Todo” para todo su historial). El recibo <b>solo muestra lo que TÚ le cobraste</b> al chofer (nunca lo que Gofo te cobra a ti).
+              {t('El export usa el ')}<b>{t('rango de fechas de la barra de arriba')}</b>{t(' (elige “Todo” para todo su historial). El recibo ')}<b>{t('solo muestra lo que TÚ le cobraste')}</b>{t(' al chofer (nunca lo que Gofo te cobra a ti).')}
             </p>
             <Tabla
               columns={[
-                { key: 'semana', label: 'Semana' },
-                { key: 'paquetes', label: 'Entregas', align: 'right' },
-                { key: 'claims', label: 'Claims', align: 'right' },
-                { key: 'fallidos', label: 'Fallidos', align: 'right' },
-                { key: 'prestamo', label: 'Préstamo', align: 'right' },
-                { key: 'bono', label: 'Bono', align: 'right' },
-                { key: 'totalPagar', label: 'Pagado', align: 'right' },
-                { key: 'estado', label: 'Estado', align: 'center' },
+                { key: 'semana', label: t('Semana') },
+                { key: 'paquetes', label: t('Entregas'), align: 'right' },
+                { key: 'claims', label: t('Claims'), align: 'right' },
+                { key: 'fallidos', label: t('Fallidos'), align: 'right' },
+                { key: 'prestamo', label: t('Préstamo'), align: 'right' },
+                { key: 'bono', label: t('Bono'), align: 'right' },
+                { key: 'totalPagar', label: t('Pagado'), align: 'right' },
+                { key: 'estado', label: t('Estado'), align: 'center' },
               ]}
               rows={historial.map((h) => ({ ...h, _key: h.id }))}
-              emptyText="Sin semanas en el rango."
+              emptyText={t('Sin semanas en el rango.')}
               renderCell={(row, key) => {
                 if (key === 'totalPagar') return <b>{money(row.totalPagar)}</b>
                 if (key === 'prestamo') return row.prestamo > 0 ? <span className="text-rose-600 dark:text-rose-400">−{money(row.prestamo)}</span> : <span className="text-slate-400">{money(0)}</span>
@@ -323,7 +325,7 @@ export default function PerfilChofer() {
                 if (key === 'paquetes' || key === 'claims' || key === 'fallidos') return num(row[key] || 0)
                 if (key === 'estado') {
                   const e = pagosStatus[row.id] || pagosStatusSemana[row.semana]
-                  return e === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>
+                  return e === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>
                 }
                 return row[key]
               }}
@@ -333,38 +335,38 @@ export default function PerfilChofer() {
           {/* Detalle de claims */}
           <Card className="p-4">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Detalle de claims ({claimsChofer.length})</h3>
-              <button onClick={() => setVerMontosClaim((v) => !v)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verMontosClaim ? 'Ocultar montos' : 'Mostrar montos'}>
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Detalle de claims')} ({claimsChofer.length})</h3>
+              <button onClick={() => setVerMontosClaim((v) => !v)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300" title={verMontosClaim ? t('Ocultar montos') : t('Mostrar montos')}>
                 {verMontosClaim ? <EyeOff size={14} strokeWidth={1.9} /> : <Eye size={14} strokeWidth={1.9} />}
-                {verMontosClaim ? 'Ocultar montos' : 'Ver montos'}
+                {verMontosClaim ? t('Ocultar montos') : t('Ver montos')}
               </button>
             </div>
-            <p className="mb-3 text-xs text-slate-400">“Te cobré” = lo que le descontaste al chofer por ese claim · “Descontó Gofo” = lo que Gofo te quitó a ti. Haz clic en un claim para abrir la ficha del tracking.</p>
+            <p className="mb-3 text-xs text-slate-400">{t('“Te cobré” = lo que le descontaste al chofer por ese claim · “Descontó Gofo” = lo que Gofo te quitó a ti. Haz clic en un claim para abrir la ficha del tracking.')}</p>
             <Tabla
               columns={[
-                { key: 'waybill', label: 'Waybill' },
-                { key: 'date', label: 'Fecha' },
-                { key: 'claimType', label: 'Tipo' },
-                { key: 'miDescuento', label: 'Te cobré', align: 'right' },
-                { key: 'montoGofo', label: 'Descontó Gofo', align: 'right' },
-                { key: 'estadoRevision', label: 'Revisión', align: 'center' },
-                { key: 'estado', label: 'Estado', align: 'center' },
+                { key: 'waybill', label: t('Waybill') },
+                { key: 'date', label: t('Fecha') },
+                { key: 'claimType', label: t('Tipo') },
+                { key: 'miDescuento', label: t('Te cobré'), align: 'right' },
+                { key: 'montoGofo', label: t('Descontó Gofo'), align: 'right' },
+                { key: 'estadoRevision', label: t('Revisión'), align: 'center' },
+                { key: 'estado', label: t('Estado'), align: 'center' },
               ]}
               rows={claimsChofer.map((c) => ({ ...c, _key: c.id }))}
               onRowClick={(row) => row.waybill && navigate(`/tracking/${encodeURIComponent(row.waybill)}`)}
-              emptyText="Sin claims en el periodo."
+              emptyText={t('Sin claims en el periodo.')}
               renderCell={(row, key) => {
                 if (key === 'miDescuento') { const v = row.perdonado ? 0 : feeDeClaim(inv, row.ciudad, row); return verMontosClaim ? <span className="font-semibold text-rose-600 dark:text-rose-400">{row.perdonado ? '—' : `−${money(v)}`}</span> : '••••' }
                 if (key === 'montoGofo') return verMontosClaim ? <span className="text-slate-500">−{money(Math.abs(Number(row.montoGofo) || 0))}</span> : '••••'
                 if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
                 if (key === 'estadoRevision') {
                   const e = row.estadoRevision
-                  if (e === 'anulado') return <Badge color="slate">Anulado</Badge>
-                  if (e === 'pendiente') return <Badge color="gold">Pendiente</Badge>
-                  if (row.esRepetido) return <Badge color="green">Aprobado</Badge>
+                  if (e === 'anulado') return <Badge color="slate">{t('Anulado')}</Badge>
+                  if (e === 'pendiente') return <Badge color="gold">{t('Pendiente')}</Badge>
+                  if (row.esRepetido) return <Badge color="green">{t('Aprobado')}</Badge>
                   return <span className="text-slate-300 dark:text-slate-600">—</span>
                 }
-                if (key === 'estado') return row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                if (key === 'estado') return row.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')}</Badge>
                 return row[key] || '—'
               }}
             />

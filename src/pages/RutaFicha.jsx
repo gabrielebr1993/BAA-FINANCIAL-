@@ -8,6 +8,7 @@ import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import { TrendCard } from '../components/charts'
+import { useLang } from '../i18n'
 
 const tms = (d) => (d instanceof Date ? d.getTime() : 0)
 
@@ -16,6 +17,7 @@ export default function RutaFicha() {
   const decoded = decodeURIComponent(ruta || '')
   const navigate = useNavigate()
   const { facturaRango: inv, invoices, invAnterior, claims, drivers, cargando } = useData()
+  const { t } = useLang()
 
   const rutaActual = useMemo(() => rutasConGanancia(inv, drivers, TODAS).find((r) => r.ruta === decoded) || null, [inv, drivers, decoded])
 
@@ -64,26 +66,26 @@ export default function RutaFicha() {
   const nombreExp = `ruta_${decoded}`.replace(/[^\w-]+/g, '_')
   const exportarE = () =>
     exportarExcel(nombreExp, [
-      ...(rutaActual ? [{ nombre: 'Resumen', rows: [
-        { Métrica: 'Ruta', Valor: decoded },
-        { Métrica: 'Paquetes', Valor: rutaActual.paquetes },
-        { Métrica: 'Ingreso', Valor: Math.round(rutaActual.ingreso) },
-        { Métrica: '$/paquete (paga Gofo)', Valor: Number((rutaActual.precioPorPaquete || 0).toFixed(2)) },
-        { Métrica: 'Costo choferes', Valor: Math.round(rutaActual.costoChoferes) },
-        { Métrica: 'Ganancia', Valor: Math.round(rutaActual.ganancia) },
-        { Métrica: 'Ganancia/paquete', Valor: Number((rutaActual.gananciaPorPaquete || 0).toFixed(2)) },
-        { Métrica: 'Claims', Valor: rutaActual.numClaims || 0 },
+      ...(rutaActual ? [{ nombre: t('Resumen'), rows: [
+        { Métrica: t('Ruta'), Valor: decoded },
+        { Métrica: t('Paquetes'), Valor: rutaActual.paquetes },
+        { Métrica: t('Ingreso'), Valor: Math.round(rutaActual.ingreso) },
+        { Métrica: t('$/paquete (paga Gofo)'), Valor: Number((rutaActual.precioPorPaquete || 0).toFixed(2)) },
+        { Métrica: t('Costo choferes'), Valor: Math.round(rutaActual.costoChoferes) },
+        { Métrica: t('Ganancia'), Valor: Math.round(rutaActual.ganancia) },
+        { Métrica: t('Ganancia/paquete'), Valor: Number((rutaActual.gananciaPorPaquete || 0).toFixed(2)) },
+        { Métrica: t('Claims'), Valor: rutaActual.numClaims || 0 },
       ] }] : []),
-      ...(choferesRuta.length ? [{ nombre: 'Choferes', rows: choferesRuta.map((p) => ({ Chofer: p.nombre, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles, Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales })) }] : []),
-      ...(historial.length ? [{ nombre: 'Historial', rows: historial.map((h) => ({ Semana: h.semana, Paquetes: h.paquetes, Ingreso: Math.round(h.ingreso), Ganancia: Math.round(h.ganancia), Claims: h.claims })) }] : []),
+      ...(choferesRuta.length ? [{ nombre: t('Choferes'), rows: choferesRuta.map((p) => ({ Chofer: p.nombre, Paquetes: p.paquetes, Individuales: p.individuales, Dobles: p.dobles, Ingreso: Math.round(p.ingreso), Pago: Math.round(p.totalPagar), Ganancia: Math.round(p.ganancia), Claims: p.claimsTotales })) }] : []),
+      ...(historial.length ? [{ nombre: t('Historial'), rows: historial.map((h) => ({ Semana: h.semana, Paquetes: h.paquetes, Ingreso: Math.round(h.ingreso), Ganancia: Math.round(h.ganancia), Claims: h.claims })) }] : []),
     ])
   const exportarP = () =>
-    exportarPDF(nombreExp, `Ruta ${decoded}`, inv?.semana || '', [
-      ...(rutaActual ? [{ titulo: 'Resumen de la ruta', head: ['Métrica', 'Valor'], body: [
-        ['Paquetes', num(rutaActual.paquetes)], ['Ingreso (Gofo)', money(rutaActual.ingreso)], ['$/paquete (paga Gofo)', money(rutaActual.precioPorPaquete)],
-        ['Costo choferes', money(rutaActual.costoChoferes)], ['Ganancia', money(rutaActual.ganancia)], ['Ganancia/paquete', money(rutaActual.gananciaPorPaquete)], ['Claims', num(rutaActual.numClaims || 0)],
+    exportarPDF(nombreExp, `${t('Ruta')} ${decoded}`, inv?.semana || '', [
+      ...(rutaActual ? [{ titulo: t('Resumen de la ruta'), head: [t('Métrica'), t('Valor')], body: [
+        [t('Paquetes'), num(rutaActual.paquetes)], [t('Ingreso (Gofo)'), money(rutaActual.ingreso)], [t('$/paquete (paga Gofo)'), money(rutaActual.precioPorPaquete)],
+        [t('Costo choferes'), money(rutaActual.costoChoferes)], [t('Ganancia'), money(rutaActual.ganancia)], [t('Ganancia/paquete'), money(rutaActual.gananciaPorPaquete)], [t('Claims'), num(rutaActual.numClaims || 0)],
       ] }] : []),
-      ...(choferesRuta.length ? [{ titulo: `Choferes de la ruta (${choferesRuta.length})`, head: ['Chofer', 'Paq.', 'Ingreso', 'Pago', 'Ganancia', 'Claims'], body: choferesRuta.map((p) => [p.nombre, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales)]) }] : []),
+      ...(choferesRuta.length ? [{ titulo: `${t('Choferes de la ruta')} (${choferesRuta.length})`, head: [t('Chofer'), t('Paq.'), t('Ingreso'), t('Pago'), t('Ganancia'), t('Claims')], body: choferesRuta.map((p) => [p.nombre, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales)]) }] : []),
     ])
 
   const hayDatos = rutaActual || historial.length > 0
@@ -99,24 +101,24 @@ export default function RutaFicha() {
         )
       }>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
-          <ArrowLeft size={16} strokeWidth={2} /> Volver
+          <ArrowLeft size={16} strokeWidth={2} /> {t('Volver')}
         </button>
-        Ruta {decoded}
+        {t('Ruta')} {decoded}
       </PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando ruta…" />
+        <Cargando texto={t('Cargando ruta…')} />
       ) : !hayDatos ? (
-        <EstadoVacio titulo={decoded} texto="Esta ruta no tiene datos en el rango seleccionado." />
+        <EstadoVacio titulo={decoded} texto={t('Esta ruta no tiene datos en el rango seleccionado.')} />
       ) : (
         <>
           {alertaPrecio && (
             <Aviso tipo="warn">
               <span className="inline-flex flex-wrap items-center gap-1.5">
-                <AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio de esta ruta vs. la semana anterior:
+                <AlertTriangle size={15} strokeWidth={1.8} /> {t('Gofo cambió el precio de esta ruta vs. la semana anterior:')}
                 $/paq {money(alertaPrecio.antesPq)} → {money(alertaPrecio.ahoraPq)} ({alertaPrecio.dPq >= 0 ? '+' : ''}{pct(alertaPrecio.dPq)}) ·
                 $/lb ${(alertaPrecio.antesLb || 0).toFixed(3)} → ${(alertaPrecio.ahoraLb || 0).toFixed(3)} ({alertaPrecio.dLb >= 0 ? '+' : ''}{pct(alertaPrecio.dLb)}).
-                Útil para reclamar a Gofo.
+                {t('Útil para reclamar a Gofo.')}
               </span>
             </Aviso>
           )}
@@ -124,39 +126,39 @@ export default function RutaFicha() {
           {/* 1. Resumen del periodo */}
           {rutaActual && (
             <div className="mb-4 flex flex-wrap gap-3">
-              <KPI label="Paquetes" value={num(rutaActual.paquetes)} icon={Package} accent="navy" sub={`${num(rutaActual.individuales)} ind · ${num(rutaActual.dobles)} dob`} />
-              <KPI label="Ingreso (Gofo)" value={money(rutaActual.ingreso)} icon={DollarSign} accent="green" />
-              <KPI label="$/paquete (te paga Gofo)" value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" sub="ingreso por paquete" />
+              <KPI label={t('Paquetes')} value={num(rutaActual.paquetes)} icon={Package} accent="navy" sub={`${num(rutaActual.individuales)} ${t('ind')} · ${num(rutaActual.dobles)} ${t('dob')}`} />
+              <KPI label={t('Ingreso (Gofo)')} value={money(rutaActual.ingreso)} icon={DollarSign} accent="green" />
+              <KPI label={t('$/paquete (te paga Gofo)')} value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" sub={t('ingreso por paquete')} />
               <KPI label="$/lb" value={`$${(rutaActual.precioPorLb || 0).toFixed(3)}`} icon={Scale} accent="steel" />
-              <KPI label="Costo choferes" value={money(rutaActual.costoChoferes)} icon={Users} accent="navy" />
-              <KPI label="Ganancia" value={money(rutaActual.ganancia)} icon={TrendingUp} accent={rutaActual.ganancia >= 0 ? 'gold' : 'red'} valueColor={rutaActual.ganancia >= 0 ? undefined : 'text-rose-600'} sub={pct(rutaActual.margen)} />
-              <KPI label="Ganancia / paquete" value={money(rutaActual.gananciaPorPaquete)} icon={TrendingUp} accent={rutaActual.gananciaPorPaquete >= 0 ? 'green' : 'red'} valueColor={rutaActual.gananciaPorPaquete >= 0 ? undefined : 'text-rose-600'} sub="lo que te queda por paquete" />
-              <KPI label="Claims" value={num(rutaActual.numClaims || 0)} icon={AlertTriangle} accent="red" sub={`Calidad ${pct(rutaActual.calidad, 1)}`} />
+              <KPI label={t('Costo choferes')} value={money(rutaActual.costoChoferes)} icon={Users} accent="navy" />
+              <KPI label={t('Ganancia')} value={money(rutaActual.ganancia)} icon={TrendingUp} accent={rutaActual.ganancia >= 0 ? 'gold' : 'red'} valueColor={rutaActual.ganancia >= 0 ? undefined : 'text-rose-600'} sub={pct(rutaActual.margen)} />
+              <KPI label={t('Ganancia / paquete')} value={money(rutaActual.gananciaPorPaquete)} icon={TrendingUp} accent={rutaActual.gananciaPorPaquete >= 0 ? 'green' : 'red'} valueColor={rutaActual.gananciaPorPaquete >= 0 ? undefined : 'text-rose-600'} sub={t('lo que te queda por paquete')} />
+              <KPI label={t('Claims')} value={num(rutaActual.numClaims || 0)} icon={AlertTriangle} accent="red" sub={`${t('Calidad')} ${pct(rutaActual.calidad, 1)}`} />
             </div>
           )}
 
           {/* 2. Historial semana a semana */}
           {historial.length > 1 && (
             <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <TrendCard title="Ingreso y ganancia por semana" data={trendData} fmt={money}
-                series={[{ key: 'ingreso', label: 'Ingreso', color: '#13233f' }, { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' }]} />
-              <TrendCard title="$/paquete por semana" data={trendPpp} fmt={money}
-                series={[{ key: 'valor', label: '$/paquete', color: '#3d5a80' }]} />
+              <TrendCard title={t('Ingreso y ganancia por semana')} data={trendData} fmt={money}
+                series={[{ key: 'ingreso', label: t('Ingreso'), color: '#13233f' }, { key: 'ganancia', label: t('Ganancia'), color: '#c9a24b' }]} />
+              <TrendCard title={t('$/paquete por semana')} data={trendPpp} fmt={money}
+                series={[{ key: 'valor', label: t('$/paquete'), color: '#3d5a80' }]} />
             </div>
           )}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Historial de la ruta</h3>
+            <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Historial de la ruta')}</h3>
             <Tabla
               columns={[
-                { key: 'semana', label: 'Semana' },
-                { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                { key: 'ingreso', label: 'Ingreso', align: 'right' },
-                { key: 'ganancia', label: 'Ganancia', align: 'right' },
-                { key: 'ppp', label: '$/paq', align: 'right' },
-                { key: 'claims', label: 'Claims', align: 'right' },
+                { key: 'semana', label: t('Semana') },
+                { key: 'paquetes', label: t('Paquetes'), align: 'right' },
+                { key: 'ingreso', label: t('Ingreso'), align: 'right' },
+                { key: 'ganancia', label: t('Ganancia'), align: 'right' },
+                { key: 'ppp', label: t('$/paq'), align: 'right' },
+                { key: 'claims', label: t('Claims'), align: 'right' },
               ]}
               rows={[...historial].reverse().map((h) => ({ ...h, _key: h.id }))}
-              emptyText="Sin historial."
+              emptyText={t('Sin historial.')}
               renderCell={(row, key) => {
                 if (key === 'ingreso' || key === 'ganancia' || key === 'ppp') return money(row[key])
                 if (key === 'paquetes' || key === 'claims') return num(row[key])
@@ -167,20 +169,20 @@ export default function RutaFicha() {
 
           {/* 3. Choferes de la ruta */}
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Choferes de esta ruta{choferesRuta.length ? ` (${choferesRuta.length})` : ''}</h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Choferes de esta ruta')}{choferesRuta.length ? ` (${choferesRuta.length})` : ''}</h3>
             {choferesRuta.length > 0 ? (
               <>
-                <p className="mb-3 text-xs text-slate-400">Números exactos de esta ruta (paquetes, ingreso, pago y claims). Clic en un chofer para ver su perfil.</p>
+                <p className="mb-3 text-xs text-slate-400">{t('Números exactos de esta ruta (paquetes, ingreso, pago y claims). Clic en un chofer para ver su perfil.')}</p>
                 <Tabla
                   columns={[
-                    { key: 'nombre', label: 'Chofer' },
-                    { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                    { key: 'individuales', label: 'Ind.', align: 'right' },
-                    { key: 'dobles', label: 'Dobles', align: 'right' },
-                    { key: 'ingreso', label: 'Ingreso', align: 'right' },
-                    { key: 'totalPagar', label: 'Pago', align: 'right' },
-                    { key: 'ganancia', label: 'Ganancia', align: 'right' },
-                    { key: 'claimsTotales', label: 'Claims', align: 'right' },
+                    { key: 'nombre', label: t('Chofer') },
+                    { key: 'paquetes', label: t('Paquetes'), align: 'right' },
+                    { key: 'individuales', label: t('Ind.'), align: 'right' },
+                    { key: 'dobles', label: t('Dobles'), align: 'right' },
+                    { key: 'ingreso', label: t('Ingreso'), align: 'right' },
+                    { key: 'totalPagar', label: t('Pago'), align: 'right' },
+                    { key: 'ganancia', label: t('Ganancia'), align: 'right' },
+                    { key: 'claimsTotales', label: t('Claims'), align: 'right' },
                   ]}
                   rows={choferesRuta.map((p) => ({ ...p, _key: p.nombre }))}
                   onRowClick={(row) => navigate(`/choferes/${encodeURIComponent(row.nombre)}`)}
@@ -193,14 +195,14 @@ export default function RutaFicha() {
               </>
             ) : (
               <>
-                <p className="mb-3 text-xs text-slate-400">Esta factura no guardó el desglose por chofer×ruta (histórico). Se muestran los choferes con claims en la ruta. Las facturas nuevas ya traen el detalle completo.</p>
+                <p className="mb-3 text-xs text-slate-400">{t('Esta factura no guardó el desglose por chofer×ruta (histórico). Se muestran los choferes con claims en la ruta. Las facturas nuevas ya traen el detalle completo.')}</p>
                 {choferes.length === 0 ? (
-                  <div className="text-sm text-slate-400">Sin choferes con claims en esta ruta en el periodo.</div>
+                  <div className="text-sm text-slate-400">{t('Sin choferes con claims en esta ruta en el periodo.')}</div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {choferes.map((c) => (
                       <Link key={c.nombre} to={`/choferes/${encodeURIComponent(c.nombre)}`} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
-                        <Users size={14} strokeWidth={1.8} className="text-slate-400" /> {c.nombre} <Badge color="red">{c.claims} claim(s)</Badge>
+                        <Users size={14} strokeWidth={1.8} className="text-slate-400" /> {c.nombre} <Badge color="red">{c.claims} {t('claim(s)')}</Badge>
                       </Link>
                     ))}
                   </div>
@@ -213,24 +215,24 @@ export default function RutaFicha() {
           <Card className="p-4">
             <div className="mb-1 flex items-center gap-2">
               <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
-              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Claims de la ruta ({claimsRuta.length})</h3>
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Claims de la ruta')} ({claimsRuta.length})</h3>
             </div>
-            <p className="mb-3 text-xs text-slate-400">Haz clic en un claim para abrir la ficha del tracking.</p>
+            <p className="mb-3 text-xs text-slate-400">{t('Haz clic en un claim para abrir la ficha del tracking.')}</p>
             <Tabla
               columns={[
                 { key: 'waybill', label: 'Waybill' },
-                { key: 'courier', label: 'Chofer' },
-                { key: 'claimType', label: 'Tipo' },
-                { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
-                { key: 'estado', label: 'Estado', align: 'center' },
+                { key: 'courier', label: t('Chofer') },
+                { key: 'claimType', label: t('Tipo') },
+                { key: 'montoGofo', label: t('Monto Gofo'), align: 'right' },
+                { key: 'estado', label: t('Estado'), align: 'center' },
               ]}
               rows={claimsRuta.map((c) => ({ ...c, _key: c.id }))}
               onRowClick={(row) => row.waybill && navigate(`/tracking/${encodeURIComponent(row.waybill)}`)}
-              emptyText="Sin claims en esta ruta en el periodo."
+              emptyText={t('Sin claims en esta ruta en el periodo.')}
               renderCell={(row, key) => {
                 if (key === 'montoGofo') return money(row.montoGofo)
                 if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
-                if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">{t('Anulado')}</Badge> : row.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')}</Badge>
                 return row[key] || '—'
               }}
             />

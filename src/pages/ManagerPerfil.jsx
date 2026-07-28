@@ -9,8 +9,10 @@ import { money } from '../utils/format'
 import { Card, PageTitle, Badge, EstadoVacio } from '../components/ui'
 import VerificacionChofer from '../components/VerificacionChofer'
 import FotoPerfil from '../components/FotoPerfil'
+import { useLang } from '../i18n'
 
 export default function ManagerPerfil() {
+  const { t } = useLang()
   const { id } = useParams()
   const navigate = useNavigate()
   const { managers, reloadManagers, activeCompanyId, ciudadesEmpresa } = useData()
@@ -21,13 +23,13 @@ export default function ManagerPerfil() {
     <div>
       <PageTitle>
         <button onClick={() => navigate(-1)} className="mr-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-white">
-          <ArrowLeft size={16} strokeWidth={2} /> Volver
+          <ArrowLeft size={16} strokeWidth={2} /> {t('Volver')}
         </button>
-        Perfil del gasto fijo
+        {t('Perfil del gasto fijo')}
       </PageTitle>
 
       {!m ? (
-        <EstadoVacio titulo="No encontrado" texto="Este gasto fijo no existe o fue eliminado." mostrarBoton={false} />
+        <EstadoVacio titulo={t('No encontrado')} texto={t('Este gasto fijo no existe o fue eliminado.')} mostrarBoton={false} />
       ) : (
         <>
           <Card className="mb-4 p-5">
@@ -36,11 +38,11 @@ export default function ManagerPerfil() {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{m.nombre}</h2>
-                  {m.activo === false ? <Badge color="slate">Inactivo</Badge> : <Badge color="green">Activo</Badge>}
+                  {m.activo === false ? <Badge color="slate">{t('Inactivo')}</Badge> : <Badge color="green">{t('Activo')}</Badge>}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-                  <span>Ciudad: <b className="text-brand-navy dark:text-slate-200">{nombreCiu(m.ciudad)}</b></span>
-                  <span>Monto semanal: <b className="text-brand-navy dark:text-slate-200">{money(m.sueldoSemanal)}</b></span>
+                  <span>{t('Ciudad')}: <b className="text-brand-navy dark:text-slate-200">{nombreCiu(m.ciudad)}</b></span>
+                  <span>{t('Monto semanal')}: <b className="text-brand-navy dark:text-slate-200">{money(m.sueldoSemanal)}</b></span>
                 </div>
               </div>
             </div>

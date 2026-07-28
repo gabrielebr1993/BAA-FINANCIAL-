@@ -21,6 +21,7 @@ import FirmaCanvas from '../components/FirmaCanvas'
 import { exportarPDF } from '../utils/exportar'
 import { money, num } from '../utils/format'
 import { Card, KPI, Boton, Badge, Tabla, Cargando, EstadoVacio, Aviso, Spinner, Input, Select } from '../components/ui'
+import { useLang } from '../i18n'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -33,6 +34,7 @@ const MENU = [
 ]
 
 export default function DriverPortal() {
+  const { t } = useLang()
   const { perfil, companyId, driverId, driverNombre, driverKey, cerrarSesion } = useAuth()
   const { oscuro, alternar } = useTheme()
   const [vista, setVista] = useState('inicio')
@@ -78,7 +80,7 @@ export default function DriverPortal() {
   const subirW9 = async (file) => {
     if (!file) return
     setSubiendoW9(true); setW9Msg(null)
-    try { await subirW9Chofer(file); await cargarEstado(); setW9Msg({ tipo: 'ok', txt: '¡Listo! Tu W-9 se envió y quedó guardado.' }) }
+    try { await subirW9Chofer(file); await cargarEstado(); setW9Msg({ tipo: 'ok', txt: t('¡Listo! Tu W-9 se envió y quedó guardado.') }) }
     catch (e) { setW9Msg({ tipo: 'error', txt: e.message }) } finally { setSubiendoW9(false) }
   }
   const firmarW9 = async () => {
@@ -88,36 +90,36 @@ export default function DriverPortal() {
       await firmarW9Chofer(firmaPng, new Date().toLocaleDateString())
       await cargarEstado()
       setFirmando(false); setFirmaPng(null)
-      setW9Msg({ tipo: 'ok', txt: '¡Listo! Tu W-9 firmado se generó y quedó guardado. Tu empresa ya puede verlo.' })
+      setW9Msg({ tipo: 'ok', txt: t('¡Listo! Tu W-9 firmado se generó y quedó guardado. Tu empresa ya puede verlo.') })
     } catch (e) { setW9Msg({ tipo: 'error', txt: e.message }) } finally { setEnviandoFirma(false) }
   }
 
   const subirLic = async (file) => {
     if (!file) return
     setSubiendoLic(true); setLicMsg(null)
-    try { await subirLicenciaChofer(file); await cargarEstado(); setLicMsg({ tipo: 'ok', txt: '¡Listo! Tu licencia se envió y quedó guardada.' }) }
+    try { await subirLicenciaChofer(file); await cargarEstado(); setLicMsg({ tipo: 'ok', txt: t('¡Listo! Tu licencia se envió y quedó guardada.') }) }
     catch (e) { setLicMsg({ tipo: 'error', txt: e.message }) } finally { setSubiendoLic(false) }
   }
   const subirFoto = async (file) => {
     if (!file) return
     setSubiendoFoto(true); setFotoMsg(null)
-    try { await subirFotoChofer(file); await cargarEstado(); setFotoMsg({ tipo: 'ok', txt: 'Foto actualizada.' }) }
+    try { await subirFotoChofer(file); await cargarEstado(); setFotoMsg({ tipo: 'ok', txt: t('Foto actualizada.') }) }
     catch (e) { setFotoMsg({ tipo: 'error', txt: e.message }) } finally { setSubiendoFoto(false) }
   }
 
   const guardarBanco = async () => {
     setBancoMsg(null)
-    if (!banco.nombreCompleto.trim()) return setBancoMsg({ tipo: 'error', txt: 'Falta tu nombre completo.' })
-    if (!banco.direccion.trim()) return setBancoMsg({ tipo: 'error', txt: 'Falta tu dirección.' })
-    if (String(banco.ssn).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: 'El SSN debe tener 9 dígitos.' })
-    if (String(banco.rutaNumero).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: 'El número de ruta (routing) debe tener 9 dígitos.' })
-    if (!banco.cuentaNumero.trim()) return setBancoMsg({ tipo: 'error', txt: 'Falta el número de cuenta.' })
-    if (!banco.bancoNombre.trim()) return setBancoMsg({ tipo: 'error', txt: 'Elige tu banco.' })
+    if (!banco.nombreCompleto.trim()) return setBancoMsg({ tipo: 'error', txt: t('Falta tu nombre completo.') })
+    if (!banco.direccion.trim()) return setBancoMsg({ tipo: 'error', txt: t('Falta tu dirección.') })
+    if (String(banco.ssn).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: t('El SSN debe tener 9 dígitos.') })
+    if (String(banco.rutaNumero).replace(/\D/g, '').length !== 9) return setBancoMsg({ tipo: 'error', txt: t('El número de ruta (routing) debe tener 9 dígitos.') })
+    if (!banco.cuentaNumero.trim()) return setBancoMsg({ tipo: 'error', txt: t('Falta el número de cuenta.') })
+    if (!banco.bancoNombre.trim()) return setBancoMsg({ tipo: 'error', txt: t('Elige tu banco.') })
     setGuardandoBanco(true)
     try {
       await guardarDatosBancariosChofer({ ...banco, ssn: String(banco.ssn).replace(/\D/g, '') })
       await cargarEstado()
-      setBancoMsg({ tipo: 'ok', txt: '¡Listo! Tus datos de pago se guardaron y quedaron bloqueados. Tu empresa ya puede verlos.' })
+      setBancoMsg({ tipo: 'ok', txt: t('¡Listo! Tus datos de pago se guardaron y quedaron bloqueados. Tu empresa ya puede verlos.') })
       setBanco((s) => ({ ...s, ssn: '', cuentaNumero: '', rutaNumero: '' })) // no dejar datos sensibles en memoria
     } catch (e) {
       setBancoMsg({ tipo: 'error', txt: e.message })
@@ -141,7 +143,7 @@ export default function DriverPortal() {
         p.docs.forEach((d) => { const x = d.data(); pm[x.invoiceId] = x.estado || 'pendiente' })
         setPayroll(pm)
       } catch (e) {
-        if (vivo) { setError('No se pudieron cargar tus datos: ' + e.message); setStats([]) }
+        if (vivo) { setError(t('No se pudieron cargar tus datos: ') + e.message); setStats([]) }
       }
     })()
     return () => { vivo = false }
@@ -174,21 +176,21 @@ export default function DriverPortal() {
   const totalClaims = semanasPagadas.reduce((a, w) => a + (w.claimsTotales || 0), 0)
 
   const recibo = (w) => {
-    const estadoPago = payroll[w.invoiceId] === 'pagado' ? 'Pagado' : 'Pendiente'
-    exportarPDF(`recibo_${(driverNombre || 'chofer').replace(/[^\w]+/g, '_')}_${w.semana}`, 'Recibo de pago', `${driverNombre} · ${w.semana}`, [
+    const estadoPago = payroll[w.invoiceId] === 'pagado' ? t('Pagado') : t('Pendiente')
+    exportarPDF(`recibo_${(driverNombre || 'chofer').replace(/[^\w]+/g, '_')}_${w.semana}`, t('Recibo de pago'), `${driverNombre} · ${w.semana}`, [
       {
-        titulo: 'Detalle del pago',
-        head: ['Concepto', 'Valor'],
+        titulo: t('Detalle del pago'),
+        head: [t('Concepto'), t('Valor')],
         body: [
-          ['Individuales', num(w.individuales)],
-          ['Dobles', num(w.dobles)],
-          ['Total de paquetes', num(w.paquetes)],
-          ['Tarifa individual', money(w.tarifaInd)],
-          ['Tarifa doble', money(w.tarifaDoble)],
-          ['Claims cobrados', num(w.claimsActivos)],
-          ['Descuento por claims', money(-Math.abs(w.descuentoClaims || 0))],
-          ['TOTAL A PAGAR', money(w.totalPagar)],
-          ['Estado', estadoPago],
+          [t('Individuales'), num(w.individuales)],
+          [t('Dobles'), num(w.dobles)],
+          [t('Total de paquetes'), num(w.paquetes)],
+          [t('Tarifa individual'), money(w.tarifaInd)],
+          [t('Tarifa doble'), money(w.tarifaDoble)],
+          [t('Claims cobrados'), num(w.claimsActivos)],
+          [t('Descuento por claims'), money(-Math.abs(w.descuentoClaims || 0))],
+          [t('TOTAL A PAGAR'), money(w.totalPagar)],
+          [t('Estado'), estadoPago],
         ],
       },
     ])
@@ -215,18 +217,18 @@ export default function DriverPortal() {
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy"><FileText size={18} strokeWidth={1.9} className="text-brand-gold" /></div>
         <div>
           <div className="text-base font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
-          <div className="text-[11px] text-slate-400">Portal del chofer</div>
+          <div className="text-[11px] text-slate-400">{t('Portal del chofer')}</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={alternar} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/40" title="Cambiar tema">
+          <button onClick={alternar} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/40" title={t('Cambiar tema')}>
             {oscuro ? <Sun size={17} strokeWidth={1.8} /> : <Moon size={17} strokeWidth={1.8} />}
           </button>
-          <Boton variant="ghost" onClick={cerrarSesion} className="px-3 py-1.5 text-sm"><LogOut size={15} strokeWidth={1.8} /> Salir</Boton>
+          <Boton variant="ghost" onClick={cerrarSesion} className="px-3 py-1.5 text-sm"><LogOut size={15} strokeWidth={1.8} /> {t('Salir')}</Boton>
         </div>
       </header>
 
       {stats === null ? (
-        <Cargando texto="Cargando tu portal…" />
+        <Cargando texto={t('Cargando tu portal…')} />
       ) : (
         <>
         <div className="mx-auto max-w-5xl p-3 pb-24 sm:flex sm:gap-6 sm:p-6 sm:pb-6">
@@ -238,7 +240,7 @@ export default function DriverPortal() {
               return (
                 <button key={m.k} onClick={() => setVista(m.k)}
                   className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
-                  <Icon size={20} strokeWidth={1.9} className="flex-shrink-0" /> <span>{m.label}</span>
+                  <Icon size={20} strokeWidth={1.9} className="flex-shrink-0" /> <span>{t(m.label)}</span>
                 </button>
               )
             })}
@@ -246,7 +248,7 @@ export default function DriverPortal() {
 
           {/* Contenido */}
           <main className="min-w-0 flex-1">
-            {error && <EstadoVacio titulo="Sin acceso a esos datos" texto={error} mostrarBoton={false} />}
+            {error && <EstadoVacio titulo={t('Sin acceso a esos datos')} texto={error} mostrarBoton={false} />}
 
             {/* ---------- INICIO ---------- */}
             {vista === 'inicio' && (
@@ -256,9 +258,9 @@ export default function DriverPortal() {
                     {/* Resplandor dorado suave y difuminado (decorativo) */}
                     <div className="pointer-events-none absolute -bottom-16 -right-8 h-52 w-52 rounded-full bg-brand-gold/25 blur-3xl" aria-hidden />
                     <div className="pointer-events-none absolute -top-12 left-16 h-36 w-36 rounded-full bg-brand-gold/10 blur-3xl" aria-hidden />
-                    <div className="relative text-[11px] font-medium uppercase tracking-wide text-white/50">Portal del chofer</div>
-                    <h1 className="mt-0.5 text-xl font-bold text-white sm:text-2xl">Hola, {driverNombre || perfil?.nombre || 'chofer'}</h1>
-                    <p className="mt-1 text-sm text-white/70">Tus pagos, entregas, claims y tu calificación.</p>
+                    <div className="relative text-[11px] font-medium uppercase tracking-wide text-white/50">{t('Portal del chofer')}</div>
+                    <h1 className="mt-0.5 text-xl font-bold text-white sm:text-2xl">{t('Hola')}, {driverNombre || perfil?.nombre || t('chofer')}</h1>
+                    <p className="mt-1 text-sm text-white/70">{t('Tus pagos, entregas, claims y tu calificación.')}</p>
                     {calif && (
                       <div className="mt-4 inline-flex items-center gap-2.5 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/15">
                         <span className="grid h-10 w-10 place-items-center rounded-full text-sm font-extrabold text-white ring-2 ring-white/40" style={{ background: COLOR_NIVEL[calif.nivel] }}>{calif.puntaje}</span>
@@ -272,30 +274,30 @@ export default function DriverPortal() {
                 </Card>
 
                 {semanasPagadas.length === 0 ? (
-                  <EstadoVacio titulo="Aún no tienes pagos" texto="Cuando tu empresa apruebe y marque como pagada una de tus semanas, verás aquí tu recibo y el detalle. Mientras tanto, no aparece nada." mostrarBoton={false} />
+                  <EstadoVacio titulo={t('Aún no tienes pagos')} texto={t('Cuando tu empresa apruebe y marque como pagada una de tus semanas, verás aquí tu recibo y el detalle. Mientras tanto, no aparece nada.')} mostrarBoton={false} />
                 ) : (
                   <>
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <KPI label="Total pagado" value={money(totalPagado)} icon={Wallet} accent="green" />
-                      <KPI label="Semanas pagadas" value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
-                      <KPI label="Paquetes (pagados)" value={num(totalPaquetes)} icon={Package} accent="navy" />
-                      <KPI label="Claims (pagados)" value={num(totalClaims)} icon={AlertTriangle} accent="red" />
+                      <KPI label={t('Total pagado')} value={money(totalPagado)} icon={Wallet} accent="green" />
+                      <KPI label={t('Semanas pagadas')} value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
+                      <KPI label={t('Paquetes (pagados)')} value={num(totalPaquetes)} icon={Package} accent="navy" />
+                      <KPI label={t('Claims (pagados)')} value={num(totalClaims)} icon={AlertTriangle} accent="red" />
                     </div>
 
                     <Card className="mb-4 p-4">
-                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis pagos y entregas</h2>
+                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis pagos y entregas')}</h2>
                       <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                         <table className="w-full min-w-[600px] border-collapse text-sm">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                              <th className="px-3 py-2.5 text-left font-semibold">Semana</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">Ind.</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">Dobles</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">Paquetes</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">Claims</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">A pagar</th>
-                              <th className="px-3 py-2.5 text-center font-semibold">Estado</th>
-                              <th className="px-3 py-2.5 text-right font-semibold">Recibo</th>
+                              <th className="px-3 py-2.5 text-left font-semibold">{t('Semana')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('Ind.')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('Dobles')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('Paquetes')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('Claims')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('A pagar')}</th>
+                              <th className="px-3 py-2.5 text-center font-semibold">{t('Estado')}</th>
+                              <th className="px-3 py-2.5 text-right font-semibold">{t('Recibo')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -310,12 +312,12 @@ export default function DriverPortal() {
                                   {money(w.pagoNeto)}
                                   {(w.prestamo > 0 || w.bono > 0) && (
                                     <div className="text-[10px] font-medium">
-                                      {w.prestamo > 0 && <span className="text-rose-500">−{money(w.prestamo)} préstamo </span>}
-                                      {w.bono > 0 && <span className="text-emerald-500">+{money(w.bono)} bono</span>}
+                                      {w.prestamo > 0 && <span className="text-rose-500">−{money(w.prestamo)} {t('préstamo')} </span>}
+                                      {w.bono > 0 && <span className="text-emerald-500">+{money(w.bono)} {t('bono')}</span>}
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-center"><Badge color="green">Pagado</Badge></td>
+                                <td className="px-3 py-2 text-center"><Badge color="green">{t('Pagado')}</Badge></td>
                                 <td className="px-3 py-2 text-right"><Boton variant="ghost" onClick={() => recibo(w)} className="px-2.5 py-1 text-xs"><FileText size={13} strokeWidth={1.8} /> PDF</Boton></td>
                               </tr>
                             ))}
@@ -325,19 +327,19 @@ export default function DriverPortal() {
                     </Card>
 
                     <Card className="p-4">
-                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis claims ({claims.length})</h2>
+                      <h2 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis claims')} ({claims.length})</h2>
                       <Tabla
                         columns={[
                           { key: 'waybill', label: 'Tracking' },
-                          { key: 'semana', label: 'Semana' },
-                          { key: 'claimType', label: 'Tipo' },
-                          { key: 'estado', label: 'Estado', align: 'center' },
+                          { key: 'semana', label: t('Semana') },
+                          { key: 'claimType', label: t('Tipo') },
+                          { key: 'estado', label: t('Estado'), align: 'center' },
                         ]}
                         rows={claims.map((c) => ({ ...c, _key: c.id }))}
-                        emptyText="No tienes claims registrados. ¡Bien!"
+                        emptyText={t('No tienes claims registrados. ¡Bien!')}
                         renderCell={(row, key) => {
                           if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
-                          if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                          if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">{t('Anulado')}</Badge> : row.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')}</Badge>
                           return row[key] || '—'
                         }}
                       />
@@ -351,40 +353,40 @@ export default function DriverPortal() {
             {vista === 'financiero' && (
               <>
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">Resumen financiero</h2>
+                  <h2 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">{t('Resumen financiero')}</h2>
                   <button
                     onClick={() => setVerMontos((v) => !v)}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-brand-gold dark:border-slate-700 dark:text-slate-300"
-                    title={verMontos ? 'Ocultar montos de claims' : 'Mostrar montos de claims'}
+                    title={verMontos ? t('Ocultar montos de claims') : t('Mostrar montos de claims')}
                   >
                     {verMontos ? <EyeOff size={16} strokeWidth={1.9} /> : <Eye size={16} strokeWidth={1.9} />}
-                    {verMontos ? 'Ocultar montos' : 'Ver montos'}
+                    {verMontos ? t('Ocultar montos') : t('Ver montos')}
                   </button>
                 </div>
 
                 {semanasPagadas.length === 0 ? (
-                  <EstadoVacio titulo="Aún no tienes pagos" texto="Cuando tu empresa marque una semana como pagada, verás aquí tu resumen de pagos y claims." mostrarBoton={false} />
+                  <EstadoVacio titulo={t('Aún no tienes pagos')} texto={t('Cuando tu empresa marque una semana como pagada, verás aquí tu resumen de pagos y claims.')} mostrarBoton={false} />
                 ) : (
                   <>
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <KPI label="Total pagado" value={money(totalPagado)} icon={Wallet} accent="green" />
-                      <KPI label="Semanas pagadas" value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
-                      <KPI label="Paquetes" value={num(totalPaquetes)} icon={Package} accent="navy" />
-                      <KPI label="Claims" value={num(totalClaims)} icon={AlertTriangle} accent="red" />
+                      <KPI label={t('Total pagado')} value={money(totalPagado)} icon={Wallet} accent="green" />
+                      <KPI label={t('Semanas pagadas')} value={num(semanasPagadas.length)} icon={CheckCircle2} accent="navy" />
+                      <KPI label={t('Paquetes')} value={num(totalPaquetes)} icon={Package} accent="navy" />
+                      <KPI label={t('Claims')} value={num(totalClaims)} icon={AlertTriangle} accent="red" />
                     </div>
 
                     <Card className="mb-4 p-4">
-                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Pagos por semana</h3>
+                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Pagos por semana')}</h3>
                       <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                         <table className="w-full min-w-[720px] border-collapse text-sm">
                           <thead>
                             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                              <th className="px-3 py-2 text-left font-semibold">Semana</th>
-                              <th className="px-3 py-2 text-right font-semibold">Paquetes</th>
-                              <th className="px-3 py-2 text-right font-semibold">Préstamo (loan)</th>
-                              <th className="px-3 py-2 text-right font-semibold">Bono</th>
-                              <th className="px-3 py-2 text-right font-semibold">Descuento por claims</th>
-                              <th className="px-3 py-2 text-right font-semibold">Total pagado</th>
+                              <th className="px-3 py-2 text-left font-semibold">{t('Semana')}</th>
+                              <th className="px-3 py-2 text-right font-semibold">{t('Paquetes')}</th>
+                              <th className="px-3 py-2 text-right font-semibold">{t('Préstamo (loan)')}</th>
+                              <th className="px-3 py-2 text-right font-semibold">{t('Bono')}</th>
+                              <th className="px-3 py-2 text-right font-semibold">{t('Descuento por claims')}</th>
+                              <th className="px-3 py-2 text-right font-semibold">{t('Total pagado')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -401,22 +403,22 @@ export default function DriverPortal() {
                           </tbody>
                         </table>
                       </div>
-                      <p className="mt-2 text-[11px] text-slate-400">“Descuento por claims” = lo que tu empresa te descontó por claims. Toca “Ver montos” para mostrarlo u ocultarlo.</p>
+                      <p className="mt-2 text-[11px] text-slate-400">{t('“Descuento por claims” = lo que tu empresa te descontó por claims. Toca “Ver montos” para mostrarlo u ocultarlo.')}</p>
                     </Card>
 
                     <Card className="p-4">
-                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Mis claims ({claims.length})</h3>
+                      <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis claims')} ({claims.length})</h3>
                       <Tabla
                         columns={[
-                          { key: 'semana', label: 'Semana' },
-                          { key: 'claimType', label: 'Tipo' },
-                          { key: 'estado', label: 'Estado', align: 'center' },
+                          { key: 'semana', label: t('Semana') },
+                          { key: 'claimType', label: t('Tipo') },
+                          { key: 'estado', label: t('Estado'), align: 'center' },
                         ]}
                         rows={claims.map((c) => ({ ...c, _key: c.id }))}
-                        emptyText="No tienes claims registrados. ¡Bien!"
+                        emptyText={t('No tienes claims registrados. ¡Bien!')}
                         renderCell={(row, key) => {
                           if (key === 'claimType') return etiquetaTipoClaim(row.claimType)
-                          if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">Anulado</Badge> : row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                          if (key === 'estado') return row.estadoRevision === 'anulado' ? <Badge color="slate">{t('Anulado')}</Badge> : row.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')}</Badge>
                           return row[key] || '—'
                         }}
                       />
@@ -429,7 +431,7 @@ export default function DriverPortal() {
             {/* ---------- PERFORMANCE ---------- */}
             {vista === 'performance' && (
               semanas.length === 0 ? (
-                <EstadoVacio titulo="Aún no hay datos" texto="Cuando tu empresa cargue tu primera semana, aquí verás tu desempeño." mostrarBoton={false} />
+                <EstadoVacio titulo={t('Aún no hay datos')} texto={t('Cuando tu empresa cargue tu primera semana, aquí verás tu desempeño.')} mostrarBoton={false} />
               ) : (
                 <Card className="overflow-hidden">
                   <div className={`p-5 ${consejo.tono === 'ojo' ? 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-500/10 dark:to-transparent' : 'bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-500/10 dark:to-transparent'}`}>
@@ -438,16 +440,16 @@ export default function DriverPortal() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{consejo.titulo}</h2>
-                          <Badge color="navy">Tu asesor</Badge>
+                          <Badge color="navy">{t('Tu asesor')}</Badge>
                         </div>
                         <p className="mt-1 mb-0 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{consejo.mensaje}</p>
                       </div>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <Mini label="Claims (semana)" valor={num(ultima?.claimsTotales || 0)} />
-                      <Mini label="Paquetes (semana)" valor={num(ultima?.paquetes || 0)} />
-                      {calif && <Mini label="Calificación" valor={calif.etiqueta} color={COLOR_NIVEL[calif.nivel]} />}
-                      {calif && <Mini label="Puntaje" valor={`${calif.puntaje}/100`} color={COLOR_NIVEL[calif.nivel]} />}
+                      <Mini label={t('Claims (semana)')} valor={num(ultima?.claimsTotales || 0)} />
+                      <Mini label={t('Paquetes (semana)')} valor={num(ultima?.paquetes || 0)} />
+                      {calif && <Mini label={t('Calificación')} valor={calif.etiqueta} color={COLOR_NIVEL[calif.nivel]} />}
+                      {calif && <Mini label={t('Puntaje')} valor={`${calif.puntaje}/100`} color={COLOR_NIVEL[calif.nivel]} />}
                     </div>
                     {calif && (
                       <div className="mt-3 flex items-center gap-2">
@@ -475,12 +477,12 @@ export default function DriverPortal() {
                     <div className="relative"><Foto url={fotoUrl} size={96} ringClass="ring-4 ring-white dark:ring-surface-dark-card shadow-lg" /></div>
                   </div>
                   <div>
-                    <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || 'Chofer'}</h2>
+                    <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{driverNombre || perfil?.nombre || t('Chofer')}</h2>
                     {perfil?.email && <div className="text-sm text-slate-400">{perfil.email}</div>}
                   </div>
                   {fotoMsg && <div className="w-full max-w-sm"><Aviso tipo={fotoMsg.tipo}>{fotoMsg.txt}</Aviso></div>}
                   <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoFoto ? 'pointer-events-none opacity-60' : ''}`}>
-                    {subiendoFoto ? <><Spinner /> Subiendo…</> : <><Camera size={16} strokeWidth={1.8} /> {fotoUrl ? 'Cambiar foto' : 'Subir foto de perfil'}</>}
+                    {subiendoFoto ? <><Spinner /> {t('Subiendo…')}</> : <><Camera size={16} strokeWidth={1.8} /> {fotoUrl ? t('Cambiar foto') : t('Subir foto de perfil')}</>}
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => subirFoto(e.target.files?.[0])} />
                   </label>
                 </div>
@@ -489,7 +491,7 @@ export default function DriverPortal() {
                 <div className="mt-5 rounded-2xl border border-slate-200 p-4 dark:border-slate-700/60">
                   <div className="mb-3 flex items-center gap-2">
                     <Award size={18} strokeWidth={1.8} className="text-brand-gold" />
-                    <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mi calificación</h3>
+                    <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mi calificación')}</h3>
                   </div>
                   {calif ? (
                     <div className="flex flex-wrap items-center gap-4">
@@ -500,11 +502,11 @@ export default function DriverPortal() {
                           <Estrellas n={calif.estrellas} />
                         </div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">{calif.desglose}</div>
-                        <div className="mt-1 text-xs text-slate-400">Semana: {ultima?.semana}</div>
+                        <div className="mt-1 text-xs text-slate-400">{t('Semana')}: {ultima?.semana}</div>
                       </div>
                     </div>
                   ) : (
-                    <p className="m-0 text-sm text-slate-400">Tu calificación aparecerá cuando tu empresa cargue tus entregas.</p>
+                    <p className="m-0 text-sm text-slate-400">{t('Tu calificación aparecerá cuando tu empresa cargue tus entregas.')}</p>
                   )}
                 </div>
                 </div>
@@ -518,63 +520,63 @@ export default function DriverPortal() {
                 <Card className="mb-4 p-4">
                   <div className="mb-2 flex items-center gap-2">
                     <ShieldCheck size={18} strokeWidth={1.8} className="text-brand-gold" />
-                    <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Requisitos para tu 1099</h2>
-                    {listo1099 ? <Badge color="green">Completo ✓</Badge> : <Badge color="gold">Faltan datos</Badge>}
+                    <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Requisitos para tu 1099')}</h2>
+                    {listo1099 ? <Badge color="green">{t('Completo ✓')}</Badge> : <Badge color="gold">{t('Faltan datos')}</Badge>}
                   </div>
-                  <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Completa <b>todos</b> los campos para poder generar tu 1099 a fin de año.</p>
+                  <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('Completa')} <b>{t('todos')}</b> {t('los campos para poder generar tu 1099 a fin de año.')}</p>
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    <ReqItem ok={req.nombre} label="Nombre completo" />
-                    <ReqItem ok={req.direccion} label="Dirección" />
-                    <ReqItem ok={req.datos} label="SSN y datos bancarios" />
-                    <ReqItem ok={req.w9} label="Formulario W-9 subido" />
-                    <ReqItem ok={req.licencia} label="Licencia / ID (recomendado)" />
+                    <ReqItem ok={req.nombre} label={t('Nombre completo')} />
+                    <ReqItem ok={req.direccion} label={t('Dirección')} />
+                    <ReqItem ok={req.datos} label={t('SSN y datos bancarios')} />
+                    <ReqItem ok={req.w9} label={t('Formulario W-9 subido')} />
+                    <ReqItem ok={req.licencia} label={t('Licencia / ID (recomendado)')} />
                   </div>
                 </Card>
 
                 {!driverId ? (
-                  <Aviso tipo="warn">Tu cuenta aún no está vinculada a tu registro de chofer. Pídele a tu empresa que la vincule.</Aviso>
+                  <Aviso tipo="warn">{t('Tu cuenta aún no está vinculada a tu registro de chofer. Pídele a tu empresa que la vincule.')}</Aviso>
                 ) : (
                   <>
                     {/* Datos de pago */}
                     <Card className="mb-4 p-5">
                       <div className="mb-2 flex items-center gap-2">
                         <Landmark size={18} strokeWidth={1.8} className="text-brand-gold" />
-                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mis datos de pago</h2>
-                        {estado?.tieneDatos && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Guardado</span></Badge>}
-                        {bloqueado && <Badge color="slate"><span className="inline-flex items-center gap-1"><Lock size={12} strokeWidth={2} /> Bloqueado</span></Badge>}
+                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis datos de pago')}</h2>
+                        {estado?.tieneDatos && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> {t('Guardado')}</span></Badge>}
+                        {bloqueado && <Badge color="slate"><span className="inline-flex items-center gap-1"><Lock size={12} strokeWidth={2} /> {t('Bloqueado')}</span></Badge>}
                       </div>
                       {bancoMsg && <div className="mb-3"><Aviso tipo={bancoMsg.tipo}>{bancoMsg.txt}</Aviso></div>}
 
                       {bloqueado ? (
                         <Aviso tipo="info">
-                          Ya enviaste tus datos y están <b>bloqueados</b> por seguridad. Si necesitas cambiarlos, pídele a tu empresa que <b>habilite la edición</b>; entonces podrás actualizarlos aquí.
+                          {t('Ya enviaste tus datos y están')} <b>{t('bloqueados')}</b> {t('por seguridad. Si necesitas cambiarlos, pídele a tu empresa que')} <b>{t('habilite la edición')}</b>{t('; entonces podrás actualizarlos aquí.')}
                         </Aviso>
                       ) : (
                         <>
-                          {estado?.puedeActualizar && estado?.tieneDatos && <Aviso tipo="ok">Tu empresa habilitó la edición. Vuelve a llenar tus datos para actualizarlos.</Aviso>}
-                          <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Registra tu <b>nombre</b>, <b>dirección</b>, <b>seguro social</b> y tu <b>cuenta bancaria</b> para recibir tus pagos. Solo tu empresa los verá.</p>
+                          {estado?.puedeActualizar && estado?.tieneDatos && <Aviso tipo="ok">{t('Tu empresa habilitó la edición. Vuelve a llenar tus datos para actualizarlos.')}</Aviso>}
+                          <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('Registra tu')} <b>{t('nombre')}</b>, <b>{t('dirección')}</b>, <b>{t('seguro social')}</b> {t('y tu')} <b>{t('cuenta bancaria')}</b> {t('para recibir tus pagos. Solo tu empresa los verá.')}</p>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <Campo label="Nombre completo (legal)"><Input value={banco.nombreCompleto} onChange={(e) => setB('nombreCompleto', e.target.value)} /></Campo>
-                            <Campo label="Dirección"><Input value={banco.direccion} onChange={(e) => setB('direccion', e.target.value)} placeholder="Calle, ciudad, estado, ZIP" /></Campo>
-                            <Campo label="Seguro Social (SSN, 9 dígitos)"><Input value={banco.ssn} inputMode="numeric" onChange={(e) => setB('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="123456789" /></Campo>
-                            <Campo label="Banco (lista de EE. UU.)">
+                            <Campo label={t('Nombre completo (legal)')}><Input value={banco.nombreCompleto} onChange={(e) => setB('nombreCompleto', e.target.value)} /></Campo>
+                            <Campo label={t('Dirección')}><Input value={banco.direccion} onChange={(e) => setB('direccion', e.target.value)} placeholder={t('Calle, ciudad, estado, ZIP')} /></Campo>
+                            <Campo label={t('Seguro Social (SSN, 9 dígitos)')}><Input value={banco.ssn} inputMode="numeric" onChange={(e) => setB('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="123456789" /></Campo>
+                            <Campo label={t('Banco (lista de EE. UU.)')}>
                               <Select value={banco.bancoNombre} onChange={(e) => setB('bancoNombre', e.target.value)}>
-                                <option value="">— Elige tu banco —</option>
+                                <option value="">{t('— Elige tu banco —')}</option>
                                 {BANCOS_EEUU.map((b) => <option key={b} value={b}>{b}</option>)}
                               </Select>
                             </Campo>
-                            <Campo label="Tipo de cuenta">
+                            <Campo label={t('Tipo de cuenta')}>
                               <Select value={banco.tipoCuenta} onChange={(e) => setB('tipoCuenta', e.target.value)}>
-                                <option value="checking">Corriente (checking)</option>
-                                <option value="savings">Ahorros (savings)</option>
+                                <option value="checking">{t('Corriente (checking)')}</option>
+                                <option value="savings">{t('Ahorros (savings)')}</option>
                               </Select>
                             </Campo>
-                            <Campo label="Número de cuenta"><Input value={banco.cuentaNumero} inputMode="numeric" onChange={(e) => setB('cuentaNumero', e.target.value.replace(/\s/g, ''))} /></Campo>
-                            <Campo label="Número de ruta (routing, 9 dígitos)"><Input value={banco.rutaNumero} inputMode="numeric" onChange={(e) => setB('rutaNumero', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="110000000" /></Campo>
+                            <Campo label={t('Número de cuenta')}><Input value={banco.cuentaNumero} inputMode="numeric" onChange={(e) => setB('cuentaNumero', e.target.value.replace(/\s/g, ''))} /></Campo>
+                            <Campo label={t('Número de ruta (routing, 9 dígitos)')}><Input value={banco.rutaNumero} inputMode="numeric" onChange={(e) => setB('rutaNumero', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="110000000" /></Campo>
                           </div>
                           <div className="mt-4">
                             <Boton variant="gold" onClick={guardarBanco} disabled={guardandoBanco}>
-                              {guardandoBanco ? <><Spinner /> Guardando…</> : <><Landmark size={15} strokeWidth={1.8} /> Guardar mis datos</>}
+                              {guardandoBanco ? <><Spinner /> {t('Guardando…')}</> : <><Landmark size={15} strokeWidth={1.8} /> {t('Guardar mis datos')}</>}
                             </Boton>
                           </div>
                         </>
@@ -585,55 +587,55 @@ export default function DriverPortal() {
                     <Card className="mb-4 p-5">
                       <div className="mb-2 flex items-center gap-2">
                         <FileText size={18} strokeWidth={1.8} className="text-brand-gold" />
-                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mi formulario W-9</h2>
-                        {estado?.w9Url && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Enviado</span></Badge>}
-                        {!estado?.w9Url && estado?.w9Solicitado && <Badge color="gold">Solicitado</Badge>}
+                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mi formulario W-9')}</h2>
+                        {estado?.w9Url && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> {t('Enviado')}</span></Badge>}
+                        {!estado?.w9Url && estado?.w9Solicitado && <Badge color="gold">{t('Solicitado')}</Badge>}
                       </div>
-                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">El sistema <b>llena tu W-9</b> con los datos que guardaste. Tú solo tienes que <b>firmar</b> aquí mismo (como DocuSign).</p>
+                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('El sistema')} <b>{t('llena tu W-9')}</b> {t('con los datos que guardaste. Tú solo tienes que')} <b>{t('firmar')}</b> {t('aquí mismo (como DocuSign).')}</p>
                       {w9Msg && <div className="mb-3"><Aviso tipo={w9Msg.tipo}>{w9Msg.txt}</Aviso></div>}
 
                       {!estado?.completo ? (
-                        <Aviso tipo="warn">Primero completa y guarda <b>todos</b> tus datos de pago (nombre, dirección, SSN y banco) arriba. Cuando estén completos, podrás firmar tu W-9.</Aviso>
+                        <Aviso tipo="warn">{t('Primero completa y guarda')} <b>{t('todos')}</b> {t('tus datos de pago (nombre, dirección, SSN y banco) arriba. Cuando estén completos, podrás firmar tu W-9.')}</Aviso>
                       ) : !firmando ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <Boton variant="gold" onClick={() => { setFirmando(true); setFirmaPng(null); setW9Msg(null) }}>
-                            <FileText size={15} strokeWidth={1.8} /> {estado?.w9Url ? 'Volver a firmar mi W-9' : 'Firmar mi W-9'}
+                            <FileText size={15} strokeWidth={1.8} /> {estado?.w9Url ? t('Volver a firmar mi W-9') : t('Firmar mi W-9')}
                           </Boton>
-                          {estado?.w9Url && <a href={estado.w9Url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Ver mi W-9 {estado?.w9Firmado ? 'firmado' : ''}</a>}
+                          {estado?.w9Url && <a href={estado.w9Url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">{t('Ver mi W-9')} {estado?.w9Firmado ? t('firmado') : ''}</a>}
                         </div>
                       ) : (
                         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
                           {/* Vista de los datos que llevará el W-9 */}
                           <div className="mb-3 grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
-                            <div><span className="text-slate-400">Nombre:</span> <b>{estado?.nombreCompleto || driverNombre}</b></div>
-                            <div><span className="text-slate-400">Dirección:</span> <b>{estado?.direccion || '—'}</b></div>
+                            <div><span className="text-slate-400">{t('Nombre')}:</span> <b>{estado?.nombreCompleto || driverNombre}</b></div>
+                            <div><span className="text-slate-400">{t('Dirección')}:</span> <b>{estado?.direccion || '—'}</b></div>
                             <div><span className="text-slate-400">SSN:</span> <b>•••-••-••••</b></div>
-                            <div><span className="text-slate-400">Fecha:</span> <b>{new Date().toLocaleDateString()}</b></div>
+                            <div><span className="text-slate-400">{t('Fecha')}:</span> <b>{new Date().toLocaleDateString()}</b></div>
                           </div>
-                          <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">Tu firma</div>
+                          <div className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{t('Tu firma')}</div>
                           <FirmaCanvas onFirma={setFirmaPng} />
                           <div className="mt-3 flex flex-wrap justify-end gap-2">
-                            <Boton variant="ghost" onClick={() => { setFirmando(false); setFirmaPng(null) }} disabled={enviandoFirma}>Cancelar</Boton>
+                            <Boton variant="ghost" onClick={() => { setFirmando(false); setFirmaPng(null) }} disabled={enviandoFirma}>{t('Cancelar')}</Boton>
                             <Boton variant="gold" onClick={firmarW9} disabled={!firmaPng || enviandoFirma}>
-                              {enviandoFirma ? <><Spinner /> Generando…</> : <><FileText size={15} strokeWidth={1.8} /> Firmar y enviar W-9</>}
+                              {enviandoFirma ? <><Spinner /> {t('Generando…')}</> : <><FileText size={15} strokeWidth={1.8} /> {t('Firmar y enviar W-9')}</>}
                             </Boton>
                           </div>
-                          {!firmaPng && <p className="mt-1 text-right text-[11px] text-slate-400">Dibuja tu firma y toca “Usar esta firma”.</p>}
+                          {!firmaPng && <p className="mt-1 text-right text-[11px] text-slate-400">{t('Dibuja tu firma y toca “Usar esta firma”.')}</p>}
                         </div>
                       )}
 
                       {/* Alternativa: subir el W-9 oficial manualmente */}
                       <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/50">
                         <button onClick={() => setSubirManual((s) => !s)} className="text-xs font-semibold text-slate-500 hover:text-brand-navy dark:hover:text-slate-200">
-                          {subirManual ? '− Ocultar' : '¿Prefieres subir tu propio W-9? (opcional)'}
+                          {subirManual ? '− ' + t('Ocultar') : t('¿Prefieres subir tu propio W-9? (opcional)')}
                         </button>
                         {subirManual && (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-brand-navy no-underline hover:border-brand-gold dark:border-slate-600 dark:text-slate-200">
-                              <FileText size={15} strokeWidth={1.8} /> Abrir W-9 oficial (IRS)
+                              <FileText size={15} strokeWidth={1.8} /> {t('Abrir W-9 oficial (IRS)')}
                             </a>
                             <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoW9 ? 'pointer-events-none opacity-60' : ''}`}>
-                              {subiendoW9 ? <><Spinner /> Subiendo…</> : <><Upload size={15} strokeWidth={1.8} /> Subir W-9 lleno</>}
+                              {subiendoW9 ? <><Spinner /> {t('Subiendo…')}</> : <><Upload size={15} strokeWidth={1.8} /> {t('Subir W-9 lleno')}</>}
                               <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirW9(e.target.files?.[0])} />
                             </label>
                           </div>
@@ -645,17 +647,17 @@ export default function DriverPortal() {
                     <Card className="p-5">
                       <div className="mb-2 flex items-center gap-2">
                         <IdCard size={18} strokeWidth={1.8} className="text-brand-gold" />
-                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mi licencia / ID</h2>
-                        {estado?.licenciaUrl && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> Enviada</span></Badge>}
+                        <h2 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mi licencia / ID')}</h2>
+                        {estado?.licenciaUrl && <Badge color="green"><span className="inline-flex items-center gap-1"><CheckCircle2 size={13} strokeWidth={2} /> {t('Enviada')}</span></Badge>}
                       </div>
-                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Sube una foto o PDF de tu <b>licencia de conducir o identificación</b>. Solo tu empresa la verá.</p>
+                      <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('Sube una foto o PDF de tu')} <b>{t('licencia de conducir o identificación')}</b>{t('. Solo tu empresa la verá.')}</p>
                       {licMsg && <div className="mb-3"><Aviso tipo={licMsg.tipo}>{licMsg.txt}</Aviso></div>}
                       <div className="flex flex-wrap items-center gap-2">
                         <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 ${subiendoLic ? 'pointer-events-none opacity-60' : ''}`}>
-                          {subiendoLic ? <><Spinner /> Subiendo…</> : <><Upload size={16} strokeWidth={1.8} /> {estado?.licenciaUrl ? 'Subir otra' : 'Subir mi licencia'}</>}
+                          {subiendoLic ? <><Spinner /> {t('Subiendo…')}</> : <><Upload size={16} strokeWidth={1.8} /> {estado?.licenciaUrl ? t('Subir otra') : t('Subir mi licencia')}</>}
                           <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => subirLic(e.target.files?.[0])} />
                         </label>
-                        {estado?.licenciaUrl && <a href={estado.licenciaUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">Ver mi licencia</a>}
+                        {estado?.licenciaUrl && <a href={estado.licenciaUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400">{t('Ver mi licencia')}</a>}
                       </div>
                     </Card>
                   </>
@@ -664,7 +666,7 @@ export default function DriverPortal() {
             )}
 
             <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-400">
-              <ShieldCheck size={13} strokeWidth={1.8} /> Solo tú puedes ver esta información. No tienes acceso a datos de la empresa ni de otros choferes.
+              <ShieldCheck size={13} strokeWidth={1.8} /> {t('Solo tú puedes ver esta información. No tienes acceso a datos de la empresa ni de otros choferes.')}
             </p>
           </main>
         </div>
@@ -677,7 +679,7 @@ export default function DriverPortal() {
             return (
               <button key={m.k} onClick={() => setVista(m.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition ${activo ? 'text-brand-navy dark:text-brand-gold' : 'text-slate-400'}`}>
                 <span className={`grid h-8 w-12 place-items-center rounded-full transition ${activo ? 'bg-brand-navy/10 dark:bg-brand-gold/15' : ''}`}><Icon size={21} strokeWidth={1.9} /></span>
-                {m.label}
+                {t(m.label)}
               </button>
             )
           })}
@@ -689,7 +691,8 @@ export default function DriverPortal() {
 }
 
 function Foto({ url, size = 48, ringClass = '' }) {
-  if (url) return <img src={url} alt="Foto de perfil" className={`flex-shrink-0 rounded-2xl object-cover ${ringClass}`} style={{ width: size, height: size }} />
+  const { t } = useLang()
+  if (url) return <img src={url} alt={t('Foto de perfil')} className={`flex-shrink-0 rounded-2xl object-cover ${ringClass}`} style={{ width: size, height: size }} />
   return (
     <div className={`grid flex-shrink-0 place-items-center rounded-2xl bg-brand-navy text-brand-gold ${ringClass}`} style={{ width: size, height: size }}>
       <Truck size={Math.round(size * 0.45)} strokeWidth={1.8} />

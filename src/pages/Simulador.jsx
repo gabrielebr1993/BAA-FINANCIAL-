@@ -18,6 +18,7 @@ import { money, num, pct } from '../utils/format'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, Boton, Select, Input, Aviso, EstadoVacio, PageTitle, Spinner } from '../components/ui'
 import { ComparativoCard, ImpactoCard, GaugeCard } from '../components/charts'
+import { useLang } from '../i18n'
 import { SlidersHorizontal, RotateCcw, TrendingUp, DollarSign, Building2, Target, Receipt, Globe, FileSpreadsheet, FileText, Zap, AlertTriangle, CheckCircle2, Info, Scale, ChevronDown, Check, Save, History, Trash2, FolderOpen, Eye, EyeOff, Search, X } from 'lucide-react'
 
 const MENSUAL = 4.3
@@ -56,6 +57,7 @@ const NIVEL_UI = {
 export default function Simulador({ embed = false }) {
   const { invoices, drivers, managers, ciudadesEmpresa, activeCompanyId, ajustes, reloadAjustes, reloadInvoices } = useData()
   const { perfil, esSuperAdmin } = useAuth()
+  const { t } = useLang()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
   const [dragRepro, setDragRepro] = useState(false)
   const [verHist, setVerHist] = useState(false)
@@ -257,7 +259,7 @@ export default function Simulador({ embed = false }) {
     try {
       const rr = await reprocesarFactura(inv, files)
       if (rr) { setReproMsg(rr); if (rr.tipo === 'ok') await reloadInvoices() }
-    } catch (err) { setReproMsg({ tipo: 'error', txt: 'No se pudo procesar: ' + err.message }) }
+    } catch (err) { setReproMsg({ tipo: 'error', txt: t('No se pudo procesar: ') + err.message }) }
     finally { setReprocesando(false); setReproTargetId(null) }
   }
   const pedirArchivo = (inv) => { targetInvRef.current = inv; fileRef.current?.click() }
@@ -422,7 +424,7 @@ export default function Simulador({ embed = false }) {
   const fmtFechaHist = (ts) => { try { return new Date(ts).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' }) } catch { return ts } }
   const guardar = async () => {
     const sug = `${resumen.label} ${pctTxt} · ${new Date().toLocaleDateString('es')}`
-    const nombre = window.prompt('Nombre de la proyección:', sug)
+    const nombre = window.prompt(t('Nombre de la proyección:'), sug)
     if (nombre == null) return
     setGuardando(true)
     try {
@@ -435,8 +437,8 @@ export default function Simulador({ embed = false }) {
         resumen: { label: resumen.label, ingresoBase: resumen.ingresoBase, ingresoProy: resumen.ingresoProy, gananciaBase: resumen.gananciaBase, gananciaProy: resumen.gananciaProy, margenBase: resumen.margenBase, margenProy: resumen.margenProy, pct: pctTxt, pagoEditado: hayManual, pagoEff: r2(effFlat), gananciaSiSigo: r2(gananciaSiSigo) },
       })
       await reloadAjustes()
-      setReproMsg({ tipo: 'ok', txt: 'Proyección guardada en el historial.' })
-    } catch (e) { setReproMsg({ tipo: 'error', txt: 'No se pudo guardar: ' + e.message }) }
+      setReproMsg({ tipo: 'ok', txt: t('Proyección guardada en el historial.') })
+    } catch (e) { setReproMsg({ tipo: 'error', txt: t('No se pudo guardar: ') + e.message }) }
     finally { setGuardando(false) }
   }
   const cargar = (p) => {
@@ -455,7 +457,7 @@ export default function Simulador({ embed = false }) {
     setVerHist(false)
   }
   const borrar = async (id) => {
-    if (!window.confirm('¿Eliminar esta proyección guardada?')) return
+    if (!window.confirm(t('¿Eliminar esta proyección guardada?'))) return
     await borrarProyeccion(activeCompanyId, proyeccionesGuardadas, id)
     await reloadAjustes()
   }
@@ -464,16 +466,16 @@ export default function Simulador({ embed = false }) {
     const etiquetaCol = porDrv ? 'Driver' : 'Ruta'
     const nombre = `pago_${porDrv ? 'por_driver' : 'por_ruta'}_${etiquetaCiudades}_margen${Math.round(margenObj * 100)}`.replace(/[^\w-]+/g, '_')
     const resumenRows = [
-      { Concepto: 'Agrupado por', Valor: porDrv ? 'Driver' : 'Ruta' },
-      { Concepto: 'Margen objetivo', Valor: `${Math.round(margenObj * 100)}%` },
-      { Concepto: hayManual ? 'Rates editados a mano' : 'Rates', Valor: hayManual ? 'Sí (algunos valores manuales)' : 'Todos sugeridos' },
-      { Concepto: 'Pago al driver actual ($/paq)', Valor: Number(fuente.linealFlat.toFixed(2)) },
-      { Concepto: 'Pago al driver del escenario ($/paq)', Valor: Number(effFlat.toFixed(2)) },
-      { Concepto: 'Ganancia real hoy', Valor: Math.round(real.gananciaReal) },
-      { Concepto: 'Ganancia real con este escenario', Valor: Math.round(gananciaSiSigo) },
-      ...(hayGofoManual ? [{ Concepto: 'Cambio de ingreso Gofo (editado)', Valor: Math.round(deltaIngreso) }] : []),
-      { Concepto: 'Diferencia por semana', Valor: Math.round(difTotal) },
-      { Concepto: 'Diferencia por mes (~4.3 sem)', Valor: Math.round(difTotal * MENSUAL) },
+      { Concepto: t('Agrupado por'), Valor: porDrv ? 'Driver' : t('Ruta') },
+      { Concepto: t('Margen objetivo'), Valor: `${Math.round(margenObj * 100)}%` },
+      { Concepto: hayManual ? t('Rates editados a mano') : t('Rates'), Valor: hayManual ? t('Sí (algunos valores manuales)') : t('Todos sugeridos') },
+      { Concepto: t('Pago al driver actual ($/paq)'), Valor: Number(fuente.linealFlat.toFixed(2)) },
+      { Concepto: t('Pago al driver del escenario ($/paq)'), Valor: Number(effFlat.toFixed(2)) },
+      { Concepto: t('Ganancia real hoy'), Valor: Math.round(real.gananciaReal) },
+      { Concepto: t('Ganancia real con este escenario'), Valor: Math.round(gananciaSiSigo) },
+      ...(hayGofoManual ? [{ Concepto: t('Cambio de ingreso Gofo (editado)'), Valor: Math.round(deltaIngreso) }] : []),
+      { Concepto: t('Diferencia por semana'), Valor: Math.round(difTotal) },
+      { Concepto: t('Diferencia por mes (~4.3 sem)'), Valor: Math.round(difTotal * MENSUAL) },
     ]
     // Solo se exportan las columnas visibles (ojito). La columna ruta/driver siempre va.
     if (tipo === 'excel') {
@@ -496,15 +498,15 @@ export default function Simulador({ embed = false }) {
       ])
     }
     const head = []
-    if (verCol('ciudad') && variasCiudades) head.push('Ciudad')
+    if (verCol('ciudad') && variasCiudades) head.push(t('Ciudad'))
     head.push(etiquetaCol)
-    if (verCol('paquetes')) head.push('Paq.')
-    if (verCol('gofo')) head.push('Gofo $/paq')
-    if (verCol('actual')) head.push('Actual $/paq')
-    if (verCol('sugerido')) head.push('Sugerido $/paq', 'Rate usado')
-    if (verCol('max')) head.push('Máx $/paq')
-    if (verCol('margen')) head.push('Margen')
-    if (verCol('ganancia')) head.push('Ganancia')
+    if (verCol('paquetes')) head.push(t('Paq.'))
+    if (verCol('gofo')) head.push(t('Gofo $/paq'))
+    if (verCol('actual')) head.push(t('Actual $/paq'))
+    if (verCol('sugerido')) head.push(t('Sugerido $/paq'), t('Rate usado'))
+    if (verCol('max')) head.push(t('Máx $/paq'))
+    if (verCol('margen')) head.push(t('Margen'))
+    if (verCol('ganancia')) head.push(t('Ganancia'))
     const body = escenario.rows.map((f) => {
       const r = []
       if (verCol('ciudad') && variasCiudades) r.push(f.ciudad)
@@ -518,14 +520,14 @@ export default function Simulador({ embed = false }) {
       if (verCol('ganancia')) r.push(money(f.gan))
       return r
     })
-    return exportarPDF(nombre, `Pago por paquete (${porDrv ? 'por driver' : 'por ruta'}) · margen ${pct(margenObj)}`, etiquetaCiudades, [
-      { titulo: 'Impacto en la ganancia real', head: ['Concepto', 'Valor'], body: resumenRows.map((r) => [r.Concepto, typeof r.Valor === 'number' ? money(r.Valor) : r.Valor]) },
-      { titulo: `Pago por paquete (lineal) por ${porDrv ? 'driver' : 'ruta'}`, head, body },
+    return exportarPDF(nombre, `${t('Pago por paquete')} (${porDrv ? t('por driver') : t('por ruta')}) · ${t('margen')} ${pct(margenObj)}`, etiquetaCiudades, [
+      { titulo: t('Impacto en la ganancia real'), head: [t('Concepto'), t('Valor')], body: resumenRows.map((r) => [r.Concepto, typeof r.Valor === 'number' ? money(r.Valor) : r.Valor]) },
+      { titulo: `${t('Pago por paquete (lineal) por')} ${porDrv ? t('driver') : t('ruta')}`, head, body },
     ])
   }
 
-  if (!esDueno) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<Aviso tipo="warn">La proyección está disponible solo para el dueño.</Aviso></div>
-  if (!ciudades.length) return <div>{!embed && <PageTitle>Proyección</PageTitle>}<EstadoVacio titulo="Sin facturas" texto="Carga una factura para poder simular precios." mostrarBoton={false} /></div>
+  if (!esDueno) return <div>{!embed && <PageTitle>{t('Proyección')}</PageTitle>}<Aviso tipo="warn">{t('La proyección está disponible solo para el dueño.')}</Aviso></div>
+  if (!ciudades.length) return <div>{!embed && <PageTitle>{t('Proyección')}</PageTitle>}<EstadoVacio titulo={t('Sin facturas')} texto={t('Carga una factura para poder simular precios.')} mostrarBoton={false} /></div>
 
   const colorCelda = (proyec, actual) => (proyec < actual - 0.001 ? 'text-rose-600 border-rose-300 dark:text-rose-400' : proyec > actual + 0.001 ? 'text-emerald-600 border-emerald-300 dark:text-emerald-400' : 'text-slate-600 border-slate-200 dark:text-slate-300')
 
@@ -534,26 +536,26 @@ export default function Simulador({ embed = false }) {
       const filasX = proyCiudad.map((c) => ({ Ciudad: c.nombre, Semana: c.semana || '', 'Ingreso actual': Math.round(c.ingresoBase), 'Ingreso proyectado': Math.round(c.ingresoProy), 'Ganancia real actual': Math.round(c.gananciaBase), 'Ganancia real proyectada': Math.round(c.gananciaProy), 'Δ': Math.round(c.gananciaProy - c.gananciaBase), Equilibrio: bePctTxt(c.bePctCiudad) }))
       const nombre = `proyeccion_${etiquetaCiudades}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
       if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Ciudades', rows: filasX }])
-      return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ciudad', head: ['Ciudad', 'Semana', 'Ing. actual', 'Ing. proy.', 'Gan. actual', 'Gan. proy.', 'Δ', 'Equilibrio'], body: proyCiudad.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
+      return exportarPDF(nombre, `${t('Proyección')} · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: t('Proyección por ciudad'), head: [t('Ciudad'), t('Semana'), t('Ing. actual'), t('Ing. proy.'), t('Gan. actual'), t('Gan. proy.'), 'Δ', t('Equilibrio')], body: proyCiudad.map((c) => [c.nombre, c.semana || '', money(c.ingresoBase), money(c.ingresoProy), money(c.gananciaBase), money(c.gananciaProy), money(c.gananciaProy - c.gananciaBase), bePctTxt(c.bePctCiudad)]) }])
     }
     const filasX = proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return { Ciudad: b.nombreCiudad || '', Ruta: b.rutaNombre || r.ruta, 'Ingreso actual': Math.round(r.ingresoBase), 'Ingreso proyectado': Math.round(r.ingresoProy), 'Ganancia (ruta) proy.': Math.round(r.gananciaProy), 'Δ ruta': Math.round(r.gananciaProy - r.gananciaBase) } })
     const nombre = `proyeccion_${etiquetaCiudades}_${pctTxt.replace('%', 'pct')}`.replace(/[^\w-]+/g, '_')
     if (tipo === 'excel') return exportarExcel(nombre, [{ nombre: 'Rutas', rows: filasX }])
-    return exportarPDF(nombre, `Proyección · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: 'Proyección por ruta', head: ['Ciudad', 'Ruta', 'Ing. actual', 'Ing. proy.', 'Gan. ruta proy.', 'Δ ruta'], body: proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return [b.nombreCiudad || '', b.rutaNombre || r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase)] }) }])
+    return exportarPDF(nombre, `${t('Proyección')} · ${etiquetaCiudades} (${pctTxt})`, '', [{ titulo: t('Proyección por ruta'), head: [t('Ciudad'), t('Ruta'), t('Ing. actual'), t('Ing. proy.'), t('Gan. ruta proy.'), t('Δ ruta')], body: proj.rutas.map((r) => { const b = baseMulti.rutas.find((x) => x.ruta === r.ruta) || {}; return [b.nombreCiudad || '', b.rutaNombre || r.ruta, money(r.ingresoBase), money(r.ingresoProy), money(r.gananciaProy), money(r.gananciaProy - r.gananciaBase)] }) }])
   }
 
   return (
     <div>
-      {!embed && <PageTitle>Proyección</PageTitle>}
+      {!embed && <PageTitle>{t('Proyección')}</PageTitle>}
       <Aviso tipo="info" className="mb-4">
-        <b>Simulador de precios.</b> Proyecta tu ingreso y tu <b>ganancia REAL</b> (igual que Financiero: ingreso neto − pago a choferes − gastos fijos) si Gofo cambia sus precios. Es
-        <b> solo simulación</b>: no cambia ningún dato. El pago a los choferes usa la <b>tarifa real</b> y es fijo.
+        <b>{t('Simulador de precios.')}</b> {t('Proyecta tu ingreso y tu')} <b>{t('ganancia REAL')}</b> {t('(igual que Financiero: ingreso neto − pago a choferes − gastos fijos) si Gofo cambia sus precios. Es')}
+        <b>{t(' solo simulación')}</b>{t(': no cambia ningún dato. El pago a los choferes usa la')} <b>{t('tarifa real')}</b> {t('y es fijo.')}
       </Aviso>
 
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-end gap-3">
           <div className="relative" ref={cRef}>
-            <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Building2 size={13} /> Ciudad(es)</div>
+            <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Building2 size={13} /> {t('Ciudad(es)')}</div>
             <button type="button" onClick={() => setAbreCiudades((o) => !o)} className="inline-flex min-w-[190px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
               <Building2 size={15} strokeWidth={1.8} className="text-brand-gold" />
               <span className="flex-1 truncate text-left">{etiquetaCiudades}</span>
@@ -561,7 +563,7 @@ export default function Simulador({ embed = false }) {
             </button>
             {abreCiudades && (
               <div className="absolute left-0 z-30 mt-1 max-h-72 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                <button type="button" onClick={() => { setCiudadesSel([]); resetear() }} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${ciudadesSel.length === 0 ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}>🌎 Todas las ciudades{ciudadesSel.length === 0 && <Check size={15} strokeWidth={2.4} className="text-brand-gold" />}</button>
+                <button type="button" onClick={() => { setCiudadesSel([]); resetear() }} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${ciudadesSel.length === 0 ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}>🌎 {t('Todas las ciudades')}{ciudadesSel.length === 0 && <Check size={15} strokeWidth={2.4} className="text-brand-gold" />}</button>
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700/60" />
                 {ciudades.map((c) => {
                   const on = ciudadesSel.includes(c.codigo)
@@ -572,27 +574,27 @@ export default function Simulador({ embed = false }) {
                     </button>
                   )
                 })}
-                {ciudadesSel.length >= 2 && <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Editas las rutas de {ciudadesSel.length} ciudades y ves su proyección combinada.</div>}
+                {ciudadesSel.length >= 2 && <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">{t('Editas las rutas de')} {ciudadesSel.length} {t('ciudades y ves su proyección combinada.')}</div>}
               </div>
             )}
           </div>
           {unaCiudad && (
             <div>
-              <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Receipt size={13} /> Factura</div>
+              <div className="mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400"><Receipt size={13} /> {t('Factura')}</div>
               <Select value={facturaSimId} onChange={(e) => { setFacturaSimId(e.target.value); resetear() }} className="min-w-[220px]">
                 {facturasCiudad.map((f) => <option key={f.id} value={f.id}>{f.semana || `${fFecha(f.fechaInicio)}–${fFecha(f.fechaFin)}`}</option>)}
               </Select>
             </div>
           )}
-          <span className="text-xs text-slate-400">{esResumen ? `${unidades.length} ciudad(es) · factura más reciente de cada una` : `${baseMulti.rutas.length} ruta(s) · ${unidades.length} ciudad(es)`}</span>
+          <span className="text-xs text-slate-400">{esResumen ? `${unidades.length} ${t('ciudad(es) · factura más reciente de cada una')}` : `${baseMulti.rutas.length} ${t('ruta(s)')} · ${unidades.length} ${t('ciudad(es)')}`}</span>
           {unaCiudad && invSel && (baseMulti.tieneDetalle
             ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> desglose por peso disponible</span>
-                <button onClick={() => fileRef.current?.click()} disabled={reprocesando} className="text-xs text-slate-400 underline underline-offset-2 hover:text-brand-navy disabled:opacity-50 dark:hover:text-white">{reprocesando ? 'actualizando…' : 'actualizar'}</button>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={12} strokeWidth={2.2} /> {t('desglose por peso disponible')}</span>
+                <button onClick={() => fileRef.current?.click()} disabled={reprocesando} className="text-xs text-slate-400 underline underline-offset-2 hover:text-brand-navy disabled:opacity-50 dark:hover:text-white">{reprocesando ? t('actualizando…') : t('actualizar')}</button>
               </span>
             )
-            : <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><Scale size={12} strokeWidth={2} /> Sin desglose — reprocesar</span>)}
+            : <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><Scale size={12} strokeWidth={2} /> {t('Sin desglose — reprocesar')}</span>)}
           {hayResultado && (
             <div className="ml-auto flex gap-2">
               <Boton variant="ghost" onClick={() => exportar('excel')} className="px-3 py-1.5 text-xs"><FileSpreadsheet size={15} strokeWidth={1.8} /> Excel</Boton>
@@ -609,8 +611,8 @@ export default function Simulador({ embed = false }) {
           <div className="mb-3 flex items-center gap-2">
             <Scale size={20} strokeWidth={1.8} className={baseMulti.tieneDetalle ? 'text-emerald-500' : 'text-amber-500'} />
             <div>
-              <div className="font-semibold text-brand-navy dark:text-slate-100">{baseMulti.tieneDetalle ? 'Desglose por peso disponible ✓' : 'Esta factura usa el precio PROMEDIO por ruta'}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">{baseMulti.tieneDetalle ? 'Ya tienes los precios reales por peso. Puedes volver a subir el Excel para actualizarlos.' : 'Reprocesa su Excel para obtener los precios reales por peso.'} Solo alimenta el simulador — <b>no cambia pagos, ganancias ni totales</b>.</div>
+              <div className="font-semibold text-brand-navy dark:text-slate-100">{baseMulti.tieneDetalle ? t('Desglose por peso disponible ✓') : t('Esta factura usa el precio PROMEDIO por ruta')}</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">{baseMulti.tieneDetalle ? t('Ya tienes los precios reales por peso. Puedes volver a subir el Excel para actualizarlos.') : t('Reprocesa su Excel para obtener los precios reales por peso.')} {t('Solo alimenta el simulador —')} <b>{t('no cambia pagos, ganancias ni totales')}</b>.</div>
             </div>
           </div>
           <div
@@ -621,8 +623,8 @@ export default function Simulador({ embed = false }) {
             className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition ${dragRepro ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 hover:border-brand-gold dark:border-slate-600'}`}
           >
             {reprocesando ? <Spinner /> : <Scale size={22} strokeWidth={1.8} className="text-brand-gold" />}
-            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? 'Procesando…' : (baseMulti.tieneDetalle ? 'Arrastra el Excel aquí para actualizar el desglose' : 'Arrastra el Excel de esta factura aquí')}</div>
-            <div className="text-xs text-slate-400">o haz clic para elegirlo · .xlsx, .xls</div>
+            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{reprocesando ? t('Procesando…') : (baseMulti.tieneDetalle ? t('Arrastra el Excel aquí para actualizar el desglose') : t('Arrastra el Excel de esta factura aquí'))}</div>
+            <div className="text-xs text-slate-400">{t('o haz clic para elegirlo · .xlsx, .xls')}</div>
           </div>
         </Card>
       )}
@@ -630,8 +632,8 @@ export default function Simulador({ embed = false }) {
       {/* Multi-ciudad: reprocesar la factura de CADA ciudad para tener sus precios por peso. */}
       {!esResumen && variasCiudades && (
         <Card className="mb-4 p-4">
-          <div className="mb-1 flex items-center gap-2"><Scale size={18} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precios por peso · factura de cada ciudad</h3></div>
-          <p className="mb-3 text-xs text-slate-400">Sube o <b>arrastra</b> el Excel de la factura de cada ciudad para tener los precios reales por peso de todas sus rutas. Solo alimenta el simulador — no cambia pagos ni totales.</p>
+          <div className="mb-1 flex items-center gap-2"><Scale size={18} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Precios por peso · factura de cada ciudad')}</h3></div>
+          <p className="mb-3 text-xs text-slate-400">{t('Sube o')} <b>{t('arrastra')}</b> {t('el Excel de la factura de cada ciudad para tener los precios reales por peso de todas sus rutas. Solo alimenta el simulador — no cambia pagos ni totales.')}</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {unidades.map((u) => {
               const ok = tieneDesglose(u.inv, u.ciudad)
@@ -648,9 +650,9 @@ export default function Simulador({ embed = false }) {
                   <div className="font-semibold text-brand-navy dark:text-slate-100">{nombreDeCiudad(u.ciudad)}</div>
                   <div className="text-[11px] text-slate-400">{u.inv.semana || fFecha(u.inv.fechaInicio)}</div>
                   <div className="mt-1.5 text-xs">
-                    {proc ? <span className="inline-flex items-center gap-1 text-slate-500"><Spinner /> Procesando…</span>
-                      : ok ? <span className="inline-flex items-center gap-1 font-medium text-emerald-600"><CheckCircle2 size={13} strokeWidth={2.2} /> desglose por peso</span>
-                        : <span className="font-medium text-amber-600">sin desglose · arrastra o clic</span>}
+                    {proc ? <span className="inline-flex items-center gap-1 text-slate-500"><Spinner /> {t('Procesando…')}</span>
+                      : ok ? <span className="inline-flex items-center gap-1 font-medium text-emerald-600"><CheckCircle2 size={13} strokeWidth={2.2} /> {t('desglose por peso')}</span>
+                        : <span className="font-medium text-amber-600">{t('sin desglose · arrastra o clic')}</span>}
                   </div>
                 </div>
               )
@@ -660,38 +662,38 @@ export default function Simulador({ embed = false }) {
       )}
 
       {!hayResultado ? (
-        <EstadoVacio titulo="Sin rutas" texto="No hay rutas para simular con esta selección." mostrarBoton={false} />
+        <EstadoVacio titulo={t('Sin rutas')} texto={t('No hay rutas para simular con esta selección.')} mostrarBoton={false} />
       ) : (
         <>
           <div className="mb-2 flex flex-wrap gap-3">
-            <KPI label="Ingreso Gofo (entregas)" value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" sub="lo que paga Gofo" />
-            {Math.abs(resumen.claimsGofo) > 0.01 && <KPI label="Claims (Gofo descuenta)" value={money(resumen.claimsGofo)} icon={AlertTriangle} accent="red" sub="rebaja de Gofo por claims" />}
-            <KPI label="Pago a choferes REAL (fijo)" value={money(resumen.pago)} icon={Receipt} accent="navy" sub="tarifa real · no cambia" />
-            <KPI label="Gastos fijos" value={money(resumen.gastos)} icon={Building2} accent="slate" sub="managers de la(s) ciudad(es)" />
-            <KPI label="Ganancia REAL actual" value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`margen ${pct(resumen.margenBase)}`} />
+            <KPI label={t('Ingreso Gofo (entregas)')} value={money(resumen.ingresoBase)} icon={DollarSign} accent="green" sub={t('lo que paga Gofo')} />
+            {Math.abs(resumen.claimsGofo) > 0.01 && <KPI label={t('Claims (Gofo descuenta)')} value={money(resumen.claimsGofo)} icon={AlertTriangle} accent="red" sub={t('rebaja de Gofo por claims')} />}
+            <KPI label={t('Pago a choferes REAL (fijo)')} value={money(resumen.pago)} icon={Receipt} accent="navy" sub={t('tarifa real · no cambia')} />
+            <KPI label={t('Gastos fijos')} value={money(resumen.gastos)} icon={Building2} accent="slate" sub={t('managers de la(s) ciudad(es)')} />
+            <KPI label={t('Ganancia REAL actual')} value={money(resumen.gananciaBase)} icon={TrendingUp} accent="gold" sub={`${t('margen')} ${pct(resumen.margenBase)}`} />
           </div>
           <p className="mb-4 text-xs text-slate-400">
-            Cuadre: Ingreso Gofo <b>{money(resumen.ingresoBase)}</b>
-            {Math.abs(resumen.claimsGofo) > 0.01 && <> − claims <b>{money(-resumen.claimsGofo)}</b></>}
-            {' '}− pago choferes <b>{money(resumen.pago)}</b> − gastos fijos <b>{money(resumen.gastos)}</b> = <b className="text-brand-navy dark:text-slate-200">{money(resumen.gananciaBase)}</b> de ganancia real.
+            {t('Cuadre: Ingreso Gofo')} <b>{money(resumen.ingresoBase)}</b>
+            {Math.abs(resumen.claimsGofo) > 0.01 && <> − {t('claims')} <b>{money(-resumen.claimsGofo)}</b></>}
+            {' '}− {t('pago choferes')} <b>{money(resumen.pago)}</b> − {t('gastos fijos')} <b>{money(resumen.gastos)}</b> = <b className="text-brand-navy dark:text-slate-200">{money(resumen.gananciaBase)}</b> {t('de ganancia real.')}
           </p>
 
           <Card className={`mb-4 flex items-start gap-3 p-4 ${resumen.bePct > -0.05 ? 'border-l-4 border-l-rose-500' : ''}`}>
             <Target size={20} strokeWidth={1.8} className={resumen.bePct > -0.05 ? 'text-rose-500' : 'text-amber-500'} />
             <div>
-              <div className="font-semibold text-brand-navy dark:text-slate-100">Punto de equilibrio de {resumen.label}</div>
-              <div className="text-sm text-slate-600 dark:text-slate-300">Si Gofo baja sus precios <b>más de {Math.abs(Math.round(resumen.bePct * 1000) / 10)}%</b> (sobre las primeras entregas), la <b>ganancia real</b> llega a <b>$0</b>. Ese es tu margen para negociar.</div>
+              <div className="font-semibold text-brand-navy dark:text-slate-100">{t('Punto de equilibrio de')} {resumen.label}</div>
+              <div className="text-sm text-slate-600 dark:text-slate-300">{t('Si Gofo baja sus precios')} <b>{t('más de')} {Math.abs(Math.round(resumen.bePct * 1000) / 10)}%</b> {t('(sobre las primeras entregas), la')} <b>{t('ganancia real')}</b> {t('llega a')} <b>$0</b>. {t('Ese es tu margen para negociar.')}</div>
             </div>
           </Card>
 
           <Card className="mb-4 p-4">
             <div className="mb-3 flex items-center gap-2">
               <SlidersHorizontal size={17} strokeWidth={1.9} className="text-brand-gold" />
-              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Ajuste de precios</h3>
-              {hayCambios && <Boton variant="ghost" onClick={resetear} className="ml-auto px-2.5 py-1 text-xs"><RotateCcw size={13} strokeWidth={2} /> Reiniciar</Boton>}
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ajuste de precios')}</h3>
+              {hayCambios && <Boton variant="ghost" onClick={resetear} className="ml-auto px-2.5 py-1 text-xs"><RotateCcw size={13} strokeWidth={2} /> {t('Reiniciar')}</Boton>}
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Cambiar todos los precios:</span>
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{t('Cambiar todos los precios:')}</span>
               <input type="range" min={-0.30} max={0.10} step={0.01} value={pctGlobal} onChange={(e) => setPctGlobal(Number(e.target.value))} className="w-56 accent-brand-navy" />
               <span className={`w-16 text-center text-sm font-bold ${pctGlobal < 0 ? 'text-rose-600' : pctGlobal > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>{pctTxt}</span>
               <div className="flex gap-1">
@@ -703,7 +705,7 @@ export default function Simulador({ embed = false }) {
             </div>
             {!esResumen && baseMulti.tieneDetalle && (
               <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-700/60">
-                <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Fijar precio por rango de peso (todas las rutas):</div>
+                <div className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">{t('Fijar precio por rango de peso (todas las rutas):')}</div>
                 <div className="flex flex-wrap gap-2">
                   {baseMulti.rangos.filter((rg) => rg !== '(promedio)').map((rg) => (
                     <div key={rg} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 dark:border-slate-700">
@@ -712,27 +714,27 @@ export default function Simulador({ embed = false }) {
                     </div>
                   ))}
                 </div>
-                <p className="mt-1.5 text-[11px] text-slate-400">Prioridad: precio de una celda &gt; precio fijo por peso &gt; % global &gt; precio actual.</p>
+                <p className="mt-1.5 text-[11px] text-slate-400">{t('Prioridad: precio de una celda > precio fijo por peso > % global > precio actual.')}</p>
               </div>
             )}
-            {esResumen && <p className="mt-2 text-[11px] text-slate-400">En "Todas las ciudades" se aplica el % global a la factura más reciente de cada una. Elige ciudades específicas para editar precios por ruta.</p>}
+            {esResumen && <p className="mt-2 text-[11px] text-slate-400">{t('En "Todas las ciudades" se aplica el % global a la factura más reciente de cada una. Elige ciudades específicas para editar precios por ruta.')}</p>}
           </Card>
 
           {!esResumen ? (
             <Card className="mb-4 p-4">
-              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Precios por ruta{variasCiudades ? ` · ${unidades.length} ciudades` : ''}</h3>
+              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Precios por ruta')}{variasCiudades ? ` · ${unidades.length} ${t('ciudades')}` : ''}</h3>
               <p className="mb-3 text-xs text-slate-400">
-                El <b>precio actual</b> (grande) es el dato real de la factura de cada ciudad. Escribe el <b>precio nuevo</b>. <span className="text-rose-600">Rojo</span> = baja · <span className="text-emerald-600">verde</span> = sube. La ganancia por ruta es a nivel de entregas (los gastos fijos entran en el total).
+                {t('El')} <b>{t('precio actual')}</b> {t('(grande) es el dato real de la factura de cada ciudad. Escribe el')} <b>{t('precio nuevo')}</b>. <span className="text-rose-600">{t('Rojo')}</span> {t('= baja ·')} <span className="text-emerald-600">{t('verde')}</span> {t('= sube. La ganancia por ruta es a nivel de entregas (los gastos fijos entran en el total).')}
               </p>
               <div className="scroll-thin max-h-[520px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      {variasCiudades && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
-                      <th className="px-2.5 py-2.5 text-left font-semibold">Ruta</th>
-                      {baseMulti.rangos.map((rg) => <th key={rg} className="px-2 py-2.5 text-center font-semibold">{rg === '(promedio)' ? 'Precio/paq' : rg}</th>)}
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Δ Ingreso</th>
+                      {variasCiudades && <th className="px-2.5 py-2.5 text-left font-semibold">{t('Ciudad')}</th>}
+                      <th className="px-2.5 py-2.5 text-left font-semibold">{t('Ruta')}</th>
+                      {baseMulti.rangos.map((rg) => <th key={rg} className="px-2 py-2.5 text-center font-semibold">{rg === '(promedio)' ? t('Precio/paq') : rg}</th>)}
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ingreso proy.')}</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Δ Ingreso')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -753,7 +755,7 @@ export default function Simulador({ embed = false }) {
                             return (
                               <td key={rg} className="px-2 py-1.5 text-center">
                                 <div className="text-[15px] font-bold text-brand-navy dark:text-slate-100">{money(c.precio)}</div>
-                                <div className="mb-1 text-[10px] text-slate-400">{num(c.cantidad)} paq</div>
+                                <div className="mb-1 text-[10px] text-slate-400">{num(c.cantidad)} {t('paq')}</div>
                                 <input type="number" step="0.01" min="0" value={val ?? ''} placeholder={proyec.toFixed(2)} onChange={(e) => setCelda((s) => ({ ...s, [k]: e.target.value }))} className={`w-16 rounded-md border bg-transparent px-1 py-0.5 text-center text-[13px] outline-none focus:border-brand-gold ${colorCelda(proyec, c.precio)}`} />
                               </td>
                             )
@@ -769,17 +771,17 @@ export default function Simulador({ embed = false }) {
             </Card>
           ) : (
             <Card className="mb-4 p-4">
-              <div className="mb-1 flex items-center gap-2"><Globe size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real por ciudad ({pctTxt})</h3></div>
-              <p className="mb-3 text-xs text-slate-400">Cada ciudad con su factura más reciente. Ganancia real = ingreso neto − pago choferes − gastos fijos.</p>
+              <div className="mb-1 flex items-center gap-2"><Globe size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ganancia real por ciudad')} ({pctTxt})</h3></div>
+              <p className="mb-3 text-xs text-slate-400">{t('Cada ciudad con su factura más reciente. Ganancia real = ingreso neto − pago choferes − gastos fijos.')}</p>
               <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full min-w-[720px] border-collapse text-[13px]">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso actual</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ingreso proy.</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia real</th>
-                      <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia proy.</th>
+                      <th className="px-2.5 py-2.5 text-left font-semibold">{t('Ciudad')}</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ingreso actual')}</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ingreso proy.')}</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ganancia real')}</th>
+                      <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ganancia proy.')}</th>
                       <th className="px-2.5 py-2.5 text-right font-semibold">Δ</th>
                     </tr>
                   </thead>
@@ -788,7 +790,7 @@ export default function Simulador({ embed = false }) {
                       const dG = c.gananciaProy - c.gananciaBase
                       return (
                         <tr key={c.codigo} className={`border-t border-slate-100 dark:border-slate-700/50 ${c.gananciaProy < 0 ? 'bg-rose-50/60 dark:bg-rose-500/5' : ''}`}>
-                          <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{c.nombre} {!c.tieneDetalle && <span className="text-[10px] text-slate-400">(nivel ruta)</span>}</td>
+                          <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{c.nombre} {!c.tieneDetalle && <span className="text-[10px] text-slate-400">{t('(nivel ruta)')}</span>}</td>
                           <td className="px-2.5 py-2 text-right">{money(c.ingresoBase)}</td>
                           <td className="px-2.5 py-2 text-right">{money(c.ingresoProy)}</td>
                           <td className="px-2.5 py-2 text-right">{money(c.gananciaBase)}</td>
@@ -800,7 +802,7 @@ export default function Simulador({ embed = false }) {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                      <td className="px-2.5 py-2.5">Total</td>
+                      <td className="px-2.5 py-2.5">{t('Total')}</td>
                       <td className="px-2.5 py-2.5 text-right">{money(resumen.ingresoBase)}</td>
                       <td className="px-2.5 py-2.5 text-right">{money(resumen.ingresoProy)}</td>
                       <td className="px-2.5 py-2.5 text-right">{money(resumen.gananciaBase)}</td>
@@ -817,27 +819,27 @@ export default function Simulador({ embed = false }) {
             <Card className="mb-4 p-4">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <TrendingUp size={17} strokeWidth={1.9} className="text-brand-gold" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Cuánto pagar al driver por paquete (pago lineal)</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Cuánto pagar al driver por paquete (pago lineal)')}</h3>
                 {/* Sub-pestañas: agrupar el pago por Ruta o por Driver individual */}
                 <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-xs font-semibold dark:border-slate-700">
-                  <button onClick={() => setModoPago('ruta')} className={`px-3 py-1.5 transition ${modoPago === 'ruta' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Por ruta</button>
-                  <button onClick={() => setModoPago('driver')} className={`px-3 py-1.5 transition ${modoPago === 'driver' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>Por driver</button>
+                  <button onClick={() => setModoPago('ruta')} className={`px-3 py-1.5 transition ${modoPago === 'ruta' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{t('Por ruta')}</button>
+                  <button onClick={() => setModoPago('driver')} className={`px-3 py-1.5 transition ${modoPago === 'driver' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{t('Por driver')}</button>
                 </div>
                 <div className="ml-auto flex items-center gap-2 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Margen objetivo</span>
+                  <span className="text-slate-500 dark:text-slate-400">{t('Margen objetivo')}</span>
                   <Input type="number" step="1" min="0" max="90" className="w-16" value={Math.round(margenObj * 100)} onChange={(e) => setMargenObj(Math.max(0, Math.min(0.9, (Number(e.target.value) || 0) / 100)))} />
                   <span className="text-slate-500">%</span>
-                  {(hayManual || hayGofoManual) && <Boton variant="ghost" onClick={() => { setPagoManual({}); setGofoManual({}) }} className="px-2.5 py-1 text-xs"><RotateCcw size={14} strokeWidth={1.8} /> Restablecer</Boton>}
+                  {(hayManual || hayGofoManual) && <Boton variant="ghost" onClick={() => { setPagoManual({}); setGofoManual({}) }} className="px-2.5 py-1 text-xs"><RotateCcw size={14} strokeWidth={1.8} /> {t('Restablecer')}</Boton>}
                   <div className="relative">
-                    <Boton variant="ghost" onClick={() => setVerColsPago((v) => !v)} className="px-2.5 py-1 text-xs"><Eye size={14} strokeWidth={1.8} /> Columnas</Boton>
+                    <Boton variant="ghost" onClick={() => setVerColsPago((v) => !v)} className="px-2.5 py-1 text-xs"><Eye size={14} strokeWidth={1.8} /> {t('Columnas')}</Boton>
                     {verColsPago && (
                       <>
                         <div className="fixed inset-0 z-20" onClick={() => setVerColsPago(false)} />
                         <div className="absolute right-0 z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                          <div className="px-2 py-1 text-[11px] font-semibold uppercase text-slate-400">Mostrar en tabla y export</div>
+                          <div className="px-2 py-1 text-[11px] font-semibold uppercase text-slate-400">{t('Mostrar en tabla y export')}</div>
                           {COLS_PAGO.map((c) => (
                             <button key={c.key} onClick={() => setColsPago((s) => ({ ...s, [c.key]: !verCol(c.key) }))} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700/60">
-                              <span className={verCol(c.key) ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 line-through'}>{c.label}</span>
+                              <span className={verCol(c.key) ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 line-through'}>{t(c.label)}</span>
                               {verCol(c.key) ? <Eye size={15} strokeWidth={1.8} className="text-brand-gold" /> : <EyeOff size={15} strokeWidth={1.8} className="text-slate-400" />}
                             </button>
                           ))}
@@ -849,56 +851,56 @@ export default function Simulador({ embed = false }) {
                   <Boton variant="gold" onClick={() => exportarPagoDriver('pdf')} className="px-2.5 py-1 text-xs"><FileText size={14} strokeWidth={1.8} /> PDF</Boton>
                 </div>
               </div>
-              <p className="mb-3 text-xs text-slate-400">Tú le pagas al driver un rate <b>fijo por paquete</b> (no por peso). Con las pestañas de arriba ves el pago agrupado <b>por ruta</b> o <b>por driver individual</b>. Puedes <b>editar tanto el "Gofo $/paq"</b> (lo que te paga Gofo) <b>como el "Sugerido $/paq"</b> (lo que le pagas al driver) a mano: el sugerido, el máximo, el margen, la ganancia y el impacto en la ganancia real se recalculan al instante. El <b>máximo</b> es el punto de equilibrio: por encima de eso, se pierde.</p>
+              <p className="mb-3 text-xs text-slate-400">{t('Tú le pagas al driver un rate')} <b>{t('fijo por paquete')}</b> {t('(no por peso). Con las pestañas de arriba ves el pago agrupado')} <b>{t('por ruta')}</b> {t('o')} <b>{t('por driver individual')}</b>. {t('Puedes')} <b>{t('editar tanto el "Gofo $/paq"')}</b> {t('(lo que te paga Gofo)')} <b>{t('como el "Sugerido $/paq"')}</b> {t('(lo que le pagas al driver) a mano: el sugerido, el máximo, el margen, la ganancia y el impacto en la ganancia real se recalculan al instante. El')} <b>{t('máximo')}</b> {t('es el punto de equilibrio: por encima de eso, se pierde.')}</p>
               {/* Impacto en la ganancia real de seguir el escenario (sugerido o editado a mano) */}
               <div className="mb-3 grid gap-3 sm:grid-cols-3">
                 <Card className="p-3">
-                  <div className="text-[11px] text-slate-400">Pago al driver · hoy → {(hayManual || hayGofoManual) ? 'escenario' : 'sugerido'}</div>
-                  <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(fuente.linealFlat)} → {money(effFlat)}<span className="text-xs font-normal text-slate-400"> /paq</span></div>
-                  <div className="text-xs text-slate-400">total {money(fuente.totalCosto)} → {money(pagoSugTotal)}</div>
+                  <div className="text-[11px] text-slate-400">{t('Pago al driver · hoy →')} {(hayManual || hayGofoManual) ? t('escenario') : t('sugerido')}</div>
+                  <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(fuente.linealFlat)} → {money(effFlat)}<span className="text-xs font-normal text-slate-400"> {t('/paq')}</span></div>
+                  <div className="text-xs text-slate-400">{t('total')} {money(fuente.totalCosto)} → {money(pagoSugTotal)}</div>
                 </Card>
                 <Card className={`p-3 ${difTotal > 0.01 ? 'border-l-4 border-l-emerald-500' : difTotal < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
-                  <div className="text-[11px] text-slate-400">Ganancia REAL · hoy → con este escenario</div>
+                  <div className="text-[11px] text-slate-400">{t('Ganancia REAL · hoy → con este escenario')}</div>
                   <div className="text-base font-bold text-brand-navy dark:text-slate-100">{money(real.gananciaReal)} → {money(gananciaSiSigo)}</div>
-                  <div className="text-xs text-slate-400">margen {pct(resumen.margenBase)} → {pct(margenSiSigo)}{hayGofoManual ? ` · Gofo ${deltaIngreso >= 0 ? '+' : ''}${money(deltaIngreso)}` : ''}</div>
+                  <div className="text-xs text-slate-400">{t('margen')} {pct(resumen.margenBase)} → {pct(margenSiSigo)}{hayGofoManual ? ` · Gofo ${deltaIngreso >= 0 ? '+' : ''}${money(deltaIngreso)}` : ''}</div>
                 </Card>
                 <Card className={`p-3 ${difTotal > 0.01 ? 'border-l-4 border-l-emerald-500' : difTotal < -0.01 ? 'border-l-4 border-l-rose-500' : ''}`}>
-                  <div className="text-[11px] text-slate-400">Diferencia con este escenario</div>
-                  <div className={`text-base font-bold ${difTotal > 0.01 ? 'text-emerald-600' : difTotal < -0.01 ? 'text-rose-600' : 'text-slate-500'}`}>{difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem</div>
-                  <div className="text-xs text-slate-400">{difTotal > 0.01 ? `Ganarías ${money(difTotal * MENSUAL)} más al mes` : difTotal < -0.01 ? `Perderías ${money(-difTotal * MENSUAL)} al mes` : 'Igual que hoy'}</div>
+                  <div className="text-[11px] text-slate-400">{t('Diferencia con este escenario')}</div>
+                  <div className={`text-base font-bold ${difTotal > 0.01 ? 'text-emerald-600' : difTotal < -0.01 ? 'text-rose-600' : 'text-slate-500'}`}>{difTotal >= 0 ? '+' : ''}{money(difTotal)}{t('/sem')}</div>
+                  <div className="text-xs text-slate-400">{difTotal > 0.01 ? `${t('Ganarías')} ${money(difTotal * MENSUAL)} ${t('más al mes')}` : difTotal < -0.01 ? `${t('Perderías')} ${money(-difTotal * MENSUAL)} ${t('al mes')}` : t('Igual que hoy')}</div>
                 </Card>
               </div>
-              <Aviso tipo="ok" className="mb-3">{(hayManual || hayGofoManual) ? <>Con lo que pusiste, pagarías <b>{money(effFlat)} por paquete</b> en promedio → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Edita el Gofo o el sugerido de cada {etiquetaFila}, o pulsa <b>Restablecer</b> para volver al original.</> : <>Sugerencia: paga <b>{money(fuente.sugFlat)} por paquete</b> (hoy ~{money(fuente.linealFlat)}) → ganancia real <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}/sem vs hoy). Sube o baja el <b>margen objetivo</b> o edita el Gofo/sugerido de cada {etiquetaFila} abajo para probar escenarios.</>}</Aviso>
+              <Aviso tipo="ok" className="mb-3">{(hayManual || hayGofoManual) ? <>{t('Con lo que pusiste, pagarías')} <b>{money(effFlat)} {t('por paquete')}</b> {t('en promedio → ganancia real')} <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}{t('/sem vs hoy). Edita el Gofo o el sugerido de cada')} {etiquetaFila}{t(', o pulsa')} <b>{t('Restablecer')}</b> {t('para volver al original.')}</> : <>{t('Sugerencia: paga')} <b>{money(fuente.sugFlat)} {t('por paquete')}</b> ({t('hoy')} ~{money(fuente.linealFlat)}) → {t('ganancia real')} <b>{money(gananciaSiSigo)}</b> ({difTotal >= 0 ? '+' : ''}{money(difTotal)}{t('/sem vs hoy). Sube o baja el')} <b>{t('margen objetivo')}</b> {t('o edita el Gofo/sugerido de cada')} {etiquetaFila} {t('abajo para probar escenarios.')}</>}</Aviso>
               {/* Buscador para editar rápido un solo driver/ruta */}
               <div className="mb-2 flex items-center gap-2">
                 <div className="relative flex-1 sm:max-w-xs">
                   <Search size={15} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <Input type="text" value={buscarPago} onChange={(e) => setBuscarPago(e.target.value)} placeholder={modoPago === 'driver' ? 'Buscar driver…' : 'Buscar ruta…'} className="w-full pl-8 pr-8" />
-                  {buscarPago && <button onClick={() => setBuscarPago('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title="Limpiar"><X size={14} strokeWidth={2} /></button>}
+                  <Input type="text" value={buscarPago} onChange={(e) => setBuscarPago(e.target.value)} placeholder={modoPago === 'driver' ? t('Buscar driver…') : t('Buscar ruta…')} className="w-full pl-8 pr-8" />
+                  {buscarPago && <button onClick={() => setBuscarPago('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" title={t('Limpiar')}><X size={14} strokeWidth={2} /></button>}
                 </div>
-                {buscarPago.trim() && <span className="text-xs text-slate-400">{filasPago.length} de {escenario.rows.length}</span>}
+                {buscarPago.trim() && <span className="text-xs text-slate-400">{filasPago.length} {t('de')} {escenario.rows.length}</span>}
               </div>
               <div className="scroll-thin max-h-[420px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full border-collapse text-[13px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      {variasCiudades && verCol('ciudad') && <th className="px-2.5 py-2.5 text-left font-semibold">Ciudad</th>}
-                      <th className="px-2.5 py-2.5 text-left font-semibold">{EtiquetaFila}</th>
-                      {verCol('paquetes') && <th className="px-2.5 py-2.5 text-right font-semibold">Paquetes</th>}
-                      {verCol('gofo') && <th className="px-2.5 py-2.5 text-right font-semibold">Gofo $/paq <span className="font-normal text-slate-400">(editable)</span></th>}
-                      {verCol('actual') && <th className="px-2.5 py-2.5 text-right font-semibold">Pago actual $/paq</th>}
-                      {verCol('sugerido') && <th className="px-2.5 py-2.5 text-right font-semibold">Sugerido $/paq <span className="font-normal text-slate-400">(editable)</span></th>}
-                      {verCol('max') && <th className="px-2.5 py-2.5 text-right font-semibold">Máx $/paq</th>}
-                      {verCol('margen') && <th className="px-2.5 py-2.5 text-right font-semibold">Margen</th>}
-                      {verCol('ganancia') && <th className="px-2.5 py-2.5 text-right font-semibold">Ganancia</th>}
+                      {variasCiudades && verCol('ciudad') && <th className="px-2.5 py-2.5 text-left font-semibold">{t('Ciudad')}</th>}
+                      <th className="px-2.5 py-2.5 text-left font-semibold">{t(EtiquetaFila)}</th>
+                      {verCol('paquetes') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Paquetes')}</th>}
+                      {verCol('gofo') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Gofo $/paq')} <span className="font-normal text-slate-400">{t('(editable)')}</span></th>}
+                      {verCol('actual') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Pago actual $/paq')}</th>}
+                      {verCol('sugerido') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Sugerido $/paq')} <span className="font-normal text-slate-400">{t('(editable)')}</span></th>}
+                      {verCol('max') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Máx $/paq')}</th>}
+                      {verCol('margen') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Margen')}</th>}
+                      {verCol('ganancia') && <th className="px-2.5 py-2.5 text-right font-semibold">{t('Ganancia')}</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {escenario.rows.length === 0 && (
-                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">Esta factura no trae el desglose chofer×ruta necesario para agrupar por driver. Reprocesa la factura arriba, o usa la vista <b>Por ruta</b>.</td></tr>
+                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">{t('Esta factura no trae el desglose chofer×ruta necesario para agrupar por driver. Reprocesa la factura arriba, o usa la vista')} <b>{t('Por ruta')}</b>.</td></tr>
                     )}
                     {escenario.rows.length > 0 && filasPago.length === 0 && (
-                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">Sin resultados para “{buscarPago}”. <button onClick={() => setBuscarPago('')} className="text-brand-gold underline">Limpiar</button></td></tr>
+                      <tr><td colSpan={nColsPago} className="px-2.5 py-6 text-center text-sm text-slate-400">{t('Sin resultados para')} “{buscarPago}”. <button onClick={() => setBuscarPago('')} className="text-brand-gold underline">{t('Limpiar')}</button></td></tr>
                     )}
                     {filasPago.map((f) => {
                       const over = f.rate > f.maxPq + 0.001            // paga por encima del equilibrio → pierde
@@ -916,7 +918,7 @@ export default function Simulador({ embed = false }) {
                               </div>
                             </td>
                           )}
-                          {verCol('actual') && <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? 'Tarifa lineal (0–1 lb) del driver asignado a la ruta' : 'Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes'}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>}
+                          {verCol('actual') && <td className="px-2.5 py-2 text-right font-semibold text-slate-600 dark:text-slate-300" title={f.actualExacto ? t('Tarifa lineal (0–1 lb) del driver asignado a la ruta') : t('Estimado: la factura no trae el desglose chofer×ruta; se usa el costo real ÷ paquetes')}>{f.actualExacto ? '' : '~'}{money(f.actualPq)}</td>}
                           {verCol('sugerido') && (
                             <td className="px-2.5 py-2 text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -934,8 +936,8 @@ export default function Simulador({ embed = false }) {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-slate-200 bg-slate-50 font-bold dark:border-slate-700 dark:bg-slate-800/60">
-                      {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2.5 text-xs text-slate-500">Total</td>}
-                      <td className="px-2.5 py-2.5 text-brand-navy dark:text-slate-100">{variasCiudades && verCol('ciudad') ? '' : 'Total'}</td>
+                      {variasCiudades && verCol('ciudad') && <td className="px-2.5 py-2.5 text-xs text-slate-500">{t('Total')}</td>}
+                      <td className="px-2.5 py-2.5 text-brand-navy dark:text-slate-100">{variasCiudades && verCol('ciudad') ? '' : t('Total')}</td>
                       {verCol('paquetes') && <td className="px-2.5 py-2.5 text-right">{num(fuente.totalP)}</td>}
                       {verCol('gofo') && <td className="px-2.5 py-2.5 text-right text-slate-500">{money(fuente.totalP > 0 ? escenario.totalIng / fuente.totalP : 0)}</td>}
                       {verCol('actual') && <td className="px-2.5 py-2.5 text-right text-slate-600 dark:text-slate-300">{money(fuente.linealFlat)}</td>}
@@ -947,37 +949,37 @@ export default function Simulador({ embed = false }) {
                   </tfoot>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-slate-400"><b>"Pago actual $/paq"</b> = la tarifa lineal (0–1 lb) del driver, o sea lo que realmente le pagas por paquete (un <b>~</b> indica que se estimó porque la factura no trae el desglose chofer×ruta). {modoPago === 'driver' ? 'En la vista por driver, el ingreso de Gofo se reparte entre los choferes de cada ruta según sus paquetes.' : ''} Edita el <b>Gofo $/paq</b> (simula que Gofo pague más/menos) o el <b>Sugerido $/paq</b> (tu pago al driver) de cualquier {etiquetaFila}; el <span className="text-amber-600">margen en ámbar</span> rinde menos que tu objetivo ({pct(margenObj)}) y en <span className="text-rose-600">rojo</span> se pierde (pagas por encima del equilibrio). "Margen" y "Ganancia" son sobre el ingreso de Gofo de ese {etiquetaFila}.</p>
+              <p className="mt-2 text-[11px] text-slate-400"><b>{t('"Pago actual $/paq"')}</b> {t('= la tarifa lineal (0–1 lb) del driver, o sea lo que realmente le pagas por paquete (un')} <b>~</b> {t('indica que se estimó porque la factura no trae el desglose chofer×ruta).')} {modoPago === 'driver' ? t('En la vista por driver, el ingreso de Gofo se reparte entre los choferes de cada ruta según sus paquetes.') : ''} {t('Edita el')} <b>{t('Gofo $/paq')}</b> {t('(simula que Gofo pague más/menos) o el')} <b>{t('Sugerido $/paq')}</b> {t('(tu pago al driver) de cualquier')} {etiquetaFila}{t('; el')} <span className="text-amber-600">{t('margen en ámbar')}</span> {t('rinde menos que tu objetivo (')}{pct(margenObj)}{t(') y en')} <span className="text-rose-600">{t('rojo')}</span> {t('se pierde (pagas por encima del equilibrio). "Margen" y "Ganancia" son sobre el ingreso de Gofo de ese')} {etiquetaFila}.</p>
             </Card>
           )}
 
           <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
             <button onClick={() => setGenerado(true)} className="inline-flex items-center gap-2 rounded-xl bg-brand-navy px-6 py-3 text-base font-bold text-white shadow-sm transition hover:brightness-110 dark:bg-brand-gold dark:text-brand-navy">
-              <Zap size={20} strokeWidth={2} /> {generado ? 'Actualizar proyección' : 'Generar proyección'}
+              <Zap size={20} strokeWidth={2} /> {generado ? t('Actualizar proyección') : t('Generar proyección')}
             </button>
-            <Boton variant="gold" onClick={guardar} disabled={guardando} className="px-4 py-3 text-sm">{guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.9} /> Guardar</>}</Boton>
-            <Boton variant="ghost" onClick={() => setVerHist((v) => !v)} className="px-4 py-3 text-sm"><History size={16} strokeWidth={1.9} /> Historial ({proyeccionesGuardadas.length})</Boton>
+            <Boton variant="gold" onClick={guardar} disabled={guardando} className="px-4 py-3 text-sm">{guardando ? <><Spinner /> {t('Guardando…')}</> : <><Save size={16} strokeWidth={1.9} /> {t('Guardar')}</>}</Boton>
+            <Boton variant="ghost" onClick={() => setVerHist((v) => !v)} className="px-4 py-3 text-sm"><History size={16} strokeWidth={1.9} /> {t('Historial')} ({proyeccionesGuardadas.length})</Boton>
           </div>
 
           {verHist && (
             <Card className="mb-4 p-4">
-              <div className="mb-2 flex items-center gap-2"><History size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de proyecciones ({proyeccionesGuardadas.length})</h3></div>
+              <div className="mb-2 flex items-center gap-2"><History size={17} strokeWidth={1.8} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Historial de proyecciones')} ({proyeccionesGuardadas.length})</h3></div>
               {proyeccionesGuardadas.length === 0 ? (
-                <div className="text-sm text-slate-400">Aún no has guardado proyecciones. Ajusta precios y dale a <b>Guardar</b> para tenerlas aquí.</div>
+                <div className="text-sm text-slate-400">{t('Aún no has guardado proyecciones. Ajusta precios y dale a')} <b>{t('Guardar')}</b> {t('para tenerlas aquí.')}</div>
               ) : (
                 <div className="scroll-thin overflow-x-auto">
                   <table className="w-full min-w-[700px] text-sm">
-                    <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Nombre</th><th>Fecha</th><th>Alcance</th><th className="text-right">Ganancia real (actual → proy.)</th><th></th></tr></thead>
+                    <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">{t('Nombre')}</th><th>{t('Fecha')}</th><th>{t('Alcance')}</th><th className="text-right">{t('Ganancia real (actual → proy.)')}</th><th></th></tr></thead>
                     <tbody>
                       {proyeccionesGuardadas.map((p) => (
                         <tr key={p.id} className="border-t border-slate-100 dark:border-slate-700/50">
                           <td className="py-2 font-medium text-brand-navy dark:text-slate-100">{p.nombre}</td>
                           <td className="whitespace-nowrap text-slate-500">{fmtFechaHist(p.ts)}</td>
-                          <td className="text-slate-500">{p.resumen?.label} · {p.resumen?.pct}{p.resumen?.pagoEditado ? <span className="ml-1 rounded bg-brand-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-gold">pago {money(p.resumen?.pagoEff)}/paq</span> : null}</td>
+                          <td className="text-slate-500">{p.resumen?.label} · {p.resumen?.pct}{p.resumen?.pagoEditado ? <span className="ml-1 rounded bg-brand-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand-gold">{t('pago')} {money(p.resumen?.pagoEff)}/paq</span> : null}</td>
                           <td className="whitespace-nowrap text-right">{money(p.resumen?.gananciaBase)} → <b className={p.resumen?.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-200'}>{money(p.resumen?.gananciaProy)}</b></td>
                           <td className="whitespace-nowrap text-right">
-                            <Boton variant="ghost" onClick={() => cargar(p)} className="px-2 py-1 text-xs"><FolderOpen size={13} strokeWidth={1.8} /> Cargar</Boton>
-                            {esDueno && <button onClick={() => borrar(p.id)} className="ml-1 rounded-lg px-1.5 py-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" title="Eliminar"><Trash2 size={14} strokeWidth={1.8} /></button>}
+                            <Boton variant="ghost" onClick={() => cargar(p)} className="px-2 py-1 text-xs"><FolderOpen size={13} strokeWidth={1.8} /> {t('Cargar')}</Boton>
+                            {esDueno && <button onClick={() => borrar(p.id)} className="ml-1 rounded-lg px-1.5 py-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" title={t('Eliminar')}><Trash2 size={14} strokeWidth={1.8} /></button>}
                           </td>
                         </tr>
                       ))}
@@ -992,34 +994,34 @@ export default function Simulador({ embed = false }) {
             <>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
                 <Card className={`p-4 ${difIngreso < 0 ? 'border-l-4 border-l-rose-500' : difIngreso > 0 ? 'border-l-4 border-l-emerald-500' : ''}`}>
-                  <div className="text-xs text-slate-400">Ingreso Gofo · actual → proyectado</div>
+                  <div className="text-xs text-slate-400">{t('Ingreso Gofo · actual → proyectado')}</div>
                   <div className="text-lg font-bold text-brand-navy dark:text-slate-100">{money(resumen.ingresoBase)} → {money(resumen.ingresoProy)}</div>
-                  <div className={`text-sm font-semibold ${difIngreso < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{difIngreso >= 0 ? '+' : ''}{money(difIngreso)}/sem</div>
+                  <div className={`text-sm font-semibold ${difIngreso < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{difIngreso >= 0 ? '+' : ''}{money(difIngreso)}{t('/sem')}</div>
                 </Card>
                 <Card className={`p-4 ${difGanancia < 0 ? 'border-l-4 border-l-rose-500' : difGanancia > 0 ? 'border-l-4 border-l-emerald-500' : ''}`}>
-                  <div className="text-xs text-slate-400">Ganancia REAL · actual → proyectada</div>
+                  <div className="text-xs text-slate-400">{t('Ganancia REAL · actual → proyectada')}</div>
                   <div className={`text-lg font-bold ${resumen.gananciaProy < 0 ? 'text-rose-600' : 'text-brand-navy dark:text-slate-100'}`}>{money(resumen.gananciaBase)} → {money(resumen.gananciaProy)}</div>
-                  <div className={`text-sm font-semibold ${difGanancia < 0 ? 'text-rose-600' : difGanancia > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{difGanancia < -0.01 ? `Dejarías de ganar ${money(Math.abs(difGanancia))}` : difGanancia > 0.01 ? `Ganarías ${money(difGanancia)}` : 'Sin cambio'}/sem</div>
+                  <div className={`text-sm font-semibold ${difGanancia < 0 ? 'text-rose-600' : difGanancia > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{difGanancia < -0.01 ? `${t('Dejarías de ganar')} ${money(Math.abs(difGanancia))}` : difGanancia > 0.01 ? `${t('Ganarías')} ${money(difGanancia)}` : t('Sin cambio')}{t('/sem')}</div>
                 </Card>
                 <Card className="p-4">
-                  <div className="text-xs text-slate-400">Estimado mensual (~{MENSUAL} sem)</div>
+                  <div className="text-xs text-slate-400">{t('Estimado mensual')} (~{MENSUAL} {t('sem')})</div>
                   <div className={`text-lg font-bold ${difGanancia < 0 ? 'text-rose-600' : difGanancia > 0 ? 'text-emerald-600' : 'text-brand-navy dark:text-slate-100'}`}>{difGanancia >= 0 ? '+' : ''}{money(difGanancia * MENSUAL)}</div>
-                  <div className="text-sm text-slate-400">margen {pct(resumen.margenBase)} → {pct(resumen.margenProy)}</div>
+                  <div className="text-sm text-slate-400">{t('margen')} {pct(resumen.margenBase)} → {pct(resumen.margenProy)}</div>
                 </Card>
               </div>
 
               <div className="mb-4 grid gap-4 lg:grid-cols-2">
-                <ComparativoCard title="Ingreso y ganancia real · Actual vs Proyectado" data={comparativo} fmt={(v) => money(v)} />
-                <ImpactoCard title={esResumen ? 'Impacto por ciudad (Δ ganancia)' : 'Impacto por ruta (Δ ingreso)'} subtitle="Rojo = cae · verde = sube" data={impacto} fmt={(v) => money(v)} />
+                <ComparativoCard title={t('Ingreso y ganancia real · Actual vs Proyectado')} data={comparativo} fmt={(v) => money(v)} />
+                <ImpactoCard title={esResumen ? t('Impacto por ciudad (Δ ganancia)') : t('Impacto por ruta (Δ ingreso)')} subtitle={t('Rojo = cae · verde = sube')} data={impacto} fmt={(v) => money(v)} />
               </div>
 
               <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                <GaugeCard title="Margen real actual" value={Math.max(0, resumen.margenBase)} color="#13233f" />
-                <GaugeCard title="Margen real proyectado" value={Math.max(0, resumen.margenProy)} color={resumen.margenProy < 0.05 ? '#e11d48' : '#c9a24b'} />
+                <GaugeCard title={t('Margen real actual')} value={Math.max(0, resumen.margenBase)} color="#13233f" />
+                <GaugeCard title={t('Margen real proyectado')} value={Math.max(0, resumen.margenProy)} color={resumen.margenProy < 0.05 ? '#e11d48' : '#c9a24b'} />
               </div>
 
               <Card className="p-4">
-                <div className="mb-3 flex items-center gap-2"><Zap size={17} strokeWidth={1.9} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Recomendaciones</h3></div>
+                <div className="mb-3 flex items-center gap-2"><Zap size={17} strokeWidth={1.9} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Recomendaciones')}</h3></div>
                 <div className="space-y-2">
                   {recs.map((rec, i) => {
                     const u = NIVEL_UI[rec.nivel]
