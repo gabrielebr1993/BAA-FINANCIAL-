@@ -8,6 +8,7 @@ import { calcularAlertas, SEVERIDAD_ORDEN, NOMBRE_TIPO, CATEGORIAS } from '../ut
 import { calcularPagos } from '../utils/calc'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { KPI, PageTitle, Card, Boton, Badge, Cargando, EstadoVacio } from '../components/ui'
+import { useLang } from '../i18n'
 
 const ESTILO = {
   red: 'border-l-rose-500 bg-rose-50 dark:bg-rose-500/10',
@@ -32,6 +33,7 @@ function iconoDe(a) {
 }
 
 export default function Alertas() {
+  const { t } = useLang()
   const { facturaRango: inv, invoicesRango, claims, drivers, invAnterior, activeCompanyId, estadosAlertas, marcarAlerta, reactivarAlerta, cargando } = useData()
   const [pendientes, setPendientes] = useState(0)
   const [fTipo, setFTipo] = useState('')      // '', 'red', 'yellow', 'blue'
@@ -89,18 +91,18 @@ export default function Alertas() {
 
   return (
     <div>
-      <PageTitle>Alertas</PageTitle>
+      <PageTitle>{t('Alertas')}</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Calculando alertas…" />
+        <Cargando texto={t('Calculando alertas…')} />
       ) : !inv ? (
-        <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango seleccionado para calcular alertas." />
+        <EstadoVacio titulo={t('Sin datos en este rango')} texto={t('No hay facturas en el rango seleccionado para calcular alertas.')} />
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
-            <KPI label="Graves" value={nRed} icon={AlertTriangle} accent="red" />
-            <KPI label="Avisos" value={nYellow} icon={AlertCircle} accent="gold" />
-            <KPI label="Info" value={nBlue} icon={Info} accent="blue" />
+            <KPI label={t('Graves')} value={nRed} icon={AlertTriangle} accent="red" />
+            <KPI label={t('Avisos')} value={nYellow} icon={AlertCircle} accent="gold" />
+            <KPI label={t('Info')} value={nBlue} icon={Info} accent="blue" />
             <div className="ml-auto flex gap-2">
               <Boton variant="ghost" onClick={exportarE} disabled={activas.length === 0}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
               <Boton variant="gold" onClick={exportarP} disabled={activas.length === 0}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
@@ -110,19 +112,19 @@ export default function Alertas() {
           {/* Filtros: estado, severidad y categoría */}
           <Card className="mb-4 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ver</span>
-              <Pill activo={verEstado === 'activa'} onClick={() => setVerEstado('activa')}>Activas ({activas.length})</Pill>
-              <Pill activo={verEstado === 'resuelta'} onClick={() => setVerEstado('resuelta')}>Resueltas ({nResueltas})</Pill>
-              <Pill activo={verEstado === 'descartada'} onClick={() => setVerEstado('descartada')}>Descartadas ({nDescartadas})</Pill>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Ver')}</span>
+              <Pill activo={verEstado === 'activa'} onClick={() => setVerEstado('activa')}>{t('Activas')} ({activas.length})</Pill>
+              <Pill activo={verEstado === 'resuelta'} onClick={() => setVerEstado('resuelta')}>{t('Resueltas')} ({nResueltas})</Pill>
+              <Pill activo={verEstado === 'descartada'} onClick={() => setVerEstado('descartada')}>{t('Descartadas')} ({nDescartadas})</Pill>
               <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Severidad</span>
-              <Pill activo={fTipo === ''} onClick={() => setFTipo('')}>Todas</Pill>
-              <Pill activo={fTipo === 'red'} onClick={() => setFTipo('red')}>Graves</Pill>
-              <Pill activo={fTipo === 'yellow'} onClick={() => setFTipo('yellow')}>Avisos</Pill>
-              <Pill activo={fTipo === 'blue'} onClick={() => setFTipo('blue')}>Info</Pill>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Severidad')}</span>
+              <Pill activo={fTipo === ''} onClick={() => setFTipo('')}>{t('Todas')}</Pill>
+              <Pill activo={fTipo === 'red'} onClick={() => setFTipo('red')}>{t('Graves')}</Pill>
+              <Pill activo={fTipo === 'yellow'} onClick={() => setFTipo('yellow')}>{t('Avisos')}</Pill>
+              <Pill activo={fTipo === 'blue'} onClick={() => setFTipo('blue')}>{t('Info')}</Pill>
               <span className="mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Categoría</span>
-              <Pill activo={fCategoria === ''} onClick={() => setFCategoria('')}>Todas</Pill>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Categoría')}</span>
+              <Pill activo={fCategoria === ''} onClick={() => setFCategoria('')}>{t('Todas')}</Pill>
               {CATEGORIAS.map((c) => (
                 <Pill key={c} activo={fCategoria === c} onClick={() => setFCategoria(c)}>{c}</Pill>
               ))}
@@ -132,9 +134,13 @@ export default function Alertas() {
           {filtradas.length === 0 ? (
             <Card className="p-8 text-center">
               <CheckCircle2 size={40} strokeWidth={1.5} className="mx-auto text-emerald-500" />
-              <h3 className="mt-2 text-lg font-bold text-brand-navy dark:text-slate-100">{verEstado === 'activa' ? 'Todo en orden' : 'Nada aquí'}</h3>
+              <h3 className="mt-2 text-lg font-bold text-brand-navy dark:text-slate-100">{verEstado === 'activa' ? t('Todo en orden') : t('Nada aquí')}</h3>
               <p className="text-slate-500 dark:text-slate-400">
-                {verEstado === 'activa' ? 'No hay alertas activas con estos filtros.' : `No hay alertas ${verEstado === 'resuelta' ? 'resueltas' : 'descartadas'} con estos filtros.`}
+                {verEstado === 'activa'
+                  ? t('No hay alertas activas con estos filtros.')
+                  : verEstado === 'resuelta'
+                    ? t('No hay alertas resueltas con estos filtros.')
+                    : t('No hay alertas descartadas con estos filtros.')}
               </p>
             </Card>
           ) : (
@@ -155,14 +161,14 @@ export default function Alertas() {
                             <div className="font-bold text-brand-navy dark:text-slate-100">{a.titulo}</div>
                             <div className="text-sm text-slate-600 dark:text-slate-300">{a.detalle}</div>
                             <div className="mt-2 flex flex-wrap items-center gap-3">
-                              <Link to={a.link} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy dark:text-brand-gold">Ir a la sección <ArrowRight size={13} strokeWidth={2} /></Link>
+                              <Link to={a.link} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy dark:text-brand-gold">{t('Ir a la sección')} <ArrowRight size={13} strokeWidth={2} /></Link>
                               {a.estado === 'activa' ? (
                                 <>
-                                  <button onClick={() => marcarAlerta(a.id, 'resuelta')} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:underline dark:text-emerald-400"><Check size={13} strokeWidth={2.2} /> Marcar como resuelta</button>
-                                  <button onClick={() => marcarAlerta(a.id, 'descartada')} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:underline"><X size={13} strokeWidth={2.2} /> Descartar</button>
+                                  <button onClick={() => marcarAlerta(a.id, 'resuelta')} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:underline dark:text-emerald-400"><Check size={13} strokeWidth={2.2} /> {t('Marcar como resuelta')}</button>
+                                  <button onClick={() => marcarAlerta(a.id, 'descartada')} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:underline"><X size={13} strokeWidth={2.2} /> {t('Descartar')}</button>
                                 </>
                               ) : (
-                                <button onClick={() => reactivarAlerta(a.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy hover:underline dark:text-slate-200"><RotateCcw size={13} strokeWidth={2.2} /> Reactivar</button>
+                                <button onClick={() => reactivarAlerta(a.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy hover:underline dark:text-slate-200"><RotateCcw size={13} strokeWidth={2.2} /> {t('Reactivar')}</button>
                               )}
                             </div>
                           </div>

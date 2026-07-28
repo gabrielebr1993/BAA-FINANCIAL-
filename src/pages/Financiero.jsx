@@ -12,8 +12,10 @@ import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
+import { useLang } from '../i18n'
 
 export default function Financiero() {
+  const { t } = useLang()
   const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, verificacionCiudad, ajustesPorChofer, cargando } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   // Solo owner/admin/superadmin ven la info de descuentos de Gofo (panel de claims y la
@@ -85,17 +87,17 @@ export default function Financiero() {
 
   return (
     <div>
-      <PageTitle>Financiero</PageTitle>
+      <PageTitle>{t('Financiero')}</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando datos…" />
+        <Cargando texto={t('Cargando datos…')} />
       ) : (
         <>
           {verificacionCiudad ? (
             <Verificacion v={verificacionCiudad} />
           ) : selectedInvoice && (
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-              No hay desglose de pago de Gofo para esta ciudad en este período.
+              {t('No hay desglose de pago de Gofo para esta ciudad en este período.')}
             </div>
           )}
           {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} verGofo={verGofo} />}
@@ -103,16 +105,16 @@ export default function Financiero() {
           {/* Desglose de ganancia real por ciudad */}
           {selectedInvoice && desgloseCiudades.length > 0 && (
             <Card className="mb-4 p-4">
-              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real por ciudad</h3>
-              <p className="mb-3 text-xs text-slate-400">Ingreso neto (aprox. por ciudad) − costo de choferes − gastos fijos de esa ciudad. El total general es la fila inferior.</p>
+              <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ganancia real por ciudad')}</h3>
+              <p className="mb-3 text-xs text-slate-400">{t('Ingreso neto (aprox. por ciudad) − costo de choferes − gastos fijos de esa ciudad. El total general es la fila inferior.')}</p>
               <Tabla
                 columns={[
-                  { key: 'nombreCiudad', label: 'Ciudad' },
-                  { key: 'ingresoNeto', label: 'Ingreso neto', align: 'right' },
-                  { key: 'costoChoferes', label: 'Costo choferes', align: 'right' },
-                  { key: 'costoManagers', label: 'Gastos fijos', align: 'right' },
-                  { key: 'gananciaReal', label: 'Ganancia real', align: 'right' },
-                  { key: 'margen', label: 'Margen', align: 'right' },
+                  { key: 'nombreCiudad', label: t('Ciudad') },
+                  { key: 'ingresoNeto', label: t('Ingreso neto'), align: 'right' },
+                  { key: 'costoChoferes', label: t('Costo choferes'), align: 'right' },
+                  { key: 'costoManagers', label: t('Gastos fijos'), align: 'right' },
+                  { key: 'gananciaReal', label: t('Ganancia real'), align: 'right' },
+                  { key: 'margen', label: t('Margen'), align: 'right' },
                 ]}
                 rows={desgloseCiudades.map((c) => ({ ...c, _key: c.code }))}
                 renderCell={(row, key) => {
@@ -123,12 +125,12 @@ export default function Financiero() {
                 }}
               />
               <div className="mt-2 flex flex-wrap items-center justify-end gap-4 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
-                <span className="text-slate-500 dark:text-slate-400">TOTAL general:</span>
-                <span>Gastos fijos <b className="text-brand-navy dark:text-slate-100">{money(sumaMgrCiudades)}</b></span>
+                <span className="text-slate-500 dark:text-slate-400">{t('TOTAL general:')}</span>
+                <span>{t('Gastos fijos')} <b className="text-brand-navy dark:text-slate-100">{money(sumaMgrCiudades)}</b></span>
                 {Math.abs(ajusteVerif) >= 0.5 && (
-                  <span title="Offset y ajustes de la verificación de Gofo que no se reparten por ciudad">Ajustes verif. <b className={ajusteVerif >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{money(ajusteVerif)}</b></span>
+                  <span title={t('Offset y ajustes de la verificación de Gofo que no se reparten por ciudad')}>{t('Ajustes verif.')} <b className={ajusteVerif >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{money(ajusteVerif)}</b></span>
                 )}
-                <span>Ganancia real <b className="text-brand-gold">{money(selectedCity === TODAS ? gananciaReal : sumaGanCiudades)}</b></span>
+                <span>{t('Ganancia real')} <b className="text-brand-gold">{money(selectedCity === TODAS ? gananciaReal : sumaGanCiudades)}</b></span>
               </div>
             </Card>
           )}
@@ -136,11 +138,11 @@ export default function Financiero() {
           {selectedInvoice && verGofo && <PanelClaims claims={claimsDeCiudad(claims, selectedCity, selectedInvoice)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <KPI label="Ingreso neto (Gofo)" value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
-            <KPI label="− Pago choferes" value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
-            <KPI label="− Gastos fijos" value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
-            <KPI label="Ganancia real" value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
-            <KPI label="Margen" value={pct(margen)} icon={Target} accent="blue" />
+            <KPI label={t('Ingreso neto (Gofo)')} value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
+            <KPI label={t('− Pago choferes')} value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
+            <KPI label={t('− Gastos fijos')} value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
+            <KPI label={t('Ganancia real')} value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
+            <KPI label={t('Margen')} value={pct(margen)} icon={Target} accent="blue" />
           </div>
 
           {!selectedInvoice ? (
@@ -148,42 +150,42 @@ export default function Financiero() {
           ) : (
             <>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
+                <GaugeCard title={t('Margen de ganancia')} value={margen} color="#c9a24b" />
                 <div className="lg:col-span-2">
-                  <DonutCard title="Distribución de ingreso por ciudad" data={ingresoPorCiudad} fmt={money} height={200} />
+                  <DonutCard title={t('Distribución de ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} height={200} />
                 </div>
               </div>
 
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <BarCard title="Ingreso por ruta (top 10)" data={ingresoPorRuta} color="#13233f" fmt={money} />
-                <BarCard title="Ganancia por ruta (top 10)" data={gananciaPorRuta} color="#c9a24b" fmt={money} />
-                <BarCard title="$ por libra por ruta (top 10)" data={lbPorRuta} color="#4a9c8c" fmt={(v) => `$${Number(v).toFixed(3)}`} />
-                <BarCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} horizontal />
+                <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
+                <BarCard title={t('Ganancia por ruta (top 10)')} data={gananciaPorRuta} color="#c9a24b" fmt={money} />
+                <BarCard title={t('$ por libra por ruta (top 10)')} data={lbPorRuta} color="#4a9c8c" fmt={(v) => `$${Number(v).toFixed(3)}`} />
+                <BarCard title={t('Ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} horizontal />
               </div>
 
               <Card className="p-4">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Rentabilidad por ruta (ordenado por $/lb)</h3>
+                  <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Rentabilidad por ruta (ordenado por $/lb)')}</h3>
                   <div className="ml-auto flex gap-2">
                     <Boton variant="ghost" onClick={exportarE}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
                     <Boton variant="gold" onClick={exportarP}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
                   </div>
                 </div>
                 <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  Costo por ruta estimado con la tarifa promedio de los choferes ({money(avg.ind)} ind. / {money(avg.dob)} doble).
+                  {t('Costo por ruta estimado con la tarifa promedio de los choferes')} ({money(avg.ind)} {t('ind.')} / {money(avg.dob)} {t('doble')}).
                 </p>
                 <Tabla
                   columns={[
-                    { key: 'ruta', label: 'Ruta' },
-                    { key: 'nombreCiudad', label: 'Ciudad' },
-                    { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                    { key: 'pesoTotalLb', label: 'Peso (lb)', align: 'right' },
-                    { key: 'ingreso', label: 'Ingreso', align: 'right' },
+                    { key: 'ruta', label: t('Ruta') },
+                    { key: 'nombreCiudad', label: t('Ciudad') },
+                    { key: 'paquetes', label: t('Paquetes'), align: 'right' },
+                    { key: 'pesoTotalLb', label: t('Peso (lb)'), align: 'right' },
+                    { key: 'ingreso', label: t('Ingreso'), align: 'right' },
                     { key: 'precioPorLb', label: '$/lb', align: 'right' },
                     { key: 'precioPorPaquete', label: '$/paq', align: 'right' },
-                    { key: 'costoEst', label: 'Costo est.', align: 'right' },
-                    { key: 'ganancia', label: 'Ganancia', align: 'right' },
-                    { key: 'margen', label: 'Margen', align: 'right' },
+                    { key: 'costoEst', label: t('Costo est.'), align: 'right' },
+                    { key: 'ganancia', label: t('Ganancia'), align: 'right' },
+                    { key: 'margen', label: t('Margen'), align: 'right' },
                   ]}
                   rows={rutas.map((r) => ({ ...r, _key: r.ruta }))}
                   renderCell={(row, key) => {

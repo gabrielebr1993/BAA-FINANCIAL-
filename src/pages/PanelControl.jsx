@@ -12,6 +12,7 @@ import { useAuth } from '../AuthContext'
 import { stripeConfig } from '../utils/stripe'
 import { Card, PageTitle, Aviso } from '../components/ui'
 import JarvisSphere from '../components/JarvisSphere'
+import { useLang } from '../i18n'
 
 const NAVY = '#13233f', GOLD = '#c9a24b'
 const GREEN = '#16a34a', AMBER = '#d97706', RED = '#dc2626'
@@ -50,6 +51,7 @@ function Gauge({ label, valor }) {
 }
 
 export default function PanelControl() {
+  const { t } = useLang()
   const navigate = useNavigate()
   const { esSuperAdmin } = useAuth()
   const { activeCompanyId, empresaActiva, invoices, drivers, ajustes, numAlertas } = useData()
@@ -79,15 +81,15 @@ export default function PanelControl() {
   const horasBackup = ultBackup ? Math.round((Date.now() - ultBackup.getTime()) / 3.6e6) : null
 
   const diag = []
-  if (sinBanco > 0) diag.push({ n: 'aviso', txt: `${sinBanco} chofer(es) sin cuenta bancaria verificada en Stripe.`, link: '/stripe' })
-  if (sinAsociar > 0) diag.push({ n: 'critico', txt: `${sinAsociar} nombre(s) sin asociar en la última factura.`, link: '/facturas' })
-  if (horasBackup == null) diag.push({ n: 'aviso', txt: 'Aún no hay respaldo automático registrado.', link: '/backups' })
-  else if (horasBackup > 48) diag.push({ n: 'aviso', txt: `Último respaldo hace ${horasBackup} h.`, link: '/backups' })
-  else diag.push({ n: 'ok', txt: `Último respaldo exitoso hace ${horasBackup} h.`, link: null })
-  if (stripe && !stripe.error && stripe.configurado && stripe.test) diag.push({ n: 'aviso', txt: 'Stripe en modo TEST — pagos reales desactivados.', link: '/stripe' })
-  if (stripe && !stripe.error && !stripe.configurado) diag.push({ n: 'critico', txt: 'Stripe no está configurado (falta STRIPE_SECRET_KEY).', link: '/stripe' })
-  if (numAlertas > 0) diag.push({ n: 'aviso', txt: `${numAlertas} alerta(s) activas del negocio.`, link: '/alertas' })
-  diag.push({ n: 'ok', txt: 'Reglas de seguridad de Firestore activas (acceso por empresa y rol).', link: null })
+  if (sinBanco > 0) diag.push({ n: 'aviso', txt: `${sinBanco} ${t('chofer(es) sin cuenta bancaria verificada en Stripe.')}`, link: '/stripe' })
+  if (sinAsociar > 0) diag.push({ n: 'critico', txt: `${sinAsociar} ${t('nombre(s) sin asociar en la última factura.')}`, link: '/facturas' })
+  if (horasBackup == null) diag.push({ n: 'aviso', txt: t('Aún no hay respaldo automático registrado.'), link: '/backups' })
+  else if (horasBackup > 48) diag.push({ n: 'aviso', txt: `${t('Último respaldo hace')} ${horasBackup} h.`, link: '/backups' })
+  else diag.push({ n: 'ok', txt: `${t('Último respaldo exitoso hace')} ${horasBackup} h.`, link: null })
+  if (stripe && !stripe.error && stripe.configurado && stripe.test) diag.push({ n: 'aviso', txt: t('Stripe en modo TEST — pagos reales desactivados.'), link: '/stripe' })
+  if (stripe && !stripe.error && !stripe.configurado) diag.push({ n: 'critico', txt: t('Stripe no está configurado (falta STRIPE_SECRET_KEY).'), link: '/stripe' })
+  if (numAlertas > 0) diag.push({ n: 'aviso', txt: `${numAlertas} ${t('alerta(s) activas del negocio.')}`, link: '/alertas' })
+  diag.push({ n: 'ok', txt: t('Reglas de seguridad de Firestore activas (acceso por empresa y rol).'), link: null })
 
   const criticos = diag.filter((d) => d.n === 'critico').length
   const operativo = criticos === 0
@@ -97,35 +99,35 @@ export default function PanelControl() {
   const saludPagos = Math.round(((drivers || []).filter((d) => d.stripeEstado === 'verificado').length / totalCh) * 100)
 
   if (!esSuperAdmin) {
-    return (<div><PageTitle>Panel de Control</PageTitle><Aviso tipo="warn">Solo el súper-admin puede ver el panel de control.</Aviso></div>)
+    return (<div><PageTitle>{t('Panel de Control')}</PageTitle><Aviso tipo="warn">{t('Solo el súper-admin puede ver el panel de control.')}</Aviso></div>)
   }
 
   return (
     <div>
-      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>Panel de Control</PageTitle>
+      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>{t('Panel de Control')}</PageTitle>
 
       {/* Estado global + mini cerebro */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 text-xs text-slate-400">Monitoreo en tiempo real</div>
+        <div className="flex items-center gap-1 text-xs text-slate-400">{t('Monitoreo en tiempo real')}</div>
         <div className="flex items-center gap-3">
           <JarvisSphere estado="idle" size={54} alerta={criticos > 0} />
           <div className={`rounded-xl border px-4 py-2 text-sm font-extrabold ${operativo ? 'border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' : 'border-rose-500 bg-rose-50 text-rose-600 dark:bg-rose-500/10'}`}>
-            {operativo ? '✓ Todo operativo' : '⚠ Requiere atención'}
+            {operativo ? t('✓ Todo operativo') : t('⚠ Requiere atención')}
           </div>
         </div>
       </div>
 
       {/* Conexiones */}
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Conexion icon={Database} nombre="FIREBASE" color={ping ? (ping.ok ? 'verde' : 'rojo') : 'gris'} valor={ping ? (ping.ok ? 'OK' : 'ERROR') : '…'} detalle={ping ? `${ping.ms} ms` : 'comprobando'} />
-        <Conexion icon={CreditCard} nombre="STRIPE" color={stripe ? (stripe.error ? 'gris' : stripe.configurado ? (stripe.test ? 'ambar' : 'verde') : 'rojo') : 'gris'} valor={stripe ? (stripe.error ? '—' : stripe.configurado ? (stripe.test ? 'TEST' : 'LIVE') : 'OFF') : '…'} detalle={stripe ? (stripe.error ? 'no consultado' : stripe.configurado ? (stripe.test ? 'modo test' : 'producción') : 'no configurado') : 'comprobando'} />
+        <Conexion icon={Database} nombre="FIREBASE" color={ping ? (ping.ok ? 'verde' : 'rojo') : 'gris'} valor={ping ? (ping.ok ? 'OK' : 'ERROR') : '…'} detalle={ping ? `${ping.ms} ms` : t('comprobando')} />
+        <Conexion icon={CreditCard} nombre="STRIPE" color={stripe ? (stripe.error ? 'gris' : stripe.configurado ? (stripe.test ? 'ambar' : 'verde') : 'rojo') : 'gris'} valor={stripe ? (stripe.error ? '—' : stripe.configurado ? (stripe.test ? 'TEST' : 'LIVE') : 'OFF') : '…'} detalle={stripe ? (stripe.error ? t('no consultado') : stripe.configurado ? (stripe.test ? t('modo test') : t('producción')) : t('no configurado')) : t('comprobando')} />
         <Conexion icon={Server} nombre="VERCEL" color="verde" valor="OK" detalle="online" />
-        <Conexion icon={Cloud} nombre="STORAGE" color="verde" valor="OK" detalle="protegido" />
+        <Conexion icon={Cloud} nombre="STORAGE" color="verde" valor="OK" detalle={t('protegido')} />
       </div>
 
       {/* Gráficas */}
       <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <Card className="p-4"><Sub>Ingreso semanal ($)</Sub>
+        <Card className="p-4"><Sub>{t('Ingreso semanal ($)')}</Sub>
           <ResponsiveContainer width="100%" height={150}>
             <LineChart data={series} margin={{ left: -12, right: 8, top: 6 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
@@ -136,7 +138,7 @@ export default function PanelControl() {
             </LineChart>
           </ResponsiveContainer>
         </Card>
-        <Card className="p-4"><Sub>Paquetes por semana</Sub>
+        <Card className="p-4"><Sub>{t('Paquetes por semana')}</Sub>
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={series} margin={{ left: -12, right: 8, top: 6 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
@@ -151,14 +153,14 @@ export default function PanelControl() {
 
       {/* Salud + Qué revisar */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.4fr]">
-        <Card className="p-4"><Sub>Salud del sistema</Sub>
+        <Card className="p-4"><Sub>{t('Salud del sistema')}</Sub>
           <div className="mt-2 flex justify-around">
-            <Gauge label="General" valor={saludGeneral} />
-            <Gauge label="Datos" valor={saludDatos} />
-            <Gauge label="Pagos" valor={saludPagos} />
+            <Gauge label={t('General')} valor={saludGeneral} />
+            <Gauge label={t('Datos')} valor={saludDatos} />
+            <Gauge label={t('Pagos')} valor={saludPagos} />
           </div>
         </Card>
-        <Card className="p-4"><Sub><span className="inline-flex items-center gap-1"><Activity size={12} strokeWidth={2} className="text-brand-gold" /> Qué revisar</span></Sub>
+        <Card className="p-4"><Sub><span className="inline-flex items-center gap-1"><Activity size={12} strokeWidth={2} className="text-brand-gold" /> {t('Qué revisar')}</span></Sub>
           <div className="flex flex-col gap-2">
             {diag.map((d, i) => {
               const c = d.n === 'critico' ? RED : d.n === 'aviso' ? AMBER : GREEN
@@ -167,7 +169,7 @@ export default function PanelControl() {
                 <div key={i} className="flex items-center gap-2.5 rounded-lg px-3 py-2" style={{ background: `${c}0d`, border: `1px solid ${c}33` }}>
                   <span style={{ color: c }}>{ic}</span>
                   <div className="flex-1 text-[12.5px] text-slate-600 dark:text-slate-300">{d.txt}</div>
-                  {d.link && <button onClick={() => navigate(d.link)} className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: c }}>Ir <ArrowRight size={12} strokeWidth={2.2} /></button>}
+                  {d.link && <button onClick={() => navigate(d.link)} className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: c }}>{t('Ir')} <ArrowRight size={12} strokeWidth={2.2} /></button>}
                 </div>
               )
             })}

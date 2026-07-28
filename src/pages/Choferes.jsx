@@ -14,11 +14,13 @@ import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
 import ManagersPanel from '../components/ManagersPanel'
 import RegistroChoferes from '../components/RegistroChoferes'
+import { useLang } from '../i18n'
 
 const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
+  const { t } = useLang()
   const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity, ciudadesEmpresa, ajustes } = useData()
   // Modo POR RUTA: el rate del chofer sale de su RUTA (no editable aquí); en modo
   // estándar sale de su ficha (editable). Se muestra el que realmente se le aplica.
@@ -105,15 +107,15 @@ export default function Choferes() {
 
   const crearAccesoDriver = async () => {
     setAccesoMsg(null)
-    if (!accesoForm.email.trim()) return setAccesoMsg({ tipo: 'error', txt: 'Escribe el email del chofer.' })
-    if (String(accesoForm.password).length < 6) return setAccesoMsg({ tipo: 'error', txt: 'La contraseña debe tener al menos 6 caracteres.' })
+    if (!accesoForm.email.trim()) return setAccesoMsg({ tipo: 'error', txt: t('Escribe el email del chofer.') })
+    if (String(accesoForm.password).length < 6) return setAccesoMsg({ tipo: 'error', txt: t('La contraseña debe tener al menos 6 caracteres.') })
     if (!activeCompanyId || !modal) return
     setCreandoAcceso(true)
     try {
       const token = await auth.currentUser.getIdToken()
       const email = accesoForm.email.trim()
       const data = await crearUsuarioApi({ nombre: modalForm.nombre, email, password: accesoForm.password, role: 'driver', companyId: activeCompanyId, driverId: modal.id, driverNombre: modalForm.nombre }, token)
-      if (!data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || 'No se pudo crear el acceso.' })
+      if (!data.ok) return setAccesoMsg({ tipo: 'error', txt: data.error || t('No se pudo crear el acceso.') })
       // Guardar en el doc del chofer que ya tiene cuenta (email de acceso), para
       // saber de un vistazo quién ya tiene portal. No rompe nada del cálculo.
       try {
@@ -121,10 +123,10 @@ export default function Choferes() {
         setModal((m) => (m ? { ...m, accesoEmail: email } : m))
         await reloadDrivers()
       } catch { /* si falla el updateDoc, el acceso igual quedó creado */ }
-      setAccesoMsg({ tipo: 'ok', txt: `Acceso creado. Correo: ${email} · Contraseña: ${accesoForm.password} · Link: ${window.location.origin}` })
+      setAccesoMsg({ tipo: 'ok', txt: `${t('Acceso creado. Correo:')} ${email} · ${t('Contraseña:')} ${accesoForm.password} · ${t('Link:')} ${window.location.origin}` })
       setAccesoForm({ email: '', password: '' })
     } catch (e) {
-      setAccesoMsg({ tipo: 'error', txt: 'Error: ' + e.message })
+      setAccesoMsg({ tipo: 'error', txt: t('Error:') + ' ' + e.message })
     } finally {
       setCreandoAcceso(false)
     }
@@ -198,8 +200,8 @@ export default function Choferes() {
 
   // ---- alta ----
   const agregar = async () => {
-    if (!form.nombre.trim()) return setError('El nombre es obligatorio (debe coincidir con "Courier" del Excel).')
-    if (Number(form.precioIndividual) < 0 || Number(form.precioDoble) < 0) return setError('Las tarifas no pueden ser negativas.')
+    if (!form.nombre.trim()) return setError(t('El nombre es obligatorio (debe coincidir con "Courier" del Excel).'))
+    if (Number(form.precioIndividual) < 0 || Number(form.precioDoble) < 0) return setError(t('Las tarifas no pueden ser negativas.'))
     setGuardandoAlta(true)
     setError('')
     try {
@@ -213,7 +215,7 @@ export default function Choferes() {
       await reloadDrivers()
       setForm(vacio)
     } catch (e) {
-      setError('Error al guardar: ' + e.message)
+      setError(t('Error al guardar:') + ' ' + e.message)
     } finally {
       setGuardandoAlta(false)
     }
@@ -263,9 +265,9 @@ export default function Choferes() {
 
   const pedirAplicarTarifa = () => {
     const ind = Number(bulkTarifa.ind), dob = Number(bulkTarifa.dob)
-    if ((bulkTarifa.ind !== '' && (isNaN(ind) || ind < 0)) || (bulkTarifa.dob !== '' && (isNaN(dob) || dob < 0))) return setError('Tarifas inválidas.')
+    if ((bulkTarifa.ind !== '' && (isNaN(ind) || ind < 0)) || (bulkTarifa.dob !== '' && (isNaN(dob) || dob < 0))) return setError(t('Tarifas inválidas.'))
     setConfirm({
-      texto: `Aplicar tarifa ${bulkTarifa.ind !== '' ? 'individual ' + money(ind) : ''}${bulkTarifa.dob !== '' ? ' doble ' + money(dob) : ''} a ${idsSel().length} chofer(es).`,
+      texto: `${t('Aplicar tarifa')} ${bulkTarifa.ind !== '' ? t('individual') + ' ' + money(ind) : ''}${bulkTarifa.dob !== '' ? ' ' + t('doble') + ' ' + money(dob) : ''} ${t('a')} ${idsSel().length} ${t('chofer(es).')}`,
       accion: () => aplicarBatch((batch, d) => {
         const p = {}
         if (bulkTarifa.ind !== '') p.precioIndividual = ind
@@ -277,25 +279,25 @@ export default function Choferes() {
 
   const pedirAjustar = () => {
     const v = Number(bulkAjuste.valor)
-    if (isNaN(v)) return setError('Valor de ajuste inválido.')
+    if (isNaN(v)) return setError(t('Valor de ajuste inválido.'))
     const signo = bulkAjuste.op === 'restar' ? -1 : 1
     const ajustar = (base) => {
       const nb = bulkAjuste.modo === 'pct' ? base * (1 + (signo * v) / 100) : base + signo * v
       return Math.max(0, Math.round(nb * 100) / 100)
     }
     setConfirm({
-      texto: `Ajustar tarifas ${bulkAjuste.op === 'restar' ? '−' : '+'}${v}${bulkAjuste.modo === 'pct' ? '%' : ' $'} a ${idsSel().length} chofer(es).`,
+      texto: `${t('Ajustar tarifas')} ${bulkAjuste.op === 'restar' ? '−' : '+'}${v}${bulkAjuste.modo === 'pct' ? '%' : ' $'} ${t('a')} ${idsSel().length} ${t('chofer(es).')}`,
       accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { precioIndividual: ajustar(Number(d.precioIndividual) || 0), precioDoble: ajustar(Number(d.precioDoble) || 0) })),
     })
   }
 
   const pedirActivar = (activo) =>
-    setConfirm({ texto: `${activo ? 'Activar' : 'Desactivar'} ${idsSel().length} chofer(es).`, accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { activo })) })
+    setConfirm({ texto: `${activo ? t('Activar') : t('Desactivar')} ${idsSel().length} ${t('chofer(es).')}`, accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { activo })) })
 
   const pedirBorrar = () =>
     setConfirm({
       peligro: true,
-      texto: `Vas a ELIMINAR ${idsSel().length} chofer(es) de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero estos choferes desaparecerán de la lista y de los cálculos futuros. Esta acción no se puede deshacer.`,
+      texto: `${t('Vas a ELIMINAR')} ${idsSel().length} ${t('chofer(es) de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero estos choferes desaparecerán de la lista y de los cálculos futuros. Esta acción no se puede deshacer.')}`,
       accion: () => aplicarBatch((batch, d) => batch.delete(doc(db, 'drivers', d.id))),
     })
 
@@ -304,7 +306,7 @@ export default function Choferes() {
     setModal(null)
     setConfirm({
       peligro: true,
-      texto: `Vas a ELIMINAR al chofer "${d.nombre}" de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero desaparecerá de la lista y de los cálculos futuros. Esta acción no se puede deshacer.`,
+      texto: `${t('Vas a ELIMINAR al chofer')} "${d.nombre}" ${t('de forma permanente. El historial de pagos y los claims ya cargados NO se borran (quedan como registro), pero desaparecerá de la lista y de los cálculos futuros. Esta acción no se puede deshacer.')}`,
       accion: async () => {
         setOcupado(true)
         try {
@@ -338,7 +340,7 @@ export default function Choferes() {
     }
   }
   const guardarModal = async () => {
-    if (Number(modalForm.precioIndividual) < 0 || Number(modalForm.precioDoble) < 0) return setError('Las tarifas no pueden ser negativas.')
+    if (Number(modalForm.precioIndividual) < 0 || Number(modalForm.precioDoble) < 0) return setError(t('Las tarifas no pueden ser negativas.'))
     setGuardandoModal(true)
     try {
       await updateDoc(doc(db, 'drivers', modal.id), {
@@ -366,12 +368,12 @@ export default function Choferes() {
 
   return (
     <div>
-      <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">Semana: <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>Choferes y Tarifas</PageTitle>
+      <PageTitle right={facturaRango && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Semana:')} <b className="text-brand-navy dark:text-slate-200">{facturaRango.semana}</b></span>}>{t('Choferes y Tarifas')}</PageTitle>
 
       {/* Gastos fijos: dueño/súper-admin (todas las ciudades) y admin (solo su ciudad). El manager no. */}
       {puedeGastos && (
         <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-          {[{ k: 'choferes', l: 'Choferes' }, { k: 'managers', l: 'Gastos fijos' }].map((t) => (
+          {[{ k: 'choferes', l: t('Choferes') }, { k: 'managers', l: t('Gastos fijos') }].map((t) => (
             <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium transition ${tab === t.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>
               {t.l}
             </button>
@@ -386,7 +388,7 @@ export default function Choferes() {
       {error && <Aviso tipo="error">{error}</Aviso>}
       {sinTarifa.length > 0 && (
         <Aviso tipo="warn">
-          <span className="inline-flex items-center gap-1.5"><Truck size={15} strokeWidth={1.8} /> {sinTarifa.length} chofer(es) de la factura sin tarifa: {sinTarifa.slice(0, 8).join(', ')}{sinTarifa.length > 8 ? '…' : ''}. Créalos abajo.</span>
+          <span className="inline-flex items-center gap-1.5"><Truck size={15} strokeWidth={1.8} /> {sinTarifa.length} {t('chofer(es) de la factura sin tarifa:')} {sinTarifa.slice(0, 8).join(', ')}{sinTarifa.length > 8 ? '…' : ''}. {t('Créalos abajo.')}</span>
         </Aviso>
       )}
 
@@ -395,24 +397,24 @@ export default function Choferes() {
 
       {/* Alta de chofer */}
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Agregar chofer</h3>
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Agregar chofer')}</h3>
         <div className="flex flex-wrap items-end gap-3">
-          <Campo label="Nombre (= Courier del Excel)"><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
-          <Campo label="Rate individual ($) — lo que le pagas"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-          <Campo label="Rate doble ($) — lo que le pagas"><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
-          <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? 'Guardando…' : 'Agregar'}</Boton>
+          <Campo label={t('Nombre (= Courier del Excel)')}><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
+          <Campo label={t('Rate individual ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+          <Campo label={t('Rate doble ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+          <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
         </div>
       </Card>
 
       {/* Barra de búsqueda + contador */}
       <div className="mb-2 flex flex-wrap items-center gap-3">
-        <Input className="w-64" placeholder="Buscar por nombre o rate (ej. 1.6)…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-        <span className="text-sm text-slate-500 dark:text-slate-400">Mostrando {filtrados.length} de {drivers.length}</span>
+        <Input className="w-64" placeholder={t('Buscar por nombre o rate (ej. 1.6)…')} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+        <span className="text-sm text-slate-500 dark:text-slate-400">{t('Mostrando')} {filtrados.length} {t('de')} {drivers.length}</span>
         <Boton variant="ghost" className="ml-auto px-3 py-1.5 text-xs" onClick={exportarChoferes} disabled={filtrados.length === 0}>
-          <FileSpreadsheet size={15} strokeWidth={1.8} /> Exportar Excel
+          <FileSpreadsheet size={15} strokeWidth={1.8} /> {t('Exportar Excel')}
         </Boton>
-        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={filtrados.length === 0} title="Descargar nombre, cuenta, ruta y banco (todos o seleccionados)">
-          <Landmark size={15} strokeWidth={1.8} /> Datos bancarios
+        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={filtrados.length === 0} title={t('Descargar nombre, cuenta, ruta y banco (todos o seleccionados)')}>
+          <Landmark size={15} strokeWidth={1.8} /> {t('Datos bancarios')}
         </Boton>
       </div>
 
@@ -420,14 +422,14 @@ export default function Choferes() {
       {nSel > 0 && (
         <Card className="mb-2 border-2 border-brand-gold/50 p-3">
           <div className="flex flex-wrap items-end gap-3">
-            <span className="self-center font-semibold text-brand-navy dark:text-slate-100">{nSel} seleccionado(s)</span>
+            <span className="self-center font-semibold text-brand-navy dark:text-slate-100">{nSel} {t('seleccionado(s)')}</span>
             <div className="flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
-              <Campo label="Tarifa ind."><Input className="w-24" type="number" step="0.01" min="0" value={bulkTarifa.ind} onChange={(e) => setBulkTarifa((b) => ({ ...b, ind: e.target.value }))} /></Campo>
-              <Campo label="doble"><Input className="w-24" type="number" step="0.01" min="0" value={bulkTarifa.dob} onChange={(e) => setBulkTarifa((b) => ({ ...b, dob: e.target.value }))} /></Campo>
-              <Boton variant="ghost" onClick={pedirAplicarTarifa}>Aplicar tarifa</Boton>
+              <Campo label={t('Tarifa ind.')}><Input className="w-24" type="number" step="0.01" min="0" value={bulkTarifa.ind} onChange={(e) => setBulkTarifa((b) => ({ ...b, ind: e.target.value }))} /></Campo>
+              <Campo label={t('doble')}><Input className="w-24" type="number" step="0.01" min="0" value={bulkTarifa.dob} onChange={(e) => setBulkTarifa((b) => ({ ...b, dob: e.target.value }))} /></Campo>
+              <Boton variant="ghost" onClick={pedirAplicarTarifa}>{t('Aplicar tarifa')}</Boton>
             </div>
             <div className="flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
-              <Campo label="Ajustar">
+              <Campo label={t('Ajustar')}>
                 <select value={bulkAjuste.op} onChange={(e) => setBulkAjuste((b) => ({ ...b, op: e.target.value }))} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
                   <option value="sumar">+</option>
                   <option value="restar">−</option>
@@ -438,13 +440,13 @@ export default function Choferes() {
                 <option value="monto">$</option>
                 <option value="pct">%</option>
               </select>
-              <Boton variant="ghost" onClick={pedirAjustar}>Ajustar</Boton>
+              <Boton variant="ghost" onClick={pedirAjustar}>{t('Ajustar')}</Boton>
             </div>
-            <Boton variant="ghost" onClick={() => pedirActivar(true)}>Activar</Boton>
-            <Boton variant="ghost" onClick={() => pedirActivar(false)}>Desactivar</Boton>
-            <Boton variant="ghost" onClick={exportarBancarios}><Landmark size={15} strokeWidth={1.8} /> Datos bancarios</Boton>
-            <Boton variant="danger" onClick={pedirBorrar}><Trash2 size={15} strokeWidth={1.8} /> Borrar</Boton>
-            <Boton variant="ghost" onClick={() => setSeleccion(new Set())}>Limpiar</Boton>
+            <Boton variant="ghost" onClick={() => pedirActivar(true)}>{t('Activar')}</Boton>
+            <Boton variant="ghost" onClick={() => pedirActivar(false)}>{t('Desactivar')}</Boton>
+            <Boton variant="ghost" onClick={exportarBancarios}><Landmark size={15} strokeWidth={1.8} /> {t('Datos bancarios')}</Boton>
+            <Boton variant="danger" onClick={pedirBorrar}><Trash2 size={15} strokeWidth={1.8} /> {t('Borrar')}</Boton>
+            <Boton variant="ghost" onClick={() => setSeleccion(new Set())}>{t('Limpiar')}</Boton>
           </div>
         </Card>
       )}
@@ -455,19 +457,19 @@ export default function Choferes() {
           <thead className="sticky top-0 z-10">
             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 [&>th]:bg-slate-100 dark:[&>th]:bg-slate-800">
               <th className="px-2 py-2.5"><input type="checkbox" checked={todosSel} onChange={toggleTodos} /></th>
-              <th className="px-3 py-2.5 text-left font-semibold">Chofer</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Rate individual</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Rate doble</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Ind.</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Dobles</th>
+              <th className="px-3 py-2.5 text-left font-semibold">{t('Chofer')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Rate individual')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Rate doble')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Ind.')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Dobles')}</th>
               <th className="px-3 py-2.5 text-right font-semibold">Claims</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Total semana</th>
-              <th className="px-3 py-2.5 text-center font-semibold">Activo</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Total semana')}</th>
+              <th className="px-3 py-2.5 text-center font-semibold">{t('Activo')}</th>
               <th className="px-3 py-2.5 text-right font-semibold"></th>
             </tr>
           </thead>
           <tbody>
-            {filtrados.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-slate-400">Sin choferes.</td></tr>}
+            {filtrados.length === 0 && <tr><td colSpan={10} className="px-4 py-6 text-center text-slate-400">{t('Sin choferes.')}</td></tr>}
             {filtrados.map((d, i) => {
               const w = pagoMap[key(d.nombre)]
               const total = totalRow(d)
@@ -489,14 +491,14 @@ export default function Choferes() {
                           </span>
                         )}
                       </div>
-                      {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> guardado</span>}
+                      {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> {t('guardado')}</span>}
                     </div>
                   </td>
                   {modoRuta ? (
                     <>
                       <td className="px-3 py-2 text-right">
                         <div className="font-semibold">{money(rateDeRuta(d).ind)}</div>
-                        <div className="text-[10px] text-slate-400">{rateDeRuta(d).ruta ? `ruta ${rateDeRuta(d).ruta}` : 'sin ruta'}</div>
+                        <div className="text-[10px] text-slate-400">{rateDeRuta(d).ruta ? `${t('ruta')} ${rateDeRuta(d).ruta}` : t('sin ruta')}</div>
                       </td>
                       <td className="px-3 py-2 text-right font-semibold">{money(rateDeRuta(d).dob)}</td>
                     </>
@@ -517,16 +519,16 @@ export default function Choferes() {
                   <td className="px-3 py-2 text-right">{w ? `${w.claimsActivos}/${w.claimsTotales}` : '—'}</td>
                   <td className="px-3 py-2 text-right font-bold">{total == null ? '—' : money(total)}</td>
                   <td className="px-3 py-2 text-center">
-                    <button onClick={() => toggleActivoUno(d)}>{d.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>}</button>
+                    <button onClick={() => toggleActivoUno(d)}>{d.activo !== false ? <Badge color="green">{t('Activo')}</Badge> : <Badge color="slate">{t('Inactivo')}</Badge>}</button>
                   </td>
-                  <td className="px-3 py-2 text-right"><Boton variant="ghost" onClick={() => abrirModal(d)} className="px-2.5 py-1 text-xs">Editar</Boton></td>
+                  <td className="px-3 py-2 text-right"><Boton variant="ghost" onClick={() => abrirModal(d)} className="px-2.5 py-1 text-xs">{t('Editar')}</Boton></td>
                 </tr>
               )
             })}
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 font-bold dark:bg-slate-800">
-              <td colSpan={7} className="px-3 py-2.5 text-right">Total nómina de la semana:</td>
+              <td colSpan={7} className="px-3 py-2.5 text-right">{t('Total nómina de la semana:')}</td>
               <td className="px-3 py-2.5 text-right text-brand-gold">{money(totalNomina)}</td>
               <td colSpan={2}></td>
             </tr>
@@ -539,12 +541,12 @@ export default function Choferes() {
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !ocupado && setConfirm(null)}>
           <Card className={`w-full max-w-md p-5 ${confirm.peligro ? 'border-2 border-rose-400/70' : ''}`} onClick={(e) => e.stopPropagation()}>
             <h3 className={`m-0 mb-2 flex items-center gap-2 text-lg font-bold ${confirm.peligro ? 'text-rose-600 dark:text-rose-400' : 'text-brand-navy dark:text-slate-100'}`}>
-              {confirm.peligro && <Trash2 size={18} strokeWidth={1.9} />}{confirm.peligro ? 'Eliminar choferes' : 'Confirmar cambio masivo'}
+              {confirm.peligro && <Trash2 size={18} strokeWidth={1.9} />}{confirm.peligro ? t('Eliminar choferes') : t('Confirmar cambio masivo')}
             </h3>
             <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">{confirm.texto}</p>
             <div className="flex justify-end gap-2">
-              <Boton variant="ghost" onClick={() => setConfirm(null)} disabled={ocupado}>Cancelar</Boton>
-              <Boton variant={confirm.peligro ? 'danger' : 'gold'} onClick={confirm.accion} disabled={ocupado}>{ocupado ? <><Spinner /> {confirm.peligro ? 'Borrando…' : 'Aplicando…'}</> : (confirm.peligro ? 'Sí, eliminar' : 'Confirmar')}</Boton>
+              <Boton variant="ghost" onClick={() => setConfirm(null)} disabled={ocupado}>{t('Cancelar')}</Boton>
+              <Boton variant={confirm.peligro ? 'danger' : 'gold'} onClick={confirm.accion} disabled={ocupado}>{ocupado ? <><Spinner /> {confirm.peligro ? t('Borrando…') : t('Aplicando…')}</> : (confirm.peligro ? t('Sí, eliminar') : t('Confirmar'))}</Boton>
             </div>
           </Card>
         </div>
@@ -555,32 +557,32 @@ export default function Choferes() {
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => setModal(null)}>
           <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center gap-2">
-              <h3 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">Editar chofer</h3>
-              <Boton variant="ghost" onClick={() => setModal(null)} className="ml-auto px-2.5 py-1 text-xs">Cerrar</Boton>
+              <h3 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">{t('Editar chofer')}</h3>
+              <Boton variant="ghost" onClick={() => setModal(null)} className="ml-auto px-2.5 py-1 text-xs">{t('Cerrar')}</Boton>
             </div>
             <div className="mb-3">
-              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre (= Courier del Excel)</div>
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Nombre (= Courier del Excel)')}</div>
               <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">{modalForm.nombre}</div>
             </div>
             <div className="mb-3 flex flex-wrap gap-3">
-              <Campo label="Rate individual ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-              <Campo label="Rate doble ($)"><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
-              <Campo label="Activo">
-                <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={modalForm.activo} onChange={(e) => setModalForm((f) => ({ ...f, activo: e.target.checked }))} /> {modalForm.activo ? 'Sí' : 'No'}</label>
+              <Campo label={t('Rate individual ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+              <Campo label={t('Rate doble ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+              <Campo label={t('Activo')}>
+                <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={modalForm.activo} onChange={(e) => setModalForm((f) => ({ ...f, activo: e.target.checked }))} /> {modalForm.activo ? t('Sí') : t('No')}</label>
               </Campo>
             </div>
             <div className="mb-3">
-              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Notas</div>
-              <textarea rows={3} value={modalForm.notas} onChange={(e) => setModalForm((f) => ({ ...f, notas: e.target.value }))} placeholder="Ej. advertido por claims el 05/07…"
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Notas')}</div>
+              <textarea rows={3} value={modalForm.notas} onChange={(e) => setModalForm((f) => ({ ...f, notas: e.target.value }))} placeholder={t('Ej. advertido por claims el 05/07…')}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
             </div>
 
             <div className="mb-3">
-              <div className="mb-1 text-sm font-semibold text-slate-600 dark:text-slate-300">Historial de pagos</div>
+              <div className="mb-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{t('Historial de pagos')}</div>
               {cargandoHist ? (
-                <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Spinner className="text-brand-gold" /> Cargando…</div>
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Spinner className="text-brand-gold" /> {t('Cargando…')}</div>
               ) : historial.length === 0 ? (
-                <div className="py-2 text-sm text-slate-400">Sin pagos registrados.</div>
+                <div className="py-2 text-sm text-slate-400">{t('Sin pagos registrados.')}</div>
               ) : (
                 <>
                   <div className="scroll-thin max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
@@ -590,13 +592,13 @@ export default function Choferes() {
                           <tr key={h.id} className="border-t border-slate-100 dark:border-slate-700/50">
                             <td className="px-3 py-1.5">{h.semana}</td>
                             <td className="px-3 py-1.5 text-right">{money(h.totalPagar)}</td>
-                            <td className="px-3 py-1.5 text-center">{h.estado === 'pagado' ? <Badge color="green">Pagado</Badge> : <Badge color="gold">Pendiente</Badge>}</td>
+                            <td className="px-3 py-1.5 text-center">{h.estado === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Acumulado: <b>{money(historial.reduce((a, h) => a + (h.totalPagar || 0), 0))}</b></div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('Acumulado:')} <b>{money(historial.reduce((a, h) => a + (h.totalPagar || 0), 0))}</b></div>
                 </>
               )}
             </div>
@@ -604,29 +606,29 @@ export default function Choferes() {
             {/* Dar acceso al chofer (usuario rol driver) */}
             <div className="mb-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
               <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                <KeyRound size={15} strokeWidth={1.8} className="text-brand-gold" /> Dar acceso al chofer
+                <KeyRound size={15} strokeWidth={1.8} className="text-brand-gold" /> {t('Dar acceso al chofer')}
               </div>
               <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                Crea un usuario para <b>{modalForm.nombre}</b> que solo verá su portal (sus pagos, entregas, claims y calificación). No verá finanzas ni a otros choferes.
+                {t('Crea un usuario para')} <b>{modalForm.nombre}</b> {t('que solo verá su portal (sus pagos, entregas, claims y calificación). No verá finanzas ni a otros choferes.')}
               </p>
               {modal.accesoEmail && (
                 <div className="mb-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                  <KeyRound size={13} strokeWidth={1.9} /> Ya tiene acceso: {modal.accesoEmail}. Crear de nuevo generará otra cuenta.
+                  <KeyRound size={13} strokeWidth={1.9} /> {t('Ya tiene acceso:')} {modal.accesoEmail}. {t('Crear de nuevo generará otra cuenta.')}
                 </div>
               )}
               {accesoMsg && <Aviso tipo={accesoMsg.tipo}>{accesoMsg.txt}</Aviso>}
               <div className="flex flex-wrap items-end gap-2">
-                <Campo label="Email del chofer"><Input className="w-52" type="email" value={accesoForm.email} onChange={(e) => setAccesoForm((f) => ({ ...f, email: e.target.value }))} placeholder="chofer@correo.com" /></Campo>
-                <Campo label="Contraseña (mín. 6)"><Input className="w-40" value={accesoForm.password} onChange={(e) => setAccesoForm((f) => ({ ...f, password: e.target.value }))} placeholder="la que definas" /></Campo>
-                <Boton variant="primary" disabled={creandoAcceso} onClick={crearAccesoDriver}>{creandoAcceso ? <><Spinner /> Creando…</> : <><KeyRound size={15} strokeWidth={1.8} /> Crear acceso</>}</Boton>
+                <Campo label={t('Email del chofer')}><Input className="w-52" type="email" value={accesoForm.email} onChange={(e) => setAccesoForm((f) => ({ ...f, email: e.target.value }))} placeholder={t('chofer@correo.com')} /></Campo>
+                <Campo label={t('Contraseña (mín. 6)')}><Input className="w-40" value={accesoForm.password} onChange={(e) => setAccesoForm((f) => ({ ...f, password: e.target.value }))} placeholder={t('la que definas')} /></Campo>
+                <Boton variant="primary" disabled={creandoAcceso} onClick={crearAccesoDriver}>{creandoAcceso ? <><Spinner /> {t('Creando…')}</> : <><KeyRound size={15} strokeWidth={1.8} /> {t('Crear acceso')}</>}</Boton>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <Boton variant="danger" onClick={() => pedirBorrarUno(modal)}><Trash2 size={15} strokeWidth={1.8} /> Eliminar chofer</Boton>
+              <Boton variant="danger" onClick={() => pedirBorrarUno(modal)}><Trash2 size={15} strokeWidth={1.8} /> {t('Eliminar chofer')}</Boton>
               <div className="ml-auto flex gap-2">
-                <Boton variant="ghost" onClick={() => setModal(null)}>Cancelar</Boton>
-                <Boton variant="gold" onClick={guardarModal} disabled={guardandoModal}>{guardandoModal ? <><Spinner /> Guardando…</> : 'Guardar cambios'}</Boton>
+                <Boton variant="ghost" onClick={() => setModal(null)}>{t('Cancelar')}</Boton>
+                <Boton variant="gold" onClick={guardarModal} disabled={guardandoModal}>{guardandoModal ? <><Spinner /> {t('Guardando…')}</> : t('Guardar cambios')}</Boton>
               </div>
             </div>
           </Card>

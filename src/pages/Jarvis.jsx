@@ -12,6 +12,7 @@ import { TODAS } from '../utils/calc'
 import { generarReporteAsistente } from '../utils/reporteAsistente'
 import { PageTitle, Boton, Aviso } from '../components/ui'
 import JarvisSphere from '../components/JarvisSphere'
+import { useLang } from '../i18n'
 import {
   preguntarAsistente, ejecutarAccionAsistente, hablar, detenerVoz, desbloquearAudio,
   crearReconocedor, reconocimientoDisponible, detectarIdioma, estadoVozIA,
@@ -28,6 +29,7 @@ const LABEL_ESTADO = { idle: '◊ EN ESPERA', listening: '◊ ESCUCHANDO', think
 const COLOR_ESTADO = { idle: '#8ea0bd', listening: '#4ade80', thinking: '#e3c988', speaking: '#c9a24b' }
 
 export default function Jarvis() {
+  const { t } = useLang()
   const navigate = useNavigate()
   const { activeCompanyId, empresaActiva, drivers, claims, facturaRango, selectedCity, setRango, setSelectedCity, reloadDrivers } = useData()
   const { perfil, esSuperAdmin } = useAuth()
@@ -35,7 +37,7 @@ export default function Jarvis() {
   const puede = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
 
   const [mensajes, setMensajes] = useState([
-    { role: 'assistant', content: 'Hola, soy JARVIS. Toca la esfera o pulsa “Hablar” y pregúntame por rutas, pagos, choferes, claims o fallidos. También abro secciones y aplico filtros.' },
+    { role: 'assistant', content: t('Hola, soy JARVIS. Toca la esfera o pulsa “Hablar” y pregúntame por rutas, pagos, choferes, claims o fallidos. También abro secciones y aplico filtros.') },
   ])
   const [texto, setTexto] = useState('')
   const [interim, setInterim] = useState('') // lo que se va reconociendo por voz
@@ -80,9 +82,9 @@ export default function Jarvis() {
       } else if (ac.tipo === 'generar_reporte') {
         try {
           const r = await generarReporteAsistente(ac.seccion, ac.formato, { facturaRango, claims, drivers, selectedCity })
-          setMensajes((m) => [...m, { role: 'assistant', content: `📥 Descargando ${r.formato}: ${r.titulo} (${r.filas} filas).` }])
+          setMensajes((m) => [...m, { role: 'assistant', content: `📥 ${t('Descargando')} ${r.formato}: ${r.titulo} (${r.filas} ${t('filas')}).` }])
         } catch (e) {
-          setError('No se pudo generar el reporte: ' + e.message)
+          setError(t('No se pudo generar el reporte: ') + e.message)
         }
       } else if (ac.tipo === 'aplicar_filtro') {
         if (ac.desde || ac.hasta) setRango({ preset: 'personalizado', desde: ac.desde || '', hasta: ac.hasta || '' })
@@ -100,7 +102,7 @@ export default function Jarvis() {
     setMensajes(nuevos); setCargando(true); setEstado('thinking')
     try {
       const r = await preguntarAsistente({ companyId: activeCompanyId, messages: nuevos })
-      if (!r.ok) { setError(r.error || 'No se pudo responder.'); setEstado('idle'); return }
+      if (!r.ok) { setError(r.error || t('No se pudo responder.')); setEstado('idle'); return }
       const mood = r.mood || 'neutro'
       setAnimo(mood)
       setMensajes((m) => [...m, { role: 'assistant', content: r.reply }])
@@ -111,12 +113,12 @@ export default function Jarvis() {
         hablar(r.reply, {
           idioma: detectarIdioma(r.reply), mood,
           onFuente: setFuenteVoz,
-          onError: (m) => setError('Voz ElevenLabs no disponible: ' + m + '. Se usó la voz del navegador.'),
+          onError: (m) => setError(t('Voz ElevenLabs no disponible: ') + m + t('. Se usó la voz del navegador.')),
           onFin: () => { setEstado('idle'); if (continuoRef.current) setTimeout(() => escucharRef.current?.(), 350) },
         })
       } else { setEstado('idle'); if (continuoRef.current) setTimeout(() => escucharRef.current?.(), 350) }
     } catch (e) {
-      setError('Error: ' + e.message); setEstado('idle')
+      setError(t('Error: ') + e.message); setEstado('idle')
     } finally { setCargando(false) }
   }, [texto, cargando, mensajes, activeCompanyId, vozActiva, ejecutarAcciones])
 
@@ -124,7 +126,7 @@ export default function Jarvis() {
   // terminaste: por "final" del navegador, por pausa de ~1.6 s, o al cerrarse el
   // micro (algunos navegadores no marcan "final"). No envía si tú lo detienes.
   const iniciarEscucha = useCallback(() => {
-    if (!reconocimientoDisponible()) { setError('Tu navegador no soporta reconocimiento de voz. Usa Chrome.'); return }
+    if (!reconocimientoDisponible()) { setError(t('Tu navegador no soporta reconocimiento de voz. Usa Chrome.')); return }
     detenerVoz()
     setError(''); setInterim('')
     cancelRef.current = false
@@ -150,7 +152,7 @@ export default function Jarvis() {
       },
       onError: (err) => {
         limpiarSilencio(); setEscuchando(false); setEstado('idle')
-        if (err === 'not-allowed') setError('Permite el micrófono en el navegador para hablar con JARVIS.')
+        if (err === 'not-allowed') setError(t('Permite el micrófono en el navegador para hablar con JARVIS.'))
       },
     })
     recRef.current = rec
@@ -176,53 +178,53 @@ export default function Jarvis() {
     try {
       const d = drivers.find((x) => norm(x.nombre) === norm(propuesta.driverNombre)) ||
                 drivers.find((x) => norm(x.nombre).includes(norm(propuesta.driverNombre)))
-      if (!d) { setError(`No encontré al chofer "${propuesta.driverNombre}".`); return }
+      if (!d) { setError(`${t('No encontré al chofer "')}${propuesta.driverNombre}${t('".')}`); return }
       const body = { companyId: activeCompanyId, tipo: propuesta.tipo, driverId: d.id }
       if (propuesta.tipo === 'verificacion_estado') body.estado = propuesta.estado
       if (propuesta.tipo === 'tarifa_chofer') body.tarifa = propuesta.tarifa
       const r = await ejecutarAccionAsistente(body)
-      if (!r.ok) { setError(r.error || 'No se pudo aplicar.'); return }
+      if (!r.ok) { setError(r.error || t('No se pudo aplicar.')); return }
       await reloadDrivers?.()
-      setMensajes((m) => [...m, { role: 'assistant', content: `✅ Hecho: ${propuesta.resumen}` }])
+      setMensajes((m) => [...m, { role: 'assistant', content: `${t('✅ Hecho: ')}${propuesta.resumen}` }])
       setPropuesta(null)
-    } catch (e) { setError('Error: ' + e.message) } finally { setAplicando(false) }
+    } catch (e) { setError(t('Error: ') + e.message) } finally { setAplicando(false) }
   }
 
   if (!puede) {
-    return (<div><PageTitle>JARVIS</PageTitle><Aviso tipo="warn">Solo el <b>dueño</b>, el súper-admin o un <b>admin</b> pueden usar el asistente.</Aviso></div>)
+    return (<div><PageTitle>JARVIS</PageTitle><Aviso tipo="warn">{t('Solo el ')}<b>{t('dueño')}</b>{t(', el súper-admin o un ')}<b>admin</b>{t(' pueden usar el asistente.')}</Aviso></div>)
   }
 
   const ultimaResp = [...mensajes].reverse().find((m) => m.role === 'assistant')?.content || ''
-  const subtitulo = escuchando ? (interim || 'Escuchando…') : cargando ? 'Pensando…' : ultimaResp
+  const subtitulo = escuchando ? (interim || t('Escuchando…')) : cargando ? t('Pensando…') : ultimaResp
 
   return (
     <div>
-      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">Empresa: <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>JARVIS</PageTitle>
+      <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>JARVIS</PageTitle>
 
       {/* HERO claro: la esfera-cerebro (canvas transparente) sobre el fondo de la app */}
       <div className="flex flex-col items-center pt-2">
         <div className="text-center">
           <div className="text-xs font-bold tracking-[0.4em] text-brand-gold">J.A.R.V.I.S</div>
-          <div className="mt-0.5 text-[10px] tracking-[0.3em] text-brand-gold/60">MILEPAY · NÚCLEO NEURONAL</div>
+          <div className="mt-0.5 text-[10px] tracking-[0.3em] text-brand-gold/60">{t('MILEPAY · NÚCLEO NEURONAL')}</div>
         </div>
 
-        <button onClick={alternar} className="cursor-pointer" style={{ marginTop: -30, marginBottom: -30 }} aria-label="Hablar con JARVIS" title="Toca para hablar">
+        <button onClick={alternar} className="cursor-pointer" style={{ marginTop: -30, marginBottom: -30 }} aria-label={t('Hablar con JARVIS')} title={t('Toca para hablar')}>
           <JarvisSphere estado={estado} size={700} animo={animo} />
         </button>
 
         <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-2 text-xs font-bold tracking-[0.3em]" style={{ color: COLOR_ESTADO[estado] }}>{LABEL_ESTADO[estado]}</div>
+          <div className="mb-2 text-xs font-bold tracking-[0.3em]" style={{ color: COLOR_ESTADO[estado] }}>{t(LABEL_ESTADO[estado])}</div>
           <div className="min-h-[56px] px-2 text-lg leading-relaxed text-slate-700 dark:text-slate-200">{subtitulo}</div>
         </div>
 
         {/* Propuesta de cambio (requiere confirmación) */}
         {propuesta && (
           <div className="mx-auto mt-3 max-w-xl rounded-2xl border border-brand-gold/50 bg-brand-gold/10 p-4 text-center">
-            <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-brand-gold">Confirmación requerida</div>
+            <div className="mb-2 text-sm font-semibold text-brand-navy dark:text-brand-gold">{t('Confirmación requerida')}</div>
             <div className="mb-3 text-sm text-slate-700 dark:text-slate-200">{propuesta.resumen}</div>
             <div className="flex justify-center gap-2">
-              <Boton variant="gold" onClick={confirmar} disabled={aplicando}>{aplicando ? <><Loader2 size={15} className="animate-spin" /> Aplicando…</> : <><Check size={15} strokeWidth={2} /> Confirmar</>}</Boton>
-              <Boton variant="ghost" onClick={() => setPropuesta(null)} disabled={aplicando}><X size={15} strokeWidth={2} /> Cancelar</Boton>
+              <Boton variant="gold" onClick={confirmar} disabled={aplicando}>{aplicando ? <><Loader2 size={15} className="animate-spin" /> {t('Aplicando…')}</> : <><Check size={15} strokeWidth={2} /> {t('Confirmar')}</>}</Boton>
+              <Boton variant="ghost" onClick={() => setPropuesta(null)} disabled={aplicando}><X size={15} strokeWidth={2} /> {t('Cancelar')}</Boton>
             </div>
           </div>
         )}
@@ -232,26 +234,26 @@ export default function Jarvis() {
         {/* Controles (estilo claro) */}
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
           <button onClick={alternar} className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold tracking-wide text-white shadow-lg transition hover:brightness-105" style={{ background: '#c9a24b', boxShadow: '0 6px 18px rgba(201,162,75,0.4)' }}>
-            {activo ? <>◼ Detener</> : <><Mic size={16} strokeWidth={2} /> Hablar con JARVIS</>}
+            {activo ? <>◼ {t('Detener')}</> : <><Mic size={16} strokeWidth={2} /> {t('Hablar con JARVIS')}</>}
           </button>
-          <button onClick={toggleContinuo} title="Conversación continua: reactiva el micrófono tras responder" className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${continuo ? 'border-emerald-400 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' : 'border-brand-gold/50 bg-white text-[#8a6d2f] hover:bg-brand-gold/5 dark:border-slate-600 dark:bg-slate-800 dark:text-brand-gold'}`}>
-            <Repeat size={15} strokeWidth={2} /> Continuo
+          <button onClick={toggleContinuo} title={t('Conversación continua: reactiva el micrófono tras responder')} className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${continuo ? 'border-emerald-400 bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' : 'border-brand-gold/50 bg-white text-[#8a6d2f] hover:bg-brand-gold/5 dark:border-slate-600 dark:bg-slate-800 dark:text-brand-gold'}`}>
+            <Repeat size={15} strokeWidth={2} /> {t('Continuo')}
           </button>
-          <button onClick={toggleVoz} title={vozActiva ? 'Silenciar voz' : 'Activar voz'} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-600 transition hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          <button onClick={toggleVoz} title={vozActiva ? t('Silenciar voz') : t('Activar voz')} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-600 transition hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
             {vozActiva ? <Volume2 size={15} strokeWidth={2} className="text-brand-gold" /> : <VolumeX size={15} strokeWidth={2} />}
           </button>
-          <button onClick={() => setChatAbierto((c) => !c)} title="Abrir/cerrar chat de texto" className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${chatAbierto ? 'border-brand-gold bg-brand-gold/10 text-[#8a6d2f] dark:text-brand-gold' : 'border-slate-300 bg-white text-slate-600 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
-            <MessageSquare size={15} strokeWidth={2} /> Chat
+          <button onClick={() => setChatAbierto((c) => !c)} title={t('Abrir/cerrar chat de texto')} className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-3 text-xs font-semibold transition ${chatAbierto ? 'border-brand-gold bg-brand-gold/10 text-[#8a6d2f] dark:text-brand-gold' : 'border-slate-300 bg-white text-slate-600 hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+            <MessageSquare size={15} strokeWidth={2} /> {t('Chat')}
           </button>
         </div>
 
         {/* Indicador de qué voz está activa */}
         <div className="mt-3 text-center text-[11px]">
-          {vozIA === null ? <span className="text-slate-400">Comprobando voz…</span>
-            : fuenteVoz === 'elevenlabs-alt' ? <span className="text-amber-600 dark:text-amber-400">● Voz alterna de ElevenLabs (tu voz elegida es de biblioteca: agrégala a “My Voices” con tu plan de pago)</span>
-            : vozIA ? <span className="text-emerald-600 dark:text-emerald-400">● Voz IA (ElevenLabs) activa</span>
-            : <span className="text-amber-600 dark:text-amber-400">Voz del navegador · ElevenLabs no disponible (revisa variables + Redeploy)</span>}
-          {fuenteVoz === 'navegador' && vozIA && <span className="ml-2 text-amber-600 dark:text-amber-400">· sonó la voz del navegador (¿autoplay? toca 🔊 y reintenta)</span>}
+          {vozIA === null ? <span className="text-slate-400">{t('Comprobando voz…')}</span>
+            : fuenteVoz === 'elevenlabs-alt' ? <span className="text-amber-600 dark:text-amber-400">{t('● Voz alterna de ElevenLabs (tu voz elegida es de biblioteca: agrégala a “My Voices” con tu plan de pago)')}</span>
+            : vozIA ? <span className="text-emerald-600 dark:text-emerald-400">{t('● Voz IA (ElevenLabs) activa')}</span>
+            : <span className="text-amber-600 dark:text-amber-400">{t('Voz del navegador · ElevenLabs no disponible (revisa variables + Redeploy)')}</span>}
+          {fuenteVoz === 'navegador' && vozIA && <span className="ml-2 text-amber-600 dark:text-amber-400">{t('· sonó la voz del navegador (¿autoplay? toca 🔊 y reintenta)')}</span>}
         </div>
       </div>
 
@@ -264,12 +266,12 @@ export default function Jarvis() {
                 <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${m.role === 'user' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'}`}>{m.content}</div>
               </div>
             ))}
-            {cargando && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-500 dark:bg-slate-800"><Loader2 size={15} className="animate-spin" /> Pensando…</div></div>}
+            {cargando && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-500 dark:bg-slate-800"><Loader2 size={15} className="animate-spin" /> {t('Pensando…')}</div></div>}
             <div ref={finRef} />
           </div>
           <div className="border-t border-slate-200 p-3 dark:border-slate-700/60">
             <div className="flex items-end gap-2">
-              <textarea rows={1} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} placeholder="Escribe tu pregunta…" className="max-h-32 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+              <textarea rows={1} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }} placeholder={t('Escribe tu pregunta…')} className="max-h-32 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
               <Boton variant="gold" onClick={() => { desbloquearAudio(); enviar() }} disabled={cargando || !texto.trim()}><Send size={16} strokeWidth={1.9} /></Boton>
             </div>
           </div>

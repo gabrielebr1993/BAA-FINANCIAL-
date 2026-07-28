@@ -5,8 +5,10 @@ import { combinarFacturas, facturaDeChofer } from '../utils/rango'
 import { money, num, pct } from '../utils/format'
 import { PageTitle, Card, Select, Aviso, EstadoVacio } from '../components/ui'
 import { BarCard } from '../components/charts'
+import { useLang } from '../i18n'
 
 export default function Comparar() {
+  const { t } = useLang()
   const { invoices, drivers, selectedCity, selectedDriver, facturaRangoFull } = useData()
   const hayChofer = selectedDriver && selectedDriver !== TODOS
 
@@ -46,35 +48,35 @@ export default function Comparar() {
   if (weeks.length < 2) {
     return (
       <div>
-        <PageTitle>Comparar semanas</PageTitle>
-        <EstadoVacio titulo="Necesitas al menos 2 semanas" texto="Carga al menos dos semanas distintas para poder compararlas." />
+        <PageTitle>{t('Comparar semanas')}</PageTitle>
+        <EstadoVacio titulo={t('Necesitas al menos 2 semanas')} texto={t('Carga al menos dos semanas distintas para poder compararlas.')} />
       </div>
     )
   }
 
   const metricas = [
-    { key: 'ingreso', label: 'Ingreso', fmt: money },
-    { key: 'costo', label: 'Costo', fmt: money },
-    { key: 'ganancia', label: 'Ganancia', fmt: money },
-    { key: 'paquetes', label: 'Paquetes', fmt: num },
-    { key: 'dobles', label: 'Dobles', fmt: num },
-    { key: 'claims', label: 'Claims', fmt: num },
+    { key: 'ingreso', label: t('Ingreso'), fmt: money },
+    { key: 'costo', label: t('Costo'), fmt: money },
+    { key: 'ganancia', label: t('Ganancia'), fmt: money },
+    { key: 'paquetes', label: t('Paquetes'), fmt: num },
+    { key: 'dobles', label: t('Dobles'), fmt: num },
+    { key: 'claims', label: t('Claims'), fmt: num },
   ]
 
   const chartData = [
-    { name: 'Ingreso', A: Math.round(eA.ingreso), B: Math.round(eB.ingreso) },
-    { name: 'Costo', A: Math.round(eA.costo), B: Math.round(eB.costo) },
-    { name: 'Ganancia', A: Math.round(eA.ganancia), B: Math.round(eB.ganancia) },
+    { name: t('Ingreso'), A: Math.round(eA.ingreso), B: Math.round(eB.ingreso) },
+    { name: t('Costo'), A: Math.round(eA.costo), B: Math.round(eB.costo) },
+    { name: t('Ganancia'), A: Math.round(eA.ganancia), B: Math.round(eB.ganancia) },
   ]
 
   return (
     <div>
-      <PageTitle>Comparar semanas</PageTitle>
+      <PageTitle>{t('Comparar semanas')}</PageTitle>
 
       {(selectedCity !== TODAS || hayChofer) && (
         <div className="mb-3 flex items-center gap-1.5 text-[13px]">
-          <span className="text-slate-400 dark:text-slate-500">Filtro aplicado:</span>
-          <span className="font-semibold text-brand-navy dark:text-white">{selectedCity === TODAS ? 'Todas las ciudades' : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)}</span>
+          <span className="text-slate-400 dark:text-slate-500">{t('Filtro aplicado:')}</span>
+          <span className="font-semibold text-brand-navy dark:text-white">{selectedCity === TODAS ? t('Todas las ciudades') : (nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity)}</span>
           {hayChofer && (<><span className="text-slate-300 dark:text-slate-600">·</span><span className="text-slate-600 dark:text-slate-300">{selectedDriver}</span></>)}
         </div>
       )}
@@ -82,14 +84,14 @@ export default function Comparar() {
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Semana A</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Semana A')}</div>
             <Select value={wkA} onChange={(e) => setWkA(e.target.value)}>
               {weeks.map((w) => (<option key={w.semana} value={w.semana}>{w.semana}</option>))}
             </Select>
           </div>
           <div className="text-2xl text-slate-400">vs</div>
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Semana B</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Semana B')}</div>
             <Select value={wkB} onChange={(e) => setWkB(e.target.value)}>
               {weeks.map((w) => (<option key={w.semana} value={w.semana}>{w.semana}</option>))}
             </Select>
@@ -97,16 +99,16 @@ export default function Comparar() {
         </div>
       </Card>
 
-      {wkA === wkB && <Aviso tipo="warn">Estás comparando la misma semana. Elige dos semanas distintas.</Aviso>}
+      {wkA === wkB && <Aviso tipo="warn">{t('Estás comparando la misma semana. Elige dos semanas distintas.')}</Aviso>}
 
       <Card className="mb-4 p-0">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              <th className="px-4 py-2.5 text-left font-semibold">Métrica</th>
+              <th className="px-4 py-2.5 text-left font-semibold">{t('Métrica')}</th>
               <th className="px-4 py-2.5 text-right font-semibold">A · {wkA}</th>
               <th className="px-4 py-2.5 text-right font-semibold">B · {wkB}</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Variación</th>
+              <th className="px-4 py-2.5 text-right font-semibold">{t('Variación')}</th>
             </tr>
           </thead>
           <tbody>
@@ -130,8 +132,8 @@ export default function Comparar() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <BarCard title={`Semana A · ${wkA || ''}`} data={chartData} fmt={money} dataKey="A" color="#13233f" />
-        <BarCard title={`Semana B · ${wkB || ''}`} data={chartData} fmt={money} dataKey="B" color="#c9a24b" />
+        <BarCard title={`${t('Semana A')} · ${wkA || ''}`} data={chartData} fmt={money} dataKey="A" color="#13233f" />
+        <BarCard title={`${t('Semana B')} · ${wkB || ''}`} data={chartData} fmt={money} dataKey="B" color="#c9a24b" />
       </div>
     </div>
   )

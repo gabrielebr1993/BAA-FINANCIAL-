@@ -16,6 +16,7 @@ import { money } from '../utils/format'
 import { Card, KPI, PageTitle, Boton, Badge, Aviso, EstadoVacio, Spinner } from '../components/ui'
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
 import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText, FileSpreadsheet } from 'lucide-react'
+import { useLang } from '../i18n'
 
 // Lee un extracto (Excel o CSV) a matriz de filas. Usa SheetJS y, si el CSV no se
 // interpreta, cae a un parseo de texto simple (comillas + comas).
@@ -52,21 +53,22 @@ const TABS = [
 ]
 
 export default function Auditorias() {
+  const { t } = useLang()
   const [tab, setTab] = useState('financiera')
   return (
     <div>
-      <PageTitle right={<span className="inline-flex items-center gap-1.5 text-sm text-slate-400"><ShieldCheck size={16} className="text-brand-gold" /> Confianza de datos</span>}>Auditorías</PageTitle>
+      <PageTitle right={<span className="inline-flex items-center gap-1.5 text-sm text-slate-400"><ShieldCheck size={16} className="text-brand-gold" /> {t('Confianza de datos')}</span>}>{t('Auditorías')}</PageTitle>
       <div className="mb-5 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700/60">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const on = tab === t.key
+        {TABS.map((tabItem) => {
+          const Icon = tabItem.icon
+          const on = tab === tabItem.key
           return (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={tabItem.key}
+              onClick={() => setTab(tabItem.key)}
               className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition ${on ? 'border-brand-gold text-brand-navy dark:text-white' : 'border-transparent text-slate-500 hover:text-brand-navy dark:text-slate-400 dark:hover:text-white'}`}
             >
-              <Icon size={15} strokeWidth={1.9} /> {t.label}
+              <Icon size={15} strokeWidth={1.9} /> {t(tabItem.label)}
             </button>
           )
         })}
@@ -97,6 +99,7 @@ function useGastosFijos() {
 
 // Zona para arrastrar/soltar o hacer clic para elegir el extracto del banco.
 function Dropzone({ onArchivo, cargando, banco }) {
+  const { t } = useLang()
   const [drag, setDrag] = useState(false)
   const inputRef = useRef(null)
   const soltar = (e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) onArchivo(f) }
@@ -109,9 +112,9 @@ function Dropzone({ onArchivo, cargando, banco }) {
       className={`mb-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition ${drag ? 'border-brand-gold bg-brand-gold/5' : 'border-slate-300 bg-white hover:border-brand-gold dark:border-slate-600 dark:bg-slate-800'}`}
     >
       {cargando ? <Spinner /> : <Upload size={26} strokeWidth={1.8} className="text-brand-gold" />}
-      <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{cargando ? 'Leyendo…' : (banco ? 'Arrastra otro extracto o haz clic para cambiarlo' : 'Arrastra el extracto del banco aquí')}</div>
-      <div className="text-xs text-slate-400">o haz clic para elegir un archivo · .xlsx, .xls, .csv</div>
-      {banco && <div className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-700/50 dark:text-slate-300"><FileSpreadsheet size={13} strokeWidth={1.9} /> {banco.nombreArchivo} · {banco.movimientos.length} pagos · {money(banco.total)}</div>}
+      <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{cargando ? t('Leyendo…') : (banco ? t('Arrastra otro extracto o haz clic para cambiarlo') : t('Arrastra el extracto del banco aquí'))}</div>
+      <div className="text-xs text-slate-400">{t('o haz clic para elegir un archivo · .xlsx, .xls, .csv')}</div>
+      {banco && <div className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-700/50 dark:text-slate-300"><FileSpreadsheet size={13} strokeWidth={1.9} /> {banco.nombreArchivo} · {banco.movimientos.length} {t('pagos')} · {money(banco.total)}</div>}
       <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onArchivo(f) }} />
     </div>
   )
@@ -119,6 +122,7 @@ function Dropzone({ onArchivo, cargando, banco }) {
 
 // ============================ TAB 1: FINANCIERA ============================
 function TabFinanciera() {
+  const { t } = useLang()
   const { facturaRango, claims, drivers, selectedCity, ajustesPorChofer } = useData()
   const gastosFijos = useGastosFijos()
   const [banco, setBanco] = useState(null) // { movimientos, total, nombreArchivo }
@@ -152,15 +156,15 @@ function TabFinanciera() {
   const procesar = async (file) => {
     setError('')
     if (!file) return
-    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { setError('Formato no soportado. Sube un archivo .xlsx, .xls o .csv del banco.'); return }
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) { setError(t('Formato no soportado. Sube un archivo .xlsx, .xls o .csv del banco.')); return }
     setCargando(true)
     try {
       const aoa = await leerExtracto(file)
       const parsed = parseExtractoBanco(aoa)
-      if (!parsed.movimientos.length) { setError(`No se detectaron pagos en "${file.name}". Revisa que el archivo tenga columnas de descripción y monto (débitos).`); setBanco(null); return }
+      if (!parsed.movimientos.length) { setError(`${t('No se detectaron pagos en')} "${file.name}". ${t('Revisa que el archivo tenga columnas de descripción y monto (débitos).')}`); setBanco(null); return }
       setBanco({ ...parsed, nombreArchivo: file.name })
     } catch (err) {
-      setError('No se pudo leer el archivo: ' + err.message)
+      setError(t('No se pudo leer el archivo:') + ' ' + err.message)
     } finally {
       setCargando(false)
     }
@@ -169,42 +173,42 @@ function TabFinanciera() {
   return (
     <div>
       <Aviso tipo="info" className="mb-4">
-        Sube el <b>extracto del banco</b> (Excel o CSV con la actividad de la cuenta). MilePay lo cruza con lo que
-        <b> debe salir</b> del banco según el filtro actual (choferes con saldo positivo + gastos fijos) y te muestra si <b>cuadra</b>.
-        Ajusta el filtro de arriba (semana/ciudad) para que coincida con el periodo del extracto.
+        {t('Sube el')} <b>{t('extracto del banco')}</b> {t('(Excel o CSV con la actividad de la cuenta). MilePay lo cruza con lo que')}
+        <b> {t('debe salir')}</b> {t('del banco según el filtro actual (choferes con saldo positivo + gastos fijos) y te muestra si')} <b>{t('cuadra')}</b>.
+        {t('Ajusta el filtro de arriba (semana/ciudad) para que coincida con el periodo del extracto.')}
       </Aviso>
 
       <Dropzone onArchivo={procesar} cargando={cargando} banco={banco} />
       {error && <Aviso tipo="error" className="mb-4">{error}</Aviso>}
       {banco && milePay.length === 0 && (
-        <Aviso tipo="warn" className="mb-4">El extracto se cargó ({banco.movimientos.length} pagos · {money(banco.total)}), pero el <b>filtro actual no tiene pagos calculados</b>. Elige arriba la semana y la(s) ciudad(es) que correspondan a este extracto para poder conciliar.</Aviso>
+        <Aviso tipo="warn" className="mb-4">{t('El extracto se cargó')} ({banco.movimientos.length} {t('pagos')} · {money(banco.total)}), {t('pero el')} <b>{t('filtro actual no tiene pagos calculados')}</b>. {t('Elige arriba la semana y la(s) ciudad(es) que correspondan a este extracto para poder conciliar.')}</Aviso>
       )}
       {sinNombres && (
-        <Aviso tipo="info" className="mb-4">Este banco <b>no muestra los nombres</b> de los beneficiarios (cuentas enmascaradas). La conciliación se hace por <b>monto</b> y por el <b>total</b>; los nombres no se pueden emparejar.</Aviso>
+        <Aviso tipo="info" className="mb-4">{t('Este banco')} <b>{t('no muestra los nombres')}</b> {t('de los beneficiarios (cuentas enmascaradas). La conciliación se hace por')} <b>{t('monto')}</b> {t('y por el')} <b>{t('total')}</b>; {t('los nombres no se pueden emparejar.')}</Aviso>
       )}
 
       {!res ? (
-        <EstadoVacio titulo="Sin extracto cargado" texto="Arrastra el extracto del banco o haz clic para elegirlo." mostrarBoton={false} />
+        <EstadoVacio titulo={t('Sin extracto cargado')} texto={t('Arrastra el extracto del banco o haz clic para elegirlo.')} mostrarBoton={false} />
       ) : (
         <>
           <div className="mb-4 mt-4 flex flex-wrap gap-3">
-            <KPI label="MilePay (debe salir)" value={money(res.totMilePay)} icon={FileText} accent="navy" sub={`${milePay.length} pagos calculados`} />
-            <KPI label="Banco (salió real)" value={money(res.totBanco)} icon={Landmark} accent="slate" sub={`${banco.movimientos.length} movimientos`} />
+            <KPI label={t('MilePay (debe salir)')} value={money(res.totMilePay)} icon={FileText} accent="navy" sub={`${milePay.length} ${t('pagos calculados')}`} />
+            <KPI label={t('Banco (salió real)')} value={money(res.totBanco)} icon={Landmark} accent="slate" sub={`${banco.movimientos.length} ${t('movimientos')}`} />
             <KPI
-              label={res.cuadra ? 'Cuadra' : 'Diferencia'}
+              label={res.cuadra ? t('Cuadra') : t('Diferencia')}
               value={res.cuadra ? '✓' : money(res.diferencia)}
               icon={res.cuadra ? CheckCircle2 : AlertTriangle}
               accent={res.cuadra ? 'green' : 'red'}
-              sub={res.cuadra ? 'MilePay = banco' : 'MilePay − banco'}
+              sub={res.cuadra ? t('MilePay = banco') : t('MilePay − banco')}
             />
           </div>
 
           {res.difs.length > 0 && (
             <Card className="mb-4">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-brand-navy dark:text-slate-100"><AlertTriangle size={16} className="text-amber-500" /> Diferencias de monto ({res.difs.length})</div>
+              <div className="mb-2 flex items-center gap-2 font-semibold text-brand-navy dark:text-slate-100"><AlertTriangle size={16} className="text-amber-500" /> {t('Diferencias de monto')} ({res.difs.length})</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-sm">
-                  <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-1.5">Beneficiario</th><th>MilePay</th><th>Banco</th><th className="text-right">Diferencia</th></tr></thead>
+                  <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-1.5">{t('Beneficiario')}</th><th>MilePay</th><th>{t('Banco')}</th><th className="text-right">{t('Diferencia')}</th></tr></thead>
                   <tbody>
                     {res.difs.map((d, i) => (
                       <tr key={i} className="border-t border-slate-100 dark:border-slate-700/50">
@@ -222,22 +226,22 @@ function TabFinanciera() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
-              <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">En MilePay, sin salir del banco ({res.soloMilePay.length})</div>
-              {res.soloMilePay.length === 0 ? <div className="text-sm text-slate-400">Todo lo calculado tiene su pago en el banco.</div> : (
+              <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('En MilePay, sin salir del banco')} ({res.soloMilePay.length})</div>
+              {res.soloMilePay.length === 0 ? <div className="text-sm text-slate-400">{t('Todo lo calculado tiene su pago en el banco.')}</div> : (
                 <ul className="space-y-1 text-sm">
                   {res.soloMilePay.map((p, i) => (
                     <li key={i} className="flex justify-between border-t border-slate-100 py-1.5 dark:border-slate-700/50">
-                      <span>{p.nombre} {p.tipo === 'fijo' && <Badge color="slate">fijo</Badge>}</span>
+                      <span>{p.nombre} {p.tipo === 'fijo' && <Badge color="slate">{t('fijo')}</Badge>}</span>
                       <span className="font-semibold">{money(p.monto)}</span>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-2 text-xs text-slate-400">Posibles causas: pago aún no enviado, saldo negativo no cobrado, o nombre distinto en el banco.</p>
+              <p className="mt-2 text-xs text-slate-400">{t('Posibles causas: pago aún no enviado, saldo negativo no cobrado, o nombre distinto en el banco.')}</p>
             </Card>
             <Card>
-              <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">En el banco, sin match en MilePay ({res.soloBanco.length})</div>
-              {res.soloBanco.length === 0 ? <div className="text-sm text-slate-400">Cada movimiento del banco corresponde a un pago calculado.</div> : (
+              <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('En el banco, sin match en MilePay')} ({res.soloBanco.length})</div>
+              {res.soloBanco.length === 0 ? <div className="text-sm text-slate-400">{t('Cada movimiento del banco corresponde a un pago calculado.')}</div> : (
                 <ul className="space-y-1 text-sm">
                   {res.soloBanco.map((b, i) => (
                     <li key={i} className="flex justify-between border-t border-slate-100 py-1.5 dark:border-slate-700/50">
@@ -247,7 +251,7 @@ function TabFinanciera() {
                   ))}
                 </ul>
               )}
-              <p className="mt-2 text-xs text-slate-400">Posibles causas: pago fuera de MilePay, otra semana/ciudad, un manager no registrado, o gasto ajeno a nómina.</p>
+              <p className="mt-2 text-xs text-slate-400">{t('Posibles causas: pago fuera de MilePay, otra semana/ciudad, un manager no registrado, o gasto ajeno a nómina.')}</p>
             </Card>
           </div>
         </>
@@ -258,6 +262,7 @@ function TabFinanciera() {
 
 // ============================ TAB 2: REGISTRO ============================
 function TabRegistro() {
+  const { t } = useLang()
   const { ajustes, reloadAjustes, activeCompanyId } = useData()
   const { perfil, esSuperAdmin } = useAuth()
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
@@ -275,7 +280,7 @@ function TabRegistro() {
 
   const fmtFecha = (ts) => { try { return new Date(ts).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return ts } }
   const vaciar = async () => {
-    if (!window.confirm('¿Vaciar el registro dejando solo las últimas 200 entradas?')) return
+    if (!window.confirm(t('¿Vaciar el registro dejando solo las últimas 200 entradas?'))) return
     setLimpiando(true)
     await limpiarAuditoria(activeCompanyId, entradas, 200)
     await reloadAjustes()
@@ -285,24 +290,23 @@ function TabRegistro() {
   return (
     <div>
       <Aviso tipo="info" className="mb-4">
-        Bitácora de cambios sensibles: pagos marcados, ajustes de préstamo/bono, claims perdonados y facturas cargadas o borradas.
-        Se registra automáticamente a partir de ahora, con el usuario y la fecha.
+        {t('Bitácora de cambios sensibles: pagos marcados, ajustes de préstamo/bono, claims perdonados y facturas cargadas o borradas. Se registra automáticamente a partir de ahora, con el usuario y la fecha.')}
       </Aviso>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button onClick={() => setFiltro('')} className={`rounded-full px-3 py-1.5 text-xs font-medium ${!filtro ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300'}`}>Todas ({entradas.length})</button>
+        <button onClick={() => setFiltro('')} className={`rounded-full px-3 py-1.5 text-xs font-medium ${!filtro ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300'}`}>{t('Todas')} ({entradas.length})</button>
         {accionesPresentes.map((a) => (
           <button key={a} onClick={() => setFiltro(a)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filtro === a ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300'}`}>{ACCIONES[a]?.label || a}</button>
         ))}
-        {esDueno && entradas.length > 0 && <Boton variant="ghost" onClick={vaciar} disabled={limpiando} className="ml-auto px-2.5 py-1 text-xs">{limpiando ? 'Vaciando…' : 'Vaciar registro'}</Boton>}
+        {esDueno && entradas.length > 0 && <Boton variant="ghost" onClick={vaciar} disabled={limpiando} className="ml-auto px-2.5 py-1 text-xs">{limpiando ? t('Vaciando…') : t('Vaciar registro')}</Boton>}
       </div>
 
       {filtradas.length === 0 ? (
-        <EstadoVacio titulo="Sin cambios registrados" texto="Aparecerán aquí cuando marques pagos, ajustes, claims o cargues facturas." mostrarBoton={false} />
+        <EstadoVacio titulo={t('Sin cambios registrados')} texto={t('Aparecerán aquí cuando marques pagos, ajustes, claims o cargues facturas.')} mostrarBoton={false} />
       ) : (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">Fecha</th><th>Acción</th><th>Detalle</th><th>Usuario</th><th className="text-right">Monto</th></tr></thead>
+              <thead><tr className="text-left text-xs uppercase text-slate-400"><th className="py-2">{t('Fecha')}</th><th>{t('Acción')}</th><th>{t('Detalle')}</th><th>{t('Usuario')}</th><th className="text-right">{t('Monto')}</th></tr></thead>
               <tbody>
                 {filtradas.map((e) => (
                   <tr key={e.id} className="border-t border-slate-100 dark:border-slate-700/50">
@@ -324,6 +328,7 @@ function TabRegistro() {
 
 // ============================ TAB 3: DATOS ============================
 function TabDatos() {
+  const { t } = useLang()
   const { facturaRango, claims, drivers, selectedCity, ajustesPorChofer, invoices, alertasTodas } = useData()
 
   const pagos = useMemo(() => calcularPagos(facturaRango, claims, drivers, selectedCity, ajustesPorChofer), [facturaRango, claims, drivers, selectedCity, ajustesPorChofer])
@@ -337,14 +342,14 @@ function TabDatos() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-3">
-        <KPI label="Alertas activas" value={String(alertas.length)} icon={AlertTriangle} accent={graves.length ? 'red' : 'slate'} sub={graves.length ? `${graves.length} graves` : 'sin alertas graves'} />
-        <KPI label="Facturas que no cuadran con Gofo" value={String(noCuadran.length)} icon={Landmark} accent={noCuadran.length ? 'red' : 'green'} sub="neto MilePay vs total Gofo" />
-        <KPI label="Choferes en pérdida" value={String(enPerdida.length)} icon={TrendingDown} accent={enPerdida.length ? 'red' : 'green'} sub="pago negativo (te deben)" />
+        <KPI label={t('Alertas activas')} value={String(alertas.length)} icon={AlertTriangle} accent={graves.length ? 'red' : 'slate'} sub={graves.length ? `${graves.length} ${t('graves')}` : t('sin alertas graves')} />
+        <KPI label={t('Facturas que no cuadran con Gofo')} value={String(noCuadran.length)} icon={Landmark} accent={noCuadran.length ? 'red' : 'green'} sub={t('neto MilePay vs total Gofo')} />
+        <KPI label={t('Choferes en pérdida')} value={String(enPerdida.length)} icon={TrendingDown} accent={enPerdida.length ? 'red' : 'green'} sub={t('pago negativo (te deben)')} />
       </div>
 
       {enPerdida.length > 0 && (
         <Card className="mb-4">
-          <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Choferes con saldo negativo</div>
+          <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('Choferes con saldo negativo')}</div>
           <ul className="space-y-1 text-sm">
             {enPerdida.map((p, i) => (
               <li key={i} className="flex justify-between border-t border-slate-100 py-1.5 dark:border-slate-700/50">
@@ -357,8 +362,8 @@ function TabDatos() {
       )}
 
       <Card className="mb-4">
-        <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Alertas de rentabilidad y datos ({alertas.length})</div>
-        {alertas.length === 0 ? <div className="text-sm text-slate-400">Sin alertas activas. Todo en orden.</div> : (
+        <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('Alertas de rentabilidad y datos')} ({alertas.length})</div>
+        {alertas.length === 0 ? <div className="text-sm text-slate-400">{t('Sin alertas activas. Todo en orden.')}</div> : (
           <ul className="space-y-2">
             {alertas.slice(0, 40).map((a) => (
               <li key={a.id} className="flex items-start gap-2 border-t border-slate-100 py-2 dark:border-slate-700/50">
@@ -373,7 +378,7 @@ function TabDatos() {
         )}
       </Card>
 
-      <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">Reconciliación con Gofo (por factura)</div>
+      <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('Reconciliación con Gofo (por factura)')}</div>
       <HistorialReconciliacion />
     </div>
   )

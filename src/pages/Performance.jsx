@@ -13,10 +13,12 @@ import KpiPro from '../components/KpiPro'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
+import { useLang } from '../i18n'
 
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
 export default function Performance() {
+  const { t } = useLang()
   const { facturaRango: selectedInvoice, claims, drivers, managers, invoicesRango, numSemanas, selectedCity, setSelectedCity, activeCompanyId, cargando } = useData()
   const navigate = useNavigate()
   const [sortKey, setSortKey] = useState('ingreso')
@@ -96,19 +98,19 @@ export default function Performance() {
   }
 
   const cols = [
-    { key: 'nombre', label: 'Chofer', txt: true },
-    { key: 'nombreCiudad', label: 'Ciudad', txt: true },
-    { key: 'paquetes', label: 'Paquetes' },
-    { key: 'individuales', label: 'Ind.' },
-    { key: 'dobles', label: 'Dobles' },
-    { key: 'ingreso', label: 'Ingreso' },
-    { key: 'totalPagar', label: 'Pago' },
-    { key: 'ganancia', label: 'Ganancia' },
-    { key: 'claimsTotales', label: 'Claims' },
-    { key: 'fallidos', label: 'Fallidos' },
-    { key: 'descuentoClaims', label: 'Desc. al chofer' },
-    { key: 'descontadoGofo', label: 'Descontado Gofo' },
-    { key: 'gananciaClaims', label: 'Ganancia claims' },
+    { key: 'nombre', label: t('Chofer'), txt: true },
+    { key: 'nombreCiudad', label: t('Ciudad'), txt: true },
+    { key: 'paquetes', label: t('Paquetes') },
+    { key: 'individuales', label: t('Ind.') },
+    { key: 'dobles', label: t('Dobles') },
+    { key: 'ingreso', label: t('Ingreso') },
+    { key: 'totalPagar', label: t('Pago') },
+    { key: 'ganancia', label: t('Ganancia') },
+    { key: 'claimsTotales', label: t('Claims') },
+    { key: 'fallidos', label: t('Fallidos') },
+    { key: 'descuentoClaims', label: t('Desc. al chofer') },
+    { key: 'descontadoGofo', label: t('Descontado Gofo') },
+    { key: 'gananciaClaims', label: t('Ganancia claims') },
   ]
 
   // Exportaciones de la tabla de choferes (respetan los filtros: ruta, ciudad, etc.).
@@ -232,77 +234,77 @@ export default function Performance() {
 
   return (
     <div>
-      <PageTitle>Performance</PageTitle>
+      <PageTitle>{t('Performance')}</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando datos…" />
+        <Cargando texto={t('Cargando datos…')} />
       ) : !selectedInvoice ? (
-        <EstadoVacio texto="Cuando cargues una factura verás aquí el ranking detallado de choferes y rutas." />
+        <EstadoVacio texto={t('Cuando cargues una factura verás aquí el ranking detallado de choferes y rutas.')} />
       ) : (
         <>
           <Aviso tipo="info">
-            Nota: los <b>paquetes fallidos</b> (“Failed delivery”) salen del reporte de fallidos y ahora <b>cuentan en la calificación</b> de desempeño (calidad = 70% claims + 30% fallidos) y en el ranking de ciudades. <b>No</b> afectan el pago ni el neto de Gofo.
+            {t('Nota: los')} <b>{t('paquetes fallidos')}</b> {t('(“Failed delivery”) salen del reporte de fallidos y ahora')} <b>{t('cuentan en la calificación')}</b> {t('de desempeño (calidad = 70% claims + 30% fallidos) y en el ranking de ciudades.')} <b>{t('No')}</b> {t('afectan el pago ni el neto de Gofo.')}
           </Aviso>
 
           {/* ==== Indicadores (sección nueva; respeta ciudad + fechas globales) ==== */}
-          <h2 className="mb-2 mt-1 text-xl font-bold text-brand-navy dark:text-slate-100">Indicadores</h2>
+          <h2 className="mb-2 mt-1 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Indicadores')}</h2>
           <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             <KpiPro
-              icon={TrendingUp} accent="gold" label="Chofer más rentable"
+              icon={TrendingUp} accent="gold" label={t('Chofer más rentable')}
               value={indic.masRentable ? indic.masRentable.nombre : '—'}
-              sub={indic.masRentable ? `Ganancia ${money(indic.masRentable.ganancia)}` : 'Sin datos'}
+              sub={indic.masRentable ? `${t('Ganancia')} ${money(indic.masRentable.ganancia)}` : t('Sin datos')}
               onClick={indic.masRentable ? () => verPerfil(indic.masRentable.nombre) : undefined}
             />
             <KpiPro
-              icon={AlertTriangle} accent="red" valueColor="text-rose-600 dark:text-rose-400" label="Chofer más problemático"
+              icon={AlertTriangle} accent="red" valueColor="text-rose-600 dark:text-rose-400" label={t('Chofer más problemático')}
               value={indic.masProblematico ? indic.masProblematico.nombre : '—'}
-              sub={indic.masProblematico ? `${num(indic.masProblematico.claimsTotales)} claims` : 'Nadie con claims'}
+              sub={indic.masProblematico ? `${num(indic.masProblematico.claimsTotales)} claims` : t('Nadie con claims')}
               onClick={indic.masProblematico ? () => verPerfil(indic.masProblematico.nombre) : undefined}
             />
             <KpiPro
-              icon={Handshake} accent="green" label="Ganancia por claims"
+              icon={Handshake} accent="green" label={t('Ganancia por claims')}
               value={money(indic.gananciaClaims)}
               valueColor={indic.gananciaClaims >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}
-              sub="Cobrado a choferes − descontado Gofo"
+              sub={t('Cobrado a choferes − descontado Gofo')}
               spark={serie.map((s) => s.gananciaClaims)} trend={trendDe('gananciaClaims')}
               onClick={() => navigate('/claims')}
             />
             <KpiPro
-              icon={Wallet} accent="navy" label="Costo total de nómina"
+              icon={Wallet} accent="navy" label={t('Costo total de nómina')}
               value={money(indic.nominaTotal)}
-              sub={`Choferes ${money(indic.nominaChoferes)} + gastos fijos ${money(indic.costoMgr)}`}
+              sub={`${t('Choferes')} ${money(indic.nominaChoferes)} + ${t('gastos fijos')} ${money(indic.costoMgr)}`}
               spark={serie.map((s) => s.nomina)} trend={trendDe('nomina')}
               onClick={() => navigate('/pagos')}
             />
             <KpiPro
-              icon={Package} accent="steel" label="Ticket promedio / paquete"
+              icon={Package} accent="steel" label={t('Ticket promedio / paquete')}
               value={indic.paquetes > 0 ? money(indic.ticket) : '—'}
-              sub={`${num(indic.paquetes)} paquetes`}
+              sub={`${num(indic.paquetes)} ${t('paquetes')}`}
               spark={serie.map((s) => s.ticket)} trend={trendDe('ticket')}
               onClick={() => navigate('/financiero')}
             />
             <KpiPro
-              icon={Route} accent="gold" label="Ruta más / menos rentable"
+              icon={Route} accent="gold" label={t('Ruta más / menos rentable')}
               value={indic.rutaTop ? indic.rutaTop.ruta : '—'}
-              sub={indic.rutaTop ? `${money(indic.rutaTop.ganancia)}${indic.rutaBottom ? ` · peor: ${indic.rutaBottom.ruta} (${money(indic.rutaBottom.ganancia)})` : ''}` : 'Sin rutas'}
+              sub={indic.rutaTop ? `${money(indic.rutaTop.ganancia)}${indic.rutaBottom ? ` · ${t('peor:')} ${indic.rutaBottom.ruta} (${money(indic.rutaBottom.ganancia)})` : ''}` : t('Sin rutas')}
               onClick={indic.rutaTop ? () => setFRuta(indic.rutaTop.ruta) : undefined}
             />
             <KpiPro
-              icon={Clock} accent="amber" valueColor="text-amber-600 dark:text-amber-400" label="Pagos pendientes"
+              icon={Clock} accent="amber" valueColor="text-amber-600 dark:text-amber-400" label={t('Pagos pendientes')}
               value={money(pendientes.monto)}
-              sub={`${num(pendientes.choferes)} chofer(es) por pagar`}
+              sub={`${num(pendientes.choferes)} ${t('chofer(es) por pagar')}`}
               onClick={() => navigate('/pagos')}
             />
             <KpiPro
-              icon={UserX} accent="red" label="Sin tarifa / inactivos"
+              icon={UserX} accent="red" label={t('Sin tarifa / inactivos')}
               value={num(indic.sinTarifaN)}
-              sub={`sin tarifa · ${num(indic.inactivosN)} sin entregas`}
+              sub={`${t('sin tarifa')} · ${num(indic.inactivosN)} ${t('sin entregas')}`}
               onClick={() => navigate('/choferes')}
             />
             <KpiPro
-              icon={Building2} accent="gold" label="Mejor ciudad"
+              icon={Building2} accent="gold" label={t('Mejor ciudad')}
               value={indic.mejorCiudad ? indic.mejorCiudad.nombre : '—'}
-              sub={indic.mejorCiudad ? `Calificación ${indic.mejorCiudad.puntaje} · ganancia ${money(indic.mejorCiudad.ganancia)}` : 'Sin ciudades'}
+              sub={indic.mejorCiudad ? `${t('Calificación')} ${indic.mejorCiudad.puntaje} · ${t('ganancia')} ${money(indic.mejorCiudad.ganancia)}` : t('Sin ciudades')}
               onClick={indic.mejorCiudad ? () => setSelectedCity(indic.mejorCiudad.code) : undefined}
             />
           </div>
@@ -310,61 +312,61 @@ export default function Performance() {
           {/* Barra de filtros combinables */}
           <Card className="mb-4 p-3">
             <div className="flex flex-wrap items-end gap-3">
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400"><Filter size={14} strokeWidth={2} /> Filtros</div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400"><Filter size={14} strokeWidth={2} /> {t('Filtros')}</div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Ruta <span className="text-slate-400">(choferes de su ciudad)</span></div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Ruta')} <span className="text-slate-400">{t('(choferes de su ciudad)')}</span></div>
                 <Select value={fRuta} onChange={(e) => setFRuta(e.target.value)}>
-                  <option value="">Todas</option>
+                  <option value="">{t('Todas')}</option>
                   {rutasOpts.map((r) => (<option key={r} value={r}>{r}</option>))}
                 </Select>
               </div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Tipo de claim</div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Tipo de claim')}</div>
                 <Select value={fTipo} onChange={(e) => setFTipo(e.target.value)}>
-                  <option value="">Todos</option>
-                  {tiposOpts.map((t) => (<option key={t} value={t}>{etiquetaTipoClaim(t)}</option>))}
+                  <option value="">{t('Todos')}</option>
+                  {tiposOpts.map((tp) => (<option key={tp} value={tp}>{etiquetaTipoClaim(tp)}</option>))}
                 </Select>
               </div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Claims ≥</div>
-                <Input className="w-20" type="number" min="0" value={fMin} onChange={(e) => setFMin(e.target.value)} placeholder="mín" />
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Claims ≥')}</div>
+                <Input className="w-20" type="number" min="0" value={fMin} onChange={(e) => setFMin(e.target.value)} placeholder={t('mín')} />
               </div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Claims ≤</div>
-                <Input className="w-20" type="number" min="0" value={fMax} onChange={(e) => setFMax(e.target.value)} placeholder="máx" />
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Claims ≤')}</div>
+                <Input className="w-20" type="number" min="0" value={fMax} onChange={(e) => setFMax(e.target.value)} placeholder={t('máx')} />
               </div>
               <div className="relative">
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Buscar chofer</div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Buscar chofer')}</div>
                 <Search size={15} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-[30px] text-slate-400" />
                 <Input
                   className="w-48 pl-8"
                   value={qBusca}
                   onChange={(e) => { const v = e.target.value; setQBusca(v); setFBusca(v.trim()) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') aplicarBusqueda() }}
-                  placeholder="Nombre…"
+                  placeholder={t('Nombre…')}
                 />
               </div>
-              <Boton variant="primary" onClick={aplicarBusqueda} className="px-3.5 py-2 text-xs"><Search size={14} strokeWidth={2} /> Buscar</Boton>
+              <Boton variant="primary" onClick={aplicarBusqueda} className="px-3.5 py-2 text-xs"><Search size={14} strokeWidth={2} /> {t('Buscar')}</Boton>
               {fRuta && (
-                <Boton variant="gold" onClick={() => navigate(`/rutas/${encodeURIComponent(fRuta)}`)} className="px-3 py-2 text-xs"><Route size={14} strokeWidth={2} /> Ver ficha de {fRuta}</Boton>
+                <Boton variant="gold" onClick={() => navigate(`/rutas/${encodeURIComponent(fRuta)}`)} className="px-3 py-2 text-xs"><Route size={14} strokeWidth={2} /> {t('Ver ficha de')} {fRuta}</Boton>
               )}
               {hayFiltros && (
-                <Boton variant="ghost" onClick={limpiarFiltros} className="px-3 py-2 text-xs"><RotateCcw size={14} strokeWidth={2} /> Limpiar filtros</Boton>
+                <Boton variant="ghost" onClick={limpiarFiltros} className="px-3 py-2 text-xs"><RotateCcw size={14} strokeWidth={2} /> {t('Limpiar filtros')}</Boton>
               )}
             </div>
           </Card>
 
           <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <BarCard title="Top choferes por ingreso" data={topProd} fmt={money} horizontal height={240} />
-            <BarCard title="Top choferes por ganancia" data={topGan} fmt={money} horizontal height={240} />
-            <DonutCard title="Calidad: con vs sin claims" data={claimsDona} fmt={num} height={240} />
+            <BarCard title={t('Top choferes por ingreso')} data={topProd} fmt={money} horizontal height={240} />
+            <BarCard title={t('Top choferes por ganancia')} data={topGan} fmt={money} horizontal height={240} />
+            <DonutCard title={t('Calidad: con vs sin claims')} data={claimsDona} fmt={num} height={240} />
           </div>
 
           {driverSel && (
             <Aviso tipo="info" className="flex items-center gap-2">
-              <span>Mostrando el detalle de <b>{driverSel}</b>.</span>
+              <span>{t('Mostrando el detalle de')} <b>{driverSel}</b>.</span>
               <button onClick={limpiarDriver} className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-brand-navy hover:underline dark:text-brand-gold">
-                <X size={14} strokeWidth={2} /> Ver todos
+                <X size={14} strokeWidth={2} /> {t('Ver todos')}
               </button>
             </Aviso>
           )}
@@ -372,10 +374,10 @@ export default function Performance() {
           <Card className="mb-4 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">
-                {driverSel ? `Detalle de ${driverSel}` : usaRutaExacta ? `Choferes de la ruta ${fRuta}` : 'Tabla completa de choferes'}
+                {driverSel ? `${t('Detalle de')} ${driverSel}` : usaRutaExacta ? `${t('Choferes de la ruta')} ${fRuta}` : t('Tabla completa de choferes')}
                 {!driverSel && (
                   <span className="ml-2 text-xs font-normal text-slate-400">
-                    {hayFiltros ? `${ordenados.length} de ${pagos.length} choferes` : `${ordenados.length} choferes`} · clic en encabezado para ordenar
+                    {hayFiltros ? `${ordenados.length} ${t('de')} ${pagos.length} ${t('choferes')}` : `${ordenados.length} ${t('choferes')}`} · {t('clic en encabezado para ordenar')}
                   </span>
                 )}
               </h3>
@@ -385,7 +387,7 @@ export default function Performance() {
               </div>
             </div>
             {usaRutaExacta && (
-              <Aviso tipo="info">Mostrando los <b>datos exactos de la ruta {fRuta}</b> (paquetes, ingreso y claims de esa ruta). Requiere factura cargada con el desglose por ruta.</Aviso>
+              <Aviso tipo="info">{t('Mostrando los')} <b>{t('datos exactos de la ruta')} {fRuta}</b> {t('(paquetes, ingreso y claims de esa ruta). Requiere factura cargada con el desglose por ruta.')}</Aviso>
             )}
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[1120px] border-collapse text-[13.5px]">
@@ -403,7 +405,7 @@ export default function Performance() {
                     <tr key={p.nombre} className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
                       <td className="px-2.5 py-2">
                         <button onClick={() => verPerfil(p.nombre)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{p.nombre}</button>
-                        {p.sinTarifa && <Badge color="red">sin tarifa</Badge>}
+                        {p.sinTarifa && <Badge color="red">{t('sin tarifa')}</Badge>}
                       </td>
                       <td className="px-2.5 py-2">{p.nombreCiudad}</td>
                       <td className="px-2.5 py-2 text-right">{num(p.paquetes)}</td>
@@ -420,46 +422,46 @@ export default function Performance() {
                     </tr>
                   ))}
                   {ordenados.length === 0 && (
-                    <tr><td colSpan={cols.length} className="px-3 py-6 text-center text-slate-400">Ningún chofer con estos filtros.</td></tr>
+                    <tr><td colSpan={cols.length} className="px-3 py-6 text-center text-slate-400">{t('Ningún chofer con estos filtros.')}</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
             {ordenados.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center justify-end gap-4 text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Totales de claims ({ordenados.length} chofer{ordenados.length === 1 ? '' : 'es'}):</span>
-                <span>Desc. al chofer <b className="text-brand-navy dark:text-slate-100">{money(ordenados.reduce((a, p) => a + p.descuentoClaims, 0))}</b></span>
-                <span>Descontado Gofo <b className="text-rose-600 dark:text-rose-400">{money(ordenados.reduce((a, p) => a + p.descontadoGofo, 0))}</b></span>
-                <span>Ganancia por claims <b className="text-emerald-600 dark:text-emerald-400">{money(ordenados.reduce((a, p) => a + p.gananciaClaims, 0))}</b></span>
+                <span className="text-slate-500 dark:text-slate-400">{t('Totales de claims')} ({ordenados.length} {ordenados.length === 1 ? t('chofer') : t('choferes')}):</span>
+                <span>{t('Desc. al chofer')} <b className="text-brand-navy dark:text-slate-100">{money(ordenados.reduce((a, p) => a + p.descuentoClaims, 0))}</b></span>
+                <span>{t('Descontado Gofo')} <b className="text-rose-600 dark:text-rose-400">{money(ordenados.reduce((a, p) => a + p.descontadoGofo, 0))}</b></span>
+                <span>{t('Ganancia por claims')} <b className="text-emerald-600 dark:text-emerald-400">{money(ordenados.reduce((a, p) => a + p.gananciaClaims, 0))}</b></span>
               </div>
             )}
-            <p className="mt-2 text-xs text-slate-400">“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.</p>
+            <p className="mt-2 text-xs text-slate-400">{t('“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.')}</p>
           </Card>
 
-          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking general de choferes (calificación)</h2>
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Ranking general de choferes (calificación)')}</h2>
           <div className="mb-4">
             <RankingCalificacion />
           </div>
 
-          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h2>
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Ranking de ciudades')}</h2>
           <div className="mb-4">
             <RankingCiudades />
           </div>
 
-          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo{fTipo ? ` · ${etiquetaTipoClaim(fTipo)}` : ''}</h2>
+          <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Claims por tipo')}{fTipo ? ` · ${etiquetaTipoClaim(fTipo)}` : ''}</h2>
           <div className="mb-4">
             <RankingClaimsTipo claims={claimsParaTipo} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Lista titulo="Mejor productividad" rows={[...pagos].sort((a, b) => b.ingreso - a.ingreso).slice(0, 5)} render={(p) => `${p.nombre} — ${money(p.ingreso)} (${num(p.paquetes)} paq.)`} />
-            <Lista titulo="Mejor ganancia" rows={[...pagos].sort((a, b) => b.ganancia - a.ganancia).slice(0, 5)} render={(p) => `${p.nombre} — ${money(p.ganancia)}`} />
-            <Lista titulo="Más claims (peor calidad)" rows={conClaims.slice(0, 5)} render={(p) => `${p.nombre} — ${num(p.claimsTotales)} claims`} vacio="Nadie con claims." />
-            <Lista titulo="Cero claims" rows={ceroClaims.slice(0, 10)} render={(p) => p.nombre} vacio="Todos tienen algún claim." />
-            <Lista titulo="Rutas con más reclamos" rows={rrF.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio="Ninguna con claims." />
-            <Lista titulo="Rutas con cero reclamos" rows={rrF.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 10)} render={(r) => r.ruta} vacio="—" />
-            <Lista titulo="Rutas más rentables ($/lb)" rows={rrF.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} />
-            <Lista titulo="Rutas menos rentables ($/lb)" rows={[...rrF.porPrecioLb].reverse().slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} />
+            <Lista titulo={t('Mejor productividad')} rows={[...pagos].sort((a, b) => b.ingreso - a.ingreso).slice(0, 5)} render={(p) => `${p.nombre} — ${money(p.ingreso)} (${num(p.paquetes)} ${t('paq.')})`} />
+            <Lista titulo={t('Mejor ganancia')} rows={[...pagos].sort((a, b) => b.ganancia - a.ganancia).slice(0, 5)} render={(p) => `${p.nombre} — ${money(p.ganancia)}`} />
+            <Lista titulo={t('Más claims (peor calidad)')} rows={conClaims.slice(0, 5)} render={(p) => `${p.nombre} — ${num(p.claimsTotales)} claims`} vacio={t('Nadie con claims.')} />
+            <Lista titulo={t('Cero claims')} rows={ceroClaims.slice(0, 10)} render={(p) => p.nombre} vacio={t('Todos tienen algún claim.')} />
+            <Lista titulo={t('Rutas con más reclamos')} rows={rrF.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio={t('Ninguna con claims.')} />
+            <Lista titulo={t('Rutas con cero reclamos')} rows={rrF.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 10)} render={(r) => r.ruta} vacio="—" />
+            <Lista titulo={t('Rutas más rentables ($/lb)')} rows={rrF.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} />
+            <Lista titulo={t('Rutas menos rentables ($/lb)')} rows={[...rrF.porPrecioLb].reverse().slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} />
           </div>
         </>
       )}
@@ -468,10 +470,11 @@ export default function Performance() {
 }
 
 function Lista({ titulo, rows, render, vacio }) {
+  const { t } = useLang()
   return (
     <Widget title={titulo}>
       {rows.length === 0 ? (
-        <div className="text-sm text-slate-400">{vacio || 'Sin datos.'}</div>
+        <div className="text-sm text-slate-400">{vacio || t('Sin datos.')}</div>
       ) : (
         <ol className="m-0 list-decimal pl-5 text-sm leading-8">
           {rows.map((r, i) => (

@@ -8,8 +8,10 @@ import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
+import { useLang } from '../i18n'
 
 export default function Claims() {
+  const { t } = useLang()
   const { perfil, esSuperAdmin } = useAuth()
   // Solo owner/admin/superadmin ven la info financiera de Gofo (igual que el resto de la
   // app). Al MANAGER se le ocultan la columna Categoría·Método y Monto Gofo, y las tarjetas
@@ -128,29 +130,29 @@ export default function Claims() {
 
   return (
     <div>
-      <PageTitle>Claims</PageTitle>
+      <PageTitle>{t('Claims')}</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando claims…" />
+        <Cargando texto={t('Cargando claims…')} />
       ) : (
         <>
           <div className="mb-5 flex flex-wrap gap-3">
-            <KPI label="Total claims" value={num(totalClaims)} icon={AlertTriangle} accent="navy" />
-            <KPI label="Perdonados" value={num(perdonados)} icon={Handshake} accent="green" />
-            <KPI label="Activos" value={num(activos)} icon={Ban} accent="red" />
-            {!ocultarGofo && <KPI label="Descuento a choferes" value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} claim(s) activo(s)`} />}
-            {!ocultarGofo && <KPI label="Te descontó Gofo" value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
+            <KPI label={t('Total claims')} value={num(totalClaims)} icon={AlertTriangle} accent="navy" />
+            <KPI label={t('Perdonados')} value={num(perdonados)} icon={Handshake} accent="green" />
+            <KPI label={t('Activos')} value={num(activos)} icon={Ban} accent="red" />
+            {!ocultarGofo && <KPI label={t('Descuento a choferes')} value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} ${t('claim(s) activo(s)')}`} />}
+            {!ocultarGofo && <KPI label={t('Te descontó Gofo')} value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
           </div>
 
           {pendientesRepetidos.length > 0 && (
             <Card className="mb-4 border-2 border-amber-400/70 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Copy size={18} strokeWidth={1.8} className="text-amber-500" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Claims repetidos pendientes de aprobación</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Claims repetidos pendientes de aprobación')}</h3>
                 <Badge color="gold">{pendientesRepetidos.length}</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Un mismo tracking aparece más de una vez (claim + reversión). Aprobar cuenta el claim y cobra $100 al chofer; anular no cuenta ni cobra. El neto de Gofo no cambia.
+                {t('Un mismo tracking aparece más de una vez (claim + reversión). Aprobar cuenta el claim y cobra $100 al chofer; anular no cuenta ni cobra. El neto de Gofo no cambia.')}
               </p>
               <div className="space-y-3">
                 {pendientesRepetidos.map((caso) => (
@@ -159,14 +161,14 @@ export default function Claims() {
                       <span className="font-mono text-sm font-semibold text-brand-navy dark:text-slate-100">{caso.waybill}</span>
                       <span className="text-sm text-slate-500 dark:text-slate-400">· {caso.courier}</span>
                       <div className="ml-auto flex gap-2">
-                        <Boton variant="success" disabled={ocupado} onClick={() => resolverRepetido(caso, 'aprobado')} className="px-3 py-1.5 text-xs"><Check size={14} strokeWidth={2} /> Aprobar</Boton>
-                        <Boton variant="danger" disabled={ocupado} onClick={() => resolverRepetido(caso, 'anulado')} className="px-3 py-1.5 text-xs"><X size={14} strokeWidth={2} /> Anular</Boton>
+                        <Boton variant="success" disabled={ocupado} onClick={() => resolverRepetido(caso, 'aprobado')} className="px-3 py-1.5 text-xs"><Check size={14} strokeWidth={2} /> {t('Aprobar')}</Boton>
+                        <Boton variant="danger" disabled={ocupado} onClick={() => resolverRepetido(caso, 'anulado')} className="px-3 py-1.5 text-xs"><X size={14} strokeWidth={2} /> {t('Anular')}</Boton>
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {caso.claims.map((c, i) => (
                         <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${Number(c.montoGofo) < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'}`}>
-                          {ocultarGofo ? (c.claimType || 'sin tipo') : <>{money(c.montoGofo)} · {c.claimType || 'sin tipo'}</>}
+                          {ocultarGofo ? (c.claimType || t('sin tipo')) : <>{money(c.montoGofo)} · {c.claimType || t('sin tipo')}</>}
                         </span>
                       ))}
                     </div>
@@ -177,29 +179,29 @@ export default function Claims() {
           )}
 
           {!selectedInvoice ? (
-            <EstadoVacio texto="Cuando cargues una factura verás aquí todos los claims para perdonarlos o cobrarlos." />
+            <EstadoVacio texto={t('Cuando cargues una factura verás aquí todos los claims para perdonarlos o cobrarlos.')} />
           ) : (
             <>
               <Card className="mb-4 p-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <Select value={fCourier} onChange={(e) => setFCourier(e.target.value)}>
-                    <option value="">Todos los choferes</option>
+                    <option value="">{t('Todos los choferes')}</option>
                     {couriers.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </Select>
                   <Select value={fTipo} onChange={(e) => setFTipo(e.target.value)}>
-                    <option value="">Todos los tipos</option>
-                    {tipos.map((t) => (
-                      <option key={t} value={t}>{t}</option>
+                    <option value="">{t('Todos los tipos')}</option>
+                    {tipos.map((tp) => (
+                      <option key={tp} value={tp}>{tp}</option>
                     ))}
                   </Select>
                   <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
-                    <option value="">Todos los estados</option>
-                    <option value="activo">Solo activos</option>
-                    <option value="perdonado">Solo perdonados</option>
+                    <option value="">{t('Todos los estados')}</option>
+                    <option value="activo">{t('Solo activos')}</option>
+                    <option value="perdonado">{t('Solo perdonados')}</option>
                   </Select>
-                  <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{filtrados.length} claim(s)</span>
+                  <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{filtrados.length} {t('claim(s)')}</span>
                 </div>
               </Card>
 
@@ -208,32 +210,32 @@ export default function Claims() {
                 <Card className="mb-3 border-2 border-brand-gold/50 p-3">
                   {!lote ? (
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} seleccionado(s)</span>
+                      <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} {t('seleccionado(s)')}</span>
                       <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-50 px-2 py-1 dark:bg-slate-800/60">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Método:</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('Método:')}</span>
                         {['M1', 'M2', 'M3', 'auto'].map((mm) => (
-                          <Boton key={mm} variant="ghost" disabled={ocupado} onClick={() => cambiarMetodoLote(mm)} className="px-2 py-1 text-xs">{mm === 'auto' ? 'Auto' : mm}</Boton>
+                          <Boton key={mm} variant="ghost" disabled={ocupado} onClick={() => cambiarMetodoLote(mm)} className="px-2 py-1 text-xs">{mm === 'auto' ? t('Auto') : mm}</Boton>
                         ))}
                       </div>
                       <div className="ml-auto flex flex-wrap gap-2">
                         <Boton variant="success" disabled={ocupado || selPorPerdonar.length === 0} onClick={() => setLote(true)} className="px-3 py-1.5 text-xs">
-                          <Handshake size={14} strokeWidth={1.8} /> Perdonar seleccionados ({selPorPerdonar.length})
+                          <Handshake size={14} strokeWidth={1.8} /> {t('Perdonar seleccionados')} ({selPorPerdonar.length})
                         </Boton>
                         <Boton variant="danger" disabled={ocupado || selPorRestaurar.length === 0} onClick={quitarPerdonLote} className="px-3 py-1.5 text-xs">
-                          Quitar perdón ({selPorRestaurar.length})
+                          {t('Quitar perdón')} ({selPorRestaurar.length})
                         </Boton>
-                        <Boton variant="ghost" onClick={limpiarSel} className="px-3 py-1.5 text-xs">Limpiar</Boton>
+                        <Boton variant="ghost" onClick={limpiarSel} className="px-3 py-1.5 text-xs">{t('Limpiar')}</Boton>
                       </div>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      <Input autoFocus className="w-64" placeholder="Motivo del perdón (uno para todos)…" value={motivoLote} onChange={(e) => setMotivoLote(e.target.value)} />
+                      <Input autoFocus className="w-64" placeholder={t('Motivo del perdón (uno para todos)…')} value={motivoLote} onChange={(e) => setMotivoLote(e.target.value)} />
                       <span className="text-sm text-slate-600 dark:text-slate-300">
-                        Vas a perdonar <b>{selPorPerdonar.length}</b> claim(s){motivoLote ? <> con el motivo: “{motivoLote}”</> : null}. Cada uno absorbe su propio monto de Gofo.
+                        {t('Vas a perdonar')} <b>{selPorPerdonar.length}</b> {t('claim(s)')}{motivoLote ? <> {t('con el motivo:')} “{motivoLote}”</> : null}. {t('Cada uno absorbe su propio monto de Gofo.')}
                       </span>
                       <div className="ml-auto flex gap-2">
-                        <Boton variant="success" disabled={ocupado} onClick={confirmarLote} className="px-3 py-1.5 text-xs">Confirmar</Boton>
-                        <Boton variant="ghost" onClick={() => { setLote(false); setMotivoLote('') }} className="px-3 py-1.5 text-xs">Cancelar</Boton>
+                        <Boton variant="success" disabled={ocupado} onClick={confirmarLote} className="px-3 py-1.5 text-xs">{t('Confirmar')}</Boton>
+                        <Boton variant="ghost" onClick={() => { setLote(false); setMotivoLote('') }} className="px-3 py-1.5 text-xs">{t('Cancelar')}</Boton>
                       </div>
                     </div>
                   )}
@@ -242,22 +244,22 @@ export default function Claims() {
 
               <Tabla
                 columns={[
-                  { key: 'sel', label: <input type="checkbox" aria-label="Seleccionar todos" checked={todosSel} onChange={toggleTodos} />, align: 'center' },
-                  { key: 'waybill', label: 'Waybill' },
-                  { key: 'courier', label: 'Chofer' },
-                  { key: 'date', label: 'Fecha' },
-                  { key: 'claimType', label: 'Tipo' },
-                  !ocultarGofo && { key: 'metodo', label: 'Categoría · Método', align: 'center' },
-                  { key: 'ciudad', label: 'Ciudad' },
-                  !ocultarGofo && { key: 'montoGofo', label: 'Monto Gofo', align: 'right' },
-                  { key: 'revision', label: 'Revisión', align: 'center' },
-                  { key: 'estado', label: 'Estado', align: 'center' },
-                  { key: 'acciones', label: 'Acción', align: 'right' },
+                  { key: 'sel', label: <input type="checkbox" aria-label={t('Seleccionar todos')} checked={todosSel} onChange={toggleTodos} />, align: 'center' },
+                  { key: 'waybill', label: t('Waybill') },
+                  { key: 'courier', label: t('Chofer') },
+                  { key: 'date', label: t('Fecha') },
+                  { key: 'claimType', label: t('Tipo') },
+                  !ocultarGofo && { key: 'metodo', label: t('Categoría · Método'), align: 'center' },
+                  { key: 'ciudad', label: t('Ciudad') },
+                  !ocultarGofo && { key: 'montoGofo', label: t('Monto Gofo'), align: 'right' },
+                  { key: 'revision', label: t('Revisión'), align: 'center' },
+                  { key: 'estado', label: t('Estado'), align: 'center' },
+                  { key: 'acciones', label: t('Acción'), align: 'right' },
                 ].filter(Boolean)}
                 rows={filtrados.map((c) => ({ ...c, _key: c.id }))}
-                emptyText="Sin claims con estos filtros."
+                emptyText={t('Sin claims con estos filtros.')}
                 renderCell={(row, key) => {
-                  if (key === 'sel') return <input type="checkbox" aria-label="Seleccionar claim" checked={sel.has(row.id)} onChange={() => toggleUno(row.id)} />
+                  if (key === 'sel') return <input type="checkbox" aria-label={t('Seleccionar claim')} checked={sel.has(row.id)} onChange={() => toggleUno(row.id)} />
                   if (key === 'waybill') return <Link to={`/tracking/${encodeURIComponent(row.waybill)}`} className="font-medium text-brand-navy hover:underline dark:text-brand-gold">{row.waybill || '—'}</Link>
                   if (key === 'montoGofo') return money(row.montoGofo)
                   if (key === 'metodo') {
@@ -269,12 +271,12 @@ export default function Claims() {
                       <div className="flex flex-col items-center gap-1">
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">{etiquetaCategoria(cat)}</span>
                         <Select className="w-40 py-1 text-xs" value={manual ? row.metodo : 'auto'} disabled={ocupado} onChange={(e) => cambiarMetodo(row, e.target.value)}>
-                          <option value="auto">Auto ({auto === 'M1' ? 'Manual' : auto === 'M2' ? 'Gofo' : 'Perdón'})</option>
-                          <option value="M1">Manual</option>
-                          <option value="M2">Lo que Gofo cobra</option>
-                          <option value="M3">Perdón</option>
+                          <option value="auto">{t('Auto')} ({auto === 'M1' ? t('Manual') : auto === 'M2' ? 'Gofo' : t('Perdón')})</option>
+                          <option value="M1">{t('Manual')}</option>
+                          <option value="M2">{t('Lo que Gofo cobra')}</option>
+                          <option value="M3">{t('Perdón')}</option>
                         </Select>
-                        {manual && <span className="text-[10px] font-semibold text-brand-gold">manual</span>}
+                        {manual && <span className="text-[10px] font-semibold text-brand-gold">{t('manual')}</span>}
                       </div>
                     )
                   }
@@ -282,17 +284,17 @@ export default function Claims() {
                   if (key === 'revision') {
                     const est = estadoPorWaybill[(row.waybill || '').trim()]
                     if (!est) return <span className="text-slate-300 dark:text-slate-600">—</span>
-                    if (est === 'aprobado') return <Badge color="green">Repetido · aprobado</Badge>
-                    if (est === 'anulado') return <Badge color="slate">Repetido · anulado</Badge>
-                    return <Badge color="gold">Repetido · pendiente</Badge>
+                    if (est === 'aprobado') return <Badge color="green">{t('Repetido · aprobado')}</Badge>
+                    if (est === 'anulado') return <Badge color="slate">{t('Repetido · anulado')}</Badge>
+                    return <Badge color="gold">{t('Repetido · pendiente')}</Badge>
                   }
                   if (key === 'estado')
-                    return row.perdonado ? <Badge color="green">Perdonado</Badge> : <Badge color="red">Activo</Badge>
+                    return row.perdonado ? <Badge color="green">{t('Perdonado')}</Badge> : <Badge color="red">{t('Activo')}</Badge>
                   if (key === 'acciones') {
                     if (perdonandoId === row.id)
                       return (
                         <div className="flex items-center justify-end gap-1.5">
-                          <Input autoFocus className="w-36" placeholder="Motivo…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+                          <Input autoFocus className="w-36" placeholder={t('Motivo…')} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
                           <Boton variant="success" disabled={ocupado} onClick={() => confirmarPerdon(row)} className="px-2.5 py-1 text-xs">OK</Boton>
                           <Boton variant="ghost" onClick={() => { setPerdonandoId(null); setMotivo('') }} className="px-2.5 py-1 text-xs"><X size={13} strokeWidth={2.2} /></Boton>
                         </div>
@@ -301,14 +303,14 @@ export default function Claims() {
                       <div className="flex items-center justify-end gap-1.5">
                         {row.motivo && <span className="self-center text-xs text-slate-400" title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
                         {!ocultarGofo && (
-                          <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title="Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)">
-                            te costó {money(Math.abs(Number(row.montoGofo) || 0))}
+                          <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title={t('Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)')}>
+                            {t('te costó')} {money(Math.abs(Number(row.montoGofo) || 0))}
                           </span>
                         )}
-                        <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} className="px-2.5 py-1 text-xs">Quitar perdón</Boton>
+                        <Boton variant="ghost" disabled={ocupado} onClick={() => restaurar(row)} className="px-2.5 py-1 text-xs">{t('Quitar perdón')}</Boton>
                       </div>
                     ) : (
-                      <Boton variant="ghost" onClick={() => { setPerdonandoId(row.id); setMotivo('') }} className="px-2.5 py-1 text-xs">Perdonar</Boton>
+                      <Boton variant="ghost" onClick={() => { setPerdonandoId(row.id); setMotivo('') }} className="px-2.5 py-1 text-xs">{t('Perdonar')}</Boton>
                     )
                   }
                   return row[key] || '—'

@@ -8,8 +8,10 @@ import { PERMISOS } from '../constants'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select } from '../components/ui'
 import { borrarRefsEnLotes } from '../utils/borrado'
 import { crearUsuarioApi } from '../utils/api'
+import { useLang } from '../i18n'
 
 export default function Empresas() {
+  const { t } = useLang()
   const { esSuperAdmin } = useAuth()
   const { companies, activeCompanyId, setActiveCompanyId, reloadCompanies } = useData()
   const [nombre, setNombre] = useState('')
@@ -32,18 +34,18 @@ export default function Empresas() {
   if (!esSuperAdmin) {
     return (
       <div>
-        <PageTitle>Empresas</PageTitle>
-        <Aviso tipo="error">Esta sección es solo para súper-administradores.</Aviso>
+        <PageTitle>{t('Empresas')}</PageTitle>
+        <Aviso tipo="error">{t('Esta sección es solo para súper-administradores.')}</Aviso>
       </div>
     )
   }
 
   const crearEmpresa = async () => {
-    if (!nombre.trim()) return setError('Escribe el nombre de la empresa.')
+    if (!nombre.trim()) return setError(t('Escribe el nombre de la empresa.'))
     if (crearOwnerTambien) {
-      if (!ownerNuevo.nombre.trim() || !ownerNuevo.email.trim()) return setError('Completa nombre y email del dueño (o desmarca "crear también el usuario dueño").')
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerNuevo.email.trim())) return setError('El email del dueño no es válido. Escribe un correo real, por ejemplo nombre@dominio.com.')
-      if (String(ownerNuevo.password).length < 6) return setError('La contraseña del dueño debe tener al menos 6 caracteres.')
+      if (!ownerNuevo.nombre.trim() || !ownerNuevo.email.trim()) return setError(t('Completa nombre y email del dueño (o desmarca "crear también el usuario dueño").'))
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerNuevo.email.trim())) return setError(t('El email del dueño no es válido. Escribe un correo real, por ejemplo nombre@dominio.com.'))
+      if (String(ownerNuevo.password).length < 6) return setError(t('La contraseña del dueño debe tener al menos 6 caracteres.'))
     }
     setCreando(true); setError(''); setOk(''); setResumenAcceso(null)
     try {
@@ -56,7 +58,7 @@ export default function Empresas() {
         const token = await auth.currentUser.getIdToken()
         const data = await crearUsuarioApi({ nombre: ownerNuevo.nombre.trim(), email: ownerNuevo.email.trim(), password: ownerNuevo.password, role: 'owner', permissions, companyId: ref.id }, token)
         if (!data.ok) {
-          setError(`Empresa "${nombre.trim()}" creada, pero no se pudo crear el dueño: ${data.error || ''} Puedes crearlo abajo (modo manual con UID).`)
+          setError(`${t('Empresa')} "${nombre.trim()}" ${t('creada, pero no se pudo crear el dueño:')} ${data.error || ''} ${t('Puedes crearlo abajo (modo manual con UID).')}`)
           setNombre('')
           return
         }
@@ -64,9 +66,9 @@ export default function Empresas() {
         setOwnerNuevo({ nombre: '', email: '', password: '' })
       }
       setNombre('')
-      setOk(crearOwnerTambien ? 'Empresa y usuario dueño creados.' : 'Empresa creada y activada.')
+      setOk(crearOwnerTambien ? t('Empresa y usuario dueño creados.') : t('Empresa creada y activada.'))
     } catch (e) {
-      setError('Error al crear la empresa: ' + e.message)
+      setError(t('Error al crear la empresa: ') + e.message)
     } finally {
       setCreando(false)
     }
@@ -74,7 +76,7 @@ export default function Empresas() {
 
   const copiarAcceso = async () => {
     if (!resumenAcceso) return
-    const txt = `Empresa creada. Acceso del cliente:\nCorreo: ${resumenAcceso.email}\nContraseña: ${resumenAcceso.password}\nLink: ${resumenAcceso.link}`
+    const txt = `${t('Empresa creada. Acceso del cliente:')}\n${t('Correo:')} ${resumenAcceso.email}\n${t('Contraseña:')} ${resumenAcceso.password}\nLink: ${resumenAcceso.link}`
     try { await navigator.clipboard.writeText(txt); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { /* noop */ }
   }
 
@@ -87,8 +89,8 @@ export default function Empresas() {
     setError('')
     setOk('')
     const cid = ownerForm.companyId || activeCompanyId
-    if (!cid) return setError('Elige una empresa para el owner.')
-    if (!ownerForm.uid.trim() || !ownerForm.nombre.trim() || !ownerForm.email.trim()) return setError('UID, nombre y email del owner son obligatorios.')
+    if (!cid) return setError(t('Elige una empresa para el owner.'))
+    if (!ownerForm.uid.trim() || !ownerForm.nombre.trim() || !ownerForm.email.trim()) return setError(t('UID, nombre y email del owner son obligatorios.'))
     setGuardandoOwner(true)
     try {
       const permissions = {}
@@ -102,9 +104,9 @@ export default function Empresas() {
         superAdmin: false,
       })
       setOwnerForm({ uid: '', nombre: '', email: '', companyId: '' })
-      setOk('Owner creado para la empresa.')
+      setOk(t('Owner creado para la empresa.'))
     } catch (e) {
-      setError('Error al crear el owner: ' + e.message)
+      setError(t('Error al crear el owner: ') + e.message)
     } finally {
       setGuardandoOwner(false)
     }
@@ -171,11 +173,11 @@ export default function Empresas() {
       const restantes = await conTimeout(reloadCompanies(), 15000, 'refrescar lista').catch(() => null)
       if (activeCompanyId === cid) setActiveCompanyId(restantes && restantes[0] ? restantes[0].id : null)
       setPorEliminar(null); setConfirmNombre(''); setBorrarUsuarios(false)
-      setOk(`Empresa "${nombreBorrado}" eliminada (${total} registro(s) de datos borrados).`)
+      setOk(`${t('Empresa')} "${nombreBorrado}" ${t('eliminada')} (${total} ${t('registro(s) de datos borrados).')}`)
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[MilePay] Error al eliminar empresa:', e)
-      setError(`No se pudo eliminar: ${e.message}`)
+      setError(`${t('No se pudo eliminar:')} ${e.message}`)
     } finally {
       setEliminando(false) // pase lo que pase, nunca se queda en "Eliminando…"
       setProgreso(null)
@@ -184,75 +186,75 @@ export default function Empresas() {
 
   return (
     <div>
-      <PageTitle>Empresas (súper-admin)</PageTitle>
+      <PageTitle>{t('Empresas (súper-admin)')}</PageTitle>
 
       {error && <Aviso tipo="error">{error}</Aviso>}
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Building2 size={18} strokeWidth={1.8} className="text-brand-gold" /> Crear empresa cliente</h3>
+        <h3 className="m-0 mb-3 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Building2 size={18} strokeWidth={1.8} className="text-brand-gold" /> {t('Crear empresa cliente')}</h3>
         <div className="mb-3">
-          <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre de la empresa</div>
-          <Input className="w-72" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. BAA Financial" />
+          <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Nombre de la empresa')}</div>
+          <Input className="w-72" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={t('Ej. BAA Financial')} />
         </div>
 
         <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <input type="checkbox" checked={crearOwnerTambien} onChange={(e) => setCrearOwnerTambien(e.target.checked)} />
-          <UserPlus size={15} strokeWidth={1.8} /> Crear también el usuario dueño (owner) de esta empresa
+          <UserPlus size={15} strokeWidth={1.8} /> {t('Crear también el usuario dueño (owner) de esta empresa')}
         </label>
 
         {crearOwnerTambien && (
           <div className="mb-3 flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
-            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre del dueño</div><Input className="w-48" value={ownerNuevo.nombre} onChange={(e) => setOwnerNuevo((o) => ({ ...o, nombre: e.target.value }))} placeholder="Ej. Juan Pérez" /></div>
+            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Nombre del dueño')}</div><Input className="w-48" value={ownerNuevo.nombre} onChange={(e) => setOwnerNuevo((o) => ({ ...o, nombre: e.target.value }))} placeholder={t('Ej. Juan Pérez')} /></div>
             <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Email</div><Input className="w-56" type="email" value={ownerNuevo.email} onChange={(e) => setOwnerNuevo((o) => ({ ...o, email: e.target.value }))} placeholder="cliente@correo.com" /></div>
-            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Contraseña (mín. 6)</div><Input className="w-44" value={ownerNuevo.password} onChange={(e) => setOwnerNuevo((o) => ({ ...o, password: e.target.value }))} placeholder="la que tú definas" /></div>
+            <div><div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Contraseña (mín. 6)')}</div><Input className="w-44" value={ownerNuevo.password} onChange={(e) => setOwnerNuevo((o) => ({ ...o, password: e.target.value }))} placeholder={t('la que tú definas')} /></div>
           </div>
         )}
 
-        <Boton variant="gold" onClick={crearEmpresa} disabled={creando}>{creando ? 'Creando…' : crearOwnerTambien ? 'Crear empresa y dueño' : 'Crear empresa'}</Boton>
-        <p className="mt-2 text-xs text-slate-400">El dueño se crea con acceso completo (Firebase Admin, sin UID manual) y solo verá su empresa. Requiere FIREBASE_SERVICE_ACCOUNT_BASE64 en el servidor.</p>
+        <Boton variant="gold" onClick={crearEmpresa} disabled={creando}>{creando ? t('Creando…') : crearOwnerTambien ? t('Crear empresa y dueño') : t('Crear empresa')}</Boton>
+        <p className="mt-2 text-xs text-slate-400">{t('El dueño se crea con acceso completo (Firebase Admin, sin UID manual) y solo verá su empresa. Requiere FIREBASE_SERVICE_ACCOUNT_BASE64 en el servidor.')}</p>
       </Card>
 
       {resumenAcceso && (
         <Card className="mb-4 border-2 border-emerald-400/60 p-4">
-          <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Check size={18} strokeWidth={2} className="text-emerald-500" /> Acceso del cliente — pásaselo</h3>
+          <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Check size={18} strokeWidth={2} className="text-emerald-500" /> {t('Acceso del cliente — pásaselo')}</h3>
           <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
-            <div><span className="text-slate-400">Empresa:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.empresa}</b></div>
-            <div><span className="text-slate-400">Correo:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.email}</b></div>
-            <div><span className="text-slate-400">Contraseña:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.password}</b></div>
+            <div><span className="text-slate-400">{t('Empresa:')}</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.empresa}</b></div>
+            <div><span className="text-slate-400">{t('Correo:')}</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.email}</b></div>
+            <div><span className="text-slate-400">{t('Contraseña:')}</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.password}</b></div>
             <div><span className="text-slate-400">Link:</span> <b className="text-brand-navy dark:text-slate-100">{resumenAcceso.link}</b></div>
           </div>
           <Boton variant={copiado ? 'success' : 'primary'} onClick={copiarAcceso} className="mt-3">
-            {copiado ? <><Check size={16} strokeWidth={2} /> Copiado</> : <><Copy size={16} strokeWidth={1.8} /> Copiar datos de acceso</>}
+            {copiado ? <><Check size={16} strokeWidth={2} /> {t('Copiado')}</> : <><Copy size={16} strokeWidth={1.8} /> {t('Copiar datos de acceso')}</>}
           </Boton>
         </Card>
       )}
 
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Empresas registradas ({companies.length})</h3>
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Empresas registradas')} ({companies.length})</h3>
         <Tabla
           columns={[
-            { key: 'nombre', label: 'Empresa' },
-            { key: 'activo', label: 'Estado', align: 'center' },
-            { key: 'activa', label: 'Activa ahora', align: 'center' },
+            { key: 'nombre', label: t('Empresa') },
+            { key: 'activo', label: t('Estado'), align: 'center' },
+            { key: 'activa', label: t('Activa ahora'), align: 'center' },
             { key: 'acciones', label: '', align: 'right' },
           ]}
           rows={companies.map((c) => ({ ...c, _key: c.id }))}
-          emptyText="Aún no hay empresas. Crea la primera arriba."
+          emptyText={t('Aún no hay empresas. Crea la primera arriba.')}
           renderCell={(row, key) => {
             if (key === 'nombre') return <span>{row.nombre} <span className="ml-1 font-mono text-[11px] text-slate-400">{String(row.id).slice(0, 6)}…</span></span>
-            if (key === 'activo') return row.activo !== false ? <Badge color="green">Activa</Badge> : <Badge color="slate">Inactiva</Badge>
-            if (key === 'activa') return row.id === activeCompanyId ? <Badge color="gold">● En uso</Badge> : ''
+            if (key === 'activo') return row.activo !== false ? <Badge color="green">{t('Activa')}</Badge> : <Badge color="slate">{t('Inactiva')}</Badge>
+            if (key === 'activa') return row.id === activeCompanyId ? <Badge color="gold">{t('● En uso')}</Badge> : ''
             if (key === 'acciones')
               return (
                 <div className="flex justify-end gap-2">
                   <Boton variant={row.id === activeCompanyId ? 'ghost' : 'primary'} onClick={() => setActiveCompanyId(row.id)} className="px-2.5 py-1 text-xs" disabled={row.id === activeCompanyId}>
-                    {row.id === activeCompanyId ? 'En uso' : 'Usar esta'}
+                    {row.id === activeCompanyId ? t('En uso') : t('Usar esta')}
                   </Boton>
                   <Boton variant="ghost" onClick={() => toggleActivo(row)} className="px-2.5 py-1 text-xs">
-                    {row.activo !== false ? 'Desactivar' : 'Activar'}
+                    {row.activo !== false ? t('Desactivar') : t('Activar')}
                   </Boton>
-                  <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre(''); setBorrarUsuarios(false) }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> Eliminar</Boton>
+                  <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre(''); setBorrarUsuarios(false) }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> {t('Eliminar')}</Boton>
                 </div>
               )
             return row[key]
@@ -264,26 +266,25 @@ export default function Empresas() {
       <Card className="p-4">
         <button onClick={() => setMostrarAvanzado((v) => !v)} className="flex w-full items-center gap-2 text-left text-sm font-medium text-slate-500 hover:text-brand-navy dark:text-slate-400 dark:hover:text-slate-200">
           {mostrarAvanzado ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />}
-          Método avanzado (crear owner con UID de Firebase)
-          <span className="text-xs text-slate-400">— {mostrarAvanzado ? 'ocultar' : 'mostrar solo si lo necesitas'}</span>
+          {t('Método avanzado (crear owner con UID de Firebase)')}
+          <span className="text-xs text-slate-400">— {mostrarAvanzado ? t('ocultar') : t('mostrar solo si lo necesitas')}</span>
         </button>
         {mostrarAvanzado && (
           <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700/60">
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Usa la forma de arriba (email + contraseña, sin UID) para crear empresas y dueños. Este método solo es un respaldo:
-              crea el documento del usuario owner con un UID ya existente en Firebase Auth (el acceso se crea aparte en la consola de Firebase).
+              {t('Usa la forma de arriba (email + contraseña, sin UID) para crear empresas y dueños. Este método solo es un respaldo: crea el documento del usuario owner con un UID ya existente en Firebase Auth (el acceso se crea aparte en la consola de Firebase).')}
             </p>
             <div className="flex flex-wrap items-end gap-3">
-              <Campo label="Empresa">
+              <Campo label={t('Empresa')}>
                 <Select className="w-52" value={ownerForm.companyId || activeCompanyId || ''} onChange={(e) => setOwnerForm((f) => ({ ...f, companyId: e.target.value }))}>
-                  <option value="">— Elegir —</option>
+                  <option value="">{t('— Elegir —')}</option>
                   {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
                 </Select>
               </Campo>
               <Campo label="UID (Firebase Auth)"><Input className="w-52" value={ownerForm.uid} onChange={(e) => setOwnerForm((f) => ({ ...f, uid: e.target.value }))} /></Campo>
-              <Campo label="Nombre"><Input className="w-44" value={ownerForm.nombre} onChange={(e) => setOwnerForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
+              <Campo label={t('Nombre')}><Input className="w-44" value={ownerForm.nombre} onChange={(e) => setOwnerForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
               <Campo label="Email"><Input className="w-52" value={ownerForm.email} onChange={(e) => setOwnerForm((f) => ({ ...f, email: e.target.value }))} /></Campo>
-              <Boton variant="ghost" onClick={crearOwner} disabled={guardandoOwner}>{guardandoOwner ? 'Creando…' : 'Crear owner (avanzado)'}</Boton>
+              <Boton variant="ghost" onClick={crearOwner} disabled={guardandoOwner}>{guardandoOwner ? t('Creando…') : t('Crear owner (avanzado)')}</Boton>
             </div>
           </div>
         )}
@@ -293,24 +294,24 @@ export default function Empresas() {
       {porEliminar && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !eliminando && setPorEliminar(null)}>
           <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={20} strokeWidth={1.8} /> Eliminar empresa</h3>
+            <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={20} strokeWidth={1.8} /> {t('Eliminar empresa')}</h3>
             <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
-              Vas a borrar <b>{porEliminar.nombre}</b> y <b>todos sus datos</b> (facturas, choferes, claims, pagos, gastos fijos, ajustes). Esta acción no se puede deshacer.
+              {t('Vas a borrar')} <b>{porEliminar.nombre}</b> {t('y')} <b>{t('todos sus datos')}</b> {t('(facturas, choferes, claims, pagos, gastos fijos, ajustes). Esta acción no se puede deshacer.')}
             </p>
-            <p className="mb-3 text-xs text-slate-400">ID: <span className="font-mono">{porEliminar.id}</span> — se borra exactamente esta (útil si hay nombres duplicados).</p>
+            <p className="mb-3 text-xs text-slate-400">ID: <span className="font-mono">{porEliminar.id}</span> {t('— se borra exactamente esta (útil si hay nombres duplicados).')}</p>
             <label className="mb-3 flex items-start gap-2 rounded-xl bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
               <input type="checkbox" checked={borrarUsuarios} onChange={(e) => setBorrarUsuarios(e.target.checked)} className="mt-0.5" />
-              <span>También eliminar los usuarios de esta empresa (nunca borra súper-admins ni tu propio usuario). Si lo dejas sin marcar, los usuarios se conservan.</span>
+              <span>{t('También eliminar los usuarios de esta empresa (nunca borra súper-admins ni tu propio usuario). Si lo dejas sin marcar, los usuarios se conservan.')}</span>
             </label>
             <div className="mb-3">
-              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Para confirmar, escribe el nombre exacto de la empresa:</div>
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Para confirmar, escribe el nombre exacto de la empresa:')}</div>
               <Input className="w-full" value={confirmNombre} onChange={(e) => setConfirmNombre(e.target.value)} placeholder={porEliminar.nombre} />
             </div>
             {eliminando && progreso && (
               <div className="mb-3">
                 <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>Eliminando datos…</span>
-                  <span>{progreso.hechos} de {progreso.total || '—'}</span>
+                  <span>{t('Eliminando datos…')}</span>
+                  <span>{progreso.hechos} {t('de')} {progreso.total || '—'}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                   <div className="h-full rounded-full bg-brand-gold transition-all duration-200" style={{ width: `${progreso.total ? Math.round((progreso.hechos / progreso.total) * 100) : 5}%` }} />
@@ -318,9 +319,9 @@ export default function Empresas() {
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>Cancelar</Boton>
+              <Boton variant="ghost" onClick={() => setPorEliminar(null)} disabled={eliminando}>{t('Cancelar')}</Boton>
               <Boton variant="danger" onClick={eliminarEmpresa} disabled={eliminando || confirmNombre.trim() !== porEliminar.nombre.trim()}>
-                {eliminando ? 'Eliminando…' : <><Trash2 size={15} strokeWidth={1.8} /> Eliminar definitivamente</>}
+                {eliminando ? t('Eliminando…') : <><Trash2 size={15} strokeWidth={1.8} /> {t('Eliminar definitivamente')}</>}
               </Boton>
             </div>
           </Card>
