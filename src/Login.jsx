@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/aut
 import { Eye, EyeOff, ArrowLeft, FileText, Lock, Check, LayoutGrid } from 'lucide-react'
 import { auth } from './firebase'
 import { Spinner } from './components/ui'
+import { useLang, LangToggle } from './i18n'
 
 function mensajeError(code) {
   const map = {
@@ -74,6 +75,7 @@ function Ticker({ compacto = false }) {
 
 export default function Login() {
   const navigate = useNavigate()
+  const { t } = useLang()
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [verPass, setVerPass] = useState(false)
@@ -93,7 +95,7 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email.trim(), pass)
     } catch (e) {
-      setError(mensajeError(e.code))
+      setError(t(mensajeError(e.code)))
     } finally {
       setCargando(false)
     }
@@ -102,13 +104,13 @@ export default function Login() {
   const enviarReset = async () => {
     setResetMsg('')
     setError('')
-    if (!resetEmail.trim()) return setError('Escribe tu correo para enviarte el enlace.')
+    if (!resetEmail.trim()) return setError(t('Escribe tu correo para enviarte el enlace.'))
     setResetCargando(true)
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim())
-      setResetMsg('Te enviamos un correo para restablecer tu contraseña. Revisa tu bandeja (y spam).')
+      setResetMsg(t('Te enviamos un correo para restablecer tu contraseña. Revisa tu bandeja (y spam).'))
     } catch (e) {
-      setError(mensajeError(e.code))
+      setError(t(mensajeError(e.code)))
     } finally {
       setResetCargando(false)
     }
@@ -138,12 +140,15 @@ export default function Login() {
 
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">
           <div className="w-full max-w-sm">
-            <button
-              onClick={() => navigate('/elegir')}
-              className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-brand-navy dark:hover:text-slate-200"
-            >
-              <LayoutGrid size={15} strokeWidth={1.9} /> Cambiar de módulo
-            </button>
+            <div className="mb-6 flex items-center justify-between">
+              <button
+                onClick={() => navigate('/elegir')}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-brand-navy dark:hover:text-slate-200"
+              >
+                <LayoutGrid size={15} strokeWidth={1.9} /> {t('Cambiar de módulo')}
+              </button>
+              <LangToggle />
+            </div>
             {/* logo */}
             <div className="mb-8 flex items-center gap-3">
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-navy shadow-sm">
@@ -151,16 +156,16 @@ export default function Login() {
               </div>
               <div>
                 <div className="text-xl font-extrabold leading-none text-brand-navy dark:text-slate-100">MilePay</div>
-                <div className="mt-1 text-[10px] font-semibold tracking-[0.18em] text-slate-400">GESTIÓN DE FACTURAS DE REPARTO</div>
+                <div className="mt-1 text-[10px] font-semibold tracking-[0.18em] text-slate-400">{t('GESTIÓN DE FACTURAS DE REPARTO')}</div>
               </div>
             </div>
 
             {!modoReset ? (
               <>
-                <h1 className="m-0 mb-1 text-2xl font-bold text-brand-navy dark:text-slate-100">Acceso seguro</h1>
-                <p className="m-0 mb-7 text-sm text-slate-500 dark:text-slate-400">Ingresa tus credenciales para continuar.</p>
+                <h1 className="m-0 mb-1 text-2xl font-bold text-brand-navy dark:text-slate-100">{t('Acceso seguro')}</h1>
+                <p className="m-0 mb-7 text-sm text-slate-500 dark:text-slate-400">{t('Ingresa tus credenciales para continuar.')}</p>
 
-                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">Correo electrónico</label>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">{t('Correo electrónico')}</label>
                 <input
                   className={`mb-4 ${inputBase}`}
                   placeholder="tucorreo@ejemplo.com"
@@ -169,7 +174,7 @@ export default function Login() {
                   onKeyDown={(e) => e.key === 'Enter' && entrar()}
                 />
 
-                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">Contraseña</label>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">{t('Contraseña')}</label>
                 <div className="relative mb-3">
                   <input
                     className={`pr-11 ${inputBase}`}
@@ -198,14 +203,14 @@ export default function Login() {
                       style={{ accentColor: '#13233f' }}
                       className="h-4 w-4 cursor-pointer"
                     />
-                    Recordarme
+                    {t('Recordarme')}
                   </label>
                   <button
                     type="button"
                     onClick={() => { setModoReset(true); setError(''); setResetEmail(email) }}
                     className="text-sm font-semibold text-brand-gold hover:underline"
                   >
-                    ¿Olvidaste tu contraseña?
+                    {t('¿Olvidaste tu contraseña?')}
                   </button>
                 </div>
 
@@ -214,22 +219,22 @@ export default function Login() {
                   disabled={cargando}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-navy-700 disabled:opacity-60"
                 >
-                  {cargando ? (<><Spinner /> Entrando…</>) : 'Iniciar sesión'}
+                  {cargando ? (<><Spinner /> {t('Entrando…')}</>) : t('Iniciar sesión')}
                 </button>
 
                 {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
                 <div className="mt-7 flex items-center justify-center gap-2 text-xs text-slate-400">
                   <Lock size={14} strokeWidth={1.9} />
-                  Conexión cifrada y protegida
+                  {t('Conexión cifrada y protegida')}
                 </div>
               </>
             ) : (
               <>
-                <h1 className="m-0 mb-1 text-2xl font-bold text-brand-navy dark:text-slate-100">Recuperar contraseña</h1>
-                <p className="m-0 mb-7 text-sm text-slate-500 dark:text-slate-400">Te enviaremos un enlace para crear una nueva contraseña.</p>
+                <h1 className="m-0 mb-1 text-2xl font-bold text-brand-navy dark:text-slate-100">{t('Recuperar contraseña')}</h1>
+                <p className="m-0 mb-7 text-sm text-slate-500 dark:text-slate-400">{t('Te enviaremos un enlace para crear una nueva contraseña.')}</p>
 
-                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">Correo electrónico</label>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-600 dark:text-slate-300">{t('Correo electrónico')}</label>
                 <input
                   className={`mb-4 ${inputBase}`}
                   placeholder="tucorreo@ejemplo.com"
@@ -243,7 +248,7 @@ export default function Login() {
                   disabled={resetCargando}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-navy-700 disabled:opacity-60"
                 >
-                  {resetCargando ? (<><Spinner /> Enviando…</>) : 'Enviar enlace'}
+                  {resetCargando ? (<><Spinner /> {t('Enviando…')}</>) : t('Enviar enlace')}
                 </button>
 
                 <button
@@ -251,7 +256,7 @@ export default function Login() {
                   onClick={() => { setModoReset(false); setError(''); setResetMsg('') }}
                   className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-navy hover:underline dark:text-slate-300"
                 >
-                  <ArrowLeft size={14} strokeWidth={2} /> Volver a iniciar sesión
+                  <ArrowLeft size={14} strokeWidth={2} /> {t('Volver a iniciar sesión')}
                 </button>
 
                 {resetMsg && <p className="mt-3 text-sm text-emerald-600">{resetMsg}</p>}
@@ -259,7 +264,7 @@ export default function Login() {
               </>
             )}
 
-            <p className="mt-10 text-center text-xs text-slate-400">© 2026 MilePay · Todos los derechos reservados</p>
+            <p className="mt-10 text-center text-xs text-slate-400">© 2026 MilePay · {t('Todos los derechos reservados')}</p>
           </div>
         </div>
       </div>
@@ -331,10 +336,10 @@ export default function Login() {
         <div className="relative z-10 flex flex-1 flex-col justify-center px-12 xl:px-16">
           <div className="mb-6 h-1 w-14 rounded-full bg-brand-gold" />
           <h2 className="m-0 max-w-lg text-4xl font-bold leading-tight xl:text-[2.6rem]">
-            El control financiero de tu operación <span className="text-brand-gold">de última milla</span>
+            {t('El control financiero de tu operación')} <span className="text-brand-gold">{t('de última milla')}</span>
           </h2>
           <p className="m-0 mt-5 max-w-md text-[15px] leading-relaxed text-slate-300">
-            Calcula pagos, verifica facturas contra tu proveedor y controla tu rentabilidad — con la precisión que tu negocio exige.
+            {t('Calcula pagos, verifica facturas contra tu proveedor y controla tu rentabilidad — con la precisión que tu negocio exige.')}
           </p>
 
           <ul className="m-0 mt-9 list-none space-y-4 p-0">
@@ -342,12 +347,12 @@ export default function Login() {
               'Verificación al centavo con tu proveedor',
               'Pagos calculados automáticamente',
               'Datos cifrados y protegidos',
-            ].map((t) => (
-              <li key={t} className="flex items-center gap-3 text-[15px] text-slate-200">
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-3 text-[15px] text-slate-200">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full" style={{ backgroundColor: 'rgba(201,162,75,0.18)' }}>
                   <Check size={14} strokeWidth={2.5} className="text-brand-gold" />
                 </span>
-                {t}
+                {t(item)}
               </li>
             ))}
           </ul>

@@ -4,6 +4,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 
 import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
+import { useLang } from '../i18n'
 import {
   calcularPagos, rankingsChoferes, rankingsRutas, alertasCambioPrecio,
   porCiudad, totalesFiltrados, resumenEstimado, variacion, gananciaRealDe, economiaClaims, nombreCiudadDe, contarClaimsValidos, claimsDeCiudad, TODAS,
@@ -25,6 +26,7 @@ import Onboarding from '../components/Onboarding'
 export default function Dashboard() {
   const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, verificacionCiudad, vista, cargando } = useData()
   const { perfil, esSuperAdmin } = useAuth()
+  const { t } = useLang()
   // Solo owner/admin/superadmin ven la info financiera de Gofo (descuentos). Al manager se
   // le oculta el panel "Ganancia por claims" (muestra "Lo que Gofo te descontó").
   const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
@@ -140,7 +142,7 @@ export default function Dashboard() {
       <PageTitle right={
         inv && !cargando && (
           <>
-            <Boton variant="ghost" onClick={() => setVerDinero((v) => !v)} title={verDinero ? 'Ocultar montos ($)' : 'Mostrar montos ($)'}>{verDinero ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />} {verDinero ? 'Ocultar $' : 'Ver $'}</Boton>
+            <Boton variant="ghost" onClick={() => setVerDinero((v) => !v)} title={verDinero ? t('Ocultar montos ($)') : t('Mostrar montos ($)')}>{verDinero ? <EyeOff size={16} strokeWidth={1.8} /> : <Eye size={16} strokeWidth={1.8} />} {verDinero ? t('Ocultar $') : t('Ver $')}</Boton>
             <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} strokeWidth={1.8} /> Excel</Boton>
             <Boton variant="gold" onClick={descargarPDF}><FileText size={16} strokeWidth={1.8} /> PDF</Boton>
           </>
@@ -148,7 +150,7 @@ export default function Dashboard() {
       }>Dashboard</PageTitle>
 
       {cargando ? (
-        <Cargando texto="Cargando datos…" />
+        <Cargando texto={t('Cargando datos…')} />
       ) : onbAbierto && invoices.length === 0 ? (
         /* Empresa nueva / vacía: pantalla de bienvenida y guía. */
         <Onboarding />
@@ -171,24 +173,24 @@ export default function Dashboard() {
           )}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label="Ingreso total" value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
-            <KPI label="Costo total" value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
-            <KPI label="Ganancia" value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
-            <KPI label="Margen" value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
-            <KPI label="Paquetes" value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
-            <KPI label="% Dobles" value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
-            <KPI label="Claims" value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
+            <KPI label={t('Ingreso total')} value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
+            <KPI label={t('Costo total')} value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
+            <KPI label={t('Ganancia')} value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
+            <KPI label={t('Margen')} value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
+            <KPI label={t('Paquetes')} value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
+            <KPI label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
+            <KPI label={t('Claims')} value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
           </div>
 
           {!inv ? (
-            <EstadoVacio titulo="Sin datos en este rango" texto="No hay facturas en el rango de fechas seleccionado. Cambia el rango o carga una factura." />
+            <EstadoVacio titulo={t('Sin datos en este rango')} texto={t('No hay facturas en el rango de fechas seleccionado. Cambia el rango o carga una factura.')} />
           ) : porSemana ? (
             /* -------- VISTA POR SEMANA -------- */
             <>
               <div className="mb-4">
                 <TrendCard
-                  title="Evolución semana a semana"
-                  subtitle="Ingreso, costo y ganancia por semana"
+                  title={t('Evolución semana a semana')}
+                  subtitle={t('Ingreso, costo y ganancia por semana')}
                   area
                   data={trendData}
                   fmt={money}
@@ -200,15 +202,15 @@ export default function Dashboard() {
                 />
               </div>
               <Card className="p-4">
-                <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Detalle por semana</h3>
+                <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Detalle por semana')}</h3>
                 <Tabla
                   columns={[
-                    { key: 'name', label: 'Semana' },
-                    { key: 'ingreso', label: 'Ingreso', align: 'right' },
-                    { key: 'costo', label: 'Costo', align: 'right' },
-                    { key: 'ganancia', label: 'Ganancia', align: 'right' },
-                    { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                    { key: 'claims', label: 'Claims', align: 'right' },
+                    { key: 'name', label: t('Semana') },
+                    { key: 'ingreso', label: t('Ingreso'), align: 'right' },
+                    { key: 'costo', label: t('Costo'), align: 'right' },
+                    { key: 'ganancia', label: t('Ganancia'), align: 'right' },
+                    { key: 'paquetes', label: t('Paquetes'), align: 'right' },
+                    { key: 'claims', label: t('Claims'), align: 'right' },
                   ]}
                   rows={[...trendData].reverse().map((r, i) => ({ ...r, _key: i }))}
                   renderCell={(row, key) => (['ingreso', 'costo', 'ganancia'].includes(key) ? money(row[key]) : typeof row[key] === 'number' ? num(row[key]) : row[key])}
@@ -222,46 +224,46 @@ export default function Dashboard() {
                 {/* Desglose de Gofo de la CIUDAD seleccionada (Gofo paga por ciudad;
                     cada factura es de una sola ciudad). Con "Todas" es el del rango. */}
                 {verificacionCiudad ? (
-                  <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
+                  <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
                     <Verificacion v={verificacionCiudad} compacto />
                   </ClickWrap>
                 ) : (
                   <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                    No hay desglose de pago de Gofo para esta ciudad en este período.
+                    {t('No hay desglose de pago de Gofo para esta ciudad en este período.')}
                   </div>
                 )}
-                <ClickWrap onClick={() => irA('/financiero')} titulo="Ver detalle financiero">
+                <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
                   <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} verGofo={verGofo} />
                 </ClickWrap>
               </div>
 
               {verGofo && (
-                <ClickWrap onClick={() => irA('/claims')} titulo="Ver claims">
+                <ClickWrap onClick={() => irA('/claims')} titulo={t('Ver claims')}>
                   <PanelClaims claims={claimsDeCiudad(claims, selectedCity, inv)} inv={inv} compacto />
                 </ClickWrap>
               )}
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <GaugeCard title="Margen de ganancia" value={margen} color="#c9a24b" />
-                <GaugeCard title="% de dobles" value={tot.pctDobles} color="#3d5a80" />
-                <GaugeCard title="Calidad (entregas sin claim)" value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
+                <GaugeCard title={t('Margen de ganancia')} value={margen} color="#c9a24b" />
+                <GaugeCard title={t('% de dobles')} value={tot.pctDobles} color="#3d5a80" />
+                <GaugeCard title={t('Calidad (entregas sin claim)')} value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
               </div>
 
               {variasSemanas && (
                 <div className="mb-4">
-                  <TrendCard title="Tendencia semana a semana" subtitle="Ingreso, costo y ganancia por semana" area data={trendData} fmt={money}
+                  <TrendCard title={t('Tendencia semana a semana')} subtitle={t('Ingreso, costo y ganancia por semana')} area data={trendData} fmt={money}
                     series={[{ key: 'ingreso', label: 'Ingreso', color: '#13233f' }, { key: 'costo', label: 'Costo', color: '#c47f5a' }, { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' }]} />
                 </div>
               )}
 
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <BarCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} horizontal />
-                <DonutCard title="Distribución individual vs doble" data={donutTipo} fmt={num} />
-                <BarCard title="Ingreso por ruta (top 10)" data={ingresoPorRuta} color="#13233f" fmt={money} />
-                <StackedBarCard title="Individuales vs dobles por ciudad" data={stackedCiudad} fmt={num}
+                <BarCard title={t('Ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} horizontal />
+                <DonutCard title={t('Distribución individual vs doble')} data={donutTipo} fmt={num} />
+                <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
+                <StackedBarCard title={t('Individuales vs dobles por ciudad')} data={stackedCiudad} fmt={num}
                   series={[{ key: 'Individuales', label: 'Individuales', color: '#3d5a80' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
-                {ingresoPorCiudad.length > 1 && <DonutCard title="Ingreso por ciudad" data={ingresoPorCiudad} fmt={money} />}
-                <BarCard title="Claims por ruta" data={claimsPorRuta} color="#c47f5a" fmt={num} />
+                {ingresoPorCiudad.length > 1 && <DonutCard title={t('Ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} />}
+                <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="#c47f5a" fmt={num} />
               </div>
 
               {/* Ranking de ciudades: SIEMPRE visible (compara todas), resalta la
@@ -272,15 +274,15 @@ export default function Dashboard() {
 
               {selectedCity === TODAS && comparativoCiudades.length > 1 && (
                 <Card className="mb-4 p-4">
-                  <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">Comparativo entre ciudades</h3>
-                  <p className="mb-3 text-xs text-slate-400">Haz clic en una ciudad para filtrar el financiero por ella.</p>
+                  <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Comparativo entre ciudades')}</h3>
+                  <p className="mb-3 text-xs text-slate-400">{t('Haz clic en una ciudad para filtrar el financiero por ella.')}</p>
                   <Tabla
                     columns={[
-                      { key: 'ciudad', label: 'Ciudad' },
-                      { key: 'paquetes', label: 'Paquetes', align: 'right' },
-                      { key: 'ingreso', label: 'Ingreso', align: 'right' },
-                      { key: 'ganancia', label: 'Ganancia', align: 'right' },
-                      { key: 'claims', label: 'Claims', align: 'right' },
+                      { key: 'ciudad', label: t('Ciudad') },
+                      { key: 'paquetes', label: t('Paquetes'), align: 'right' },
+                      { key: 'ingreso', label: t('Ingreso'), align: 'right' },
+                      { key: 'ganancia', label: t('Ganancia'), align: 'right' },
+                      { key: 'claims', label: t('Claims'), align: 'right' },
                     ]}
                     rows={[...comparativoCiudades].sort((a, b) => b.ingreso - a.ingreso).map((c) => ({ ...c, _key: c.ciudad }))}
                     onRowClick={(row) => irA('/financiero', row.code)}
@@ -293,26 +295,26 @@ export default function Dashboard() {
                 <RankingCalificacion compacto limite={5} />
               </div>
 
-              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Rankings de choferes</h2>
-              <p className="-mt-2 mb-3 text-xs text-slate-400">Haz clic en un chofer para ver su detalle en Performance.</p>
+              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Rankings de choferes')}</h2>
+              <p className="-mt-2 mb-3 text-xs text-slate-400">{t('Haz clic en un chofer para ver su detalle en Performance.')}</p>
               <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <RankWidget title="Por productividad (ingreso)" data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
-                <RankWidget title="Por ganancia" data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
-                <RankWidget title="Por calidad (menos claims)" data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
+                <RankWidget title={t('Por productividad (ingreso)')} data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
+                <RankWidget title={t('Por ganancia')} data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
+                <RankWidget title={t('Por calidad (menos claims)')} data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
               </div>
 
-              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">Rankings de rutas</h2>
+              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Rankings de rutas')}</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <MiniLista titulo="Más reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio="Ninguna ruta con claims." onPick={() => irA('/performance')} />
-                <MiniLista titulo="Cero reclamos" rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio="Todas tienen algún claim." onPick={() => irA('/performance')} />
-                <MiniLista titulo="Más ingreso" rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
-                <MiniLista titulo="Mejor $/lb" rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
+                <MiniLista titulo={t('Más reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio={t('Ninguna ruta con claims.')} onPick={() => irA('/performance')} />
+                <MiniLista titulo={t('Cero reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio={t('Todas tienen algún claim.')} onPick={() => irA('/performance')} />
+                <MiniLista titulo={t('Más ingreso')} rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
+                <MiniLista titulo={t('Mejor $/lb')} rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
               </div>
 
               {claimsDeCiudad(claims, selectedCity, inv).length > 0 && (
                 <>
-                  <h2 className="mb-1 mt-6 text-xl font-bold text-brand-navy dark:text-slate-100">Claims por tipo</h2>
-                  <p className="mb-3 text-xs text-slate-400">Choferes con más claims por tipo. Haz clic para ver su detalle.</p>
+                  <h2 className="mb-1 mt-6 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Claims por tipo')}</h2>
+                  <p className="mb-3 text-xs text-slate-400">{t('Choferes con más claims por tipo. Haz clic para ver su detalle.')}</p>
                   <RankingClaimsTipo claims={claimsDeCiudad(claims, selectedCity, inv)} compacto />
                 </>
               )}
@@ -341,6 +343,7 @@ function ClickWrap({ onClick, titulo, children }) {
 }
 
 function RankWidget({ title, data, lista, fmt, valor, marcaSinTarifa, onPick }) {
+  const { t } = useLang()
   const mejor = lista[0]
   const peor = lista[lista.length - 1]
   return (
@@ -348,13 +351,13 @@ function RankWidget({ title, data, lista, fmt, valor, marcaSinTarifa, onPick }) 
       <BarCardInline data={data} fmt={fmt} onPick={onPick} />
       {mejor && (
         <button onClick={() => onPick?.(mejor.nombre)} className="mt-2 block w-full text-left text-xs hover:underline">
-          <Badge color="green">Mejor</Badge> {mejor?.nombre} · {fmt(valor(mejor) || 0)}
+          <Badge color="green">{t('Mejor')}</Badge> {mejor?.nombre} · {fmt(valor(mejor) || 0)}
           {marcaSinTarifa && mejor?.sinTarifa ? ' (sin tarifa)' : ''}
         </button>
       )}
       {peor && lista.length > 1 && (
         <button onClick={() => onPick?.(peor.nombre)} className="mt-1 block w-full text-left text-xs hover:underline">
-          <Badge color="red">Peor</Badge> {peor?.nombre} · {fmt(valor(peor) || 0)}
+          <Badge color="red">{t('Peor')}</Badge> {peor?.nombre} · {fmt(valor(peor) || 0)}
         </button>
       )}
     </Widget>
@@ -380,10 +383,11 @@ function BarCardInline({ data, fmt, onPick }) {
 }
 
 function MiniLista({ titulo, rows, render, vacio, onPick }) {
+  const { t } = useLang()
   return (
     <Widget title={titulo}>
       {rows.length === 0 ? (
-        <div className="text-sm text-slate-400">{vacio || 'Sin datos.'}</div>
+        <div className="text-sm text-slate-400">{vacio || t('Sin datos.')}</div>
       ) : (
         <ol className="m-0 list-decimal pl-5 text-sm leading-8">
           {rows.map((r, i) => (
