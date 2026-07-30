@@ -1885,6 +1885,23 @@ const EN = {
   // — Freight · aviso oficina —
   "Tienes un mensaje nuevo de la oficina.": "You have a new message from the office.",
 
+  // — Freight · perfil chofer (detalle) —
+  "Rechazos": "Rejections",
+  "Aceptación": "Acceptance",
+  "Prom. entrega": "Avg. delivery",
+  "Puntualidad": "On-time rate",
+  "Ton promedio": "Avg. tons",
+  "Pago promedio": "Avg. pay",
+  "Rendimiento por trabajo": "Performance by job",
+  "Viajes": "Trips",
+  "viajes": "trips",
+  "Materiales movidos": "Materials hauled",
+  "Ficha": "Details",
+  "Primera orden": "First order",
+  "Última orden": "Last order",
+  "Equipos usados": "Equipment used",
+  "Clientes y plantas": "Clients & plants",
+
 }
 
 const Ctx = createContext(null)
