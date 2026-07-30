@@ -1933,6 +1933,9 @@ const EN = {
   "sin equipo": "no equipment",
   "Selecciona los transportistas que reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto. Los marcados “sin equipo” no recibirán órdenes hasta dárselo en Transportistas.": "Select the carriers that receive this job’s orders. Add another if the current one can’t keep up. Those marked “no equipment” won’t receive orders until you give it to them in Carriers.",
 
+  // — Freight · perfil transportista (detalle) —
+  "Utilidad": "Profit",
+
 }
 
 const Ctx = createContext(null)

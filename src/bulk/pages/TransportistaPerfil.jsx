@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, Check, Plus, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, Check, Plus, AlertTriangle, Loader, Layers, Clock, CheckCircle2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
+import { tsMillis } from '../data/chatKeys'
+import { fechaOrden } from '../domain/perfilChofer'
 import { estadoDocumento } from '../domain/facturacion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
@@ -13,9 +15,24 @@ import { useLang } from '../../i18n'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const ACTIVAS = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
+const EN_PROCESO = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
 const n = (v) => Number(v) || 0
+const tonDe = (o) => n(o.pesoReal ?? o.pesoEstimado)
 const DOC_COLOR = { vencido: 'red', proximo: 'gold', ok: 'green', sin_fecha: 'slate' }
 const DOC_LABEL = { vencido: 'Vencido', proximo: 'Por vencer', ok: 'Vigente', sin_fecha: 'Sin fecha' }
+const COLOR_EST = { creada: 'slate', en_cola: 'slate', notificando: 'gold', aceptada: 'navy', en_planta: 'navy', cargando: 'navy', en_ruta: 'blue', en_destino: 'blue', entregada: 'green', liberada: 'green', cerrada: 'green', cancelada: 'red', rechazada: 'red' }
+const fechaCorta = (ms) => (ms > 0 ? new Date(ms).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+
+function agrupar(lista, keyFn) {
+  const m = new Map()
+  for (const o of lista) {
+    const k = keyFn(o); if (k == null || k === '') continue
+    const g = m.get(k) || { key: k, viajes: 0, ton: 0, ingreso: 0 }
+    g.viajes += 1; g.ton += tonDe(o); g.ingreso += n(o.precioCliente)
+    m.set(k, g)
+  }
+  return [...m.values()].map((g) => ({ ...g, ton: Math.round(g.ton) })).sort((a, b) => b.ton - a.ton || b.viajes - a.viajes)
+}
 
 export default function TransportistaPerfil() {
   const { t } = useLang()
@@ -27,16 +44,28 @@ export default function TransportistaPerfil() {
   const { datos: jobs } = useColeccion('jobs')
 
   const carrier = useMemo(() => carriers.find((c) => c.id === id) || null, [carriers, id])
-  // Trabajos a los que está asociado (autorizado). Es el filtro que decide de qué
-  // trabajos reciben órdenes este transporte y sus choferes.
+  const misOrdenes = useMemo(
+    () => ordenes.filter((o) => o.transportistaId === id).slice().sort((a, b) => tsMillis(fechaOrden(b)) - tsMillis(fechaOrden(a))),
+    [ordenes, id],
+  )
   const trabajos = useMemo(() => jobs.filter((j) => (j.transportistasAutorizados || []).includes(id)), [jobs, id])
-  const misOrdenes = useMemo(() => ordenes.filter((o) => o.transportistaId === id), [ordenes, id])
   const choferes = useMemo(() => {
     const gestion = (carrier?.choferes || []).map((d) => d.nombre)
     const deOrdenes = misOrdenes.map((o) => o.choferNombre).filter(Boolean)
     return [...new Set([...gestion, ...deOrdenes])]
   }, [carrier, misOrdenes])
   const docs = useMemo(() => documentos.filter((d) => d.carrierId === id).map((d) => ({ ...d, ...estadoDocumento(d.vence) })), [documentos, id])
+  const nombreJob = (jid) => jobs.find((j) => j.id === jid)?.nombre || jid
+
+  // Asociar/quitar este transporte a un trabajo (edita job.transportistasAutorizados).
+  const enJob = (job) => (job.transportistasAutorizados || []).includes(id)
+  const jobCompat = (job) => !job.tipoEquipo || (carrier?.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase())
+  const toggleJob = async (job) => {
+    const aut = job.transportistasAutorizados || []
+    const nuevos = aut.includes(id) ? aut.filter((x) => x !== id) : [...aut, id]
+    await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'job', entidadId: job.id, detalle: `${carrier?.nombre}: ${aut.includes(id) ? 'quitado' : 'agregado'}` })
+  }
 
   if (cargando) return <Cargando />
   if (!carrier) return (
@@ -44,26 +73,25 @@ export default function TransportistaPerfil() {
   )
 
   const entregadas = misOrdenes.filter((o) => FIN.includes(o.estado))
+  const ton = Math.round(entregadas.reduce((a, o) => a + tonDe(o), 0))
+  const ingreso = entregadas.reduce((a, o) => a + n(o.precioCliente), 0)
+  const utilidad = entregadas.reduce((a, o) => a + (n(o.precioTransportista) - n(o.pagoChofer)), 0)
   const stats = {
     total: misOrdenes.length,
     activas: misOrdenes.filter((o) => ACTIVAS.includes(o.estado)).length,
+    proceso: misOrdenes.filter((o) => EN_PROCESO.includes(o.estado)).length,
     entregadas: entregadas.length,
-    ton: Math.round(entregadas.reduce((a, o) => a + n(o.pesoReal ?? o.pesoEstimado), 0)),
-    ingreso: entregadas.reduce((a, o) => a + n(o.precioCliente), 0),
+    ton, ingreso, utilidad,
+    dolarPorTon: ton ? Math.round((ingreso / ton) * 100) / 100 : 0,
   }
+  const porTrabajo = agrupar(misOrdenes, (o) => o.jobId).map((g) => ({ ...g, nombre: nombreJob(g.key) }))
+  const porMaterial = agrupar(misOrdenes, (o) => o.material)
+  const porEstado = misOrdenes.reduce((m, o) => { m[o.estado] = (m[o.estado] || 0) + 1; return m }, {})
+  const maxTonMat = Math.max(1, ...porMaterial.map((m) => m.ton))
   const inicial = (carrier.nombre || '?').charAt(0).toUpperCase()
-  // Asociar/quitar este transporte a un trabajo (edita job.transportistasAutorizados).
-  const enJob = (job) => (job.transportistasAutorizados || []).includes(id)
-  const jobCompat = (job) => !job.tipoEquipo || (carrier.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase())
-  const toggleJob = async (job) => {
-    const aut = job.transportistasAutorizados || []
-    const nuevos = aut.includes(id) ? aut.filter((x) => x !== id) : [...aut, id]
-    await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'job', entidadId: job.id, detalle: `${carrier.nombre}: ${aut.includes(id) ? 'quitado' : 'agregado'}` })
-  }
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <Link to="/bulk/transportistas" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
 
       {/* Portada tipo perfil */}
@@ -84,6 +112,8 @@ export default function TransportistaPerfil() {
           {(carrier.equipos || []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>
           )}
+
+          {/* Trabajos asociados (editable) */}
           <div className="mt-3">
             <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300"><Briefcase size={12} className="text-amber-500" /> {t('Trabajos asociados')} ({trabajos.length})</div>
             <div className="flex flex-wrap gap-1.5">
@@ -91,15 +121,11 @@ export default function TransportistaPerfil() {
                 const on = enJob(j)
                 const compat = jobCompat(j)
                 return (
-                  <button
-                    key={j.id}
-                    type="button"
-                    onClick={() => toggleJob(j)}
+                  <button key={j.id} type="button" onClick={() => toggleJob(j)}
                     title={compat ? (on ? t('Quitar del trabajo') : t('Agregar al trabajo')) : `${t('Sin el equipo')} ${j.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
                     className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on
                       ? (compat ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-rose-400 bg-rose-50 font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300')
-                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
-                  >
+                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
                     {on ? <Check size={12} /> : <Plus size={12} />} {j.nombre} {!compat && <AlertTriangle size={11} className="text-rose-500" />}
                   </button>
                 )
@@ -111,64 +137,143 @@ export default function TransportistaPerfil() {
       </Card>
 
       {/* Métricas */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Mini icon={Package} label={t('Órdenes')} val={stats.total} sub={`${stats.activas} ${t('activas')}`} />
+        <Mini icon={Loader} label={t('En proceso')} val={stats.proceso} />
         <Mini icon={Award} label={t('Entregadas')} val={stats.entregadas} />
         <Mini icon={Weight} label={t('Toneladas')} val={stats.ton} />
         <Mini icon={DollarSign} label={t('Facturado')} val={money(stats.ingreso)} />
+        <Mini icon={DollarSign} label={t('Utilidad')} val={money(stats.utilidad)} />
+        <Mini icon={DollarSign} label="$/ton" val={stats.dolarPorTon ? money(stats.dolarPorTon) : '—'} />
+        <Mini icon={User} label={t('Choferes')} val={choferes.length} />
+        <Mini icon={Briefcase} label={t('Trabajos')} val={trabajos.length} />
+        <Mini icon={Layers} label={t('Materiales')} val={porMaterial.length} />
+        <Mini icon={FileWarning} label={t('Documentos')} val={docs.length} />
+        <Mini icon={Truck} label={t('Equipos')} val={(carrier.equipos || []).length} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Choferes */}
-        <Card className="p-4">
-          <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><User size={15} className="text-amber-500" /> {t('Choferes')} ({choferes.length})</h3>
-          {choferes.length === 0 ? <p className="text-sm text-slate-400">{t('Sin choferes registrados en órdenes.')}</p> : (
-            <div className="space-y-1.5">
-              {choferes.map((c) => (
-                <Link key={c} to={`/bulk/chofer/${encodeURIComponent(c)}`} className="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <div className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(c || '?').charAt(0)}</div>
-                  <span className="text-sm font-medium text-brand-navy dark:text-slate-100">{c}</span>
-                  <span className="ml-auto text-xs text-amber-600">{t('ver perfil →')}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Columna izquierda: trabajo */}
+        <div className="space-y-4 lg:col-span-2">
+          <Card className="p-4">
+            <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Briefcase size={15} className="text-amber-500" /> {t('Rendimiento por trabajo')}</h3>
+            {porTrabajo.length === 0 ? <p className="text-sm text-slate-400">{t('Aún sin órdenes.')}</p> : (
+              <div className="scroll-thin overflow-x-auto">
+                <table className="w-full border-collapse text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                      <th className="pb-1 pr-2 font-semibold">{t('Trabajo')}</th>
+                      <th className="pb-1 px-2 text-right font-semibold">{t('Viajes')}</th>
+                      <th className="pb-1 px-2 text-right font-semibold">{t('Toneladas')}</th>
+                      <th className="pb-1 pl-2 text-right font-semibold">{t('Facturado')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {porTrabajo.map((g) => (
+                      <tr key={g.key} className="border-t border-slate-100 dark:border-slate-700/50">
+                        <td className="py-1.5 pr-2 font-medium text-brand-navy dark:text-slate-100">{g.nombre}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums">{g.viajes}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums">{g.ton}</td>
+                        <td className="py-1.5 pl-2 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{money(g.ingreso)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
 
-        {/* Documentos */}
-        <Card className="p-4">
-          <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileWarning size={15} className="text-amber-500" /> {t('Documentos')} ({docs.length})</h3>
-          {docs.length === 0 ? <p className="text-sm text-slate-400">{t('Sin documentos registrados.')}</p> : (
-            <div className="space-y-1.5">
-              {docs.sort((a, b) => (a.dias ?? 1e9) - (b.dias ?? 1e9)).map((d) => (
-                <div key={d.id} className="flex items-center gap-2 text-sm">
-                  <span className="font-medium text-brand-navy dark:text-slate-100">{d.tipo}</span>
-                  {d.numero && <span className="text-xs text-slate-400">#{d.numero}</span>}
-                  <span className="ml-auto text-xs text-slate-400">{d.vence}</span>
-                  <Badge color={DOC_COLOR[d.estado]}>{t(DOC_LABEL[d.estado])}</Badge>
-                </div>
-              ))}
-            </div>
+          <Card className="p-4">
+            <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Layers size={15} className="text-amber-500" /> {t('Materiales movidos')}</h3>
+            {porMaterial.length === 0 ? <p className="text-sm text-slate-400">{t('Aún sin órdenes.')}</p> : (
+              <div className="space-y-2">
+                {porMaterial.map((m) => (
+                  <div key={m.key}>
+                    <div className="mb-0.5 flex items-center justify-between text-xs">
+                      <span className="font-medium text-brand-navy dark:text-slate-100">{t(m.key)}</span>
+                      <span className="tabular-nums text-slate-400">{m.ton} ton · {m.viajes} {t('viajes')} · {money(m.ingreso)}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700/60">
+                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(4, (m.ton / maxTonMat) * 100)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Clock size={15} className="text-amber-500" /> {t('Actividad')} <span className="text-xs font-normal text-slate-400">({misOrdenes.length})</span></h3>
+            {misOrdenes.length === 0 ? <p className="text-sm text-slate-400">{t('Aún sin órdenes.')}</p> : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {misOrdenes.slice(0, 24).map((o) => {
+                  const fin = FIN.includes(o.estado)
+                  const ms = tsMillis(fechaOrden(o))
+                  return (
+                    <Link key={o.id} to={`/bulk/ordenes/${o.id}`} className="rounded-xl border border-slate-100 p-2.5 transition hover:border-amber-300 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                        <Badge color={COLOR_EST[o.estado] || 'navy'}>{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
+                        {o.choferNombre && <span className="ml-auto inline-flex items-center gap-0.5 text-xs text-slate-400"><User size={11} /> {o.choferNombre}</span>}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+                        <span>{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</span>
+                        {ms > 0 && <span className="ml-auto">{fechaCorta(ms)}</span>}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Columna derecha: plantilla y documentos */}
+        <div className="space-y-4">
+          <Card className="p-4">
+            <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><User size={15} className="text-amber-500" /> {t('Choferes')} ({choferes.length})</h3>
+            {choferes.length === 0 ? <p className="text-sm text-slate-400">{t('Sin choferes registrados en órdenes.')}</p> : (
+              <div className="scroll-thin max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                {choferes.map((c) => (
+                  <Link key={c} to={`/bulk/chofer/${encodeURIComponent(c)}`} className="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <div className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(c || '?').charAt(0)}</div>
+                    <span className="text-sm font-medium text-brand-navy dark:text-slate-100">{c}</span>
+                    <span className="ml-auto text-xs text-amber-600">{t('ver perfil →')}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileWarning size={15} className="text-amber-500" /> {t('Documentos')} ({docs.length})</h3>
+            {docs.length === 0 ? <p className="text-sm text-slate-400">{t('Sin documentos registrados.')}</p> : (
+              <div className="space-y-1.5">
+                {docs.sort((a, b) => (a.dias ?? 1e9) - (b.dias ?? 1e9)).map((d) => (
+                  <div key={d.id} className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-brand-navy dark:text-slate-100">{t(d.tipo)}</span>
+                    {d.numero && <span className="text-xs text-slate-400">#{d.numero}</span>}
+                    <span className="ml-auto text-xs text-slate-400">{d.vence}</span>
+                    <Badge color={DOC_COLOR[d.estado]}>{t(DOC_LABEL[d.estado])}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Distribución por estado */}
+          {misOrdenes.length > 0 && (
+            <Card className="p-4">
+              <h3 className="m-0 mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes por estado')}</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(porEstado).sort((a, b) => b[1] - a[1]).map(([est, cnt]) => (
+                  <Badge key={est} color={COLOR_EST[est] || 'slate'}>{t(ORDEN_ESTADO_LABEL[est] || est)} · {cnt}</Badge>
+                ))}
+              </div>
+            </Card>
           )}
-        </Card>
+        </div>
       </div>
-
-      {/* Órdenes recientes */}
-      <Card className="mt-4 p-4">
-        <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Truck size={15} className="text-amber-500" /> {t('Órdenes')}</h3>
-        {misOrdenes.length === 0 ? <p className="text-sm text-slate-400">{t('Aún sin órdenes.')}</p> : (
-          <div className="space-y-1.5">
-            {misOrdenes.slice(0, 12).map((o) => (
-              <Link key={o.id} to={`/bulk/ordenes/${o.id}`} className="flex items-center gap-2 rounded-lg p-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
-                <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                <Badge color="slate">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
-                <span className="text-xs text-slate-400">{o.material} · {o.pesoReal ?? o.pesoEstimado} t</span>
-                <span className="ml-auto text-xs text-amber-600">{t('ficha →')}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
     </div>
   )
 }
@@ -177,7 +282,7 @@ function Mini({ icon: Icon, label, val, sub }) {
   return (
     <Card className="p-3">
       <div className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-slate-400"><Icon size={12} /> {label}</div>
-      <div className="mt-0.5 text-xl font-black text-brand-navy dark:text-slate-100">{val}</div>
+      <div className="mt-0.5 text-lg font-black text-brand-navy dark:text-slate-100">{val}</div>
       {sub && <div className="text-[10px] text-slate-400">{sub}</div>}
     </Card>
   )
