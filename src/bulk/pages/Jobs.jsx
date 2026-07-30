@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Layers, Trash2, Wand2, Truck, Check, AlertTriangle } from 'lucide-react'
+import { Plus, Layers, Trash2, Wand2, Truck, Check, AlertTriangle, Search } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, crearLote, listar, guardar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -133,6 +133,7 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
   const [precioCliente, setPrecioCliente] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [res, setRes] = useState(null)
+  const [buscarC, setBuscarC] = useState('')
   const viajes = cant ? contarViajes(cant) : 0
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -182,29 +183,54 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
 
       {/* Transportistas autorizados (el FILTRO de quién recibe las órdenes) */}
       <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
-        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">
           <Truck size={13} className="text-amber-500" /> {t('Transportistas autorizados')} ({autorizados.length})
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {carriers.length === 0 ? <span className="text-xs text-slate-400">{t('Crea transportistas primero en Transportistas.')}</span> : carriers.map((c) => {
-            const on = autorizados.includes(c.id)
-            const compat = esCompatible(c)
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggleAut(c.id)}
-                title={compat ? (on ? t('Quitar del trabajo') : t('Agregar al trabajo')) : `${t('Sin el equipo')} ${job.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
-                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on
-                  ? (compat ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-rose-400 bg-rose-50 font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300')
-                  : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
-              >
-                {on ? <Check size={12} /> : <Plus size={12} />} {c.nombre} {!compat && <AlertTriangle size={11} className="text-rose-500" />}
-              </button>
-            )
-          })}
-        </div>
-        <p className="mt-1.5 text-[11px] text-slate-400">{t('Toca para agregar o quitar. Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo; agrega otro si el actual no da abasto. Los marcados en rojo no tienen el equipo del trabajo y no recibirán órdenes hasta dárselo en Transportistas.')}</p>
+        {carriers.length === 0 ? <span className="text-xs text-slate-400">{t('Crea transportistas primero en Transportistas.')}</span> : (
+          <>
+            {carriers.length > 4 && (
+              <div className="relative mb-2">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input value={buscarC} onChange={(e) => setBuscarC(e.target.value)} placeholder={t('Buscar transportista…')} className="w-full pl-8 py-1.5 text-sm" />
+              </div>
+            )}
+            <div className="scroll-thin max-h-64 space-y-1 overflow-y-auto pr-1">
+              {carriers
+                .filter((c) => !buscarC.trim() || (c.nombre || '').toLowerCase().includes(buscarC.trim().toLowerCase()))
+                .map((c) => {
+                  const on = autorizados.includes(c.id)
+                  const compat = esCompatible(c)
+                  return (
+                    <div key={c.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${on ? 'border-amber-300 bg-amber-500/5 dark:border-amber-500/30' : 'border-slate-100 dark:border-slate-700/50'}`}>
+                      <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(c.nombre || '?').charAt(0).toUpperCase()}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-brand-navy dark:text-slate-100">{c.nombre}</span>
+                          {!compat && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-semibold text-rose-500"><AlertTriangle size={10} /> {t('sin equipo')}</span>}
+                        </div>
+                        {(c.equipos || []).length > 0 && (
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {(c.equipos || []).slice(0, 4).map((e) => <span key={e} className="rounded bg-slate-100 px-1 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{e}</span>)}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleAut(c.id)}
+                        title={compat ? '' : `${t('Sin el equipo')} ${job.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
+                        className={`flex flex-shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${on
+                          ? 'bg-rose-100 text-rose-600 hover:bg-rose-200 dark:bg-rose-500/15 dark:text-rose-300'
+                          : 'bg-amber-500 text-slate-900 hover:bg-amber-400'}`}
+                      >
+                        {on ? <><Check size={12} /> {t('Quitar')}</> : <><Plus size={12} /> {t('Agregar')}</>}
+                      </button>
+                    </div>
+                  )
+                })}
+            </div>
+          </>
+        )}
+        <p className="mt-1.5 text-[11px] text-slate-400">{t('Selecciona los transportistas que reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto. Los marcados “sin equipo” no recibirán órdenes hasta dárselo en Transportistas.')}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">

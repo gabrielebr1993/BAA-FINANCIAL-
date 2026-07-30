@@ -1927,6 +1927,12 @@ const EN = {
   "Sin trabajos. Créalos en Trabajos.": "No jobs. Create them in Jobs.",
   "Toca para asociar o quitar este transporte a un trabajo. Recibe órdenes solo de sus trabajos asociados.": "Tap to associate or remove this carrier from a job. It receives orders only from its associated jobs.",
 
+  // — Freight · lista de transportistas en Job —
+  "Buscar transportista…": "Search carrier…",
+  "Quitar": "Remove",
+  "sin equipo": "no equipment",
+  "Selecciona los transportistas que reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto. Los marcados “sin equipo” no recibirán órdenes hasta dárselo en Transportistas.": "Select the carriers that receive this job’s orders. Add another if the current one can’t keep up. Those marked “no equipment” won’t receive orders until you give it to them in Carriers.",
+
 }
 
 const Ctx = createContext(null)
