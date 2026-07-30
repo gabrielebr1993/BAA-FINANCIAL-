@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User, Search } from 'lucide-react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User, Search, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
@@ -12,7 +12,7 @@ import { recomendarTransportistas } from '../domain/asignacion'
 import { enviarPush } from '../integraciones/notificaciones'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
-import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton } from '../../components/ui'
+import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton, Aviso } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -119,6 +119,8 @@ export default function Ordenes() {
   const coincide = (o) => !q || (o.numero || '').toLowerCase().includes(q) || (o.choferNombre || '').toLowerCase().includes(q) || (nombreCarrier(o.transportistaId) || '').toLowerCase().includes(q)
   const colaF = cola.filter(coincide)
   const activasF = activas.filter(coincide)
+  // Órdenes en cola SIN ningún transportista elegible (equipo + autorizados) → atascadas.
+  const atascadasN = colaF.filter((o) => transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o)).length === 0).length
 
   return (
     <div>
@@ -134,6 +136,12 @@ export default function Ordenes() {
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar N.º de orden o chofer…')} className="w-60 pl-8" />
         </div>
       </div>
+
+      {atascadasN > 0 && (
+        <Aviso tipo="warn" className="mb-4">
+          <b>{atascadasN}</b> {t('órdenes en cola sin transportista autorizado — no se pueden asignar.')} <Link to="/bulk/jobs" className="font-semibold underline">{t('Autorizar en Trabajos')}</Link>
+        </Aviso>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-4">
@@ -154,12 +162,19 @@ export default function Ordenes() {
                   </div>
                   <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t(ORDEN_ESTADO_LABEL[o.estado])}</div>
                   {'precioCliente' in fin && fin.precioCliente != null && <div className="mt-1 text-xs">{t('Cliente')}: {money(fin.precioCliente)}</div>}
-                  <div className="mt-2">
-                    <Select className="w-full py-1 text-xs" value={o.transportistaId || ''} onChange={(e) => asignar(o, e.target.value)}>
-                      <option value="">{compat.length ? t('Asignar transportista…') : t('Sin transportistas compatibles')}</option>
-                      {compat.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                    </Select>
-                  </div>
+                  {compat.length === 0 ? (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-rose-300 bg-rose-50 p-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+                      <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                      <span>{t('Este trabajo no tiene transportistas autorizados (o ninguno con el equipo). Las órdenes quedarán atascadas.')} <Link to="/bulk/jobs" className="font-semibold underline">{t('Autorizar en Trabajos')}</Link></span>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <Select className="w-full py-1 text-xs" value={o.transportistaId || ''} onChange={(e) => asignar(o, e.target.value)}>
+                        <option value="">{t('Asignar transportista…')}</option>
+                        {compat.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </Select>
+                    </div>
+                  )}
                   {compat.length > 0 && (
                     <div className="mt-2 flex gap-1.5">
                       <Boton variant="gold" onClick={() => autoAsignar(o)} className="flex-1 justify-center px-2 py-1 text-xs"><Zap size={13} /> {t('Auto-asignar')}</Boton>

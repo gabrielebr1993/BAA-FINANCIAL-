@@ -1910,6 +1910,11 @@ const EN = {
   "Trabajos asociados": "Associated jobs",
   "Sin trabajos asociados. Asócialo en Trabajos.": "No associated jobs. Associate it in Jobs.",
 
+  // — Freight · aviso órdenes atascadas —
+  "órdenes en cola sin transportista autorizado — no se pueden asignar.": "orders in queue with no authorized carrier — they can’t be assigned.",
+  "Autorizar en Trabajos": "Authorize in Jobs",
+  "Este trabajo no tiene transportistas autorizados (o ninguno con el equipo). Las órdenes quedarán atascadas.": "This job has no authorized carriers (or none with the equipment). Its orders will get stuck.",
+
 }
 
 const Ctx = createContext(null)
