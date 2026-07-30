@@ -5,7 +5,7 @@ import ChatOrden from '../components/ChatOrden'
 import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { guardar } from '../data/repo'
+import { guardar, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
@@ -30,13 +30,16 @@ export default function ChoferPortal() {
   const { t } = useLang()
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
-  const { datos: ordenes } = useColeccion('orders')
+  const carrierId = usuario?.carrierId || null
+  // Acotamos a las órdenes de MI transporte: así el listener cumple las reglas
+  // (el chofer no puede leer toda la colección) y vemos tanto las que se están
+  // notificando como las que ya me asignaron.
+  const { datos: ordenes } = useColeccion('orders', [where('transportistaId', '==', carrierId || '__none__')])
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: mensajes } = useColeccion('messages')
   const { datos: carriers } = useColeccion('carriers')
   const [tab, setTab] = useState('ordenes')
 
-  const carrierId = usuario?.carrierId || null
   const miConv = convChofer(usuario?.nombre)
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[miConv]) || 0
 
@@ -61,8 +64,12 @@ export default function ChoferPortal() {
     await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (claveN(d.nombre) === claveN(usuario?.nombre) ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
     if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
   }
-  const misOrdenes = useMemo(() => ordenes.filter((o) => o.choferId === usuario?.id), [ordenes, usuario])
-  const disponibles = useMemo(() => ordenes.filter((o) => o.transportistaId && o.transportistaId === carrierId && o.estado === E.NOTIFICANDO && !o.choferId), [ordenes, carrierId])
+  // Una orden es "mía" si me la asignaron por mi uid de login, por mi id en el
+  // roster del transporte (d_xxx, cuando la asigna el transportista) o por mi nombre.
+  const misIds = [usuario?.id, miChofer?.id].filter(Boolean)
+  const esMia = (o) => misIds.includes(o.choferId) || (o.choferNombre && claveN(o.choferNombre) === claveN(usuario?.nombre))
+  const misOrdenes = useMemo(() => ordenes.filter(esMia), [ordenes, usuario, miChofer])
+  const disponibles = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO && !o.choferId), [ordenes])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
 

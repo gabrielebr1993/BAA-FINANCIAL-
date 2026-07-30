@@ -194,7 +194,7 @@ service cloud.firestore {
     match /bulk_orders/{id} {
       allow read: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && (
-             (bRole() == 'chofer' && resource.data.choferId == request.auth.uid)
+             (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier()))
           || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
           || (bRole() == 'supervisor_planta')));
