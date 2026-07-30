@@ -1936,6 +1936,11 @@ const EN = {
   // — Freight · perfil transportista (detalle) —
   "Utilidad": "Profit",
 
+  // — Freight · trabajos multiselección —
+  "Buscar trabajo…": "Search job…",
+  "cambios sin guardar": "unsaved changes",
+  "Marca los trabajos de los que este transporte (y sus choferes) recibe órdenes, y guarda. Los marcados “sin equipo” no reciben órdenes hasta darles ese equipo.": "Check the jobs this carrier (and its drivers) receives orders from, and save. Those marked “no equipment” won’t receive orders until you give them that equipment.",
+
 }
 
 const Ctx = createContext(null)

@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, Check, Plus, AlertTriangle, Loader, Layers, Clock, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, AlertTriangle, Loader, Layers, Clock, Search } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -9,7 +9,7 @@ import { tsMillis } from '../data/chatKeys'
 import { fechaOrden } from '../domain/perfilChofer'
 import { estadoDocumento } from '../domain/facturacion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
+import { Card, Badge, Cargando, EstadoVacio, Boton, Spinner, Input } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -56,15 +56,31 @@ export default function TransportistaPerfil() {
   }, [carrier, misOrdenes])
   const docs = useMemo(() => documentos.filter((d) => d.carrierId === id).map((d) => ({ ...d, ...estadoDocumento(d.vence) })), [documentos, id])
   const nombreJob = (jid) => jobs.find((j) => j.id === jid)?.nombre || jid
-
-  // Asociar/quitar este transporte a un trabajo (edita job.transportistasAutorizados).
-  const enJob = (job) => (job.transportistasAutorizados || []).includes(id)
   const jobCompat = (job) => !job.tipoEquipo || (carrier?.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase())
-  const toggleJob = async (job) => {
-    const aut = job.transportistasAutorizados || []
-    const nuevos = aut.includes(id) ? aut.filter((x) => x !== id) : [...aut, id]
-    await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'job', entidadId: job.id, detalle: `${carrier?.nombre}: ${aut.includes(id) ? 'quitado' : 'agregado'}` })
+
+  // Multiselección de trabajos (lista con buscador). Se editan localmente y se
+  // PERSISTEN al pulsar Guardar (cada job guarda su transportistasAutorizados).
+  const asociadosSet = useMemo(() => new Set(jobs.filter((j) => (j.transportistasAutorizados || []).includes(id)).map((j) => j.id)), [jobs, id])
+  const [sel, setSel] = useState(null)
+  const [guardandoJobs, setGuardandoJobs] = useState(false)
+  const [buscarJob, setBuscarJob] = useState('')
+  // Re-sincroniza con lo persistido cuando cambia de verdad (tras guardar o cambio externo).
+  useEffect(() => { setSel(new Set(asociadosSet)) }, [asociadosSet])
+  const cur = sel || asociadosSet
+  const dirty = sel && (sel.size !== asociadosSet.size || [...sel].some((x) => !asociadosSet.has(x)))
+  const toggleSel = (jid) => setSel((s) => { const nn = new Set(s || asociadosSet); nn.has(jid) ? nn.delete(jid) : nn.add(jid); return nn })
+  const guardarJobs = async () => {
+    if (!sel) return
+    setGuardandoJobs(true)
+    try {
+      for (const j of jobs) {
+        const debe = sel.has(j.id); const esta = asociadosSet.has(j.id)
+        if (debe === esta) continue
+        const aut = j.transportistasAutorizados || []
+        await guardar('jobs', j.id, { transportistasAutorizados: debe ? [...aut, id] : aut.filter((x) => x !== id) })
+      }
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'carrier', entidadId: id, detalle: `${carrier?.nombre}: trabajos actualizados (${sel.size})` })
+    } finally { setGuardandoJobs(false) }
   }
 
   if (cargando) return <Cargando />
@@ -113,25 +129,48 @@ export default function TransportistaPerfil() {
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>
           )}
 
-          {/* Trabajos asociados (editable) */}
-          <div className="mt-3">
-            <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300"><Briefcase size={12} className="text-amber-500" /> {t('Trabajos asociados')} ({trabajos.length})</div>
-            <div className="flex flex-wrap gap-1.5">
-              {jobs.length === 0 ? <span className="text-xs text-slate-400">{t('Sin trabajos. Créalos en Trabajos.')}</span> : jobs.map((j) => {
-                const on = enJob(j)
-                const compat = jobCompat(j)
-                return (
-                  <button key={j.id} type="button" onClick={() => toggleJob(j)}
-                    title={compat ? (on ? t('Quitar del trabajo') : t('Agregar al trabajo')) : `${t('Sin el equipo')} ${j.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
-                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on
-                      ? (compat ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-rose-400 bg-rose-50 font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300')
-                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
-                    {on ? <Check size={12} /> : <Plus size={12} />} {j.nombre} {!compat && <AlertTriangle size={11} className="text-rose-500" />}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="mt-1.5 text-[11px] text-slate-400">{t('Toca para asociar o quitar este transporte a un trabajo. Recibe órdenes solo de sus trabajos asociados.')}</p>
+          {/* Trabajos asociados (lista multiselección + Guardar) */}
+          <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300"><Briefcase size={13} className="text-amber-500" /> {t('Trabajos asociados')} ({cur.size})</div>
+            {jobs.length === 0 ? <span className="text-xs text-slate-400">{t('Sin trabajos. Créalos en Trabajos.')}</span> : (
+              <>
+                {jobs.length > 4 && (
+                  <div className="relative mb-2">
+                    <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Input value={buscarJob} onChange={(e) => setBuscarJob(e.target.value)} placeholder={t('Buscar trabajo…')} className="w-full py-1.5 pl-8 text-sm" />
+                  </div>
+                )}
+                <div className="scroll-thin max-h-64 space-y-1 overflow-y-auto pr-1">
+                  {jobs
+                    .filter((j) => !buscarJob.trim() || (j.nombre || '').toLowerCase().includes(buscarJob.trim().toLowerCase()) || (j.codigo || '').toLowerCase().includes(buscarJob.trim().toLowerCase()))
+                    .map((j) => {
+                      const on = cur.has(j.id)
+                      const compat = jobCompat(j)
+                      return (
+                        <label key={j.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 ${on ? 'border-amber-300 bg-amber-500/5 dark:border-amber-500/30' : 'border-slate-100 dark:border-slate-700/50'}`}>
+                          <input type="checkbox" checked={on} onChange={() => toggleSel(j.id)} className="h-4 w-4 flex-shrink-0 accent-amber-500" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-sm font-medium text-brand-navy dark:text-slate-100">{j.nombre}</span>
+                              {j.codigo && <span className="flex-shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">{j.codigo}</span>}
+                              {!compat && <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[10px] font-semibold text-rose-500"><AlertTriangle size={10} /> {t('sin equipo')}</span>}
+                            </div>
+                            {j.tipoEquipo && <div className="text-[10px] text-slate-400">{j.tipoEquipo}</div>}
+                          </div>
+                        </label>
+                      )
+                    })}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Boton variant="gold" disabled={!dirty || guardandoJobs} onClick={guardarJobs} className="px-3 py-1.5 text-sm">
+                    {guardandoJobs ? <><Spinner /> {t('Guardando…')}</> : t('Guardar')}
+                  </Boton>
+                  {dirty && <button type="button" onClick={() => setSel(new Set(asociadosSet))} className="text-xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-200">{t('Descartar')}</button>}
+                  {dirty && <span className="text-xs text-amber-600 dark:text-amber-400">{t('cambios sin guardar')}</span>}
+                </div>
+              </>
+            )}
+            <p className="mt-1.5 text-[11px] text-slate-400">{t('Marca los trabajos de los que este transporte (y sus choferes) recibe órdenes, y guarda. Los marcados “sin equipo” no reciben órdenes hasta darles ese equipo.')}</p>
           </div>
         </div>
       </Card>
