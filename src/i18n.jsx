@@ -1962,6 +1962,16 @@ const EN = {
   "orden entrando": "incoming order",
   "Buscar usuario…": "Search user…",
 
+  // — Freight · perfil cliente / ticket / escaner —
+  "Ver ticket completo": "View full ticket",
+  "Ver prueba de entrega": "View proof of delivery",
+  "Escanear ticket": "Scan ticket",
+  "Escaneando…": "Scanning…",
+  "Cliente no encontrado": "Client not found",
+  "Gasto por material": "Spend by material",
+  "Plantas": "Plants",
+  "Sin plantas registradas.": "No plants registered.",
+
 }
 
 const Ctx = createContext(null)

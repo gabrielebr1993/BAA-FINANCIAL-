@@ -165,8 +165,10 @@ export default function Ordenes() {
     .flatMap((c) => (c.choferes || []).filter((d) => d.activo !== false).map((d) => ({ ...d, carrierId: c.id, carrierNombre: c.nombre })))
     .filter((d) => !ocupados.has((d.nombre || '').toLowerCase()))
     .filter((d) => !q || (d.nombre || '').toLowerCase().includes(q))
-  // Transportes con una orden ENTRANDO (notificando): sus choferes en espera titilan.
-  const carriersNotif = new Set(ordenes.filter((o) => o.estado === E.NOTIFICANDO && o.transportistaId).map((o) => o.transportistaId))
+  // Transportes con una orden ENTRANDO (notificando): sus choferes en espera titilan
+  // y muestran el N.º de la orden que les está entrando.
+  const notifOrdenDe = {}
+  ordenes.forEach((o) => { if (o.estado === E.NOTIFICANDO && o.transportistaId && !notifOrdenDe[o.transportistaId]) notifOrdenDe[o.transportistaId] = o.numero })
   // Órdenes en cola SIN ningún transportista elegible (equipo + autorizados) → atascadas.
   const atascadasN = colaF.filter((o) => transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o)).length === 0).length
 
@@ -270,11 +272,11 @@ export default function Ordenes() {
           {choferesEspera.length === 0 ? <span className="text-xs text-emerald-700/70 dark:text-emerald-300/70">{t('Ningún chofer en espera ahora.')}</span> : (
             <div className="flex flex-wrap gap-1">
               {choferesEspera.slice(0, 40).map((d) => {
-                const entrando = carriersNotif.has(d.carrierId)
+                const numEntrando = notifOrdenDe[d.carrierId]
                 return (
-                  <Link key={d.id || d.nombre} to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} title={`${d.carrierNombre}${entrando ? ' · ' + t('orden entrando') : ''}`}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-sm transition ${entrando ? 'animate-pulse bg-amber-400 text-slate-900 ring-2 ring-amber-500' : 'bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-300'}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${entrando ? 'bg-slate-900' : 'bg-emerald-500'}`} /> {d.nombre}
+                  <Link key={d.id || d.nombre} to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} title={`${d.carrierNombre}${numEntrando ? ' · ' + t('orden entrando') : ''}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-sm transition ${numEntrando ? 'animate-pulse bg-amber-400 text-slate-900 ring-2 ring-amber-500' : 'bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-300'}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${numEntrando ? 'bg-slate-900' : 'bg-emerald-500'}`} /> {d.nombre}{numEntrando ? <span className="font-mono font-bold"> · {numEntrando}</span> : ''}
                   </Link>
                 )
               })}

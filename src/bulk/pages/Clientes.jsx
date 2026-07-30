@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Plus, Building2, MapPin, Trash2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar } from '../data/repo'
@@ -121,7 +122,7 @@ export default function Clientes() {
             <Card key={c.id} className="p-4">
               <div className="flex items-center gap-2">
                 <Building2 size={17} className="text-amber-500" />
-                <span className="font-bold text-brand-navy dark:text-slate-100">{c.nombre}</span>
+                <Link to={`/bulk/cliente/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 {c.rfc && <Badge color="slate">{c.rfc}</Badge>}
                 <button onClick={() => setAbierto(abierto === c.id ? null : c.id)} className="ml-auto text-xs text-amber-600 hover:underline">{abierto === c.id ? t('Ocultar plantas') : t('Ver / agregar plantas')}</button>
                 <button onClick={() => window.confirm(`${t('¿Eliminar cliente "')}${c.nombre}${t('"?')}`) && eliminar('clients', c.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>

@@ -13,6 +13,7 @@ import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
+import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
@@ -297,13 +298,14 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
               onClick={async () => {
                 setOcr({ cargando: true, progreso: 0 })
                 try {
-                  const r = await leerTicket(foto, (p) => setOcr({ cargando: true, progreso: p }))
+                  const escaneada = await escanearParaOCR(foto) // realza para que el OCR lea mejor
+                  const r = await leerTicket(escaneada, (p) => setOcr({ cargando: true, progreso: p }))
                   if (r) { if (r.pesoNeto) setPeso(String(r.pesoNeto)); if (r.ticket) setTicketNum(r.ticket) }
                   setOcr({ cargando: false, msg: r ? t('Leído — revisa y corrige (las unidades pueden variar).') : t('No se pudo leer el ticket.') })
                 } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket.') }) }
               }}
               className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-amber-500 dark:text-slate-900">
-              {ocr?.cargando ? <><Spinner /> {t('Leyendo…')} {ocr.progreso || 0}%</> : <><ScanLine size={15} /> {t('Leer con OCR')}</>}
+              {ocr?.cargando ? <><Spinner /> {t('Escaneando…')} {ocr.progreso || 0}%</> : <><ScanLine size={15} /> {t('Escanear ticket')}</>}
             </button>
           )}
           {ocr?.msg && <p className="mb-1 text-[11px] text-amber-600 dark:text-amber-400">{ocr.msg}</p>}

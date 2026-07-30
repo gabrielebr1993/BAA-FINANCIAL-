@@ -91,7 +91,22 @@ export default function OrdenDetalle() {
             {'pagoChofer' in fin && fin.pagoChofer != null && <Dato icon={DollarSign} label={t('Pago chofer')} val={money(fin.pagoChofer)} />}
             {orden.ticket?.numero && <Dato icon={FileText} label={t('Ticket de carga')} val={`#${orden.ticket.numero}${orden.ticket.peso ? ` · ${orden.ticket.peso} ton` : ''}`} />}
           </div>
-          {orden.ticket?.foto && <img src={orden.ticket.foto} alt="ticket" className="mt-3 max-h-44 rounded-lg border border-slate-200 dark:border-slate-700" />}
+          {(orden.ticket?.foto || orden.pod?.foto) && (
+            <div className="mt-3 flex flex-wrap gap-3">
+              {orden.ticket?.foto && (
+                <a href={orden.ticket.foto} target="_blank" rel="noreferrer" title={t('Ver ticket completo')} className="group relative">
+                  <img src={orden.ticket.foto} alt="ticket" className="max-h-44 rounded-lg border border-slate-200 object-cover transition group-hover:opacity-90 dark:border-slate-700" />
+                  <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">{t('Ticket de carga')}</span>
+                </a>
+              )}
+              {orden.pod?.foto && (
+                <a href={orden.pod.foto} target="_blank" rel="noreferrer" title={t('Ver prueba de entrega')} className="group relative">
+                  <img src={orden.pod.foto} alt="pod" className="max-h-44 rounded-lg border border-slate-200 object-cover transition group-hover:opacity-90 dark:border-slate-700" />
+                  <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">POD</span>
+                </a>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Trayectoria (hitos) */}
