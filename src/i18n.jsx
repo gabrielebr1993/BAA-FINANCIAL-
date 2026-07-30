@@ -1882,6 +1882,9 @@ const EN = {
   "Sin actividad todavía.": "No activity yet.",
   "Este chofer no está en la plantilla de ningún transporte. Agrégalo en “Choferes” para guardar su foto.": "This driver is not in any carrier’s roster. Add them in “Drivers” to save their photo.",
 
+  // — Freight · aviso oficina —
+  "Tienes un mensaje nuevo de la oficina.": "You have a new message from the office.",
+
 }
 
 const Ctx = createContext(null)

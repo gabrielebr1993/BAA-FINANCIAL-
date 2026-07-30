@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { MessageSquare, Search, Plus, Truck, User, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import ChatOrden from '../components/ChatOrden'
-import { convChofer, convCarrier, esConvDirecta } from '../data/chat'
+import { convChofer, convCarrier, esConvDirecta, tsMillis, noLeidosPorConv } from '../data/chat'
+import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio, Input, Boton } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -13,9 +14,11 @@ const COLOR_EST = { notificando: 'gold', aceptada: 'navy', en_planta: 'navy', ca
 
 export default function Mensajes() {
   const { t } = useLang()
+  const { usuario } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: mensajes } = useColeccion('messages')
+  const unread = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
   const [sel, setSel] = useState('')
   const [buscar, setBuscar] = useState('')
   const [nuevo, setNuevo] = useState(false)
@@ -59,8 +62,9 @@ export default function Mensajes() {
     const q = buscar.trim().toLowerCase()
     return [...directoConvos, ...ordenConvos]
       .filter((c) => !q || (c.nombre || '').toLowerCase().includes(q) || (c.sub || '').toLowerCase().includes(q))
-      .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
-  }, [directoConvos, ordenConvos, buscar])
+      .map((c) => ({ ...c, noLeidos: unread[c.chatId] || 0 }))
+      .sort((a, b) => (b.noLeidos - a.noLeidos) || (tsMillis(b.ts) - tsMillis(a.ts)))
+  }, [directoConvos, ordenConvos, buscar, unread])
 
   const activa = todas.find((c) => c.key === sel) || todas[0] || null
 
@@ -109,6 +113,7 @@ export default function Mensajes() {
                   <div className="flex items-center gap-1.5">
                     <span className={`truncate text-sm font-bold text-brand-navy dark:text-slate-100 ${c.tipo === 'orden' ? 'font-mono' : ''}`}>{c.nombre}</span>
                     {c.tipo === 'orden' && <Badge color={COLOR_EST[c.estado] || 'navy'}>{t(ORDEN_ESTADO_LABEL[c.estado])}</Badge>}
+                    {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
                   </div>
                   <div className="truncate text-xs text-slate-400">{c.sub}</div>
                 </div>

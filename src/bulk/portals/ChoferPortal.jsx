@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare, ScanLine } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
-import { convChofer } from '../data/chat'
+import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -31,9 +31,12 @@ export default function ChoferPortal() {
   const navigate = useNavigate()
   const { datos: ordenes } = useColeccion('orders')
   const { datos: geocercas } = useColeccion('geofences')
+  const { datos: mensajes } = useColeccion('messages')
   const [tab, setTab] = useState('ordenes')
 
   const carrierId = usuario?.carrierId || null
+  const miConv = convChofer(usuario?.nombre)
+  const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[miConv]) || 0
   const misOrdenes = useMemo(() => ordenes.filter((o) => o.choferId === usuario?.id), [ordenes, usuario])
   const disponibles = useMemo(() => ordenes.filter((o) => o.transportistaId && o.transportistaId === carrierId && o.estado === E.NOTIFICANDO && !o.choferId), [ordenes, carrierId])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
@@ -49,6 +52,14 @@ export default function ChoferPortal() {
     }
     prevIds.current = ids
   }, [disponibles])
+  // Aviso local cuando llega un mensaje nuevo de la oficina.
+  const prevOficina = useRef(null)
+  useEffect(() => {
+    if (prevOficina.current != null && noLeidosOficina > prevOficina.current) {
+      beep(); notificar(t('Mensajes con la oficina'), t('Tienes un mensaje nuevo de la oficina.'))
+    }
+    prevOficina.current = noLeidosOficina
+  }, [noLeidosOficina])
   const historial = misOrdenes.filter((o) => ESTADOS_HISTORIAL.includes(o.estado))
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
@@ -102,9 +113,13 @@ export default function ChoferPortal() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((t) => (
-          <button key={t.k} onClick={() => setTab(t.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === t.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
-            <t.I size={20} strokeWidth={tab === t.k ? 2.4 : 1.8} /> {t.l}
+        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosOficina }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
+          <button key={it.k} onClick={() => setTab(it.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === it.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+            <span className="relative">
+              <it.I size={20} strokeWidth={tab === it.k ? 2.4 : 1.8} />
+              {it.badge > 0 && <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{it.badge}</span>}
+            </span>
+            {it.l}
           </button>
         ))}
       </nav>

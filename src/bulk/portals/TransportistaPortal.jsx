@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Package, Phone, IdCard, MessageSquare } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
-import { convCarrier } from '../data/chat'
+import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar, where } from '../data/repo'
@@ -24,7 +24,9 @@ export default function TransportistaPortal() {
   const carrierId = usuario?.carrierId || '__none__'
   const { datos: ordenes, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: mensajes } = useColeccion('messages')
   const [tab, setTab] = useState('ordenes')
+  const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
 
   const carrier = carriers.find((c) => c.id === carrierId)
   const choferes = carrier?.choferes || [] // plantilla del transporte (la gestiona el admin)
@@ -69,8 +71,11 @@ export default function TransportistaPortal() {
         </div>
 
         <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-          {[{ k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') }, { k: 'equipos', l: t('Equipos') }, { k: 'mensajes', l: t('Mensajes') }].map((t) => (
-            <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium ${tab === t.k ? 'bg-amber-500 text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{t.l}</button>
+          {[{ k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') }, { k: 'equipos', l: t('Equipos') }, { k: 'mensajes', l: t('Mensajes'), badge: noLeidosOficina }].map((it) => (
+            <button key={it.k} onClick={() => setTab(it.k)} className={`px-4 py-2 text-sm font-medium ${tab === it.k ? 'bg-amber-500 text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+              {it.l}
+              {it.badge > 0 && <span className="ml-1.5 inline-grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 align-middle text-[10px] font-bold text-white">{it.badge}</span>}
+            </button>
           ))}
         </div>
 

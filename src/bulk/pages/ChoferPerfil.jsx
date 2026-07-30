@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
+import { tsMillis } from '../data/chat'
 import { leerFotoReducida } from '../components/foto'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio, Spinner } from '../../components/ui'
@@ -24,7 +25,7 @@ export default function ChoferPerfil() {
   const [subiendo, setSubiendo] = useState(false)
 
   const misOrdenes = useMemo(
-    () => ordenes.filter((o) => clave(o.choferNombre) === clave(nombre)).slice().sort((a, b) => (fecha(b) || '').localeCompare(fecha(a) || '')),
+    () => ordenes.filter((o) => clave(o.choferNombre) === clave(nombre)).slice().sort((a, b) => tsMillis(fecha(b)) - tsMillis(fecha(a))),
     [ordenes, nombre],
   )
   // Rechazos hechos por este chofer (la orden guarda rechazo.por con su nombre).
@@ -153,7 +154,7 @@ export default function ChoferPerfil() {
           <div className="relative space-y-3 before:absolute before:bottom-2 before:left-[15px] before:top-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
             {misOrdenes.slice(0, 30).map((o) => {
               const fin = FIN.includes(o.estado)
-              const f = fecha(o)
+              const ms = tsMillis(fecha(o))
               return (
                 <div key={o.id} className="relative flex gap-3">
                   <div className={`z-10 mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-full border-2 border-white dark:border-slate-900 ${fin ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-slate-900'}`}>
@@ -168,7 +169,7 @@ export default function ChoferPerfil() {
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
                       <span>{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</span>
                       {o.transportistaId && <span>· {nombreCarrier(o.transportistaId)}</span>}
-                      {f && <span className="ml-auto">{new Date(f).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
+                      {ms > 0 && <span className="ml-auto">{new Date(ms).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
                     </div>
                   </Link>
                 </div>
