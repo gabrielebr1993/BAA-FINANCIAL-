@@ -47,6 +47,24 @@ export function transportistasCompatibles(transportistas, tipoEquipoReq) {
   return (transportistas || []).filter((t) => transportistaCompatible(t.equipos, tipoEquipoReq))
 }
 
+// Transportistas ELEGIBLES para una orden de cierto trabajo: compatibles por
+// equipo Y autorizados en el trabajo. `autorizados` = job.transportistasAutorizados
+// (arreglo de ids). Si el trabajo no tiene lista (vacía/indefinida) se cae a la
+// compatibilidad por equipo — así los trabajos viejos siguen funcionando.
+export function transportistasElegibles(transportistas, tipoEquipoReq, autorizados) {
+  const compat = transportistasCompatibles(transportistas, tipoEquipoReq)
+  const permitidos = Array.isArray(autorizados) && autorizados.length ? autorizados : null
+  return permitidos ? compat.filter((c) => permitidos.includes(c.id)) : compat
+}
+
+// ¿Este transportista puede recibir órdenes de este trabajo? (equipo + autorización)
+export function transportistaElegible(carrier, tipoEquipoReq, autorizados) {
+  if (!carrier) return false
+  if (!transportistaCompatible(carrier.equipos, tipoEquipoReq)) return false
+  const permitidos = Array.isArray(autorizados) && autorizados.length ? autorizados : null
+  return permitidos ? permitidos.includes(carrier.id) : true
+}
+
 // Genera los objetos-orden base a partir de un Job y una cantidad solicitada.
 // NO escribe en base de datos: solo arma la estructura para que la capa de datos
 // la persista. `seq` permite continuar la numeración de un job existente.

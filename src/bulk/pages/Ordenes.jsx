@@ -7,7 +7,7 @@ import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
-import { transportistasCompatibles, transportistaCompatible } from '../domain/ordenes'
+import { transportistaCompatible, transportistasElegibles } from '../domain/ordenes'
 import { recomendarTransportistas } from '../domain/asignacion'
 import { enviarPush } from '../integraciones/notificaciones'
 import { desgloseVisible } from '../domain/pagos'
@@ -46,6 +46,10 @@ export default function Ordenes() {
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plants } = useColeccion('plants')
+  const { datos: jobs } = useColeccion('jobs')
+  // Transportistas autorizados en el trabajo de una orden (el filtro que controla
+  // qué transportes —y sus choferes— reciben las órdenes de ese trabajo).
+  const autorizadosDe = (o) => jobs.find((j) => j.id === o.jobId)?.transportistasAutorizados || []
   const [verSug, setVerSug] = useState('') // orderId con panel de sugerencia abierto
   const [chatOrden, setChatOrden] = useState(null) // orden con el chat abierto
   const [buscar, setBuscar] = useState('')
@@ -69,13 +73,19 @@ export default function Ordenes() {
     return m
   }, [ordenes, carriers])
   const plantaGps = (o) => plants.find((p) => p.id === o.plantaId)?.gps || null
-  const sugerir = (o) => recomendarTransportistas(o, carriers, statsPorCarrier, plantaGps(o))
+  // La sugerencia/auto-asignación solo considera transportistas ELEGIBLES (equipo + autorizados en el trabajo).
+  const sugerir = (o) => recomendarTransportistas(o, transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o)), statsPorCarrier, plantaGps(o))
 
   const asignar = async (orden, carrierId) => {
     const carrier = carriers.find((c) => c.id === carrierId)
     // Regla dura: jamás asignar un equipo incompatible.
     if (carrier && !transportistaCompatible(carrier.equipos, orden.tipoEquipo)) {
       window.alert(`${carrier.nombre} ${t('no tiene el equipo requerido')} (${orden.tipoEquipo}).`); return
+    }
+    // Regla del trabajo: solo transportistas autorizados en el trabajo de la orden.
+    const aut = autorizadosDe(orden)
+    if (aut.length && !aut.includes(carrierId)) {
+      window.alert(t('Ese transportista no está autorizado en este trabajo. Agrégalo en Trabajos.')); return
     }
     await guardar('orders', orden.id, { transportistaId: carrierId, estado: E.NOTIFICANDO })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_orden', entidad: 'orden', entidadId: orden.id, detalle: `Asignada a ${carrier?.nombre} · notificando` })
@@ -131,7 +141,7 @@ export default function Ordenes() {
         {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar ? t('Ninguna orden en cola coincide con la búsqueda.') : t('No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).')}</p> : (
           <div className="scroll-thin max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto pr-1">
             {colaF.map((o) => {
-              const compat = transportistasCompatibles(carriers, o.tipoEquipo)
+              const compat = transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o))
               const fin = desgloseVisible(o, rol)
               const notificando = o.estado === E.NOTIFICANDO
               return (

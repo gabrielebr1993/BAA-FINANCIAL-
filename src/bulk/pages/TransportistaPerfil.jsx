@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award } from 'lucide-react'
+import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { estadoDocumento } from '../domain/facturacion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
@@ -20,8 +20,12 @@ export default function TransportistaPerfil() {
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: ordenes } = useColeccion('orders')
   const { datos: documentos } = useColeccion('documents')
+  const { datos: jobs } = useColeccion('jobs')
 
   const carrier = useMemo(() => carriers.find((c) => c.id === id) || null, [carriers, id])
+  // Trabajos a los que está asociado (autorizado). Es el filtro que decide de qué
+  // trabajos reciben órdenes este transporte y sus choferes.
+  const trabajos = useMemo(() => jobs.filter((j) => (j.transportistasAutorizados || []).includes(id)), [jobs, id])
   const misOrdenes = useMemo(() => ordenes.filter((o) => o.transportistaId === id), [ordenes, id])
   const choferes = useMemo(() => {
     const gestion = (carrier?.choferes || []).map((d) => d.nombre)
@@ -67,6 +71,12 @@ export default function TransportistaPerfil() {
           {(carrier.equipos || []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>
           )}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Briefcase size={12} /> {t('Trabajos asociados')}:</span>
+            {trabajos.length > 0
+              ? trabajos.map((j) => <Link key={j.id} to="/bulk/jobs"><Badge color="gold">{j.nombre}</Badge></Link>)
+              : <span className="text-xs text-slate-400">{t('Sin trabajos asociados. Asócialo en Trabajos.')}</span>}
+          </div>
         </div>
       </Card>
 

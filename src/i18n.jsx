@@ -1902,6 +1902,14 @@ const EN = {
   "Equipos usados": "Equipment used",
   "Clientes y plantas": "Clients & plants",
 
+  // — Freight · trabajos (transportistas autorizados) —
+  "en cola": "in queue",
+  "en proceso": "in process",
+  "Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto.": "Only these carriers (and their drivers) receive this job’s orders. Add another one if the current one can’t keep up.",
+  "Ese transportista no está autorizado en este trabajo. Agrégalo en Trabajos.": "That carrier is not authorized on this job. Add it in Jobs.",
+  "Trabajos asociados": "Associated jobs",
+  "Sin trabajos asociados. Asócialo en Trabajos.": "No associated jobs. Associate it in Jobs.",
+
 }
 
 const Ctx = createContext(null)

@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { Plus, Layers, Trash2, Wand2 } from 'lucide-react'
+import { Plus, Layers, Trash2, Wand2, Truck, Check } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { crear, eliminar, crearLote, listar, where } from '../data/repo'
+import { crear, eliminar, crearLote, listar, guardar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
 import { calcularTarifa } from '../domain/tarifas'
-import { MAX_TON_POR_VIAJE } from '../domain/constants'
+import { MAX_TON_POR_VIAJE, ORDEN_ESTADO as E } from '../domain/constants'
+
+const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
+const EN_PROCESO = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio, Aviso, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -19,6 +22,11 @@ export default function Jobs() {
   const { datos: materiales } = useColeccion('materials')
   const { datos: equipos } = useColeccion('equipment')
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: ordenes } = useColeccion('orders')
+  const conteoJob = (id) => {
+    const os = ordenes.filter((o) => o.jobId === id)
+    return { cola: os.filter((o) => EN_COLA.includes(o.estado)).length, proceso: os.filter((o) => EN_PROCESO.includes(o.estado)).length }
+  }
 
   const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
   const [msg, setMsg] = useState(null)
@@ -110,14 +118,14 @@ export default function Jobs() {
 
       {jobs.length === 0 ? <EstadoVacio titulo={t('Sin trabajos')} texto={t('Crea el primero arriba.')} mostrarBoton={false} /> : (
         <div className="space-y-3">
-          {jobs.map((j) => <JobCard key={j.id} job={j} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
+          {jobs.map((j) => <JobCard key={j.id} job={j} carriers={carriers} conteo={conteoJob(j.id)} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
         </div>
       )}
     </div>
   )
 }
 
-function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
+function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
   const { t } = useLang()
   const { datos: reglas } = useColeccion('tariffs')
   const [cant, setCant] = useState('')
@@ -127,6 +135,16 @@ function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
   const [res, setRes] = useState(null)
   const viajes = cant ? contarViajes(cant) : 0
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+  // Transportistas AUTORIZADOS de este trabajo (quiénes —y sus choferes— reciben
+  // sus órdenes). Editable: agrega otro transporte si el actual no da abasto.
+  const autorizados = job.transportistasAutorizados || []
+  const compatibles = carriers.filter((c) => !job.tipoEquipo || (c.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase()))
+  const toggleAut = async (cid) => {
+    const nuevos = autorizados.includes(cid) ? autorizados.filter((x) => x !== cid) : [...autorizados, cid]
+    await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'job', entidadId: job.id, detalle: `${carriers.find((c) => c.id === cid)?.nombre || cid}: ${autorizados.includes(cid) ? 'quitado' : 'agregado'}` })
+  }
 
   const generar = async () => {
     const total = Number(cant) || 0
@@ -157,9 +175,28 @@ function JobCard({ job, nombreCliente, tenantId, usuario, rol }) {
         <Badge color="slate">{job.codigo}</Badge>
         <span className="text-xs text-slate-400">{t('Cliente')}: {nombreCliente(job.clienteId)}</span>
         {job.tipoEquipo && <Badge color="navy">{t('Equipo:')} {job.tipoEquipo}</Badge>}
+        <span className="text-xs text-slate-400">· {conteo.cola} {t('en cola')} · {conteo.proceso} {t('en proceso')}</span>
         <button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
       </div>
       {(job.materiales || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{job.materiales.map((m) => <Badge key={m} color="green">{t(m)}</Badge>)}</div>}
+
+      {/* Transportistas autorizados (el FILTRO de quién recibe las órdenes) */}
+      <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">
+          <Truck size={13} className="text-amber-500" /> {t('Transportistas autorizados')} ({autorizados.length})
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {compatibles.length === 0 ? <span className="text-xs text-rose-500">{t('Ningún transportista tiene ese equipo.')}</span> : compatibles.map((c) => {
+            const on = autorizados.includes(c.id)
+            return (
+              <button key={c.id} type="button" onClick={() => toggleAut(c.id)} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
+                {on && <Check size={12} />} {c.nombre}
+              </button>
+            )
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-slate-400">{t('Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto.')}</p>
+      </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
         <div>
