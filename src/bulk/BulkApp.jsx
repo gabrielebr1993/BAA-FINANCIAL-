@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { BulkAuthProvider, useBulkAuth } from './BulkAuthContext'
+import { activarPush } from './integraciones/fcm'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import { puedeVer } from './nav'
@@ -48,6 +49,15 @@ function P({ roles, children }) {
   return <BulkLayout><Suspense fallback={<Cargando texto={t('Cargando…')} />}>{children}</Suspense></BulkLayout>
 }
 
+// Registra el token de push (FCM) al iniciar sesión, con la audiencia del usuario.
+function PushSetup() {
+  const { usuario, tenantId, rol } = useBulkAuth()
+  useEffect(() => {
+    if (usuario?.id) activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, nombre: usuario.nombre })
+  }, [usuario?.id, tenantId, rol])
+  return null
+}
+
 function Interno() {
   const { t } = useLang()
   const { usuario, cargando, rol } = useBulkAuth()
@@ -55,10 +65,12 @@ function Interno() {
   if (!usuario) return <BulkLogin />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
-  if (Portal) return <Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense>
   const R = ['super_admin', 'admin', 'dispatcher']
   const CAT = ['super_admin', 'admin']
+  if (Portal) return <><PushSetup /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
   return (
+    <>
+    <PushSetup />
     <Routes>
       <Route path="/bulk" element={<P roles={R}><BulkDashboard /></P>} />
       <Route path="/bulk/ordenes" element={<P roles={R}><Ordenes /></P>} />
@@ -82,6 +94,7 @@ function Interno() {
       <Route path="/bulk/demo" element={<P roles={CAT}><ModoTest /></P>} />
       <Route path="/bulk/*" element={<Navigate to="/bulk" replace />} />
     </Routes>
+    </>
   )
 }
 

@@ -15,7 +15,7 @@ const cfg = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const appBulk = getApps().find((a) => a.name === 'bulk') || initializeApp(cfg, 'bulk')
+export const appBulk = getApps().find((a) => a.name === 'bulk') || initializeApp(cfg, 'bulk')
 export const authBulk = getAuth(appBulk)
 // Firestore ligado a ESTA app: así las peticiones llevan el token del usuario Bulk
 // (con bulkTenant/bulkRole). Antes se usaba la BD de la app por defecto, cuyo login

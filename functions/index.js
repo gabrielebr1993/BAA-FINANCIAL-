@@ -12,7 +12,7 @@
 // Desplegar:  cd functions && npm i && firebase deploy --only functions
 // ============================================================================
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
-const { onDocumentCreated } = require('firebase-functions/v2/firestore')
+const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore')
 const admin = require('firebase-admin')
 
 admin.initializeApp()
@@ -135,6 +135,72 @@ exports.procesarNotificacion = onDocumentCreated('bulk_notificaciones/{id}', asy
     }
   } catch (e) { error = e.message }
   await snap.ref.set({ enviado: ok, error, procesadoEn: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+})
+
+// ============================================================================
+// bulkPushOrdenes — PUSH REAL (FCM) por cambios de una orden:
+//   • Asignada / reasignada (→ notificando) → push a los CHOFERES del transporte
+//     y aviso al staff.
+//   • Aceptada  → push al staff (super_admin/admin/dispatcher).
+//   • Rechazada → push al staff.
+// Los tokens salen de `bulk_pushTokens` (los registra la app al iniciar sesión).
+// ============================================================================
+async function tokensDe(tenantId, filtro) {
+  const snap = await db.collection('bulk_pushTokens').where('tenantId', '==', tenantId).get()
+  const out = []
+  snap.forEach((d) => { const x = d.data(); if (x.token && filtro(x)) out.push({ id: d.id, token: x.token }) })
+  return out
+}
+async function enviarAPI(destinos, title, body, url) {
+  if (!destinos.length) return
+  const tokens = [...new Set(destinos.map((d) => d.token))]
+  try {
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      webpush: { fcmOptions: url ? { link: url } : undefined },
+      data: url ? { url } : {},
+    })
+    // Limpia tokens inválidos.
+    const borrar = []
+    res.responses.forEach((r, i) => {
+      const code = r.error && r.error.code
+      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
+        const t = tokens[i]; const d = destinos.find((x) => x.token === t); if (d) borrar.push(d.id)
+      }
+    })
+    await Promise.all(borrar.map((id) => db.collection('bulk_pushTokens').doc(id).delete().catch(() => {})))
+  } catch (e) { console.error('push error', e.message) }
+}
+const STAFF = ['super_admin', 'admin', 'dispatcher']
+
+exports.bulkPushOrdenes = onDocumentUpdated('bulk_orders/{id}', async (event) => {
+  const before = event.data.before.data() || {}
+  const after = event.data.after.data() || {}
+  const tenantId = after.tenantId
+  if (!tenantId) return
+  const num = after.numero || ''
+  const base = 'https://www.milepay.io/bulk/ordenes/' + event.params.id
+
+  // Asignación / reasignación
+  if (after.estado === 'notificando' && before.estado !== 'notificando' && after.transportistaId) {
+    const choferes = await tokensDe(tenantId, (x) => x.rol === 'chofer' && x.carrierId === after.transportistaId)
+    await enviarAPI(choferes, 'Nueva orden', `${num} — ${after.pesoEstimado || ''} ton (${after.tipoEquipo || ''})`, base)
+    const staff = await tokensDe(tenantId, (x) => STAFF.includes(x.rol))
+    await enviarAPI(staff, 'Orden asignada', `${num}`, base)
+  }
+  // Aceptada
+  if (after.estado === 'aceptada' && before.estado !== 'aceptada') {
+    const staff = await tokensDe(tenantId, (x) => STAFF.includes(x.rol))
+    await enviarAPI(staff, 'Orden aceptada', `${num} — ${after.choferNombre || ''}`, base)
+  }
+  // Rechazada (cambió rechazo.ts)
+  const rtA = after.rechazo && after.rechazo.ts, rtB = before.rechazo && before.rechazo.ts
+  if (rtA && rtA !== rtB) {
+    const staff = await tokensDe(tenantId, (x) => STAFF.includes(x.rol))
+    const motivo = after.rechazo && after.rechazo.motivo ? ` · ${after.rechazo.motivo}` : ''
+    await enviarAPI(staff, 'Orden rechazada', `${num} — ${(after.rechazo && after.rechazo.por) || ''}${motivo}`, base)
+  }
 })
 
 // ============================================================================
