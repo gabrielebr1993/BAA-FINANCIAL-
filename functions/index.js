@@ -204,6 +204,47 @@ exports.bulkPushOrdenes = onDocumentUpdated('bulk_orders/{id}', async (event) =>
 })
 
 // ============================================================================
+// bulkPushMensajes — PUSH REAL (FCM) por mensaje nuevo de chat (bulk_messages).
+// Notifica a la OTRA parte de la conversación (no al autor):
+//   • dm_c_<carrierId>  → el transporte y el staff.
+//   • dm_d_<slug>       → el chofer (por nombre) y el staff.
+//   • <orderId real>    → staff + el chofer y el transporte de esa orden.
+// ============================================================================
+const slugNombre = (s) => (s || '').trim().toLowerCase().normalize('NFD')
+  .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60)
+
+exports.bulkPushMensajes = onDocumentCreated('bulk_messages/{id}', async (event) => {
+  const m = (event.data && event.data.data()) || {}
+  const tenantId = m.tenantId
+  const orderId = String(m.orderId || '')
+  if (!tenantId || !orderId) return
+  const autorId = m.autorId
+  const titulo = m.autorNombre ? `Mensaje de ${m.autorNombre}` : 'Nuevo mensaje'
+  const cuerpo = m.texto || (m.tipo === 'foto' ? '📷 Foto' : m.tipo === 'ubicacion' ? '📍 Ubicación' : 'Nuevo mensaje')
+
+  let filtro, url
+  if (orderId.startsWith('dm_c_')) {
+    const carrierId = orderId.slice(5)
+    filtro = (x) => x.uid !== autorId && ((x.rol === 'transportista' && x.carrierId === carrierId) || STAFF.includes(x.rol))
+    url = 'https://www.milepay.io/bulk/mensajes'
+  } else if (orderId.startsWith('dm_d_')) {
+    const slug = orderId.slice(5)
+    filtro = (x) => x.uid !== autorId && ((x.rol === 'chofer' && slugNombre(x.nombre) === slug) || STAFF.includes(x.rol))
+    url = 'https://www.milepay.io/bulk/mensajes'
+  } else {
+    const ord = (await db.collection('bulk_orders').doc(orderId).get()).data() || {}
+    const choferSlug = slugNombre(ord.choferNombre)
+    const carrierId = ord.transportistaId
+    filtro = (x) => x.uid !== autorId && (STAFF.includes(x.rol)
+      || (x.rol === 'chofer' && choferSlug && slugNombre(x.nombre) === choferSlug)
+      || (x.rol === 'transportista' && carrierId && x.carrierId === carrierId))
+    url = 'https://www.milepay.io/bulk/ordenes/' + orderId
+  }
+  const dest = await tokensDe(tenantId, filtro)
+  await enviarAPI(dest, titulo, cuerpo, url)
+})
+
+// ============================================================================
 // recomendarAsignacionIA — hook opcional de IA. Si no hay modelo configurado,
 // responde que se use el motor de reglas del front (domain/asignacion.js).
 // data: { orden, candidatos }  →  { usarReglas } | { ranking }
