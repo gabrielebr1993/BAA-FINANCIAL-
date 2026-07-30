@@ -33,12 +33,20 @@ export default function Mensajes() {
     [carriers],
   )
 
-  // Conversaciones de ORDEN (activas/chateables).
+  // Órdenes que YA tienen al menos un mensaje: solo esas aparecen como
+  // conversación. Una orden sin chat no ensucia la lista (el chat es solo chat).
+  const ordenesConMensajes = useMemo(() => {
+    const s = new Set()
+    for (const m of mensajes) if (!esConvDirecta(m.orderId)) s.add(m.orderId)
+    return s
+  }, [mensajes])
+
+  // Conversaciones de ORDEN: únicamente las chateables que ya tienen historial.
   const ordenConvos = useMemo(
     () => ordenes
-      .filter((o) => CHATEABLES.includes(o.estado))
+      .filter((o) => CHATEABLES.includes(o.estado) && ordenesConMensajes.has(o.id))
       .map((o) => ({ key: o.id, chatId: o.id, tipo: 'orden', estado: o.estado, nombre: o.numero || '', sub: `${o.choferNombre || t('sin chofer')} · ${o.material || ''}`, ts: o.actualizadoEn || o.creadoEn || '' })),
-    [ordenes, t],
+    [ordenes, ordenesConMensajes, t],
   )
 
   // Conversaciones DIRECTAS: derivadas de los mensajes dm_* + las iniciadas ahora.
