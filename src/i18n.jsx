@@ -1705,6 +1705,11 @@ const EN = {
   "Sin órdenes entregadas para ese cliente/periodo.": "No delivered orders for that client/period.",
   "ton": "tons",
   "Facturas emitidas": "Invoices issued",
+  // — Chofer: reparar acceso (claims) —
+  "Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.": "Your account isn't linked to a carrier. If the administrator already assigned it, tap \"Fix my access\". Otherwise, ask them to assign it.",
+  "Reparar mi acceso": "Fix my access",
+  "Reparando…": "Fixing…",
+  "¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.": "Not seeing your orders, or your carrier changed? Refresh your permissions here.",
   // — Facturación: envío + pagos a transportistas —
   "Facturación y pagos": "Billing and payments",
   "Facturas a clientes": "Client invoices",

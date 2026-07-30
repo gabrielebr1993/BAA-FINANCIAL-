@@ -28,8 +28,16 @@ const capturarGPS = () => new Promise((res) => {
 
 export default function ChoferPortal() {
   const { t } = useLang()
-  const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
+  const { usuario, cerrarSesion, tenantId, rol, repararPermisos } = useBulkAuth()
   const navigate = useNavigate()
+  const [reparando, setReparando] = useState(false)
+  // Re-aplica los claims del usuario (bulkCarrierId, etc.) desde su perfil y recarga
+  // para tomar el token nuevo. Arregla el caso "mi cuenta no está ligada" sin cerrar sesión.
+  const repararAcceso = async () => {
+    setReparando(true)
+    try { await repararPermisos() } catch { /* noop */ }
+    window.location.reload()
+  }
   const carrierId = usuario?.carrierId || null
   // Acotamos a las órdenes de MI transporte: así el listener cumple las reglas
   // (el chofer no puede leer toda la colección) y vemos tanto las que se están
@@ -106,7 +114,14 @@ export default function ChoferPortal() {
       <main className="flex-1 overflow-y-auto p-3 pb-20">
         {tab === 'ordenes' && (
           <>
-            {!carrierId && <Aviso tipo="warn" className="mb-3">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</Aviso>}
+            {!carrierId && (
+              <Aviso tipo="warn" className="mb-3">
+                <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
+                <Boton variant="gold" onClick={repararAcceso} disabled={reparando} className="mt-2 px-3 py-1 text-xs">
+                  {reparando ? <><Spinner /> {t('Reparando…')}</> : t('Reparar mi acceso')}
+                </Boton>
+              </Aviso>
+            )}
             {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} />
               : disponibles.length === 0 ? <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />
               : disponibles.map((o) => <TarjetaNueva key={o.id} orden={o} usuario={usuario} tenantId={tenantId} rol={rol} onRechazo={registrarRechazo} />)}
@@ -138,7 +153,13 @@ export default function ChoferPortal() {
           <Card className="p-4">
             <div className="text-sm"><b>{usuario?.nombre}</b></div>
             <div className="text-xs text-slate-400">{usuario?.email}</div>
-            <div className="mt-2 text-xs text-slate-400">{t('Rol: Chofer · Transportista:')} {carrierId ? carrierId : '—'}</div>
+            <div className="mt-2 text-xs text-slate-400">{t('Rol: Chofer · Transportista:')} {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</div>
+            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
+              <Boton variant="ghost" onClick={repararAcceso} disabled={reparando} className="px-3 py-1 text-xs">
+                {reparando ? <><Spinner /> {t('Reparando…')}</> : t('Reparar mi acceso')}
+              </Boton>
+            </div>
           </Card>
         )}
       </main>
