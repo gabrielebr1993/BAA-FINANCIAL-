@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
-import { tsMillis } from '../data/chat'
+import { tsMillis } from '../data/chatKeys'
+import { perfilDeChofer, fechaOrden } from '../domain/perfilChofer'
 import { leerFotoReducida } from '../components/foto'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio, Spinner } from '../../components/ui'
@@ -11,9 +12,7 @@ import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
-const n = (v) => Number(v) || 0
 const clave = (s) => (s || '').trim().toLowerCase()
-const fecha = (o) => o.hitos?.entrega || o.hitos?.tomada || o.creadoEn || ''
 
 export default function ChoferPerfil() {
   const { t } = useLang()
@@ -24,25 +23,9 @@ export default function ChoferPerfil() {
   const { datos: jobs } = useColeccion('jobs')
   const [subiendo, setSubiendo] = useState(false)
 
-  const misOrdenes = useMemo(
-    () => ordenes.filter((o) => clave(o.choferNombre) === clave(nombre)).slice().sort((a, b) => tsMillis(fecha(b)) - tsMillis(fecha(a))),
-    [ordenes, nombre],
-  )
-  // Rechazos hechos por este chofer (la orden guarda rechazo.por con su nombre).
-  const rechazos = useMemo(() => ordenes.filter((o) => clave(o.rechazo?.por) === clave(nombre)).length, [ordenes, nombre])
-  // Transporte/plantilla al que pertenece (carrier.choferes por nombre) + su ficha.
-  const rosterCarrier = useMemo(() => carriers.find((c) => (c.choferes || []).some((d) => clave(d.nombre) === clave(nombre))), [carriers, nombre])
-  const rosterChofer = rosterCarrier?.choferes?.find((d) => clave(d.nombre) === clave(nombre))
+  const perfil = useMemo(() => perfilDeChofer({ ordenes, carriers, jobs, nombre }), [ordenes, carriers, jobs, nombre])
+  const { misOrdenes, rechazos, rosterCarrier, rosterChofer, transportes, trabajos, stats, rating, rechazaMucho, confiable, existe } = perfil
   const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
-  const transportes = useMemo(() => {
-    const ids = new Set(misOrdenes.map((o) => o.transportistaId).filter(Boolean))
-    if (rosterCarrier) ids.add(rosterCarrier.id)
-    return [...ids]
-  }, [misOrdenes, rosterCarrier])
-  const trabajos = useMemo(() => {
-    const ids = [...new Set(misOrdenes.map((o) => o.jobId).filter(Boolean))]
-    return ids.map((id) => jobs.find((j) => j.id === id)).filter(Boolean)
-  }, [misOrdenes, jobs])
 
   const subirFoto = async (e) => {
     const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return
@@ -55,23 +38,9 @@ export default function ChoferPerfil() {
   }
 
   if (cargando) return <Cargando />
-  if (!nombre || (misOrdenes.length === 0 && !rosterCarrier)) return (
+  if (!nombre || !existe) return (
     <div><Link to="/bulk/transportistas" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Volver')}</Link><EstadoVacio titulo={t('Chofer sin actividad')} texto={`${t('No hay órdenes registradas para')} ${nombre || t('este chofer')}.`} mostrarBoton={false} /></div>
   )
-
-  const entregadas = misOrdenes.filter((o) => FIN.includes(o.estado))
-  const stats = {
-    total: misOrdenes.length,
-    entregadas: entregadas.length,
-    ton: Math.round(entregadas.reduce((a, o) => a + n(o.pesoReal ?? o.pesoEstimado), 0)),
-    pago: entregadas.reduce((a, o) => a + n(o.pagoChofer), 0),
-  }
-  // Calificación derivada del desempeño: entregas vs rechazos (5 estrellas).
-  const baseCalif = stats.entregadas + rechazos
-  const rating = baseCalif > 0 ? Math.round((stats.entregadas / baseCalif) * 5 * 10) / 10 : null
-  const rechazoRate = baseCalif > 0 ? rechazos / baseCalif : 0
-  const rechazaMucho = rechazos >= 3 && rechazoRate > 0.3
-  const confiable = rechazos === 0 && stats.entregadas > 0
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -154,7 +123,7 @@ export default function ChoferPerfil() {
           <div className="relative space-y-3 before:absolute before:bottom-2 before:left-[15px] before:top-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
             {misOrdenes.slice(0, 30).map((o) => {
               const fin = FIN.includes(o.estado)
-              const ms = tsMillis(fecha(o))
+              const ms = tsMillis(fechaOrden(o))
               return (
                 <div key={o.id} className="relative flex gap-3">
                   <div className={`z-10 mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-full border-2 border-white dark:border-slate-900 ${fin ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-slate-900'}`}>
