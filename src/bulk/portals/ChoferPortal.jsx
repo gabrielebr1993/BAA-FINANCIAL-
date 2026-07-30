@@ -237,6 +237,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
   const [copiado, setCopiado] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [errCod, setErrCod] = useState(false)
+  const [lightbox, setLightbox] = useState(null) // src de la foto ampliada
 
   // Destino de la fase actual: recogida = planta; entrega = dirección de entrega.
   const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
@@ -347,6 +348,14 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
         ))}
       </div>
 
+      {/* Fotos ya registradas (toca para ampliar) */}
+      {(orden.ticket?.foto || orden.pod?.foto) && (
+        <div className="mt-3 flex gap-2">
+          <FotoMini src={orden.ticket?.foto} etiqueta={t('Ticket')} onAmpliar={setLightbox} />
+          <FotoMini src={orden.pod?.foto} etiqueta={t('Entrega')} onAmpliar={setLightbox} />
+        </div>
+      )}
+
       {paso ? (
         <>
           <Boton variant="gold" onClick={avanzar} disabled={ocupado || (paso.gate && !puedeLlegar)} className="mt-4 w-full justify-center py-2.5">
@@ -384,9 +393,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
           <Input type="number" placeholder={t('Peso real (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-2" />
           <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
           <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
-            <Camera size={18} /> {foto ? t('Foto lista ✓') : t('Tomar foto del ticket')}
+            <Camera size={18} /> {foto ? t('Foto lista ✓ (toca para reemplazar)') : t('Tomar foto del ticket')}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
           </label>
+          {foto && <div className="mb-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
           {foto && (
             <button type="button" disabled={ocr?.cargando}
               onClick={async () => {
@@ -412,9 +422,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
       {modal === 'pod' && (
         <Modal onClose={() => setModal(null)} titulo={t('Prueba de entrega (POD)')}>
           <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
-            <Camera size={18} /> {foto ? t('Foto lista ✓') : t('Foto de la entrega')}
+            <Camera size={18} /> {foto ? t('Foto lista ✓ (toca para reemplazar)') : t('Foto de la entrega')}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
           </label>
+          {foto && <div className="mb-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
           <div className="mb-1 text-xs font-semibold text-slate-500">{t('Firma de quien recibe')}</div>
           <FirmaPad onChange={setFirma} />
           <Input placeholder={t('Comentarios (opcional)')} value={coment} onChange={(e) => setComent(e.target.value)} className="my-2" />
@@ -422,7 +433,33 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
           <Boton variant="gold" onClick={guardarPOD} disabled={ocupado} className="w-full justify-center">{ocupado ? <Spinner /> : t('Confirmar entrega')}</Boton>
         </Modal>
       )}
+
+      {/* Visor de foto a pantalla completa */}
+      <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
     </Card>
+  )
+}
+
+// Miniatura que abre la foto a pantalla completa al tocarla.
+function FotoMini({ src, etiqueta, onAmpliar }) {
+  if (!src) return null
+  return (
+    <button type="button" onClick={() => onAmpliar(src)} className="group relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+      <img src={src} alt={etiqueta} className="h-20 w-20 object-cover transition group-hover:opacity-90" />
+      {etiqueta && <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] font-semibold text-white">{etiqueta}</span>}
+    </button>
+  )
+}
+
+// Visor a pantalla completa; se cierra al tocar en cualquier lado.
+function Lightbox({ src, onClose }) {
+  const { t } = useLang()
+  if (!src) return null
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={onClose}>
+      <img src={src} alt="foto" className="max-h-full max-w-full rounded-lg object-contain" />
+      <button onClick={onClose} className="absolute right-4 top-4 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white">{t('Cerrar')}</button>
+    </div>
   )
 }
 
