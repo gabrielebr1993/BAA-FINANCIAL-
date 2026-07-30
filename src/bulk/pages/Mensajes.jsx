@@ -21,6 +21,7 @@ export default function Mensajes() {
   const unread = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
   const [sel, setSel] = useState('')
   const [buscar, setBuscar] = useState('')
+  const [soloNoLeidos, setSoloNoLeidos] = useState(false)
   const [nuevo, setNuevo] = useState(false)
   const [buscarNuevo, setBuscarNuevo] = useState('')
   // Conversaciones directas iniciadas en esta sesión (aún sin mensajes): {id, nombre, tipo}.
@@ -63,8 +64,10 @@ export default function Mensajes() {
     return [...directoConvos, ...ordenConvos]
       .filter((c) => !q || (c.nombre || '').toLowerCase().includes(q) || (c.sub || '').toLowerCase().includes(q))
       .map((c) => ({ ...c, noLeidos: unread[c.chatId] || 0 }))
+      .filter((c) => !soloNoLeidos || c.noLeidos > 0)
       .sort((a, b) => (b.noLeidos - a.noLeidos) || (tsMillis(b.ts) - tsMillis(a.ts)))
-  }, [directoConvos, ordenConvos, buscar, unread])
+  }, [directoConvos, ordenConvos, buscar, unread, soloNoLeidos])
+  const totalNoLeidos = useMemo(() => Object.values(unread).reduce((a, n) => a + n, 0), [unread])
 
   const activa = todas.find((c) => c.key === sel) || todas[0] || null
 
@@ -101,9 +104,14 @@ export default function Mensajes() {
             <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar conversación, transporte o chofer…')} className="w-full pl-8" />
           </div>
+          <button type="button" onClick={() => setSoloNoLeidos((v) => !v)}
+            className={`mb-2 inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 text-xs font-semibold transition ${soloNoLeidos ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
+            <MessageSquare size={13} /> {t('Solo no leídos')}
+            {totalNoLeidos > 0 && <span className={`grid h-4 min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-bold ${soloNoLeidos ? 'bg-white/25 text-white' : 'bg-rose-500 text-white'}`}>{totalNoLeidos}</span>}
+          </button>
           <div className="scroll-thin min-h-0 flex-1 space-y-1 overflow-y-auto">
             {todas.length === 0 ? (
-              <div className="px-2 py-6 text-center text-xs text-slate-400">{t('Sin conversaciones. Toca “Nueva conversación”.')}</div>
+              <div className="px-2 py-6 text-center text-xs text-slate-400">{soloNoLeidos ? t('No hay mensajes sin leer.') : t('Sin conversaciones. Toca “Nueva conversación”.')}</div>
             ) : todas.map((c) => (
               <button key={c.key} onClick={() => setSel(c.key)} className={`flex w-full items-center gap-2 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                 <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800">

@@ -1730,6 +1730,8 @@ const EN = {
   "Ampliar": "Zoom",
   "Ticket": "Ticket",
   "Entrega": "Delivery",
+  "Solo no leídos": "Unread only",
+  "No hay mensajes sin leer.": "No unread messages.",
   // — Chofer: reparar acceso (claims) —
   "Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.": "Your account isn't linked to a carrier. If the administrator already assigned it, tap \"Fix my access\". Otherwise, ask them to assign it.",
   "Reparar mi acceso": "Fix my access",

@@ -45,7 +45,8 @@ export default function ChoferPortal() {
   const [tab, setTab] = useState('ordenes')
 
   const miConv = convChofer(usuario?.nombre)
-  const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[miConv]) || 0
+  const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
+  const noLeidosOficina = noLeidos[miConv] || 0
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
@@ -126,7 +127,7 @@ export default function ChoferPortal() {
                 <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
               </Aviso>
             )}
-            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} />
+            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} noLeidosChat={noLeidos[activa.id] || 0} />
               : <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />}
           </>
         )}
@@ -222,7 +223,7 @@ function VacioMsg({ icon: Icon, texto }) {
   return <div className="mt-10 flex flex-col items-center gap-2 text-center text-slate-400"><Icon size={34} strokeWidth={1.4} /><p className="max-w-xs text-sm">{texto}</p></div>
 }
 
-function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos }) {
+function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, noLeidosChat = 0 }) {
   const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
   const fase = faseChofer(orden.estado)
@@ -311,7 +312,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos })
       <div className="flex items-center gap-2">
         <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span>
         <Badge color="navy">{t(ORDEN_ESTADO_LABEL[orden.estado])}</Badge>
-        <button onClick={() => setModal('chat')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={14} /> {t('Chat')}</button>
+        <button onClick={() => setModal('chat')} className="relative ml-auto inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          <MessageSquare size={14} /> {t('Chat')}
+          {noLeidosChat > 0 && <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidosChat}</span>}
+        </button>
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
       <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>

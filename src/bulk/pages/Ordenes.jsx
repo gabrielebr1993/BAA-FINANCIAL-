@@ -3,6 +3,7 @@ import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User
 import { Link } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
+import { noLeidosPorConv } from '../data/chat'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -52,6 +53,8 @@ export default function Ordenes() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plants } = useColeccion('plants')
   const { datos: jobs } = useColeccion('jobs')
+  const { datos: mensajes } = useColeccion('messages')
+  const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
   // Transportistas autorizados en el trabajo de una orden (el filtro que controla
   // qué transportes —y sus choferes— reciben las órdenes de ese trabajo).
   const autorizadosDe = (o) => jobs.find((j) => j.id === o.jobId)?.transportistasAutorizados || []
@@ -209,7 +212,10 @@ export default function Ordenes() {
                     <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                     <Badge color="navy">{o.pesoEstimado} ton</Badge>
                     {o.tipoEquipo && <Badge color="slate">{o.tipoEquipo}</Badge>}
-                    <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
+                    <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="relative ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                      <MessageSquare size={15} />
+                      {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
+                    </button>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t(ORDEN_ESTADO_LABEL[o.estado])}</div>
                   {'precioCliente' in fin && fin.precioCliente != null && <div className="mt-1 text-xs">{t('Cliente')}: {money(fin.precioCliente)}</div>}
@@ -294,7 +300,10 @@ export default function Ordenes() {
                     <span className={`h-2 w-2 flex-shrink-0 rounded-full ${enRuta ? 'animate-pulse bg-emerald-500' : fin ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                     <Badge color={COLOR_ESTADO[o.estado] || 'navy'}>{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
-                    <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800"><MessageSquare size={15} /></button>
+                    <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="relative ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                      <MessageSquare size={15} />
+                      {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
+                    </button>
                   </div>
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs">
                     <User size={13} className="text-amber-500" />
