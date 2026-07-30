@@ -25,6 +25,25 @@ export function armarFactura(ordenes, { desde, hasta } = {}) {
   return { lineas, subtotal, total: subtotal, toneladas, n: lineas.length }
 }
 
+// Arma el AVISO DE PAGO a un transportista: sus órdenes ENTREGADAS del periodo,
+// sumando lo que se le paga a él (precioTransportista) por cada carga.
+export function armarAvisoPago(ordenes, { desde, hasta } = {}) {
+  const dd = desde ? new Date(desde + 'T00:00:00') : null
+  const hh = hasta ? new Date(hasta + 'T23:59:59') : null
+  const lineas = (ordenes || [])
+    .filter((o) => ENTREGADAS.includes(o.estado))
+    .filter((o) => { const f = fEntrega(o); if (dd && (!f || f < dd)) return false; if (hh && (!f || f > hh)) return false; return true })
+    .map((o) => ({
+      orderId: o.id, numero: o.numero, material: o.material || '',
+      ton: r2(o.pesoReal ?? o.pesoEstimado), precio: r2(o.precioTransportista),
+      fecha: fEntrega(o) ? fEntrega(o).toISOString() : null,
+    }))
+    .sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
+  const subtotal = r2(lineas.reduce((a, l) => a + l.precio, 0))
+  const toneladas = r2(lineas.reduce((a, l) => a + l.ton, 0))
+  return { lineas, subtotal, total: subtotal, toneladas, n: lineas.length }
+}
+
 // Días para vencer (negativo = vencido). null si no hay fecha.
 export function diasParaVencer(fechaISO) {
   if (!fechaISO) return null

@@ -3,7 +3,7 @@ const NAVY = [19, 35, 63]
 const GOLD = [201, 162, 75]
 const money = (n) => `$${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export async function generarFacturaPDF(factura, { clienteNombre, empresa }) {
+export async function generarFacturaPDF(factura, { clienteNombre, empresa, titulo = 'FACTURA', paraLabel = 'Cliente', para } = {}) {
   const { default: jsPDF } = await import('jspdf')
   const autoTable = (await import('jspdf-autotable')).default
   const doc = new jsPDF()
@@ -13,13 +13,13 @@ export async function generarFacturaPDF(factura, { clienteNombre, empresa }) {
   doc.setTextColor(255); doc.setFontSize(18); doc.setFont(undefined, 'bold')
   doc.text(empresa || 'Freight', 14, 15)
   doc.setFontSize(10); doc.setFont(undefined, 'normal')
-  doc.text('FACTURA', 14, 22)
+  doc.text(titulo, 14, 22)
   doc.setTextColor(...GOLD); doc.setFontSize(12); doc.setFont(undefined, 'bold')
   doc.text(factura.numero || '', W - 14, 15, { align: 'right' })
 
   doc.setTextColor(60); doc.setFontSize(10)
   let y = 38
-  doc.text(`Cliente: ${clienteNombre || '—'}`, 14, y); y += 6
+  doc.text(`${paraLabel}: ${para || clienteNombre || '—'}`, 14, y); y += 6
   doc.text(`Periodo: ${factura.desde || '—'} a ${factura.hasta || '—'}`, 14, y); y += 6
   doc.text(`Estado: ${factura.estado || 'enviada'}`, 14, y)
 

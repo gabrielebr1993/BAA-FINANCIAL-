@@ -170,6 +170,19 @@ service cloud.firestore {
     match /bulk_plants/{id}    { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    // Config del transportista (cómo le paga a sus choferes). El propio transportista (por su carrierId) o el staff pueden escribirla.
+    match /bulk_carrierConfig/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && bCarrier() == id);
+      allow create: if bStaff(request.resource.data.tenantId) || (bSame(request.resource.data.tenantId) && bCarrier() == id);
+      allow update: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && bCarrier() == id);
+      allow delete: if bStaff(resource.data.tenantId);
+    }
+    // Avisos de pago a transportistas (los emite el staff; el transportista lee los suyos).
+    match /bulk_carrierStatements/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
+      allow create: if bStaff(request.resource.data.tenantId);
+      allow update, delete: if bStaff(resource.data.tenantId);
+    }
     match /bulk_materials/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
     match /bulk_equipment/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }
     match /bulk_geofences/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bAdmin(request.resource.data.tenantId); allow update, delete: if bAdmin(resource.data.tenantId); }

@@ -5,12 +5,13 @@ import ChatOrden from '../components/ChatOrden'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, where } from '../data/repo'
+import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ahora } from '../domain/flujo'
 import { desgloseVisible } from '../domain/pagos'
-import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select } from '../../components/ui'
+import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
+import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -24,6 +25,7 @@ export default function TransportistaPortal() {
   const carrierId = usuario?.carrierId || '__none__'
   const { datos: ordenes, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: configs } = useColeccion('carrierConfig')
   const { datos: mensajes } = useColeccion('messages')
   const [tab, setTab] = useState('ordenes')
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
@@ -31,6 +33,27 @@ export default function TransportistaPortal() {
   const carrier = carriers.find((c) => c.id === carrierId)
   const choferes = carrier?.choferes || [] // plantilla del transporte (la gestiona el admin)
   const nombreChofer = (id) => choferes.find((c) => c.id === id)?.nombre || ''
+  const pagoChoferes = (configs.find((c) => c.id === carrierId)?.pagoChoferes) || {}
+
+  // Cuánto se le ha pagado (acumulado) a cada chofer por sus cargas entregadas.
+  const pagadoPorChofer = useMemo(() => {
+    const acc = {}
+    for (const o of ordenes) {
+      if (!o.choferId || !ENTREGADAS.includes(o.estado)) continue
+      acc[o.choferId] = (acc[o.choferId] || 0) + (Number(o.pagoChofer) || 0)
+    }
+    return acc
+  }, [ordenes])
+
+  // Guarda (o cambia) cómo se le paga a un chofer: % de la carga o valor fijo.
+  const guardarPago = async (driverId, tipo, valor) => {
+    const next = { ...pagoChoferes, [driverId]: { tipo, valor: Number(valor) || 0 } }
+    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: next })
+  }
+  const quitarPago = async (driverId) => {
+    const next = { ...pagoChoferes }; delete next[driverId]
+    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: next })
+  }
   const stats = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
     const util = entregadas.reduce((a, o) => a + ((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0)), 0)
@@ -42,8 +65,11 @@ export default function TransportistaPortal() {
   const asignarChofer = async (orden, driverId) => {
     const d = choferes.find((c) => c.id === driverId)
     const avanza = [E.CREADA, E.EN_COLA, E.NOTIFICANDO].includes(orden.estado)
+    // Si el transportista definió cómo paga a este chofer, calculamos su pago para esta carga.
+    const pago = calcularPagoChofer(orden.precioTransportista, configDeChofer(pagoChoferes, driverId))
     await guardar('orders', orden.id, {
       choferId: driverId, choferNombre: d?.nombre || '',
+      ...(pago != null ? { pagoChofer: pago } : {}),
       ...(avanza ? { estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } } : {}),
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_chofer', entidad: 'orden', entidadId: orden.id, detalle: d?.nombre })
@@ -107,18 +133,17 @@ export default function TransportistaPortal() {
 
         {tab === 'choferes' && (
           <>
-            <Aviso tipo="info" className="mb-3">{t('Tus choferes los da de alta y transfiere el administrador. Aquí los ves y los asignas a tus órdenes (un chofer puede ir en varias).')}</Aviso>
+            <Aviso tipo="info" className="mb-3">{t('Tus choferes los da de alta el administrador. Aquí defines cómo le pagas a cada uno: un porcentaje de lo que recibes por cada carga, o un valor fijo por carga entregada. Se aplica al asignarlo a una orden.')}</Aviso>
             {choferes.length === 0 ? <EstadoVacio titulo={t('Sin choferes')} texto={t('Pídele al administrador que registre tus choferes.')} mostrarBoton={false} /> : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {choferes.map((c) => (
-                  <Card key={c.id} className="p-3">
-                    <div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
-                    <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                      {c.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {c.telefono}</span>}
-                      {c.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {c.licencia}</span>}
-                    </div>
-                    <div className="mt-1"><Badge color={c.activo === false ? 'slate' : 'green'}>{c.activo === false ? t('Inactivo') : t('Activo')}</Badge></div>
-                  </Card>
+                  <PagoChoferCard
+                    key={c.id} c={c}
+                    config={pagoChoferes[c.id]}
+                    pagado={pagadoPorChofer[c.id] || 0}
+                    onGuardar={(tipo, valor) => guardarPago(c.id, tipo, valor)}
+                    onQuitar={() => quitarPago(c.id)}
+                  />
                 ))}
               </div>
             )}
@@ -144,5 +169,49 @@ export default function TransportistaPortal() {
         )}
       </main>
     </div>
+  )
+}
+
+// Tarjeta de un chofer con el modo de pago (porcentaje / fijo) editable por el transportista.
+function PagoChoferCard({ c, config, pagado, onGuardar, onQuitar }) {
+  const { t } = useLang()
+  const [tipo, setTipo] = useState(config?.tipo || 'porcentaje')
+  const [valor, setValor] = useState(config?.valor != null ? String(config.valor) : '')
+  const [editando, setEditando] = useState(false)
+  const guardar = async () => { await onGuardar(tipo, valor); setEditando(false) }
+  const etiqueta = etiquetaPago(config)
+
+  return (
+    <Card className="p-3">
+      <div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
+      <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-slate-400">
+        {c.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {c.telefono}</span>}
+        {c.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {c.licencia}</span>}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <Badge color={c.activo === false ? 'slate' : 'green'}>{c.activo === false ? t('Inactivo') : t('Activo')}</Badge>
+        {etiqueta && <Badge color="gold"><DollarSign size={10} className="mr-0.5 inline" />{t(etiqueta)}</Badge>}
+      </div>
+      {pagado > 0 && <div className="mt-1 text-[11px] text-slate-400">{t('Pagado (entregadas):')} <b className="text-emerald-600 dark:text-emerald-400">{money(pagado)}</b></div>}
+
+      {!editando ? (
+        <button onClick={() => setEditando(true)} className="mt-2 text-xs font-medium text-amber-600 hover:underline">
+          {etiqueta ? t('Cambiar forma de pago') : t('Definir forma de pago')}
+        </button>
+      ) : (
+        <div className="mt-2 space-y-1.5 rounded-lg border border-slate-200 p-2 dark:border-slate-700/60">
+          <Select className="w-full py-1 text-xs" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option value="porcentaje">{t('Porcentaje de la carga (%)')}</option>
+            <option value="fijo">{t('Valor fijo por carga ($)')}</option>
+          </Select>
+          <Input type="number" step="0.01" className="w-full py-1 text-xs" placeholder={tipo === 'porcentaje' ? t('Ej. 80 (= 80%)') : t('Ej. 120 ($ por carga)')} value={valor} onChange={(e) => setValor(e.target.value)} />
+          <div className="flex flex-wrap gap-1.5">
+            <Boton variant="gold" onClick={guardar} disabled={!(Number(valor) > 0)} className="px-2.5 py-1 text-xs">{t('Guardar')}</Boton>
+            <Boton variant="ghost" onClick={() => setEditando(false)} className="px-2.5 py-1 text-xs">{t('Cancelar')}</Boton>
+            {config && <Boton variant="ghost" onClick={() => { onQuitar(); setEditando(false) }} className="px-2.5 py-1 text-xs text-rose-500">{t('Quitar')}</Boton>}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
