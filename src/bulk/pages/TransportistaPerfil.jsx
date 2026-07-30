@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase } from 'lucide-react'
+import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, Check, Plus, AlertTriangle } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { guardar } from '../data/repo'
+import { useBulkAuth } from '../BulkAuthContext'
+import { auditar } from '../data/auditoria'
 import { estadoDocumento } from '../domain/facturacion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
@@ -17,6 +20,7 @@ const DOC_LABEL = { vencido: 'Vencido', proximo: 'Por vencer', ok: 'Vigente', si
 export default function TransportistaPerfil() {
   const { t } = useLang()
   const { id } = useParams()
+  const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: ordenes } = useColeccion('orders')
   const { datos: documentos } = useColeccion('documents')
@@ -48,6 +52,15 @@ export default function TransportistaPerfil() {
     ingreso: entregadas.reduce((a, o) => a + n(o.precioCliente), 0),
   }
   const inicial = (carrier.nombre || '?').charAt(0).toUpperCase()
+  // Asociar/quitar este transporte a un trabajo (edita job.transportistasAutorizados).
+  const enJob = (job) => (job.transportistasAutorizados || []).includes(id)
+  const jobCompat = (job) => !job.tipoEquipo || (carrier.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase())
+  const toggleJob = async (job) => {
+    const aut = job.transportistasAutorizados || []
+    const nuevos = aut.includes(id) ? aut.filter((x) => x !== id) : [...aut, id]
+    await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'autorizar_transporte', entidad: 'job', entidadId: job.id, detalle: `${carrier.nombre}: ${aut.includes(id) ? 'quitado' : 'agregado'}` })
+  }
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -71,11 +84,28 @@ export default function TransportistaPerfil() {
           {(carrier.equipos || []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Briefcase size={12} /> {t('Trabajos asociados')}:</span>
-            {trabajos.length > 0
-              ? trabajos.map((j) => <Link key={j.id} to="/bulk/jobs"><Badge color="gold">{j.nombre}</Badge></Link>)
-              : <span className="text-xs text-slate-400">{t('Sin trabajos asociados. Asócialo en Trabajos.')}</span>}
+          <div className="mt-3">
+            <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300"><Briefcase size={12} className="text-amber-500" /> {t('Trabajos asociados')} ({trabajos.length})</div>
+            <div className="flex flex-wrap gap-1.5">
+              {jobs.length === 0 ? <span className="text-xs text-slate-400">{t('Sin trabajos. Créalos en Trabajos.')}</span> : jobs.map((j) => {
+                const on = enJob(j)
+                const compat = jobCompat(j)
+                return (
+                  <button
+                    key={j.id}
+                    type="button"
+                    onClick={() => toggleJob(j)}
+                    title={compat ? (on ? t('Quitar del trabajo') : t('Agregar al trabajo')) : `${t('Sin el equipo')} ${j.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on
+                      ? (compat ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-rose-400 bg-rose-50 font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300')
+                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+                  >
+                    {on ? <Check size={12} /> : <Plus size={12} />} {j.nombre} {!compat && <AlertTriangle size={11} className="text-rose-500" />}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">{t('Toca para asociar o quitar este transporte a un trabajo. Recibe órdenes solo de sus trabajos asociados.')}</p>
           </div>
         </div>
       </Card>

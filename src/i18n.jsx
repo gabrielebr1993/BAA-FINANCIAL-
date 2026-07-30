@@ -1923,6 +1923,10 @@ const EN = {
   "no recibirá órdenes hasta agregárselo en Transportistas.": "won’t receive orders until you add it in Carriers.",
   "Toca para agregar o quitar. Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo; agrega otro si el actual no da abasto. Los marcados en rojo no tienen el equipo del trabajo y no recibirán órdenes hasta dárselo en Transportistas.": "Tap to add or remove. Only these carriers (and their drivers) receive this job’s orders; add another if the current one can’t keep up. Those marked in red don’t have the job’s equipment and won’t receive orders until you give it to them in Carriers.",
 
+  // — Freight · asociar trabajos desde transporte —
+  "Sin trabajos. Créalos en Trabajos.": "No jobs. Create them in Jobs.",
+  "Toca para asociar o quitar este transporte a un trabajo. Recibe órdenes solo de sus trabajos asociados.": "Tap to associate or remove this carrier from a job. It receives orders only from its associated jobs.",
+
 }
 
 const Ctx = createContext(null)
