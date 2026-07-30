@@ -1956,6 +1956,12 @@ const EN = {
   "Cuenta desactivada": "Account deactivated",
   "Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.": "You rejected 3 orders. Sign out and back in to reactivate.",
 
+  // — Freight · choferes activos / buscadores —
+  "Choferes activos": "Active drivers",
+  "Ningún chofer en espera ahora.": "No drivers waiting right now.",
+  "orden entrando": "incoming order",
+  "Buscar usuario…": "Search user…",
+
 }
 
 const Ctx = createContext(null)

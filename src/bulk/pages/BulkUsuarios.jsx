@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus, Trash2, ShieldCheck } from 'lucide-react'
+import { UserPlus, Trash2, ShieldCheck, Search, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { eliminar, guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -21,6 +21,8 @@ export default function BulkUsuarios() {
   const { datos: carriers } = useColeccion('carriers')
   const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
   const [msg, setMsg] = useState(null)
+  const [buscar, setBuscar] = useState('')
+  const [alta, setAlta] = useState(false)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const necesitaCliente = f.rol === BULK_ROLES.CLIENTE
   const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA || f.rol === BULK_ROLES.CHOFER
@@ -55,6 +57,16 @@ export default function BulkUsuarios() {
     <div>
       <PageTitle>{t('Usuarios y roles')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar usuario…')} className="w-64 pl-8" />
+        </div>
+        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Nuevo usuario')}</>}</Boton>
+      </div>
+
+      {alta && (
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo usuario')}</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -76,11 +88,14 @@ export default function BulkUsuarios() {
         )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><UserPlus size={16} /> {t('Crear usuario')}</Boton></div>
       </Card>
+      )}
 
       <Card className="p-4">
         <Tabla
           columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
-          rows={usuarios.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => ({ ...u, _key: u.id }))}
+          rows={usuarios
+            .filter((u) => { const s = buscar.trim().toLowerCase(); return !s || (u.nombre || '').toLowerCase().includes(s) || (u.email || '').toLowerCase().includes(s) || (t(BULK_ROLES_LABEL[u.rol]) || u.rol || '').toLowerCase().includes(s) })
+            .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => ({ ...u, _key: u.id }))}
           emptyText={t('Sin usuarios.')}
           renderCell={(row, key) => {
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{t(BULK_ROLES_LABEL[row.rol]) || row.rol}</Badge>

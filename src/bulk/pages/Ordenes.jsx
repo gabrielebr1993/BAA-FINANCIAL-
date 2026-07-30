@@ -159,12 +159,14 @@ export default function Ordenes() {
   const setF = (v) => setFiltro((f) => (f === v ? '' : v))
   const colaF = cola.filter(coincide).filter(pasaFiltro)
   const activasF = activas.filter(coincide).filter(pasaFiltro)
-  // Choferes EN ESPERA: registrados y activos que no están en una orden en curso.
+  // Choferes ACTIVOS en espera: registrados y activos que no están en una orden en curso.
   const ocupados = new Set(ordenes.filter((o) => OCUPADO_EST.includes(o.estado)).map((o) => (o.choferNombre || '').toLowerCase()).filter(Boolean))
   const choferesEspera = carriers
-    .flatMap((c) => (c.choferes || []).filter((d) => d.activo !== false).map((d) => ({ ...d, carrierNombre: c.nombre })))
+    .flatMap((c) => (c.choferes || []).filter((d) => d.activo !== false).map((d) => ({ ...d, carrierId: c.id, carrierNombre: c.nombre })))
     .filter((d) => !ocupados.has((d.nombre || '').toLowerCase()))
     .filter((d) => !q || (d.nombre || '').toLowerCase().includes(q))
+  // Transportes con una orden ENTRANDO (notificando): sus choferes en espera titilan.
+  const carriersNotif = new Set(ordenes.filter((o) => o.estado === E.NOTIFICANDO && o.transportistaId).map((o) => o.transportistaId))
   // Órdenes en cola SIN ningún transportista elegible (equipo + autorizados) → atascadas.
   const atascadasN = colaF.filter((o) => transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o)).length === 0).length
 
@@ -193,18 +195,6 @@ export default function Ordenes() {
       <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Cola · por asignar')} ({cola.length})</h3></div>
-        {choferesEspera.length > 0 && (
-          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><UserCheck size={13} /> {t('Choferes en espera')} ({choferesEspera.length})</div>
-            <div className="flex flex-wrap gap-1">
-              {choferesEspera.slice(0, 24).map((d) => (
-                <Link key={d.id || d.nombre} to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} title={d.carrierNombre} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100 dark:bg-slate-800 dark:text-emerald-300 dark:hover:bg-slate-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {d.nombre}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
         {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar || filtro ? t('Ninguna orden en cola coincide con la búsqueda.') : t('No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).')}</p> : (
           <div className="scroll-thin grid max-h-[calc(100vh-16rem)] grid-cols-1 gap-2 overflow-y-auto pr-1 2xl:grid-cols-2">
             {colaF.map((o) => {
@@ -274,6 +264,23 @@ export default function Ordenes() {
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Asignación en vivo')} ({activas.length})</h3></div>
+        {/* Choferes activos esperando una orden; titilan cuando su transporte tiene una entrando. */}
+        <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><UserCheck size={13} /> {t('Choferes activos')} ({choferesEspera.length})</div>
+          {choferesEspera.length === 0 ? <span className="text-xs text-emerald-700/70 dark:text-emerald-300/70">{t('Ningún chofer en espera ahora.')}</span> : (
+            <div className="flex flex-wrap gap-1">
+              {choferesEspera.slice(0, 40).map((d) => {
+                const entrando = carriersNotif.has(d.carrierId)
+                return (
+                  <Link key={d.id || d.nombre} to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} title={`${d.carrierNombre}${entrando ? ' · ' + t('orden entrando') : ''}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold shadow-sm transition ${entrando ? 'animate-pulse bg-amber-400 text-slate-900 ring-2 ring-amber-500' : 'bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-300'}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${entrando ? 'bg-slate-900' : 'bg-emerald-500'}`} /> {d.nombre}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
         {activasF.length === 0 ? <EstadoVacio texto={buscar || filtro ? t('Ninguna orden asignada coincide con la búsqueda.') : t('Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real.')} mostrarBoton={false} /> : (
           <div className="scroll-thin grid max-h-[calc(100vh-16rem)] grid-cols-1 gap-2 overflow-y-auto pr-1 2xl:grid-cols-2">
             {activasF.map((o) => {

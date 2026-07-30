@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard } from 'lucide-react'
+import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard, Search, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -13,6 +13,8 @@ export default function GestionChoferes() {
   const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
   const [f, setF] = useState({ carrierId: '', nombre: '', telefono: '', licencia: '' })
+  const [buscar, setBuscar] = useState('')
+  const [alta, setAlta] = useState(false)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   const agregar = async () => {
@@ -44,12 +46,26 @@ export default function GestionChoferes() {
 
   if (cargando) return <Cargando />
   const totalChoferes = carriers.reduce((a, c) => a + (c.choferes || []).length, 0)
+  const q = buscar.trim().toLowerCase()
+  const carriersV = carriers
+    .map((c) => ({ ...c, _cho: (c.choferes || []).filter((d) => !q || (d.nombre || '').toLowerCase().includes(q)) }))
+    .filter((c) => c._cho.length > 0)
 
   return (
     <div>
       <PageTitle>Choferes por transporte</PageTitle>
 
-      {/* Alta */}
+      {/* Barra: buscador + botón para mostrar el alta */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar chofer…" className="w-64 pl-8" />
+        </div>
+        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> Cerrar</> : <><Plus size={16} /> Nuevo chofer</>}</Boton>
+      </div>
+
+      {/* Alta (colapsable) */}
+      {alta && (
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">Nuevo chofer</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -64,20 +80,23 @@ export default function GestionChoferes() {
         <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.carrierId || !f.nombre.trim()}><Plus size={16} /> Agregar chofer</Boton></div>
         <p className="mt-2 text-[11px] text-slate-400">Para darle acceso a la app móvil, créalo también en “Usuarios y roles” como rol Chofer. Aquí gestionas la plantilla y las reasignaciones.</p>
       </Card>
+      )}
 
       {carriers.length === 0 ? <EstadoVacio titulo="Sin transportes" texto="Primero crea transportistas." mostrarBoton={false} /> : totalChoferes === 0 ? (
-        <EstadoVacio titulo="Sin choferes" texto="Agrega el primero arriba, o carga el Modo test." mostrarBoton={false} />
+        <EstadoVacio titulo="Sin choferes" texto="Agrega el primero (botón “Nuevo chofer”), o carga el Modo test." mostrarBoton={false} />
+      ) : carriersV.length === 0 ? (
+        <EstadoVacio titulo="Sin resultados" texto="Ningún chofer coincide con la búsqueda." mostrarBoton={false} />
       ) : (
         <div className="space-y-3">
-          {carriers.filter((c) => (c.choferes || []).length > 0).map((c) => (
+          {carriersV.map((c) => (
             <Card key={c.id} className="p-4">
               <div className="mb-2 flex items-center gap-2">
                 <Truck size={16} className="text-amber-500" />
                 <Link to={`/bulk/transportistas/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
-                <span className="text-xs text-slate-400">· {(c.choferes || []).length} chofer(es)</span>
+                <span className="text-xs text-slate-400">· {c._cho.length} chofer(es)</span>
               </div>
               <div className="space-y-2">
-                {(c.choferes || []).map((d) => (
+                {c._cho.map((d) => (
                   <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 p-2.5 dark:border-slate-700/50">
                     <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(d.nombre || '?').charAt(0)}</div>
                     <div className="min-w-0">
