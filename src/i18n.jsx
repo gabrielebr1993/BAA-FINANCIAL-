@@ -1915,6 +1915,14 @@ const EN = {
   "Autorizar en Trabajos": "Authorize in Jobs",
   "Este trabajo no tiene transportistas autorizados (o ninguno con el equipo). Las órdenes quedarán atascadas.": "This job has no authorized carriers (or none with the equipment). Its orders will get stuck.",
 
+  // — Freight · autorizar transportes (todos) —
+  "Crea transportistas primero en Transportistas.": "Create carriers first in Carriers.",
+  "Quitar del trabajo": "Remove from job",
+  "Agregar al trabajo": "Add to job",
+  "Sin el equipo": "Without the equipment",
+  "no recibirá órdenes hasta agregárselo en Transportistas.": "won’t receive orders until you add it in Carriers.",
+  "Toca para agregar o quitar. Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo; agrega otro si el actual no da abasto. Los marcados en rojo no tienen el equipo del trabajo y no recibirán órdenes hasta dárselo en Transportistas.": "Tap to add or remove. Only these carriers (and their drivers) receive this job’s orders; add another if the current one can’t keep up. Those marked in red don’t have the job’s equipment and won’t receive orders until you give it to them in Carriers.",
+
 }
 
 const Ctx = createContext(null)

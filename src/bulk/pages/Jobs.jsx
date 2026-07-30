@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Layers, Trash2, Wand2, Truck, Check } from 'lucide-react'
+import { Plus, Layers, Trash2, Wand2, Truck, Check, AlertTriangle } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, crearLote, listar, guardar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -139,7 +139,7 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
   // Transportistas AUTORIZADOS de este trabajo (quiénes —y sus choferes— reciben
   // sus órdenes). Editable: agrega otro transporte si el actual no da abasto.
   const autorizados = job.transportistasAutorizados || []
-  const compatibles = carriers.filter((c) => !job.tipoEquipo || (c.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase()))
+  const esCompatible = (c) => !job.tipoEquipo || (c.equipos || []).map((x) => x.toLowerCase()).includes((job.tipoEquipo || '').toLowerCase())
   const toggleAut = async (cid) => {
     const nuevos = autorizados.includes(cid) ? autorizados.filter((x) => x !== cid) : [...autorizados, cid]
     await guardar('jobs', job.id, { transportistasAutorizados: nuevos })
@@ -186,16 +186,25 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
           <Truck size={13} className="text-amber-500" /> {t('Transportistas autorizados')} ({autorizados.length})
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {compatibles.length === 0 ? <span className="text-xs text-rose-500">{t('Ningún transportista tiene ese equipo.')}</span> : compatibles.map((c) => {
+          {carriers.length === 0 ? <span className="text-xs text-slate-400">{t('Crea transportistas primero en Transportistas.')}</span> : carriers.map((c) => {
             const on = autorizados.includes(c.id)
+            const compat = esCompatible(c)
             return (
-              <button key={c.id} type="button" onClick={() => toggleAut(c.id)} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}>
-                {on && <Check size={12} />} {c.nombre}
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggleAut(c.id)}
+                title={compat ? (on ? t('Quitar del trabajo') : t('Agregar al trabajo')) : `${t('Sin el equipo')} ${job.tipoEquipo} — ${t('no recibirá órdenes hasta agregárselo en Transportistas.')}`}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${on
+                  ? (compat ? 'border-amber-500 bg-amber-500/15 font-semibold text-amber-700 dark:text-amber-300' : 'border-rose-400 bg-rose-50 font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300')
+                  : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+              >
+                {on ? <Check size={12} /> : <Plus size={12} />} {c.nombre} {!compat && <AlertTriangle size={11} className="text-rose-500" />}
               </button>
             )
           })}
         </div>
-        <p className="mt-1.5 text-[11px] text-slate-400">{t('Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto.')}</p>
+        <p className="mt-1.5 text-[11px] text-slate-400">{t('Toca para agregar o quitar. Solo estos transportistas (y sus choferes) reciben las órdenes de este trabajo; agrega otro si el actual no da abasto. Los marcados en rojo no tienen el equipo del trabajo y no recibirán órdenes hasta dárselo en Transportistas.')}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">
