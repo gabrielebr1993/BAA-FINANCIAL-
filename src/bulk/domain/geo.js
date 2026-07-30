@@ -29,6 +29,38 @@ export function transicionGeocerca(estabaDentro, pos, gf) {
   return null
 }
 
+// Geocerca objetivo de la fase actual del chofer.
+//   recogida → la geocerca de la planta de la orden (por plantaId), o el GPS de la
+//              planta con radio por defecto si no hay geocerca creada.
+//   entrega  → como la orden no guarda un destino puntual, se usan TODAS las
+//              geocercas tipo 'destino' (llega si entra en cualquiera).
+// Devuelve una geocerca, un array de geocercas, o null si no hay ninguna definida.
+export function geocercaObjetivo(orden, fase, geocercas, plantas) {
+  const gs = geocercas || []
+  if (fase === 'recogida') {
+    const porPlanta = gs.find((g) => g.plantaId && g.plantaId === orden?.plantaId)
+    if (porPlanta) return porPlanta
+    const planta = (plantas || []).find((p) => p.id === orden?.plantaId)
+    if (planta?.gps && planta.gps.lat != null) return { lat: planta.gps.lat, lng: planta.gps.lng, radio: 200, nombre: planta.nombre, tipo: 'planta' }
+    return null
+  }
+  if (fase === 'entrega') {
+    const dest = gs.filter((g) => g.tipo === 'destino')
+    return dest.length ? dest : null
+  }
+  return null
+}
+
+// ¿Puede el chofer marcar "Llegué"? Si no hay geocerca definida para la fase, no se
+// bloquea (true). Si la hay pero aún no tenemos GPS, false. Si la hay, exige estar dentro.
+export function puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) {
+  const obj = geocercaObjetivo(orden, fase, geocercas, plantas)
+  if (!obj) return true
+  if (!pos) return false
+  const lista = Array.isArray(obj) ? obj : [obj]
+  return lista.some((g) => dentroGeocerca(pos, g))
+}
+
 // Métricas de un recorrido a partir de puntos [{lat,lng,speed?,ts}] ordenados por ts.
 //   umbralMovMS: velocidad (m/s) sobre la cual se considera "en movimiento".
 export function metricasRecorrido(puntos, umbralMovMS = 1.2) {

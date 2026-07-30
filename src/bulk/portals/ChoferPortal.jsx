@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare, ScanLine } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import { convChofer, noLeidosPorConv } from '../data/chat'
@@ -9,9 +9,11 @@ import { useColeccion } from '../data/useColeccion'
 import { guardar, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
-import { siguientePasoChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
+import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
+import { puedeMarcarLlegada, geocercaObjetivo } from '../domain/geo'
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
+import { useGeoPos } from './useGeoPos'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
 import { escanearParaOCR } from '../integraciones/escaner'
@@ -37,6 +39,7 @@ export default function ChoferPortal() {
   // notificando como las que ya me asignaron.
   const { datos: ordenes } = useColeccion('orders', [where('transportistaId', '==', carrierId || '__none__')])
   const { datos: geocercas } = useColeccion('geofences')
+  const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages')
   const { datos: carriers } = useColeccion('carriers')
   const [tab, setTab] = useState('ordenes')
@@ -73,6 +76,9 @@ export default function ChoferPortal() {
   const disponibles = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO && !o.choferId), [ordenes])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
+  const pos = useGeoPos(!!activa) // posición en vivo para habilitar "Llegué" por geocerca
+  // Orden nueva que entra y aún no acepté ni rechacé (para la pantalla superpuesta).
+  const entrante = !activa ? disponibles[0] : null
 
   // Alerta local: al asignarle una orden nueva, suena y muestra notificación.
   const prevIds = useRef(null)
@@ -84,6 +90,13 @@ export default function ChoferPortal() {
     }
     prevIds.current = ids
   }, [disponibles])
+  // Mientras haya una orden entrante sin responder, suena en bucle hasta que acepte/rechace.
+  useEffect(() => {
+    if (!entrante) return
+    beep(2)
+    const id = setInterval(() => beep(2), 2200)
+    return () => clearInterval(id)
+  }, [entrante?.id])
   // Aviso local cuando llega un mensaje nuevo de la oficina.
   const prevOficina = useRef(null)
   useEffect(() => {
@@ -113,9 +126,8 @@ export default function ChoferPortal() {
                 <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
               </Aviso>
             )}
-            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} />
-              : disponibles.length === 0 ? <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />
-              : disponibles.map((o) => <TarjetaNueva key={o.id} orden={o} usuario={usuario} tenantId={tenantId} rol={rol} onRechazo={registrarRechazo} />)}
+            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} />
+              : <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />}
           </>
         )}
         {tab === 'historial' && (
@@ -164,15 +176,15 @@ export default function ChoferPortal() {
           </button>
         ))}
       </nav>
+
+      {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
+      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} onRechazo={registrarRechazo} />}
     </div>
   )
 }
 
-function VacioMsg({ icon: Icon, texto }) {
-  return <div className="mt-10 flex flex-col items-center gap-2 text-center text-slate-400"><Icon size={34} strokeWidth={1.4} /><p className="max-w-xs text-sm">{texto}</p></div>
-}
-
-function TarjetaNueva({ orden, usuario, tenantId, rol, onRechazo }) {
+// Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar.
+function OverlayEntrante({ orden, usuario, tenantId, rol, onRechazo }) {
   const { t } = useLang()
   const [ocupado, setOcupado] = useState(false)
   const aceptar = async () => {
@@ -188,22 +200,33 @@ function TarjetaNueva({ orden, usuario, tenantId, rol, onRechazo }) {
     await onRechazo?.()
   }
   return (
-    <Card className="mb-3 animate-pulse border-2 border-amber-400 p-4">
-      <div className="flex items-center gap-2"><span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span><Badge color="gold">{t('Nueva')}</Badge></div>
-      <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
-      <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>
-      <div className="mt-3 flex gap-2">
-        <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center"><CheckCircle2 size={16} /> {t('Aceptar')}</Boton>
-        <Boton variant="danger" onClick={rechazar} disabled={ocupado} className="flex-1 justify-center"><XCircle size={16} /> {t('Rechazar')}</Boton>
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/95 p-6 text-center">
+      <div className="mb-3 grid h-16 w-16 animate-pulse place-items-center rounded-full bg-amber-500/20"><Truck size={32} className="text-amber-400" /></div>
+      <div className="text-xs font-bold uppercase tracking-widest text-amber-400">{t('¡Nueva orden!')}</div>
+      <div className="mt-1 font-mono text-3xl font-black text-white">{orden.numero}</div>
+      <div className="mt-3 w-full max-w-xs space-y-1.5 rounded-2xl bg-white/5 p-4 text-left text-sm text-slate-200">
+        <div className="flex items-center gap-2"><Package size={15} className="text-amber-400" /> {orden.material || t('material s/e')} · {orden.pesoEstimado} ton</div>
+        <div className="flex items-center gap-2"><Truck size={15} className="text-amber-400" /> {orden.tipoEquipo || t('equipo s/e')}</div>
+        {orden.direccionEntrega && <div className="flex items-start gap-2"><MapPin size={15} className="mt-0.5 flex-shrink-0 text-amber-400" /> {orden.direccionEntrega}</div>}
+        <div className="flex items-center gap-2 font-semibold text-emerald-400"><DollarSign size={15} /> {t('Tu pago:')} {money(orden.pagoChofer)}</div>
       </div>
-    </Card>
+      <div className="mt-5 flex w-full max-w-xs gap-3">
+        <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><CheckCircle2 size={18} /> {t('Aceptar')}</Boton>
+        <Boton variant="danger" onClick={rechazar} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><XCircle size={18} /> {t('Rechazar')}</Boton>
+      </div>
+    </div>
   )
 }
 
-function OrdenActiva({ orden, tenantId, usuario, rol }) {
+function VacioMsg({ icon: Icon, texto }) {
+  return <div className="mt-10 flex flex-col items-center gap-2 text-center text-slate-400"><Icon size={34} strokeWidth={1.4} /><p className="max-w-xs text-sm">{texto}</p></div>
+}
+
+function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos }) {
   const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
-  const [modal, setModal] = useState(null) // 'ticket' | 'pod'
+  const fase = faseChofer(orden.estado)
+  const [modal, setModal] = useState(null) // 'ticket' | 'pod' | 'chat'
   const [ocupado, setOcupado] = useState(false)
   const [peso, setPeso] = useState('')
   const [ticketNum, setTicketNum] = useState('')
@@ -211,41 +234,73 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
   const [firma, setFirma] = useState(null)
   const [coment, setComent] = useState('')
   const [ocr, setOcr] = useState(null) // {cargando, progreso, msg}
+  const [copiado, setCopiado] = useState(false)
+  const [codigo, setCodigo] = useState('')
+  const [errCod, setErrCod] = useState(false)
+
+  // Destino de la fase actual: recogida = planta; entrega = dirección de entrega.
+  const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
+  const enRecogida = fase === 'recogida'
+  const gps = enRecogida ? planta?.gps : null
+  const dirTexto = enRecogida ? (planta?.direccion || planta?.nombre || '') : (orden.direccionEntrega || '')
+  const mapsUrl = (gps && gps.lat != null) ? `https://maps.google.com/?q=${gps.lat},${gps.lng}`
+    : (dirTexto ? `https://maps.google.com/?q=${encodeURIComponent(dirTexto)}` : null)
+  const copiaTexto = (gps && gps.lat != null) ? `${gps.lat}, ${gps.lng}` : dirTexto
+  const puedeLlegar = paso?.gate ? puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) : true
+  const hayGeocerca = !!geocercaObjetivo(orden, fase, geocercas, plantas)
+
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(copiaTexto); setCopiado(true); setTimeout(() => setCopiado(false), 1500) } catch { /* noop */ }
+  }
 
   const avanzar = async () => {
     if (!paso) return
+    if (paso.gate && !puedeLlegar) return
     if (paso.requiere === 'ticket') return setModal('ticket')
     if (paso.requiere === 'pod') return setModal('pod')
     setOcupado(true)
-    const gps = await capturarGPS()
-    await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: gps })
+    const g = await capturarGPS()
+    await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}`, entidad: 'orden', entidadId: orden.id })
     setOcupado(false)
   }
 
   const guardarTicket = async () => {
     setOcupado(true)
-    const gps = await capturarGPS()
+    const g = await capturarGPS()
+    // Al registrar el ticket, la carga queda hecha y sale de la planta (dos hitos).
     await guardar('orders', orden.id, {
-      estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() },
+      estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
       pesoReal: Number(peso) || orden.pesoEstimado,
       ticket: { numero: ticketNum || null, foto: foto || null, peso: Number(peso) || null, ts: ahora() },
-      [`gps_${paso.hito}`]: gps,
+      gps_carga: g,
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ticket_carga', entidad: 'orden', entidadId: orden.id, detalle: `Peso real ${peso}` })
-    setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum('')
+    setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null)
   }
 
   const guardarPOD = async () => {
+    if (!foto) { window.alert(t('Toma la foto de la entrega.')); return }
     if (!firma) { window.alert(t('Falta la firma.')); return }
     setOcupado(true)
-    const gps = await capturarGPS()
+    const g = await capturarGPS()
+    // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
+    const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
     await guardar('orders', orden.id, {
-      estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() },
-      pod: { firma, foto: foto || null, comentarios: coment || '', gps, ts: ahora() },
+      estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
+      pod: { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() },
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id })
     setModal(null); setOcupado(false); setFoto(null); setFirma(null); setComent('')
+  }
+
+  const liberarConCodigo = async () => {
+    setErrCod(false)
+    if (codigo.trim() !== String(orden.codigoLiberacion || '')) { setErrCod(true); return }
+    setOcupado(true)
+    await guardar('orders', orden.id, { estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberacion: ahora() }, liberadaPor: usuario?.nombre || usuario?.email })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id })
+    setOcupado(false); setCodigo('')
   }
 
   const onFoto = async (e) => setFoto(await leerFotoReducida(e.target.files?.[0]))
@@ -259,15 +314,26 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
       <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>
-      {orden.direccionEntrega && (
-        <a href={`https://maps.google.com/?q=${encodeURIComponent(orden.direccionEntrega)}`} target="_blank" rel="noreferrer" className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <MapPin size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
-          <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('Llevar a')}</div>
-            <div className="text-sm font-semibold text-brand-navy dark:text-slate-100">{orden.direccionEntrega}</div>
-            {orden.po && <div className="text-xs text-slate-500">PO: {orden.po}</div>}
+
+      {/* Tarjeta de recogida / entrega según la fase */}
+      {fase && (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            {enRecogida ? <Building2 size={13} /> : <MapPin size={13} />} {enRecogida ? t('Recoger en la planta') : t('Llevar a la entrega')}
           </div>
-        </a>
+          {enRecogida && planta?.nombre && <div className="mt-1 text-sm font-bold text-brand-navy dark:text-slate-100">{planta.nombre}</div>}
+          {dirTexto && <div className="mt-0.5 text-sm text-brand-navy dark:text-slate-100">{dirTexto}</div>}
+          <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {orden.material || '—'} · {orden.pesoReal ?? orden.pesoEstimado} ton</span>
+            {orden.po && <span className="inline-flex items-center gap-1"><FileText size={12} className="text-amber-500" /> PO {orden.po}</span>}
+          </div>
+          <div className="mt-2.5 flex gap-2">
+            {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white dark:bg-amber-500 dark:text-slate-900"><Navigation size={15} /> {t('Ir')}</a>}
+            <button type="button" onClick={copiar} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              {copiado ? <><Check size={15} className="text-emerald-500" /> {t('Copiado')}</> : <><Copy size={15} /> {t('Copiar dirección')}</>}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Hitos registrados */}
@@ -282,15 +348,26 @@ function OrdenActiva({ orden, tenantId, usuario, rol }) {
       </div>
 
       {paso ? (
-        <Boton variant="gold" onClick={avanzar} disabled={ocupado} className="mt-4 w-full justify-center py-2.5">
-          {ocupado ? <><Spinner /> {t('Guardando…')}</> : t(paso.label)}
-        </Boton>
+        <>
+          <Boton variant="gold" onClick={avanzar} disabled={ocupado || (paso.gate && !puedeLlegar)} className="mt-4 w-full justify-center py-2.5">
+            {ocupado ? <><Spinner /> {t('Guardando…')}</> : t(paso.label)}
+          </Boton>
+          {paso.gate && !puedeLlegar && (
+            <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
+              <MapPin size={12} /> {hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.')}
+            </p>
+          )}
+        </>
       ) : orden.estado === E.ENTREGADA ? (
         <div className="mt-4 rounded-xl border-2 border-dashed border-amber-400 p-4 text-center">
-          <QrCode size={40} className="mx-auto text-amber-500" />
-          <div className="mt-1 text-xs text-slate-400">{t('Muestra este código al supervisor para liberar la carga')}</div>
-          <div className="mt-1 text-2xl font-black tracking-widest text-brand-navy dark:text-slate-100">{orden.numero}</div>
-          <div className="mt-1 text-xs text-slate-400">{t('Esperando liberación…')}</div>
+          <KeyRound size={36} className="mx-auto text-amber-500" />
+          <div className="mt-1 text-sm font-semibold text-brand-navy dark:text-slate-100">{t('Pide el código de liberación al supervisor')}</div>
+          <div className="mt-0.5 text-xs text-slate-400">{t('Al ingresarlo, la orden se libera y puedes tomar otra.')}</div>
+          <div className="mt-3 flex gap-2">
+            <Input inputMode="numeric" placeholder={t('Código (4 dígitos)')} value={codigo} onChange={(e) => { setCodigo(e.target.value); setErrCod(false) }} className="flex-1 text-center tracking-widest" />
+            <Boton variant="gold" onClick={liberarConCodigo} disabled={ocupado || !codigo.trim()}>{ocupado ? <Spinner /> : t('Liberar')}</Boton>
+          </div>
+          {errCod && <div className="mt-1.5 text-xs font-semibold text-rose-500">{t('Código incorrecto. Verifícalo con el supervisor.')}</div>}
         </div>
       ) : null}
 

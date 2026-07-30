@@ -68,6 +68,12 @@ export default function SupervisorPortal() {
                 <Boton variant="success" onClick={() => liberar(o)} className="ml-auto px-3 py-1 text-xs"><CheckCircle2 size={14} /> {t('Liberar')}</Boton>
               </div>
               <div className="mt-1 text-xs text-slate-400">{o.material} · {t('chofer:')} {o.choferNombre || '—'}</div>
+              {o.codigoLiberacion && (
+                <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-500/10">
+                  <span className="text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-400">{t('Código para el chofer')}</span>
+                  <span className="font-mono text-lg font-black tracking-widest text-brand-navy dark:text-slate-100">{o.codigoLiberacion}</span>
+                </div>
+              )}
             </Card>
           ))
         )}
