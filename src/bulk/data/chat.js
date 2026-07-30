@@ -3,6 +3,19 @@
 import { crear, suscribir, where, ref } from './repo'
 import { updateDoc, arrayUnion } from 'firebase/firestore'
 
+// ── Conversaciones DIRECTAS (no ligadas a una orden) ────────────────────────
+// Se guardan en la misma colección de mensajes usando un `orderId` sintético:
+//   dm_c_<carrierId>   → chat con un transporte
+//   dm_d_<slug(nombre)> → chat con un chofer (por NOMBRE, que es único en la
+//   plantilla; así coinciden el lado oficina y el portal del chofer, que se
+//   identifican por ids distintos).
+export const slugChofer = (s) => (s || '')
+  .trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60)
+export const convChofer = (nombre) => `dm_d_${slugChofer(nombre)}`
+export const convCarrier = (carrierId) => `dm_c_${carrierId}`
+export const esConvDirecta = (id) => typeof id === 'string' && id.startsWith('dm_')
+
 export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', texto, foto, ubicacion, urgente } = {}) {
   await crear('messages', tenantId, {
     orderId,

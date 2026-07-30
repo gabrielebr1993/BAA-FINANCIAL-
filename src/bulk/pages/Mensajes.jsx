@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { MessageSquare, Search, Plus, Truck, User, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import ChatOrden from '../components/ChatOrden'
+import { convChofer, convCarrier, esConvDirecta } from '../data/chat'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio, Input, Boton } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -9,10 +10,6 @@ import { useLang } from '../../i18n'
 // Órdenes con las que tiene sentido chatear: en cola asignada o en proceso.
 const CHATEABLES = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
 const COLOR_EST = { notificando: 'gold', aceptada: 'navy', en_planta: 'navy', cargando: 'navy', en_ruta: 'blue', en_destino: 'blue', entregada: 'green' }
-
-// Prefijos de "conversación directa" (no ligada a una orden). Se usan como `orderId`
-// del chat: dm_c_<carrierId> para un transporte, dm_d_<choferId> para un chofer.
-const esDirecto = (id) => typeof id === 'string' && id.startsWith('dm_')
 
 export default function Mensajes() {
   const { t } = useLang()
@@ -45,11 +42,11 @@ export default function Mensajes() {
     const ids = new Set(directos.map((d) => d.id))
     const lastTs = {}
     for (const m of mensajes) {
-      if (esDirecto(m.orderId)) { ids.add(m.orderId); if (!lastTs[m.orderId] || m.ts > lastTs[m.orderId]) lastTs[m.orderId] = m.ts }
+      if (esConvDirecta(m.orderId)) { ids.add(m.orderId); if (!lastTs[m.orderId] || m.ts > lastTs[m.orderId]) lastTs[m.orderId] = m.ts }
     }
     const resolver = (id) => {
       if (id.startsWith('dm_c_')) { const c = carriers.find((x) => x.id === id.slice(5)); return { tipo: 'carrier', nombre: c?.nombre || t('Transporte') } }
-      if (id.startsWith('dm_d_')) { const d = choferes.find((x) => x.id === id.slice(5)); return { tipo: 'driver', nombre: d?.nombre || t('Chofer') } }
+      if (id.startsWith('dm_d_')) { const d = choferes.find((x) => convChofer(x.nombre) === id); return { tipo: 'driver', nombre: d?.nombre || t('Chofer') } }
       return { tipo: 'carrier', nombre: t('Conversación') }
     }
     return [...ids].map((id) => {
@@ -72,10 +69,10 @@ export default function Mensajes() {
     const q = buscarNuevo.trim().toLowerCase()
     const cs = carriers
       .filter((c) => !q || (c.nombre || '').toLowerCase().includes(q))
-      .map((c) => ({ id: `dm_c_${c.id}`, nombre: c.nombre || '', tipo: 'carrier' }))
+      .map((c) => ({ id: convCarrier(c.id), nombre: c.nombre || '', tipo: 'carrier' }))
     const ds = choferes
       .filter((d) => !q || (d.nombre || '').toLowerCase().includes(q))
-      .map((d) => ({ id: `dm_d_${d.id}`, nombre: d.nombre || '', tipo: 'driver', sub: d.carrierNombre }))
+      .map((d) => ({ id: convChofer(d.nombre), nombre: d.nombre || '', tipo: 'driver', sub: d.carrierNombre }))
     return [...cs, ...ds].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   }, [carriers, choferes, buscarNuevo])
 

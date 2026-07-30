@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, QrCode, Clock, MessageSquare, ScanLine } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
+import { convChofer } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -85,6 +86,12 @@ export default function ChoferPortal() {
             <div className="mt-1 text-xs text-slate-400">{historial.length} {t('entrega(s) cerrada(s)')}</div>
           </Card>
         )}
+        {tab === 'mensajes' && (
+          <Card className="flex h-[calc(100vh-11rem)] flex-col p-3">
+            <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</span></div>
+            <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convChofer(usuario?.nombre), numero: t('Oficina') }} fill /></div>
+          </Card>
+        )}
         {tab === 'perfil' && (
           <Card className="p-4">
             <div className="text-sm"><b>{usuario?.nombre}</b></div>
@@ -95,7 +102,7 @@ export default function ChoferPortal() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((t) => (
+        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((t) => (
           <button key={t.k} onClick={() => setTab(t.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === t.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
             <t.I size={20} strokeWidth={tab === t.k ? 2.4 : 1.8} /> {t.l}
           </button>

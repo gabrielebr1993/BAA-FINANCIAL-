@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Package, Phone, IdCard } from 'lucide-react'
+import { Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Package, Phone, IdCard, MessageSquare } from 'lucide-react'
+import ChatOrden from '../components/ChatOrden'
+import { convCarrier } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar, where } from '../data/repo'
@@ -67,7 +69,7 @@ export default function TransportistaPortal() {
         </div>
 
         <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-          {[{ k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') }, { k: 'equipos', l: t('Equipos') }].map((t) => (
+          {[{ k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') }, { k: 'equipos', l: t('Equipos') }, { k: 'mensajes', l: t('Mensajes') }].map((t) => (
             <button key={t.k} onClick={() => setTab(t.k)} className={`px-4 py-2 text-sm font-medium ${tab === t.k ? 'bg-amber-500 text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{t.l}</button>
           ))}
         </div>
@@ -124,6 +126,15 @@ export default function TransportistaPortal() {
             <div className="flex flex-wrap gap-1.5">
               {(carrier?.equipos || []).length ? carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>) : <span className="text-sm text-slate-400">{t('El administrador aún no registró tus equipos.')}</span>}
             </div>
+          </Card>
+        )}
+
+        {tab === 'mensajes' && (
+          <Card className="flex h-[70vh] flex-col p-3">
+            <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
+            {usuario?.carrierId
+              ? <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convCarrier(carrierId), numero: t('Oficina') }} fill /></div>
+              : <span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span>}
           </Card>
         )}
       </main>

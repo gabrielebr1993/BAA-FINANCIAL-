@@ -1870,6 +1870,18 @@ const EN = {
   "Sin resultados.": "No results.",
   "Conversación": "Conversation",
 
+  // — Freight · Perfil chofer + chat oficina —
+  "Mensajes con la oficina": "Messages with the office",
+  "Oficina": "Office",
+  "Sin calificación": "No rating",
+  "Rechaza muchas órdenes": "Rejects many orders",
+  "No rechaza órdenes": "Doesn’t reject orders",
+  "rechazo(s)": "rejection(s)",
+  "Trabajos": "Jobs",
+  "Actividad": "Activity",
+  "Sin actividad todavía.": "No activity yet.",
+  "Este chofer no está en la plantilla de ningún transporte. Agrégalo en “Choferes” para guardar su foto.": "This driver is not in any carrier’s roster. Add them in “Drivers” to save their photo.",
+
 }
 
 const Ctx = createContext(null)
