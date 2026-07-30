@@ -39,8 +39,8 @@ export default function BulkLayout({ children }) {
           <button onClick={cerrarSesion} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"><LogOut size={16} /> {t('Salir')}</button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6">
-        <div className="mx-auto w-full max-w-[1500px]">{children}</div>
+      <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-5">
+        <div className="w-full">{children}</div>
       </main>
     </div>
   )
