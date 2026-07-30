@@ -1861,6 +1861,15 @@ const EN = {
   "Se descuenta del pago de cada chofer.": "It is deducted from each driver’s pay.",
   "Escribe un monto: se reparte en partes iguales entre todos los choferes y se descuenta del pago de cada uno.": "Enter an amount: it is split equally among all drivers and deducted from each one’s pay.",
 
+  // — Freight · Chat (nueva conversación) —
+  "Nueva conversación": "New conversation",
+  "Buscar conversación, transporte o chofer…": "Search conversation, carrier or driver…",
+  "Sin conversaciones. Toca “Nueva conversación”.": "No conversations. Tap “New conversation”.",
+  "Crea una conversación con un transporte o chofer, o chatea desde una orden activa.": "Start a conversation with a carrier or driver, or chat from an active order.",
+  "Buscar transporte o chofer…": "Search carrier or driver…",
+  "Sin resultados.": "No results.",
+  "Conversación": "Conversation",
+
 }
 
 const Ctx = createContext(null)

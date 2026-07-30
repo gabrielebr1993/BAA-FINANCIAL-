@@ -129,7 +129,7 @@ export default function Ordenes() {
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Cola · por asignar')} ({cola.length})</h3></div>
         {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar ? t('Ninguna orden en cola coincide con la búsqueda.') : t('No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).')}</p> : (
-          <div className="space-y-2">
+          <div className="scroll-thin max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto pr-1">
             {colaF.map((o) => {
               const compat = transportistasCompatibles(carriers, o.tipoEquipo)
               const fin = desgloseVisible(o, rol)
@@ -191,7 +191,7 @@ export default function Ordenes() {
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Asignación en vivo')} ({activas.length})</h3></div>
         {activasF.length === 0 ? <EstadoVacio texto={buscar ? t('Ninguna orden asignada coincide con la búsqueda.') : t('Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real.')} mostrarBoton={false} /> : (
-          <div className="space-y-2">
+          <div className="scroll-thin max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto pr-1">
             {activasF.map((o) => {
               const enRuta = o.estado === E.EN_RUTA
               const fin = FINALES.includes(o.estado)
