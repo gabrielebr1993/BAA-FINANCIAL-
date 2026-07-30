@@ -1946,6 +1946,16 @@ const EN = {
   "Sin trabajos asociados. Toca Editar para agregar.": "No associated jobs. Tap Edit to add.",
   "Sin transportistas. Toca Editar para agregar.": "No carriers. Tap Edit to add.",
 
+  // — Freight · cola (filtros, notif, espera) —
+  "Orden aceptada": "Order accepted",
+  "Orden rechazada": "Order rejected",
+  "Orden asignada": "Order assigned",
+  "Choferes en espera": "Drivers waiting",
+  "Asignando a": "Assigning to",
+  "Ver todas": "View all",
+  "Cuenta desactivada": "Account deactivated",
+  "Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.": "You rejected 3 orders. Sign out and back in to reactivate.",
+
 }
 
 const Ctx = createContext(null)

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User, Search, AlertTriangle } from 'lucide-react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import { Radio, CheckCircle2, XCircle, Truck, Sparkles, Zap, MessageSquare, User, Search, AlertTriangle, UserCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
@@ -10,6 +10,7 @@ import { auditar } from '../data/auditoria'
 import { transportistaCompatible, transportistasElegibles } from '../domain/ordenes'
 import { recomendarTransportistas } from '../domain/asignacion'
 import { enviarPush } from '../integraciones/notificaciones'
+import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, EstadoVacio, Select, Boton, Aviso } from '../../components/ui'
@@ -18,6 +19,9 @@ import { useLang } from '../../i18n'
 
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
 const ACTIVAS_EST = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
+const FINALES = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
+const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
+const OCUPADO_EST = [E.NOTIFICANDO, ...EN_PROCESO_EST]
 
 // Color semántico por estado (mismos nombres que acepta <Badge/>).
 const COLOR_ESTADO = {
@@ -26,7 +30,8 @@ const COLOR_ESTADO = {
   cerrada: 'green', cancelada: 'red', rechazada: 'red',
 }
 
-function Chip({ label, val, color }) {
+// Chip-filtro: clic para filtrar la cola/asignación por estado. `active` lo resalta.
+function Chip({ label, val, color, active, onClick }) {
   const c = {
     slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
     gold: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
@@ -34,9 +39,9 @@ function Chip({ label, val, color }) {
     green: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   }[color]
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${c}`}>
+    <button type="button" onClick={onClick} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${active ? 'ring-2 ring-amber-500 ring-offset-1 dark:ring-offset-slate-900' : ''} ${c}`}>
       {label}<span className="tabular-nums">{val}</span>
-    </span>
+    </button>
   )
 }
 
@@ -53,6 +58,33 @@ export default function Ordenes() {
   const [verSug, setVerSug] = useState('') // orderId con panel de sugerencia abierto
   const [chatOrden, setChatOrden] = useState(null) // orden con el chat abierto
   const [buscar, setBuscar] = useState('')
+  const [filtro, setFiltro] = useState('') // '' | en_cola | notificando | proceso | entregadas
+  const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
+
+  // Notificaciones al dueño/dispatcher: al ACEPTAR, RECHAZAR o (RE)ASIGNAR una orden,
+  // suena y muestra un aviso del navegador (mientras la app esté abierta).
+  const prevRef = useRef(null)
+  useEffect(() => { pedirPermisoNotif() }, [])
+  useEffect(() => {
+    const prev = prevRef.current
+    const cur = {}
+    for (const o of ordenes) cur[o.id] = { estado: o.estado, rechazoTs: o.rechazo?.ts || '', carrier: o.transportistaId || '' }
+    if (prev) {
+      for (const o of ordenes) {
+        const p = prev[o.id]; if (!p) continue
+        const c = cur[o.id]
+        if (c.estado === E.ACEPTADA && p.estado !== E.ACEPTADA) {
+          beep(2); notificar(t('Orden aceptada'), `${o.numero} — ${o.choferNombre || nombreCarrier(o.transportistaId)}`)
+        } else if (c.rechazoTs && c.rechazoTs !== p.rechazoTs) {
+          beep(3); notificar(t('Orden rechazada'), `${o.numero} — ${o.rechazo?.por || nombreCarrier(p.carrier)}${o.rechazo?.motivo ? ` · ${o.rechazo.motivo}` : ''}`)
+        } else if (c.estado === E.NOTIFICANDO && p.estado !== E.NOTIFICANDO) {
+          notificar(t('Orden asignada'), `${o.numero} → ${nombreCarrier(o.transportistaId)}`)
+        }
+      }
+    }
+    prevRef.current = cur
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordenes])
 
   const { cola, activas } = useMemo(() => {
     const cola = ordenes.filter((o) => EN_COLA.includes(o.estado))
@@ -109,16 +141,30 @@ export default function Ordenes() {
   }
 
   if (cargando) return <Cargando />
-  const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
-  const FINALES = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
   const notifN = cola.filter((o) => o.estado === E.NOTIFICANDO).length
   const enProcesoN = activas.filter((o) => !FINALES.includes(o.estado)).length
   const entregadasN = activas.filter((o) => FINALES.includes(o.estado)).length
   const avance = (o) => { const h = o.hitos || {}; const done = ORDEN_HITOS.filter((k) => h[k.key]).length; return Math.round((done / ORDEN_HITOS.length) * 100) }
   const q = buscar.trim().toLowerCase()
   const coincide = (o) => !q || (o.numero || '').toLowerCase().includes(q) || (o.choferNombre || '').toLowerCase().includes(q) || (nombreCarrier(o.transportistaId) || '').toLowerCase().includes(q)
-  const colaF = cola.filter(coincide)
-  const activasF = activas.filter(coincide)
+  // Filtro por estado (chips clicables).
+  const pasaFiltro = (o) => {
+    if (!filtro) return true
+    if (filtro === 'en_cola') return o.estado === E.CREADA || o.estado === E.EN_COLA
+    if (filtro === 'notificando') return o.estado === E.NOTIFICANDO
+    if (filtro === 'proceso') return EN_PROCESO_EST.includes(o.estado)
+    if (filtro === 'entregadas') return FINALES.includes(o.estado)
+    return true
+  }
+  const setF = (v) => setFiltro((f) => (f === v ? '' : v))
+  const colaF = cola.filter(coincide).filter(pasaFiltro)
+  const activasF = activas.filter(coincide).filter(pasaFiltro)
+  // Choferes EN ESPERA: registrados y activos que no están en una orden en curso.
+  const ocupados = new Set(ordenes.filter((o) => OCUPADO_EST.includes(o.estado)).map((o) => (o.choferNombre || '').toLowerCase()).filter(Boolean))
+  const choferesEspera = carriers
+    .flatMap((c) => (c.choferes || []).filter((d) => d.activo !== false).map((d) => ({ ...d, carrierNombre: c.nombre })))
+    .filter((d) => !ocupados.has((d.nombre || '').toLowerCase()))
+    .filter((d) => !q || (d.nombre || '').toLowerCase().includes(q))
   // Órdenes en cola SIN ningún transportista elegible (equipo + autorizados) → atascadas.
   const atascadasN = colaF.filter((o) => transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o)).length === 0).length
 
@@ -127,10 +173,11 @@ export default function Ordenes() {
       <PageTitle>{t('Órdenes / Cola')}</PageTitle>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Chip label={t('En cola')} val={cola.length - notifN} color="slate" />
-        <Chip label={t('Notificando')} val={notifN} color="gold" />
-        <Chip label={t('En proceso')} val={enProcesoN} color="navy" />
-        <Chip label={t('Entregadas')} val={entregadasN} color="green" />
+        <Chip label={t('En cola')} val={cola.length - notifN} color="slate" active={filtro === 'en_cola'} onClick={() => setF('en_cola')} />
+        <Chip label={t('Notificando')} val={notifN} color="gold" active={filtro === 'notificando'} onClick={() => setF('notificando')} />
+        <Chip label={t('En proceso')} val={enProcesoN} color="navy" active={filtro === 'proceso'} onClick={() => setF('proceso')} />
+        <Chip label={t('Entregadas')} val={entregadasN} color="green" active={filtro === 'entregadas'} onClick={() => setF('entregadas')} />
+        {filtro && <button onClick={() => setFiltro('')} className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">{t('Ver todas')}</button>}
         <div className="relative ml-auto">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar N.º de orden o chofer…')} className="w-60 pl-8" />
@@ -146,8 +193,20 @@ export default function Ordenes() {
       <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Cola · por asignar')} ({cola.length})</h3></div>
-        {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar ? t('Ninguna orden en cola coincide con la búsqueda.') : t('No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).')}</p> : (
-          <div className="scroll-thin max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto pr-1">
+        {choferesEspera.length > 0 && (
+          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><UserCheck size={13} /> {t('Choferes en espera')} ({choferesEspera.length})</div>
+            <div className="flex flex-wrap gap-1">
+              {choferesEspera.slice(0, 24).map((d) => (
+                <Link key={d.id || d.nombre} to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} title={d.carrierNombre} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-700 shadow-sm hover:bg-emerald-100 dark:bg-slate-800 dark:text-emerald-300 dark:hover:bg-slate-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {d.nombre}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+        {colaF.length === 0 ? <p className="text-sm text-slate-400">{buscar || filtro ? t('Ninguna orden en cola coincide con la búsqueda.') : t('No hay órdenes en cola. Genera órdenes desde un Trabajo (Job).')}</p> : (
+          <div className="scroll-thin grid max-h-[calc(100vh-16rem)] grid-cols-1 gap-2 overflow-y-auto pr-1 2xl:grid-cols-2">
             {colaF.map((o) => {
               const compat = transportistasElegibles(carriers, o.tipoEquipo, autorizadosDe(o))
               const fin = desgloseVisible(o, rol)
@@ -200,10 +259,10 @@ export default function Ordenes() {
                     </div>
                   )}
                   {notificando && (
-                    <div className="mt-2 flex gap-1.5">
+                    <div className="mt-2 flex items-center gap-1.5">
                       <button onClick={() => aceptar(o)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-semibold text-white"><CheckCircle2 size={13} /> {t('Aceptar')}</button>
                       <button onClick={() => rechazar(o)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-xs font-semibold text-white"><XCircle size={13} /> {t('Rechazar')}</button>
-                      <span className="ml-auto self-center text-[10px] text-slate-400">→ {nombreCarrier(o.transportistaId)}</span>
+                      <span className="ml-auto inline-flex animate-pulse items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300" title={t('Asignando a')}>→ {nombreCarrier(o.transportistaId)}</span>
                     </div>
                   )}
                 </div>
@@ -215,8 +274,8 @@ export default function Ordenes() {
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Asignación en vivo')} ({activas.length})</h3></div>
-        {activasF.length === 0 ? <EstadoVacio texto={buscar ? t('Ninguna orden asignada coincide con la búsqueda.') : t('Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real.')} mostrarBoton={false} /> : (
-          <div className="scroll-thin max-h-[calc(100vh-16rem)] space-y-2 overflow-y-auto pr-1">
+        {activasF.length === 0 ? <EstadoVacio texto={buscar || filtro ? t('Ninguna orden asignada coincide con la búsqueda.') : t('Cuando asignes una orden y el chofer la acepte, aparecerá aquí con su chofer y su avance en tiempo real.')} mostrarBoton={false} /> : (
+          <div className="scroll-thin grid max-h-[calc(100vh-16rem)] grid-cols-1 gap-2 overflow-y-auto pr-1 2xl:grid-cols-2">
             {activasF.map((o) => {
               const enRuta = o.estado === E.EN_RUTA
               const fin = FINALES.includes(o.estado)

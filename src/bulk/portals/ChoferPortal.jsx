@@ -32,11 +32,34 @@ export default function ChoferPortal() {
   const { datos: ordenes } = useColeccion('orders')
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: mensajes } = useColeccion('messages')
+  const { datos: carriers } = useColeccion('carriers')
   const [tab, setTab] = useState('ordenes')
 
   const carrierId = usuario?.carrierId || null
   const miConv = convChofer(usuario?.nombre)
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[miConv]) || 0
+
+  // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
+  // rechazos y para reactivarme al reingresar.
+  const claveN = (s) => (s || '').trim().toLowerCase()
+  const miCarrier = carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
+  const miChofer = miCarrier?.choferes?.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
+  // Al abrir sesión: si estaba desactivado (3 rechazos), me reactiva y me vuelve a
+  // poner en la cola de espera (resetea el contador).
+  useEffect(() => {
+    if (miCarrier && miChofer && (miChofer.activo === false || (miChofer.rechazos || 0) > 0)) {
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (claveN(d.nombre) === claveN(usuario?.nombre) ? { ...d, activo: true, rechazos: 0 } : d)) })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [miCarrier?.id])
+  // Cuenta un rechazo; al llegar a 3 me desactiva (salgo de la cola de espera).
+  const registrarRechazo = async () => {
+    if (!miCarrier || !miChofer) return
+    const nRech = (miChofer.rechazos || 0) + 1
+    const off = nRech >= 3
+    await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (claveN(d.nombre) === claveN(usuario?.nombre) ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
+    if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
+  }
   const misOrdenes = useMemo(() => ordenes.filter((o) => o.choferId === usuario?.id), [ordenes, usuario])
   const disponibles = useMemo(() => ordenes.filter((o) => o.transportistaId && o.transportistaId === carrierId && o.estado === E.NOTIFICANDO && !o.choferId), [ordenes, carrierId])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
@@ -78,7 +101,7 @@ export default function ChoferPortal() {
             {!carrierId && <Aviso tipo="warn" className="mb-3">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</Aviso>}
             {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} />
               : disponibles.length === 0 ? <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />
-              : disponibles.map((o) => <TarjetaNueva key={o.id} orden={o} usuario={usuario} tenantId={tenantId} rol={rol} />)}
+              : disponibles.map((o) => <TarjetaNueva key={o.id} orden={o} usuario={usuario} tenantId={tenantId} rol={rol} onRechazo={registrarRechazo} />)}
           </>
         )}
         {tab === 'historial' && (
@@ -131,7 +154,7 @@ function VacioMsg({ icon: Icon, texto }) {
   return <div className="mt-10 flex flex-col items-center gap-2 text-center text-slate-400"><Icon size={34} strokeWidth={1.4} /><p className="max-w-xs text-sm">{texto}</p></div>
 }
 
-function TarjetaNueva({ orden, usuario, tenantId, rol }) {
+function TarjetaNueva({ orden, usuario, tenantId, rol, onRechazo }) {
   const { t } = useLang()
   const [ocupado, setOcupado] = useState(false)
   const aceptar = async () => {
@@ -144,6 +167,7 @@ function TarjetaNueva({ orden, usuario, tenantId, rol }) {
     setOcupado(true)
     await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, rechazo: { por: usuario.nombre, motivo, ts: ahora() } })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: motivo })
+    await onRechazo?.()
   }
   return (
     <Card className="mb-3 animate-pulse border-2 border-amber-400 p-4">
