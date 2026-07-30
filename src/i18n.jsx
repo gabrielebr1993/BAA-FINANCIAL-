@@ -1709,6 +1709,7 @@ const EN = {
   "Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.": "Your account isn't linked to a carrier. If the administrator already assigned it, tap \"Fix my access\". Otherwise, ask them to assign it.",
   "Reparar mi acceso": "Fix my access",
   "Reparando…": "Fixing…",
+  "Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.": "Your user isn't linked to a client yet. If the administrator already assigned it, tap \"Fix my access\". Otherwise, ask them to assign it.",
   "¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.": "Not seeing your orders, or your carrier changed? Refresh your permissions here.",
   // — Facturación: envío + pagos a transportistas —
   "Facturación y pagos": "Billing and payments",

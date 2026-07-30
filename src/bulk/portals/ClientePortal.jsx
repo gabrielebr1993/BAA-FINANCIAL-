@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, LogOut, Grid2x2, Weight, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
+import RepararAcceso from '../components/RepararAcceso'
 import { useColeccion } from '../data/useColeccion'
 import { where, guardar } from '../data/repo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
@@ -65,7 +66,12 @@ export default function ClientePortal() {
       </header>
 
       <main className="mx-auto max-w-5xl p-4">
-        {!usuario?.clienteId ? <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Pídele al administrador que lo asigne.')} mostrarBoton={false} /> : (
+        {!usuario?.clienteId ? (
+          <div className="text-center">
+            <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.')} mostrarBoton={false} />
+            <RepararAcceso className="mt-1 px-3 py-1.5 text-xs" />
+          </div>
+        ) : (
           <>
             <div className="mb-4 flex flex-wrap gap-3">
               <KPI label={t('Órdenes')} value={stats.total} icon={ClipboardList} accent="navy" />

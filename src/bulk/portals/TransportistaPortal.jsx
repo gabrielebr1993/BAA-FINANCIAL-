@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Package, Phone, IdCard, MessageSquare } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
+import RepararAcceso from '../components/RepararAcceso'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -87,7 +88,12 @@ export default function TransportistaPortal() {
       </header>
 
       <main className="mx-auto max-w-5xl p-4">
-        {!usuario?.carrierId && <Aviso tipo="warn" className="mb-3">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</Aviso>}
+        {!usuario?.carrierId && (
+          <Aviso tipo="warn" className="mb-3">
+            <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
+            <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
+          </Aviso>
+        )}
 
         <div className="mb-4 flex flex-wrap gap-3">
           <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
