@@ -45,7 +45,7 @@ export default function ChoferPortal() {
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
-  const claveN = (s) => (s || '').trim().toLowerCase()
+  const claveN = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   const miCarrier = carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
   const miChofer = miCarrier?.choferes?.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
   // Al abrir sesión: si estaba desactivado (3 rechazos), me reactiva y me vuelve a
