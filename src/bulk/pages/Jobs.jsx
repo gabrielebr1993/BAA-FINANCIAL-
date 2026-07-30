@@ -134,6 +134,7 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
   const [ocupado, setOcupado] = useState(false)
   const [res, setRes] = useState(null)
   const [buscarC, setBuscarC] = useState('')
+  const [editT, setEditT] = useState(false)
   const viajes = cant ? contarViajes(cant) : 0
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -183,11 +184,17 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
 
       {/* Transportistas autorizados (el FILTRO de quién recibe las órdenes) */}
       <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
-        <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">
-          <Truck size={13} className="text-amber-500" /> {t('Transportistas autorizados')} ({autorizados.length})
+        <div className="flex items-center gap-1.5">
+          <Truck size={13} className="text-amber-500" />
+          <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">{t('Transportistas autorizados')} ({autorizados.length})</span>
+          <button type="button" onClick={() => setEditT((v) => !v)} className="ml-auto text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">{editT ? t('Cerrar') : t('Editar')}</button>
         </div>
-        {carriers.length === 0 ? <span className="text-xs text-slate-400">{t('Crea transportistas primero en Transportistas.')}</span> : (
-          <>
+        {!editT ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {autorizados.length ? carriers.filter((c) => autorizados.includes(c.id)).map((c) => <Badge key={c.id} color="navy">{c.nombre}</Badge>) : <span className="text-xs text-slate-400">{t('Sin transportistas. Toca Editar para agregar.')}</span>}
+          </div>
+        ) : carriers.length === 0 ? <span className="mt-2 block text-xs text-slate-400">{t('Crea transportistas primero en Transportistas.')}</span> : (
+          <div className="mt-2">
             {carriers.length > 4 && (
               <div className="relative mb-2">
                 <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -228,9 +235,9 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
                   )
                 })}
             </div>
-          </>
+            <p className="mt-1.5 text-[11px] text-slate-400">{t('Selecciona los transportistas que reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto. Los marcados “sin equipo” no recibirán órdenes hasta dárselo en Transportistas.')}</p>
+          </div>
         )}
-        <p className="mt-1.5 text-[11px] text-slate-400">{t('Selecciona los transportistas que reciben las órdenes de este trabajo. Agrega otro si el actual no da abasto. Los marcados “sin equipo” no recibirán órdenes hasta dárselo en Transportistas.')}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/50">

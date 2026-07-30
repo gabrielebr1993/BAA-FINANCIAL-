@@ -1941,6 +1941,11 @@ const EN = {
   "cambios sin guardar": "unsaved changes",
   "Marca los trabajos de los que este transporte (y sus choferes) recibe órdenes, y guarda. Los marcados “sin equipo” no reciben órdenes hasta darles ese equipo.": "Check the jobs this carrier (and its drivers) receives orders from, and save. Those marked “no equipment” won’t receive orders until you give them that equipment.",
 
+  // — Freight · asignación colapsable —
+  "Editar": "Edit",
+  "Sin trabajos asociados. Toca Editar para agregar.": "No associated jobs. Tap Edit to add.",
+  "Sin transportistas. Toca Editar para agregar.": "No carriers. Tap Edit to add.",
+
 }
 
 const Ctx = createContext(null)

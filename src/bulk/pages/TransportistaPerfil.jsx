@@ -64,6 +64,7 @@ export default function TransportistaPerfil() {
   const [sel, setSel] = useState(null)
   const [guardandoJobs, setGuardandoJobs] = useState(false)
   const [buscarJob, setBuscarJob] = useState('')
+  const [editJobs, setEditJobs] = useState(false)
   // Re-sincroniza con lo persistido cuando cambia de verdad (tras guardar o cambio externo).
   useEffect(() => { setSel(new Set(asociadosSet)) }, [asociadosSet])
   const cur = sel || asociadosSet
@@ -129,11 +130,19 @@ export default function TransportistaPerfil() {
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>
           )}
 
-          {/* Trabajos asociados (lista multiselección + Guardar) */}
+          {/* Trabajos asociados (colapsado; se expande para editar) */}
           <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
-            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500 dark:text-slate-300"><Briefcase size={13} className="text-amber-500" /> {t('Trabajos asociados')} ({cur.size})</div>
-            {jobs.length === 0 ? <span className="text-xs text-slate-400">{t('Sin trabajos. Créalos en Trabajos.')}</span> : (
-              <>
+            <div className="flex items-center gap-1.5">
+              <Briefcase size={13} className="text-amber-500" />
+              <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-300">{t('Trabajos asociados')} ({editJobs ? cur.size : trabajos.length})</span>
+              <button type="button" onClick={() => setEditJobs((v) => !v)} className="ml-auto text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">{editJobs ? t('Cerrar') : t('Editar')}</button>
+            </div>
+            {!editJobs ? (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {trabajos.length ? trabajos.map((j) => <Badge key={j.id} color="gold">{j.nombre}</Badge>) : <span className="text-xs text-slate-400">{t('Sin trabajos asociados. Toca Editar para agregar.')}</span>}
+              </div>
+            ) : jobs.length === 0 ? <span className="mt-2 block text-xs text-slate-400">{t('Sin trabajos. Créalos en Trabajos.')}</span> : (
+              <div className="mt-2">
                 {jobs.length > 4 && (
                   <div className="relative mb-2">
                     <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -168,9 +177,9 @@ export default function TransportistaPerfil() {
                   {dirty && <button type="button" onClick={() => setSel(new Set(asociadosSet))} className="text-xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-200">{t('Descartar')}</button>}
                   {dirty && <span className="text-xs text-amber-600 dark:text-amber-400">{t('cambios sin guardar')}</span>}
                 </div>
-              </>
+                <p className="mt-1.5 text-[11px] text-slate-400">{t('Marca los trabajos de los que este transporte (y sus choferes) recibe órdenes, y guarda. Los marcados “sin equipo” no reciben órdenes hasta darles ese equipo.')}</p>
+              </div>
             )}
-            <p className="mt-1.5 text-[11px] text-slate-400">{t('Marca los trabajos de los que este transporte (y sus choferes) recibe órdenes, y guarda. Los marcados “sin equipo” no reciben órdenes hasta darles ese equipo.')}</p>
           </div>
         </div>
       </Card>
