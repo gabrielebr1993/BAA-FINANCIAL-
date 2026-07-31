@@ -225,6 +225,10 @@ service cloud.firestore {
     // Tokens de push (FCM): cada usuario registra el suyo; el backend (Admin SDK) los lee para enviar.
     match /bulk_pushTokens/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(resource.data.tenantId); }
 
+    // Presencia de choferes (en línea / disponible): cada chofer escribe la suya;
+    // cualquier miembro del tenant la lee (el dispatcher empareja órdenes con choferes).
+    match /bulk_presence/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(resource.data.tenantId); }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

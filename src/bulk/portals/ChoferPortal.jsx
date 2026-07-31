@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import { convChofer, noLeidosPorConv } from '../data/chat'
@@ -11,6 +11,8 @@ import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { puedeMarcarLlegada, geocercaObjetivo } from '../domain/geo'
+import { tsMillis } from '../data/chatKeys'
+import { conectar, desconectar, latir, ocupar, liberar } from '../data/presencia'
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
 import { useGeoPos } from './useGeoPos'
@@ -42,7 +44,9 @@ export default function ChoferPortal() {
   const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages')
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: presencias } = useColeccion('presence')
   const [tab, setTab] = useState('ordenes')
+  const [equipoSel, setEquipoSel] = useState('')
 
   const miConv = convChofer(usuario?.nombre)
   const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
@@ -74,23 +78,38 @@ export default function ChoferPortal() {
   const misIds = [usuario?.id, miChofer?.id].filter(Boolean)
   const esMia = (o) => misIds.includes(o.choferId) || (o.choferNombre && claveN(o.choferNombre) === claveN(usuario?.nombre))
   const misOrdenes = useMemo(() => ordenes.filter(esMia), [ordenes, usuario, miChofer])
-  const disponibles = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO && !o.choferId), [ordenes])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
   const pos = useGeoPos(!!activa) // posición en vivo para habilitar "Llegué" por geocerca
-  // Orden nueva que entra y aún no acepté ni rechacé (para la pantalla superpuesta).
-  const entrante = !activa ? disponibles[0] : null
+  // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
+  // no respondo → pantalla superpuesta con contador de 2:00.
+  const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && o.choferId === usuario?.id) : null
 
-  // Alerta local: al asignarle una orden nueva, suena y muestra notificación.
-  const prevIds = useRef(null)
+  // ── Presencia: en línea / disponible ───────────────────────────────────────
+  const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
+  const enLinea = miPresencia?.enLinea === true
+  const equipos = miCarrier?.equipos || []
+  useEffect(() => { if (!equipoSel && equipos.length) setEquipoSel(equipos[0]) }, [equipos.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: equipoSel || equipos[0] || '' })
+  const desconectarme = () => desconectar(usuario.id)
+  // Latido cada 30 s mientras esté en línea; al cerrar la pestaña, me desconecta.
+  useEffect(() => {
+    if (!enLinea) return
+    const id = setInterval(() => latir(usuario.id), 30000)
+    const salir = () => desconectar(usuario.id)
+    window.addEventListener('beforeunload', salir)
+    return () => { clearInterval(id); window.removeEventListener('beforeunload', salir) }
+  }, [enLinea, usuario?.id])
+
+  // Alerta local: al ofrecerme una orden nueva, suena y muestra notificación.
+  const prevEntrante = useRef(null)
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {
-    const ids = new Set(disponibles.map((o) => o.id))
-    if (prevIds.current && [...ids].some((id) => !prevIds.current.has(id))) {
+    if (entrante && entrante.id !== prevEntrante.current) {
       beep(); notificar(t('Nueva orden asignada'), t('Tienes una orden nueva por aceptar.'))
     }
-    prevIds.current = ids
-  }, [disponibles])
+    prevEntrante.current = entrante?.id || null
+  }, [entrante?.id])
   // Mientras haya una orden entrante sin responder, suena en bucle hasta que acepte/rechace.
   useEffect(() => {
     if (!entrante) return
@@ -128,7 +147,38 @@ export default function ChoferPortal() {
               </Aviso>
             )}
             {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} noLeidosChat={noLeidos[activa.id] || 0} />
-              : <VacioMsg icon={ClipboardList} texto={t('No tienes órdenes asignadas ahora. Cuando el dispatcher te asigne una, aparecerá aquí y sonará.')} />}
+              : (
+                <>
+                  {carrierId && (
+                    <Card className={`mb-3 p-4 ${enLinea ? 'border-2 border-emerald-400' : ''}`}>
+                      {enLinea ? (
+                        <div className="flex items-center gap-3">
+                          <span className="relative flex h-3 w-3"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" /></span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{t('En línea · disponible')}</div>
+                            <div className="text-xs text-slate-400">{miPresencia?.equipo || '—'} · {t('desde')} {miPresencia?.desde ? new Date(tsMillis(miPresencia.desde)).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                          </div>
+                          <Boton variant="ghost" onClick={desconectarme} className="px-3 py-1.5 text-xs"><Power size={14} /> {t('Desconectarme')}</Boton>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Wifi size={16} className="text-amber-500" /> {t('Ponte en línea para recibir órdenes')}</div>
+                          <div className="mb-2 text-xs text-slate-400">{t('El sistema te enviará automáticamente la siguiente orden compatible con tu camión.')}</div>
+                          <div className="flex items-center gap-2">
+                            {equipos.length > 0 && (
+                              <select value={equipoSel} onChange={(e) => setEquipoSel(e.target.value)} className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                                {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+                              </select>
+                            )}
+                            <Boton variant="success" onClick={conectarme} className="justify-center px-4 py-2"><Wifi size={16} /> {t('Conectarme')}</Boton>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  )}
+                  <VacioMsg icon={ClipboardList} texto={enLinea ? t('En línea. Esperando que te asignen una orden…') : t('Conéctate para empezar a recibir órdenes automáticamente.')} />
+                </>
+              )}
           </>
         )}
         {tab === 'historial' && (
@@ -184,26 +234,43 @@ export default function ChoferPortal() {
   )
 }
 
-// Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar.
+// Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
+// y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
 function OverlayEntrante({ orden, usuario, tenantId, rol, onRechazo }) {
   const { t } = useLang()
   const [ocupado, setOcupado] = useState(false)
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id) }, [])
+  const rest = orden.asignacionExpira ? Math.max(0, tsMillis(orden.asignacionExpira) - now) : null
+  const mmss = rest != null ? `${Math.floor(rest / 60000)}:${String(Math.floor((rest % 60000) / 1000)).padStart(2, '0')}` : null
+
   const aceptar = async () => {
     setOcupado(true)
     await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
+    await ocupar(usuario.id, orden.id) // salgo de la cola de disponibles
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
   }
-  const rechazar = async () => {
-    const motivo = window.prompt(t('Motivo del rechazo:')) || 'Sin motivo'
+  const rechazar = async (motivo) => {
+    const m = motivo || window.prompt(t('Motivo del rechazo:')) || 'Sin motivo'
     setOcupado(true)
-    await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, rechazo: { por: usuario.nombre, motivo, ts: ahora() } })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: motivo })
+    const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), usuario.id])]
+    await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
+    await liberar(usuario.id) // vuelvo al final de la cola de en línea
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
     await onRechazo?.()
   }
+  // Auto-rechazo por timeout si el contador llega a 0 (respaldo si el dispatcher no lo hace).
+  const venciendo = useRef(false)
+  useEffect(() => {
+    if (rest === 0 && !venciendo.current && !ocupado) { venciendo.current = true; rechazar('timeout') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rest])
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/95 p-6 text-center">
       <div className="mb-3 grid h-16 w-16 animate-pulse place-items-center rounded-full bg-amber-500/20"><Truck size={32} className="text-amber-400" /></div>
       <div className="text-xs font-bold uppercase tracking-widest text-amber-400">{t('¡Nueva orden!')}</div>
+      {mmss && <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-bold text-amber-300"><Clock size={14} /> {mmss}</div>}
       <div className="mt-1 font-mono text-3xl font-black text-white">{orden.numero}</div>
       <div className="mt-3 w-full max-w-xs space-y-1.5 rounded-2xl bg-white/5 p-4 text-left text-sm text-slate-200">
         <div className="flex items-center gap-2"><Package size={15} className="text-amber-400" /> {orden.material || t('material s/e')} · {orden.pesoEstimado} ton</div>
@@ -213,7 +280,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, onRechazo }) {
       </div>
       <div className="mt-5 flex w-full max-w-xs gap-3">
         <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><CheckCircle2 size={18} /> {t('Aceptar')}</Boton>
-        <Boton variant="danger" onClick={rechazar} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><XCircle size={18} /> {t('Rechazar')}</Boton>
+        <Boton variant="danger" onClick={() => rechazar()} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><XCircle size={18} /> {t('Rechazar')}</Boton>
       </div>
     </div>
   )
@@ -301,6 +368,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
     if (codigo.trim() !== String(orden.codigoLiberacion || '')) { setErrCod(true); return }
     setOcupado(true)
     await guardar('orders', orden.id, { estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberacion: ahora() }, liberadaPor: usuario?.nombre || usuario?.email })
+    await liberar(usuario.id) // terminé: vuelvo a la cola de en línea (disponible)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id })
     setOcupado(false); setCodigo('')
   }

@@ -36,6 +36,15 @@ export default {
         card: '0 1px 2px rgba(0,0,0,0.04)',
         cardhover: '0 4px 14px rgba(0,0,0,0.06)',
       },
+      keyframes: {
+        'slide-up': {
+          '0%': { transform: 'translateY(1rem)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+      },
+      animation: {
+        'slide-up': 'slide-up 0.25s ease-out',
+      },
     },
   },
   plugins: [],
