@@ -118,14 +118,14 @@ export default function Jobs() {
 
       {jobs.length === 0 ? <EstadoVacio titulo={t('Sin trabajos')} texto={t('Crea el primero arriba.')} mostrarBoton={false} /> : (
         <div className="space-y-3">
-          {jobs.map((j) => <JobCard key={j.id} job={j} carriers={carriers} conteo={conteoJob(j.id)} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
+          {jobs.map((j) => <JobCard key={j.id} job={j} carriers={carriers} materiales={materiales} conteo={conteoJob(j.id)} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
         </div>
       )}
     </div>
   )
 }
 
-function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
+function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
   const { t } = useLang()
   const { datos: reglas } = useColeccion('tariffs')
   const [cant, setCant] = useState('')
@@ -154,13 +154,15 @@ function JobCard({ job, carriers = [], conteo = { cola: 0, proceso: 0 }, nombreC
     setOcupado(true); setRes(null)
     // Continúa la numeración desde las órdenes existentes del job.
     const existentes = await listar('orders', tenantId, [where('jobId', '==', job.id)])
-    const nuevas = generarOrdenesDeJob(job, total, { material, seqInicial: existentes.length + 1 })
+    // El equipo requerido sale del MATERIAL elegido (si lo tiene); si no, del trabajo.
+    const equipoReq = materiales.find((m) => m.nombre === material)?.equipo || job.tipoEquipo || ''
+    const nuevas = generarOrdenesDeJob(job, total, { material, tipoEquipo: equipoReq, seqInicial: existentes.length + 1 })
     // Precio: manual (override) o AUTOMÁTICO con el motor de tarifas, por cada orden.
     const manual = precioCliente ? Number(precioCliente) : null
     let conTarifa = 0
     const conPrecio = nuevas.map((o) => {
       if (manual != null) return { ...o, precioCliente: manual, precioTransportista: r2(manual * 0.72), pagoChofer: r2(manual * 0.72 * 0.8) }
-      const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: job.tipoEquipo, clienteId: job.clienteId, plantaId: job.plantaId, ton: o.pesoEstimado })
+      const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: equipoReq, clienteId: job.clienteId, plantaId: job.plantaId, ton: o.pesoEstimado })
       if (t) { conTarifa++; return { ...o, precioCliente: t.precioCliente, precioTransportista: t.precioTransportista, pagoChofer: t.pagoChofer } }
       return o
     })

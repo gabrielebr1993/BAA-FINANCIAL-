@@ -89,8 +89,9 @@ export default function ChoferPortal() {
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
   const enLinea = miPresencia?.enLinea === true
   const equipos = miCarrier?.equipos || []
-  useEffect(() => { if (!equipoSel && equipos.length) setEquipoSel(equipos[0]) }, [equipos.length]) // eslint-disable-line react-hooks/exhaustive-deps
-  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: equipoSel || equipos[0] || '' })
+  const miEquipo = miChofer?.equipo || '' // equipo asignado en su perfil (fijo)
+  useEffect(() => { if (!equipoSel) setEquipoSel(miEquipo || equipos[0] || '') }, [miEquipo, equipos.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: miEquipo || equipoSel || equipos[0] || '', jobs: miChofer?.jobs || [] })
   const desconectarme = () => desconectar(usuario.id)
   // Latido cada 30 s mientras esté en línea; al cerrar la pestaña, me desconecta.
   useEffect(() => {
@@ -165,11 +166,13 @@ export default function ChoferPortal() {
                           <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Wifi size={16} className="text-amber-500" /> {t('Ponte en línea para recibir órdenes')}</div>
                           <div className="mb-2 text-xs text-slate-400">{t('El sistema te enviará automáticamente la siguiente orden compatible con tu camión.')}</div>
                           <div className="flex items-center gap-2">
-                            {equipos.length > 0 && (
+                            {miEquipo ? (
+                              <span className="inline-flex flex-1 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-brand-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"><Truck size={15} className="text-amber-500" /> {miEquipo}</span>
+                            ) : equipos.length > 0 ? (
                               <select value={equipoSel} onChange={(e) => setEquipoSel(e.target.value)} className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
                                 {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
                               </select>
-                            )}
+                            ) : null}
                             <Boton variant="success" onClick={conectarme} className="justify-center px-4 py-2"><Wifi size={16} /> {t('Conectarme')}</Boton>
                           </div>
                         </div>

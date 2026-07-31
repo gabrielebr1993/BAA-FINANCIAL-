@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Boxes } from 'lucide-react'
+import { Plus, Trash2, Boxes, Truck } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, guardar, eliminar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -13,16 +13,19 @@ export default function Materiales() {
   const { t } = useLang()
   const { tenantId } = useBulkAuth()
   const { datos: materiales, cargando } = useColeccion('materials')
-  const [f, setF] = useState({ nombre: '', unidad: 'ton', precio: '' })
+  const { datos: equipos } = useColeccion('equipment')
+  const equiposAct = equipos.filter((e) => e.activo !== false)
+  const [f, setF] = useState({ nombre: '', unidad: 'ton', precio: '', equipo: '' })
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
 
   const agregar = async () => {
     if (!f.nombre.trim()) return
-    await crear('materials', tenantId, { nombre: f.nombre.trim(), unidad: f.unidad, precio: Number(f.precio) || 0, activo: true })
-    setF({ nombre: '', unidad: 'ton', precio: '' })
+    await crear('materials', tenantId, { nombre: f.nombre.trim(), unidad: f.unidad, precio: Number(f.precio) || 0, equipo: f.equipo || '', activo: true })
+    setF({ nombre: '', unidad: 'ton', precio: '', equipo: '' })
   }
   const toggle = async (m) => { await guardar('materials', m.id, { activo: m.activo === false }) }
   const editarPrecio = async (m, v) => { await guardar('materials', m.id, { precio: Number(v) || 0 }) }
+  const editarEquipo = async (m, v) => { await guardar('materials', m.id, { equipo: v }) }
 
   if (cargando) return <Cargando />
   return (
@@ -31,16 +34,20 @@ export default function Materiales() {
 
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo material')}</h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Input placeholder={t('Nombre (ej. Grava)')} value={f.nombre} onChange={set('nombre')} />
           <Select value={f.unidad} onChange={set('unidad')}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</Select>
+          <Select value={f.equipo} onChange={set('equipo')}>
+            <option value="">{t('— Equipo requerido —')}</option>
+            {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+          </Select>
           <div>
             <div className="mb-1 text-[11px] uppercase text-slate-400">{t('Precio por')} {f.unidad}</div>
             <Input type="number" step="0.01" placeholder="0.00" value={f.precio} onChange={set('precio')} />
           </div>
           <div className="flex items-end"><Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim()} className="w-full justify-center"><Plus size={16} /> {t('Agregar')}</Boton></div>
         </div>
-        <p className="mt-2 text-[11px] text-slate-400">{t('El precio es la referencia del material. El precio final al cliente puede ajustarse por planta/acuerdo en el motor de tarifas y en el trabajo.')}</p>
+        <p className="mt-2 text-[11px] text-slate-400">{t('El “equipo requerido” hace que las órdenes de este material solo se ofrezcan a choferes con ese camión. El precio es la referencia; el final puede ajustarse en tarifas y en el trabajo.')}</p>
       </Card>
 
       {materiales.length === 0 ? <EstadoVacio titulo={t('Sin materiales')} texto={t('Agrega el primero arriba.')} mostrarBoton={false} /> : (
@@ -57,6 +64,14 @@ export default function Materiales() {
                 <span className="text-xs text-slate-400">{t('Precio por')} {m.unidad || 'ton'}:</span>
                 <Input type="number" step="0.01" defaultValue={m.precio ?? 0} onBlur={(e) => editarPrecio(m, e.target.value)} className="w-28 py-1 text-sm" />
                 <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{money(m.precio || 0)}</span>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <Truck size={13} className="text-slate-400" />
+                <span className="text-xs text-slate-400">{t('Equipo')}:</span>
+                <Select value={m.equipo || ''} onChange={(e) => editarEquipo(m, e.target.value)} className="flex-1 py-1 text-sm">
+                  <option value="">{t('— cualquiera —')}</option>
+                  {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+                </Select>
               </div>
             </Card>
           ))}

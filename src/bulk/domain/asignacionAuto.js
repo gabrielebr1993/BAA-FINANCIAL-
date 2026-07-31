@@ -19,6 +19,14 @@ export function equipoCompatible(equipoChofer, tipoEquipoReq) {
   return transportistaCompatible(equipoChofer ? [equipoChofer] : [], tipoEquipoReq)
 }
 
+// ¿El chofer está habilitado para el trabajo de la orden?
+// Si el chofer no tiene trabajos configurados, puede recibir de cualquiera (no
+// restringe). Si tiene una lista, la orden debe pertenecer a uno de esos trabajos.
+export function trabajoCompatible(jobsChofer, jobId) {
+  if (!jobsChofer || jobsChofer.length === 0) return true
+  return !!jobId && jobsChofer.includes(jobId)
+}
+
 // ¿Está esta presencia libre y viva ahora mismo?
 export function choferDisponible(p, ahoraMs) {
   if (!p || p.enLinea !== true) return false
@@ -47,6 +55,7 @@ export function emparejar(ordenesCola, presencias, ahoraMs) {
       .filter((p) => !usados.has(p.id))
       .filter((p) => !rechazadoPor.includes(p.uid || p.id))
       .filter((p) => equipoCompatible(p.equipo, orden.tipoEquipo))
+      .filter((p) => trabajoCompatible(p.jobs, orden.jobId))
       .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde))
     if (cand.length) { pares.push({ orden, chofer: cand[0] }); usados.add(cand[0].id) }
   }

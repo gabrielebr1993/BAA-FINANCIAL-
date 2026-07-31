@@ -81,7 +81,9 @@ export function generarOrdenesDeJob(job, cantidadTon, opts = {}) {
     direccionEntrega: job.destino || '',
     po: job.po || '',
     material: opts.material || (job.materiales || [])[0] || '',
-    tipoEquipo: job.tipoEquipo || '',
+    // El equipo requerido sale del MATERIAL (opts.tipoEquipo) si está definido;
+    // si no, cae al equipo del trabajo. Así una orden de grava exige End Dump, etc.
+    tipoEquipo: opts.tipoEquipo || job.tipoEquipo || '',
     pesoEstimado: peso,
     pesoReal: null,
     transportistaId: null,

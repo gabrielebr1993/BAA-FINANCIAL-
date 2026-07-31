@@ -8,7 +8,7 @@
 // Cada documento lleva `demo: true`. `borrarDemo` solo elimina esos documentos,
 // así que NUNCA toca datos reales del tenant.
 // ============================================================================
-import { crear, crearLote, listar, eliminar, guardar, where } from './repo'
+import { crear, crearConId, crearLote, listar, eliminar, guardar, where } from './repo'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 
 // ---- utilidades -----------------------------------------------------------
@@ -71,9 +71,9 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   // 1) Catálogos base ---------------------------------------------------------
   log('Materiales y tipos de equipo…')
   const materiales = [
-    { nombre: 'Arena', unidad: 'ton' }, { nombre: 'Piedra', unidad: 'ton' }, { nombre: 'Grava', unidad: 'ton' },
-    { nombre: 'Tierra', unidad: 'ton' }, { nombre: 'Concreto', unidad: 'ton' }, { nombre: 'Asfalto', unidad: 'ton' },
-    { nombre: 'Material reciclado', unidad: 'ton' },
+    { nombre: 'Arena', unidad: 'ton', equipo: 'End Dump' }, { nombre: 'Piedra', unidad: 'ton', equipo: 'Belly Dump' }, { nombre: 'Grava', unidad: 'ton', equipo: 'End Dump' },
+    { nombre: 'Tierra', unidad: 'ton', equipo: 'Dump Truck' }, { nombre: 'Concreto', unidad: 'ton', equipo: 'Concrete Mixer' }, { nombre: 'Asfalto', unidad: 'ton', equipo: 'End Dump' },
+    { nombre: 'Material reciclado', unidad: 'ton', equipo: 'Walking Floor' },
   ].map((m) => ({ ...m, precio: RATE[m.nombre] || 20, activo: true, demo: true }))
   await crearLote('materials', tenantId, materiales)
   const equipos = ['End Dump', 'Belly Dump', 'Dump Truck', 'Concrete Mixer', 'Flatbed', 'Lowboy', 'Side Dump']
@@ -95,7 +95,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     const c = carriersDef[i]
     // 2 choferes por transporte (guardados en el propio documento del transporte).
     const choferes = [CHOFERES[(i * 2) % CHOFERES.length], CHOFERES[(i * 2 + 1) % CHOFERES.length]]
-      .map((nombre, k) => ({ id: `d_${i}${k}`, nombre, telefono: `214-555-0${100 + i * 2 + k}`, licencia: `TX-${10000 + i * 2 + k}`, activo: true }))
+      .map((nombre, k) => ({ id: `d_${i}${k}`, nombre, telefono: `214-555-0${100 + i * 2 + k}`, licencia: `TX-${10000 + i * 2 + k}`, equipo: c.equipos[k % c.equipos.length], activo: true }))
     carriers.push(await crear('carriers', tenantId, { ...c, choferes, activo: true, demo: true }))
   }
   conteo.transportistas = carriers.length
@@ -327,9 +327,10 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   for (const p of enLineaDef) {
     const c = carriers[p.ci]; const d = c?.choferes?.[p.di]
     if (!c || !d) continue
-    await crear('presence', tenantId, {
+    // El id del doc DEBE ser el uid del chofer (así reservar/liberar lo encuentran).
+    await crearConId('presence', d.id, tenantId, {
       uid: d.id, nombre: d.nombre, carrierId: c.id, carrierNombre: c.nombre,
-      equipo: c.equipos[0], enLinea: true, estado: p.estado, ordenId: p.ordenId || null,
+      equipo: d.equipo || c.equipos[0], enLinea: true, estado: p.estado, ordenId: p.ordenId || null,
       desde: minsAtras(p.mins), heartbeat: latidoDemo, demo: true,
     })
     nPres++

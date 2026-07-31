@@ -6,12 +6,13 @@ import { crearConId, guardar } from './repo'
 
 const ahora = () => new Date().toISOString()
 
-// Marca al chofer EN LÍNEA (disponible) con el camión que va a manejar.
-export async function conectar(tenantId, { uid, nombre, carrierId, carrierNombre, equipo }) {
+// Marca al chofer EN LÍNEA (disponible) con el camión que maneja y los trabajos
+// a los que está afiliado (para que solo le lleguen órdenes compatibles).
+export async function conectar(tenantId, { uid, nombre, carrierId, carrierNombre, equipo, jobs }) {
   try {
     await crearConId('presence', uid, tenantId, {
       uid, nombre: nombre || '', carrierId: carrierId || null, carrierNombre: carrierNombre || '',
-      equipo: equipo || '', enLinea: true, estado: 'libre', ordenId: null,
+      equipo: equipo || '', jobs: jobs || [], enLinea: true, estado: 'libre', ordenId: null,
       desde: ahora(), heartbeat: ahora(),
     })
   } catch { /* reglas no desplegadas: degradar sin romper */ }
