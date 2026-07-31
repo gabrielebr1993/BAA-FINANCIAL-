@@ -234,6 +234,8 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   // Una orden en cola cuyo equipo (Concrete Mixer) NO tiene chofer en línea →
   // se queda "esperando chofer en línea compatible" (sin emparejar).
   orders.push(buildOrder(0, 92, E.CREADA, false, { equipo: 'Concrete Mixer' }))
+  // Una orden CANCELADA (para poblar el historial de canceladas).
+  orders.push({ ...buildOrder(0, 93, E.CANCELADA), cancelacion: { por: 'Dispatch', motivo: 'Cliente canceló', ts: iso(daysAgo(1)) } })
   const ordersCreados = await crearLote('orders', tenantId, orders)
   conteo.ordenes = ordersCreados.length
 

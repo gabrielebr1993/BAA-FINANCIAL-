@@ -1,8 +1,10 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw } from 'lucide-react'
+import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
+import ModalCancelarOrden from '../components/ModalCancelarOrden'
+import { puedeCancelar } from '../data/ordenAcciones'
 import { noLeidosPorConv } from '../data/chat'
 import { tsMillis } from '../data/chatKeys'
 import { useColeccion } from '../data/useColeccion'
@@ -55,6 +57,8 @@ export default function Ordenes() {
   const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
   const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
   const [chatOrden, setChatOrden] = useState(null)
+  const [cancelar, setCancelar] = useState(null) // orden a cancelar (modal)
+  const [verCanceladas, setVerCanceladas] = useState(false)
   const [buscar, setBuscar] = useState('')
   const [toasts, setToasts] = useState([]) // notificaciones estilo sistema (abajo-derecha)
 
@@ -67,6 +71,7 @@ export default function Ordenes() {
   const emparejando = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO), [ordenes])
   const enProceso = useMemo(() => ordenes.filter((o) => EN_PROCESO_EST.includes(o.estado)), [ordenes])
   const entregadas = useMemo(() => ordenes.filter((o) => FINALES.includes(o.estado)), [ordenes])
+  const canceladas = useMemo(() => ordenes.filter((o) => o.estado === E.CANCELADA), [ordenes])
   // Choferes en línea (vivos) que se muestran: libres + reservados (los ocupados salen).
   const enLinea = useMemo(() => (presencias || [])
     .filter((p) => p.enLinea === true && p.estado !== 'ocupado' && p.estado !== 'offline')
@@ -176,6 +181,10 @@ export default function Ordenes() {
         <StatPill label={t('Emparejando')} val={emparejando.length} color="gold" icon={RefreshCw} />
         <StatPill label={t('En proceso')} val={enProceso.length} color="blue" icon={Truck} />
         <StatPill label={t('Entregadas')} val={entregadas.length} color="navy" icon={CheckCircle2} />
+        <button type="button" onClick={() => setVerCanceladas((v) => !v)} className={`flex min-w-[7rem] flex-1 items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-left transition ${verCanceladas ? 'border-rose-400 bg-rose-50 dark:border-rose-500/50 dark:bg-rose-500/10' : 'border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-900'}`}>
+          <Ban size={20} className="text-rose-500" strokeWidth={1.9} />
+          <div className="min-w-0"><div className="text-2xl font-black tabular-nums leading-none text-rose-500">{canceladas.length}</div><div className="mt-0.5 truncate text-[11px] font-medium text-slate-400">{t('Canceladas')}</div></div>
+        </button>
         <div className="relative ml-auto self-center">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar orden o chofer…')} className="w-56 pl-8" />
@@ -201,10 +210,13 @@ export default function Ordenes() {
                       <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                       <Badge color="navy">{o.pesoEstimado} ton</Badge>
                       {o.tipoEquipo && <Badge color="slate">{o.tipoEquipo}</Badge>}
-                      <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="relative ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
-                        <MessageSquare size={15} />
-                        {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
-                      </button>
+                      <div className="ml-auto flex items-center gap-0.5">
+                        {esStaff && puedeCancelar(o) && <button onClick={() => setCancelar(o)} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
+                        <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                          <MessageSquare size={15} />
+                          {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
                       <Package size={12} /> {t(o.material || 'material s/e')}
@@ -272,10 +284,13 @@ export default function Ordenes() {
                   <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
                   <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
                   <Badge color="navy">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
-                  <button onClick={() => setChatOrden(o)} className="relative ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
-                    <MessageSquare size={15} />
-                    {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
-                  </button>
+                  <div className="ml-auto flex items-center gap-0.5">
+                    {esStaff && puedeCancelar(o) && <button onClick={() => setCancelar(o)} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
+                    <button onClick={() => setChatOrden(o)} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                      <MessageSquare size={15} />
+                      {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5 text-xs"><User size={13} className="text-amber-500" /><span className="font-semibold text-brand-navy dark:text-slate-100">{o.choferNombre || nombreCarrier(o.transportistaId)}</span><span className="text-slate-400">· {t(o.material)} · {o.pesoReal ?? o.pesoEstimado} ton</span></div>
               </div>
@@ -284,11 +299,33 @@ export default function Ordenes() {
         </Card>
       )}
 
+      {/* Historial de canceladas (toggle desde el indicador) */}
+      {verCanceladas && (
+        <Card className="mt-4 p-4">
+          <div className="mb-3 flex items-center gap-2"><Ban size={17} className="text-rose-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Canceladas')} ({canceladas.length})</h3></div>
+          {canceladas.length === 0 ? <p className="py-4 text-center text-sm text-slate-400">{t('No hay órdenes canceladas.')}</p> : (
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {canceladas.filter(coincideO).map((o) => (
+                <div key={o.id} className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 dark:border-rose-500/20 dark:bg-rose-500/5">
+                  <div className="flex items-center gap-2">
+                    <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
+                    <Badge color="red">{t('Cancelada')}</Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(o.material || 'material s/e')} · {o.pesoEstimado} ton</div>
+                  {o.cancelacion && <div className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{t('Motivo')}: {o.cancelacion.motivo} · {o.cancelacion.por}{o.cancelacion.ts ? ` · ${new Date(o.cancelacion.ts).toLocaleDateString('es', { day: '2-digit', month: 'short' })}` : ''}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {chatOrden && (
         <ModalChat titulo={`${t('Chat')} · ${chatOrden.numero}`} onClose={() => setChatOrden(null)}>
           <ChatOrden orden={chatOrden} alto={380} />
         </ModalChat>
       )}
+      {cancelar && <ModalCancelarOrden orden={cancelar} ctx={{ tenantId, usuario, rol }} onClose={() => setCancelar(null)} onDone={() => setCancelar(null)} />}
 
       {/* Notificaciones estilo sistema (abajo-derecha) */}
       <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col gap-2">

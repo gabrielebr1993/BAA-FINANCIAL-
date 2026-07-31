@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle } from 'lucide-react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
 import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
+import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
+import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import MapaLeaflet from '../components/MapaLeaflet'
 import ChatOrden from '../components/ChatOrden'
-import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
+import { Card, Badge, Boton, Cargando, EstadoVacio } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -22,14 +24,20 @@ const hora = (ts) => (ts ? new Date(ts).toLocaleString('es', { day: '2-digit', m
 export default function OrdenDetalle() {
   const { t } = useLang()
   const { id } = useParams()
-  const { tenantId, rol } = useBulkAuth()
+  const navigate = useNavigate()
+  const { tenantId, rol, usuario } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
   const { datos: incidencias } = useColeccion('incidents')
+  const { datos: facturas } = useColeccion('invoices')
   const [track, setTrack] = useState([])
+  const [accion, setAccion] = useState(null) // 'cancelar' | 'eliminar' | null
+  const [menu, setMenu] = useState(false)
 
+  const esStaff = ['super_admin', 'admin', 'dispatcher'].includes(rol)
+  const esAdmin = ['super_admin', 'admin'].includes(rol)
   const orden = useMemo(() => ordenes.find((o) => o.id === id) || null, [ordenes, id])
 
   useEffect(() => {
@@ -74,7 +82,36 @@ export default function OrdenDetalle() {
             <div className="text-xl font-black text-brand-navy dark:text-slate-100">{Math.round((hitosHechos / ORDEN_HITOS.length) * 100)}%</div>
           </div>
         </div>
+
+        {/* Acciones de gestión (staff cancela; admin/owner puede eliminar) */}
+        {esStaff && (
+          <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+            {orden.estado === E.CANCELADA ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400"><Ban size={14} /> {t('Orden cancelada')}{orden.cancelacion?.motivo ? ` · ${orden.cancelacion.motivo}` : ''}</span>
+            ) : puedeCancelar(orden) ? (
+              <Boton variant="ghost" onClick={() => setAccion('cancelar')} className="px-3 py-1.5 text-xs"><Ban size={14} /> {t('Cancelar orden')}</Boton>
+            ) : (
+              <span className="text-xs text-slate-400">{t('Orden finalizada — no se puede cancelar.')}</span>
+            )}
+            {esAdmin && (
+              <div className="relative ml-auto">
+                <button onClick={() => setMenu((v) => !v)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" title={t('Más acciones')}><MoreVertical size={18} /></button>
+                {menu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+                    <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                      <button onClick={() => { setMenu(false); setAccion('eliminar') }} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"><Trash2 size={15} /> {t('Eliminar orden…')}</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </Card>
+
+      {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}
+      {accion === 'eliminar' && <ModalEliminar orden={orden} facturada={ordenFacturada(orden, facturas)} onClose={() => setAccion(null)} onDone={() => navigate('/bulk/ordenes')} ctx={{ tenantId, usuario, rol, facturas }} t={t} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Datos */}
@@ -177,5 +214,53 @@ function Dato({ icon: Icon, label, val }) {
         <div className="font-medium text-brand-navy dark:text-slate-100">{val}</div>
       </div>
     </div>
+  )
+}
+
+function Overlay({ children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>{children}</div>
+    </div>
+  )
+}
+
+// Eliminar: doble confirmación (escribir el número). Bloqueado si está facturada.
+function ModalEliminar({ orden, facturada, onClose, onDone, ctx, t }) {
+  const [txt, setTxt] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const ok = txt.trim() === (orden.numero || '').trim()
+  const confirmar = async () => {
+    setOcupado(true)
+    try { await eliminarOrden(orden, ctx); onDone() }
+    catch (e) {
+      if (e?.code === 'FACTURADA') window.alert(t('Esta orden está en una factura; cancélala o ajusta la factura primero.'))
+      else window.alert(t('No se pudo eliminar la orden.'))
+      setOcupado(false)
+    }
+  }
+  return (
+    <Overlay onClose={onClose}>
+      <div className="mb-1 flex items-center gap-2"><ShieldAlert size={18} className="text-rose-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Eliminar orden')} {orden.numero}</h3></div>
+      {facturada ? (
+        <>
+          <div className="my-3 flex items-start gap-2 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+            <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+            <span>{t('Esta orden está en una factura; cancélala o ajusta la factura primero.')} {t('Para no romper la contabilidad, no se puede eliminar una orden facturada.')}</span>
+          </div>
+          <div className="flex justify-end"><Boton variant="ghost" onClick={onClose} className="px-3 py-2 text-sm">{t('Entendido')}</Boton></div>
+        </>
+      ) : (
+        <>
+          <p className="my-2 text-sm text-slate-600 dark:text-slate-300">{t('Esta acción es permanente e irreversible: la orden se borrará por completo. Se guardará solo un registro en auditoría.')}</p>
+          <label className="mb-1 block text-xs font-semibold text-slate-500">{t('Escribe el número de la orden para confirmar:')} <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{orden.numero}</span></label>
+          <input value={txt} onChange={(e) => setTxt(e.target.value)} placeholder={orden.numero} className="mb-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+          <div className="mt-3 flex justify-end gap-2">
+            <Boton variant="ghost" onClick={onClose} disabled={ocupado} className="px-3 py-2 text-sm">{t('Volver')}</Boton>
+            <Boton variant="danger" onClick={confirmar} disabled={ocupado || !ok} className="px-3 py-2 text-sm"><Trash2 size={15} /> {t('Sí, eliminar definitivamente')}</Boton>
+          </div>
+        </>
+      )}
+    </Overlay>
   )
 }
