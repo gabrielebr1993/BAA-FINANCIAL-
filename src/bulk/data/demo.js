@@ -296,6 +296,33 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   }
   conteo.incidencias = incs.length
 
+  // 12) Choferes EN LÍNEA (presencia) — para ver el emparejamiento automático
+  // sin abrir una segunda sesión. Se les ofrece una orden en cola compatible y
+  // titilan con el contador de 2:00 en la pantalla "Órdenes / Cola".
+  log('Choferes en línea…')
+  const ahoraD = new Date()
+  const minsAtras = (m) => iso(new Date(ahoraD.getTime() - m * 60000))
+  // Latido muy adelantado para que la presencia demo no caduque durante la sesión.
+  const latidoDemo = iso(new Date(ahoraD.getTime() + 365 * 24 * 3600000))
+  const enLineaDef = [
+    { ci: 0, di: 0, mins: 12 }, // Transportes Rápidos (End Dump) — el más antiguo en línea
+    { ci: 1, di: 0, mins: 7 },  // Fletes del Golfo (Belly Dump)
+    { ci: 2, di: 0, mins: 3 },  // Aguilar Hauling (Dump Truck)
+    { ci: 0, di: 1, mins: 1 },  // Transportes Rápidos · 2º chofer (End Dump)
+  ]
+  let nPres = 0
+  for (const p of enLineaDef) {
+    const c = carriers[p.ci]; const d = c?.choferes?.[p.di]
+    if (!c || !d) continue
+    await crear('presence', tenantId, {
+      uid: d.id, nombre: d.nombre, carrierId: c.id, carrierNombre: c.nombre,
+      equipo: c.equipos[0], enLinea: true, estado: 'libre', ordenId: null,
+      desde: minsAtras(p.mins), heartbeat: latidoDemo, demo: true,
+    })
+    nPres++
+  }
+  conteo.choferesEnLinea = nPres
+
   log('¡Listo!')
   return conteo
 }
@@ -303,7 +330,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
 // ============================================================================
 // Borra SOLO los documentos demo (demo === true) del tenant. No toca datos reales.
 export async function borrarDemo(tenantId, onProgress = () => {}) {
-  const cols = ['trackpoints', 'orders', 'invoices', 'incidents', 'documents', 'jobs', 'geofences', 'tariffs', 'plants', 'clients', 'carriers', 'equipment', 'materials']
+  const cols = ['presence', 'trackpoints', 'orders', 'invoices', 'incidents', 'documents', 'jobs', 'geofences', 'tariffs', 'plants', 'clients', 'carriers', 'equipment', 'materials']
   let total = 0
   for (const c of cols) {
     const docs = await listar(c, tenantId, [where('demo', '==', true)])
