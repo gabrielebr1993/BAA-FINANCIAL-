@@ -54,7 +54,7 @@ export default function OrdenDetalle() {
   const hitosHechos = ORDEN_HITOS.filter((h) => orden.hitos?.[h.key]).length
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <Link to="/bulk/ordenes" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Volver a Órdenes')}</Link>
 
       {/* Encabezado */}
