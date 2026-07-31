@@ -201,7 +201,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
       material, tipoEquipo: tie?.equipo || jd.tipoEquipo,
       pesoEstimado: Math.min(25, ton), pesoReal: terminado ? ton : null,
       transportistaId: asignado ? carrierId : null,
-      choferId: tie ? tie.choferId : null, choferNombre: (activo || terminado) ? chofer : null,
+      choferId: tie?.choferId ?? null, choferNombre: (activo || terminado) ? chofer : null,
       estado, urgente, hitos, demo: true,
       ...precioDe(ton, material),
     }
@@ -231,6 +231,9 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   const dEntreg = carriers[0]?.choferes?.[1]
   if (dOcup) orders.push(buildOrder(0, 90, E.EN_RUTA, false, { carrierId: carriers[0].id, choferId: dOcup.id, choferNombre: dOcup.nombre, equipo: carriers[0].equipos[0] }))
   if (dEntreg) orders.push(buildOrder(0, 91, E.ENTREGADA, false, { carrierId: carriers[0].id, choferId: dEntreg.id, choferNombre: dEntreg.nombre, equipo: carriers[0].equipos[0] }))
+  // Una orden en cola cuyo equipo (Concrete Mixer) NO tiene chofer en línea →
+  // se queda "esperando chofer en línea compatible" (sin emparejar).
+  orders.push(buildOrder(0, 92, E.CREADA, false, { equipo: 'Concrete Mixer' }))
   const ordersCreados = await crearLote('orders', tenantId, orders)
   conteo.ordenes = ordersCreados.length
 
