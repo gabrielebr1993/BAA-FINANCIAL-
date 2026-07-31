@@ -180,13 +180,13 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
 
   // 7) Órdenes en todas las etapas -------------------------------------------
   log('Órdenes (cola, activas, entregadas)…')
-  const buildOrder = (jIdx, seq, estado, urgente = false) => {
+  const buildOrder = (jIdx, seq, estado, urgente = false, tie = null) => {
     const job = jobs[jIdx], jd = jobsDef[jIdx]
     const material = pick(jd.materiales)
     const ton = r2(randInt(180, 250) / 10) // 18.0–25.0
     const compatibles = compatCarriers(jd.tipoEquipo)
-    const carrierId = compatibles.length ? pick(compatibles) : null
-    const chofer = pick(CHOFERES)
+    const carrierId = tie ? tie.carrierId : (compatibles.length ? pick(compatibles) : null)
+    const chofer = tie ? tie.choferNombre : pick(CHOFERES)
     const asignado = ![E.CREADA, E.EN_COLA].includes(estado)
     const activo = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO].includes(estado)
     const terminado = [E.ENTREGADA, E.LIBERADA, E.CERRADA].includes(estado)
@@ -198,10 +198,10 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
       numero: `${job.codigo}-${String(seq).padStart(4, '0')}`,
       jobId: job.id, clienteId: job.clienteId, plantaId: job.plantaId,
       direccionEntrega: dest.direccion, po: `PO-${2500 + jIdx}`,
-      material, tipoEquipo: jd.tipoEquipo,
+      material, tipoEquipo: tie?.equipo || jd.tipoEquipo,
       pesoEstimado: Math.min(25, ton), pesoReal: terminado ? ton : null,
       transportistaId: asignado ? carrierId : null,
-      choferId: null, choferNombre: (activo || terminado) ? chofer : null,
+      choferId: tie ? tie.choferId : null, choferNombre: (activo || terminado) ? chofer : null,
       estado, urgente, hitos, demo: true,
       ...precioDe(ton, material),
     }
@@ -224,6 +224,13 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     const finales = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
     for (let k = 0; k < nFin; k++) orders.push(buildOrder(j, seq++, pick(finales)))
   }
+  // Dos órdenes LIGADAS a choferes concretos (los que quedan en línea abajo):
+  //   · una EN RUTA (chofer ocupado, aparece en "En proceso")
+  //   · una ENTREGADA (el chofer acaba de entregar y vuelve a "en línea")
+  const dOcup = carriers[0]?.choferes?.[0]
+  const dEntreg = carriers[0]?.choferes?.[1]
+  if (dOcup) orders.push(buildOrder(0, 90, E.EN_RUTA, false, { carrierId: carriers[0].id, choferId: dOcup.id, choferNombre: dOcup.nombre, equipo: carriers[0].equipos[0] }))
+  if (dEntreg) orders.push(buildOrder(0, 91, E.ENTREGADA, false, { carrierId: carriers[0].id, choferId: dEntreg.id, choferNombre: dEntreg.nombre, equipo: carriers[0].equipos[0] }))
   const ordersCreados = await crearLote('orders', tenantId, orders)
   conteo.ordenes = ordersCreados.length
 
@@ -304,11 +311,12 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   const minsAtras = (m) => iso(new Date(ahoraD.getTime() - m * 60000))
   // Latido muy adelantado para que la presencia demo no caduque durante la sesión.
   const latidoDemo = iso(new Date(ahoraD.getTime() + 365 * 24 * 3600000))
+  const ordenEnRuta = ordersCreados.find((o) => dOcup && o.choferId === dOcup.id && o.estado === E.EN_RUTA)
   const enLineaDef = [
-    { ci: 0, di: 0, mins: 12 }, // Transportes Rápidos (End Dump) — el más antiguo en línea
-    { ci: 1, di: 0, mins: 7 },  // Fletes del Golfo (Belly Dump)
-    { ci: 2, di: 0, mins: 3 },  // Aguilar Hauling (Dump Truck)
-    { ci: 0, di: 1, mins: 1 },  // Transportes Rápidos · 2º chofer (End Dump)
+    { ci: 0, di: 0, mins: 15, estado: 'ocupado', ordenId: ordenEnRuta?.id || null }, // en una orden EN RUTA
+    { ci: 1, di: 0, mins: 7, estado: 'libre' },  // Fletes del Golfo (Belly Dump)
+    { ci: 2, di: 0, mins: 3, estado: 'libre' },  // Aguilar Hauling (Dump Truck)
+    { ci: 0, di: 1, mins: 1, estado: 'libre' },  // Transportes Rápidos · 2º chofer (acaba de entregar → en línea)
   ]
   let nPres = 0
   for (const p of enLineaDef) {
@@ -316,7 +324,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     if (!c || !d) continue
     await crear('presence', tenantId, {
       uid: d.id, nombre: d.nombre, carrierId: c.id, carrierNombre: c.nombre,
-      equipo: c.equipos[0], enLinea: true, estado: 'libre', ordenId: null,
+      equipo: c.equipos[0], enLinea: true, estado: p.estado, ordenId: p.ordenId || null,
       desde: minsAtras(p.mins), heartbeat: latidoDemo, demo: true,
     })
     nPres++
