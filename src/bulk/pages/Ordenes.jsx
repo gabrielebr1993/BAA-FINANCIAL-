@@ -80,20 +80,25 @@ export default function Ordenes() {
   const libresN = choferesLibres(presencias, now).length
 
   // ── Motor de emparejamiento (corre en el cliente del dispatcher) ──────────
+  // Reacciona SOLO a cambios en la cola o en la presencia (no al reloj de 1s), para
+  // no re-ejecutar cada segundo. Usa Date.now() interno para la frescura.
   const enVuelo = useRef(new Set())          // órdenes en proceso de oferta
   const enVueloChofer = useRef(new Set())    // choferes ya comprometidos (aún sin propagarse la reserva)
   useEffect(() => {
     if (!esStaff) return
-    // Excluye del pool a los choferes con una oferta en vuelo, para no ofrecerles dos.
-    const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid))
-    const pares = emparejar(porAsignar, pool, now)
-    for (const { orden, chofer } of pares) {
-      if (enVuelo.current.has(orden.id)) continue
-      enVuelo.current.add(orden.id); enVueloChofer.current.add(chofer.uid)
-      ofrecer(orden, chofer).finally(() => { enVuelo.current.delete(orden.id); enVueloChofer.current.delete(chofer.uid) })
-    }
+    try {
+      const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid))
+      const pares = emparejar(porAsignar, pool, Date.now())
+      for (const { orden, chofer } of pares) {
+        if (enVuelo.current.has(orden.id)) continue
+        enVuelo.current.add(orden.id); enVueloChofer.current.add(chofer.uid)
+        ofrecer(orden, chofer)
+          .catch(() => { /* red/permiso: no romper el loop */ })
+          .finally(() => { enVuelo.current.delete(orden.id); enVueloChofer.current.delete(chofer.uid) })
+      }
+    } catch { /* nunca dejar que el matcher tumbe la página */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAsignar, presencias, now, esStaff])
+  }, [porAsignar, presencias, esStaff])
 
   const ofrecer = async (orden, chofer) => {
     await guardar('orders', orden.id, {
@@ -109,13 +114,17 @@ export default function Ordenes() {
   const revirtiendo = useRef(new Set())
   useEffect(() => {
     if (!esStaff) return
-    for (const o of emparejando) {
-      // Vencida (2:00 sin respuesta) o notificando "heredada" sin contador → reencolar.
-      const revertir = ofertaVencida(o, now) || !o.asignacionExpira
-      if (!revertir || revirtiendo.current.has(o.id)) continue
-      revirtiendo.current.add(o.id)
-      reofertar(o, o.asignacionExpira ? 'timeout' : 'reencolar').finally(() => revirtiendo.current.delete(o.id))
-    }
+    try {
+      for (const o of emparejando) {
+        // Vencida (2:00 sin respuesta) o notificando "heredada" sin contador → reencolar.
+        const revertir = ofertaVencida(o, now) || !o.asignacionExpira
+        if (!revertir || revirtiendo.current.has(o.id)) continue
+        revirtiendo.current.add(o.id)
+        reofertar(o, o.asignacionExpira ? 'timeout' : 'reencolar')
+          .catch(() => { /* no romper el loop */ })
+          .finally(() => revirtiendo.current.delete(o.id))
+      }
+    } catch { /* proteger la página */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emparejando, now, esStaff])
 
