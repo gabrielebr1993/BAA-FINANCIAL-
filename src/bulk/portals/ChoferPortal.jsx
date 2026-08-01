@@ -95,9 +95,9 @@ export default function ChoferPortal() {
   const enLinea = miPresencia?.enLinea === true
   // Perfil propio del chofer (foto, datos, banco) — editable por él mismo.
   const miPerfil = (driverProfiles || []).find((p) => p.uid === usuario?.id) || null
-  // El EQUIPO lo asigna el administrador (roster); el chofer solo lo ve, no lo cambia.
-  const miEquipo = miChofer?.equipo || ''
-  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: miEquipo, jobs: miChofer?.jobs || [] })
+  // Los EQUIPOS los asigna el administrador (roster); el chofer solo los ve.
+  const miEquipos = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : [])
+  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipos: miEquipos, jobs: miChofer?.jobs || [] })
   const desconectarme = () => desconectar(usuario.id)
   // Latido cada 30 s mientras esté en línea; al cerrar la pestaña, me desconecta.
   useEffect(() => {
@@ -166,7 +166,7 @@ export default function ChoferPortal() {
                       <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">{t('En línea')}</div>
                       <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('Buscando cargas para ti…')}</div>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"><Truck size={12} className="text-amber-500" /> {miPresencia?.equipo || miEquipo || '—'}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"><Truck size={12} className="text-amber-500" /> {(miPresencia?.equipos && miPresencia.equipos.join(', ')) || miEquipos.join(', ') || '—'}</span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"><Clock size={12} /> {t('desde')} {miPresencia?.desde ? new Date(tsMillis(miPresencia.desde)).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                       </div>
                       <button onClick={desconectarme} className="mt-6 w-full rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Power size={15} className="mr-1 inline" /> {t('Desconectarme')}</button>
@@ -177,13 +177,13 @@ export default function ChoferPortal() {
                       <div className="text-lg font-black text-brand-navy dark:text-slate-100">{t('Estás desconectado')}</div>
                       <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('Conéctate para recibir órdenes que coincidan con tu camión.')}</div>
                       <div className="mt-4">
-                        {miEquipo ? (
-                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400"><Truck size={14} /> {miEquipo}</div>
+                        {miEquipos.length > 0 ? (
+                          <div className="flex flex-wrap justify-center gap-1.5">{miEquipos.map((eq) => <span key={eq} className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400"><Truck size={14} /> {eq}</span>)}</div>
                         ) : (
                           <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">{t('Sin equipo asignado. Pídele al administrador que te asigne un camión para recibir órdenes.')}</div>
                         )}
                       </div>
-                      <button onClick={conectarme} disabled={!miEquipo} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
+                      <button onClick={conectarme} disabled={!miEquipos.length} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
                     </div>
                   )}
                 </div>
@@ -365,7 +365,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const [banco, setBanco] = useState({ titular: '', banco: '', cuenta: '', routing: '' })
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
-  const equipo = miChofer?.equipo || '' // asignado por el admin (solo lectura)
+  const equiposCh = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : []) // asignados por el admin (solo lectura)
   const trabajos = miChofer?.jobsNombres || [] // nombres denormalizados (solo lectura)
 
   // Sembrar el formulario cuando carga el perfil (o desde la ficha del roster).
@@ -411,7 +411,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><User size={12} /> {t('Chofer')}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</span>
-            {equipo && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {equipo}</span>}
+            {equiposCh.map((eq) => <span key={eq} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {eq}</span>)}
             {(miChofer?.jobs || []).length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{miChofer.jobs.length} {t('trabajo(s)')}</span>}
           </div>
         </div>
@@ -429,9 +429,9 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
       {/* Asignación (solo lectura): la define el administrador */}
       <Card className="p-4">
         <div className="mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mi asignación')}</div>
-        <div className="flex items-center justify-between border-b border-slate-100 py-2 dark:border-slate-800">
-          <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400"><Truck size={15} className="text-amber-500" /> {t('Mi camión')}</span>
-          {equipo ? <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{equipo}</span> : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{t('sin asignar')}</span>}
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 py-2 dark:border-slate-800">
+          <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400"><Truck size={15} className="text-amber-500" /> {t('Mis camiones')}</span>
+          {equiposCh.length > 0 ? <span className="flex flex-wrap justify-end gap-1">{equiposCh.map((eq) => <span key={eq} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-brand-navy dark:bg-slate-800 dark:text-slate-100">{eq}</span>)}</span> : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{t('sin asignar')}</span>}
         </div>
         <div className="py-2">
           <div className="mb-1 text-sm text-slate-500 dark:text-slate-400">{t('Trabajos asignados')}</div>

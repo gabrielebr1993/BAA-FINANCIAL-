@@ -62,6 +62,11 @@ export default function ChoferPerfil() {
     const nuevos = (rosterCarrier.choferes || []).map((d) => (clave(d.nombre) === clave(nombre) ? { ...d, ...patch } : d))
     await guardar('carriers', rosterCarrier.id, { choferes: nuevos })
   }
+  const toggleRosterEquipo = (eq) => {
+    const actuales = rosterChofer?.equipos || (rosterChofer?.equipo ? [rosterChofer.equipo] : [])
+    const nuevos = actuales.includes(eq) ? actuales.filter((x) => x !== eq) : [...actuales, eq]
+    editarRoster({ equipos: nuevos, equipo: nuevos[0] || '' })
+  }
   const nombreJob = (id) => jobs.find((j) => j.id === id)?.nombre || jobs.find((j) => j.id === id)?.codigo || id
   const toggleRosterJob = (id) => {
     const actuales = rosterChofer?.jobs || []
@@ -126,16 +131,19 @@ export default function ChoferPerfil() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
-            {rosterChofer && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Truck size={12} /> {t('Equipo (camión):')}</span>
-                <select value={rosterChofer.equipo || ''} onChange={(e) => editarRoster({ equipo: e.target.value })} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-                  <option value="">{t('— sin asignar —')}</option>
-                  {equiposAct.map((eq) => <option key={eq.id} value={eq.nombre}>{eq.nombre}</option>)}
-                </select>
-                {!rosterChofer.equipo && <span className="text-[11px] text-amber-600 dark:text-amber-400">{t('sin equipo, no recibirá órdenes')}</span>}
-              </div>
-            )}
+            {rosterChofer && (() => {
+              const eqCh = rosterChofer.equipos || (rosterChofer.equipo ? [rosterChofer.equipo] : [])
+              return (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Truck size={12} /> {t('Equipos (camiones):')}</span>
+                  {equiposAct.map((eq) => {
+                    const on = eqCh.includes(eq.nombre)
+                    return <button key={eq.id} type="button" onClick={() => toggleRosterEquipo(eq.nombre)} className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{eq.nombre}</button>
+                  })}
+                  {eqCh.length === 0 && <span className="text-[11px] text-amber-600 dark:text-amber-400">{t('sin equipo, no recibirá órdenes')}</span>}
+                </div>
+              )
+            })()}
             {rosterChofer && jobsAct.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Briefcase size={12} /> {t('Afiliado a:')}</span>

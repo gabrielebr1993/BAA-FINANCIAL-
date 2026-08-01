@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard, Search, X, Briefcase } from 'lucide-react'
+import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard, Search, X, Briefcase, Save } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -17,11 +17,13 @@ export default function GestionChoferes() {
   const equiposAct = equipos.filter((e) => e.activo !== false)
   const jobsAct = jobs.filter((j) => j.activo !== false)
   const nombreJob = (id) => jobs.find((j) => j.id === id)?.nombre || jobs.find((j) => j.id === id)?.codigo || id
-  const [f, setF] = useState({ carrierId: '', nombre: '', telefono: '', licencia: '', equipo: '', jobs: [] })
+  const [f, setF] = useState({ carrierId: '', nombre: '', telefono: '', licencia: '', equipos: [], jobs: [] })
   const [buscar, setBuscar] = useState('')
   const [alta, setAlta] = useState(false)
+  const [borrador, setBorrador] = useState({}) // equipos en edición por chofer (antes de Guardar)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const toggleFJob = (id) => setF((s) => ({ ...s, jobs: s.jobs.includes(id) ? s.jobs.filter((x) => x !== id) : [...s.jobs, id] }))
+  const toggleFEquipo = (eq) => setF((s) => ({ ...s, equipos: s.equipos.includes(eq) ? s.equipos.filter((x) => x !== eq) : [...s.equipos, eq] }))
 
   const agregar = async () => {
     const c = carriers.find((x) => x.id === f.carrierId)
@@ -29,13 +31,13 @@ export default function GestionChoferes() {
     // Un chofer solo puede estar en UN transporte.
     const yaExiste = carriers.some((x) => (x.choferes || []).some((d) => (d.nombre || '').toLowerCase() === f.nombre.trim().toLowerCase()))
     if (yaExiste) { window.alert('Ese chofer ya está en un transporte. Un chofer solo puede estar en uno; usa “Reasignar” para moverlo.'); return }
-    const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), equipo: f.equipo || '', jobs: f.jobs || [], jobsNombres: (f.jobs || []).map(nombreJob), activo: true }
+    const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), equipos: f.equipos, equipo: f.equipos[0] || '', jobs: f.jobs || [], jobsNombres: (f.jobs || []).map(nombreJob), activo: true }
     await guardar('carriers', c.id, { choferes: [...(c.choferes || []), chofer] })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'alta_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${c.nombre}` })
-    setF({ carrierId: '', nombre: '', telefono: '', licencia: '', equipo: '', jobs: [] })
+    setF({ carrierId: '', nombre: '', telefono: '', licencia: '', equipos: [], jobs: [] })
   }
 
-  // Edición en sitio de un campo del chofer embebido (equipo, jobs, …).
+  // Edición en sitio de un campo del chofer embebido (equipos, jobs, …).
   const editarChofer = async (carrier, chofer, patch) => {
     await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === chofer.id ? { ...d, ...patch } : d)) })
   }
@@ -43,6 +45,17 @@ export default function GestionChoferes() {
     const actuales = chofer.jobs || []
     const nuevos = actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id]
     editarChofer(carrier, chofer, { jobs: nuevos, jobsNombres: nuevos.map(nombreJob) })
+  }
+  // Equipos del chofer (multiselección) con borrador + botón Guardar.
+  const equiposGuardados = (d) => d.equipos || (d.equipo ? [d.equipo] : [])
+  const equiposDe = (d) => borrador[d.id] ?? equiposGuardados(d)
+  const dirtyEquipos = (d) => !!borrador[d.id] && JSON.stringify([...borrador[d.id]].sort()) !== JSON.stringify([...equiposGuardados(d)].sort())
+  const toggleEquipoBorrador = (d, eq) => setBorrador((s) => { const cur = s[d.id] ?? equiposGuardados(d); const next = cur.includes(eq) ? cur.filter((x) => x !== eq) : [...cur, eq]; return { ...s, [d.id]: next } })
+  const guardarEquipos = async (carrier, d) => {
+    const lista = equiposDe(d)
+    await editarChofer(carrier, d, { equipos: lista, equipo: lista[0] || '' })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'equipos_chofer', entidad: 'chofer', detalle: `${d.nombre}: ${lista.join(', ') || '—'}` })
+    setBorrador((s) => { const n = { ...s }; delete n[d.id]; return n })
   }
 
   const borrar = async (carrier, chofer) => {
@@ -90,12 +103,16 @@ export default function GestionChoferes() {
             {carriers.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </Select>
           <Input placeholder="Nombre del chofer" value={f.nombre} onChange={set('nombre')} />
-          <Select value={f.equipo} onChange={set('equipo')}>
-            <option value="">— Equipo (camión) —</option>
-            {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
-          </Select>
           <Input placeholder="Teléfono" value={f.telefono} onChange={set('telefono')} />
           <Input placeholder="Licencia" value={f.licencia} onChange={set('licencia')} />
+        </div>
+        <div className="mt-3">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-slate-400"><Truck size={12} /> Equipos (camiones) que maneja <span className="normal-case text-slate-400">(uno o varios)</span></div>
+          <div className="flex flex-wrap gap-1.5">
+            {equiposAct.map((e) => (
+              <button key={e.id} type="button" onClick={() => toggleFEquipo(e.nombre)} className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${f.equipos.includes(e.nombre) ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>{e.nombre}</button>
+            ))}
+          </div>
         </div>
         {jobsAct.length > 0 && (
           <div className="mt-3">
@@ -138,11 +155,6 @@ export default function GestionChoferes() {
                         </div>
                       </div>
                       <div className="ml-auto flex items-center gap-1.5">
-                        <Truck size={13} className="text-slate-400" />
-                        <Select value={d.equipo || ''} onChange={(e) => editarChofer(c, d, { equipo: e.target.value })} className="py-1 text-xs">
-                          <option value="">— equipo —</option>
-                          {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
-                        </Select>
                         <ArrowRightLeft size={13} className="text-slate-400" />
                         <Select value="" onChange={(e) => reasignar(c, d, e.target.value)} className="py-1 text-xs">
                           <option value="">Reasignar a…</option>
@@ -150,6 +162,15 @@ export default function GestionChoferes() {
                         </Select>
                         <button onClick={() => borrar(c, d)} className="text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button>
                       </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-700/50">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Truck size={11} /> Equipos:</span>
+                      {equiposAct.map((e) => {
+                        const on = equiposDe(d).includes(e.nombre)
+                        return <button key={e.id} type="button" onClick={() => toggleEquipoBorrador(d, e.nombre)} className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{e.nombre}</button>
+                      })}
+                      {equiposDe(d).length === 0 && <span className="text-[11px] text-amber-600 dark:text-amber-400">sin equipo</span>}
+                      {dirtyEquipos(d) && <button onClick={() => guardarEquipos(c, d)} className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-600"><Save size={11} /> Guardar</button>}
                     </div>
                     {jobsAct.length > 0 && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-700/50">

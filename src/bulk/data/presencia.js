@@ -8,11 +8,12 @@ const ahora = () => new Date().toISOString()
 
 // Marca al chofer EN LÍNEA (disponible) con el camión que maneja y los trabajos
 // a los que está afiliado (para que solo le lleguen órdenes compatibles).
-export async function conectar(tenantId, { uid, nombre, carrierId, carrierNombre, equipo, jobs }) {
+export async function conectar(tenantId, { uid, nombre, carrierId, carrierNombre, equipo, equipos, jobs }) {
   try {
+    const lista = equipos && equipos.length ? equipos : (equipo ? [equipo] : [])
     await crearConId('presence', uid, tenantId, {
       uid, nombre: nombre || '', carrierId: carrierId || null, carrierNombre: carrierNombre || '',
-      equipo: equipo || '', jobs: jobs || [], enLinea: true, estado: 'libre', ordenId: null,
+      equipo: lista[0] || '', equipos: lista, jobs: jobs || [], enLinea: true, estado: 'libre', ordenId: null,
       desde: ahora(), heartbeat: ahora(),
     })
   } catch { /* reglas no desplegadas: degradar sin romper */ }

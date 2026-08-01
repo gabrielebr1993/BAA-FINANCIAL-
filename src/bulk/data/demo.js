@@ -95,7 +95,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     const c = carriersDef[i]
     // 2 choferes por transporte (guardados en el propio documento del transporte).
     const choferes = [CHOFERES[(i * 2) % CHOFERES.length], CHOFERES[(i * 2 + 1) % CHOFERES.length]]
-      .map((nombre, k) => ({ id: `d_${i}${k}`, nombre, telefono: `214-555-0${100 + i * 2 + k}`, licencia: `TX-${10000 + i * 2 + k}`, equipo: c.equipos[k % c.equipos.length], activo: true }))
+      .map((nombre, k) => { const eq = c.equipos[k % c.equipos.length]; return { id: `d_${i}${k}`, nombre, telefono: `214-555-0${100 + i * 2 + k}`, licencia: `TX-${10000 + i * 2 + k}`, equipo: eq, equipos: [eq], activo: true } })
     carriers.push(await crear('carriers', tenantId, { ...c, choferes, activo: true, demo: true }))
   }
   conteo.transportistas = carriers.length
@@ -330,7 +330,7 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
     // El id del doc DEBE ser el uid del chofer (así reservar/liberar lo encuentran).
     await crearConId('presence', d.id, tenantId, {
       uid: d.id, nombre: d.nombre, carrierId: c.id, carrierNombre: c.nombre,
-      equipo: d.equipo || c.equipos[0], enLinea: true, estado: p.estado, ordenId: p.ordenId || null,
+      equipo: d.equipo || c.equipos[0], equipos: d.equipos || [d.equipo || c.equipos[0]], enLinea: true, estado: p.estado, ordenId: p.ordenId || null,
       desde: minsAtras(p.mins), heartbeat: latidoDemo, demo: true,
     })
     nPres++

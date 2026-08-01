@@ -13,10 +13,10 @@ export const PRESENCIA_TTL_MS = 90 * 1000
 export const ESPERA_RESPUESTA_MS = 120 * 1000
 
 // ¿El camión del chofer sirve para el equipo que pide la orden?
-// Reutiliza la compatibilidad de transportista tratando el equipo del chofer
-// como su lista de equipos. Orden sin `tipoEquipo` → cualquiera sirve.
+// Acepta un equipo (string) o VARIOS (array). Orden sin `tipoEquipo` → cualquiera.
 export function equipoCompatible(equipoChofer, tipoEquipoReq) {
-  return transportistaCompatible(equipoChofer ? [equipoChofer] : [], tipoEquipoReq)
+  const lista = Array.isArray(equipoChofer) ? equipoChofer : (equipoChofer ? [equipoChofer] : [])
+  return transportistaCompatible(lista, tipoEquipoReq)
 }
 
 // ¿El chofer está habilitado para el trabajo de la orden?
@@ -54,7 +54,7 @@ export function emparejar(ordenesCola, presencias, ahoraMs) {
     const cand = libres
       .filter((p) => !usados.has(p.id))
       .filter((p) => !rechazadoPor.includes(p.uid || p.id))
-      .filter((p) => equipoCompatible(p.equipo, orden.tipoEquipo))
+      .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
       .filter((p) => trabajoCompatible(p.jobs, orden.jobId))
       .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde))
     if (cand.length) { pares.push({ orden, chofer: cand[0] }); usados.add(cand[0].id) }

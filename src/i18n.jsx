@@ -1795,6 +1795,8 @@ const EN = {
   "Sin equipo asignado. Pídele al administrador que te asigne un camión para recibir órdenes.": "No equipment assigned. Ask the admin to assign you a truck to receive orders.",
   "Mi asignación": "My assignment",
   "Mi camión": "My truck",
+  "Mis camiones": "My trucks",
+  "Equipos (camiones):": "Equipment (trucks):",
   "sin asignar": "unassigned",
   "Trabajos asignados": "Assigned jobs",
   "Todos los trabajos (sin restricción)": "All jobs (no restriction)",

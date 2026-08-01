@@ -227,7 +227,7 @@ export default function Ordenes() {
                 const entrando = numOrdenPorChofer[p.uid]
                 const rest = entrando?.expira ? tsMillis(entrando.expira) - now : 0
                 return (
-                  <div key={p.id} className={`flex items-center gap-3 rounded-xl border p-3 transition ${entrando ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700/60'}`}>
+                  <div key={p.id} onClick={() => p.nombre && navigate(`/bulk/chofer/${encodeURIComponent(p.nombre)}`)} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition hover:shadow-sm ${entrando ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>
                     <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-sm font-black ${entrando ? 'bg-amber-400 text-slate-900' : 'bg-brand-navy text-white dark:bg-slate-700'}`}>{inicial(p.nombre)}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -235,7 +235,7 @@ export default function Ordenes() {
                         <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-500" />
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                        {p.equipo && <span className="inline-flex items-center gap-0.5"><Truck size={11} /> {p.equipo}</span>}
+                        {(p.equipos && p.equipos.length ? p.equipos.join(', ') : p.equipo) && <span className="inline-flex items-center gap-0.5"><Truck size={11} /> {p.equipos && p.equipos.length ? p.equipos.join(', ') : p.equipo}</span>}
                         <span>· {p.carrierNombre || '—'}</span>
                         <span>· {t('desde')} {horaCorta(p.desde)}</span>
                       </div>
