@@ -434,7 +434,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
         </button>
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
-      <div className="mt-1 text-sm font-semibold text-emerald-600">{t('Tu pago:')} {money(orden.pagoChofer)}</div>
+      <div className="mt-2 flex items-baseline gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
+        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{money(orden.pagoChofer)}</span>
+        <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago por este viaje')}</span>
+      </div>
 
       {/* Tarjeta de recogida / entrega según la fase */}
       {fase && (
@@ -478,9 +481,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
 
       {paso ? (
         <>
-          <Boton variant="gold" onClick={avanzar} disabled={ocupado || (paso.gate && !puedeLlegar)} className="mt-4 w-full justify-center py-2.5">
-            {ocupado ? <><Spinner /> {t('Guardando…')}</> : t(paso.label)}
-          </Boton>
+          <button onClick={avanzar} disabled={ocupado || (paso.gate && !puedeLlegar)}
+            className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-black shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed ${paso.gate && !puedeLlegar ? 'bg-slate-200 text-slate-400 shadow-none dark:bg-slate-800' : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}>
+            {ocupado ? <><Spinner /> {t('Guardando…')}</> : <>{paso.gate && !puedeLlegar ? <MapPin size={18} /> : <CheckCircle2 size={18} />} {t(paso.label)}</>}
+          </button>
           {paso.gate && !puedeLlegar && (
             <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
               <MapPin size={12} /> {hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.')}

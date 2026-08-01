@@ -1766,6 +1766,7 @@ const EN = {
   "Sin equipo asignado. Pídele al administrador que te asigne un camión.": "No equipment assigned. Ask the admin to assign you a truck.",
   "Nueva carga": "New load",
   "Tu pago por este viaje": "Your pay for this trip",
+  "tu pago por este viaje": "your pay for this trip",
   "Recoger": "Pick up",
   "Entregar": "Deliver",
   "Aceptar carga": "Accept load",

@@ -58,7 +58,9 @@ export function useAutoAsignacion() {
   useEffect(() => {
     if (!esStaff) return
     try {
-      const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid))
+      // Los choferes DEMO (presencia de prueba) se muestran en la columna de en
+      // línea pero NO se les ofrecen órdenes, para que un chofer real reciba la carga.
+      const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo)
       const pares = emparejar(porAsignar, pool, Date.now())
       for (const { orden, chofer } of pares) {
         if (enVuelo.current.has(orden.id)) continue
