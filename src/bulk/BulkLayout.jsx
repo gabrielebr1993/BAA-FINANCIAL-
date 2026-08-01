@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Truck, LogOut, Grid2x2 } from 'lucide-react'
+import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
 import { NAV, puedeVer } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
@@ -19,6 +19,15 @@ export default function BulkLayout({ children }) {
   const navigate = useNavigate()
   const items = NAV.filter((i) => puedeVer(rol, i.roles))
   const [verClave, setVerClave] = useState(false)
+  // Menú lateral: se puede ocultar/mostrar. Recordamos la preferencia.
+  const [menuAbierto, setMenuAbierto] = useState(() => {
+    try { return localStorage.getItem('bulk_menu_oculto') !== '1' } catch { return true }
+  })
+  const alternarMenu = () => setMenuAbierto((v) => {
+    const n = !v
+    try { localStorage.setItem('bulk_menu_oculto', n ? '0' : '1') } catch { /* noop */ }
+    return n
+  })
   // Motor de asignación automática: corre mientras cualquier staff tenga el panel
   // abierto (en cualquier pantalla), no solo en Órdenes.
   useAutoAsignacion()
@@ -37,13 +46,16 @@ export default function BulkLayout({ children }) {
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
-      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:flex">
+      {/* Fondo oscuro en móvil cuando el menú está abierto (para cerrarlo al tocar). */}
+      {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
+      <aside className={`${menuAbierto ? 'flex' : 'hidden'} fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>
         <div className="mb-4 flex flex-shrink-0 items-center gap-2 px-2 py-1">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={19} strokeWidth={2} /></div>
           <div>
             <div className="text-base font-extrabold leading-none">Freight</div>
             <div className="text-[11px] text-slate-400">{t('Transporte de materiales')}</div>
           </div>
+          <button onClick={alternarMenu} title={t('Ocultar menú')} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {items.map((i) => (
@@ -66,6 +78,11 @@ export default function BulkLayout({ children }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-5">
+        {!menuAbierto && (
+          <button onClick={alternarMenu} title={t('Mostrar menú')} className="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+            <PanelLeft size={17} /> {t('Menú')}
+          </button>
+        )}
         <div className="w-full">{children}</div>
       </main>
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}

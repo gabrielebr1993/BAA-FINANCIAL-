@@ -2203,6 +2203,10 @@ const EN = {
   "Se cerró la sesión de todos los usuarios.": "All users have been signed out.",
   "Se cerró la sesión del rol": "Signed out the role",
   "Se cerró la sesión de": "Signed out",
+  // — Freight · menú lateral —
+  "Ocultar menú": "Hide menu",
+  "Mostrar menú": "Show menu",
+  "Menú": "Menu",
 
 }
 
