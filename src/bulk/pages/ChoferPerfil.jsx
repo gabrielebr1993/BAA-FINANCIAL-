@@ -27,7 +27,9 @@ export default function ChoferPerfil() {
   const { datos: plants } = useColeccion('plants')
   const { datos: incidents } = useColeccion('incidents')
   const { datos: equipment } = useColeccion('equipment')
+  const { datos: driverProfiles } = useColeccion('driverProfiles')
   const equiposAct = equipment.filter((e) => e.activo !== false)
+  const perfilDriver = driverProfiles.find((p) => clave(p.nombre) === clave(nombre)) || null
   const jobsAct = jobs.filter((j) => j.activo !== false)
   const [subiendo, setSubiendo] = useState(false)
 
@@ -82,8 +84,8 @@ export default function ChoferPerfil() {
         <div className="px-5 pb-5">
           <div className="-mt-12 flex flex-wrap items-end gap-4">
             <div className="relative">
-              {rosterChofer?.foto
-                ? <img src={rosterChofer.foto} alt={nombre} className="h-24 w-24 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-900" />
+              {(perfilDriver?.foto || rosterChofer?.foto)
+                ? <img src={perfilDriver?.foto || rosterChofer.foto} alt={nombre} className="h-24 w-24 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-900" />
                 : <div className="grid h-24 w-24 flex-shrink-0 place-items-center rounded-full border-4 border-white bg-brand-navy text-4xl font-black text-white shadow-lg dark:border-slate-900">{(nombre || '?').charAt(0).toUpperCase()}</div>}
               <label className="absolute bottom-0 right-0 grid h-8 w-8 cursor-pointer place-items-center rounded-full border-2 border-white bg-amber-500 text-slate-900 shadow dark:border-slate-900" title={t('Cambiar foto')}>
                 {subiendo ? <Spinner /> : <Camera size={15} />}
@@ -157,6 +159,19 @@ export default function ChoferPerfil() {
           </div>
         </div>
       </Card>
+
+      {/* Datos bancarios del chofer (MilePay) — capturados por él en su app */}
+      {perfilDriver?.banco && (perfilDriver.banco.titular || perfilDriver.banco.cuenta || perfilDriver.banco.banco) && (
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><DollarSign size={16} className="text-emerald-500" /> {t('Datos bancarios (MilePay)')}</div>
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div><div className="text-[11px] uppercase text-slate-400">{t('Titular')}</div><div className="font-medium text-brand-navy dark:text-slate-100">{perfilDriver.banco.titular || '—'}</div></div>
+            <div><div className="text-[11px] uppercase text-slate-400">{t('Banco')}</div><div className="font-medium text-brand-navy dark:text-slate-100">{perfilDriver.banco.banco || '—'}</div></div>
+            <div><div className="text-[11px] uppercase text-slate-400">{t('N.º de cuenta')}</div><div className="font-mono font-medium text-brand-navy dark:text-slate-100">{perfilDriver.banco.cuenta || '—'}</div></div>
+            <div><div className="text-[11px] uppercase text-slate-400">Routing / CLABE</div><div className="font-mono font-medium text-brand-navy dark:text-slate-100">{perfilDriver.banco.routing || '—'}</div></div>
+          </div>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

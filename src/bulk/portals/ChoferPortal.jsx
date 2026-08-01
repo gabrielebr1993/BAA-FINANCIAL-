@@ -1,12 +1,12 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, where } from '../data/repo'
+import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
@@ -45,6 +45,8 @@ export default function ChoferPortal() {
   const { datos: mensajes } = useColeccion('messages')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
+  const { datos: equipmentCat } = useColeccion('equipment')
+  const { datos: driverProfiles } = useColeccion('driverProfiles')
   const [tab, setTab] = useState('ordenes')
   const [equipoSel, setEquipoSel] = useState('')
 
@@ -88,8 +90,13 @@ export default function ChoferPortal() {
   // ── Presencia: en línea / disponible ───────────────────────────────────────
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
   const enLinea = miPresencia?.enLinea === true
-  const equipos = miCarrier?.equipos || []
-  const miEquipo = miChofer?.equipo || '' // equipo asignado en su perfil (fijo)
+  // Perfil propio del chofer (foto, datos, banco, equipo) — editable por él mismo.
+  const miPerfil = (driverProfiles || []).find((p) => p.uid === usuario?.id) || null
+  // Camiones para elegir: los del transporte; si no hay, el catálogo global de equipos.
+  const catalogoEquipos = equipmentCat.filter((e) => e.activo !== false).map((e) => e.nombre)
+  const equipos = (miCarrier?.equipos && miCarrier.equipos.length) ? miCarrier.equipos : catalogoEquipos
+  // Equipo del chofer: primero el de su perfil propio, luego el que le puso el admin.
+  const miEquipo = miPerfil?.equipo || miChofer?.equipo || ''
   useEffect(() => { if (!equipoSel) setEquipoSel(miEquipo || equipos[0] || '') }, [miEquipo, equipos.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: miEquipo || equipoSel || equipos[0] || '', jobs: miChofer?.jobs || [] })
   const desconectarme = () => desconectar(usuario.id)
@@ -234,23 +241,7 @@ export default function ChoferPortal() {
           </Card>
         )}
         {tab === 'perfil' && (
-          <div>
-            <Card className="p-5 text-center">
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-brand-navy text-3xl font-black text-white dark:bg-slate-700">{(usuario?.nombre || '?').charAt(0).toUpperCase()}</div>
-              <div className="mt-3 text-lg font-black text-brand-navy dark:text-slate-100">{usuario?.nombre}</div>
-              <div className="text-xs text-slate-400">{usuario?.email}</div>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><User size={12} /> {t('Chofer')}</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</span>
-                {miChofer?.equipo && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {miChofer.equipo}</span>}
-              </div>
-              {(miChofer?.jobs || []).length > 0 && <div className="mt-2 text-[11px] text-slate-400">{t('Afiliado a')} {miChofer.jobs.length} {t('trabajo(s)')}</div>}
-            </Card>
-            <Card className="mt-3 p-4">
-              <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
-              <RepararAcceso variant="ghost" />
-            </Card>
-          </div>
+          <PerfilChofer usuario={usuario} tenantId={tenantId} miPerfil={miPerfil} miCarrier={miCarrier} miChofer={miChofer} carrierId={carrierId} equipos={equipos} />
         )}
       </main>
 
@@ -367,6 +358,110 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, onRechazo }) 
 
 function VacioMsg({ icon: Icon, texto }) {
   return <div className="mt-10 flex flex-col items-center gap-2 text-center text-slate-400"><Icon size={34} strokeWidth={1.4} /><p className="max-w-xs text-sm">{texto}</p></div>
+}
+
+// Perfil del chofer (tipo red social): foto, datos y datos bancarios para MilePay.
+// El propio chofer lo edita; se guarda en bulk_driverProfiles (doc id = su uid).
+function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrierId, equipos }) {
+  const { t } = useLang()
+  const [foto, setFoto] = useState(null)
+  const [telefono, setTelefono] = useState('')
+  const [licencia, setLicencia] = useState('')
+  const [equipo, setEquipo] = useState('')
+  const [banco, setBanco] = useState({ titular: '', banco: '', cuenta: '', routing: '' })
+  const [guardando, setGuardando] = useState(false)
+  const [ok, setOk] = useState(false)
+
+  // Sembrar el formulario cuando carga el perfil (o desde la ficha del roster).
+  useEffect(() => {
+    setFoto(miPerfil?.foto || null)
+    setTelefono(miPerfil?.telefono || miChofer?.telefono || '')
+    setLicencia(miPerfil?.licencia || miChofer?.licencia || '')
+    setEquipo(miPerfil?.equipo || miChofer?.equipo || '')
+    setBanco(miPerfil?.banco || { titular: '', banco: '', cuenta: '', routing: '' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [miPerfil?.uid, miChofer?.id])
+
+  const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (f) setFoto(f) }
+  const setB = (k) => (e) => setBanco((s) => ({ ...s, [k]: e.target.value }))
+  const guardarPerfil = async () => {
+    setGuardando(true)
+    try {
+      await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, foto: foto || null, telefono, licencia, equipo, banco })
+      setOk(true); setTimeout(() => setOk(false), 2000)
+    } catch { window.alert(t('No se pudo guardar el perfil. Puede que falten desplegar las reglas de driverProfiles.')) }
+    finally { setGuardando(false) }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Portada + foto tipo red social */}
+      <Card className="overflow-hidden p-0">
+        <div className="h-24 bg-gradient-to-r from-amber-500 via-amber-600 to-brand-navy" />
+        <div className="px-4 pb-4">
+          <div className="-mt-10 flex items-end gap-3">
+            <div className="relative">
+              {foto
+                ? <img src={foto} alt={usuario?.nombre} className="h-20 w-20 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-900" />
+                : <div className="grid h-20 w-20 place-items-center rounded-full border-4 border-white bg-brand-navy text-3xl font-black text-white shadow-lg dark:border-slate-900">{(usuario?.nombre || '?').charAt(0).toUpperCase()}</div>}
+              <label className="absolute bottom-0 right-0 grid h-7 w-7 cursor-pointer place-items-center rounded-full border-2 border-white bg-amber-500 text-slate-900 shadow dark:border-slate-900" title={t('Cambiar foto')}>
+                <Camera size={13} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" />
+              </label>
+            </div>
+            <div className="min-w-0 pb-1">
+              <div className="truncate text-lg font-black text-brand-navy dark:text-slate-100">{usuario?.nombre}</div>
+              <div className="truncate text-xs text-slate-400">{usuario?.email}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><User size={12} /> {t('Chofer')}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</span>
+            {equipo && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {equipo}</span>}
+            {(miChofer?.jobs || []).length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{miChofer.jobs.length} {t('trabajo(s)')}</span>}
+          </div>
+        </div>
+      </Card>
+
+      {/* Mis datos */}
+      <Card className="p-4">
+        <div className="mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mis datos')}</div>
+        <div className="space-y-2.5">
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Phone size={15} className="text-slate-400" /><input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder={t('Teléfono')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><IdCard size={15} className="text-slate-400" /><input value={licencia} onChange={(e) => setLicencia(e.target.value)} placeholder={t('Licencia')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Truck size={15} className="text-slate-400" />
+            <select value={equipo} onChange={(e) => setEquipo(e.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-slate-100">
+              <option value="">{t('— Mi camión (equipo) —')}</option>
+              {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+            </select>
+          </label>
+          <p className="text-[11px] text-slate-400">{t('Tu camión decide qué órdenes recibes: solo las que piden ese tipo de equipo.')}</p>
+        </div>
+      </Card>
+
+      {/* Datos bancarios (MilePay) */}
+      <Card className="p-4">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Landmark size={16} className="text-emerald-500" /> {t('Datos bancarios (MilePay)')}</div>
+        <p className="mb-3 text-[11px] text-slate-400">{t('Para recibir tus pagos. Solo lo ve la oficina.')}</p>
+        <div className="space-y-2.5">
+          <input value={banco.titular} onChange={setB('titular')} placeholder={t('Titular de la cuenta')} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+          <input value={banco.banco} onChange={setB('banco')} placeholder={t('Banco')} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+          <div className="flex gap-2">
+            <input value={banco.cuenta} onChange={setB('cuenta')} placeholder={t('N.º de cuenta')} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+            <input value={banco.routing} onChange={setB('routing')} placeholder={t('Routing / CLABE')} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+          </div>
+        </div>
+      </Card>
+
+      <button onClick={guardarPerfil} disabled={guardando} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3.5 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-60">
+        {guardando ? <><Spinner /> {t('Guardando…')}</> : ok ? <><Check size={18} /> {t('Guardado')}</> : <><Save size={18} /> {t('Guardar perfil')}</>}
+      </button>
+
+      <Card className="p-4">
+        <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
+        <RepararAcceso variant="ghost" />
+      </Card>
+    </div>
+  )
 }
 
 function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, noLeidosChat = 0 }) {

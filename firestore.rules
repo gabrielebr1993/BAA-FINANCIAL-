@@ -229,6 +229,15 @@ service cloud.firestore {
     // cualquier miembro del tenant la lee (el dispatcher empareja órdenes con choferes).
     match /bulk_presence/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(resource.data.tenantId); }
 
+    // Perfil del chofer (foto, datos, banco para pagos). El chofer edita el suyo
+    // (docId = su uid); el staff lo lee (para pagarle). Datos bancarios visibles
+    // solo para el dueño del perfil y el staff.
+    match /bulk_driverProfiles/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && request.auth.uid == id);
+      allow create, update: if bSame(request.resource.data.tenantId) && (request.auth.uid == id || bStaff(request.resource.data.tenantId));
+      allow delete: if bStaff(resource.data.tenantId);
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }
