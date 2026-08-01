@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
@@ -49,6 +49,8 @@ export default function Ordenes() {
   const { t } = useLang()
   const { tenantId, usuario, rol } = useBulkAuth()
   const esStaff = STAFF.includes(rol)
+  const navigate = useNavigate()
+  const abrir = (o) => navigate(`/bulk/ordenes/${o.id}`) // toda la tarjeta abre el detalle
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
@@ -168,14 +170,14 @@ export default function Ordenes() {
                 const rest = ofrecida && o.asignacionExpira ? tsMillis(o.asignacionExpira) - now : 0
                 const compat = choferesLibres(presencias, now).some((p) => (!o.tipoEquipo || (p.equipo || '').trim().toLowerCase() === o.tipoEquipo.trim().toLowerCase()) && !(o.rechazadoPor || []).includes(p.uid))
                 return (
-                  <div key={o.id} className={`rounded-xl border p-3 transition ${ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700/60'}`}>
+                  <div key={o.id} onClick={() => abrir(o)} className={`cursor-pointer rounded-xl border p-3 transition hover:border-amber-400 hover:shadow-sm ${ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700/60'}`}>
                     <div className="flex items-center gap-2">
-                      <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
+                      <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                       <Badge color="navy">{o.pesoEstimado} ton</Badge>
                       {o.tipoEquipo && <Badge color="slate">{o.tipoEquipo}</Badge>}
                       <div className="ml-auto flex items-center gap-0.5">
-                        {esStaff && puedeCancelar(o) && <button onClick={() => setCancelar(o)} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
-                        <button onClick={() => setChatOrden(o)} title={t('Chat de la orden')} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                        {esStaff && puedeCancelar(o) && <button onClick={(e) => { e.stopPropagation(); setCancelar(o) }} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
+                        <button onClick={(e) => { e.stopPropagation(); setChatOrden(o) }} title={t('Chat de la orden')} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
                           <MessageSquare size={15} />
                           {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
                         </button>
@@ -189,7 +191,7 @@ export default function Ordenes() {
                       <div className="mt-2 flex items-center gap-2 text-xs">
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 font-bold text-amber-700 dark:text-amber-300"><Clock size={12} /> {t('esperando respuesta')} {mmss(rest)}</span>
                         <span className="truncate font-semibold text-brand-navy dark:text-slate-100">→ {o.choferNombre}</span>
-                        {esStaff && <button onClick={() => reofertar(o, 'manual')} title={t('Reasignar a otro')} className="ml-auto rounded-lg p-1 text-slate-400 hover:text-amber-500"><RefreshCw size={13} /></button>}
+                        {esStaff && <button onClick={(e) => { e.stopPropagation(); reofertar(o, 'manual') }} title={t('Reasignar a otro')} className="ml-auto rounded-lg p-1 text-slate-400 hover:text-amber-500"><RefreshCw size={13} /></button>}
                       </div>
                     ) : (
                       <div className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${compat ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
@@ -242,14 +244,14 @@ export default function Ordenes() {
           <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-sky-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('En proceso')} ({enProceso.length})</h3></div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {enProceso.filter(coincideO).map((o) => (
-              <div key={o.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
+              <div key={o.id} onClick={() => abrir(o)} className="cursor-pointer rounded-xl border border-slate-200 p-3 transition hover:border-amber-400 hover:shadow-sm dark:border-slate-700/60">
                 <div className="flex items-center gap-2">
                   <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
-                  <Link to={`/bulk/ordenes/${o.id}`} className="font-mono text-sm font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.numero}</Link>
+                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                   <Badge color="navy">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
                   <div className="ml-auto flex items-center gap-0.5">
-                    {esStaff && puedeCancelar(o) && <button onClick={() => setCancelar(o)} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
-                    <button onClick={() => setChatOrden(o)} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
+                    {esStaff && puedeCancelar(o) && <button onClick={(e) => { e.stopPropagation(); setCancelar(o) }} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
+                    <button onClick={(e) => { e.stopPropagation(); setChatOrden(o) }} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
                       <MessageSquare size={15} />
                       {(noLeidos[o.id] || 0) > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidos[o.id]}</span>}
                     </button>

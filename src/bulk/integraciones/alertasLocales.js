@@ -17,6 +17,23 @@ export function beep(veces = 2) {
   } catch { /* noop */ }
 }
 
+// Tono LARGO tipo timbre (~1.6s) para una orden entrante — más difícil de ignorar.
+export function tonoOrden() {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)()
+    const notas = [880, 1175, 880, 1175, 880, 1175]
+    notas.forEach((f, i) => {
+      const t = ctx.currentTime + i * 0.26
+      const o = ctx.createOscillator(); const g = ctx.createGain()
+      o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = f
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(0.4, t + 0.03)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24)
+      o.start(t); o.stop(t + 0.25)
+    })
+  } catch { /* noop */ }
+}
+
 export async function pedirPermisoNotif() {
   try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission() } catch { /* noop */ }
 }

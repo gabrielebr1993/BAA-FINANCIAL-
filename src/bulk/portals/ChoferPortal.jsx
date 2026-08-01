@@ -16,7 +16,7 @@ import { conectar, desconectar, latir, ocupar, liberar } from '../data/presencia
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
 import { useGeoPos } from './useGeoPos'
-import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
+import { beep, tonoOrden, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
@@ -117,11 +117,11 @@ export default function ChoferPortal() {
     }
     prevEntrante.current = entrante?.id || null
   }, [entrante?.id])
-  // Mientras haya una orden entrante sin responder, suena en bucle hasta que acepte/rechace.
+  // Mientras haya una orden entrante sin responder, suena un tono largo en bucle.
   useEffect(() => {
     if (!entrante) return
-    beep(2)
-    const id = setInterval(() => beep(2), 2200)
+    tonoOrden()
+    const id = setInterval(() => tonoOrden(), 3000)
     return () => clearInterval(id)
   }, [entrante?.id])
   // Aviso local cuando llega un mensaje nuevo de la oficina.
@@ -481,6 +481,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
   const [coment, setComent] = useState('')
   const [ocr, setOcr] = useState(null) // {cargando, progreso, msg}
   const [copiado, setCopiado] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [errCod, setErrCod] = useState(false)
   const [lightbox, setLightbox] = useState(null) // src de la foto ampliada
@@ -493,6 +494,14 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
   const mapsUrl = (gps && gps.lat != null) ? `https://maps.google.com/?q=${gps.lat},${gps.lng}`
     : (dirTexto ? `https://maps.google.com/?q=${encodeURIComponent(dirTexto)}` : null)
   const copiaTexto = (gps && gps.lat != null) ? `${gps.lat}, ${gps.lng}` : dirTexto
+  // Destino para navegar: coordenadas si hay, si no la dirección. Deja elegir app.
+  const tieneDest = (gps && gps.lat != null) || !!dirTexto
+  const navDest = (gps && gps.lat != null) ? `${gps.lat},${gps.lng}` : encodeURIComponent(dirTexto)
+  const navUrls = {
+    google: `https://www.google.com/maps/dir/?api=1&destination=${navDest}`,
+    waze: (gps && gps.lat != null) ? `https://waze.com/ul?ll=${gps.lat},${gps.lng}&navigate=yes` : `https://waze.com/ul?q=${encodeURIComponent(dirTexto)}&navigate=yes`,
+    apple: `https://maps.apple.com/?daddr=${navDest}`,
+  }
   const puedeLlegar = paso?.gate ? puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) : true
   const hayGeocerca = !!geocercaObjetivo(orden, fase, geocercas, plantas)
 
@@ -581,11 +590,24 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
             <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {orden.material || '—'} · {orden.pesoReal ?? orden.pesoEstimado} ton</span>
             {orden.po && <span className="inline-flex items-center gap-1"><FileText size={12} className="text-amber-500" /> PO {orden.po}</span>}
           </div>
-          <div className="mt-2.5 flex gap-2">
-            {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white dark:bg-amber-500 dark:text-slate-900"><Navigation size={15} /> {t('Ir')}</a>}
+          <div className="relative mt-2.5 flex gap-2">
+            {tieneDest && (
+              <button type="button" onClick={() => setNavOpen((v) => !v)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2.5 text-sm font-bold text-white dark:bg-amber-500 dark:text-slate-900"><Navigation size={15} /> {t('Navegar')}</button>
+            )}
             <button type="button" onClick={copiar} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-600 dark:text-slate-300">
-              {copiado ? <><Check size={15} className="text-emerald-500" /> {t('Copiado')}</> : <><Copy size={15} /> {t('Copiar dirección')}</>}
+              {copiado ? <><Check size={15} className="text-emerald-500" /> {t('Copiado')}</> : <><Copy size={15} /> {t('Copiar')}</>}
             </button>
+            {navOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setNavOpen(false)} />
+                <div className="absolute bottom-full left-0 z-20 mb-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                  <div className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:border-slate-800">{t('Abrir con')}</div>
+                  {[{ k: 'google', l: 'Google Maps' }, { k: 'waze', l: 'Waze' }, { k: 'apple', l: 'Apple Maps' }].map((a) => (
+                    <a key={a.k} href={navUrls[a.k]} target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)} className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><Navigation size={14} className="text-amber-500" /> {a.l}</a>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@ import { tsMillis } from '../data/chatKeys'
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const ACTIVAS = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
 const n = (v) => Number(v) || 0
-const clave = (s) => (s || '').trim().toLowerCase()
+const clave = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 const tonDe = (o) => n(o.pesoReal ?? o.pesoEstimado)
 
 // Fecha representativa de una orden para ordenar la actividad (más reciente primero).
@@ -31,15 +31,17 @@ const agrupar = (lista, keyFn) => {
 
 export function perfilDeChofer({ ordenes = [], carriers = [], jobs = [], clientes = [], plants = [], incidents = [], nombre = '' }) {
   const k = clave(nombre)
+  const rosterCarrier = carriers.find((c) => (c.choferes || []).some((d) => clave(d.nombre) === k)) || null
+  const rosterChofer = rosterCarrier?.choferes?.find((d) => clave(d.nombre) === k) || null
+  const rosterId = rosterChofer?.id || null
+  // Órdenes del chofer: por NOMBRE (normalizado) o por su id de roster (choferId).
+  const esMia = (o) => clave(o.choferNombre) === k || (rosterId && o.choferId === rosterId)
   const misOrdenes = ordenes
-    .filter((o) => clave(o.choferNombre) === k)
+    .filter(esMia)
     .slice()
     .sort((a, b) => tsMillis(fechaOrden(b)) - tsMillis(fechaOrden(a)))
   // Rechazos hechos por este chofer (la orden guarda rechazo.por con su nombre).
   const rechazos = ordenes.filter((o) => clave(o.rechazo?.por) === k).length
-
-  const rosterCarrier = carriers.find((c) => (c.choferes || []).some((d) => clave(d.nombre) === k)) || null
-  const rosterChofer = rosterCarrier?.choferes?.find((d) => clave(d.nombre) === k) || null
 
   const idsT = new Set(misOrdenes.map((o) => o.transportistaId).filter(Boolean))
   if (rosterCarrier) idsT.add(rosterCarrier.id)
