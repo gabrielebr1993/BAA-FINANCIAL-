@@ -8,6 +8,9 @@ import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useColeccion } from './data/useColeccion'
 import { noLeidosPorConv } from './data/chat'
 import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
+import CambiarClave from './components/CambiarClave'
+import { KeyRound } from 'lucide-react'
+import { useState } from 'react'
 import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLayout({ children }) {
@@ -15,6 +18,7 @@ export default function BulkLayout({ children }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const items = NAV.filter((i) => puedeVer(rol, i.roles))
+  const [verClave, setVerClave] = useState(false)
   // Motor de asignación automática: corre mientras cualquier staff tenga el panel
   // abierto (en cualquier pantalla), no solo en Órdenes.
   useAutoAsignacion()
@@ -56,6 +60,7 @@ export default function BulkLayout({ children }) {
             <div className="text-slate-400">{t(BULK_ROLES_LABEL[rol] || rol)}</div>
           </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
+          <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>
           <button onClick={() => navigate('/elegir')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><Grid2x2 size={16} /> {t('Cambiar módulo')}</button>
           <button onClick={cerrarSesion} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"><LogOut size={16} /> {t('Salir')}</button>
         </div>
@@ -63,6 +68,7 @@ export default function BulkLayout({ children }) {
       <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-5">
         <div className="w-full">{children}</div>
       </main>
+      {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
     </div>
   )
 }

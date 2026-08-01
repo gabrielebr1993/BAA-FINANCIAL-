@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
+import CambiarClave from '../components/CambiarClave'
 import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -365,6 +366,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const [banco, setBanco] = useState({ titular: '', banco: '', cuenta: '', routing: '' })
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
+  const [verClave, setVerClave] = useState(false)
   const equiposCh = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : []) // asignados por el admin (solo lectura)
   const trabajos = miChofer?.jobsNombres || [] // nombres denormalizados (solo lectura)
 
@@ -460,10 +462,13 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         {guardando ? <><Spinner /> {t('Guardando…')}</> : ok ? <><Check size={18} /> {t('Guardado')}</> : <><Save size={18} /> {t('Guardar perfil')}</>}
       </button>
 
+      <button onClick={() => setVerClave(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>
+
       <Card className="p-4">
         <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
         <RepararAcceso variant="ghost" />
       </Card>
+      {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
     </div>
   )
 }
