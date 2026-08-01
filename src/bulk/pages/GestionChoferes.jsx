@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard, Search, X, Briefcase, Save } from 'lucide-react'
+import { Plus, Trash2, Truck, User, ArrowRightLeft, Phone, IdCard, Search, X, Briefcase, Save, Pencil } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -61,6 +61,18 @@ export default function GestionChoferes() {
   const borrar = async (carrier, chofer) => {
     if (!window.confirm(`¿Eliminar al chofer "${chofer.nombre}"?`)) return
     await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).filter((d) => d.id !== chofer.id) })
+  }
+
+  // Renombrar la ficha del chofer (p. ej. para que coincida con su cuenta de acceso).
+  const renombrar = async (carrier, chofer) => {
+    const nuevo = window.prompt(`Nuevo nombre para "${chofer.nombre}":`, chofer.nombre)
+    if (nuevo == null) return
+    const nombre = nuevo.trim()
+    if (!nombre || nombre === chofer.nombre) return
+    const dup = carriers.some((x) => (x.choferes || []).some((d) => d.id !== chofer.id && (d.nombre || '').toLowerCase() === nombre.toLowerCase()))
+    if (dup) { window.alert('Ya existe otro chofer con ese nombre.'); return }
+    await editarChofer(carrier, chofer, { nombre })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'renombrar_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${nombre}` })
   }
 
   // Reasignar: quitar del transporte origen y agregar al destino.
@@ -148,7 +160,10 @@ export default function GestionChoferes() {
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(d.nombre || '?').charAt(0)}</div>
                       <div className="min-w-0">
-                        <Link to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} className="text-sm font-semibold text-brand-navy hover:text-amber-600 dark:text-slate-100">{d.nombre}</Link>
+                        <div className="flex items-center gap-1">
+                          <Link to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} className="text-sm font-semibold text-brand-navy hover:text-amber-600 dark:text-slate-100">{d.nombre}</Link>
+                          <button onClick={() => renombrar(c, d)} title="Renombrar" className="text-slate-400 hover:text-amber-600"><Pencil size={12} /></button>
+                        </div>
                         <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
                           {d.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {d.telefono}</span>}
                           {d.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {d.licencia}</span>}
