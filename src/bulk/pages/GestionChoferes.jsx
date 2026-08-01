@@ -29,7 +29,7 @@ export default function GestionChoferes() {
     // Un chofer solo puede estar en UN transporte.
     const yaExiste = carriers.some((x) => (x.choferes || []).some((d) => (d.nombre || '').toLowerCase() === f.nombre.trim().toLowerCase()))
     if (yaExiste) { window.alert('Ese chofer ya está en un transporte. Un chofer solo puede estar en uno; usa “Reasignar” para moverlo.'); return }
-    const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), equipo: f.equipo || '', jobs: f.jobs || [], activo: true }
+    const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), equipo: f.equipo || '', jobs: f.jobs || [], jobsNombres: (f.jobs || []).map(nombreJob), activo: true }
     await guardar('carriers', c.id, { choferes: [...(c.choferes || []), chofer] })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'alta_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${c.nombre}` })
     setF({ carrierId: '', nombre: '', telefono: '', licencia: '', equipo: '', jobs: [] })
@@ -41,7 +41,8 @@ export default function GestionChoferes() {
   }
   const toggleJob = (carrier, chofer, id) => {
     const actuales = chofer.jobs || []
-    editarChofer(carrier, chofer, { jobs: actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id] })
+    const nuevos = actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id]
+    editarChofer(carrier, chofer, { jobs: nuevos, jobsNombres: nuevos.map(nombreJob) })
   }
 
   const borrar = async (carrier, chofer) => {

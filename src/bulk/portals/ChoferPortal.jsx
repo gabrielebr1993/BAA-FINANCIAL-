@@ -35,7 +35,13 @@ export default function ChoferPortal() {
   const { t } = useLang()
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
-  const carrierId = usuario?.carrierId || null
+  const { datos: carriers } = useColeccion('carriers')
+  // carrierId EFECTIVO: el del login y, si no lo trae, el del transporte donde
+  // aparezco en la plantilla (por nombre). Así las órdenes llegan aunque la cuenta
+  // no tenga el claim de carrier.
+  const _norm = (s) => (s || '').trim().toLowerCase()
+  const _miCarrierBoot = carriers.find((c) => (c.choferes || []).some((d) => _norm(d.nombre) === _norm(usuario?.nombre)))
+  const carrierId = usuario?.carrierId || _miCarrierBoot?.id || null
   // Acotamos a las órdenes de MI transporte: así el listener cumple las reglas
   // (el chofer no puede leer toda la colección) y vemos tanto las que se están
   // notificando como las que ya me asignaron.
@@ -43,12 +49,9 @@ export default function ChoferPortal() {
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages')
-  const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
-  const { datos: equipmentCat } = useColeccion('equipment')
   const { datos: driverProfiles } = useColeccion('driverProfiles')
   const [tab, setTab] = useState('ordenes')
-  const [equipoSel, setEquipoSel] = useState('')
 
   const miConv = convChofer(usuario?.nombre)
   const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
@@ -90,15 +93,11 @@ export default function ChoferPortal() {
   // ── Presencia: en línea / disponible ───────────────────────────────────────
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
   const enLinea = miPresencia?.enLinea === true
-  // Perfil propio del chofer (foto, datos, banco, equipo) — editable por él mismo.
+  // Perfil propio del chofer (foto, datos, banco) — editable por él mismo.
   const miPerfil = (driverProfiles || []).find((p) => p.uid === usuario?.id) || null
-  // Camiones para elegir: los del transporte; si no hay, el catálogo global de equipos.
-  const catalogoEquipos = equipmentCat.filter((e) => e.activo !== false).map((e) => e.nombre)
-  const equipos = (miCarrier?.equipos && miCarrier.equipos.length) ? miCarrier.equipos : catalogoEquipos
-  // Equipo del chofer: primero el de su perfil propio, luego el que le puso el admin.
-  const miEquipo = miPerfil?.equipo || miChofer?.equipo || ''
-  useEffect(() => { if (!equipoSel) setEquipoSel(miEquipo || equipos[0] || '') }, [miEquipo, equipos.length]) // eslint-disable-line react-hooks/exhaustive-deps
-  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: miEquipo || equipoSel || equipos[0] || '', jobs: miChofer?.jobs || [] })
+  // El EQUIPO lo asigna el administrador (roster); el chofer solo lo ve, no lo cambia.
+  const miEquipo = miChofer?.equipo || ''
+  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipo: miEquipo, jobs: miChofer?.jobs || [] })
   const desconectarme = () => desconectar(usuario.id)
   // Latido cada 30 s mientras esté en línea; al cerrar la pestaña, me desconecta.
   useEffect(() => {
@@ -180,15 +179,11 @@ export default function ChoferPortal() {
                       <div className="mt-4">
                         {miEquipo ? (
                           <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400"><Truck size={14} /> {miEquipo}</div>
-                        ) : equipos.length > 0 ? (
-                          <select value={equipoSel} onChange={(e) => setEquipoSel(e.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-                            {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
-                          </select>
                         ) : (
-                          <div className="text-xs text-amber-600 dark:text-amber-400">{t('Sin equipo asignado. Pídele al administrador que te asigne un camión.')}</div>
+                          <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">{t('Sin equipo asignado. Pídele al administrador que te asigne un camión para recibir órdenes.')}</div>
                         )}
                       </div>
-                      <button onClick={conectarme} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99]"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
+                      <button onClick={conectarme} disabled={!miEquipo} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
                     </div>
                   )}
                 </div>
@@ -241,7 +236,7 @@ export default function ChoferPortal() {
           </Card>
         )}
         {tab === 'perfil' && (
-          <PerfilChofer usuario={usuario} tenantId={tenantId} miPerfil={miPerfil} miCarrier={miCarrier} miChofer={miChofer} carrierId={carrierId} equipos={equipos} />
+          <PerfilChofer usuario={usuario} tenantId={tenantId} miPerfil={miPerfil} miCarrier={miCarrier} miChofer={miChofer} carrierId={carrierId} />
         )}
       </main>
 
@@ -362,22 +357,22 @@ function VacioMsg({ icon: Icon, texto }) {
 
 // Perfil del chofer (tipo red social): foto, datos y datos bancarios para MilePay.
 // El propio chofer lo edita; se guarda en bulk_driverProfiles (doc id = su uid).
-function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrierId, equipos }) {
+function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrierId }) {
   const { t } = useLang()
   const [foto, setFoto] = useState(null)
   const [telefono, setTelefono] = useState('')
   const [licencia, setLicencia] = useState('')
-  const [equipo, setEquipo] = useState('')
   const [banco, setBanco] = useState({ titular: '', banco: '', cuenta: '', routing: '' })
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
+  const equipo = miChofer?.equipo || '' // asignado por el admin (solo lectura)
+  const trabajos = miChofer?.jobsNombres || [] // nombres denormalizados (solo lectura)
 
   // Sembrar el formulario cuando carga el perfil (o desde la ficha del roster).
   useEffect(() => {
     setFoto(miPerfil?.foto || null)
     setTelefono(miPerfil?.telefono || miChofer?.telefono || '')
     setLicencia(miPerfil?.licencia || miChofer?.licencia || '')
-    setEquipo(miPerfil?.equipo || miChofer?.equipo || '')
     setBanco(miPerfil?.banco || { titular: '', banco: '', cuenta: '', routing: '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miPerfil?.uid, miChofer?.id])
@@ -387,7 +382,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const guardarPerfil = async () => {
     setGuardando(true)
     try {
-      await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, foto: foto || null, telefono, licencia, equipo, banco })
+      await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, foto: foto || null, telefono, licencia, banco })
       setOk(true); setTimeout(() => setOk(false), 2000)
     } catch { window.alert(t('No se pudo guardar el perfil. Puede que falten desplegar las reglas de driverProfiles.')) }
     finally { setGuardando(false) }
@@ -428,14 +423,23 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         <div className="space-y-2.5">
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Phone size={15} className="text-slate-400" /><input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder={t('Teléfono')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><IdCard size={15} className="text-slate-400" /><input value={licencia} onChange={(e) => setLicencia(e.target.value)} placeholder={t('Licencia')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Truck size={15} className="text-slate-400" />
-            <select value={equipo} onChange={(e) => setEquipo(e.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-slate-100">
-              <option value="">{t('— Mi camión (equipo) —')}</option>
-              {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
-            </select>
-          </label>
-          <p className="text-[11px] text-slate-400">{t('Tu camión decide qué órdenes recibes: solo las que piden ese tipo de equipo.')}</p>
         </div>
+      </Card>
+
+      {/* Asignación (solo lectura): la define el administrador */}
+      <Card className="p-4">
+        <div className="mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mi asignación')}</div>
+        <div className="flex items-center justify-between border-b border-slate-100 py-2 dark:border-slate-800">
+          <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400"><Truck size={15} className="text-amber-500" /> {t('Mi camión')}</span>
+          {equipo ? <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{equipo}</span> : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{t('sin asignar')}</span>}
+        </div>
+        <div className="py-2">
+          <div className="mb-1 text-sm text-slate-500 dark:text-slate-400">{t('Trabajos asignados')}</div>
+          {trabajos.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">{trabajos.map((j, i) => <span key={i} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{j}</span>)}</div>
+          ) : <span className="text-xs text-slate-400">{t('Todos los trabajos (sin restricción)')}</span>}
+        </div>
+        <p className="mt-1 text-[11px] text-slate-400">{t('Tu camión y tus trabajos los asigna la oficina. Determinan qué órdenes recibes.')}</p>
       </Card>
 
       {/* Datos bancarios (MilePay) */}

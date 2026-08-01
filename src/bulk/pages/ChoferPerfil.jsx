@@ -62,9 +62,11 @@ export default function ChoferPerfil() {
     const nuevos = (rosterCarrier.choferes || []).map((d) => (clave(d.nombre) === clave(nombre) ? { ...d, ...patch } : d))
     await guardar('carriers', rosterCarrier.id, { choferes: nuevos })
   }
+  const nombreJob = (id) => jobs.find((j) => j.id === id)?.nombre || jobs.find((j) => j.id === id)?.codigo || id
   const toggleRosterJob = (id) => {
     const actuales = rosterChofer?.jobs || []
-    editarRoster({ jobs: actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id] })
+    const nuevos = actuales.includes(id) ? actuales.filter((x) => x !== id) : [...actuales, id]
+    editarRoster({ jobs: nuevos, jobsNombres: nuevos.map(nombreJob) })
   }
 
   if (cargando) return <Cargando />
