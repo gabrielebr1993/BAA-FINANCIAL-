@@ -2215,6 +2215,8 @@ const EN = {
   "Selecciona el chofer registrado al que se afilia esta cuenta.": "Select the registered driver this account links to.",
   "El chofer registrado ya no existe.": "The registered driver no longer exists.",
   "Ese chofer ya está afiliado a otra cuenta.": "That driver is already linked to another account.",
+  "Usuario eliminado": "User deleted",
+  "No se pudo eliminar (¿backend desplegado?).": "Could not delete (is the backend deployed?).",
 
 }
 

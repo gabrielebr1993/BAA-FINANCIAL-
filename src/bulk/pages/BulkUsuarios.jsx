@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound, LogOut, Power } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { eliminar, guardar } from '../data/repo'
+import { guardar } from '../data/repo'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -72,7 +72,17 @@ export default function BulkUsuarios() {
   const borrar = async (u) => {
     if (u.rol === BULK_ROLES.SUPER_ADMIN) return
     if (!window.confirm(`${t('¿Eliminar a')} ${u.email}?`)) return
-    await eliminar('users', u.id)
+    setMsg(null)
+    try {
+      // El borrado real pasa por el backend (Admin SDK): elimina la cuenta de
+      // Auth y el doc de bulk_users. Las reglas bloquean el borrado directo.
+      const token = await authBulk.currentUser.getIdToken()
+      const r = await fetch('/api/eliminar-usuario', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ uid: u.id, email: u.email }) })
+      const data = await r.json()
+      if (!data.ok) throw new Error(data.error || 'Error')
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'eliminar_usuario', entidad: 'usuario', detalle: u.email })
+      setMsg({ tipo: 'ok', txt: `${t('Usuario eliminado')}: ${u.email}.` })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo eliminar (¿backend desplegado?).') }) }
   }
   const toggle = async (u) => { if (u.rol !== BULK_ROLES.SUPER_ADMIN) await guardar('users', u.id, { activo: u.activo === false }) }
   // Admin fija una nueva contraseña a un usuario (vía endpoint con Admin SDK).
