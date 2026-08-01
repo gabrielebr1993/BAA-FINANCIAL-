@@ -62,15 +62,16 @@ export default function ChoferPortal() {
   // rechazos y para reactivarme al reingresar.
   const claveN = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   // Resolución ROBUSTA para que los equipos/trabajos (que el admin asigna al
-  // roster) siempre aparezcan aunque el nombre de la cuenta no coincida exacto:
-  //   1) mi transporte = el del claim carrierId; si no, aquel donde salgo por nombre.
-  //   2) mi ficha = por uid (enlace estable) → por nombre → si soy el único, esa.
-  const miCarrier = carriers.find((c) => c.id === carrierId)
+  // roster) siempre aparezcan aunque el nombre de la cuenta no coincida exacto.
+  // Mi transporte = aquel cuyo roster me contiene (por uid → por nombre); si en
+  // ninguno aparezco, el del claim carrierId (y, si tiene un solo chofer, esa ficha).
+  const miCarrier = carriers.find((c) => (c.choferes || []).some((d) => d.uid && d.uid === usuario?.id))
     || carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
+    || carriers.find((c) => c.id === carrierId)
   const rosterCho = miCarrier?.choferes || []
   const miChofer = rosterCho.find((d) => d.uid && d.uid === usuario?.id)
     || rosterCho.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
-    || (rosterCho.length === 1 ? rosterCho[0] : null)
+    || (miCarrier?.id === carrierId && rosterCho.length === 1 ? rosterCho[0] : null)
   // Enlaza mi ficha del roster con mi cuenta (uid) la primera vez, para que el
   // emparejamiento sea estable aunque cambie el nombre.
   useEffect(() => {
@@ -197,7 +198,10 @@ export default function ChoferPortal() {
                         {miEquipos.length > 0 ? (
                           <div className="flex flex-wrap justify-center gap-1.5">{miEquipos.map((eq) => <span key={eq} className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400"><Truck size={14} /> {eq}</span>)}</div>
                         ) : (
-                          <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">{t('Sin equipo asignado. Pídele al administrador que te asigne un camión para recibir órdenes.')}</div>
+                          <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+                            <div>{t('Sin equipo asignado. Pídele al administrador que te asigne un camión para recibir órdenes.')}</div>
+                            <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
+                          </div>
                         )}
                       </div>
                       <button onClick={conectarme} disabled={!miEquipos.length} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
