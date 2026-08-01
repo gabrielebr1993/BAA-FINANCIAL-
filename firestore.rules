@@ -238,6 +238,10 @@ service cloud.firestore {
       allow delete: if bStaff(resource.data.tenantId);
     }
 
+    // Señal de cierre de sesión forzado: la escribe el staff; todos la leen para
+    // saber si deben cerrar sesión.
+    match /bulk_signals/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bStaff(request.resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

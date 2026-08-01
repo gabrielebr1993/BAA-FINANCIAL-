@@ -2191,6 +2191,18 @@ const EN = {
   "Gasto por material": "Spend by material",
   "Plantas": "Plants",
   "Sin plantas registradas.": "No plants registered.",
+  // — Freight · cierre de sesión forzado —
+  "Cerrar sesiones": "Sign users out",
+  "Obliga a los usuarios a volver a iniciar sesión. Útil tras un cambio de contraseña o por seguridad.": "Forces users to sign in again. Useful after a password change or for security.",
+  "Cerrar sesión a TODOS": "Sign out EVERYONE",
+  "por rol": "by role",
+  "Cerrar sesión de este usuario": "Sign this user out",
+  "¿Cerrar la sesión de TODOS los usuarios? Tendrán que volver a iniciar sesión.": "Sign out ALL users? They will have to sign in again.",
+  "¿Cerrar la sesión de todos los usuarios con el rol": "Sign out all users with the role",
+  "¿Cerrar la sesión de": "Sign out",
+  "Se cerró la sesión de todos los usuarios.": "All users have been signed out.",
+  "Se cerró la sesión del rol": "Signed out the role",
+  "Se cerró la sesión de": "Signed out",
 
 }
 

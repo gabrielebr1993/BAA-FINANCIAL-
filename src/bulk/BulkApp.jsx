@@ -1,6 +1,8 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { BulkAuthProvider, useBulkAuth } from './BulkAuthContext'
+import { useColeccion } from './data/useColeccion'
+import { logoutAplicable } from './data/sesiones'
 import { activarPush } from './integraciones/fcm'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
@@ -50,6 +52,19 @@ function P({ roles, children }) {
   return <BulkLayout><Suspense fallback={<Cargando texto={t('Cargando…')} />}>{children}</Suspense></BulkLayout>
 }
 
+// Vigila la señal de cierre de sesión forzado: si el admin la emite y aplica a
+// este usuario (por todos/rol/uid) después de que inició su sesión, cierra sesión.
+function ForceLogoutWatcher() {
+  const { usuario, rol, cerrarSesion } = useBulkAuth()
+  const { datos: signals } = useColeccion('signals')
+  const inicio = useRef(Date.now())
+  useEffect(() => {
+    const sig = signals.find((s) => s.id === 'logout')
+    if (logoutAplicable(sig, rol, usuario?.id) > inicio.current) cerrarSesion()
+  }, [signals, rol, usuario, cerrarSesion])
+  return null
+}
+
 // Registra el token de push (FCM) al iniciar sesión, con la audiencia del usuario.
 function PushSetup() {
   const { usuario, tenantId, rol } = useBulkAuth()
@@ -68,10 +83,11 @@ function Interno() {
   const Portal = PORTALES[rol]
   const R = ['super_admin', 'admin', 'dispatcher']
   const CAT = ['super_admin', 'admin']
-  if (Portal) return <><PushSetup /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
+  if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
   return (
     <>
     <PushSetup />
+    <ForceLogoutWatcher />
     <Routes>
       <Route path="/bulk" element={<P roles={R}><BulkDashboard /></P>} />
       <Route path="/bulk/ordenes" element={<P roles={R}><Ordenes /></P>} />

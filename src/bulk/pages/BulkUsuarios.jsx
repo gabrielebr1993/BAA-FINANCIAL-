@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound } from 'lucide-react'
+import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound, LogOut, Power } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { eliminar, guardar } from '../data/repo'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
+import { cerrarTodos, cerrarPorRol, cerrarUsuario } from '../data/sesiones'
 import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -68,6 +69,26 @@ export default function BulkUsuarios() {
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo cambiar la contraseña (¿backend desplegado?).') }) }
   }
 
+  // ── Cierre de sesión forzado (a todos / por rol / a un usuario) ──────────
+  const forzarTodos = async () => {
+    if (!window.confirm(t('¿Cerrar la sesión de TODOS los usuarios? Tendrán que volver a iniciar sesión.'))) return
+    await cerrarTodos(tenantId)
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cerrar_sesiones', entidad: 'todos', detalle: 'todos' })
+    setMsg({ tipo: 'ok', txt: t('Se cerró la sesión de todos los usuarios.') })
+  }
+  const forzarRol = async (r) => {
+    if (!window.confirm(`${t('¿Cerrar la sesión de todos los usuarios con el rol')} "${t(BULK_ROLES_LABEL[r])}"?`)) return
+    await cerrarPorRol(tenantId, r)
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cerrar_sesiones', entidad: 'rol', detalle: r })
+    setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión del rol')} ${t(BULK_ROLES_LABEL[r])}.` })
+  }
+  const forzarUsuario = async (u) => {
+    if (!window.confirm(`${t('¿Cerrar la sesión de')} ${u.email}?`)) return
+    await cerrarUsuario(tenantId, u.id)
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cerrar_sesiones', entidad: 'usuario', detalle: u.email })
+    setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión de')} ${u.email}.` })
+  }
+
   if (cargando) return <Cargando />
   return (
     <div>
@@ -106,6 +127,21 @@ export default function BulkUsuarios() {
       </Card>
       )}
 
+      <Card className="mb-4 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Power size={16} className="text-brand-gold" />
+          <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cerrar sesiones')}</h3>
+        </div>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Obliga a los usuarios a volver a iniciar sesión. Útil tras un cambio de contraseña o por seguridad.')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Boton variant="danger" onClick={forzarTodos}><Power size={15} /> {t('Cerrar sesión a TODOS')}</Boton>
+          <span className="mx-1 text-xs font-semibold uppercase text-slate-400">{t('por rol')}:</span>
+          {ROLES_ASIGNABLES.map((r) => (
+            <Boton key={r} variant="ghost" onClick={() => forzarRol(r)} className="px-3 py-1 text-xs">{t(BULK_ROLES_LABEL[r])}</Boton>
+          ))}
+        </div>
+      </Card>
+
       <Card className="p-4">
         <Tabla
           columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
@@ -118,6 +154,7 @@ export default function BulkUsuarios() {
             if (key === 'estado') return <button onClick={() => toggle(row)}><Badge color={row.activo === false ? 'slate' : 'green'}>{row.activo === false ? t('Inactivo') : t('Activo')}</Badge></button>
             if (key === 'acciones') return (
               <div className="flex justify-end gap-1.5">
+                <Boton variant="ghost" onClick={() => forzarUsuario(row)} className="px-2.5 py-1 text-xs" title={t('Cerrar sesión de este usuario')}><LogOut size={13} /></Boton>
                 <Boton variant="ghost" onClick={() => cambiarClave(row)} className="px-2.5 py-1 text-xs" title={t('Cambiar contraseña')}><KeyRound size={13} /></Boton>
                 {row.rol === BULK_ROLES.SUPER_ADMIN ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><ShieldCheck size={13} /> {t('protegido')}</span> : <Boton variant="danger" onClick={() => borrar(row)} className="px-2.5 py-1 text-xs"><Trash2 size={13} /></Boton>}
               </div>
