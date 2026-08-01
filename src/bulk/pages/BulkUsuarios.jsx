@@ -21,13 +21,22 @@ export default function BulkUsuarios() {
   const { datos: usuarios, cargando } = useColeccion('users')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
-  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
+  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
   const [msg, setMsg] = useState(null)
   const [buscar, setBuscar] = useState('')
   const [alta, setAlta] = useState(false)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const necesitaCliente = f.rol === BULK_ROLES.CLIENTE
-  const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA || f.rol === BULK_ROLES.CHOFER
+  const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA
+  const necesitaChofer = f.rol === BULK_ROLES.CHOFER
+  // Choferes ya registrados en el roster (para afiliar la cuenta a su ficha).
+  const rosterDrivers = carriers.flatMap((c) => (c.choferes || []).map((d) => ({ carrierId: c.id, carrierNombre: c.nombre, rosterId: d.id, nombre: d.nombre, uid: d.uid })))
+  // Al elegir un chofer registrado: prellena el nombre y fija su transportista.
+  const elegirChofer = (e) => {
+    const v = e.target.value
+    const rd = rosterDrivers.find((x) => `${x.carrierId}::${x.rosterId}` === v)
+    setF((s) => ({ ...s, chofer: v, nombre: rd?.nombre || s.nombre, vinculo: rd?.carrierId || '' }))
+  }
 
   const agregar = async () => {
     setMsg(null)
@@ -36,14 +45,27 @@ export default function BulkUsuarios() {
     if (usuarios.some((u) => (u.email || '').toLowerCase() === email)) { setMsg({ tipo: 'error', txt: t('Ese correo ya existe.') }); return }
     if (necesitaCliente && !f.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona el cliente al que pertenece.') }); return }
     if (necesitaCarrier && !f.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona el transportista al que pertenece.') }); return }
+    // Chofer: debe afiliarse a una ficha del roster ya registrada.
+    let rd = null
+    if (necesitaChofer) {
+      if (!f.chofer) { setMsg({ tipo: 'warn', txt: t('Selecciona el chofer registrado al que se afilia esta cuenta.') }); return }
+      rd = rosterDrivers.find((x) => `${x.carrierId}::${x.rosterId}` === f.chofer)
+      if (!rd) { setMsg({ tipo: 'error', txt: t('El chofer registrado ya no existe.') }); return }
+      if (rd.uid) { setMsg({ tipo: 'error', txt: t('Ese chofer ya está afiliado a otra cuenta.') }); return }
+    }
     try {
-      await crearUsuario({
+      const res = await crearUsuario({
         nombre: f.nombre.trim(), email, password: f.password, rol: f.rol,
         clienteId: necesitaCliente ? f.vinculo : undefined,
-        carrierId: necesitaCarrier ? f.vinculo : undefined,
+        carrierId: necesitaCarrier ? f.vinculo : (necesitaChofer ? rd.carrierId : undefined),
       })
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})` })
-      setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '' })
+      // Enlaza la ficha del roster con la cuenta recién creada (por uid).
+      if (necesitaChofer && rd && res?.uid) {
+        const carrier = carriers.find((c) => c.id === rd.carrierId)
+        if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid } : d)) })
+      }
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})${rd ? ` → ${rd.nombre}` : ''}` })
+      setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
       setMsg({ tipo: 'ok', txt: t('Usuario creado.') })
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo crear (¿backend desplegado?).') }) }
   }
@@ -110,7 +132,7 @@ export default function BulkUsuarios() {
           <Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} />
           <Input type="email" placeholder={t('Correo')} value={f.email} onChange={set('email')} />
           <Input type="password" placeholder={t('Contraseña')} value={f.password} onChange={set('password')} />
-          <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '' }))}>
+          <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '', chofer: '' }))}>
             {ROLES_ASIGNABLES.map((r) => <option key={r} value={r}>{t(BULK_ROLES_LABEL[r])}</option>)}
           </Select>
         </div>
@@ -121,6 +143,16 @@ export default function BulkUsuarios() {
               <option value="">{t('— Seleccionar —')}</option>
               {(necesitaCliente ? clientes : carriers).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
             </Select>
+          </div>
+        )}
+        {necesitaChofer && (
+          <div className="mt-3 max-w-md">
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Afiliar con chofer registrado')}</div>
+            <Select value={f.chofer} onChange={elegirChofer}>
+              <option value="">{t('— Seleccionar chofer registrado —')}</option>
+              {rosterDrivers.map((d) => <option key={`${d.carrierId}::${d.rosterId}`} value={`${d.carrierId}::${d.rosterId}`} disabled={!!d.uid}>{d.nombre} — {d.carrierNombre}{d.uid ? ` (${t('ya afiliado')})` : ''}</option>)}
+            </Select>
+            <p className="mt-1 text-[11px] text-slate-400">{t('La cuenta se vincula a esa ficha (equipos, trabajos y transportista). Si no aparece, créalo primero en “Choferes”.')}</p>
           </div>
         )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><UserPlus size={16} /> {t('Crear usuario')}</Boton></div>

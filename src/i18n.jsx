@@ -2207,6 +2207,14 @@ const EN = {
   "Ocultar menú": "Hide menu",
   "Mostrar menú": "Show menu",
   "Menú": "Menu",
+  // — Freight · afiliar cuenta de chofer con ficha del roster —
+  "Afiliar con chofer registrado": "Link to a registered driver",
+  "— Seleccionar chofer registrado —": "— Select a registered driver —",
+  "ya afiliado": "already linked",
+  "La cuenta se vincula a esa ficha (equipos, trabajos y transportista). Si no aparece, créalo primero en “Choferes”.": "The account links to that record (equipment, jobs and carrier). If it's not listed, create it first under “Drivers”.",
+  "Selecciona el chofer registrado al que se afilia esta cuenta.": "Select the registered driver this account links to.",
+  "El chofer registrado ya no existe.": "The registered driver no longer exists.",
+  "Ese chofer ya está afiliado a otra cuenta.": "That driver is already linked to another account.",
 
 }
 
