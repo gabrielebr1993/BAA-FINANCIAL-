@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, XCircle, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import { convChofer, noLeidosPorConv } from '../data/chat'
@@ -148,40 +148,44 @@ export default function ChoferPortal() {
               </Aviso>
             )}
             {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} noLeidosChat={noLeidos[activa.id] || 0} />
-              : (
-                <>
-                  {carrierId && (
-                    <Card className={`mb-3 p-4 ${enLinea ? 'border-2 border-emerald-400' : ''}`}>
-                      {enLinea ? (
-                        <div className="flex items-center gap-3">
-                          <span className="relative flex h-3 w-3"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500" /></span>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{t('En línea · disponible')}</div>
-                            <div className="text-xs text-slate-400">{miPresencia?.equipo || '—'} · {t('desde')} {miPresencia?.desde ? new Date(tsMillis(miPresencia.desde)).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
-                          </div>
-                          <Boton variant="ghost" onClick={desconectarme} className="px-3 py-1.5 text-xs"><Power size={14} /> {t('Desconectarme')}</Boton>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Wifi size={16} className="text-amber-500" /> {t('Ponte en línea para recibir órdenes')}</div>
-                          <div className="mb-2 text-xs text-slate-400">{t('El sistema te enviará automáticamente la siguiente orden compatible con tu camión.')}</div>
-                          <div className="flex items-center gap-2">
-                            {miEquipo ? (
-                              <span className="inline-flex flex-1 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-brand-navy dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"><Truck size={15} className="text-amber-500" /> {miEquipo}</span>
-                            ) : equipos.length > 0 ? (
-                              <select value={equipoSel} onChange={(e) => setEquipoSel(e.target.value)} className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-                                {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
-                              </select>
-                            ) : null}
-                            <Boton variant="success" onClick={conectarme} className="justify-center px-4 py-2"><Wifi size={16} /> {t('Conectarme')}</Boton>
-                          </div>
-                        </div>
-                      )}
-                    </Card>
+              : carrierId ? (
+                <div className="mx-auto max-w-sm pt-4">
+                  {enLinea ? (
+                    <div className="overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-6 text-center shadow-sm dark:border-emerald-500/30 dark:from-emerald-500/10 dark:to-slate-900">
+                      <div className="relative mx-auto mb-4 grid h-24 w-24 place-items-center">
+                        <span className="absolute inline-flex h-24 w-24 animate-ping rounded-full bg-emerald-400/30" />
+                        <span className="absolute inline-flex h-16 w-16 animate-pulse rounded-full bg-emerald-400/20" />
+                        <div className="relative grid h-16 w-16 place-items-center rounded-full bg-emerald-500 text-white shadow-lg"><Truck size={30} /></div>
+                      </div>
+                      <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">{t('En línea')}</div>
+                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('Buscando cargas para ti…')}</div>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"><Truck size={12} className="text-amber-500" /> {miPresencia?.equipo || miEquipo || '—'}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"><Clock size={12} /> {t('desde')} {miPresencia?.desde ? new Date(tsMillis(miPresencia.desde)).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                      </div>
+                      <button onClick={desconectarme} className="mt-6 w-full rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Power size={15} className="mr-1 inline" /> {t('Desconectarme')}</button>
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                      <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800"><Power size={30} /></div>
+                      <div className="text-lg font-black text-brand-navy dark:text-slate-100">{t('Estás desconectado')}</div>
+                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('Conéctate para recibir órdenes que coincidan con tu camión.')}</div>
+                      <div className="mt-4">
+                        {miEquipo ? (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400"><Truck size={14} /> {miEquipo}</div>
+                        ) : equipos.length > 0 ? (
+                          <select value={equipoSel} onChange={(e) => setEquipoSel(e.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                            {equipos.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
+                          </select>
+                        ) : (
+                          <div className="text-xs text-amber-600 dark:text-amber-400">{t('Sin equipo asignado. Pídele al administrador que te asigne un camión.')}</div>
+                        )}
+                      </div>
+                      <button onClick={conectarme} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99]"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
+                    </div>
                   )}
-                  <VacioMsg icon={ClipboardList} texto={enLinea ? t('En línea. Esperando que te asignen una orden…') : t('Conéctate para empezar a recibir órdenes automáticamente.')} />
-                </>
-              )}
+                </div>
+              ) : null}
           </>
         )}
         {tab === 'historial' && (
@@ -232,20 +236,23 @@ export default function ChoferPortal() {
       </nav>
 
       {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
-      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} onRechazo={registrarRechazo} />}
+      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} onRechazo={registrarRechazo} />}
     </div>
   )
 }
 
 // Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
 // y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
-function OverlayEntrante({ orden, usuario, tenantId, rol, onRechazo }) {
+function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, onRechazo }) {
   const { t } = useLang()
+  const OFERTA_MS = 120000
   const [ocupado, setOcupado] = useState(false)
   const [now, setNow] = useState(Date.now())
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id) }, [])
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(id) }, [])
   const rest = orden.asignacionExpira ? Math.max(0, tsMillis(orden.asignacionExpira) - now) : null
   const mmss = rest != null ? `${Math.floor(rest / 60000)}:${String(Math.floor((rest % 60000) / 1000)).padStart(2, '0')}` : null
+  const pct = rest != null ? Math.max(0, Math.min(100, (rest / OFERTA_MS) * 100)) : 100
+  const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
 
   const aceptar = async () => {
     setOcupado(true)
@@ -270,20 +277,58 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, onRechazo }) {
   }, [rest])
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/95 p-6 text-center">
-      <div className="mb-3 grid h-16 w-16 animate-pulse place-items-center rounded-full bg-amber-500/20"><Truck size={32} className="text-amber-400" /></div>
-      <div className="text-xs font-bold uppercase tracking-widest text-amber-400">{t('¡Nueva orden!')}</div>
-      {mmss && <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-bold text-amber-300"><Clock size={14} /> {mmss}</div>}
-      <div className="mt-1 font-mono text-3xl font-black text-white">{orden.numero}</div>
-      <div className="mt-3 w-full max-w-xs space-y-1.5 rounded-2xl bg-white/5 p-4 text-left text-sm text-slate-200">
-        <div className="flex items-center gap-2"><Package size={15} className="text-amber-400" /> {orden.material || t('material s/e')} · {orden.pesoEstimado} ton</div>
-        <div className="flex items-center gap-2"><Truck size={15} className="text-amber-400" /> {orden.tipoEquipo || t('equipo s/e')}</div>
-        {orden.direccionEntrega && <div className="flex items-start gap-2"><MapPin size={15} className="mt-0.5 flex-shrink-0 text-amber-400" /> {orden.direccionEntrega}</div>}
-        <div className="flex items-center gap-2 font-semibold text-emerald-400"><DollarSign size={15} /> {t('Tu pago:')} {money(orden.pagoChofer)}</div>
-      </div>
-      <div className="mt-5 flex w-full max-w-xs gap-3">
-        <Boton variant="success" onClick={aceptar} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><CheckCircle2 size={18} /> {t('Aceptar')}</Boton>
-        <Boton variant="danger" onClick={() => rechazar()} disabled={ocupado} className="flex-1 justify-center py-3 text-base"><XCircle size={18} /> {t('Rechazar')}</Boton>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center">
+      <div className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl">
+        {/* Barra de tiempo (2:00) */}
+        <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800">
+          <div className="h-full rounded-r-full bg-amber-500 transition-[width] duration-300 ease-linear" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400"><Truck size={13} /> {t('Nueva carga')}</span>
+            {mmss && <span className="inline-flex items-center gap-1 text-sm font-black tabular-nums text-slate-500 dark:text-slate-400"><Clock size={15} /> {mmss}</span>}
+          </div>
+
+          {/* Pago protagonista */}
+          <div className="mt-3 text-center">
+            <div className="text-4xl font-black tracking-tight text-brand-navy dark:text-slate-100">{money(orden.pagoChofer)}</div>
+            <div className="mt-0.5 text-xs font-medium text-slate-400">{t('Tu pago por este viaje')} · <span className="font-mono">{orden.numero}</span></div>
+          </div>
+
+          {/* Chips material / equipo / peso */}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Package size={12} className="text-amber-500" /> {orden.material || t('material s/e')}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {orden.tipoEquipo || t('equipo s/e')}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{orden.pesoEstimado} ton</span>
+          </div>
+
+          {/* Ruta recogida → entrega */}
+          <div className="mt-4 rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
+            <div className="flex gap-3">
+              <div className="flex flex-col items-center pt-1">
+                <span className="h-2.5 w-2.5 rounded-full border-2 border-amber-500" />
+                <span className="my-0.5 w-px flex-1 bg-slate-300 dark:bg-slate-600" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Recoger')}</div>
+                  <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{planta?.nombre || t('Planta')}{planta?.direccion ? ` · ${planta.direccion}` : ''}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Entregar')}</div>
+                  <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{orden.direccionEntrega || '—'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <button onClick={aceptar} disabled={ocupado} className="mt-4 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-60">
+            {ocupado ? t('Guardando…') : <><CheckCircle2 size={18} className="mr-1 inline" /> {t('Aceptar carga')}</>}
+          </button>
+          <button onClick={() => rechazar()} disabled={ocupado} className="mt-2 w-full rounded-2xl py-2.5 text-sm font-bold text-slate-400 transition hover:text-rose-500 disabled:opacity-60">{t('Rechazar')}</button>
+        </div>
       </div>
     </div>
   )
