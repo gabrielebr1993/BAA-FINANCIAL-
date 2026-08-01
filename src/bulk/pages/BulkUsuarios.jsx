@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { UserPlus, Trash2, ShieldCheck, Search, X } from 'lucide-react'
+import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { eliminar, guardar } from '../data/repo'
+import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
@@ -51,6 +52,21 @@ export default function BulkUsuarios() {
     await eliminar('users', u.id)
   }
   const toggle = async (u) => { if (u.rol !== BULK_ROLES.SUPER_ADMIN) await guardar('users', u.id, { activo: u.activo === false }) }
+  // Admin fija una nueva contraseña a un usuario (vía endpoint con Admin SDK).
+  const cambiarClave = async (u) => {
+    setMsg(null)
+    const nueva = window.prompt(`${t('Nueva contraseña para')} ${u.email}:`)
+    if (nueva == null) return
+    if (String(nueva).length < 6) { setMsg({ tipo: 'error', txt: t('La contraseña debe tener al menos 6 caracteres.') }); return }
+    try {
+      const token = await authBulk.currentUser.getIdToken()
+      const r = await fetch('/api/cambiar-clave', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ email: u.email, password: nueva }) })
+      const data = await r.json()
+      if (!data.ok) throw new Error(data.error || 'Error')
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cambiar_clave', entidad: 'usuario', detalle: u.email })
+      setMsg({ tipo: 'ok', txt: `${t('Contraseña actualizada para')} ${u.email}.` })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo cambiar la contraseña (¿backend desplegado?).') }) }
+  }
 
   if (cargando) return <Cargando />
   return (
@@ -100,7 +116,12 @@ export default function BulkUsuarios() {
           renderCell={(row, key) => {
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{t(BULK_ROLES_LABEL[row.rol]) || row.rol}</Badge>
             if (key === 'estado') return <button onClick={() => toggle(row)}><Badge color={row.activo === false ? 'slate' : 'green'}>{row.activo === false ? t('Inactivo') : t('Activo')}</Badge></button>
-            if (key === 'acciones') return row.rol === BULK_ROLES.SUPER_ADMIN ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><ShieldCheck size={13} /> {t('protegido')}</span> : <Boton variant="danger" onClick={() => borrar(row)} className="px-2.5 py-1 text-xs"><Trash2 size={13} /></Boton>
+            if (key === 'acciones') return (
+              <div className="flex justify-end gap-1.5">
+                <Boton variant="ghost" onClick={() => cambiarClave(row)} className="px-2.5 py-1 text-xs" title={t('Cambiar contraseña')}><KeyRound size={13} /></Boton>
+                {row.rol === BULK_ROLES.SUPER_ADMIN ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><ShieldCheck size={13} /> {t('protegido')}</span> : <Boton variant="danger" onClick={() => borrar(row)} className="px-2.5 py-1 text-xs"><Trash2 size={13} /></Boton>}
+              </div>
+            )
             return row[key]
           }}
         />
