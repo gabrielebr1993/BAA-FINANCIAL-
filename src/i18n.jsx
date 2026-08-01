@@ -1771,6 +1771,10 @@ const EN = {
   "Entregar": "Deliver",
   "Aceptar carga": "Accept load",
   "Planta": "Plant",
+  "toneladas movidas": "tons moved",
+  "promedio por viaje": "average per trip",
+  "Afiliado a": "Assigned to",
+  "trabajo(s)": "job(s)",
   // — Cancelar / eliminar órdenes —
   "Cancelar orden": "Cancel order",
   "Orden cancelada": "Order canceled",

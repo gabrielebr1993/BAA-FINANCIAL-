@@ -191,19 +191,42 @@ export default function ChoferPortal() {
         {tab === 'historial' && (
           historial.length === 0 ? <VacioMsg icon={Clock} texto={t('Aún no tienes entregas cerradas.')} />
             : historial.map((o) => (
-              <Card key={o.id} className="mb-2 p-3">
-                <div className="flex items-center gap-2"><span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="green">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge><span className="ml-auto text-sm font-semibold">{money(o.pagoChofer)}</span></div>
-                <div className="mt-1 text-xs text-slate-400">{o.material} · {o.pesoReal ?? o.pesoEstimado} ton</div>
-              </Card>
+              <div key={o.id} className="mb-2 rounded-2xl border border-slate-200 bg-white p-3.5 dark:border-slate-700/60 dark:bg-slate-900">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
+                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                  <span className="ml-auto text-base font-black text-emerald-600 dark:text-emerald-400">{money(o.pagoChofer)}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
+                  <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</span>
+                  {o.hitos?.entrega && <span>{new Date(o.hitos.entrega).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>}
+                </div>
+              </div>
             ))
         )}
-        {tab === 'ganancias' && (
-          <Card className="p-5 text-center">
-            <div className="text-xs uppercase text-slate-400">{t('Ganancias acumuladas')}</div>
-            <div className="mt-1 text-4xl font-black text-amber-500">{money(ganancias)}</div>
-            <div className="mt-1 text-xs text-slate-400">{historial.length} {t('entrega(s) cerrada(s)')}</div>
-          </Card>
-        )}
+        {tab === 'ganancias' && (() => {
+          const tonTot = historial.reduce((a, o) => a + (Number(o.pesoReal ?? o.pesoEstimado) || 0), 0)
+          const prom = historial.length ? ganancias / historial.length : 0
+          return (
+            <div>
+              <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center text-slate-900 shadow-lg">
+                <div className="text-xs font-bold uppercase tracking-widest opacity-80">{t('Ganancias acumuladas')}</div>
+                <div className="mt-1 text-5xl font-black">{money(ganancias)}</div>
+                <div className="mt-1 text-sm font-semibold opacity-80">{historial.length} {t('entrega(s) cerrada(s)')}</div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center dark:border-slate-700/60 dark:bg-slate-900">
+                  <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{Math.round(tonTot)}</div>
+                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">{t('toneladas movidas')}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center dark:border-slate-700/60 dark:bg-slate-900">
+                  <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{money(prom)}</div>
+                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">{t('promedio por viaje')}</div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         {tab === 'mensajes' && (
           <Card className="flex h-[calc(100vh-11rem)] flex-col p-3">
             <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</span></div>
@@ -211,15 +234,23 @@ export default function ChoferPortal() {
           </Card>
         )}
         {tab === 'perfil' && (
-          <Card className="p-4">
-            <div className="text-sm"><b>{usuario?.nombre}</b></div>
-            <div className="text-xs text-slate-400">{usuario?.email}</div>
-            <div className="mt-2 text-xs text-slate-400">{t('Rol: Chofer · Transportista:')} {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</div>
-            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <div>
+            <Card className="p-5 text-center">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-brand-navy text-3xl font-black text-white dark:bg-slate-700">{(usuario?.nombre || '?').charAt(0).toUpperCase()}</div>
+              <div className="mt-3 text-lg font-black text-brand-navy dark:text-slate-100">{usuario?.nombre}</div>
+              <div className="text-xs text-slate-400">{usuario?.email}</div>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><User size={12} /> {t('Chofer')}</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {carrierId ? (miCarrier?.nombre || carrierId) : '—'}</span>
+                {miChofer?.equipo && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {miChofer.equipo}</span>}
+              </div>
+              {(miChofer?.jobs || []).length > 0 && <div className="mt-2 text-[11px] text-slate-400">{t('Afiliado a')} {miChofer.jobs.length} {t('trabajo(s)')}</div>}
+            </Card>
+            <Card className="mt-3 p-4">
               <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
               <RepararAcceso variant="ghost" />
-            </div>
-          </Card>
+            </Card>
+          </div>
         )}
       </main>
 
