@@ -80,9 +80,9 @@ export default function ClientePortal() {
               <KPI label={t('Gasto total')} value={money(stats.gasto)} icon={DollarSign} accent="blue" />
             </div>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <Card className="p-4"><div className="text-xs text-slate-400">{t('Gasto hoy')}</div><div className="text-xl font-bold text-brand-navy dark:text-slate-100">{money(stats.hoy)}</div></Card>
-              <Card className="p-4"><div className="text-xs text-slate-400">{t('Gasto esta semana')}</div><div className="text-xl font-bold text-brand-navy dark:text-slate-100">{money(stats.semana)}</div></Card>
-              <Card className="p-4"><div className="text-xs text-slate-400">{t('Gasto este mes')}</div><div className="text-xl font-bold text-brand-navy dark:text-slate-100">{money(stats.mes)}</div></Card>
+              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto hoy')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.hoy)}</div></Card>
+              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto esta semana')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.semana)}</div></Card>
+              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto este mes')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.mes)}</div></Card>
             </div>
 
             <Card className="mb-4 p-4">

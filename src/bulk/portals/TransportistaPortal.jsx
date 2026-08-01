@@ -117,11 +117,14 @@ export default function TransportistaPortal() {
               {ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((o) => {
                 const fin = desgloseVisible(o, BULK_ROLES.TRANSPORTISTA)
                 return (
-                  <Card key={o.id} className="p-3">
-                    <div className="flex items-center gap-2"><span className="font-mono font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge><Badge color="slate">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge></div>
-                    <div className="mt-1 text-xs text-slate-400">{o.material} · {o.tipoEquipo}</div>
-                    <div className="mt-1 text-xs">{t('Recibes')} {money(fin.precioTransportista)} {t('· pagas al chofer')} {money(fin.pagoChofer)} {t('· utilidad')} {money(fin.utilidadTransportista)}</div>
-                    {o.choferNombre && <div className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Chofer:')} {o.choferNombre}</div>}
+                  <div key={o.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 dark:border-slate-700/60 dark:bg-slate-900">
+                    <div className="flex items-center gap-2"><span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge><Badge color="slate">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge></div>
+                    <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.tipoEquipo}</div>
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">{t('Recibes')} <b className="text-brand-navy dark:text-slate-100">{money(fin.precioTransportista)}</b></span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{t('utilidad')} {money(fin.utilidadTransportista)}</span>
+                    </div>
+                    {o.choferNombre && <div className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Chofer:')} {o.choferNombre}</div>}
                     {!FINAL.includes(o.estado) && (
                       choferes.length > 0 ? (
                         <Select className="mt-2 w-full py-1 text-xs" value={o.choferId || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
@@ -130,7 +133,7 @@ export default function TransportistaPortal() {
                         </Select>
                       ) : <div className="mt-2 text-[11px] text-slate-400">{t('El administrador aún no te ha registrado choferes.')}</div>
                     )}
-                  </Card>
+                  </div>
                 )
               })}
             </div>
