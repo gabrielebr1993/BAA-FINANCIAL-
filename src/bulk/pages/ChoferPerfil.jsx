@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale } from 'lucide-react'
+import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, Trash2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
 import { tsMillis } from '../data/chatKeys'
@@ -169,6 +169,22 @@ export default function ChoferPerfil() {
           </div>
         </div>
       </Card>
+
+      {/* Documentos del chofer (licencia y social) — el chofer los sube; el admin los ve/borra */}
+      {perfilDriver && (perfilDriver.licenciaFoto || perfilDriver.socialFoto) && (
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileText size={16} className="text-amber-500" /> {t('Documentos del chofer')}</div>
+          <div className="flex flex-wrap gap-4">
+            {[{ campo: 'licenciaFoto', l: t('Licencia') }, { campo: 'socialFoto', l: t('Seguro social') }].map((d) => perfilDriver[d.campo] && (
+              <div key={d.campo} className="relative">
+                <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{d.l}</div>
+                <a href={perfilDriver[d.campo]} target="_blank" rel="noreferrer"><img src={perfilDriver[d.campo]} alt={d.l} className="h-32 rounded-lg border border-slate-200 object-cover dark:border-slate-700" /></a>
+                <button onClick={() => { if (window.confirm(`${t('¿Borrar')} ${d.l}? ${t('El chofer podrá subirla de nuevo.')}`)) guardar('driverProfiles', perfilDriver.id, { [d.campo]: null }) }} title={t('Borrar')} className="absolute right-1 top-6 grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white shadow"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Datos bancarios del chofer (MilePay) — capturados por él en su app */}
       {perfilDriver?.banco && (perfilDriver.banco.titular || perfilDriver.banco.cuenta || perfilDriver.banco.banco) && (

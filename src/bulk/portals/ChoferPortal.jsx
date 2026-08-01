@@ -367,6 +367,8 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
   const [verClave, setVerClave] = useState(false)
+  const [lightboxP, setLightboxP] = useState(null)
+  const tocado = useRef(false)
   const equiposCh = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : []) // asignados por el admin (solo lectura)
   const trabajos = miChofer?.jobsNombres || [] // nombres denormalizados (solo lectura)
 
@@ -374,17 +376,27 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   useEffect(() => {
     setFoto(miPerfil?.foto || null)
     setTelefono(miPerfil?.telefono || miChofer?.telefono || '')
+    if (tocado.current) return // no pisar lo que el chofer está editando
     setLicencia(miPerfil?.licencia || miChofer?.licencia || '')
     setBanco(miPerfil?.banco || { titular: '', banco: '', cuenta: '', routing: '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miPerfil?.uid, miChofer?.id])
 
-  const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (f) setFoto(f) }
-  const setB = (k) => (e) => setBanco((s) => ({ ...s, [k]: e.target.value }))
+  // Guarda campos en el perfil de inmediato (merge). Incluye uid+nombre siempre
+  // para que la oficina pueda encontrarlo. Así la foto no se pierde al re-render.
+  const guardarCampo = async (patch) => {
+    try { await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, ...patch }) }
+    catch { window.alert(t('No se pudo guardar. Puede que falten desplegar las reglas de driverProfiles.')) }
+  }
+  const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; setFoto(f); await guardarCampo({ foto: f }) }
+  // Sube un documento (licencia/social) — se guarda al instante y queda bloqueado
+  // para el chofer; solo el admin puede cambiarlo después.
+  const subirDoc = async (campo, e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; await guardarCampo({ [campo]: f }) }
+  const setB = (k) => (e) => { tocado.current = true; setBanco((s) => ({ ...s, [k]: e.target.value })) }
   const guardarPerfil = async () => {
     setGuardando(true)
     try {
-      await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, foto: foto || null, telefono, licencia, banco })
+      await guardarCampo({ telefono, licencia, banco })
       setOk(true); setTimeout(() => setOk(false), 2000)
     } catch { window.alert(t('No se pudo guardar el perfil. Puede que falten desplegar las reglas de driverProfiles.')) }
     finally { setGuardando(false) }
@@ -423,8 +435,35 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
       <Card className="p-4">
         <div className="mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mis datos')}</div>
         <div className="space-y-2.5">
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Phone size={15} className="text-slate-400" /><input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder={t('Teléfono')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><IdCard size={15} className="text-slate-400" /><input value={licencia} onChange={(e) => setLicencia(e.target.value)} placeholder={t('Licencia')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Phone size={15} className="text-slate-400" /><input value={telefono} onChange={(e) => { tocado.current = true; setTelefono(e.target.value) }} placeholder={t('Teléfono')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><IdCard size={15} className="text-slate-400" /><input value={licencia} onChange={(e) => { tocado.current = true; setLicencia(e.target.value) }} placeholder={t('N.º de licencia')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+        </div>
+      </Card>
+
+      {/* Documentos: licencia y seguro social. Una vez subidos, solo el admin los cambia. */}
+      <Card className="p-4">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileText size={16} className="text-amber-500" /> {t('Mis documentos')}</div>
+        <p className="mb-3 text-[11px] text-slate-400">{t('Sube una foto de tu licencia y de tu seguro social. Al subirlas quedan bloqueadas: solo la oficina puede cambiarlas.')}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {[{ campo: 'licenciaFoto', l: t('Licencia') }, { campo: 'socialFoto', l: t('Seguro social') }].map((d) => {
+            const val = miPerfil?.[d.campo]
+            return (
+              <div key={d.campo} className="rounded-xl border border-slate-200 p-2 text-center dark:border-slate-700">
+                <div className="mb-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{d.l}</div>
+                {val ? (
+                  <>
+                    <button type="button" onClick={() => setLightboxP(val)} className="block w-full"><img src={val} alt={d.l} className="h-24 w-full rounded-lg object-cover" /></button>
+                    <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"><Check size={11} /> {t('Enviado')}</div>
+                  </>
+                ) : (
+                  <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-400 dark:border-slate-600">
+                    <Camera size={20} /> {t('Subir')}
+                    <input type="file" accept="image/*" capture="environment" onChange={(e) => subirDoc(d.campo, e)} className="hidden" />
+                  </label>
+                )}
+              </div>
+            )
+          })}
         </div>
       </Card>
 
@@ -469,6 +508,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         <RepararAcceso variant="ghost" />
       </Card>
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
+      <Lightbox src={lightboxP} onClose={() => setLightboxP(null)} />
     </div>
   )
 }
