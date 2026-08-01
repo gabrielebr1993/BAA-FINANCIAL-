@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban } from 'lucide-react'
+import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban, AlertTriangle } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
@@ -13,6 +13,7 @@ import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { choferesLibres, PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
+import { alertaOrden } from '../domain/alertas'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
@@ -73,6 +74,8 @@ export default function Ordenes() {
   const enProceso = useMemo(() => ordenes.filter((o) => EN_PROCESO_EST.includes(o.estado)), [ordenes])
   const entregadas = useMemo(() => ordenes.filter((o) => FINALES.includes(o.estado)), [ordenes])
   const canceladas = useMemo(() => ordenes.filter((o) => o.estado === E.CANCELADA), [ordenes])
+  // Órdenes atrasadas (>3h sin recoger o sin entregar) → alerta en rojo.
+  const atrasadasN = useMemo(() => ordenes.filter((o) => alertaOrden(o, now)).length, [ordenes, now])
   // Choferes en línea (vivos) que se muestran: libres + reservados (los ocupados salen).
   const enLinea = useMemo(() => (presencias || [])
     .filter((p) => p.enLinea === true && p.estado !== 'ocupado' && p.estado !== 'offline')
@@ -139,6 +142,12 @@ export default function Ordenes() {
       <PageTitle>{t('Órdenes / Cola')}</PageTitle>
       <p className="-mt-3 mb-4 text-sm text-slate-400">{t('Asignación automática por disponibilidad. El sistema empareja cada orden con un chofer en línea; tú solo observas.')}</p>
 
+      {atrasadasN > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+          <AlertTriangle size={18} /> <b>{atrasadasN}</b> {t('orden(es) llevan más de 3 h sin recogerse o entregarse.')}
+        </div>
+      )}
+
       {/* Indicadores */}
       <div className="mb-4 flex flex-wrap gap-2">
         <StatPill label={t('Órdenes en cola')} val={porAsignar.length} color="amber" icon={Radio} />
@@ -169,8 +178,10 @@ export default function Ordenes() {
                 const ofrecida = o.estado === E.NOTIFICANDO
                 const rest = ofrecida && o.asignacionExpira ? tsMillis(o.asignacionExpira) - now : 0
                 const compat = choferesLibres(presencias, now).some((p) => (!o.tipoEquipo || (p.equipo || '').trim().toLowerCase() === o.tipoEquipo.trim().toLowerCase()) && !(o.rechazadoPor || []).includes(p.uid))
+                const atr = alertaOrden(o, now)
                 return (
-                  <div key={o.id} onClick={() => abrir(o)} className={`cursor-pointer rounded-xl border p-3 transition hover:border-amber-400 hover:shadow-sm ${ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700/60'}`}>
+                  <div key={o.id} onClick={() => abrir(o)} className={`cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ${atr ? 'border-rose-400 bg-rose-50 hover:border-rose-500 dark:border-rose-500/50 dark:bg-rose-500/10' : ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 hover:border-amber-400 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>
+                    {atr && <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={11} /> {atr.tipo === 'recogida' ? t('sin recoger') : t('sin entregar')} · {atr.horas} h</div>}
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                       <Badge color="navy">{o.pesoEstimado} ton</Badge>
@@ -244,7 +255,7 @@ export default function Ordenes() {
           <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-sky-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('En proceso')} ({enProceso.length})</h3></div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {enProceso.filter(coincideO).map((o) => (
-              <div key={o.id} onClick={() => abrir(o)} className="cursor-pointer rounded-xl border border-slate-200 p-3 transition hover:border-amber-400 hover:shadow-sm dark:border-slate-700/60">
+              <div key={o.id} onClick={() => abrir(o)} className={`cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ${alertaOrden(o, now) ? 'border-rose-400 bg-rose-50 hover:border-rose-500 dark:border-rose-500/50 dark:bg-rose-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>
                 <div className="flex items-center gap-2">
                   <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>

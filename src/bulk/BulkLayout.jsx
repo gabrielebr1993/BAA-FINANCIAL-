@@ -1,9 +1,13 @@
+import { useMemo, useEffect, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2 } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
 import { NAV, puedeVer } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
+import { useColeccion } from './data/useColeccion'
+import { noLeidosPorConv } from './data/chat'
+import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLayout({ children }) {
@@ -14,6 +18,18 @@ export default function BulkLayout({ children }) {
   // Motor de asignación automática: corre mientras cualquier staff tenga el panel
   // abierto (en cualquier pantalla), no solo en Órdenes.
   useAutoAsignacion()
+
+  // Contador global de mensajes sin leer (para el badge del menú) + aviso in-app.
+  const { datos: mensajes } = useColeccion('messages')
+  const noLeidos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
+  const prevNoLeidos = useRef(null)
+  useEffect(() => { pedirPermisoNotif() }, [])
+  useEffect(() => {
+    if (prevNoLeidos.current != null && noLeidos > prevNoLeidos.current) {
+      beep(); notificar(t('Nuevo mensaje'), t('Tienes un mensaje nuevo.'))
+    }
+    prevNoLeidos.current = noLeidos
+  }, [noLeidos]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
@@ -30,6 +46,7 @@ export default function BulkLayout({ children }) {
             <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
               className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-amber-500/15 font-semibold text-amber-700 before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-500 dark:text-amber-300' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
               <i.icon size={17} strokeWidth={1.9} /> {t(i.label)}
+              {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
             </NavLink>
           ))}
         </nav>

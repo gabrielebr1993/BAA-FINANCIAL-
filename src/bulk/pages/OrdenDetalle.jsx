@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
+import { guardar } from '../data/repo'
+import { auditar } from '../data/auditoria'
+import { leerFotoReducida } from '../components/foto'
 import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
 import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
+import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import MapaLeaflet from '../components/MapaLeaflet'
@@ -35,6 +39,7 @@ export default function OrdenDetalle() {
   const [track, setTrack] = useState([])
   const [accion, setAccion] = useState(null) // 'cancelar' | 'eliminar' | null
   const [menu, setMenu] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
 
   const esStaff = ['super_admin', 'admin', 'dispatcher'].includes(rol)
   const esAdmin = ['super_admin', 'admin'].includes(rol)
@@ -60,10 +65,39 @@ export default function OrdenDetalle() {
   const fin = desgloseVisible(orden, rol)
   const incs = incidencias.filter((i) => i.orden && i.orden === orden.numero)
   const hitosHechos = ORDEN_HITOS.filter((h) => orden.hitos?.[h.key]).length
+  const atrasada = alertaOrden(orden, Date.now())
+
+  // Navegar a la dirección de entrega con la app que elija el usuario.
+  const navDest = orden.direccionEntrega ? encodeURIComponent(orden.direccionEntrega) : null
+  const navUrls = navDest ? {
+    google: `https://www.google.com/maps/dir/?api=1&destination=${navDest}`,
+    waze: `https://waze.com/ul?q=${navDest}&navigate=yes`,
+    apple: `https://maps.apple.com/?daddr=${navDest}`,
+  } : null
+
+  // Cambio MANUAL de estado (staff) — con registro en auditoría de quién lo hizo.
+  const cambiarEstado = async (nuevo) => {
+    if (!nuevo || nuevo === orden.estado) return
+    if (!window.confirm(`${t('¿Cambiar el estado a')} "${t(ORDEN_ESTADO_LABEL[nuevo])}"?`)) return
+    await guardar('orders', orden.id, { estado: nuevo })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'estado_manual', entidad: 'orden', entidadId: orden.id, detalle: `${t(ORDEN_ESTADO_LABEL[orden.estado])} → ${t(ORDEN_ESTADO_LABEL[nuevo])}` })
+  }
+  // Subir/cambiar foto de la orden manualmente — con registro de quién.
+  const subirFotoManual = async (e) => {
+    const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return
+    await guardar('orders', orden.id, { fotoManual: { foto: f, por: usuario?.nombre || usuario?.email, ts: new Date().toISOString() } })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'foto_manual', entidad: 'orden', entidadId: orden.id })
+  }
 
   return (
     <div className="w-full">
       <Link to="/bulk/ordenes" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Volver a Órdenes')}</Link>
+
+      {atrasada && (
+        <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+          <AlertTriangle size={18} /> {atrasada.tipo === 'recogida' ? t('Lleva más de 3 h sin recogerse') : t('Lleva más de 3 h sin entregarse')} ({atrasada.horas} h)
+        </div>
+      )}
 
       {/* Encabezado */}
       <Card className="mb-4 p-5">
@@ -86,6 +120,22 @@ export default function OrdenDetalle() {
         {/* Acciones de gestión (staff cancela; admin/owner puede eliminar) */}
         {esStaff && (
           <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+            {navUrls && (
+              <div className="relative">
+                <Boton variant="ghost" onClick={() => setNavOpen((v) => !v)} className="px-3 py-1.5 text-xs"><Navigation size={14} /> {t('Navegar')}</Boton>
+                {navOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setNavOpen(false)} />
+                    <div className="absolute left-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                      <div className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:border-slate-800">{t('Abrir con')}</div>
+                      {[{ k: 'google', l: 'Google Maps' }, { k: 'waze', l: 'Waze' }, { k: 'apple', l: 'Apple Maps' }].map((a) => (
+                        <a key={a.k} href={navUrls[a.k]} target="_blank" rel="noreferrer" onClick={() => setNavOpen(false)} className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-brand-navy hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><Navigation size={14} className="text-amber-500" /> {a.l}</a>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {orden.estado === E.CANCELADA ? (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400"><Ban size={14} /> {t('Orden cancelada')}{orden.cancelacion?.motivo ? ` · ${orden.cancelacion.motivo}` : ''}</span>
             ) : puedeCancelar(orden) ? (
@@ -112,6 +162,31 @@ export default function OrdenDetalle() {
 
       {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}
       {accion === 'eliminar' && <ModalEliminar orden={orden} facturada={ordenFacturada(orden, facturas)} onClose={() => setAccion(null)} onDone={() => navigate('/bulk/ordenes')} ctx={{ tenantId, usuario, rol, facturas }} t={t} />}
+
+      {/* Administración (staff): cambio manual de estado + foto — todo queda en auditoría */}
+      {esStaff && (
+        <Card className="mb-4 p-4">
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Settings size={16} className="text-amber-500" /> {t('Administración')}</div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <div className="mb-1 text-[11px] uppercase text-slate-400">{t('Cambiar estado manualmente')}</div>
+              <select value={orden.estado} onChange={(e) => cambiarEstado(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                {Object.values(E).map((es) => <option key={es} value={es}>{t(ORDEN_ESTADO_LABEL[es])}</option>)}
+              </select>
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 dark:border-slate-600">
+              <Camera size={16} /> {orden.fotoManual?.foto ? t('Cambiar foto') : t('Subir foto')}
+              <input type="file" accept="image/*" onChange={subirFotoManual} className="hidden" />
+            </label>
+            {orden.fotoManual?.foto && (
+              <a href={orden.fotoManual.foto} target="_blank" rel="noreferrer" title={t('Ver foto')}>
+                <img src={orden.fotoManual.foto} alt="foto" className="h-12 w-12 rounded-lg border border-slate-200 object-cover dark:border-slate-700" />
+              </a>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">{t('Cada cambio manual queda registrado en la auditoría (quién y cuándo).')}</p>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Datos */}
@@ -157,7 +232,7 @@ export default function OrdenDetalle() {
                   <span className="absolute -left-[27px] top-0.5 grid place-items-center">
                     {ts ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Circle size={16} className="text-slate-300 dark:text-slate-600" />}
                   </span>
-                  <div className={`text-sm font-medium ${ts ? 'text-brand-navy dark:text-slate-100' : 'text-slate-400'}`}>{t(h.label)}</div>
+                  <div className={`text-sm font-medium ${ts ? 'text-brand-navy dark:text-slate-100' : 'text-slate-400'}`}>{t(h.label)}{h.key === 'tomada' && ts && orden.choferNombre ? ` · ${orden.choferNombre}` : ''}</div>
                   <div className="text-xs text-slate-400">{hora(ts) || t('pendiente')}</div>
                 </li>
               )
