@@ -61,22 +61,38 @@ export default function ChoferPortal() {
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
   const claveN = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  const miCarrier = carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
-  const miChofer = miCarrier?.choferes?.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
+  // Resolución ROBUSTA para que los equipos/trabajos (que el admin asigna al
+  // roster) siempre aparezcan aunque el nombre de la cuenta no coincida exacto:
+  //   1) mi transporte = el del claim carrierId; si no, aquel donde salgo por nombre.
+  //   2) mi ficha = por uid (enlace estable) → por nombre → si soy el único, esa.
+  const miCarrier = carriers.find((c) => c.id === carrierId)
+    || carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
+  const rosterCho = miCarrier?.choferes || []
+  const miChofer = rosterCho.find((d) => d.uid && d.uid === usuario?.id)
+    || rosterCho.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
+    || (rosterCho.length === 1 ? rosterCho[0] : null)
+  // Enlaza mi ficha del roster con mi cuenta (uid) la primera vez, para que el
+  // emparejamiento sea estable aunque cambie el nombre.
+  useEffect(() => {
+    if (miCarrier && miChofer && !miChofer.uid && usuario?.id) {
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, uid: usuario.id } : d)) })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [miCarrier?.id, miChofer?.id, usuario?.id])
   // Al abrir sesión: si estaba desactivado (3 rechazos), me reactiva y me vuelve a
   // poner en la cola de espera (resetea el contador).
   useEffect(() => {
     if (miCarrier && miChofer && (miChofer.activo === false || (miChofer.rechazos || 0) > 0)) {
-      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (claveN(d.nombre) === claveN(usuario?.nombre) ? { ...d, activo: true, rechazos: 0 } : d)) })
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, activo: true, rechazos: 0 } : d)) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [miCarrier?.id])
+  }, [miCarrier?.id, miChofer?.id])
   // Cuenta un rechazo; al llegar a 3 me desactiva (salgo de la cola de espera).
   const registrarRechazo = async () => {
     if (!miCarrier || !miChofer) return
     const nRech = (miChofer.rechazos || 0) + 1
     const off = nRech >= 3
-    await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (claveN(d.nombre) === claveN(usuario?.nombre) ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
+    await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
     if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
   }
   // Una orden es "mía" si me la asignaron por mi uid de login, por mi id en el
