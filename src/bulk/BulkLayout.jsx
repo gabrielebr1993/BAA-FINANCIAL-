@@ -3,6 +3,7 @@ import { Truck, LogOut, Grid2x2 } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
 import { NAV, puedeVer } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
+import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLayout({ children }) {
@@ -10,6 +11,9 @@ export default function BulkLayout({ children }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const items = NAV.filter((i) => puedeVer(rol, i.roles))
+  // Motor de asignación automática: corre mientras cualquier staff tenga el panel
+  // abierto (en cualquier pantalla), no solo en Órdenes.
+  useAutoAsignacion()
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">

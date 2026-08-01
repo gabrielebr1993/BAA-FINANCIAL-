@@ -9,11 +9,10 @@ import { noLeidosPorConv } from '../data/chat'
 import { tsMillis } from '../data/chatKeys'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
-import { reservar, liberar } from '../data/presencia'
+import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
-import { emparejar, choferesLibres, ofertaVencida, PRESENCIA_TTL_MS, ESPERA_RESPUESTA_MS } from '../domain/asignacionAuto'
-import { enviarPush } from '../integraciones/notificaciones'
+import { choferesLibres, PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { desgloseVisible } from '../domain/pagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
@@ -79,56 +78,11 @@ export default function Ordenes() {
     .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde)), [presencias, now])
   const libresN = choferesLibres(presencias, now).length
 
-  // ── Motor de emparejamiento (corre en el cliente del dispatcher) ──────────
-  // Reacciona SOLO a cambios en la cola o en la presencia (no al reloj de 1s), para
-  // no re-ejecutar cada segundo. Usa Date.now() interno para la frescura.
-  const enVuelo = useRef(new Set())          // órdenes en proceso de oferta
-  const enVueloChofer = useRef(new Set())    // choferes ya comprometidos (aún sin propagarse la reserva)
-  useEffect(() => {
-    if (!esStaff) return
-    try {
-      const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid))
-      const pares = emparejar(porAsignar, pool, Date.now())
-      for (const { orden, chofer } of pares) {
-        if (enVuelo.current.has(orden.id)) continue
-        enVuelo.current.add(orden.id); enVueloChofer.current.add(chofer.uid)
-        ofrecer(orden, chofer)
-          .catch(() => { /* red/permiso: no romper el loop */ })
-          .finally(() => { enVuelo.current.delete(orden.id); enVueloChofer.current.delete(chofer.uid) })
-      }
-    } catch { /* nunca dejar que el matcher tumbe la página */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAsignar, presencias, esStaff])
+  // El MOTOR de asignación (ofrecer + timeout) vive en useAutoAsignacion (montado
+  // en BulkLayout), para que corra en cualquier pantalla del staff. Aquí solo se
+  // observa y se ofrece la acción manual de "Reasignar".
 
-  const ofrecer = async (orden, chofer) => {
-    await guardar('orders', orden.id, {
-      estado: E.NOTIFICANDO, transportistaId: chofer.carrierId, choferId: chofer.uid, choferNombre: chofer.nombre,
-      asignadoEn: iso(), asignacionExpira: new Date(Date.now() + ESPERA_RESPUESTA_MS).toISOString(),
-    })
-    await reservar(chofer.uid, orden.id)
-    enviarPush(tenantId, `chofer:${chofer.uid}`, 'Nueva orden', `Orden ${orden.numero} — ${orden.pesoEstimado} ton (${orden.tipoEquipo || '—'})`)
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ofrecer_orden', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre}` })
-  }
-
-  // ── Timeout 2:00 → cuenta como rechazo y reasigna a otro ──────────────────
-  const revirtiendo = useRef(new Set())
-  useEffect(() => {
-    if (!esStaff) return
-    try {
-      for (const o of emparejando) {
-        // Vencida (2:00 sin respuesta) o notificando "heredada" sin contador → reencolar.
-        const revertir = ofertaVencida(o, now) || !o.asignacionExpira
-        if (!revertir || revirtiendo.current.has(o.id)) continue
-        revirtiendo.current.add(o.id)
-        reofertar(o, o.asignacionExpira ? 'timeout' : 'reencolar')
-          .catch(() => { /* no romper el loop */ })
-          .finally(() => revirtiendo.current.delete(o.id))
-      }
-    } catch { /* proteger la página */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emparejando, now, esStaff])
-
-  // Devuelve la orden a la cola excluyendo al chofer que no respondió, y lo libera al final.
+  // Reasignación MANUAL: devuelve la orden a la cola excluyendo al chofer actual.
   const reofertar = async (orden, motivo) => {
     const uid = orden.choferId
     const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), uid].filter(Boolean))]
