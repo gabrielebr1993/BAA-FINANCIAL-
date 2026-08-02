@@ -170,11 +170,13 @@ service cloud.firestore {
     match /bulk_plants/{id}    { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
-    // Config del transportista (cómo le paga a sus choferes). El propio transportista (por su carrierId) o el staff pueden escribirla.
+    // Config del transportista (cómo le paga a sus choferes). SOLO el propio
+    // transportista (rol transportista + su carrierId) o el staff. Un chofer NO
+    // puede leerla ni escribirla aunque comparta bulkCarrierId (fuga L5 cerrada).
     match /bulk_carrierConfig/{id} {
-      allow read: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && bCarrier() == id);
-      allow create: if bStaff(request.resource.data.tenantId) || (bSame(request.resource.data.tenantId) && bCarrier() == id);
-      allow update: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && bCarrier() == id);
+      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'transportista' && bSame(resource.data.tenantId) && bCarrier() == id);
+      allow create: if bStaff(request.resource.data.tenantId) || (bRole() == 'transportista' && bSame(request.resource.data.tenantId) && bCarrier() == id);
+      allow update: if bStaff(resource.data.tenantId) || (bRole() == 'transportista' && bSame(request.resource.data.tenantId) && bCarrier() == id);
       allow delete: if bStaff(resource.data.tenantId);
     }
     // Avisos de pago a transportistas (los emite el staff; el transportista lee los suyos).
@@ -199,11 +201,21 @@ service cloud.firestore {
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
           || (bRole() == 'supervisor_planta')));
       allow create: if bStaff(request.resource.data.tenantId);
+      // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
+      // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo:
+      //  - precioCliente y precioTransportista: intocables por cualquier no-staff.
+      //  - pagoChofer: el transportista SÍ lo fija al asignar a su chofer; el
+      //    chofer y el supervisor NO pueden tocarlo.
       allow update: if bStaff(resource.data.tenantId)
-        || (bSame(resource.data.tenantId) && (
-             (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier()))
-          || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
-          || (bRole() == 'supervisor_planta')));
+        || (bSame(resource.data.tenantId)
+            && request.resource.data.precioCliente == resource.data.precioCliente
+            && request.resource.data.precioTransportista == resource.data.precioTransportista
+            && (
+             (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
+          || (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier())
+                && request.resource.data.pagoChofer == resource.data.pagoChofer)
+          || (bRole() == 'supervisor_planta'
+                && request.resource.data.pagoChofer == resource.data.pagoChofer)));
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
@@ -211,7 +223,12 @@ service cloud.firestore {
     match /bulk_invoices/{id} {
       allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
       allow create: if bStaff(request.resource.data.tenantId);
-      allow update: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
+      // El cliente SOLO puede FIRMAR su factura: puede tocar los campos de firma y
+      // dejarla en 'firmada'. No puede cambiar el total, las líneas ni marcarla pagada.
+      allow update: if bStaff(resource.data.tenantId)
+        || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'firma', 'firmante', 'firmadaEn'])
+            && request.resource.data.estado == 'firmada');
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
@@ -222,12 +239,19 @@ service cloud.firestore {
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.
     match /bulk_notificaciones/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 
-    // Tokens de push (FCM): cada usuario registra el suyo; el backend (Admin SDK) los lee para enviar.
-    match /bulk_pushTokens/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(resource.data.tenantId); }
+    // Tokens de push (FCM): los lee el backend (Admin SDK, ignora reglas) para
+    // enviar. En cliente solo el staff los lee; cada usuario registra el suyo.
+    match /bulk_pushTokens/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(request.resource.data.tenantId); }
 
-    // Presencia de choferes (en línea / disponible): cada chofer escribe la suya;
-    // cualquier miembro del tenant la lee (el dispatcher empareja órdenes con choferes).
-    match /bulk_presence/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(resource.data.tenantId); }
+    // Presencia de choferes (en línea / disponible): la escribe cada chofer. La leen
+    // el staff (para emparejar), el propio chofer, y su transportista (ver a su flota).
+    match /bulk_presence/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (request.auth.uid == id || resource.data.uid == request.auth.uid))
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
+      allow create, update: if bSame(request.resource.data.tenantId);
+      allow delete: if bSame(resource.data.tenantId);
+    }
 
     // Perfil del chofer (foto, datos, banco para pagos). El chofer edita el suyo
     // (docId = su uid); el staff lo lee (para pagarle). Datos bancarios visibles
