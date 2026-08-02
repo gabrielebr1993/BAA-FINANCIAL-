@@ -565,6 +565,11 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const [firma, setFirma] = useState(null)
   const [coment, setComent] = useState('')
   const [ocr, setOcr] = useState(null) // {cargando, progreso, msg}
+  // Peso OFICIAL: el que lee el OCR del ticket es la fuente de verdad. El chofer no
+  // lo edita libremente; para cambiarlo debe abrir una EXCEPCIÓN con motivo.
+  const [pesoOcr, setPesoOcr] = useState(null) // valor leído del ticket (número)
+  const [excepcionPeso, setExcepcionPeso] = useState(false)
+  const [motivoPeso, setMotivoPeso] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [codigo, setCodigo] = useState('')
@@ -628,15 +633,22 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const guardarTicket = async () => {
     setOcupado(true)
     const g = await capturarGPS()
-    // Al registrar el ticket, la carga queda hecha y sale de la planta (dos hitos).
+    // Peso OFICIAL: el del ticket (OCR) manda. Solo cambia por excepción con motivo.
+    const desdeOcr = pesoOcr != null && !excepcionPeso
+    const oficial = desdeOcr ? pesoOcr : (Number(peso) || null)
+    const fuente = desdeOcr ? 'ocr' : (pesoOcr != null ? 'manual_excepcion' : 'manual')
+    const ticket = {
+      numero: ticketNum || null, foto: foto || null,
+      peso: oficial, pesoOcr, unidad: 'ton', fuente, ts: ahora(),
+      ...(fuente === 'manual_excepcion' ? { excepcion: { motivo: motivoPeso.trim() || 'Sin motivo', valorManual: Number(peso) || null, valorOcr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
+    }
     await guardar('orders', orden.id, {
       estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
-      pesoReal: Number(peso) || orden.pesoEstimado,
-      ticket: { numero: ticketNum || null, foto: foto || null, peso: Number(peso) || null, ts: ahora() },
-      gps_carga: g,
+      pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente,
+      ticket, gps_carga: g,
     })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ticket_carga', entidad: 'orden', entidadId: orden.id, detalle: `Peso real ${peso}` })
-    setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null)
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: fuente === 'manual_excepcion' ? 'ticket_excepcion_peso' : 'ticket_carga', entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})` })
+    setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
   }
 
   const guardarPOD = async () => {
@@ -793,10 +805,9 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </Modal>
       )}
 
-      {/* Modal ticket de carga */}
+      {/* Modal ticket de carga — el PESO OFICIAL sale del ticket (OCR), no del chofer */}
       {modal === 'ticket' && (
         <Modal onClose={() => setModal(null)} titulo={t('Ticket de carga')}>
-          <Input type="number" placeholder={t('Peso real (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-2" />
           <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
           <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
             <Camera size={18} /> {foto ? t('Foto lista ✓ (toca para reemplazar)') : t('Tomar foto del ticket')}
@@ -808,10 +819,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
               onClick={async () => {
                 setOcr({ cargando: true, progreso: 0 })
                 try {
-                  const escaneada = await escanearParaOCR(foto) // realza para que el OCR lea mejor
+                  const escaneada = await escanearParaOCR(foto)
                   const r = await leerTicket(escaneada, (p) => setOcr({ cargando: true, progreso: p }))
-                  if (r) { if (r.pesoNeto) setPeso(String(r.pesoNeto)); if (r.ticket) setTicketNum(r.ticket) }
-                  setOcr({ cargando: false, msg: r ? t('Leído — revisa y corrige (las unidades pueden variar).') : t('No se pudo leer el ticket.') })
+                  if (r) { if (r.pesoNeto) { setPesoOcr(r.pesoNeto); setExcepcionPeso(false) } if (r.ticket) setTicketNum(r.ticket) }
+                  setOcr({ cargando: false, msg: r && r.pesoNeto ? t('Peso leído del ticket.') : t('No se pudo leer el peso. Revisa la foto o registra una excepción.') })
                 } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket.') }) }
               }}
               className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-amber-500 dark:text-slate-900">
@@ -819,8 +830,34 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
             </button>
           )}
           {ocr?.msg && <p className="mb-1 text-[11px] text-amber-600 dark:text-amber-400">{ocr.msg}</p>}
-          <p className="mb-2 text-[11px] text-slate-400">{t('El peso real reemplaza al estimado. El OCR pre-llena; confirma el valor.')}</p>
-          <Boton variant="gold" onClick={guardarTicket} disabled={ocupado || !peso} className="w-full justify-center">{ocupado ? <Spinner /> : t('Confirmar carga')}</Boton>
+
+          {/* Peso oficial (del ticket) — solo lectura; corregir requiere excepción */}
+          {pesoOcr != null && !excepcionPeso && (
+            <div className="mb-2 rounded-xl border border-emerald-300 bg-emerald-500/10 p-3 dark:border-emerald-500/40">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('Peso oficial (del ticket)')}</div>
+              <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{pesoOcr} ton</div>
+              <button type="button" onClick={() => { setExcepcionPeso(true); setPeso(String(pesoOcr)) }} className="mt-1 text-[11px] font-semibold text-amber-600 underline dark:text-amber-400">{t('El ticket dice otra cosa — corregir (excepción)')}</button>
+            </div>
+          )}
+          {excepcionPeso && (
+            <div className="mb-2 rounded-xl border border-amber-300 bg-amber-500/10 p-3 dark:border-amber-500/40">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('Excepción de peso (queda auditada)')}</div>
+              <Input type="number" placeholder={t('Peso correcto (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mt-2" />
+              <Input placeholder={t('Motivo de la corrección')} value={motivoPeso} onChange={(e) => setMotivoPeso(e.target.value)} className="mt-2" />
+              {pesoOcr != null && <button type="button" onClick={() => setExcepcionPeso(false)} className="mt-1 text-[11px] text-slate-400 underline">{t('Cancelar excepción')}</button>}
+            </div>
+          )}
+          {pesoOcr == null && !excepcionPeso && (
+            <div className="mb-2">
+              <Input type="number" placeholder={t('Peso (ton) — sin lectura de ticket')} value={peso} onChange={(e) => setPeso(e.target.value)} />
+              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Sin OCR: este peso queda marcado como manual para revisión.')}</p>
+            </div>
+          )}
+
+          <Boton variant="gold" onClick={guardarTicket} className="w-full justify-center"
+            disabled={ocupado || !((pesoOcr != null && !excepcionPeso) || (excepcionPeso && peso && motivoPeso.trim()) || (pesoOcr == null && peso))}>
+            {ocupado ? <Spinner /> : t('Confirmar carga')}
+          </Boton>
         </Modal>
       )}
 

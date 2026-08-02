@@ -2256,6 +2256,16 @@ const EN = {
   "Cuando la entrega tiene confianza alta (ticket + foto + firma + dentro de la zona + peso en tolerancia), se libera sola, sin código del supervisor. Si la confianza no es alta, se usa el código como siempre. El supervisor y el admin conservan la liberación manual.": "When a delivery has high confidence (ticket + photo + signature + inside the zone + weight in tolerance), it releases on its own, without the supervisor code. If confidence isn't high, the code is used as usual. Supervisor and admin keep manual release.",
   "Activar liberación automática": "Turn on automatic release",
   "Apagar liberación automática": "Turn off automatic release",
+  "Peso leído del ticket.": "Weight read from the ticket.",
+  "No se pudo leer el peso. Revisa la foto o registra una excepción.": "Couldn't read the weight. Check the photo or record an exception.",
+  "Peso oficial (del ticket)": "Official weight (from ticket)",
+  "El ticket dice otra cosa — corregir (excepción)": "The ticket says otherwise — correct (exception)",
+  "Excepción de peso (queda auditada)": "Weight exception (audited)",
+  "Peso correcto (ton)": "Correct weight (tons)",
+  "Motivo de la corrección": "Reason for the correction",
+  "Cancelar excepción": "Cancel exception",
+  "Peso (ton) — sin lectura de ticket": "Weight (tons) — no ticket reading",
+  "Sin OCR: este peso queda marcado como manual para revisión.": "No OCR: this weight is flagged as manual for review.",
 
 }
 
