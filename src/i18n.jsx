@@ -2276,6 +2276,11 @@ const EN = {
   "Viajes": "Trips",
   "orden(es) en riesgo de incumplir (2–3 h)": "order(s) at risk of breaching (2–3 h)",
   "Aún a tiempo — intervén antes de que crucen las 3 h.": "Still in time — act before they cross 3 h.",
+  "Notificaciones": "Notifications",
+  "Solo pendientes": "Only pending",
+  "Sin pendientes. Todo al día.": "Nothing pending. All caught up.",
+  "Sin notificaciones.": "No notifications.",
+  "Marcar todas como leídas": "Mark all as read",
 
 }
 
