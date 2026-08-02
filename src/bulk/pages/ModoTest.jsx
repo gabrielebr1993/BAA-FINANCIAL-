@@ -3,7 +3,8 @@ import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCh
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
-import { sincronizarPagoCliente, sincronizarPagoAsignacion } from '../data/ordenPagos'
+import { escribirPreciosBase, asignarPagos, quitarPreciosDeOrden } from '../data/ordenPagos'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, eliminar } from '../data/repo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -20,7 +21,7 @@ const PORTALES = [
 export default function ModoTest() {
   const { t } = useLang()
   const { usuario, tenantId, rol, crearUsuario, iniciarSesion, repararPermisos } = useBulkAuth()
-  const { datos: ordenes } = useColeccion('orders')
+  const { datos: ordenes } = useOrdenesConPagos()
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
   const [entrando, setEntrando] = useState(null) // rol en proceso
@@ -28,6 +29,7 @@ export default function ModoTest() {
   const [msg, setMsg] = useState(null)
   const [prueba, setPrueba] = useState(null)
   const [migrando, setMigrando] = useState(null) // { hechas, total } | null
+  const [cortando, setCortando] = useState(null) // { hechas, total } | null
 
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
@@ -99,8 +101,8 @@ export default function ModoTest() {
       for (let i = 0; i < lista.length; i += CHUNK) {
         const trozo = lista.slice(i, i + CHUNK)
         await Promise.all(trozo.flatMap((o) => {
-          const tareas = [sincronizarPagoCliente(tenantId, o)]
-          if (o.transportistaId != null || o.choferId != null) tareas.push(sincronizarPagoAsignacion(tenantId, o))
+          const tareas = [escribirPreciosBase(tenantId, o)]
+          if (o.transportistaId != null || o.choferId != null) tareas.push(asignarPagos(tenantId, o.id, { transportistaId: o.transportistaId, choferId: o.choferId, pagoChofer: o.pagoChofer, numero: o.numero }))
           return tareas
         }))
         hechas += trozo.length
@@ -110,6 +112,30 @@ export default function ModoTest() {
     } catch (e) {
       setMsg({ tipo: 'error', txt: (esPermiso(e?.message) ? t('Bloqueo de permisos. Toca “Actualizar sesión”. ') : '') + t('No se pudo migrar: ') + (e?.message || '') })
     } finally { setMigrando(null) }
+  }
+
+  // Inc.2 Fase 3b-ii · Corte: borra los precios de bulk_orders (ya viven en los
+  // docs de pago). Corre DESPUÉS de "Migrar pagos". Seguro: usa las órdenes
+  // enriquecidas (el importe sigue disponible desde los docs de pago).
+  const terminarMigracion = async () => {
+    if (!window.confirm(t('Se quitarán los precios del documento de la orden (ya están en los docs de pago). Corre esto DESPUÉS de “Migrar pagos”. ¿Continuar?'))) return
+    setMsg(null)
+    await asegurarToken()
+    const lista = ordenes || []
+    setCortando({ hechas: 0, total: lista.length })
+    const CHUNK = 20
+    let hechas = 0
+    try {
+      for (let i = 0; i < lista.length; i += CHUNK) {
+        const trozo = lista.slice(i, i + CHUNK)
+        await Promise.all(trozo.map((o) => quitarPreciosDeOrden(o.id).catch(() => {})))
+        hechas += trozo.length
+        setCortando({ hechas, total: lista.length })
+      }
+      setMsg({ tipo: 'ok', txt: `${t('Corte completo: precios retirados de ')}${hechas} ${t('órdenes.')}` })
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: t('No se pudo completar el corte: ') + (e?.message || '') })
+    } finally { setCortando(null) }
   }
 
   // Un toque: prepara la cuenta del portal (si hace falta) y entra directo a esa vista.
@@ -193,11 +219,15 @@ export default function ModoTest() {
           <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mantenimiento · Migrar pagos por audiencia')}</h3>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">{t('Crea los documentos de pago separados (cliente / transportista / chofer) de las órdenes existentes. Necesario una sola vez para separar los márgenes. Seguro y repetible.')}</p>
-        <div className="mt-3">
-          <Boton variant="gold" onClick={migrarPagos} disabled={!!migrando || ocupado}>
-            {migrando ? <><Loader2 size={16} className="animate-spin" /> {migrando.hechas}/{migrando.total}</> : <><RefreshCw size={16} /> {t('Migrar pagos')} ({ordenes.length})</>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Boton variant="gold" onClick={migrarPagos} disabled={!!migrando || !!cortando || ocupado}>
+            {migrando ? <><Loader2 size={16} className="animate-spin" /> {migrando.hechas}/{migrando.total}</> : <><RefreshCw size={16} /> {t('1) Migrar pagos')} ({ordenes.length})</>}
+          </Boton>
+          <Boton variant="danger" onClick={terminarMigracion} disabled={!!migrando || !!cortando || ocupado}>
+            {cortando ? <><Loader2 size={16} className="animate-spin" /> {cortando.hechas}/{cortando.total}</> : <><Trash2 size={16} /> {t('2) Terminar migración (quitar precios de órdenes)')}</>}
           </Boton>
         </div>
+        <p className="mt-2 text-[11px] text-slate-400">{t('Primero “Migrar pagos”; cuando termine, “Terminar migración”. Así queda cerrada la separación de márgenes.')}</p>
       </Card>
 
       {/* Portales por rol: un toque entra directo (opcional) */}

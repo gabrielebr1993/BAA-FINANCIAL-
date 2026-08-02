@@ -2225,6 +2225,13 @@ const EN = {
   "Migración completa: ": "Migration complete: ",
   "órdenes procesadas.": "orders processed.",
   "No se pudo migrar: ": "Could not migrate: ",
+  "1) Migrar pagos": "1) Migrate pay",
+  "2) Terminar migración (quitar precios de órdenes)": "2) Finish migration (remove prices from orders)",
+  "Se quitarán los precios del documento de la orden (ya están en los docs de pago). Corre esto DESPUÉS de “Migrar pagos”. ¿Continuar?": "Prices will be removed from the order document (they're already in the pay docs). Run this AFTER “Migrate pay”. Continue?",
+  "Corte completo: precios retirados de ": "Cut complete: prices removed from ",
+  "órdenes.": "orders.",
+  "No se pudo completar el corte: ": "Could not complete the cut: ",
+  "Primero “Migrar pagos”; cuando termine, “Terminar migración”. Así queda cerrada la separación de márgenes.": "First “Migrate pay”; when it finishes, “Finish migration”. That closes the margin separation.",
 
 }
 
