@@ -46,7 +46,14 @@ export default function ChoferPortal() {
   // Acotamos a las órdenes de MI transporte: así el listener cumple las reglas
   // (el chofer no puede leer toda la colección) y vemos tanto las que se están
   // notificando como las que ya me asignaron.
-  const { datos: ordenes } = useColeccion('orders', [where('transportistaId', '==', carrierId || '__none__')])
+  const { datos: _ordenesRaw } = useColeccion('orders', [where('transportistaId', '==', carrierId || '__none__')])
+  // Inc.2 Fase 2: el pago del chofer se lee de su doc de pago por audiencia
+  // (fallback al campo de la orden para las órdenes anteriores a la migración).
+  const { datos: pagosChofer } = useColeccion('orderPay_chofer')
+  const ordenes = useMemo(() => {
+    const m = {}; for (const p of pagosChofer || []) m[p.orderId || p.id] = p.pagoChofer
+    return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, pagoChofer: m[o.id] } : o))
+  }, [_ordenesRaw, pagosChofer])
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages')

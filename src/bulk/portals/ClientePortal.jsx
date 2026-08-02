@@ -21,7 +21,14 @@ export default function ClientePortal() {
   const { usuario, cerrarSesion } = useBulkAuth()
   const navigate = useNavigate()
   const clienteId = usuario?.clienteId || '__none__'
-  const { datos: ordenes, cargando } = useColeccion('orders', [where('clienteId', '==', clienteId)])
+  const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('clienteId', '==', clienteId)])
+  // Inc.2 Fase 2: el precio del cliente se lee de su doc de pago por audiencia
+  // (fallback al campo de la orden para las órdenes anteriores a la migración).
+  const { datos: pagosCliente } = useColeccion('orderPay_cliente', [where('clienteId', '==', clienteId)])
+  const ordenes = useMemo(() => {
+    const m = {}; for (const p of pagosCliente || []) m[p.orderId || p.id] = p.precioCliente
+    return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, precioCliente: m[o.id] } : o))
+  }, [_ordenesRaw, pagosCliente])
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [firma, setFirma] = useState(null)

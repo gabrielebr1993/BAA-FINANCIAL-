@@ -25,7 +25,20 @@ export default function TransportistaPortal() {
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
   const carrierId = usuario?.carrierId || '__none__'
-  const { datos: ordenes, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
+  const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
+  // Inc.2 Fase 2: los pagos se leen de los docs de pago por audiencia (el
+  // transportista NO ve precioCliente). Fallback a los campos de la orden.
+  const { datos: pagosCarrier } = useColeccion('orderPay_carrier', [where('transportistaId', '==', carrierId)])
+  const { datos: pagosChofer } = useColeccion('orderPay_chofer', [where('transportistaId', '==', carrierId)])
+  const ordenes = useMemo(() => {
+    const mc = {}; for (const p of pagosCarrier || []) mc[p.orderId || p.id] = p.precioTransportista
+    const md = {}; for (const p of pagosChofer || []) md[p.orderId || p.id] = p.pagoChofer
+    return (_ordenesRaw || []).map((o) => ({
+      ...o,
+      precioTransportista: mc[o.id] != null ? mc[o.id] : o.precioTransportista,
+      pagoChofer: md[o.id] != null ? md[o.id] : o.pagoChofer,
+    }))
+  }, [_ordenesRaw, pagosCarrier, pagosChofer])
   const { datos: carriers } = useColeccion('carriers')
   const { datos: configs } = useColeccion('carrierConfig')
   const { datos: mensajes } = useColeccion('messages')
