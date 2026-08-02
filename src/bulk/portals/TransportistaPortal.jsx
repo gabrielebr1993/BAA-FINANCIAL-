@@ -8,6 +8,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
+import { sincronizarPagoAsignacion } from '../data/ordenPagos'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ahora } from '../domain/flujo'
 import { desgloseVisible } from '../domain/pagos'
@@ -73,6 +74,8 @@ export default function TransportistaPortal() {
       ...(pago != null ? { pagoChofer: pago } : {}),
       ...(avanza ? { estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } } : {}),
     })
+    // Inc.2 Fase 1: proyecta los pagos (transportista ya fijado; chofer y su pago).
+    await sincronizarPagoAsignacion(tenantId, { ...orden, choferId: driverId, ...(pago != null ? { pagoChofer: pago } : {}) })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_chofer', entidad: 'orden', entidadId: orden.id, detalle: d?.nombre })
   }
 

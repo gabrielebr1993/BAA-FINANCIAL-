@@ -11,6 +11,7 @@ import { useColeccion } from './useColeccion'
 import { guardar } from './repo'
 import { reservar, liberar } from './presencia'
 import { auditar } from './auditoria'
+import { sincronizarPagoAsignacion, limpiarPagoAsignacion } from './ordenPagos'
 import { enviarPush } from '../integraciones/notificaciones'
 import { emparejar, ofertaVencida, ESPERA_RESPUESTA_MS } from '../domain/asignacionAuto'
 import { ORDEN_ESTADO as E } from '../domain/constants'
@@ -37,6 +38,8 @@ export function useAutoAsignacion() {
       asignadoEn: iso(), asignacionExpira: new Date(Date.now() + ESPERA_RESPUESTA_MS).toISOString(),
     })
     await reservar(chofer.uid, orden.id)
+    // Inc.2 Fase 1: proyecta los pagos de transportista y chofer a sus docs.
+    await sincronizarPagoAsignacion(tenantId, { ...orden, transportistaId: chofer.carrierId, choferId: chofer.uid })
     enviarPush(tenantId, `chofer:${chofer.uid}`, 'Nueva orden', `Orden ${orden.numero} — ${orden.pesoEstimado} ton (${orden.tipoEquipo || '—'})`)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ofrecer_orden', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre}` })
   }
@@ -49,6 +52,8 @@ export function useAutoAsignacion() {
       rechazadoPor, ultimoRechazo: { por: orden.choferNombre || '', motivo, ts: iso() },
     })
     if (uid) await liberar(uid)
+    // Inc.2 Fase 1: al liberar, quita los docs de pago de carrier/chofer.
+    await limpiarPagoAsignacion(orden)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'reofertar_orden', entidad: 'orden', entidadId: orden.id, detalle: motivo })
   }
 

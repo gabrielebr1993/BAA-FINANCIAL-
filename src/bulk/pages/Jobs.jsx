@@ -4,6 +4,7 @@ import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, crearLote, listar, guardar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
+import { sincronizarPagoCliente } from '../data/ordenPagos'
 import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
 import { calcularTarifa } from '../domain/tarifas'
 import { MAX_TON_POR_VIAJE, ORDEN_ESTADO as E } from '../domain/constants'
@@ -166,7 +167,9 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
       if (t) { conTarifa++; return { ...o, precioCliente: t.precioCliente, precioTransportista: t.precioTransportista, pagoChofer: t.pagoChofer } }
       return o
     })
-    await crearLote('orders', tenantId, conPrecio)
+    const creados = await crearLote('orders', tenantId, conPrecio)
+    // Inc.2 Fase 1: proyecta el precio del cliente a su doc de pago por audiencia.
+    await Promise.all(creados.map((o) => sincronizarPagoCliente(tenantId, o)))
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_ordenes', entidad: 'job', entidadId: job.id, detalle: `${nuevas.length} órdenes (${total} ton) para ${job.codigo}` })
     setRes({ n: nuevas.length, total, tarifa: manual != null ? 'manual' : (conTarifa ? 'auto' : 'sin_tarifa') }); setCant(''); setOcupado(false)
   }

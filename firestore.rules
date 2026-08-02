@@ -219,6 +219,28 @@ service cloud.firestore {
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
+    // ── Inc.2 · Pagos por audiencia (separación de márgenes) ─────────────────
+    // Cada orden proyecta su precio a 3 docs (mismo id que la orden) para que cada
+    // rol lea SOLO su número. Los precios de cliente y transportista los fija SOLO
+    // el staff (nadie puede inflar lo que se le cobra/paga). El pago al chofer lo
+    // fija su transportista.
+    match /bulk_orderPay_cliente/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
+      allow create, update, delete: if bStaff(request.resource.data.tenantId) || bStaff(resource.data.tenantId);
+    }
+    match /bulk_orderPay_carrier/{id} {
+      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.transportistaId == bCarrier());
+      allow create, update, delete: if bStaff(request.resource.data.tenantId) || bStaff(resource.data.tenantId);
+    }
+    match /bulk_orderPay_chofer/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bRole() == 'chofer' && bSame(resource.data.tenantId) && resource.data.choferId == request.auth.uid)
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.transportistaId == bCarrier());
+      allow create, update: if bStaff(request.resource.data.tenantId)
+        || (bRole() == 'transportista' && bSame(request.resource.data.tenantId) && request.resource.data.transportistaId == bCarrier());
+      allow delete: if bStaff(resource.data.tenantId);
+    }
+
     // Facturas: staff crea; cliente lee/firma las suyas.
     match /bulk_invoices/{id} {
       allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
