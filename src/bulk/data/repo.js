@@ -10,7 +10,7 @@
 // ============================================================================
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  query, where, orderBy, onSnapshot, serverTimestamp, writeBatch,
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore'
 import { dbBulk as db } from '../firebaseBulk'
 
@@ -18,18 +18,26 @@ const PREFIJO = 'bulk_'
 export const col = (nombre) => collection(db, PREFIJO + nombre)
 export const ref = (nombre, id) => doc(db, PREFIJO + nombre, id)
 
-// Lista documentos de una colección para un tenant (con filtros opcionales).
-export async function listar(nombre, tenantId, filtros = []) {
-  const clausulas = [where('tenantId', '==', tenantId), ...filtros]
-  const snap = await getDocs(query(col(nombre), ...clausulas))
+// Construye las cláusulas comunes: aislamiento por tenant + filtros + orden + límite.
+// opts: { orden?: campo, dir?: 'asc'|'desc', limite?: número }. Combinar `orden` con
+// el where de tenantId requiere un índice compuesto (ver firestore.indexes.json).
+function clausulasDe(tenantId, filtros = [], opts = {}) {
+  const c = [where('tenantId', '==', tenantId), ...filtros]
+  if (opts.orden) c.push(orderBy(opts.orden, opts.dir || 'asc'))
+  if (opts.limite) c.push(limit(opts.limite))
+  return c
+}
+
+// Lista documentos de una colección para un tenant (con filtros/orden/límite opcionales).
+export async function listar(nombre, tenantId, filtros = [], opts = {}) {
+  const snap = await getDocs(query(col(nombre), ...clausulasDe(tenantId, filtros, opts)))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
 // Suscripción en tiempo real (WebSocket de Firestore) a una colección del tenant.
 // Devuelve la función para cancelar la suscripción.
-export function suscribir(nombre, tenantId, cb, filtros = []) {
-  const clausulas = [where('tenantId', '==', tenantId), ...filtros]
-  return onSnapshot(query(col(nombre), ...clausulas), (snap) => {
+export function suscribir(nombre, tenantId, cb, filtros = [], opts = {}) {
+  return onSnapshot(query(col(nombre), ...clausulasDe(tenantId, filtros, opts)), (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   }, () => cb([]))
 }
