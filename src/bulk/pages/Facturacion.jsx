@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Download, Plus, Mail, MessageCircle, Truck, Building2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
-import { crear, guardar } from '../data/repo'
+import { crear, guardar, siguienteSecuencia } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { armarFactura, armarAvisoPago, estadoDocumento } from '../domain/facturacion'
@@ -12,7 +12,7 @@ import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } 
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
-const ESTADO_COLOR = { enviada: 'gold', firmada: 'green', pagada: 'navy', enviado: 'gold', pagado: 'green' }
+const ESTADO_COLOR = { enviada: 'gold', firmada: 'green', pagada: 'navy', rechazada: 'slate', enviado: 'gold', pagado: 'green' }
 
 export default function Facturacion() {
   const { t } = useLang()
@@ -64,7 +64,8 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
 
   const generar = async () => {
     if (!f.clienteId || !preview || preview.n === 0) { setMsg({ tipo: 'warn', txt: t('Selecciona un cliente con órdenes entregadas en el periodo.') }); return }
-    const numero = `FAC-${Date.now().toString(36).toUpperCase().slice(-6)}`
+    const seq = await siguienteSecuencia(tenantId, 'factura')
+    const numero = `FAC-${String(seq).padStart(5, '0')}`
     // Vencimiento por defecto: 30 días desde hoy (neto 30).
     const vence = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
     await crear('invoices', tenantId, {
@@ -110,6 +111,7 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
                 return (
                   <div className="inline-flex items-center gap-1">
                     <button onClick={() => marcarPagada(r)} title={t('Marcar pagada / pendiente')}><Badge color={ESTADO_COLOR[r.estado] || 'slate'}>{r.estado}{r.firma ? ' ✓' : ''}</Badge></button>
+                    {r.estado === 'rechazada' && <span title={r.motivoRechazo || ''} className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-400">{t('disputada')}</span>}
                     {vencida && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-400">{t('vencida')}</span>}
                   </div>
                 )
@@ -139,7 +141,8 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
 
   const generar = async () => {
     if (!f.carrierId || !preview || preview.n === 0) { setMsg({ tipo: 'warn', txt: t('Selecciona un transportista con cargas entregadas en el periodo.') }); return }
-    const numero = `PAGO-${Date.now().toString(36).toUpperCase().slice(-6)}`
+    const seq = await siguienteSecuencia(tenantId, 'pago')
+    const numero = `PAGO-${String(seq).padStart(5, '0')}`
     await crear('carrierStatements', tenantId, {
       numero, carrierId: f.carrierId, carrierNombre: nombreCarrier(f.carrierId),
       desde: f.desde || null, hasta: f.hasta || null, fechaPago: f.fechaPago || null,

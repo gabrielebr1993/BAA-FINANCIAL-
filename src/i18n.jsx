@@ -2266,6 +2266,9 @@ const EN = {
   "Cancelar excepción": "Cancel exception",
   "Peso (ton) — sin lectura de ticket": "Weight (tons) — no ticket reading",
   "Sin OCR: este peso queda marcado como manual para revisión.": "No OCR: this weight is flagged as manual for review.",
+  "Disputar": "Dispute",
+  "¿Por qué disputas esta factura?": "Why are you disputing this invoice?",
+  "disputada": "disputed",
 
 }
 

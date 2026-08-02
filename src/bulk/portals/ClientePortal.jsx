@@ -60,6 +60,12 @@ export default function ClientePortal() {
     generarFacturaPDF({ ...firmando, ...datos }, { clienteNombre: firmando.clienteNombre, empresa: 'Freight' })
     setFirmando(null); setFirma(null)
   }
+  // El cliente disputa/rechaza una factura enviada, con motivo (queda para el staff).
+  const rechazarFactura = async (r) => {
+    const motivo = window.prompt(t('¿Por qué disputas esta factura?'))
+    if (motivo == null) return
+    await guardar('invoices', r.id, { estado: 'rechazada', motivoRechazo: motivo.trim() || 'Sin motivo', rechazadaEn: new Date().toISOString() })
+  }
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
@@ -123,10 +129,11 @@ export default function ClientePortal() {
                   renderCell={(r, k) => {
                     if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
                     if (k === 'total') return money(r.total)
-                    if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : 'gold'}>{r.estado}</Badge>
+                    if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : 'gold'}>{r.estado}</Badge>
                     if (k === 'acciones') return (
                       <div className="flex justify-end gap-1.5">
                         {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> {t('Revisar y firmar')}</Boton>}
+                        {r.estado === 'enviada' && <Boton variant="ghost" onClick={() => rechazarFactura(r)} className="px-2.5 py-1 text-xs">{t('Disputar')}</Boton>}
                         <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Freight' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
                       </div>
                     )

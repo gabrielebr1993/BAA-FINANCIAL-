@@ -245,12 +245,14 @@ service cloud.firestore {
     match /bulk_invoices/{id} {
       allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
       allow create: if bStaff(request.resource.data.tenantId);
-      // El cliente SOLO puede FIRMAR su factura: puede tocar los campos de firma y
-      // dejarla en 'firmada'. No puede cambiar el total, las líneas ni marcarla pagada.
+      // El cliente puede FIRMAR (estado='firmada') o DISPUTAR (estado='rechazada')
+      // su factura — solo esos campos. No puede tocar total, líneas ni marcarla pagada.
       allow update: if bStaff(resource.data.tenantId)
         || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'firma', 'firmante', 'firmadaEn'])
-            && request.resource.data.estado == 'firmada');
+            && (
+              (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'firma', 'firmante', 'firmadaEn']) && request.resource.data.estado == 'firmada')
+              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'motivoRechazo', 'rechazadaEn']) && request.resource.data.estado == 'rechazada')
+            ));
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
@@ -287,6 +289,13 @@ service cloud.firestore {
     // Señal de cierre de sesión forzado: la escribe el staff; todos la leen para
     // saber si deben cerrar sesión.
     match /bulk_signals/{id} { allow read: if bSame(resource.data.tenantId); allow create, update: if bStaff(request.resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
+
+    // Contadores secuenciales por tenant (doc id = tenantId). Numeración de facturas/pagos.
+    // Se usa el id (== tenantId) en la regla para permitir el get transaccional aun sin doc.
+    match /bulk_counters/{id} {
+      allow read: if bStaff(id);
+      allow create, update: if bStaff(id);
+    }
 
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }

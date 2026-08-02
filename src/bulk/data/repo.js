@@ -10,7 +10,7 @@
 // ============================================================================
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, runTransaction,
 } from 'firebase/firestore'
 import { dbBulk as db } from '../firebaseBulk'
 
@@ -76,6 +76,20 @@ export async function crearLote(nombre, tenantId, lista) {
   }
   await batch.commit()
   return creados
+}
+
+// Contador secuencial atómico por tenant (doc id = tenantId en bulk_counters).
+// Devuelve el siguiente número para `clave` (p. ej. 'factura', 'pago'). Único e
+// incremental gracias a la transacción — apto para numeración fiscal.
+export async function siguienteSecuencia(tenantId, clave) {
+  const r = ref('counters', tenantId)
+  return runTransaction(db, async (tx) => {
+    const s = await tx.get(r)
+    const data = s.exists() ? s.data() : {}
+    const next = (Number(data[clave]) || 0) + 1
+    tx.set(r, { tenantId, [clave]: next, actualizadoEn: serverTimestamp() }, { merge: true })
+    return next
+  })
 }
 
 export { serverTimestamp, where, orderBy }
