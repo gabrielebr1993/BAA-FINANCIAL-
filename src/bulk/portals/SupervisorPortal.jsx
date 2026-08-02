@@ -7,6 +7,7 @@ import { guardar } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 import { ahora } from '../domain/flujo'
+import { NIVEL_LABEL } from '../domain/liberacion'
 import { Card, Boton, Input, Badge, Aviso } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -20,13 +21,30 @@ export default function SupervisorPortal() {
 
   const pendientes = useMemo(() => ordenes.filter((o) => o.estado === E.ENTREGADA), [ordenes])
 
+  const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
+  const COLOR_NIVEL = { alta: 'green', media: 'gold', baja: 'slate', critico: 'red' }
+
   const liberar = async (orden) => {
+    const nivel = nivelDe(orden)
+    const sensible = nivel === 'baja' || nivel === 'critico'
+    let motivo = ''
+    if (sensible) {
+      // Caso sensible (§8): motivo obligatorio + doble confirmación.
+      const m = window.prompt(t('Confianza baja/crítica. Escribe el motivo para liberar de todos modos:'))
+      if (m == null) return
+      motivo = m.trim()
+      if (!window.confirm(t('¿Confirmas liberar esta carga pese a la baja confianza?'))) return
+    } else if (!window.confirm(`${t('¿Liberar la orden')} ${orden.numero}?`)) return
+
+    const liberacion = { ...(orden.liberacion || {}), modo: 'supervisor', por: usuario?.nombre || usuario?.email, ts: ahora() }
+    if (motivo) liberacion.motivo = motivo
     await guardar('orders', orden.id, {
       estado: E.LIBERADA,
       hitos: { ...(orden.hitos || {}), liberacion: ahora() },
       liberadaPor: usuario?.nombre || usuario?.email,
+      liberacion,
     })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id, detalle: sensible ? `confianza ${nivel} · ${motivo}` : `confianza ${nivel || 'n/d'}` })
     setMsg({ tipo: 'ok', txt: `${t('Orden')} ${orden.numero} ${t('liberada. El chofer ya puede tomar otra carga.')}` })
   }
 
@@ -69,6 +87,7 @@ export default function SupervisorPortal() {
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                 <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                {nivelDe(o) && <Badge color={COLOR_NIVEL[nivelDe(o)] || 'slate'}>{t(NIVEL_LABEL[nivelDe(o)] || nivelDe(o))}</Badge>}
                 <button onClick={() => liberar(o)} className="ml-auto inline-flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"><CheckCircle2 size={14} /> {t('Liberar')}</button>
               </div>
               <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>

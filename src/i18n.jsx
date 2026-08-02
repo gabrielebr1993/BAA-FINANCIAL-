@@ -2301,6 +2301,13 @@ const EN = {
   "Confianza evaluada": "Assessed confidence",
   "Liberar carga (remoto)": "Release load (remote)",
   "Para cuando el supervisor no está disponible. Requiere motivo y queda auditada.": "For when the supervisor is unavailable. Requires a reason and is audited.",
+  "Confianza alta": "High confidence",
+  "Confianza media": "Medium confidence",
+  "Confianza baja": "Low confidence",
+  "Riesgo crítico": "Critical risk",
+  "Confianza baja/crítica. Escribe el motivo para liberar de todos modos:": "Low/critical confidence. Enter the reason to release anyway:",
+  "¿Confirmas liberar esta carga pese a la baja confianza?": "Confirm releasing this load despite low confidence?",
+  "¿Liberar la orden": "Release order",
 
 }
 
