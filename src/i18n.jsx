@@ -2295,6 +2295,12 @@ const EN = {
   "Revisa el detalle": "Review the detail",
   "Revísala y fírmala o disputa": "Review and sign it, or dispute",
   "En revisión por la oficina": "Under review by the office",
+  "Motivo de la liberación remota:": "Reason for remote release:",
+  "¿Confirmas la liberación remota de esta carga? Quedará auditada.": "Confirm the remote release of this load? It will be audited.",
+  "Liberación de carga": "Load release",
+  "Confianza evaluada": "Assessed confidence",
+  "Liberar carga (remoto)": "Release load (remote)",
+  "Para cuando el supervisor no está disponible. Requiere motivo y queda auditada.": "For when the supervisor is unavailable. Requires a reason and is audited.",
 
 }
 

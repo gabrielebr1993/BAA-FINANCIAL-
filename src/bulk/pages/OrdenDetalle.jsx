@@ -83,6 +83,18 @@ export default function OrdenDetalle() {
     await guardar('orders', orden.id, { estado: nuevo })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'estado_manual', entidad: 'orden', entidadId: orden.id, detalle: `${t(ORDEN_ESTADO_LABEL[orden.estado])} → ${t(ORDEN_ESTADO_LABEL[nuevo])}` })
   }
+  // Liberación REMOTA por el admin (§8): cuando el supervisor no está disponible.
+  // Requiere motivo, doble confirmación y queda auditada.
+  const liberarRemoto = async () => {
+    const motivo = window.prompt(t('Motivo de la liberación remota:'))
+    if (motivo == null) return
+    if (!window.confirm(t('¿Confirmas la liberación remota de esta carga? Quedará auditada.'))) return
+    await guardar('orders', orden.id, {
+      estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberada: new Date().toISOString() },
+      liberacion: { modo: 'remoto', por: usuario?.nombre || usuario?.email, motivo: motivo.trim() || 'Sin motivo', ts: new Date().toISOString() },
+    })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_remota', entidad: 'orden', entidadId: orden.id, detalle: motivo.trim() })
+  }
   // Subir/cambiar foto de la orden manualmente — con registro de quién.
   const subirFotoManual = async (e) => {
     const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return
@@ -185,6 +197,19 @@ export default function OrdenDetalle() {
               </a>
             )}
           </div>
+          {orden.estado === E.ENTREGADA && (
+            <div className="mt-3 rounded-xl border border-amber-300 bg-amber-500/5 p-3 dark:border-amber-500/30">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">{t('Liberación de carga')}</div>
+              {orden.liberacion && (
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {t('Confianza evaluada')}: <b>{orden.liberacion.nivel || '—'}</b>
+                  {orden.liberacion.razones && orden.liberacion.razones.length ? ` · ${orden.liberacion.razones.join(', ')}` : ''}
+                </div>
+              )}
+              <div className="mt-2"><Boton variant="gold" onClick={liberarRemoto}><ShieldAlert size={15} /> {t('Liberar carga (remoto)')}</Boton></div>
+              <p className="mt-1 text-[11px] text-slate-400">{t('Para cuando el supervisor no está disponible. Requiere motivo y queda auditada.')}</p>
+            </div>
+          )}
           <p className="mt-2 text-[11px] text-slate-400">{t('Cada cambio manual queda registrado en la auditoría (quién y cuándo).')}</p>
         </Card>
       )}
