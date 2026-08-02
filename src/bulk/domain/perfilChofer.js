@@ -34,8 +34,10 @@ export function perfilDeChofer({ ordenes = [], carriers = [], jobs = [], cliente
   const rosterCarrier = carriers.find((c) => (c.choferes || []).some((d) => clave(d.nombre) === k)) || null
   const rosterChofer = rosterCarrier?.choferes?.find((d) => clave(d.nombre) === k) || null
   const rosterId = rosterChofer?.id || null
-  // Órdenes del chofer: por NOMBRE (normalizado) o por su id de roster (choferId).
-  const esMia = (o) => clave(o.choferNombre) === k || (rosterId && o.choferId === rosterId)
+  const rosterUid = rosterChofer?.uid || null
+  // Órdenes del chofer: por NOMBRE (normalizado), por el uid de su cuenta, o por su
+  // id de roster (choferId puede ser cualquiera de ellos según cómo se asignó).
+  const esMia = (o) => clave(o.choferNombre) === k || (rosterUid && o.choferId === rosterUid) || (rosterId && o.choferId === rosterId)
   const misOrdenes = ordenes
     .filter(esMia)
     .slice()

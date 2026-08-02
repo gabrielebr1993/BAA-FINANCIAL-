@@ -47,7 +47,10 @@ export default function TransportistaPortal() {
 
   const carrier = carriers.find((c) => c.id === carrierId)
   const choferes = carrier?.choferes || [] // plantilla del transporte (la gestiona el admin)
-  const nombreChofer = (id) => choferes.find((c) => c.id === id)?.nombre || ''
+  // Un choferId en una orden puede ser el uid de la cuenta (lo normal) o el id del
+  // roster (asignaciones antiguas). Estos helpers resuelven ambos.
+  const nombreChofer = (id) => choferes.find((c) => c.id === id || c.uid === id)?.nombre || ''
+  const rosterIdDe = (id) => choferes.find((c) => c.uid === id)?.id || id
   const pagoChoferes = (configs.find((c) => c.id === carrierId)?.pagoChoferes) || {}
 
   // Cuánto se le ha pagado (acumulado) a cada chofer por sus cargas entregadas.
@@ -55,10 +58,11 @@ export default function TransportistaPortal() {
     const acc = {}
     for (const o of ordenes) {
       if (!o.choferId || !ENTREGADAS.includes(o.estado)) continue
-      acc[o.choferId] = (acc[o.choferId] || 0) + (Number(o.pagoChofer) || 0)
+      const rid = rosterIdDe(o.choferId)
+      acc[rid] = (acc[rid] || 0) + (Number(o.pagoChofer) || 0)
     }
     return acc
-  }, [ordenes])
+  }, [ordenes, choferes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Guarda (o cambia) cómo se le paga a un chofer: % de la carga o valor fijo.
   const guardarPago = async (driverId, tipo, valor) => {
@@ -80,15 +84,19 @@ export default function TransportistaPortal() {
   const asignarChofer = async (orden, driverId) => {
     const d = choferes.find((c) => c.id === driverId)
     const avanza = [E.CREADA, E.EN_COLA, E.NOTIFICANDO].includes(orden.estado)
+    // Inc.3: identidad ÚNICA del chofer. En la orden guardamos el uid de la cuenta
+    // (si el chofer tiene una vinculada); así su app lo reconoce y puede leer su
+    // pago. Si aún no tiene cuenta, cae al id del roster.
+    const choferUid = d?.uid || driverId
     // Si el transportista definió cómo paga a este chofer, calculamos su pago para esta carga.
     const pago = calcularPagoChofer(orden.precioTransportista, configDeChofer(pagoChoferes, driverId))
     await guardar('orders', orden.id, {
-      choferId: driverId, choferNombre: d?.nombre || '',
+      choferId: choferUid, choferNombre: d?.nombre || '',
       ...(avanza ? { estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } } : {}),
     })
     // Inc.2: el pago del chofer va al doc de pago (no a la orden). El importe del
     // transportista ya está guardado; aquí solo fijamos dueño + pago del chofer.
-    await asignarPagos(tenantId, orden.id, { transportistaId: orden.transportistaId || carrierId, choferId: driverId, numero: orden.numero, ...(pago != null ? { pagoChofer: pago } : {}) })
+    await asignarPagos(tenantId, orden.id, { transportistaId: orden.transportistaId || carrierId, choferId: choferUid, numero: orden.numero, ...(pago != null ? { pagoChofer: pago } : {}) })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_chofer', entidad: 'orden', entidadId: orden.id, detalle: d?.nombre })
   }
 
@@ -143,7 +151,7 @@ export default function TransportistaPortal() {
                     {o.choferNombre && <div className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Chofer:')} {o.choferNombre}</div>}
                     {!FINAL.includes(o.estado) && (
                       choferes.length > 0 ? (
-                        <Select className="mt-2 w-full py-1 text-xs" value={o.choferId || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
+                        <Select className="mt-2 w-full py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
                           <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
                           {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                         </Select>
