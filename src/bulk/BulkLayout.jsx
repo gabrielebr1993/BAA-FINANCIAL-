@@ -9,6 +9,7 @@ import { useColeccion } from './data/useColeccion'
 import { noLeidosPorConv } from './data/chat'
 import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import CambiarClave from './components/CambiarClave'
+import IndicadorConexion from './components/IndicadorConexion'
 import { KeyRound } from 'lucide-react'
 import { useState } from 'react'
 import { useLang, LangToggle } from '../i18n'
@@ -78,6 +79,7 @@ export default function BulkLayout({ children }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-5">
+        <IndicadorConexion />
         {!menuAbierto && (
           <button onClick={alternarMenu} title={t('Mostrar menú')} className="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
             <PanelLeft size={17} /> {t('Menú')}

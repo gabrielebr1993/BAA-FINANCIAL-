@@ -4,6 +4,7 @@ import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, 
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
+import IndicadorConexion from '../components/IndicadorConexion'
 import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -162,6 +163,7 @@ export default function ChoferPortal() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-100 dark:bg-slate-950">
+      <IndicadorConexion />
       <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={18} /></div>
         <div className="min-w-0"><div className="truncate text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Chofer')}</div></div>

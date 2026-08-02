@@ -2232,6 +2232,7 @@ const EN = {
   "órdenes.": "orders.",
   "No se pudo completar el corte: ": "Could not complete the cut: ",
   "Primero “Migrar pagos”; cuando termine, “Terminar migración”. Así queda cerrada la separación de márgenes.": "First “Migrate pay”; when it finishes, “Finish migration”. That closes the margin separation.",
+  "Sin conexión — tus cambios se guardan y se sincronizan al reconectar.": "Offline — your changes are saved and will sync when you reconnect.",
 
 }
 
