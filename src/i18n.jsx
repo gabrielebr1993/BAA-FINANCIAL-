@@ -2251,6 +2251,7 @@ const EN = {
   "Activar asignación en servidor": "Turn on server-side assignment",
   "Apagar asignación en servidor": "Turn off server-side assignment",
   "No se pudo cambiar: ": "Could not change: ",
+  "a recogida": "to pickup",
 
 }
 

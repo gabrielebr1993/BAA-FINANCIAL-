@@ -111,7 +111,7 @@ export default function ChoferPortal() {
   const misOrdenes = useMemo(() => ordenes.filter(esMia), [ordenes, usuario, miChofer])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
-  const pos = useGeoPos(!!activa) // posición en vivo para habilitar "Llegué" por geocerca
+  const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
   // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
   // no respondo → pantalla superpuesta con contador de 2:00.
   const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && o.choferId === usuario?.id) : null
@@ -283,14 +283,14 @@ export default function ChoferPortal() {
       </nav>
 
       {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
-      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} onRechazo={registrarRechazo} />}
+      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} />}
     </div>
   )
 }
 
 // Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
 // y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
-function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, onRechazo }) {
+function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo }) {
   const { t } = useLang()
   const OFERTA_MS = 120000
   const [ocupado, setOcupado] = useState(false)
@@ -300,6 +300,12 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, onRechazo }) 
   const mmss = rest != null ? `${Math.floor(rest / 60000)}:${String(Math.floor((rest % 60000) / 1000)).padStart(2, '0')}` : null
   const pct = rest != null ? Math.max(0, Math.min(100, (rest / OFERTA_MS) * 100)) : 100
   const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
+  // $/tonelada y distancia a la recogida (contexto para decidir la oferta).
+  const porTon = orden.pesoEstimado ? Number(orden.pagoChofer || 0) / Number(orden.pesoEstimado) : null
+  const objRecogida = geocercaObjetivo(orden, 'recogida', geocercas, plantas)
+  const objL = objRecogida ? (Array.isArray(objRecogida) ? objRecogida : [objRecogida]) : []
+  const distM = (pos && objL.length) ? Math.min(...objL.map((g) => (g.lat != null ? distanciaM(pos, { lat: g.lat, lng: g.lng }) : Infinity))) : null
+  const distTxt = distM == null || !isFinite(distM) ? null : (distM >= 1000 ? `${(distM / 1000).toFixed(1)} km` : `${Math.round(distM)} m`)
 
   const aceptar = async () => {
     setOcupado(true)
@@ -347,6 +353,8 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, onRechazo }) 
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Package size={12} className="text-amber-500" /> {orden.material || t('material s/e')}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {orden.tipoEquipo || t('equipo s/e')}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{orden.pesoEstimado} ton</span>
+            {porTon != null && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">{money(porTon)}/ton</span>}
+            {distTxt && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><MapPin size={12} /> {distTxt} {t('a recogida')}</span>}
           </div>
 
           {/* Ruta recogida → entrega */}
