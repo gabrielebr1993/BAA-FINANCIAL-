@@ -6,6 +6,7 @@ import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
 import { alertaOrden } from '../domain/alertas'
+import { scorecardsTransportistas, scorecardsChoferes } from '../domain/scorecards'
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 import { KPI, PageTitle, Card, Cargando, Badge } from '../../components/ui'
@@ -65,8 +66,10 @@ export default function BulkDashboard() {
       estadoData: Object.entries(porEstado).map(([k, valor]) => ({ name: t(ORDEN_ESTADO_LABEL[k] || k), valor })),
       rankingChoferes: Object.entries(porChofer).map(([nombre, viajes]) => ({ nombre, viajes })).sort((a, b) => b.viajes - a.viajes).slice(0, 5),
       docsAlerta, incAbiertas, slaLista, enLineaN,
+      scT: scorecardsTransportistas(ordenes, carriers).slice(0, 5),
+      scC: scorecardsChoferes(ordenes).slice(0, 5),
     }
-  }, [ordenes, documentos, incidencias, presencias, t])
+  }, [ordenes, documentos, incidencias, presencias, carriers, t])
 
   if (cargando) return <Cargando texto={t('Cargando panel…')} />
 
@@ -135,20 +138,10 @@ export default function BulkDashboard() {
             <BarCard title={t('Toneladas por material')} data={s.matData} color="#c9a24b" fmt={(v) => `${v} t`} />
             <DonutCard title={t('Órdenes por estado')} data={s.estadoData} fmt={(v) => v} />
           </div>
-          <Card className="p-4">
-            <div className="mb-3 flex items-center gap-2"><Award size={17} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Choferes más eficientes (por viajes)')}</h3></div>
-            {s.rankingChoferes.length === 0 ? <p className="text-sm text-slate-400">{t('Sin datos.')}</p> : (
-              <div className="space-y-1.5">
-                {s.rankingChoferes.map((c, i) => (
-                  <div key={c.nombre} className="flex items-center gap-2 text-sm">
-                    <Badge color={i === 0 ? 'gold' : 'navy'}>#{i + 1}</Badge>
-                    <span className="font-medium text-brand-navy dark:text-slate-100">{c.nombre}</span>
-                    <span className="ml-auto text-slate-500">{c.viajes} {t('viaje(s)')}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Scorecard titulo={t('Transportistas · desempeño')} filas={s.scT} t={t} />
+            <Scorecard titulo={t('Choferes · desempeño')} filas={s.scC} t={t} />
+          </div>
         </>
       )}
     </div>
@@ -161,5 +154,48 @@ function Grupo({ titulo }) {
       <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">{titulo}</span>
       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700/60" />
     </div>
+  )
+}
+
+// Tabla de desempeño (scorecard): viajes, ton, puntualidad, $/ton y score con barra.
+function Scorecard({ titulo, filas, t }) {
+  const colorScore = (v) => (v >= 80 ? 'bg-emerald-500' : v >= 50 ? 'bg-amber-500' : 'bg-rose-500')
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center gap-2"><Award size={17} className="text-brand-gold" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</h3></div>
+      {!filas || filas.length === 0 ? <p className="text-sm text-slate-400">{t('Sin datos.')}</p> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="py-1 pr-2 text-left font-semibold">{t('Nombre')}</th>
+                <th className="py-1 px-2 text-right font-semibold">{t('Viajes')}</th>
+                <th className="py-1 px-2 text-right font-semibold">{t('Ton')}</th>
+                <th className="py-1 px-2 text-right font-semibold">{t('Punt.')}</th>
+                <th className="py-1 px-2 text-right font-semibold">$/ton</th>
+                <th className="py-1 pl-2 text-left font-semibold">{t('Score')}</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {filas.map((f) => (
+                <tr key={f.key} className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="max-w-[9rem] truncate py-1.5 pr-2 font-medium text-brand-navy dark:text-slate-100">{f.nombre}</td>
+                  <td className="py-1.5 px-2 text-right text-slate-500">{f.viajes}</td>
+                  <td className="py-1.5 px-2 text-right text-slate-500">{f.ton}</td>
+                  <td className="py-1.5 px-2 text-right text-slate-500">{f.puntualidad == null ? '—' : `${f.puntualidad}%`}</td>
+                  <td className="py-1.5 px-2 text-right text-slate-500">{f.porTon == null ? '—' : money(f.porTon)}</td>
+                  <td className="py-1.5 pl-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><span className={`block h-full rounded-full ${colorScore(f.score)}`} style={{ width: `${Math.max(4, Math.min(100, f.score))}%` }} /></span>
+                      <span className="w-7 text-right text-xs font-bold text-brand-navy dark:text-slate-100">{f.score}</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }

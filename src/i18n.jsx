@@ -2269,6 +2269,11 @@ const EN = {
   "Disputar": "Dispute",
   "¿Por qué disputas esta factura?": "Why are you disputing this invoice?",
   "disputada": "disputed",
+  "Transportistas · desempeño": "Carriers · performance",
+  "Choferes · desempeño": "Drivers · performance",
+  "Punt.": "On-time",
+  "Score": "Score",
+  "Viajes": "Trips",
 
 }
 
