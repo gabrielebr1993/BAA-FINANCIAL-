@@ -24,6 +24,10 @@ export function useAutoAsignacion() {
   const esStaff = STAFF.includes(rol)
   const { datos: ordenes } = useColeccion('orders')
   const { datos: presencias } = useColeccion('presence')
+  // Interruptor: si el matching corre en el SERVIDOR (Cloud Function), el motor del
+  // navegador se apaga para no chocar. Se enciende en Modo test (señal 'matching').
+  const { datos: signals } = useColeccion('signals')
+  const serverSide = (signals || []).some((s) => s.id === 'matching' && s.serverSide === true)
 
   const porAsignar = useMemo(() => ordenes.filter((o) => [E.CREADA, E.EN_COLA].includes(o.estado)), [ordenes])
   const emparejando = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO), [ordenes])
@@ -62,7 +66,7 @@ export function useAutoAsignacion() {
   const enVuelo = useRef(new Set())
   const enVueloChofer = useRef(new Set())
   useEffect(() => {
-    if (!esStaff) return
+    if (!esStaff || serverSide) return
     try {
       // Los choferes DEMO (presencia de prueba) se muestran en la columna de en
       // línea pero NO se les ofrecen órdenes, para que un chofer real reciba la carga.
@@ -75,12 +79,12 @@ export function useAutoAsignacion() {
       }
     } catch { /* no romper */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAsignar, presencias, esStaff])
+  }, [porAsignar, presencias, esStaff, serverSide])
 
   // Vencimiento 2:00 (o notificando heredada sin contador) → reencolar.
   const revirtiendo = useRef(new Set())
   useEffect(() => {
-    if (!esStaff) return
+    if (!esStaff || serverSide) return
     try {
       const ahora = Date.now()
       for (const o of emparejando) {
@@ -91,5 +95,5 @@ export function useAutoAsignacion() {
       }
     } catch { /* no romper */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emparejando, tick, esStaff])
+  }, [emparejando, tick, esStaff, serverSide])
 }

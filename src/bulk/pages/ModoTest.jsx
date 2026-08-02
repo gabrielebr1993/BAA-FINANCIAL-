@@ -5,7 +5,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
 import { escribirPreciosBase, asignarPagos, quitarPreciosDeOrden } from '../data/ordenPagos'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
-import { crear, eliminar } from '../data/repo'
+import { crear, eliminar, crearConId } from '../data/repo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -22,6 +22,12 @@ export default function ModoTest() {
   const { t } = useLang()
   const { usuario, tenantId, rol, crearUsuario, iniciarSesion, repararPermisos } = useBulkAuth()
   const { datos: ordenes } = useOrdenesConPagos()
+  const { datos: signals } = useColeccion('signals')
+  const serverSide = (signals || []).some((s) => s.id === 'matching' && s.serverSide === true)
+  const toggleServerSide = async () => {
+    await asegurarToken()
+    try { await crearConId('signals', 'matching', tenantId, { serverSide: !serverSide }) } catch (e) { setMsg({ tipo: 'error', txt: t('No se pudo cambiar: ') + (e?.message || '') }) }
+  }
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
   const [entrando, setEntrando] = useState(null) // rol en proceso
@@ -228,6 +234,21 @@ export default function ModoTest() {
           </Boton>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">{t('Primero “Migrar pagos”; cuando termine, “Terminar migración”. Así queda cerrada la separación de márgenes.')}</p>
+      </Card>
+
+      {/* Matching server-side (Inc.5): interruptor tras desplegar las Cloud Functions */}
+      <Card className="mb-4 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <RefreshCw size={16} className="text-brand-gold" />
+          <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Asignación en el servidor')}</h3>
+          <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${serverSide ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{serverSide ? t('ACTIVA') : t('APAGADA')}</span>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Con esto la asignación de órdenes corre en el servidor (Cloud Function): asigna aunque nadie tenga la app abierta y evita dobles asignaciones. Actívalo SOLO después de desplegar las Functions. Si algo falla, apágalo y el motor del navegador retoma.')}</p>
+        <div className="mt-3">
+          <Boton variant={serverSide ? 'danger' : 'gold'} onClick={toggleServerSide}>
+            {serverSide ? t('Apagar asignación en servidor') : t('Activar asignación en servidor')}
+          </Boton>
+        </div>
       </Card>
 
       {/* Portales por rol: un toque entra directo (opcional) */}

@@ -2244,6 +2244,13 @@ const EN = {
   "Vence": "Due",
   "vencida": "overdue",
   "Marcar pagada / pendiente": "Mark paid / pending",
+  "Asignación en el servidor": "Server-side assignment",
+  "ACTIVA": "ON",
+  "APAGADA": "OFF",
+  "Con esto la asignación de órdenes corre en el servidor (Cloud Function): asigna aunque nadie tenga la app abierta y evita dobles asignaciones. Actívalo SOLO después de desplegar las Functions. Si algo falla, apágalo y el motor del navegador retoma.": "This runs order assignment on the server (Cloud Function): it assigns even when no one has the app open and avoids double assignments. Turn it on ONLY after deploying Functions. If anything fails, turn it off and the browser engine takes over.",
+  "Activar asignación en servidor": "Turn on server-side assignment",
+  "Apagar asignación en servidor": "Turn off server-side assignment",
+  "No se pudo cambiar: ": "Could not change: ",
 
 }
 

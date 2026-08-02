@@ -12,7 +12,8 @@
 // Desplegar:  cd functions && npm i && firebase deploy --only functions
 // ============================================================================
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore')
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore')
+const { onSchedule } = require('firebase-functions/v2/scheduler')
 const admin = require('firebase-admin')
 
 admin.initializeApp()
@@ -257,4 +258,167 @@ exports.recomendarAsignacionIA = onCall(async (req) => {
   // TODO: llamar al modelo con fetch(url, { headers:{Authorization:`Bearer ${key}`}, ... })
   // y devolver { ranking: [{carrierId, score, motivo}] }. Contrato igual al de reglas.
   return { usarReglas: true }
+})
+
+// ============================================================================
+// MATCHING SERVER-SIDE — asigna órdenes a choferes en línea SIN depender de que un
+// staff tenga la app abierta, con reserva TRANSACCIONAL (sin dobles asignaciones) y
+// expiración programada de ofertas.
+//
+// ACTIVACIÓN por tenant vía la señal `bulk_signals/matching { serverSide:true }`
+// (se enciende desde Modo test). Mientras esté apagada, estas funciones no hacen
+// nada y el motor del navegador sigue a cargo → despliegue reversible y sin choques.
+// ============================================================================
+const FieldValue = admin.firestore.FieldValue
+const PRESENCIA_TTL_MS = 90 * 1000
+const ESPERA_RESPUESTA_MS = 120 * 1000
+const PENDIENTES = ['creada', 'en_cola']
+const NORM = (s) => String(s == null ? '' : s).trim().toLowerCase()
+function tsMs(v) {
+  if (!v) return 0
+  if (typeof v === 'number') return v
+  if (typeof v === 'string') { const n = Date.parse(v); return isNaN(n) ? 0 : n }
+  if (typeof v.toMillis === 'function') return v.toMillis()
+  if (v.seconds) return v.seconds * 1000
+  return 0
+}
+function equipoCompatible(equipos, req) {
+  if (!req) return true
+  const lista = Array.isArray(equipos) ? equipos : (equipos ? [equipos] : [])
+  return lista.map(NORM).includes(NORM(req))
+}
+function trabajoCompatible(jobs, jobId) {
+  if (!jobs || !jobs.length) return true
+  return !!jobId && jobs.includes(jobId)
+}
+function presenciaViva(p, now) {
+  return !!p && p.enLinea === true && !p.ordenId && (!p.estado || p.estado === 'libre')
+    && (now - tsMs(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS && !p.demo
+}
+// ¿El matching server-side está encendido para este tenant?
+async function serverSideOn(tenantId) {
+  try {
+    const s = await db.collection('bulk_signals').doc('matching').get()
+    const d = s.exists ? s.data() : null
+    return !!d && d.serverSide === true && d.tenantId === tenantId
+  } catch (e) { return false }
+}
+
+// Ofrece UNA orden a UN chofer de forma ATÓMICA (evita dobles asignaciones).
+async function ofrecerTx(orderId, presenceId) {
+  return db.runTransaction(async (tx) => {
+    const oref = db.collection('bulk_orders').doc(orderId)
+    const pref = db.collection('bulk_presence').doc(presenceId)
+    const [os, ps] = await Promise.all([tx.get(oref), tx.get(pref)])
+    if (!os.exists) return null
+    const o = os.data()
+    if (!PENDIENTES.includes(o.estado)) return null
+    const p = ps.exists ? ps.data() : null
+    if (!presenciaViva(p, Date.now())) return null
+    const nowIso = new Date().toISOString()
+    tx.update(oref, {
+      estado: 'notificando', transportistaId: p.carrierId || null, choferId: p.uid || presenceId,
+      choferNombre: p.nombre || '', asignadoEn: nowIso,
+      asignacionExpira: new Date(Date.now() + ESPERA_RESPUESTA_MS).toISOString(),
+      actualizadoEn: FieldValue.serverTimestamp(),
+    })
+    tx.set(pref, { ordenId: orderId, estado: 'reservado', heartbeat: nowIso, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })
+    return { transportistaId: p.carrierId || null, choferId: p.uid || presenceId }
+  })
+}
+
+// Empareja la cola de un tenant con sus choferes en línea (FIFO, 1 orden→1 chofer).
+async function matchTenant(tenantId) {
+  if (!tenantId || !(await serverSideOn(tenantId))) return
+  const [ordSnap, presSnap] = await Promise.all([
+    db.collection('bulk_orders').where('tenantId', '==', tenantId).get(),
+    db.collection('bulk_presence').where('tenantId', '==', tenantId).get(),
+  ])
+  const now = Date.now()
+  const cola = ordSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((o) => PENDIENTES.includes(o.estado))
+    .sort((a, b) => tsMs(a.creadoEn || a.numero) - tsMs(b.creadoEn || b.numero))
+  if (!cola.length) return
+  const libres = presSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => presenciaViva(p, now))
+  const usados = new Set()
+  for (const orden of cola) {
+    const rech = orden.rechazadoPor || []
+    const cand = libres
+      .filter((p) => !usados.has(p.id) && !rech.includes(p.uid || p.id))
+      .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
+      .filter((p) => trabajoCompatible(p.jobs, orden.jobId))
+      .sort((a, b) => tsMs(a.desde) - tsMs(b.desde))
+    if (!cand.length) continue
+    const res = await ofrecerTx(orden.id, cand[0].id)
+    if (res) {
+      usados.add(cand[0].id)
+      try {
+        await db.collection('bulk_orderPay_carrier').doc(orden.id).set({ transportistaId: res.transportistaId, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })
+        await db.collection('bulk_orderPay_chofer').doc(orden.id).set({ choferId: res.choferId, transportistaId: res.transportistaId, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })
+      } catch (e) { /* aditivo */ }
+    }
+  }
+}
+
+// Reencola una oferta vencida y libera al chofer (lo agrega a rechazadoPor).
+async function reofertar(orderId) {
+  const info = await db.runTransaction(async (tx) => {
+    const oref = db.collection('bulk_orders').doc(orderId)
+    const os = await tx.get(oref)
+    if (!os.exists) return null
+    const o = os.data()
+    if (o.estado !== 'notificando') return null
+    const uid = o.choferId || null
+    const rechazadoPor = Array.from(new Set([...(o.rechazadoPor || []), uid].filter(Boolean)))
+    tx.update(oref, {
+      estado: 'creada', transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor,
+      ultimoRechazo: { por: o.choferNombre || '', motivo: 'timeout', ts: new Date().toISOString() },
+      actualizadoEn: FieldValue.serverTimestamp(),
+    })
+    return { tenantId: o.tenantId, uid }
+  })
+  if (info && info.uid) {
+    const nowIso = new Date().toISOString()
+    try { await db.collection('bulk_presence').doc(info.uid).set({ ordenId: null, estado: 'libre', enLinea: true, desde: nowIso, heartbeat: nowIso }, { merge: true }) } catch (e) { /* noop */ }
+    try {
+      await db.collection('bulk_orderPay_carrier').doc(orderId).set({ transportistaId: null }, { merge: true })
+      await db.collection('bulk_orderPay_chofer').doc(orderId).set({ choferId: null }, { merge: true })
+    } catch (e) { /* noop */ }
+  }
+  return info
+}
+
+// Trigger: nueva orden o cambio → si está en cola, intenta emparejar su tenant.
+exports.bulkAutoAsignar = onDocumentWritten('bulk_orders/{id}', async (event) => {
+  const after = event.data && event.data.after && event.data.after.data()
+  if (!after || !PENDIENTES.includes(after.estado)) return
+  await matchTenant(after.tenantId)
+})
+
+// Trigger: un chofer PASA a disponible (se conecta o se libera) → empareja su tenant.
+// (Se ignoran los latidos: no dispara en cada heartbeat.)
+exports.bulkPresenciaMatch = onDocumentWritten('bulk_presence/{id}', async (event) => {
+  const before = event.data && event.data.before && event.data.before.data()
+  const after = event.data && event.data.after && event.data.after.data()
+  if (!after) return
+  const dispo = after.enLinea === true && !after.ordenId && (!after.estado || after.estado === 'libre')
+  const antesDispo = !!before && before.enLinea === true && !before.ordenId && (!before.estado || before.estado === 'libre')
+  if (!dispo || antesDispo) return
+  await matchTenant(after.tenantId)
+})
+
+// Programada (cada minuto): vence ofertas sin respuesta y barre la cola pendiente.
+exports.bulkExpirarOfertas = onSchedule('every 1 minutes', async () => {
+  const now = Date.now()
+  const notif = await db.collection('bulk_orders').where('estado', '==', 'notificando').get()
+  const tenants = new Set()
+  for (const d of notif.docs) {
+    const o = d.data()
+    if (o.asignacionExpira && tsMs(o.asignacionExpira) >= now) continue
+    const info = await reofertar(d.id)
+    if (info && info.tenantId) tenants.add(info.tenantId)
+  }
+  const pend = await db.collection('bulk_orders').where('estado', 'in', PENDIENTES).get()
+  for (const d of pend.docs) { const tid = d.data().tenantId; if (tid) tenants.add(tid) }
+  for (const tid of tenants) { await matchTenant(tid) }
 })
