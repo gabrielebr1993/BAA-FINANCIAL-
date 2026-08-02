@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Plus, Mail, MessageCircle, Truck, Building2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -19,7 +20,7 @@ export default function Facturacion() {
   const empresa = usuario?.empresa || 'Freight'
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
-  const { datos: ordenes, cargando } = useColeccion('orders')
+  const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: facturas } = useColeccion('invoices')
   const { datos: avisos } = useColeccion('carrierStatements')
   const [tab, setTab] = useState('clientes')

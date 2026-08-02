@@ -8,6 +8,7 @@ import { puedeCancelar } from '../data/ordenAcciones'
 import { noLeidosPorConv } from '../data/chat'
 import { tsMillis } from '../data/chatKeys'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { guardar } from '../data/repo'
 import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -50,7 +51,7 @@ export default function Ordenes() {
   const { t } = useLang()
   const { tenantId, usuario, rol } = useBulkAuth()
   const esStaff = STAFF.includes(rol)
-  const { datos: ordenes, cargando } = useColeccion('orders')
+  const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
   const { datos: mensajes } = useColeccion('messages')

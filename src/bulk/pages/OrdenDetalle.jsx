@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { suscribirTrack } from '../data/tracking'
 import { guardar } from '../data/repo'
 import { auditar } from '../data/auditoria'
@@ -30,7 +31,7 @@ export default function OrdenDetalle() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { tenantId, rol, usuario } = useBulkAuth()
-  const { datos: ordenes, cargando } = useColeccion('orders')
+  const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')

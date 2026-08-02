@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, Trash2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { guardar } from '../data/repo'
 import { tsMillis } from '../data/chatKeys'
 import { perfilDeChofer, fechaOrden } from '../domain/perfilChofer'
@@ -20,7 +21,7 @@ export default function ChoferPerfil() {
   const { t } = useLang()
   const { nombre: nombreRaw } = useParams()
   const nombre = decodeURIComponent(nombreRaw || '')
-  const { datos: ordenes, cargando } = useColeccion('orders')
+  const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: carriers } = useColeccion('carriers')
   const { datos: jobs } = useColeccion('jobs')
   const { datos: clientes } = useColeccion('clients')

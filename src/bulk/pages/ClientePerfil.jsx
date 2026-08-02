@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Building2, Package, Weight, DollarSign, Award, Loader, Layers, Clock, FileText, MapPin, Hash } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { tsMillis } from '../data/chatKeys'
 import { fechaOrden } from '../domain/perfilChofer'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
@@ -31,7 +32,7 @@ export default function ClientePerfil() {
   const { t } = useLang()
   const { id } = useParams()
   const { datos: clientes, cargando } = useColeccion('clients')
-  const { datos: ordenes } = useColeccion('orders')
+  const { datos: ordenes } = useOrdenesConPagos()
   const { datos: plants } = useColeccion('plants')
   const { datos: invoices } = useColeccion('invoices')
   const { datos: jobs } = useColeccion('jobs')

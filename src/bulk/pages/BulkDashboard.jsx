@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { ClipboardList, Truck, Building2, Weight, DollarSign, Timer, AlertTriangle, FileWarning, Award, FlaskConical, Layers } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
 import { KPI, PageTitle, Card, Cargando, Badge } from '../../components/ui'
@@ -14,7 +15,7 @@ const n = (v) => Number(v) || 0
 
 export default function BulkDashboard() {
   const { t } = useLang()
-  const { datos: ordenes, cargando } = useColeccion('orders')
+  const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: documentos } = useColeccion('documents')

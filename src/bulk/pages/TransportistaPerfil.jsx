@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Truck, Phone, Star, User, FileWarning, Package, Weight, DollarSign, Award, Briefcase, AlertTriangle, Loader, Layers, Clock, Search } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -39,7 +40,7 @@ export default function TransportistaPerfil() {
   const { id } = useParams()
   const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
-  const { datos: ordenes } = useColeccion('orders')
+  const { datos: ordenes } = useOrdenesConPagos()
   const { datos: documentos } = useColeccion('documents')
   const { datos: jobs } = useColeccion('jobs')
 
