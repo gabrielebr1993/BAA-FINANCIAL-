@@ -3,18 +3,21 @@
 // documentos). El estado "leído" se guarda por dispositivo (localStorage).
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, AlertTriangle, Timer, FileWarning, Receipt, CheckCheck, X } from 'lucide-react'
+import { Bell, AlertTriangle, Timer, FileWarning, Receipt, MessageSquare, CheckCheck, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { useBulkAuth } from '../BulkAuthContext'
+import { noLeidosPorConv } from '../data/chat'
 import { construirNotificaciones } from '../domain/notificaciones'
 import { useLang } from '../../i18n'
 
 const LS = 'bulk_notif_leidas'
 const leerLeidas = () => { try { return new Set(JSON.parse(localStorage.getItem(LS) || '[]')) } catch { return new Set() } }
-const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning }
+const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning, mensaje: MessageSquare }
 const COLOR = { critico: 'text-rose-500', warn: 'text-amber-500', info: 'text-sky-500' }
 
 export default function NotificacionesCentro() {
   const { t } = useLang()
+  const { usuario } = useBulkAuth()
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [leidas, setLeidas] = useState(leerLeidas)
@@ -25,10 +28,12 @@ export default function NotificacionesCentro() {
   const { datos: facturas } = useColeccion('invoices')
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: documentos } = useColeccion('documents')
+  const { datos: mensajes } = useColeccion('messages')
+  const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
 
   const notifs = useMemo(
-    () => construirNotificaciones({ ordenes, facturas, incidencias, documentos, ahoraMs: Date.now() }),
-    [ordenes, facturas, incidencias, documentos],
+    () => construirNotificaciones({ ordenes, facturas, incidencias, documentos, mensajesNuevos, ahoraMs: Date.now() }),
+    [ordenes, facturas, incidencias, documentos, mensajesNuevos],
   )
   const pendientes = notifs.filter((n) => !leidas.has(n.id))
   const visibles = soloPendientes ? pendientes : notifs
@@ -75,6 +80,7 @@ export default function NotificacionesCentro() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{n.titulo}</div>
                     {n.detalle && <div className="truncate text-xs text-slate-400">{n.detalle}</div>}
+                    {n.accion && <div className="mt-0.5 truncate text-[11px] font-medium text-amber-600 dark:text-amber-400">→ {t(n.accion)}</div>}
                   </div>
                   {pend && <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" />}
                 </button>

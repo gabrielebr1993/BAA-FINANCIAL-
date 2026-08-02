@@ -2281,6 +2281,14 @@ const EN = {
   "Sin pendientes. Todo al día.": "Nothing pending. All caught up.",
   "Sin notificaciones.": "No notifications.",
   "Marcar todas como leídas": "Mark all as read",
+  "Abre el chat y responde": "Open the chat and reply",
+  "Contacta al chofer o reasigna": "Contact the driver or reassign",
+  "Confirma el avance de la entrega": "Confirm the delivery progress",
+  "Confirma avance con el chofer antes de las 3 h": "Confirm progress with the driver before 3 h",
+  "Revisa la disputa y corrige o responde": "Review the dispute and fix or reply",
+  "Atiende y marca como resuelta": "Handle it and mark as resolved",
+  "Solicita el documento actualizado": "Request the updated document",
+  "Recuérdalo antes de que venza": "Remind before it expires",
 
 }
 
