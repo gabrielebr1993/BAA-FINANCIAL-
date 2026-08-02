@@ -22,8 +22,8 @@ export function parsearTicket(texto) {
   return { texto: t, pesoNeto, pesoBruto, tara, ticket, fecha }
 }
 
-// Ejecuta el OCR sobre un dataURL de imagen. Devuelve el objeto parseado o null.
-export async function leerTicket(dataURL, onProgreso) {
+// OCR local (Tesseract) sobre un dataURL. Devuelve el objeto parseado o null.
+export async function leerTicketLocal(dataURL, onProgreso) {
   if (!dataURL) return null
   const { createWorker } = await import('tesseract.js')
   const worker = await createWorker('eng', undefined, {
@@ -35,4 +35,32 @@ export async function leerTicket(dataURL, onProgreso) {
   } finally {
     await worker.terminate()
   }
+}
+
+// OCR en la NUBE (Google Vision vía /api/ocr-ticket). Devuelve el objeto parseado,
+// o null si no hay key configurada / falla (el llamador cae al OCR local).
+export async function leerTicketNube(dataURL) {
+  if (!dataURL) return null
+  try {
+    const r = await fetch('/api/ocr-ticket', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: dataURL }),
+    })
+    if (!r.ok) return null // 503 sin key, 502 error → fallback local
+    const data = await r.json()
+    if (!data.ok || !data.texto) return null
+    return { ...parsearTicket(data.texto), fuente: 'nube' }
+  } catch { return null }
+}
+
+// Ejecuta el OCR: intenta la NUBE (más precisa); si no hay key o falla, usa el LOCAL.
+export async function leerTicket(dataURL, onProgreso) {
+  if (!dataURL) return null
+  if (onProgreso) onProgreso(5)
+  const nube = await leerTicketNube(dataURL)
+  if (nube && (nube.pesoNeto != null || nube.pesoBruto != null || nube.ticket)) {
+    if (onProgreso) onProgreso(100)
+    return nube
+  }
+  return leerTicketLocal(dataURL, onProgreso)
 }
