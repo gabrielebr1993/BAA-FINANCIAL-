@@ -5,7 +5,7 @@ import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
-import { armarFactura, armarAvisoPago } from '../domain/facturacion'
+import { armarFactura, armarAvisoPago, estadoDocumento } from '../domain/facturacion'
 import { enlacesEnvio } from '../domain/envio'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
@@ -55,12 +55,21 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
   const nombreCliente = (id) => cliente(id)?.nombre || '—'
   const preview = useMemo(() => f.clienteId ? armarFactura(ordenes.filter((o) => o.clienteId === f.clienteId), { desde: f.desde, hasta: f.hasta }) : null, [ordenes, f])
 
+  // El staff marca una factura como pagada (o revierte). Auditado.
+  const marcarPagada = async (r) => {
+    const pagar = r.estado !== 'pagada'
+    await guardar('invoices', r.id, { estado: pagar ? 'pagada' : (r.firma ? 'firmada' : 'enviada'), pagadaEn: pagar ? new Date().toISOString() : null })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: pagar ? 'factura_pagada' : 'factura_no_pagada', entidad: 'factura', detalle: `${r.numero} · ${r.clienteNombre}` })
+  }
+
   const generar = async () => {
     if (!f.clienteId || !preview || preview.n === 0) { setMsg({ tipo: 'warn', txt: t('Selecciona un cliente con órdenes entregadas en el periodo.') }); return }
     const numero = `FAC-${Date.now().toString(36).toUpperCase().slice(-6)}`
+    // Vencimiento por defecto: 30 días desde hoy (neto 30).
+    const vence = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
     await crear('invoices', tenantId, {
       numero, clienteId: f.clienteId, clienteNombre: nombreCliente(f.clienteId),
-      desde: f.desde || null, hasta: f.hasta || null,
+      desde: f.desde || null, hasta: f.hasta || null, vence,
       lineas: preview.lineas, total: preview.total, toneladas: preview.toneladas,
       estado: 'enviada', ts: new Date().toISOString(),
     })
@@ -90,12 +99,21 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas emitidas')} ({facturas.length})</h3>
         {facturas.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay facturas.')}</p> : (
           <Tabla
-            columns={[{ key: 'numero', label: t('Factura') }, { key: 'clienteNombre', label: t('Cliente') }, { key: 'periodo', label: t('Periodo') }, { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: t('Enviar'), align: 'right' }]}
+            columns={[{ key: 'numero', label: t('Factura') }, { key: 'clienteNombre', label: t('Cliente') }, { key: 'periodo', label: t('Periodo') }, { key: 'vence', label: t('Vence') }, { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: t('Enviar'), align: 'right' }]}
             rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
             renderCell={(r, k) => {
               if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
+              if (k === 'vence') { const ed = estadoDocumento(r.vence); return <span className={`text-xs ${r.estado !== 'pagada' && ed.estado === 'vencido' ? 'font-bold text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>{r.vence || '—'}</span> }
               if (k === 'total') return money(r.total)
-              if (k === 'estado') return <Badge color={ESTADO_COLOR[r.estado] || 'slate'}>{r.estado}{r.firma ? ' ✓' : ''}</Badge>
+              if (k === 'estado') {
+                const vencida = r.estado !== 'pagada' && estadoDocumento(r.vence).estado === 'vencido'
+                return (
+                  <div className="inline-flex items-center gap-1">
+                    <button onClick={() => marcarPagada(r)} title={t('Marcar pagada / pendiente')}><Badge color={ESTADO_COLOR[r.estado] || 'slate'}>{r.estado}{r.firma ? ' ✓' : ''}</Badge></button>
+                    {vencida && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-400">{t('vencida')}</span>}
+                  </div>
+                )
+              }
               if (k === 'acciones') {
                 const asunto = `${t('Factura')} ${r.numero} · ${empresa}`
                 const cuerpo = `${t('Estimado')} ${r.clienteNombre},\n${t('Adjuntamos la factura')} ${r.numero} ${t('por')} ${money(r.total)} (${r.toneladas} ${t('ton')}).\n${t('Periodo:')} ${r.desde || '—'} → ${r.hasta || '—'}.\n${t('Gracias.')} ${empresa}`

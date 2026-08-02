@@ -2241,6 +2241,9 @@ const EN = {
   "¿Confirmas que ya estás en el punto? Se registrará sin verificación de GPS.": "Confirm you're at the location? It will be recorded without GPS verification.",
   "A": "At",
   "del punto — el botón se activa al llegar.": "from the point — the button activates on arrival.",
+  "Vence": "Due",
+  "vencida": "overdue",
+  "Marcar pagada / pendiente": "Mark paid / pending",
 
 }
 
