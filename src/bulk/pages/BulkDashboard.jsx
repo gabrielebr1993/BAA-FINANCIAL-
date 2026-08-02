@@ -5,7 +5,7 @@ import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
-import { alertaOrden } from '../domain/alertas'
+import { alertaOrden, LIMITE_ALERTA_MS, LIMITE_RIESGO_MS } from '../domain/alertas'
 import { scorecardsTransportistas, scorecardsChoferes } from '../domain/scorecards'
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
@@ -40,10 +40,15 @@ export default function BulkDashboard() {
     // Alertas SLA: órdenes que llevan > 3 h sin recoger o sin entregar.
     const now2 = Date.now()
     const slaLista = ordenes
-      .map((o) => ({ o, a: alertaOrden(o, now2) }))
+      .map((o) => ({ o, a: alertaOrden(o, now2, LIMITE_ALERTA_MS) }))
       .filter((x) => x.a)
       .map((x) => ({ id: x.o.id, numero: x.o.numero, tipo: x.a.tipo, horas: x.a.horas }))
       .sort((a, b) => b.horas - a.horas)
+    // Predictivo: órdenes que se ACERCAN al incumplimiento (entre 2 h y 3 h) pero
+    // aún no lo cruzan → intervenir antes de que ocurra.
+    const riesgoLista = ordenes
+      .filter((o) => alertaOrden(o, now2, LIMITE_RIESGO_MS) && !alertaOrden(o, now2, LIMITE_ALERTA_MS))
+      .map((o) => { const a = alertaOrden(o, now2, LIMITE_RIESGO_MS); return { id: o.id, numero: o.numero, tipo: a.tipo } })
     // Choferes en línea (presencia viva: heartbeat dentro del TTL).
     const enLineaN = (presencias || []).filter((p) => p.enLinea === true && (now2 - tsMillis(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS).length
     // Tendencia real: últimos 7 días vs. los 7 anteriores (por fecha de entrega).
@@ -65,7 +70,7 @@ export default function BulkDashboard() {
       matData: Object.entries(porMaterial).map(([name, valor]) => ({ name, valor: Math.round(valor) })).sort((a, b) => b.valor - a.valor),
       estadoData: Object.entries(porEstado).map(([k, valor]) => ({ name: t(ORDEN_ESTADO_LABEL[k] || k), valor })),
       rankingChoferes: Object.entries(porChofer).map(([nombre, viajes]) => ({ nombre, viajes })).sort((a, b) => b.viajes - a.viajes).slice(0, 5),
-      docsAlerta, incAbiertas, slaLista, enLineaN,
+      docsAlerta, incAbiertas, slaLista, riesgoLista, enLineaN,
       scT: scorecardsTransportistas(ordenes, carriers).slice(0, 5),
       scC: scorecardsChoferes(ordenes).slice(0, 5),
     }
@@ -101,6 +106,24 @@ export default function BulkDashboard() {
               </Link>
             ))}
             {s.slaLista.length > 8 && <Link to="/bulk/ordenes" className="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold text-rose-600 hover:underline">+{s.slaLista.length - 8} {t('más')}</Link>}
+          </div>
+        </Card>
+      )}
+
+      {s.riesgoLista.length > 0 && (
+        <Card className="mb-4 border-l-4 border-l-amber-500 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Timer size={17} className="text-amber-500" />
+            <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{s.riesgoLista.length} {t('orden(es) en riesgo de incumplir (2–3 h)')}</h3>
+          </div>
+          <p className="mb-2 text-xs text-slate-400">{t('Aún a tiempo — intervén antes de que crucen las 3 h.')}</p>
+          <div className="flex flex-wrap gap-2">
+            {s.riesgoLista.slice(0, 8).map((x) => (
+              <Link key={x.id} to={`/bulk/ordenes/${x.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-400">
+                {x.numero} · {x.tipo === 'recogida' ? t('sin recoger') : t('sin entregar')}
+              </Link>
+            ))}
+            {s.riesgoLista.length > 8 && <Link to="/bulk/ordenes" className="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-600 hover:underline">+{s.riesgoLista.length - 8} {t('más')}</Link>}
           </div>
         </Card>
       )}

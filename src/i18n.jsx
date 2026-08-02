@@ -2274,6 +2274,8 @@ const EN = {
   "Punt.": "On-time",
   "Score": "Score",
   "Viajes": "Trips",
+  "orden(es) en riesgo de incumplir (2–3 h)": "order(s) at risk of breaching (2–3 h)",
+  "Aún a tiempo — intervén antes de que crucen las 3 h.": "Still in time — act before they cross 3 h.",
 
 }
 

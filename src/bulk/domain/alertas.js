@@ -5,7 +5,8 @@
 import { tsMillis } from '../data/chatKeys'
 import { ORDEN_ESTADO as E } from './constants'
 
-export const LIMITE_ALERTA_MS = 3 * 3600 * 1000 // 3 horas
+export const LIMITE_ALERTA_MS = 3 * 3600 * 1000 // 3 horas (incumplimiento)
+export const LIMITE_RIESGO_MS = 2 * 3600 * 1000 // 2 horas (predictivo: en riesgo)
 
 const ESPERA_RECOGIDA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA]
 const EN_ENTREGA = [E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
