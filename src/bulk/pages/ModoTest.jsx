@@ -3,6 +3,7 @@ import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCh
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
 import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
+import { sincronizarPagoCliente, sincronizarPagoAsignacion } from '../data/ordenPagos'
 import { crear, eliminar } from '../data/repo'
 import { PageTitle, Card, Boton, Aviso } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -26,6 +27,7 @@ export default function ModoTest() {
   const [refrescando, setRefrescando] = useState(false)
   const [msg, setMsg] = useState(null)
   const [prueba, setPrueba] = useState(null)
+  const [migrando, setMigrando] = useState(null) // { hechas, total } | null
 
   const ocupado = fase !== 'idle' || !!entrando
   const demoOrdenes = ordenes.filter((o) => o.demo).length
@@ -81,6 +83,33 @@ export default function ModoTest() {
       const m = e?.message || ''
       setMsg({ tipo: 'error', txt: esPermiso(m) ? t('Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') : t('No se pudo borrar: ') + m })
     } finally { setFase('idle') }
+  }
+
+  // Inc.2 Fase 3 · Backfill: crea los docs de pago por audiencia de las órdenes
+  // existentes (las nuevas ya los tienen). Corre como admin, es seguro y repetible.
+  const migrarPagos = async () => {
+    if (!window.confirm(t('Se crearán los documentos de pago separados (cliente/transportista/chofer) de las órdenes existentes. Es seguro y se puede repetir. ¿Continuar?'))) return
+    setMsg(null)
+    await asegurarToken()
+    const lista = ordenes || []
+    setMigrando({ hechas: 0, total: lista.length })
+    const CHUNK = 20
+    let hechas = 0
+    try {
+      for (let i = 0; i < lista.length; i += CHUNK) {
+        const trozo = lista.slice(i, i + CHUNK)
+        await Promise.all(trozo.flatMap((o) => {
+          const tareas = [sincronizarPagoCliente(tenantId, o)]
+          if (o.transportistaId != null || o.choferId != null) tareas.push(sincronizarPagoAsignacion(tenantId, o))
+          return tareas
+        }))
+        hechas += trozo.length
+        setMigrando({ hechas, total: lista.length })
+      }
+      setMsg({ tipo: 'ok', txt: `${t('Migración completa: ')}${hechas} ${t('órdenes procesadas.')}` })
+    } catch (e) {
+      setMsg({ tipo: 'error', txt: (esPermiso(e?.message) ? t('Bloqueo de permisos. Toca “Actualizar sesión”. ') : '') + t('No se pudo migrar: ') + (e?.message || '') })
+    } finally { setMigrando(null) }
   }
 
   // Un toque: prepara la cuenta del portal (si hace falta) y entra directo a esa vista.
@@ -155,6 +184,20 @@ export default function ModoTest() {
           </button>
         )}
         {msg && <Aviso tipo={msg.tipo} className="mt-4 text-left">{msg.txt}</Aviso>}
+      </Card>
+
+      {/* Mantenimiento: backfill de pagos por audiencia (Inc.2 Fase 3) */}
+      <Card className="mb-4 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <RefreshCw size={16} className="text-brand-gold" />
+          <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mantenimiento · Migrar pagos por audiencia')}</h3>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Crea los documentos de pago separados (cliente / transportista / chofer) de las órdenes existentes. Necesario una sola vez para separar los márgenes. Seguro y repetible.')}</p>
+        <div className="mt-3">
+          <Boton variant="gold" onClick={migrarPagos} disabled={!!migrando || ocupado}>
+            {migrando ? <><Loader2 size={16} className="animate-spin" /> {migrando.hechas}/{migrando.total}</> : <><RefreshCw size={16} /> {t('Migrar pagos')} ({ordenes.length})</>}
+          </Boton>
+        </div>
       </Card>
 
       {/* Portales por rol: un toque entra directo (opcional) */}

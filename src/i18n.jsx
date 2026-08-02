@@ -2217,6 +2217,14 @@ const EN = {
   "Ese chofer ya está afiliado a otra cuenta.": "That driver is already linked to another account.",
   "Usuario eliminado": "User deleted",
   "No se pudo eliminar (¿backend desplegado?).": "Could not delete (is the backend deployed?).",
+  // — Freight · migración de pagos por audiencia (Inc.2) —
+  "Mantenimiento · Migrar pagos por audiencia": "Maintenance · Migrate audience-scoped pay",
+  "Crea los documentos de pago separados (cliente / transportista / chofer) de las órdenes existentes. Necesario una sola vez para separar los márgenes. Seguro y repetible.": "Creates the separate pay documents (client / carrier / driver) for existing orders. Needed once to separate margins. Safe and repeatable.",
+  "Migrar pagos": "Migrate pay",
+  "Se crearán los documentos de pago separados (cliente/transportista/chofer) de las órdenes existentes. Es seguro y se puede repetir. ¿Continuar?": "The separate pay documents (client/carrier/driver) for existing orders will be created. It's safe and repeatable. Continue?",
+  "Migración completa: ": "Migration complete: ",
+  "órdenes procesadas.": "orders processed.",
+  "No se pudo migrar: ": "Could not migrate: ",
 
 }
 
