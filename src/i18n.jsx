@@ -2289,6 +2289,12 @@ const EN = {
   "Atiende y marca como resuelta": "Handle it and mark as resolved",
   "Solicita el documento actualizado": "Request the updated document",
   "Recuérdalo antes de que venza": "Remind before it expires",
+  "Asigna o contacta a tu chofer": "Assign or contact your driver",
+  "Confirma avance con tu chofer": "Confirm progress with your driver",
+  "Revisa tu comprobante": "Check your receipt",
+  "Revisa el detalle": "Review the detail",
+  "Revísala y fírmala o disputa": "Review and sign it, or dispute",
+  "En revisión por la oficina": "Under review by the office",
 
 }
 

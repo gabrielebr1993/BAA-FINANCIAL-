@@ -9,6 +9,8 @@ import { useColeccion } from '../data/useColeccion'
 import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { asignarPagos } from '../data/ordenPagos'
+import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import { notificacionesTransportista } from '../domain/notificaciones'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ahora } from '../domain/flujo'
 import { desgloseVisible } from '../domain/pagos'
@@ -44,6 +46,9 @@ export default function TransportistaPortal() {
   const { datos: mensajes } = useColeccion('messages')
   const [tab, setTab] = useState('ordenes')
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
+  const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
+  const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
+  const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
   const carrier = carriers.find((c) => c.id === carrierId)
   const choferes = carrier?.choferes || [] // plantilla del transporte (la gestiona el admin)
@@ -107,7 +112,8 @@ export default function TransportistaPortal() {
       <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={18} /></div>
         <div><div className="text-sm font-bold">{carrier?.nombre || usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Transportista')}</div></div>
-        <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
+        <div className="ml-auto"><CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" invertido /></div>
+        <button onClick={() => navigate('/elegir')} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
         <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10"><LogOut size={18} /></button>
       </header>
 

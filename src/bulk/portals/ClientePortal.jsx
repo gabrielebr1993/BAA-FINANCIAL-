@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, LogOut, Grid2x2, Weight, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
+import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import { useColeccion } from '../data/useColeccion'
@@ -61,6 +63,7 @@ export default function ClientePortal() {
     setFirmando(null); setFirma(null)
   }
   // El cliente disputa/rechaza una factura enviada, con motivo (queda para el staff).
+  const notifsC = useMemo(() => notificacionesCliente({ facturas }), [facturas])
   const rechazarFactura = async (r) => {
     const motivo = window.prompt(t('¿Por qué disputas esta factura?'))
     if (motivo == null) return
@@ -74,7 +77,8 @@ export default function ClientePortal() {
       <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Building2 size={18} /></div>
         <div><div className="text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Portal del cliente')}</div></div>
-        <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
+        <div className="ml-auto"><CampanaNotificaciones notifs={notifsC} claveLS="bulk_notif_cliente" invertido /></div>
+        <button onClick={() => navigate('/elegir')} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
         <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10"><LogOut size={18} /></button>
       </header>
 
