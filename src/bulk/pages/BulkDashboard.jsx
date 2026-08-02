@@ -5,6 +5,9 @@ import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
+import { alertaOrden } from '../domain/alertas'
+import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
+import { tsMillis } from '../data/chatKeys'
 import { KPI, PageTitle, Card, Cargando, Badge } from '../../components/ui'
 import { BarCard, DonutCard } from '../../components/charts'
 import { money } from '../../utils/format'
@@ -20,6 +23,7 @@ export default function BulkDashboard() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: documentos } = useColeccion('documents')
   const { datos: incidencias } = useColeccion('incidents')
+  const { datos: presencias } = useColeccion('presence')
 
   const s = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
@@ -32,6 +36,15 @@ export default function BulkDashboard() {
     const desvios = ordenes.reduce((a, o) => a + ((o.geoEventos || []).length ? 0 : 0), 0)
     const docsAlerta = documentos.map((d) => estadoDocumento(d.vence)).filter((x) => x.estado === 'vencido' || x.estado === 'proximo').length
     const incAbiertas = incidencias.filter((i) => i.estado !== 'resuelta').length
+    // Alertas SLA: órdenes que llevan > 3 h sin recoger o sin entregar.
+    const now2 = Date.now()
+    const slaLista = ordenes
+      .map((o) => ({ o, a: alertaOrden(o, now2) }))
+      .filter((x) => x.a)
+      .map((x) => ({ id: x.o.id, numero: x.o.numero, tipo: x.a.tipo, horas: x.a.horas }))
+      .sort((a, b) => b.horas - a.horas)
+    // Choferes en línea (presencia viva: heartbeat dentro del TTL).
+    const enLineaN = (presencias || []).filter((p) => p.enLinea === true && (now2 - tsMillis(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS).length
     // Tendencia real: últimos 7 días vs. los 7 anteriores (por fecha de entrega).
     const fEnt = (o) => (o?.hitos?.entrega ? new Date(o.hitos.entrega).getTime() : null)
     const now = Date.now(); const D = 86400000
@@ -51,9 +64,9 @@ export default function BulkDashboard() {
       matData: Object.entries(porMaterial).map(([name, valor]) => ({ name, valor: Math.round(valor) })).sort((a, b) => b.valor - a.valor),
       estadoData: Object.entries(porEstado).map(([k, valor]) => ({ name: t(ORDEN_ESTADO_LABEL[k] || k), valor })),
       rankingChoferes: Object.entries(porChofer).map(([nombre, viajes]) => ({ nombre, viajes })).sort((a, b) => b.viajes - a.viajes).slice(0, 5),
-      docsAlerta, incAbiertas,
+      docsAlerta, incAbiertas, slaLista, enLineaN,
     }
-  }, [ordenes, documentos, incidencias, t])
+  }, [ordenes, documentos, incidencias, presencias, t])
 
   if (cargando) return <Cargando texto={t('Cargando panel…')} />
 
@@ -65,11 +78,29 @@ export default function BulkDashboard() {
       <PageTitle right={<span className="text-sm text-slate-400">{fechaTxt}</span>}>{t('Dashboard')}</PageTitle>
 
       <Grupo titulo={t('Operación')} />
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KPI label={t('Órdenes abiertas')} value={s.abiertas} icon={ClipboardList} accent="navy" />
         <KPI label={t('En cola')} value={s.enCola} icon={ClipboardList} accent="gold" />
+        <Link to="/bulk/mapa" className="contents"><KPI label={t('Choferes en línea')} value={s.enLineaN} icon={Truck} accent="green" /></Link>
         <KPI label={t('T. prom. entrega')} value={`${s.tPromEntrega} min`} icon={Timer} accent="navy" sub={t('tomada → entrega')} />
       </div>
+
+      {s.slaLista.length > 0 && (
+        <Card className="mb-4 border-l-4 border-l-rose-500 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <AlertTriangle size={17} className="text-rose-500" />
+            <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{s.slaLista.length} {t('orden(es) fuera de SLA (+3 h)')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {s.slaLista.slice(0, 8).map((x) => (
+              <Link key={x.id} to={`/bulk/ordenes/${x.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-500/20 dark:text-rose-300">
+                {x.numero} · {x.tipo === 'recogida' ? t('sin recoger') : t('sin entregar')} {x.horas}h
+              </Link>
+            ))}
+            {s.slaLista.length > 8 && <Link to="/bulk/ordenes" className="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold text-rose-600 hover:underline">+{s.slaLista.length - 8} {t('más')}</Link>}
+          </div>
+        </Card>
+      )}
 
       <Grupo titulo={t('Negocio')} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
