@@ -2252,6 +2252,10 @@ const EN = {
   "Apagar asignación en servidor": "Turn off server-side assignment",
   "No se pudo cambiar: ": "Could not change: ",
   "a recogida": "to pickup",
+  "Liberación automática de carga": "Automatic load release",
+  "Cuando la entrega tiene confianza alta (ticket + foto + firma + dentro de la zona + peso en tolerancia), se libera sola, sin código del supervisor. Si la confianza no es alta, se usa el código como siempre. El supervisor y el admin conservan la liberación manual.": "When a delivery has high confidence (ticket + photo + signature + inside the zone + weight in tolerance), it releases on its own, without the supervisor code. If confidence isn't high, the code is used as usual. Supervisor and admin keep manual release.",
+  "Activar liberación automática": "Turn on automatic release",
+  "Apagar liberación automática": "Turn off automatic release",
 
 }
 

@@ -28,6 +28,11 @@ export default function ModoTest() {
     await asegurarToken()
     try { await crearConId('signals', 'matching', tenantId, { serverSide: !serverSide }) } catch (e) { setMsg({ tipo: 'error', txt: t('No se pudo cambiar: ') + (e?.message || '') }) }
   }
+  const liberacionAuto = (signals || []).some((s) => s.id === 'liberacion' && s.auto === true)
+  const toggleLiberacion = async () => {
+    await asegurarToken()
+    try { await crearConId('signals', 'liberacion', tenantId, { auto: !liberacionAuto }) } catch (e) { setMsg({ tipo: 'error', txt: t('No se pudo cambiar: ') + (e?.message || '') }) }
+  }
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
   const [entrando, setEntrando] = useState(null) // rol en proceso
@@ -247,6 +252,21 @@ export default function ModoTest() {
         <div className="mt-3">
           <Boton variant={serverSide ? 'danger' : 'gold'} onClick={toggleServerSide}>
             {serverSide ? t('Apagar asignación en servidor') : t('Activar asignación en servidor')}
+          </Boton>
+        </div>
+      </Card>
+
+      {/* Liberación automática por confianza (Fase 3) */}
+      <Card className="mb-4 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <ShieldCheck size={16} className="text-brand-gold" />
+          <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Liberación automática de carga')}</h3>
+          <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${liberacionAuto ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{liberacionAuto ? t('ACTIVA') : t('APAGADA')}</span>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Cuando la entrega tiene confianza alta (ticket + foto + firma + dentro de la zona + peso en tolerancia), se libera sola, sin código del supervisor. Si la confianza no es alta, se usa el código como siempre. El supervisor y el admin conservan la liberación manual.')}</p>
+        <div className="mt-3">
+          <Boton variant={liberacionAuto ? 'danger' : 'gold'} onClick={toggleLiberacion}>
+            {liberacionAuto ? t('Apagar liberación automática') : t('Activar liberación automática')}
           </Boton>
         </div>
       </Card>

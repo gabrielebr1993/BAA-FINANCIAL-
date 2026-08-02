@@ -12,7 +12,8 @@ import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
-import { puedeMarcarLlegada, geocercaObjetivo, distanciaM } from '../domain/geo'
+import { puedeMarcarLlegada, geocercaObjetivo, distanciaM, dentroGeocerca } from '../domain/geo'
+import { evaluarLiberacion, liberacionAutomatica } from '../domain/liberacion'
 import { tsMillis } from '../data/chatKeys'
 import { conectar, desconectar, latir, ocupar, liberar } from '../data/presencia'
 import { leerFotoReducida } from '../components/foto'
@@ -60,6 +61,8 @@ export default function ChoferPortal() {
   const { datos: mensajes } = useColeccion('messages')
   const { datos: presencias } = useColeccion('presence')
   const { datos: driverProfiles } = useColeccion('driverProfiles')
+  const { datos: signals } = useColeccion('signals')
+  const liberacionAuto = (signals || []).some((s) => s.id === 'liberacion' && s.auto === true)
   const [tab, setTab] = useState('ordenes')
 
   const miConv = convChofer(usuario?.nombre)
@@ -180,7 +183,7 @@ export default function ChoferPortal() {
                 <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
               </Aviso>
             )}
-            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} noLeidosChat={noLeidos[activa.id] || 0} />
+            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} liberacionAuto={liberacionAuto} noLeidosChat={noLeidos[activa.id] || 0} />
               : carrierId ? (
                 <div className="mx-auto max-w-sm pt-4">
                   {enLinea ? (
@@ -550,7 +553,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   )
 }
 
-function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, noLeidosChat = 0 }) {
+function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, liberacionAuto = false, noLeidosChat = 0 }) {
   const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
   const fase = faseChofer(orden.estado)
@@ -641,13 +644,32 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
     if (!firma) { window.alert(t('Falta la firma.')); return }
     setOcupado(true)
     const g = await capturarGPS()
-    // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
-    const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
-    await guardar('orders', orden.id, {
-      estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
-      pod: { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() },
-    })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id })
+    const ordenPOD = { ...orden, pod: { firma, foto: foto || null }, gps_entrega: g }
+    // Motor de liberación por confianza: ¿la entrega está dentro de la zona de destino?
+    const objEnt = geocercaObjetivo(orden, 'entrega', geocercas, plantas)
+    const objEntL = objEnt ? (Array.isArray(objEnt) ? objEnt : [objEnt]) : []
+    const dentroGeocercaEntrega = objEntL.length ? (g ? objEntL.some((gf) => dentroGeocerca(g, gf)) : false) : null
+    const evalLib = evaluarLiberacion(ordenPOD, { dentroGeocercaEntrega })
+    const auto = liberacionAuto && liberacionAutomatica(evalLib)
+    const podData = { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() }
+    if (auto) {
+      // Confianza alta + liberación automática activa: se libera sin código de supervisor.
+      await guardar('orders', orden.id, {
+        estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberada: ahora() },
+        pod: podData, gps_entrega: g,
+        liberacion: { modo: 'auto', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
+      })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
+    } else {
+      // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
+      const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
+      await guardar('orders', orden.id, {
+        estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
+        pod: podData, gps_entrega: g,
+        liberacion: { modo: 'manual', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
+      })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
+    }
     setModal(null); setOcupado(false); setFoto(null); setFirma(null); setComent('')
   }
 
