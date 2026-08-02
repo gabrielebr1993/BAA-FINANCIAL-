@@ -2237,6 +2237,10 @@ const EN = {
   "sin recoger": "not picked up",
   "sin entregar": "not delivered",
   "más": "more",
+  "No me detecta el GPS — ya estoy aquí": "GPS not detecting me — I'm here",
+  "¿Confirmas que ya estás en el punto? Se registrará sin verificación de GPS.": "Confirm you're at the location? It will be recorded without GPS verification.",
+  "A": "At",
+  "del punto — el botón se activa al llegar.": "from the point — the button activates on arrival.",
 
 }
 

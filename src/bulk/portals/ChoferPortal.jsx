@@ -12,7 +12,7 @@ import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
-import { puedeMarcarLlegada, geocercaObjetivo } from '../domain/geo'
+import { puedeMarcarLlegada, geocercaObjetivo, distanciaM } from '../domain/geo'
 import { tsMillis } from '../data/chatKeys'
 import { conectar, desconectar, latir, ocupar, liberar } from '../data/presencia'
 import { leerFotoReducida } from '../components/foto'
@@ -577,7 +577,12 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
     apple: `https://maps.apple.com/?daddr=${navDest}`,
   }
   const puedeLlegar = paso?.gate ? puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) : true
-  const hayGeocerca = !!geocercaObjetivo(orden, fase, geocercas, plantas)
+  const objetivo = geocercaObjetivo(orden, fase, geocercas, plantas)
+  const hayGeocerca = !!objetivo
+  // Distancia en vivo al punto objetivo (para orientar al chofer mientras se acerca).
+  const objLista = objetivo ? (Array.isArray(objetivo) ? objetivo : [objetivo]) : []
+  const distM = (pos && objLista.length) ? Math.min(...objLista.map((g) => (g.lat != null ? distanciaM(pos, { lat: g.lat, lng: g.lng }) : Infinity))) : null
+  const distTxt = distM == null || !isFinite(distM) ? null : (distM >= 1000 ? `${(distM / 1000).toFixed(1)} km` : `${Math.round(distM)} m`)
 
   const copiar = async () => {
     try { await navigator.clipboard.writeText(copiaTexto); setCopiado(true); setTimeout(() => setCopiado(false), 1500) } catch { /* noop */ }
@@ -592,6 +597,20 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
     const g = await capturarGPS()
     await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}`, entidad: 'orden', entidadId: orden.id })
+    setOcupado(false)
+  }
+
+  // Override manual cuando el GPS no fija: registra la llegada SIN verificación de
+  // geocerca (queda marcado como manual y auditado). Evita que el chofer se atasque.
+  const avanzarManual = async () => {
+    if (!paso) return
+    if (!window.confirm(t('¿Confirmas que ya estás en el punto? Se registrará sin verificación de GPS.'))) return
+    if (paso.requiere === 'ticket') return setModal('ticket')
+    if (paso.requiere === 'pod') return setModal('pod')
+    setOcupado(true)
+    const g = await capturarGPS()
+    await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g, [`manual_${paso.hito}`]: true })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}_manual`, entidad: 'orden', entidadId: orden.id, detalle: 'sin verificación GPS' })
     setOcupado(false)
   }
 
@@ -712,9 +731,16 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, n
             {ocupado ? <><Spinner /> {t('Guardando…')}</> : <>{paso.gate && !puedeLlegar ? <MapPin size={18} /> : <CheckCircle2 size={18} />} {t(paso.label)}</>}
           </button>
           {paso.gate && !puedeLlegar && (
-            <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
-              <MapPin size={12} /> {hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.')}
-            </p>
+            <>
+              <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
+                <MapPin size={12} /> {distTxt ? `${t('A')} ${distTxt} ${t('del punto — el botón se activa al llegar.')}` : (hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.'))}
+              </p>
+              {/* Override: si el GPS no fija (o falla), el chofer no queda atascado. */}
+              <button onClick={avanzarManual} disabled={ocupado}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                <MapPin size={13} /> {t('No me detecta el GPS — ya estoy aquí')}
+              </button>
+            </>
           )}
         </>
       ) : orden.estado === E.ENTREGADA ? (
