@@ -114,10 +114,10 @@ export default function ChoferPortal() {
   const misOrdenes = useMemo(() => ordenes.filter(esMia), [ordenes, usuario, miChofer])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
-  const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
   // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
   // no respondo → pantalla superpuesta con contador de 2:00.
   const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && o.choferId === usuario?.id) : null
+  const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
 
   // ── Presencia: en línea / disponible ───────────────────────────────────────
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
