@@ -3,7 +3,7 @@
 // sea independiente de la de Package (login separado real).
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore'
 import { getFunctions } from 'firebase/functions'
 
 const cfg = {
@@ -21,19 +21,12 @@ export const authBulk = getAuth(appBulk)
 // (con bulkTenant/bulkRole). Antes se usaba la BD de la app por defecto, cuyo login
 // no tiene esos claims → todo daba permission-denied.
 //
-// Persistencia OFFLINE (IndexedDB, multi-pestaña): la app funciona sin conexión
-// (lecturas desde caché) y las escrituras se ENCOLAN y se SINCRONIZAN solas al
-// reconectar — clave para choferes en zonas con mala señal. Si el navegador no
-// soporta IndexedDB, cae a la instancia en memoria sin romper.
-export const dbBulk = (() => {
-  try {
-    return initializeFirestore(appBulk, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    })
-  } catch {
-    return getFirestore(appBulk)
-  }
-})()
+// NOTA: la persistencia offline (persistentLocalCache) se retiró porque en
+// iOS/Safari colgaba la primera lectura de Firestore y dejaba la app en
+// "Cargando…". Se puede reintroducir más adelante con un enfoque probado por
+// dispositivo. La resiliencia de conexión se mantiene con el banner y con la
+// cola de escrituras en memoria del propio SDK mientras la app está abierta.
+export const dbBulk = getFirestore(appBulk)
 // Región por defecto us-central1; si despliegas las functions en otra región,
 // cámbiala aquí: getFunctions(appBulk, 'us-east1').
 export const funcsBulk = getFunctions(appBulk)

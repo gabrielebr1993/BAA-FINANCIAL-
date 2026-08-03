@@ -26,20 +26,35 @@ export function BulkAuthProvider({ children }) {
       try {
         const tok = await fb.getIdTokenResult(true)
         const c = tok.claims || {}
-        let perfil = {}
-        try { const s = await getDoc(ref('users', fb.uid)); if (s.exists()) perfil = s.data() } catch { /* reglas */ }
+        // La SESIÓN sale de los claims (rápido). No bloqueamos la carga esperando
+        // el perfil en Firestore: se lee aparte y enriquece cuando llega. Así la
+        // app nunca se queda en "Cargando…" si una lectura se demora o falla.
         setUsuario({
           id: fb.uid,
           email: fb.email,
-          nombre: perfil.nombre || fb.displayName || fb.email,
-          empresa: perfil.empresa || '',
-          rol: c.bulkRole || perfil.rol || null,
-          tenantId: c.bulkTenant || perfil.tenantId || null,
-          clienteId: c.bulkClienteId || perfil.clienteId || null,
-          carrierId: c.bulkCarrierId || perfil.carrierId || null,
+          nombre: fb.displayName || fb.email,
+          empresa: '',
+          rol: c.bulkRole || null,
+          tenantId: c.bulkTenant || null,
+          clienteId: c.bulkClienteId || null,
+          carrierId: c.bulkCarrierId || null,
         })
-      } catch { setUsuario(null) }
-      setCargando(false)
+        setCargando(false)
+        // Enriquecer con el perfil (no bloqueante).
+        getDoc(ref('users', fb.uid)).then((s) => {
+          if (!s.exists()) return
+          const p = s.data()
+          setUsuario((u) => (u && u.id === fb.uid ? {
+            ...u,
+            nombre: p.nombre || u.nombre,
+            empresa: p.empresa || u.empresa,
+            rol: u.rol || p.rol || null,
+            tenantId: u.tenantId || p.tenantId || null,
+            clienteId: u.clienteId || p.clienteId || null,
+            carrierId: u.carrierId || p.carrierId || null,
+          } : u))
+        }).catch(() => { /* reglas / offline: seguimos con los claims */ })
+      } catch { setUsuario(null); setCargando(false) }
     })
     return off
   }, [])
