@@ -51,7 +51,7 @@ export default function ChoferPortal() {
   const { datos: _ordenesRaw } = useColeccion('orders', [where('transportistaId', '==', carrierId || '__none__')])
   // Inc.2 Fase 2: el pago del chofer se lee de su doc de pago por audiencia
   // (fallback al campo de la orden para las órdenes anteriores a la migración).
-  const { datos: pagosChofer } = useColeccion('orderPay_chofer')
+  const { datos: pagosChofer } = useColeccion('orderPay_chofer', [where('choferId', '==', usuario?.id || '__none__')])
   const ordenes = useMemo(() => {
     const m = {}; for (const p of pagosChofer || []) m[p.orderId || p.id] = p.pagoChofer
     return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, pagoChofer: m[o.id] } : o))
@@ -59,8 +59,8 @@ export default function ChoferPortal() {
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages')
-  const { datos: presencias } = useColeccion('presence')
-  const { datos: driverProfiles } = useColeccion('driverProfiles')
+  const { datos: presencias } = useColeccion('presence', [where('uid', '==', usuario?.id || '__none__')])
+  const { datos: driverProfiles } = useColeccion('driverProfiles', [where('uid', '==', usuario?.id || '__none__')])
   const { datos: signals } = useColeccion('signals')
   const liberacionAuto = (signals || []).some((s) => s.id === 'liberacion' && s.auto === true)
   const [tab, setTab] = useState('ordenes')
