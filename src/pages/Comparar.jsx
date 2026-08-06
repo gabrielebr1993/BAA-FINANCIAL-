@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useData } from '../DataContext'
-import { resumenEstimado, variacion, nombreCiudadDe, TODAS, TODOS } from '../utils/calc'
+import { resumenEstimado, variacion, costoManagers, nombreCiudadDe, TODAS, TODOS } from '../utils/calc'
 import { combinarFacturas, facturaDeChofer } from '../utils/rango'
 import { money, num, pct } from '../utils/format'
 import { PageTitle, Card, Select, Aviso, EstadoVacio } from '../components/ui'
@@ -9,8 +9,17 @@ import { useLang } from '../i18n'
 
 export default function Comparar() {
   const { t } = useLang()
-  const { invoices, drivers, selectedCity, selectedDriver, facturaRangoFull } = useData()
+  const { invoices, drivers, managers, selectedCity, selectedDriver, facturaRangoFull } = useData()
   const hayChofer = selectedDriver && selectedDriver !== TODOS
+
+  // Gastos fijos (sueldos semanales de managers) de UNA semana, respetando el filtro de
+  // ciudad. Es la misma configuración vigente para ambas semanas; se resta por separado a
+  // cada una para obtener la GANANCIA REAL de esa semana. Con un chofer filtrado no se
+  // cargan (los gastos fijos son un costo de ciudad/empresa, no del chofer).
+  const gastosFijosSemana = useMemo(
+    () => (hayChofer ? 0 : costoManagers(managers, 1, selectedCity)),
+    [managers, selectedCity, hayChofer]
+  )
 
   // SEMANAS DISTINTAS. Cada semana puede tener VARIAS facturas (una por ciudad, porque
   // Gofo paga por ciudad). El selector muestra la semana UNA sola vez y al elegirla se
@@ -42,8 +51,14 @@ export default function Comparar() {
     const comb = combinarFacturas(w.invs)
     return hayChofer ? facturaDeChofer(comb, selectedDriver) : comb
   }
-  const eA = useMemo(() => resumenEstimado(combSemana(wkA), drivers, selectedCity), [wkA, weeks, drivers, selectedCity, hayChofer, selectedDriver])
-  const eB = useMemo(() => resumenEstimado(combSemana(wkB), drivers, selectedCity), [wkB, weeks, drivers, selectedCity, hayChofer, selectedDriver])
+  // Resumen operativo + gastos fijos de la semana + GANANCIA REAL (operativa − fijos).
+  const conFijos = (e) => ({
+    ...e,
+    gastosFijos: gastosFijosSemana,
+    gananciaReal: e.ganancia - gastosFijosSemana,
+  })
+  const eA = useMemo(() => conFijos(resumenEstimado(combSemana(wkA), drivers, selectedCity)), [wkA, weeks, drivers, selectedCity, hayChofer, selectedDriver, gastosFijosSemana])
+  const eB = useMemo(() => conFijos(resumenEstimado(combSemana(wkB), drivers, selectedCity)), [wkB, weeks, drivers, selectedCity, hayChofer, selectedDriver, gastosFijosSemana])
 
   if (weeks.length < 2) {
     return (
@@ -56,8 +71,10 @@ export default function Comparar() {
 
   const metricas = [
     { key: 'ingreso', label: t('Ingreso'), fmt: money },
-    { key: 'costo', label: t('Costo'), fmt: money },
-    { key: 'ganancia', label: t('Ganancia'), fmt: money },
+    { key: 'costo', label: t('Costo (choferes + claims)'), fmt: money },
+    { key: 'ganancia', label: t('Ganancia operativa'), fmt: money },
+    { key: 'gastosFijos', label: t('− Gastos fijos'), fmt: money, negativo: true },
+    { key: 'gananciaReal', label: t('Ganancia real'), fmt: money, destacar: true },
     { key: 'paquetes', label: t('Paquetes'), fmt: num },
     { key: 'dobles', label: t('Dobles'), fmt: num },
     { key: 'claims', label: t('Claims'), fmt: num },
@@ -65,8 +82,8 @@ export default function Comparar() {
 
   const chartData = [
     { name: t('Ingreso'), A: Math.round(eA.ingreso), B: Math.round(eB.ingreso) },
-    { name: t('Costo'), A: Math.round(eA.costo), B: Math.round(eB.costo) },
-    { name: t('Ganancia'), A: Math.round(eA.ganancia), B: Math.round(eB.ganancia) },
+    { name: t('Ganancia operativa'), A: Math.round(eA.ganancia), B: Math.round(eB.ganancia) },
+    { name: t('Ganancia real'), A: Math.round(eA.gananciaReal), B: Math.round(eB.gananciaReal) },
   ]
 
   return (
@@ -116,11 +133,16 @@ export default function Comparar() {
               const va = eA[m.key] || 0
               const vb = eB[m.key] || 0
               const v = variacion(vb, va)
+              const rowCls = m.destacar
+                ? 'border-t-2 border-brand-gold/50 bg-brand-gold/5 dark:bg-brand-gold/10'
+                : 'border-t border-slate-100 dark:border-slate-700/50'
+              const cellCls = m.destacar ? 'font-bold text-brand-navy dark:text-slate-100' : ''
+              const valCls = m.negativo ? 'text-rose-600 dark:text-rose-400' : (m.destacar ? 'font-bold' : '')
               return (
-                <tr key={m.key} className="border-t border-slate-100 dark:border-slate-700/50">
-                  <td className="px-4 py-2.5 font-medium">{m.label}</td>
-                  <td className="px-4 py-2.5 text-right">{m.fmt(va)}</td>
-                  <td className="px-4 py-2.5 text-right">{m.fmt(vb)}</td>
+                <tr key={m.key} className={rowCls}>
+                  <td className={`px-4 py-2.5 font-medium ${cellCls}`}>{m.label}</td>
+                  <td className={`px-4 py-2.5 text-right ${valCls}`}>{m.negativo ? '−' : ''}{m.fmt(va)}</td>
+                  <td className={`px-4 py-2.5 text-right ${valCls}`}>{m.negativo ? '−' : ''}{m.fmt(vb)}</td>
                   <td className={`px-4 py-2.5 text-right font-semibold ${v == null ? 'text-slate-400' : v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {v == null ? '—' : `${v >= 0 ? '▲' : '▼'} ${pct(Math.abs(v))}`}
                   </td>
@@ -130,6 +152,12 @@ export default function Comparar() {
           </tbody>
         </table>
       </Card>
+
+      <p className="mb-4 -mt-2 px-1 text-xs text-slate-400 dark:text-slate-500">
+        {hayChofer
+          ? t('Con un chofer filtrado no se cargan gastos fijos (son un costo de ciudad/empresa). La ganancia real coincide con la operativa.')
+          : `${t('Ganancia real = ganancia operativa − gastos fijos de la semana')} (${money(gastosFijosSemana)}${selectedCity !== TODAS ? ` · ${nombreCiudadDe(facturaRangoFull, selectedCity) || selectedCity}` : ''}). ${t('Son los sueldos semanales vigentes; se restan a cada semana por igual.')}`}
+      </p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <BarCard title={`${t('Semana A')} · ${wkA || ''}`} data={chartData} fmt={money} dataKey="A" color="#13233f" />
