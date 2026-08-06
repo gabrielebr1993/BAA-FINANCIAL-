@@ -6,7 +6,8 @@ import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quit
 import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X } from 'lucide-react'
+import { exportarExcel, exportarPDF } from '../utils/exportar'
+import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X, FileSpreadsheet, FileText } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { useLang } from '../i18n'
 
@@ -112,6 +113,42 @@ export default function Claims() {
     setOcupado(false)
   }
 
+  // Construye las filas a exportar desde los claims FILTRADOS (respeta ocultarGofo:
+  // al manager no se le exportan monto/método de Gofo, igual que en pantalla).
+  const filasExport = () => filtrados.map((c) => {
+    const fila = {
+      Waybill: c.waybill || '',
+      Chofer: c.courier || '',
+      Fecha: c.date || '',
+      Tipo: c.claimType || '',
+      Ciudad: nombreCiudad(c.ciudad),
+      Estado: c.perdonado ? t('Perdonado') : t('Activo'),
+      Motivo: c.motivo || '',
+    }
+    if (!ocultarGofo) {
+      fila['Categoría'] = etiquetaCategoria(c.categoria || categoriaClaim(c.claimType))
+      fila['Método'] = (c.metodo === 'M1' || c.metodo === 'M2' || c.metodo === 'M3') ? c.metodo : 'Auto'
+      fila['Monto Gofo'] = Number(c.montoGofo) || 0
+      fila['Multa chofer'] = c.perdonado ? 0 : feeDeClaim(selectedInvoice, c.ciudad, c)
+    }
+    return fila
+  })
+  const nombreBase = () => `claims_${(selectedCity || 'todos')}_${String(selectedInvoice || '').replace(/[^\w-]+/g, '')}`.replace(/_+$/,'')
+  const subtitulo = `${selectedCity ? nombreCiudad(selectedCity) : t('Todas las ciudades')} · ${selectedInvoice || '—'} · ${filtrados.length} ${t('claim(s)')}`
+
+  const exportarAExcel = () => {
+    const rows = filasExport()
+    if (!rows.length) { window.alert(t('Sin claims con estos filtros.')); return }
+    exportarExcel(nombreBase(), [{ nombre: 'Claims', rows }])
+  }
+  const exportarAPDF = async () => {
+    const rows = filasExport()
+    if (!rows.length) { window.alert(t('Sin claims con estos filtros.')); return }
+    const head = Object.keys(rows[0])
+    const body = rows.map((r) => head.map((k) => (typeof r[k] === 'number' ? money(r[k]) : r[k])))
+    await exportarPDF(nombreBase(), t('Claims'), subtitulo, [{ titulo: null, head, body }])
+  }
+
   // Cambiar el método (M1/M2/M3 o 'auto') de UN claim.
   const cambiarMetodo = async (claim, metodo) => {
     setOcupado(true)
@@ -202,6 +239,14 @@ export default function Claims() {
                     <option value="perdonado">{t('Solo perdonados')}</option>
                   </Select>
                   <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{filtrados.length} {t('claim(s)')}</span>
+                  <div className="flex gap-2">
+                    <Boton variant="ghost" disabled={filtrados.length === 0} onClick={exportarAExcel} className="px-3 py-1.5 text-xs" title={t('Descargar los claims filtrados en Excel')}>
+                      <FileSpreadsheet size={14} strokeWidth={1.8} /> {t('Excel')}
+                    </Boton>
+                    <Boton variant="ghost" disabled={filtrados.length === 0} onClick={exportarAPDF} className="px-3 py-1.5 text-xs" title={t('Descargar los claims filtrados en PDF')}>
+                      <FileText size={14} strokeWidth={1.8} /> {t('PDF')}
+                    </Boton>
+                  </div>
                 </div>
               </Card>
 
