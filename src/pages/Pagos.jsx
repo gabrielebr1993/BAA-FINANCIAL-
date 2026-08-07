@@ -31,6 +31,10 @@ export default function Pagos() {
   const verIngreso = puedePagar
   const verGanancia = puedePagar
   const [payrollMap, setPayrollMap] = useState({})
+  // ¿Ya cargó el estado de pago (colección `payroll`) de esta factura? Hasta que esté
+  // listo NO mostramos "Pendiente/Pagado": si no, al abrir se ve "No pagado" un instante
+  // (payrollMap vacío) y salta a "Pagado" cuando llega la consulta → confunde al usuario.
+  const [payrollListo, setPayrollListo] = useState(false)
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
   const [stripeMsg, setStripeMsg] = useState(null)
   const [fEstado, setFEstado] = useState('')
@@ -60,13 +64,18 @@ export default function Pagos() {
   const esRango = invoicesRango.length > 1
 
   const cargarPayroll = useCallback(async () => {
-    if (!pagoInvoiceId || !activeCompanyId) return setPayrollMap({})
-    const snap = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', pagoInvoiceId)))
-    const map = {}
-    snap.docs.forEach((d) => {
-      map[d.data().driverNombre] = { id: d.id, ...d.data() }
-    })
-    setPayrollMap(map)
+    if (!pagoInvoiceId || !activeCompanyId) { setPayrollMap({}); setPayrollListo(true); return }
+    setPayrollListo(false)
+    try {
+      const snap = await getDocs(query(collection(db, 'payroll'), where('companyId', '==', activeCompanyId), where('invoiceId', '==', pagoInvoiceId)))
+      const map = {}
+      snap.docs.forEach((d) => {
+        map[d.data().driverNombre] = { id: d.id, ...d.data() }
+      })
+      setPayrollMap(map)
+    } finally {
+      setPayrollListo(true)
+    }
   }, [pagoInvoiceId, activeCompanyId])
 
   useEffect(() => {
@@ -130,6 +139,9 @@ export default function Pagos() {
   const nCho = pagos.length
   const seguroPorChofer = nCho > 0 ? seguroTotal / nCho : 0
   // Ordenado ALFABÉTICO por nombre de chofer (aplica a la tabla y a los exports PDF/Excel).
+  // Mientras la consulta de `payroll` no termine, no afirmamos el estado (evita el
+  // parpadeo "No pagado" → "Pagado" al abrir la página).
+  const cargandoEstado = !!pagoInvoiceId && !payrollListo
   const pagosConEstado = pagos
     .map((p) => ({ ...p, seguro: seguroPorChofer, totalPagar: p.totalPagar - seguroPorChofer, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
     .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
@@ -357,7 +369,7 @@ export default function Pagos() {
             {totSeguro > 0 && <KPI label={t('Seguro')} value={money(totSeguro)} icon={ShieldCheck} accent="slate" sub={`${money(seguroPorChofer)} ${t('c/u')} × ${num(nCho)}`} />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label={t('Ajustes (préstamo / bono)')} value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
             {verGanancia && <KPI label={lGanancia(t('Ganancia real'))} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
-            <KPI label={t('Pendientes / Pagados')} value={`${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
+            <KPI label={t('Pendientes / Pagados')} value={cargandoEstado ? '…' : `${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
           </div>
           {verGanancia ? (
             <p className="mb-5 text-xs text-slate-400">
@@ -451,6 +463,7 @@ export default function Pagos() {
                         onMarcar={marcarEstado}
                         invoice={selectedInvoice}
                         puedeMarcar={!esRango}
+                        cargandoEstado={cargandoEstado}
                         fIngreso={fIngreso}
                         fGanancia={fGanancia}
                         claimsChofer={expandido === p.nombre ? claimsDeChofer(p.nombre) : []}
@@ -569,7 +582,7 @@ function OjoToggle({ activo, onClick, label }) {
   )
 }
 
-function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verIngreso, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
+function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, cargandoEstado, fIngreso, fGanancia, claimsChofer, perdonandoId, motivo, setMotivo, setPerdonandoId, confirmarPerdon, restaurar, ocupado, driver, puedePagar, verIngreso, verGanancia, esRuta, pagandoStripe, onPagarStripe, avisoPago, puedeEditarAjuste, editAjuste, setEditAjuste, onGuardarAjuste, guardandoAjuste }) {
   const { t } = useLang()
   const estadoStripe = driver?.stripeEstado || 'sin_registrar'
   const verificado = estadoStripe === 'verificado'
@@ -601,10 +614,12 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, fIng
           )}
         </td>
         {verGanancia && <td className={`${TD} ${p.ganancia >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{fGanancia(p.ganancia)}</td>}
-        <td className={TD}>{p.estado === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>}</td>
+        <td className={TD}>{cargandoEstado ? <span className="text-xs text-slate-400">…</span> : p.estado === 'pagado' ? <Badge color="green">{t('Pagado')}</Badge> : <Badge color="gold">{t('Pendiente')}</Badge>}</td>
         <td className={TD}>
           <div className="flex items-center justify-end gap-1.5">
-            {!puedeMarcar ? (
+            {cargandoEstado ? (
+              <span className="text-xs text-slate-400">…</span>
+            ) : !puedeMarcar ? (
               <span className="text-xs text-slate-400">—</span>
             ) : p.estado === 'pagado' ? (
               <>
