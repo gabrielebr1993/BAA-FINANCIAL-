@@ -14,6 +14,7 @@ import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { choferesLibres, PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
+import { diagnosticarCola, choferesReales } from '../domain/diagnosticoAsignacion'
 import { alertaOrden } from '../domain/alertas'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { desgloseVisible } from '../domain/pagos'
@@ -55,6 +56,12 @@ export default function Ordenes() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
   const { datos: mensajes } = useColeccion('messages')
+  const { datos: signals } = useColeccion('signals')
+  // Si el matching corre en el SERVIDOR (Cloud Function), el motor del navegador se
+  // apaga. Si esa función NO está desplegada, nada asigna → es la causa #1 de "en
+  // línea pero no llega ninguna orden". Lo advertimos en el diagnóstico.
+  const matchingServer = (signals || []).some((s) => s.id === 'matching' && s.serverSide === true)
+  const [verDiag, setVerDiag] = useState(false)
   const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
   const nombreCarrier = (id) => carriers.find((c) => c.id === id)?.nombre || '—'
   const [chatOrden, setChatOrden] = useState(null)
@@ -81,6 +88,10 @@ export default function Ordenes() {
     .filter((p) => (now - tsMillis(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS)
     .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde)), [presencias, now])
   const libresN = choferesLibres(presencias, now).length
+  const realesN = useMemo(() => choferesReales(presencias, now).length, [presencias, now])
+  // Diagnóstico: por qué cada orden en cola no se está emparejando (solo lectura).
+  const diag = useMemo(() => diagnosticarCola(porAsignar, presencias, now), [porAsignar, presencias, now])
+  const bloqueadas = diag.filter((d) => d.razon.tipo !== 'ok').length
 
   // El MOTOR de asignación (ofrecer + timeout) vive en useAutoAsignacion (montado
   // en BulkLayout), para que corra en cualquier pantalla del staff. Aquí solo se
@@ -163,6 +174,53 @@ export default function Ordenes() {
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar orden o chofer…')} className="w-56 pl-8" />
         </div>
       </div>
+
+      {/* Diagnóstico de asignación: por qué las órdenes en cola no llegan a un chofer */}
+      {esStaff && (porAsignar.length > 0 || matchingServer) && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setVerDiag((v) => !v)}
+            className={`flex w-full items-center gap-2 rounded-2xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+              (bloqueadas > 0 || matchingServer)
+                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
+                : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700/60 dark:bg-slate-900 dark:text-slate-300'
+            }`}
+          >
+            <AlertTriangle size={16} />
+            {bloqueadas > 0 ? `${bloqueadas} ${t('orden(es) en cola no encuentran chofer')}` : t('Diagnóstico de asignación')}
+            <span className="ml-auto text-xs font-normal">{verDiag ? '▾' : '▸'}</span>
+          </button>
+          {verDiag && (
+            <Card className="mt-2 space-y-3 p-4 text-sm">
+              {matchingServer && (
+                <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
+                  <b>{t('Asignación en servidor ACTIVA.')}</b> {t('Requiere las Cloud Functions desplegadas. Si aún no las desplegaste, NADA asigna: ve a Modo test y apaga "Asignación en servidor" para usar el motor del navegador.')}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-slate-600 dark:text-slate-300">
+                <span>{t('Motor:')} <b>{matchingServer ? t('servidor') : t('navegador (mantén esta pestaña abierta)')}</b></span>
+                <span>{t('Choferes reales en línea y libres:')} <b className={realesN > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{realesN}</b></span>
+              </div>
+              {porAsignar.length === 0 ? (
+                <p className="text-slate-400">{t('No hay órdenes en cola ahora mismo.')}</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {diag.map((d) => (
+                    <li key={d.orden.id} className="flex items-start gap-2">
+                      {d.razon.tipo === 'ok'
+                        ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                        : <XCircle size={15} className="mt-0.5 shrink-0 text-rose-500" />}
+                      <span className="text-slate-600 dark:text-slate-300"><b className="text-brand-navy dark:text-slate-100">{d.orden.numero}</b> — {d.razon.texto}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-slate-400">{t('Un chofer recibe la orden solo si: está en línea y libre (app activa), su equipo coincide con el que pide la orden, está afiliado al trabajo de la orden y no la rechazó antes.')}</p>
+            </Card>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* IZQUIERDA · Órdenes por asignar */}
