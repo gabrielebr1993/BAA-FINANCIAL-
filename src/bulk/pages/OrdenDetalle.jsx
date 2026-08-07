@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings, UserPlus, Wifi, Search } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { suscribirTrack } from '../data/tracking'
@@ -10,6 +10,8 @@ import { leerFotoReducida } from '../components/foto'
 import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
 import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
+import { asignarOrdenManual } from '../data/asignacionManual'
+import { equipoCompatible, choferDisponible } from '../domain/asignacionAuto'
 import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
@@ -37,6 +39,7 @@ export default function OrdenDetalle() {
   const { datos: plantas } = useColeccion('plants')
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: facturas } = useColeccion('invoices')
+  const { datos: presencias } = useColeccion('presence')
   const [track, setTrack] = useState([])
   const [accion, setAccion] = useState(null) // 'cancelar' | 'eliminar' | null
   const [menu, setMenu] = useState(false)
@@ -173,6 +176,7 @@ export default function OrdenDetalle() {
         )}
       </Card>
 
+      {accion === 'asignar' && <ModalAsignar orden={orden} carriers={carriers} presencias={presencias} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} t={t} />}
       {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}
       {accion === 'eliminar' && <ModalEliminar orden={orden} facturada={ordenFacturada(orden, facturas)} onClose={() => setAccion(null)} onDone={() => navigate('/bulk/ordenes')} ctx={{ tenantId, usuario, rol, facturas }} t={t} />}
 
@@ -187,6 +191,12 @@ export default function OrdenDetalle() {
                 {Object.values(E).map((es) => <option key={es} value={es}>{t(ORDEN_ESTADO_LABEL[es])}</option>)}
               </select>
             </div>
+            {![E.CANCELADA, E.ENTREGADA, E.LIBERADA, E.CERRADA].includes(orden.estado) && (
+              <div>
+                <div className="mb-1 text-[11px] uppercase text-slate-400">{orden.choferId ? t('Reasignar / transferir') : t('Asignar a un chofer')}</div>
+                <Boton variant="gold" onClick={() => setAccion('asignar')} className="px-3 py-2 text-sm"><UserPlus size={15} /> {orden.choferId ? t('Transferir orden') : t('Asignar manualmente')}</Boton>
+              </div>
+            )}
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 dark:border-slate-600">
               <Camera size={16} /> {orden.fotoManual?.foto ? t('Cambiar foto') : t('Subir foto')}
               <input type="file" accept="image/*" onChange={subirFotoManual} className="hidden" />
@@ -323,6 +333,91 @@ function Overlay({ children, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white p-5 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>{children}</div>
     </div>
+  )
+}
+
+// Asignar / transferir MANUAL: el dispatcher elige el chofer. Lista a los choferes
+// del roster de cada transportista, marca quién está EN LÍNEA y avisa si el equipo
+// no coincide con el que pide la orden (se puede asignar igual, con confirmación).
+function ModalAsignar({ orden, carriers, presencias, onClose, onDone, ctx, t }) {
+  const [busca, setBusca] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const now = Date.now()
+  const claveN = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  // uid de choferes en línea y libres (para el badge y el orden).
+  const online = new Map()
+  for (const p of (presencias || [])) {
+    if (p.uid && choferDisponible(p, now)) online.set(p.uid, p)
+  }
+
+  // Candidatos = choferes del roster de cada transportista (con su uid si ya entró).
+  const candidatos = []
+  for (const c of (carriers || [])) {
+    for (const d of (c.choferes || [])) {
+      const uid = d.uid || null
+      const equipos = (d.equipos && d.equipos.length) ? d.equipos : (d.equipo ? [d.equipo] : [])
+      candidatos.push({
+        key: `${c.id}:${d.id || d.nombre}`,
+        uid, id: d.id || null, nombre: d.nombre || '—',
+        carrierId: c.id, carrierNombre: c.nombre || '',
+        equipos, enLinea: !!(uid && online.has(uid)),
+        compatible: equipoCompatible(equipos, orden.tipoEquipo),
+        actual: (uid && uid === orden.choferId) || (d.id && d.id === orden.choferId) || (orden.choferNombre && claveN(orden.choferNombre) === claveN(d.nombre)),
+      })
+    }
+  }
+  const q = busca.trim().toLowerCase()
+  const lista = candidatos
+    .filter((x) => !q || x.nombre.toLowerCase().includes(q) || x.carrierNombre.toLowerCase().includes(q))
+    .sort((a, b) => (b.enLinea - a.enLinea) || (b.compatible - a.compatible) || a.nombre.localeCompare(b.nombre))
+
+  const asignar = async (cand) => {
+    if (cand.actual) { window.alert(t('Esta orden ya está con ese chofer.')); return }
+    if (!cand.compatible && !window.confirm(`${t('Ese chofer no tiene el equipo que pide la orden')} (${orden.tipoEquipo || '—'}). ${t('¿Asignar de todos modos?')}`)) return
+    setOcupado(true)
+    try {
+      await asignarOrdenManual(ctx.tenantId, orden, cand, ctx)
+      onDone()
+    } catch (e) {
+      window.alert(t('No se pudo asignar: ') + (e?.message || ''))
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="mb-1 flex items-center gap-2"><UserPlus size={18} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{orden.choferId ? t('Transferir orden') : t('Asignar orden')} {orden.numero}</h3></div>
+      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t('Se le ofrece la orden al chofer que elijas; le llega la notificación y debe aceptarla. Pide equipo:')} <b>{orden.tipoEquipo || t('cualquiera')}</b>.</p>
+      <div className="relative mb-2">
+        <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={t('Buscar chofer o transportista…')} className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-8 pr-3 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" autoFocus />
+      </div>
+      <div className="scroll-thin max-h-72 space-y-1.5 overflow-y-auto">
+        {lista.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-400">{t('No hay choferes en el roster. Agrégalos en Transportistas.')}</p>
+        ) : lista.map((cand) => (
+          <button
+            key={cand.key}
+            onClick={() => asignar(cand)}
+            disabled={ocupado || cand.actual}
+            className={`flex w-full items-center gap-2 rounded-xl border p-2.5 text-left transition disabled:opacity-60 ${cand.actual ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-500/10' : 'border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+          >
+            <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800"><User size={16} /></div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{cand.nombre}</span>
+                {cand.enLinea && <Badge color="green"><Wifi size={10} className="mr-0.5 inline" />{t('en línea')}</Badge>}
+                {cand.actual && <Badge color="green">{t('actual')}</Badge>}
+              </div>
+              <div className="truncate text-xs text-slate-400">{cand.carrierNombre} · {cand.equipos.length ? cand.equipos.join(', ') : t('sin equipo')}</div>
+            </div>
+            {!cand.compatible && <span className="flex-shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" title={t('El equipo no coincide con el que pide la orden')}>≠ {t('equipo')}</span>}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-end"><Boton variant="ghost" onClick={onClose} disabled={ocupado} className="px-3 py-2 text-sm">{t('Cerrar')}</Boton></div>
+    </Overlay>
   )
 }
 
