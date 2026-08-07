@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX } from 'lucide-react'
+import { sonidoActivo, setSonido } from '../integraciones/sonido'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
@@ -142,13 +143,14 @@ export default function ChoferPortal() {
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {
     if (entrante && entrante.id !== prevEntrante.current) {
-      beep(); notificar(t('Nueva orden asignada'), t('Tienes una orden nueva por aceptar.'))
+      if (sonidoActivo()) beep()
+      notificar(t('Nueva orden asignada'), t('Tienes una orden nueva por aceptar.'))
     }
     prevEntrante.current = entrante?.id || null
   }, [entrante?.id])
   // Mientras haya una orden entrante sin responder, suena un tono largo en bucle.
   useEffect(() => {
-    if (!entrante) return
+    if (!entrante || !sonidoActivo()) return
     tonoOrden()
     const id = setInterval(() => tonoOrden(), 3000)
     return () => clearInterval(id)
@@ -157,7 +159,8 @@ export default function ChoferPortal() {
   const prevOficina = useRef(null)
   useEffect(() => {
     if (prevOficina.current != null && noLeidosOficina > prevOficina.current) {
-      beep(); notificar(t('Mensajes con la oficina'), t('Tienes un mensaje nuevo de la oficina.'))
+      if (sonidoActivo()) beep()
+      notificar(t('Mensajes con la oficina'), t('Tienes un mensaje nuevo de la oficina.'))
     }
     prevOficina.current = noLeidosOficina
   }, [noLeidosOficina])
@@ -165,16 +168,24 @@ export default function ChoferPortal() {
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-100 dark:bg-slate-950">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
       <IndicadorConexion />
-      <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={18} /></div>
-        <div className="min-w-0"><div className="truncate text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Chofer')}</div></div>
-        <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10" title={t('Cambiar módulo')}><Grid2x2 size={18} /></button>
-        <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10" title={t('Salir')}><LogOut size={18} /></button>
+      <header className="bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 pt-3.5 text-white">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} /></div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-base font-black leading-tight">{usuario?.nombre}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-300">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${enLinea ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+              {enLinea ? t('En línea') : t('Desconectado')} · {t('Chofer')}
+            </div>
+          </div>
+          <button onClick={() => navigate('/elegir')} className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10" title={t('Cambiar módulo')}><Grid2x2 size={18} /></button>
+          <button onClick={cerrarSesion} className="rounded-xl p-2 text-rose-300 transition hover:bg-white/10" title={t('Salir')}><LogOut size={18} /></button>
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-3 pb-20">
+      <main className="relative -mt-5 flex-1 overflow-y-auto rounded-t-[1.75rem] bg-[#f2f3f7] p-3 pb-24 dark:bg-slate-950">
         {tab === 'ordenes' && (
           <>
             {!carrierId && (
@@ -230,6 +241,7 @@ export default function ChoferPortal() {
                 <div className="flex items-center gap-2">
                   <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                  <Badge color="green">{t('Entregada')}</Badge>
                   <span className="ml-auto text-base font-black text-emerald-600 dark:text-emerald-400">{money(o.pagoChofer)}</span>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
@@ -240,25 +252,49 @@ export default function ChoferPortal() {
             ))
         )}
         {tab === 'ganancias' && (() => {
-          const tonTot = historial.reduce((a, o) => a + (Number(o.pesoReal ?? o.pesoEstimado) || 0), 0)
-          const prom = historial.length ? ganancias / historial.length : 0
+          const enCurso = misOrdenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
+          const pendiente = enCurso.reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
+          const total = ganancias + pendiente
+          const viajes = [...enCurso, ...historial]
           return (
             <div>
-              <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center text-slate-900 shadow-lg">
-                <div className="text-xs font-bold uppercase tracking-widest opacity-80">{t('Ganancias acumuladas')}</div>
-                <div className="mt-1 text-5xl font-black">{money(ganancias)}</div>
-                <div className="mt-1 text-sm font-semibold opacity-80">{historial.length} {t('entrega(s) cerrada(s)')}</div>
+              <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#15b66b] to-emerald-600 p-6 text-center text-white shadow-lg">
+                <div className="text-xs font-bold uppercase tracking-widest opacity-80">{t('Ganancias')}</div>
+                <div className="mt-1 text-5xl font-black tracking-tight">{money(total)}</div>
+                <div className="mt-1 text-sm font-semibold opacity-90">{viajes.length} {t('viaje(s)')}</div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center dark:border-slate-700/60 dark:bg-slate-900">
-                  <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{Math.round(tonTot)}</div>
-                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">{t('toneladas movidas')}</div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><CheckCircle2 size={13} className="text-[#15b66b]" /> {t('Pagado')}</div>
+                  <div className="mt-1 text-2xl font-black text-[#15b66b]">{money(ganancias)}</div>
+                  <div className="text-[11px] text-slate-400">{historial.length} {t('entrega(s)')}</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center dark:border-slate-700/60 dark:bg-slate-900">
-                  <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{money(prom)}</div>
-                  <div className="mt-0.5 text-[11px] font-medium text-slate-400">{t('promedio por viaje')}</div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Clock size={13} className="text-amber-500" /> {t('Pendiente')}</div>
+                  <div className="mt-1 text-2xl font-black text-brand-navy dark:text-slate-100">{money(pendiente)}</div>
+                  <div className="text-[11px] text-slate-400">{enCurso.length} {t('en curso')}</div>
                 </div>
               </div>
+              <div className="mt-4 mb-1 px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t('Desglose de viajes')}</div>
+              {viajes.length === 0 ? (
+                <VacioMsg icon={DollarSign} texto={t('Aún no tienes viajes con pago.')} />
+              ) : (
+                <div className="space-y-2">
+                  {viajes.map((o) => {
+                    const cerrada = historial.includes(o)
+                    return (
+                      <div key={o.id} className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-900">
+                        <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-full ${cerrada ? 'bg-[#15b66b]/10 text-[#15b66b]' : 'bg-amber-500/10 text-amber-500'}`}>{cerrada ? <CheckCircle2 size={16} /> : <Clock size={16} />}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</div>
+                          <div className="truncate text-[11px] text-slate-400">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
+                        </div>
+                        <span className={`text-base font-black ${cerrada ? 'text-[#15b66b]' : 'text-slate-400'}`}>{money(o.pagoChofer)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )
         })()}
@@ -399,7 +435,10 @@ function VacioMsg({ icon: Icon, texto }) {
 // Perfil del chofer (tipo red social): foto, datos y datos bancarios para MilePay.
 // El propio chofer lo edita; se guarda en bulk_driverProfiles (doc id = su uid).
 function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrierId }) {
-  const { t } = useLang()
+  const { t, lang, setLang } = useLang()
+  const { cerrarSesion } = useBulkAuth()
+  const [sonido, setSonidoOn] = useState(sonidoActivo())
+  const toggleSonido = () => { const v = !sonido; setSonidoOn(v); setSonido(v); if (v) beep() }
   const [foto, setFoto] = useState(null)
   const [telefono, setTelefono] = useState('')
   const [licencia, setLicencia] = useState('')
@@ -468,6 +507,25 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
             {equiposCh.map((eq) => <span key={eq} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400"><Truck size={12} /> {eq}</span>)}
             {(miChofer?.jobs || []).length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{miChofer.jobs.length} {t('trabajo(s)')}</span>}
           </div>
+        </div>
+      </Card>
+
+      {/* AJUSTES: idioma (cambia toda la app del chofer) + sonido de avisos */}
+      <Card className="p-4">
+        <div className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">{t('Ajustes')}</div>
+        <div className="flex items-center justify-between border-b border-slate-100 py-2.5 dark:border-slate-800">
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-navy dark:text-slate-100"><Languages size={17} className="text-amber-500" /> {t('Idioma')}</span>
+          <div className="inline-flex rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+            {[{ k: 'es', l: 'Español' }, { k: 'en', l: 'English' }].map((o) => (
+              <button key={o.k} onClick={() => setLang(o.k)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${lang === o.k ? 'bg-white text-brand-navy shadow-sm dark:bg-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>{o.l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between py-2.5">
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-navy dark:text-slate-100">{sonido ? <Volume2 size={17} className="text-amber-500" /> : <VolumeX size={17} className="text-slate-400" />} {t('Sonido de notificaciones')}</span>
+          <button onClick={toggleSonido} role="switch" aria-checked={sonido} className={`relative h-6 w-11 rounded-full transition ${sonido ? 'bg-[#15b66b]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${sonido ? 'left-[22px]' : 'left-0.5'}`} />
+          </button>
         </div>
       </Card>
 
@@ -547,6 +605,8 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         <div className="mb-1.5 text-[11px] text-slate-400">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
         <RepararAcceso variant="ghost" />
       </Card>
+      <button onClick={cerrarSesion} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 py-3 text-sm font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10"><LogOut size={16} /> {t('Cerrar sesión')}</button>
+
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
       <Lightbox src={lightboxP} onClose={() => setLightboxP(null)} />
     </div>
@@ -747,16 +807,35 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </div>
       )}
 
-      {/* Hitos registrados */}
-      <div className="mt-3 space-y-1">
-        {ORDEN_HITOS.map((h) => (
-          <div key={h.key} className="flex items-center gap-2 text-xs">
-            {orden.hitos?.[h.key] ? <CheckCircle2 size={14} className="text-emerald-500" /> : <div className="h-3.5 w-3.5 rounded-full border border-slate-300 dark:border-slate-600" />}
-            <span className={orden.hitos?.[h.key] ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400'}>{t(h.label)}</span>
-            {orden.hitos?.[h.key] && <span className="ml-auto text-slate-400">{new Date(orden.hitos[h.key]).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>}
+      {/* TIMELINE de progreso: completados (verde ✓), actual (dorado con anillo), pendientes (gris) */}
+      {(() => {
+        const idxActual = ORDEN_HITOS.findIndex((h) => !orden.hitos?.[h.key])
+        return (
+          <div className="mt-4">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{t('Progreso del viaje')}</div>
+            <ol className="relative space-y-0">
+              {ORDEN_HITOS.map((h, i) => {
+                const done = !!orden.hitos?.[h.key]
+                const actual = !done && i === idxActual
+                const ultimo = i === ORDEN_HITOS.length - 1
+                return (
+                  <li key={h.key} className="relative flex gap-3 pb-3 last:pb-0">
+                    {!ultimo && <span className={`absolute left-[11px] top-6 h-[calc(100%-1.25rem)] w-0.5 ${done ? 'bg-[#15b66b]' : 'bg-slate-200 dark:bg-slate-700'}`} />}
+                    <span className={`relative z-10 grid h-6 w-6 flex-shrink-0 place-items-center rounded-full ${done ? 'bg-[#15b66b] text-white' : actual ? 'bg-[#c9a24b] text-white ring-4 ring-[#c9a24b]/25' : 'border-2 border-slate-300 bg-white text-transparent dark:border-slate-600 dark:bg-slate-900'}`}>
+                      {done ? <Check size={13} strokeWidth={3} /> : actual ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+                    </span>
+                    <div className="flex min-w-0 flex-1 items-center gap-2 pt-0.5">
+                      <span className={`text-sm ${done ? 'font-medium text-brand-navy dark:text-slate-200' : actual ? 'font-bold text-[#c9a24b]' : 'text-slate-400'}`}>{t(h.label)}</span>
+                      {done && <span className="ml-auto text-[11px] tabular-nums text-slate-400">{new Date(orden.hitos[h.key]).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      {actual && <span className="ml-auto rounded-full bg-[#c9a24b]/15 px-2 py-0.5 text-[10px] font-bold text-[#c9a24b]">{t('ahora')}</span>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
           </div>
-        ))}
-      </div>
+        )
+      })()}
 
       {/* Fotos ya registradas (toca para ampliar) */}
       {(orden.ticket?.foto || orden.pod?.foto) && (
