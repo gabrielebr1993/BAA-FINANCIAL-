@@ -745,6 +745,22 @@ export default function CargarFactura() {
       // de la colección `claims` y (b) una copia EMBEBIDA en la factura (`claimsData`),
       // que sirve de respaldo para que el claim SIEMPRE se muestre aunque la consulta
       // a la colección no lo traiga (facturas duplicadas, índices, etc.).
+      // AUTO anti-doble-cobro: un mismo tracking NO se cobra dos veces. Si el waybill
+      // ya está COBRADO (activo, no perdonado) en OTRA factura ya cargada de esta
+      // empresa (otra ciudad u otra semana), el nuevo se marca PERDONADO
+      // automáticamente, sin pedir confirmación. Dentro de una misma carga el conteo
+      // ya cuenta una sola vez (mismo invoiceId → claimsValidos lo colapsa).
+      const normWb = (w) => (w || '').trim().toUpperCase()
+      const activosPrev = new Set()
+      for (const inv of invoices || []) {
+        if (inv.companyId !== activeCompanyId) continue
+        for (const cc of inv.claimsData || []) {
+          if (cc.perdonado === true || (cc.estadoRevision || 'aprobado') === 'anulado') continue
+          const w = normWb(cc.waybill)
+          if (w) activosPrev.add(w)
+        }
+      }
+      let autoPerdonN = 0
       const claimDocsEmbed = []
       for (let i = 0; i < claims.length; i += chunk) {
         const batch = writeBatch(db)
@@ -755,6 +771,9 @@ export default function CargarFactura() {
           const wb = (c.waybill || '').trim()
           const esRepetido = casosRepetidos.some((k) => k.waybill === wb)
           const estadoRevision = esRepetido ? decisiones[wb] || 'pendiente' : 'aprobado'
+          // ¿Este tracking ya se cobra en otra factura? → perdonar automáticamente.
+          const autoDup = !esRepetido && activosPrev.has(normWb(c.waybill))
+          if (autoDup) autoPerdonN++
           const det = detPorWaybill[wb] || null
           const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
           const payload = {
@@ -780,10 +799,10 @@ export default function CargarFactura() {
             esRepetido,
             revisadoPor: esRepetido ? perfil?.nombre || perfil?.email || '' : '',
             revisadoEn: null,
-            perdonado: false,
-            motivo: '',
-            perdonadoPor: '',
-            perdonadoEn: null,
+            perdonado: autoDup,
+            motivo: autoDup ? `Tracking duplicado ${wb} — ya se cobra en otra factura (auto)` : '',
+            perdonadoPor: autoDup ? 'Sistema · anti-duplicado' : '',
+            perdonadoEn: autoDup ? new Date().toISOString() : null,
           }
           batch.set(cref, payload)
           claimDocsEmbed.push(payload)
@@ -816,8 +835,9 @@ export default function CargarFactura() {
       const claimsConDecision = combinado.claims.map((c) => {
         const wb = (c.waybill || '').trim()
         const esRep = casosRepetidos.some((k) => k.waybill === wb)
+        const autoDup = !esRep && activosPrev.has(normWb(c.waybill))
         const rutaAsignada = modoRuta ? (asignacionRuta[c.courier] || '') : ''
-        return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: false, rutaAsignada }
+        return { ...c, estadoRevision: esRep ? decisiones[wb] || 'pendiente' : 'aprobado', perdonado: autoDup, rutaAsignada }
       })
       const invCalc = { ...combinado, resumenChoferes: resumen.resumenChoferes, reglaEmpresa, reglasAplicadas, modoConfig: modoRuta ? 'ruta' : 'estandar', reglasRutaAplicadas, asignacionRuta: asignacionRutaFinal }
       const pagosFinal = calcularPagos(invCalc, claimsConDecision, driversFinal, TODAS)
@@ -886,6 +906,7 @@ export default function CargarFactura() {
       setFallidosProc(null)
       setRatesList([])
       setPreciosResumen(null)
+      if (autoPerdonN > 0) setAvisos([`Se perdonaron automáticamente ${autoPerdonN} claim(s) por tracking duplicado: ese mismo número ya se cobra en otra factura, así no se le cobra dos veces al chofer. Puedes revisarlos en Claims.`])
     } catch (e) {
       setErrores(['Error al guardar: ' + e.message])
     } finally {
