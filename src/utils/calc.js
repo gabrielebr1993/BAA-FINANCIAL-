@@ -299,6 +299,39 @@ export function claimsRepetidosPendientes(claims) {
   return detectarClaimsRepetidos(claims).filter((g) => (g.estado || 'pendiente') === 'pendiente')
 }
 
+// TRACKING DUPLICADO (injusto): el MISMO Waybill No. cobrado en 2+ claims ACTIVOS
+// (no perdonados), típicamente en ciudades/facturas distintas —o al mismo chofer—.
+// Un tracking = un cobro: si aparece cobrado dos veces hay que dejar uno solo.
+// A diferencia de `detectarClaimsRepetidos` (claim + reversión dentro de UNA
+// factura), aquí se cruza TODO el conjunto por número de tracking, sin importar la
+// ciudad ni la factura. Devuelve [{ waybill, claims:[…ordenados por fecha],
+// cobrados, ciudades, choferes, mismoChofer }].
+export function detectarTrackingDuplicado(claims) {
+  const norm = (w) => (w || '').trim().toUpperCase()
+  const grupos = {}
+  for (const c of claimsValidos(claims)) {
+    const w = norm(c.waybill)
+    if (!w) continue
+    ;(grupos[w] = grupos[w] || []).push(c)
+  }
+  const casos = []
+  for (const [waybill, arr] of Object.entries(grupos)) {
+    if (arr.length < 2) continue
+    const activos = arr.filter((c) => !c.perdonado)
+    if (activos.length < 2) continue // ya queda un solo cobro efectivo → sin problema
+    const ord = [...arr].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    casos.push({
+      waybill,
+      claims: ord,
+      cobrados: activos.length,
+      ciudades: [...new Set(arr.map((c) => c.ciudad || ''))].filter(Boolean),
+      choferes: [...new Set(arr.map((c) => c.courier || ''))].filter(Boolean),
+      mismoChofer: new Set(arr.map((c) => (c.courier || '').trim().toLowerCase())).size === 1,
+    })
+  }
+  return casos
+}
+
 // Conteo CANÓNICO: lista de claims VÁLIDOS (mismo criterio en todo el sistema).
 // - No repetido: cuenta salvo que esté 'anulado'.
 // - Repetido: cuenta UNA vez y solo si el caso está 'aprobado' (representado por

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios, cambiarMetodoClaim, cambiarMetodoVarios } from '../utils/claims'
-import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
+import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, detectarTrackingDuplicado, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -44,9 +44,28 @@ export default function Claims() {
   }, [casosRepetidos])
   const pendientesRepetidos = casosRepetidos.filter((g) => (g.estado || 'pendiente') === 'pendiente')
 
+  // Tracking DUPLICADO: el mismo número cobrado en 2+ claims activos (otra ciudad o
+  // el mismo chofer). Se detecta sobre TODOS los claims del rango (todas las
+  // ciudades), no solo la ciudad filtrada, para no perder el cruce entre ciudades.
+  const trackingDuplicados = useMemo(() => detectarTrackingDuplicado(claims), [claims])
+
   const resolverRepetido = async (caso, decision) => {
     setOcupado(true)
     await decidirClaimRepetido(caso.claims, decision, perfil)
+    await reloadClaims()
+    setOcupado(false)
+  }
+
+  // Solución: deja UN solo cobro por tracking. Conserva el más antiguo y perdona los
+  // demás claims activos del mismo waybill, con un motivo claro y auditable.
+  const resolverDuplicado = async (caso) => {
+    const activos = caso.claims.filter((c) => !c.perdonado)
+    const conservar = activos[0]
+    const sobrantes = activos.slice(1)
+    if (!sobrantes.length) return
+    setOcupado(true)
+    const motivo = `${t('Tracking duplicado')} ${caso.waybill} — ${t('ya se cobra en')} ${nombreCiudad(conservar?.ciudad) || conservar?.courier || '—'}`
+    await perdonarVarios(sobrantes, motivo, perfil)
     await reloadClaims()
     setOcupado(false)
   }
@@ -180,6 +199,40 @@ export default function Claims() {
             {!ocultarGofo && <KPI label={t('Descuento a choferes')} value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} ${t('claim(s) activo(s)')}`} />}
             {!ocultarGofo && <KPI label={t('Te descontó Gofo')} value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
           </div>
+
+          {trackingDuplicados.length > 0 && (
+            <Card className="mb-4 border-2 border-rose-400/80 p-4">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <AlertTriangle size={18} strokeWidth={1.9} className="text-rose-500" />
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Tracking cobrado más de una vez')}</h3>
+                <Badge color="red">{trackingDuplicados.length}</Badge>
+              </div>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                {t('El mismo número de tracking aparece cobrado en más de un claim (otra ciudad, u otra vez al mismo chofer). Un tracking = un cobro: es injusto cobrarle dos veces al chofer. Deja un solo cobro (el más antiguo) y perdona el resto.')}
+              </p>
+              <div className="space-y-3">
+                {trackingDuplicados.map((caso) => (
+                  <div key={caso.waybill} className="rounded-xl border border-rose-200 p-3 dark:border-rose-500/30">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="font-mono text-sm font-semibold text-brand-navy dark:text-slate-100">{caso.waybill}</span>
+                      {caso.mismoChofer
+                        ? <Badge color="red">{t('mismo chofer')} · {caso.choferes[0]}</Badge>
+                        : <span className="text-sm text-slate-500 dark:text-slate-400">{caso.choferes.join(' · ')}</span>}
+                      <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">{caso.cobrados} {t('cobros')}</span>
+                      <Boton variant="gold" disabled={ocupado} onClick={() => resolverDuplicado(caso)} className="ml-auto px-3 py-1.5 text-xs"><Check size={14} strokeWidth={2} /> {t('Dejar un solo cobro')}</Boton>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {caso.claims.map((c, i) => (
+                        <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${c.perdonado ? 'bg-slate-100 text-slate-400 line-through dark:bg-slate-800' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'}`}>
+                          {nombreCiudad(c.ciudad) || t('sin ciudad')} · {c.courier}{!ocultarGofo ? ` · ${money(feeDeClaim(selectedInvoice, c.ciudad, c))}` : ''}{c.perdonado ? ` (${t('perdonado')})` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {pendientesRepetidos.length > 0 && (
             <Card className="mb-4 border-2 border-amber-400/70 p-4">
