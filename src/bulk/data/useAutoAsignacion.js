@@ -14,6 +14,7 @@ import { auditar } from './auditoria'
 import { asignarPagos, liberarPagosAsignacion } from './ordenPagos'
 import { enviarPush } from '../integraciones/notificaciones'
 import { emparejar, ofertaVencida, ESPERA_RESPUESTA_MS } from '../domain/asignacionAuto'
+import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 
 const STAFF = ['super_admin', 'admin', 'dispatcher']
@@ -28,6 +29,18 @@ export function useAutoAsignacion() {
   // navegador se apaga para no chocar. Se enciende en Modo test (señal 'matching').
   const { datos: signals } = useColeccion('signals')
   const serverSide = (signals || []).some((s) => s.id === 'matching' && s.serverSide === true)
+  // Para calcular el pago del chofer con la MISMA config del transportista que se
+  // usa cuando asigna a mano (así el chofer cobra igual sin importar quién asigna).
+  const { datos: carriers } = useColeccion('carriers')
+  const { datos: carrierConfigs } = useColeccion('carrierConfig')
+  // Pago del chofer para esta orden según la config de su transportista (o null →
+  // se deja la tarifa base ya guardada).
+  const pagoChoferDe = (orden, chofer) => {
+    const carrier = (carriers || []).find((c) => c.id === chofer.carrierId)
+    const rosterId = (carrier?.choferes || []).find((d) => d.uid === chofer.uid)?.id || null
+    const cfg = (carrierConfigs || []).find((c) => c.id === chofer.carrierId)?.pagoChoferes || {}
+    return rosterId ? calcularPagoChofer(orden.precioTransportista, configDeChofer(cfg, rosterId)) : null
+  }
 
   const porAsignar = useMemo(() => ordenes.filter((o) => [E.CREADA, E.EN_COLA].includes(o.estado)), [ordenes])
   const emparejando = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO), [ordenes])
@@ -43,8 +56,10 @@ export function useAutoAsignacion() {
     })
     await reservar(chofer.uid, orden.id)
     // Inc.2: fija al dueño (transportista/chofer) en los docs de pago; los importes
-    // ya están guardados desde la creación, no se tocan.
-    await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId: chofer.uid, numero: orden.numero })
+    // ya están guardados desde la creación. Si el transportista definió cómo paga a
+    // este chofer, fijamos también su pago (consistente con la asignación manual).
+    const pago = pagoChoferDe(orden, chofer)
+    await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId: chofer.uid, numero: orden.numero, ...(pago != null ? { pagoChofer: pago } : {}) })
     enviarPush(tenantId, `chofer:${chofer.uid}`, 'Nueva orden', `Orden ${orden.numero} — ${orden.pesoEstimado} ton (${orden.tipoEquipo || '—'})`)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ofrecer_orden', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre}` })
   }

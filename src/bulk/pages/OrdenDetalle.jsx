@@ -13,6 +13,7 @@ import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAccio
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { liberar } from '../data/presencia'
 import { equipoCompatible, choferDisponible } from '../domain/asignacionAuto'
+import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
@@ -41,6 +42,7 @@ export default function OrdenDetalle() {
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: facturas } = useColeccion('invoices')
   const { datos: presencias } = useColeccion('presence')
+  const { datos: carrierConfigs } = useColeccion('carrierConfig')
   const [track, setTrack] = useState([])
   const [accion, setAccion] = useState(null) // 'cancelar' | 'eliminar' | null
   const [menu, setMenu] = useState(false)
@@ -179,7 +181,7 @@ export default function OrdenDetalle() {
         )}
       </Card>
 
-      {accion === 'asignar' && <ModalAsignar orden={orden} carriers={carriers} presencias={presencias} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} t={t} />}
+      {accion === 'asignar' && <ModalAsignar orden={orden} carriers={carriers} presencias={presencias} carrierConfigs={carrierConfigs} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} t={t} />}
       {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}
       {accion === 'eliminar' && <ModalEliminar orden={orden} facturada={ordenFacturada(orden, facturas)} onClose={() => setAccion(null)} onDone={() => navigate('/bulk/ordenes')} ctx={{ tenantId, usuario, rol, facturas }} t={t} />}
 
@@ -342,7 +344,7 @@ function Overlay({ children, onClose }) {
 // Asignar / transferir MANUAL: el dispatcher elige el chofer. Lista a los choferes
 // del roster de cada transportista, marca quién está EN LÍNEA y avisa si el equipo
 // no coincide con el que pide la orden (se puede asignar igual, con confirmación).
-function ModalAsignar({ orden, carriers, presencias, onClose, onDone, ctx, t }) {
+function ModalAsignar({ orden, carriers, presencias, carrierConfigs, onClose, onDone, ctx, t }) {
   const [busca, setBusca] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const now = Date.now()
@@ -380,7 +382,11 @@ function ModalAsignar({ orden, carriers, presencias, onClose, onDone, ctx, t }) 
     if (!cand.compatible && !window.confirm(`${t('Ese chofer no tiene el equipo que pide la orden')} (${orden.tipoEquipo || '—'}). ${t('¿Asignar de todos modos?')}`)) return
     setOcupado(true)
     try {
-      await asignarOrdenManual(ctx.tenantId, orden, cand, ctx)
+      // Pago del chofer según la config de su transportista (consistente con las
+      // demás vías de asignación). cand.id es el id del roster que usa la config.
+      const cfg = (carrierConfigs || []).find((c) => c.id === cand.carrierId)?.pagoChoferes || {}
+      const pago = cand.id ? calcularPagoChofer(orden.precioTransportista, configDeChofer(cfg, cand.id)) : null
+      await asignarOrdenManual(ctx.tenantId, orden, cand, ctx, { pagoChofer: pago != null ? pago : undefined })
       onDone()
     } catch (e) {
       window.alert(t('No se pudo asignar: ') + (e?.message || ''))
