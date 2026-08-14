@@ -2,8 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { collection, getDocs, query, where, doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
+import { useAuth } from '../AuthContext'
 import { PERMISOS, ROLES, SECCIONES } from '../constants'
 import { crearUsuarioApi } from '../utils/api'
+import { cerrarTodasLasSesiones, cerrarSesionUsuario } from '../data/sesiones'
+import CambiarClave from '../components/CambiarClave'
+import { KeyRound, LogOut } from 'lucide-react'
 import { Card, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import { useLang } from '../i18n'
 
@@ -17,6 +21,9 @@ const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager
 export default function Usuarios() {
   const { t } = useLang()
   const { activeCompanyId, empresaActiva, drivers, ciudadesEmpresa, invoices } = useData()
+  const { perfil, esSuperAdmin } = useAuth()
+  const puedeAdminClaves = esSuperAdmin || perfil?.role === 'owner'
+  const [verMiClave, setVerMiClave] = useState(false)
   const [usuarios, setUsuarios] = useState([])
   const [form, setForm] = useState(formVacio)
   const [editId, setEditId] = useState(null)
@@ -134,14 +141,54 @@ export default function Usuarios() {
     }
   }
 
+  // Admin fija una NUEVA contraseña a un usuario (vía endpoint con Admin SDK).
+  const cambiarClaveUsuario = async (u) => {
+    setError(''); setOk('')
+    const nueva = window.prompt(`${t('Nueva contraseña para')} ${u.email}:`)
+    if (nueva == null) return
+    if (String(nueva).length < 6) { setError(t('La contraseña debe tener al menos 6 caracteres.')); return }
+    try {
+      const token = await auth.currentUser.getIdToken()
+      const r = await fetch('/api/cambiar-clave', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ email: u.email, password: nueva }) })
+      const data = await r.json()
+      if (!data.ok) throw new Error(data.error || 'Error')
+      setOk(`${t('Contraseña actualizada para')} ${u.email}.`)
+    } catch (e) { setError(e.message || t('No se pudo cambiar la contraseña (¿servidor configurado?).')) }
+  }
+
+  // Cierra la sesión de TODAS las cuentas de la empresa (cada sesión obedece la señal).
+  const forzarLogoutTodos = async () => {
+    setError(''); setOk('')
+    if (!activeCompanyId) { setError(t('No hay una empresa activa.')); return }
+    if (!window.confirm(t('¿Cerrar la sesión de TODAS las cuentas de la empresa? Tendrán que volver a iniciar sesión (tu sesión también se cerrará).'))) return
+    try { await cerrarTodasLasSesiones(activeCompanyId); setOk(t('Se cerró la sesión de todas las cuentas.')) }
+    catch (e) { setError(e.message || t('No se pudo cerrar las sesiones.')) }
+  }
+
+  // Cierra la sesión de UN usuario.
+  const forzarLogoutUno = async (u) => {
+    setError(''); setOk('')
+    if (!window.confirm(`${t('¿Cerrar la sesión de')} ${u.email}?`)) return
+    try { await cerrarSesionUsuario(activeCompanyId, u.id); setOk(`${t('Se cerró la sesión de')} ${u.email}.`) }
+    catch (e) { setError(e.message || t('No se pudo cerrar la sesión.')) }
+  }
+
   const seccionesPermitidas = form.role === 'owner' ? SECCIONES : SECCIONES.filter((s) => form.permissions[s.permiso])
 
   return (
     <div>
       <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>{t('Usuarios y Permisos')}</PageTitle>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Boton variant="ghost" onClick={() => setVerMiClave(true)}><KeyRound size={15} /> {t('Cambiar mi contraseña')}</Boton>
+        {puedeAdminClaves && (
+          <Boton variant="danger" onClick={forzarLogoutTodos}><LogOut size={15} /> {t('Cerrar sesión en todas las cuentas')}</Boton>
+        )}
+      </div>
+
       {error && <Aviso tipo="error">{error}</Aviso>}
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
+      {verMiClave && <CambiarClave onClose={() => setVerMiClave(false)} />}
 
       <Card className="mb-5 p-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -303,9 +350,11 @@ export default function Usuarios() {
           }
           if (key === 'acciones')
             return (
-              <Boton variant="ghost" onClick={() => editar(row)} className="px-2.5 py-1 text-xs">
-                {t('Editar')}
-              </Boton>
+              <div className="flex justify-end gap-1.5">
+                <Boton variant="ghost" onClick={() => editar(row)} className="px-2.5 py-1 text-xs">{t('Editar')}</Boton>
+                {puedeAdminClaves && <Boton variant="ghost" onClick={() => cambiarClaveUsuario(row)} className="px-2.5 py-1 text-xs" title={t('Cambiar su contraseña')}><KeyRound size={13} /></Boton>}
+                {puedeAdminClaves && <Boton variant="ghost" onClick={() => forzarLogoutUno(row)} className="px-2.5 py-1 text-xs" title={t('Cerrar su sesión')}><LogOut size={13} /></Boton>}
+              </div>
             )
           return row[key]
         }}

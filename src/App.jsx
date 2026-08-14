@@ -1,6 +1,10 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
-import { AuthProvider } from './AuthContext'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { AuthProvider, useAuth } from './AuthContext'
+import { db } from './firebase'
+import { useInactividad } from './hooks/useInactividad'
+import { logoutAplicable } from './data/sesiones'
 import { ThemeProvider } from './ThemeContext'
 import { LangProvider } from './i18n'
 import { DataProvider } from './DataContext'
@@ -63,12 +67,30 @@ function PortalPage({ children }) {
   )
 }
 
+// Guarda de sesión (Package): cierra por inactividad (10 min) y obedece la señal
+// de cierre forzado que emite el dueño en authSignals/{companyId}.
+function SesionGuard() {
+  const { user, companyId, cerrarSesion } = useAuth()
+  useInactividad(cerrarSesion, { minutos: 10, activo: !!user })
+  const inicio = useRef(Date.now())
+  useEffect(() => {
+    if (!companyId || !user) return
+    const unsub = onSnapshot(doc(db, 'authSignals', companyId), (s) => {
+      const sig = s.exists() ? s.data() : null
+      if (logoutAplicable(sig, user.uid) > inicio.current) cerrarSesion()
+    }, () => { /* sin permiso/sin doc: ignorar */ })
+    return unsub
+  }, [companyId, user, cerrarSesion])
+  return null
+}
+
 // Package (MyPay): EXACTAMENTE el sistema actual — mismos providers y mismas rutas.
 // No cambia nada de su funcionamiento; solo se anida bajo el router de arriba.
 function PackageApp() {
   return (
     <AuthProvider>
       <DataProvider>
+            <SesionGuard />
             <Routes>
               <Route path="/portal" element={<PortalPage><DriverPortal /></PortalPage>} />
               <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { BulkAuthProvider, useBulkAuth } from './BulkAuthContext'
 import { useColeccion } from './data/useColeccion'
 import { logoutAplicable } from './data/sesiones'
+import { useInactividad } from '../hooks/useInactividad'
 import { activarPush } from './integraciones/fcm'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
@@ -58,6 +59,8 @@ function ForceLogoutWatcher() {
   const { usuario, rol, cerrarSesion } = useBulkAuth()
   const { datos: signals } = useColeccion('signals')
   const inicio = useRef(Date.now())
+  // Cierre por inactividad (10 min) — mismo criterio que Package.
+  useInactividad(cerrarSesion, { minutos: 10, activo: !!usuario })
   useEffect(() => {
     const sig = signals.find((s) => s.id === 'logout')
     if (logoutAplicable(sig, rol, usuario?.id) > inicio.current) cerrarSesion()

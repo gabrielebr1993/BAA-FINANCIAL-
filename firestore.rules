@@ -142,6 +142,15 @@ service cloud.firestore {
       allow update, delete: if isStaff(resource.data.companyId);
     }
 
+    // Señal de cierre de sesión forzado (Package): la emite el dueño/superadmin; la
+    // leen TODOS los usuarios de la empresa (incl. choferes) para cerrar su sesión.
+    // El doc id es el companyId. No se borra.
+    match /authSignals/{companyId} {
+      allow read: if signedIn() && (isSuper() || (hasProfile() && myCompany() == companyId));
+      allow create, update: if isSuper() || (hasProfile() && role() == 'owner' && myCompany() == companyId);
+      allow delete: if false;
+    }
+
     // =========================================================================
     // MÓDULO BULK — namespace `bulk_*` (independiente de Package).
     // Requiere Firebase Auth con CUSTOM CLAIMS puestas por el backend
