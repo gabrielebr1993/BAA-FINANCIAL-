@@ -117,7 +117,10 @@ export default function ChoferPortal() {
   useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
   // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
   // no respondo → pantalla superpuesta con contador de 2:00.
-  const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && o.choferId === usuario?.id) : null
+  // Oferta entrante = cualquier orden NOTIFICANDO que sea MÍA (por uid, por id del
+  // roster o por nombre) — así también aparece la pantalla de aceptar cuando me la
+  // asignaron a mano por el id del roster (antes solo salía si era por uid).
+  const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO) : null
   const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
 
   // ── Presencia: en línea / disponible ───────────────────────────────────────
@@ -726,11 +729,13 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     const podData = { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() }
     if (auto) {
       // Confianza alta + liberación automática activa: se libera sin código de supervisor.
+      // Usa la clave de hito 'liberacion' (la misma que muestra la línea de tiempo).
       await guardar('orders', orden.id, {
-        estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberada: ahora() },
+        estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberacion: ahora() },
         pod: podData, gps_entrega: g,
         liberacion: { modo: 'auto', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
       })
+      await liberar(usuario.id) // liberación automática: vuelvo a la cola de disponibles
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
     } else {
       // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.

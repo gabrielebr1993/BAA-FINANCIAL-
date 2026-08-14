@@ -6,13 +6,11 @@ import RepararAcceso from '../components/RepararAcceso'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, crearConId, where } from '../data/repo'
-import { auditar } from '../data/auditoria'
-import { asignarPagos } from '../data/ordenPagos'
+import { crearConId, where } from '../data/repo'
+import { asignarOrdenManual } from '../data/asignacionManual'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesTransportista } from '../domain/notificaciones'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { ahora } from '../domain/flujo'
 import { desgloseVisible } from '../domain/pagos'
 import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
 import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton } from '../../components/ui'
@@ -85,24 +83,21 @@ export default function TransportistaPortal() {
   }, [ordenes])
 
   // El transporte asigna (o cambia) uno de SUS choferes a una de sus órdenes.
-  // Un chofer puede ir en 1 o más órdenes.
+  // Se OFRECE la carga (el chofer la acepta) — igual que cualquier otra vía; así se
+  // maneja bien la presencia y no hay doble-booking. Si la orden ya tenía otro
+  // chofer, se libera (transferencia). El pago del chofer sale de la config del
+  // transportista y se fija de una vez.
   const asignarChofer = async (orden, driverId) => {
     const d = choferes.find((c) => c.id === driverId)
-    const avanza = [E.CREADA, E.EN_COLA, E.NOTIFICANDO].includes(orden.estado)
-    // Inc.3: identidad ÚNICA del chofer. En la orden guardamos el uid de la cuenta
-    // (si el chofer tiene una vinculada); así su app lo reconoce y puede leer su
-    // pago. Si aún no tiene cuenta, cae al id del roster.
-    const choferUid = d?.uid || driverId
-    // Si el transportista definió cómo paga a este chofer, calculamos su pago para esta carga.
+    // Si el transportista definió cómo paga a este chofer, calculamos su pago.
     const pago = calcularPagoChofer(orden.precioTransportista, configDeChofer(pagoChoferes, driverId))
-    await guardar('orders', orden.id, {
-      choferId: choferUid, choferNombre: d?.nombre || '',
-      ...(avanza ? { estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } } : {}),
-    })
-    // Inc.2: el pago del chofer va al doc de pago (no a la orden). El importe del
-    // transportista ya está guardado; aquí solo fijamos dueño + pago del chofer.
-    await asignarPagos(tenantId, orden.id, { transportistaId: orden.transportistaId || carrierId, choferId: choferUid, numero: orden.numero, ...(pago != null ? { pagoChofer: pago } : {}) })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_chofer', entidad: 'orden', entidadId: orden.id, detalle: d?.nombre })
+    await asignarOrdenManual(
+      tenantId,
+      orden,
+      { uid: d?.uid || null, id: driverId, nombre: d?.nombre || '', carrierId: orden.transportistaId || carrierId },
+      { usuario, rol },
+      { pagoChofer: pago != null ? pago : undefined },
+    )
   }
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>

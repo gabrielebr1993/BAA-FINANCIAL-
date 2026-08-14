@@ -88,6 +88,9 @@ export function useAutoAsignacion() {
     try {
       const ahora = Date.now()
       for (const o of emparejando) {
+        // Asignación MANUAL (dispatcher/transportista eligió a un chofer): no se
+        // reencola ni se roba. Espera a que ESE chofer acepte o rechace.
+        if (o.asignacionManual) continue
         const revertir = ofertaVencida(o, ahora) || !o.asignacionExpira
         if (!revertir || revirtiendo.current.has(o.id)) continue
         revirtiendo.current.add(o.id)

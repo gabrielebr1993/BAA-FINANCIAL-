@@ -4,6 +4,7 @@ import { ShieldCheck, LogOut, Grid2x2, QrCode, CheckCircle2 } from 'lucide-react
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
+import { liberar } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 import { ahora } from '../domain/flujo'
@@ -44,6 +45,9 @@ export default function SupervisorPortal() {
       liberadaPor: usuario?.nombre || usuario?.email,
       liberacion,
     })
+    // Libera la presencia del chofer para que vuelva a la cola de disponibles.
+    // Sin esto quedaba 'ocupado' para siempre y el matcher no le ofrecía nada.
+    if (orden.choferId) { try { await liberar(orden.choferId) } catch { /* noop */ } }
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id, detalle: sensible ? `confianza ${nivel} · ${motivo}` : `confianza ${nivel || 'n/d'}` })
     setMsg({ tipo: 'ok', txt: `${t('Orden')} ${orden.numero} ${t('liberada. El chofer ya puede tomar otra carga.')}` })
   }

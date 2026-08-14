@@ -13,7 +13,7 @@ import { guardar } from '../data/repo'
 import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
-import { choferesLibres, PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
+import { choferesLibres, PRESENCIA_TTL_MS, equipoCompatible } from '../domain/asignacionAuto'
 import { diagnosticarCola, choferesReales } from '../domain/diagnosticoAsignacion'
 import { alertaOrden } from '../domain/alertas'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
@@ -234,7 +234,7 @@ export default function Ordenes() {
                 const fin = desgloseVisible(o, rol)
                 const ofrecida = o.estado === E.NOTIFICANDO
                 const rest = ofrecida && o.asignacionExpira ? tsMillis(o.asignacionExpira) - now : 0
-                const compat = choferesLibres(presencias, now).some((p) => (!o.tipoEquipo || (p.equipo || '').trim().toLowerCase() === o.tipoEquipo.trim().toLowerCase()) && !(o.rechazadoPor || []).includes(p.uid))
+                const compat = choferesLibres(presencias, now).some((p) => equipoCompatible(p.equipos || p.equipo, o.tipoEquipo) && !(o.rechazadoPor || []).includes(p.uid))
                 const atr = alertaOrden(o, now)
                 return (
                   <Link key={o.id} to={`/bulk/ordenes/${o.id}`} className={`block cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ${atr ? 'border-rose-400 bg-rose-50 hover:border-rose-500 dark:border-rose-500/50 dark:bg-rose-500/10' : ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 hover:border-amber-400 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>

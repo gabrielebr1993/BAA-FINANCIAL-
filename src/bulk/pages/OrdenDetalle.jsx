@@ -11,6 +11,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
 import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
 import { asignarOrdenManual } from '../data/asignacionManual'
+import { liberar } from '../data/presencia'
 import { equipoCompatible, choferDisponible } from '../domain/asignacionAuto'
 import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
@@ -93,9 +94,11 @@ export default function OrdenDetalle() {
     if (motivo == null) return
     if (!window.confirm(t('¿Confirmas la liberación remota de esta carga? Quedará auditada.'))) return
     await guardar('orders', orden.id, {
-      estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberada: new Date().toISOString() },
+      estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberacion: new Date().toISOString() },
       liberacion: { modo: 'remoto', por: usuario?.nombre || usuario?.email, motivo: motivo.trim() || 'Sin motivo', ts: new Date().toISOString() },
     })
+    // Libera la presencia del chofer (si no, queda 'ocupado' y el matcher lo ignora).
+    if (orden.choferId) { try { await liberar(orden.choferId) } catch { /* noop */ } }
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_remota', entidad: 'orden', entidadId: orden.id, detalle: motivo.trim() })
   }
   // Subir/cambiar foto de la orden manualmente — con registro de quién.

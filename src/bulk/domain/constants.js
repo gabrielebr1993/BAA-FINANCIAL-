@@ -70,7 +70,9 @@ export const ORDEN_HITOS = [
   { key: 'llegadaDestino', label: 'Llegada a destino' },
   { key: 'entrega', label: 'Entrega' },
   { key: 'liberacion', label: 'Liberación (supervisor)' },
-  { key: 'cierre', label: 'Cierre de la orden' },
+  // 'cierre' se retiró de la línea de tiempo: no existía ninguna acción que lo
+  // marcara, así que el avance quedaba atascado en 88%. La orden LIBERADA es el
+  // fin del ciclo operativo del chofer → con la liberación el avance llega a 100%.
 ]
 
 // ---- Catálogos base (administrables; estos son solo las semillas) ---------
