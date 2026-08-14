@@ -265,7 +265,14 @@ service cloud.firestore {
 
     // Tokens de push (FCM): los lee el backend (Admin SDK, ignora reglas) para
     // enviar. En cliente solo el staff los lee; cada usuario registra el suyo.
-    match /bulk_pushTokens/{id} { allow read: if bStaff(resource.data.tenantId); allow create, update: if bSame(request.resource.data.tenantId); allow delete: if bSame(request.resource.data.tenantId); }
+    // Cada usuario registra/actualiza SOLO su propio token (data.uid == su uid);
+    // el staff puede administrarlos. Antes cualquier miembro podía pisar el de otro
+    // (el docId es el token FCM, no el uid).
+    match /bulk_pushTokens/{id} {
+      allow read: if bStaff(resource.data.tenantId);
+      allow create, update: if bSame(request.resource.data.tenantId) && (request.resource.data.uid == request.auth.uid || bStaff(request.resource.data.tenantId));
+      allow delete: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && resource.data.uid == request.auth.uid);
+    }
 
     // Presencia de choferes (en línea / disponible): la escribe cada chofer. La leen
     // el staff (para emparejar), el propio chofer, y su transportista (ver a su flota).
@@ -273,8 +280,11 @@ service cloud.firestore {
       allow read: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && (request.auth.uid == id || resource.data.uid == request.auth.uid))
         || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
-      allow create, update: if bSame(request.resource.data.tenantId);
-      allow delete: if bSame(resource.data.tenantId);
+      // El propio chofer escribe la suya; staff, transportista y supervisor la
+      // ajustan al asignar/reservar/liberar. Un chofer NO puede tocar la de otro.
+      allow create, update: if bSame(request.resource.data.tenantId)
+        && (request.auth.uid == id || bStaff(request.resource.data.tenantId) || bRole() in ['transportista', 'supervisor_planta']);
+      allow delete: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && request.auth.uid == id);
     }
 
     // Perfil del chofer (foto, datos, banco para pagos). El chofer edita el suyo
