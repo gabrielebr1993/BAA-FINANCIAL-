@@ -6,7 +6,12 @@ import { updateDoc, arrayUnion } from 'firebase/firestore'
 // Claves/utilidades puras (sin Firebase). Se re-exportan para no cambiar imports.
 export { slugChofer, convChofer, convCarrier, esConvDirecta, tsMillis, noLeidosPorConv } from './chatKeys'
 
-export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', texto, foto, ubicacion, urgente } = {}) {
+// `participantes`: identificadores (uid del chofer, id del carrier, id del cliente,
+// autor) que pueden leer este chat de orden. Si se pasa, las reglas acotan la
+// lectura a ellos + staff. En chats de oficina (sin esos ids) queda vacío y no se
+// guarda el campo (comportamiento previo: staff y el interlocutor).
+export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', texto, foto, ubicacion, urgente } = {}, participantes = []) {
+  const parts = [...new Set([autor.id, ...(participantes || [])].filter(Boolean))]
   await crear('messages', tenantId, {
     orderId,
     autorId: autor.id,
@@ -19,6 +24,9 @@ export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', 
     urgente: !!urgente,
     ts: new Date().toISOString(),
     leidoPor: [autor.id],
+    // Solo se guarda en chats de orden (con participantes reales). Los de oficina
+    // no lo llevan y siguen con la regla anterior.
+    ...(participantes && participantes.length ? { participantes: parts } : {}),
   })
 }
 

@@ -35,7 +35,10 @@ export default function ChatOrden({ orden, alto = 340, fill = false }) {
     if (!t && !extra.foto && !extra.ubicacion) return
     setEnviando(true)
     try {
-      await enviarMensaje(tenantId, orden.id, usuario, { texto: t, urgente, ...extra })
+      // En chats de ORDEN, marcamos quién puede leerlo (chofer/carrier/cliente).
+      // En chats de oficina estos ids no existen → participantes vacío (sin campo).
+      const participantes = [orden.choferId, orden.transportistaId, orden.clienteId].filter(Boolean)
+      await enviarMensaje(tenantId, orden.id, usuario, { texto: t, urgente, ...extra }, participantes)
       setTexto(''); setUrgente(false)
     } finally { setEnviando(false) }
   }

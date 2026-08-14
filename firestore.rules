@@ -264,7 +264,22 @@ service cloud.firestore {
     }
 
     // Mensajes de orden y GPS: cualquier miembro autenticado del tenant.
-    match /bulk_messages/{id}    { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update: if bSame(resource.data.tenantId); allow delete: if bAdmin(resource.data.tenantId); }
+    // Mensajes de orden y oficina. Los chats de ORDEN llevan `participantes` (uid del
+    // chofer, id del carrier, id del cliente, autor): solo ellos + staff los leen. Los
+    // de oficina (sin ese campo) siguen legibles por cualquier miembro del tenant (el
+    // staff y el interlocutor; el cliente no descarga chats ajenos por consulta).
+    match /bulk_messages/{id} {
+      allow read: if bSame(resource.data.tenantId) && (
+           bStaff(resource.data.tenantId)
+        || !('participantes' in resource.data)
+        || request.auth.uid in resource.data.participantes
+        || (bCarrier() != null && bCarrier() in resource.data.participantes)
+        || (bCliente() != null && bCliente() in resource.data.participantes)
+      );
+      allow create: if bSame(request.resource.data.tenantId);
+      allow update: if bSame(resource.data.tenantId);
+      allow delete: if bAdmin(resource.data.tenantId);
+    }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.
