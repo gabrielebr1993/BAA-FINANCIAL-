@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, LogOut, Grid2x2, QrCode, CheckCircle2 } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { guardar } from '../data/repo'
+import { guardar, where } from '../data/repo'
 import { liberar } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E } from '../domain/constants'
@@ -16,7 +16,10 @@ export default function SupervisorPortal() {
   const { t } = useLang()
   const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   const navigate = useNavigate()
-  const { datos: ordenes } = useColeccion('orders')
+  // El supervisor solo ve las órdenes de SU planta (la asigna el admin). Sin planta
+  // asignada no ve ninguna (antes veía las de todas las plantas del tenant).
+  const plantaId = usuario?.plantaId || null
+  const { datos: ordenes } = useColeccion('orders', [where('plantaId', '==', plantaId || '__none__')])
   const [codigo, setCodigo] = useState('')
   const [msg, setMsg] = useState(null)
 
@@ -72,6 +75,7 @@ export default function SupervisorPortal() {
 
       <main className="flex-1 overflow-y-auto p-3">
         {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
+        {!plantaId && <Aviso tipo="warn" className="mb-3">{t('Aún no tienes una planta asignada. Pídele al administrador que te asigne una en Usuarios y roles para ver las cargas de tu planta.')}</Aviso>}
         <div className="mb-4 rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full bg-amber-500/10 text-amber-500"><QrCode size={30} /></div>
           <div className="text-base font-black text-brand-navy dark:text-slate-100">{t('Liberar una carga')}</div>

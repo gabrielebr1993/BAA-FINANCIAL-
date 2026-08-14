@@ -21,6 +21,16 @@ export default function BulkUsuarios() {
   const { datos: usuarios, cargando } = useColeccion('users')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: plantas } = useColeccion('plants')
+
+  // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
+  // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.
+  const asignarPlanta = async (u, plantaId) => {
+    try {
+      await guardar('users', u.id, { plantaId: plantaId || null })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_planta', entidad: 'usuario', detalle: `${u.email} → ${plantas.find((p) => p.id === plantaId)?.nombre || 'sin planta'}` })
+    } catch { setMsg({ tipo: 'error', txt: t('No se pudo asignar la planta. Puede que falte desplegar las reglas nuevas.') }) }
+  }
   const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
   const [msg, setMsg] = useState(null)
   const [buscar, setBuscar] = useState('')
@@ -186,13 +196,22 @@ export default function BulkUsuarios() {
 
       <Card className="p-4">
         <Tabla
-          columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
+          columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'planta', label: t('Planta') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
           rows={usuarios
             .filter((u) => { const s = buscar.trim().toLowerCase(); return !s || (u.nombre || '').toLowerCase().includes(s) || (u.email || '').toLowerCase().includes(s) || (t(BULK_ROLES_LABEL[u.rol]) || u.rol || '').toLowerCase().includes(s) })
             .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => ({ ...u, _key: u.id }))}
           emptyText={t('Sin usuarios.')}
           renderCell={(row, key) => {
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{t(BULK_ROLES_LABEL[row.rol]) || row.rol}</Badge>
+            if (key === 'planta') {
+              if (row.rol !== BULK_ROLES.SUPERVISOR_PLANTA) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+              return (
+                <Select value={row.plantaId || ''} onChange={(e) => asignarPlanta(row, e.target.value)} className="py-1 text-xs">
+                  <option value="">{t('Sin planta')}</option>
+                  {plantas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </Select>
+              )
+            }
             if (key === 'estado') return <button onClick={() => toggle(row)}><Badge color={row.activo === false ? 'slate' : 'green'}>{row.activo === false ? t('Inactivo') : t('Activo')}</Badge></button>
             if (key === 'acciones') return (
               <div className="flex justify-end gap-1.5">

@@ -38,6 +38,7 @@ export function BulkAuthProvider({ children }) {
           tenantId: c.bulkTenant || null,
           clienteId: c.bulkClienteId || null,
           carrierId: c.bulkCarrierId || null,
+          plantaId: c.bulkPlantaId || null,
         })
         setCargando(false)
         // Enriquecer con el perfil (no bloqueante).
@@ -52,6 +53,9 @@ export function BulkAuthProvider({ children }) {
             tenantId: u.tenantId || p.tenantId || null,
             clienteId: u.clienteId || p.clienteId || null,
             carrierId: u.carrierId || p.carrierId || null,
+            // El supervisor de planta se acota a su planta (la asigna el admin en su
+            // doc de usuario). El claim manda; si no está, cae al perfil.
+            plantaId: u.plantaId || p.plantaId || null,
           } : u))
         }).catch(() => { /* reglas / offline: seguimos con los claims */ })
       } catch { setUsuario(null); setCargando(false) }

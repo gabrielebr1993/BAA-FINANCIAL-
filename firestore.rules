@@ -158,11 +158,17 @@ service cloud.firestore {
     function bAdmin(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin']); }
     function bCliente() { return request.auth != null ? request.auth.token.bulkClienteId : null; }
     function bCarrier() { return request.auth != null ? request.auth.token.bulkCarrierId : null; }
+    // Planta asignada al supervisor (en su doc de usuario). Para acotar sus lecturas.
+    function bMyPlanta() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.plantaId : null; }
 
     // Perfiles Bulk: lee el propio o admin del tenant. Alta/edición: backend (Admin SDK).
     match /bulk_users/{id} {
       allow read: if bSame(resource.data.tenantId) && (request.auth.uid == id || bAdmin(resource.data.tenantId));
-      allow write: if false;
+      // Alta/edición general: backend (Admin SDK). Excepción: el admin del tenant
+      // puede asignar SOLO la planta de un supervisor (campo plantaId), sin tocar
+      // rol, tenant ni credenciales.
+      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId']);
+      allow create, delete: if false;
     }
 
     // Catálogos y entidades gestionadas por staff del tenant.
@@ -199,7 +205,7 @@ service cloud.firestore {
              (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier()))
           || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
-          || (bRole() == 'supervisor_planta')));
+          || (bRole() == 'supervisor_planta' && bMyPlanta() != null && resource.data.plantaId == bMyPlanta())));
       allow create: if bStaff(request.resource.data.tenantId);
       // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
       // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo:
@@ -215,6 +221,7 @@ service cloud.firestore {
           || (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier())
                 && request.resource.data.pagoChofer == resource.data.pagoChofer)
           || (bRole() == 'supervisor_planta'
+                && resource.data.plantaId == bMyPlanta()
                 && request.resource.data.pagoChofer == resource.data.pagoChofer)));
       allow delete: if bAdmin(resource.data.tenantId);
     }
