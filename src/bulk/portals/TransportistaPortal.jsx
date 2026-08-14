@@ -6,7 +6,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { crearConId, where } from '../data/repo'
+import { crearConId, where, documentId } from '../data/repo'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesTransportista } from '../domain/notificaciones'
@@ -39,8 +39,9 @@ export default function TransportistaPortal() {
       pagoChofer: md[o.id] != null ? md[o.id] : o.pagoChofer,
     }))
   }, [_ordenesRaw, pagosCarrier, pagosChofer])
-  const { datos: carriers } = useColeccion('carriers')
-  const { datos: configs } = useColeccion('carrierConfig')
+  // Solo MI transportista y MI config (no los de la competencia).
+  const { datos: carriers } = useColeccion('carriers', [where(documentId(), '==', carrierId)])
+  const { datos: configs } = useColeccion('carrierConfig', [where(documentId(), '==', carrierId)])
   // Solo la conversación con la OFICINA (no todos los mensajes del tenant). Los
   // chats de cada orden se abren acotados por orderId (ChatOrden).
   const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])

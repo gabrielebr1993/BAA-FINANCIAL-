@@ -10,7 +10,7 @@
 // ============================================================================
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, runTransaction,
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, runTransaction, documentId,
 } from 'firebase/firestore'
 import { dbBulk as db } from '../firebaseBulk'
 
@@ -92,4 +92,4 @@ export async function siguienteSecuencia(tenantId, clave) {
   })
 }
 
-export { serverTimestamp, where, orderBy }
+export { serverTimestamp, where, orderBy, documentId }
