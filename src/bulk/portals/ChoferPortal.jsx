@@ -59,7 +59,10 @@ export default function ChoferPortal() {
   }, [_ordenesRaw, pagosChofer])
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
-  const { datos: mensajes } = useColeccion('messages')
+  // Solo la conversación con la OFICINA (no todos los mensajes del tenant). El chat
+  // de la orden activa se suscribe aparte (abajo). Así el chofer no descarga chats
+  // ajenos.
+  const { datos: mensajesOficina } = useColeccion('messages', [where('orderId', '==', convChofer(usuario?.nombre) || '__none__')])
   const { datos: presencias } = useColeccion('presence', [where('uid', '==', usuario?.id || '__none__')])
   const { datos: driverProfiles } = useColeccion('driverProfiles', [where('uid', '==', usuario?.id || '__none__')])
   const { datos: signals } = useColeccion('signals')
@@ -67,8 +70,7 @@ export default function ChoferPortal() {
   const [tab, setTab] = useState('ordenes')
 
   const miConv = convChofer(usuario?.nombre)
-  const noLeidos = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
-  const noLeidosOficina = noLeidos[miConv] || 0
+  const noLeidosOficina = useMemo(() => noLeidosPorConv(mensajesOficina, usuario?.id)[miConv] || 0, [mensajesOficina, usuario, miConv])
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
@@ -122,6 +124,9 @@ export default function ChoferPortal() {
   // asignaron a mano por el id del roster (antes solo salía si era por uid).
   const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO) : null
   const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
+  // Chat de MI orden activa (acotado por orderId) — para el contador de no leídos.
+  const { datos: mensajesActiva } = useColeccion('messages', [where('orderId', '==', activa?.id || '__none__')])
+  const noLeidosChatActiva = useMemo(() => (activa ? (noLeidosPorConv(mensajesActiva, usuario?.id)[activa.id] || 0) : 0), [mensajesActiva, activa, usuario])
 
   // ── Presencia: en línea / disponible ───────────────────────────────────────
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
@@ -197,7 +202,7 @@ export default function ChoferPortal() {
                 <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
               </Aviso>
             )}
-            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} liberacionAuto={liberacionAuto} noLeidosChat={noLeidos[activa.id] || 0} />
+            {activa ? <OrdenActiva orden={activa} tenantId={tenantId} usuario={usuario} rol={rol} geocercas={geocercas} plantas={plantas} pos={pos} liberacionAuto={liberacionAuto} noLeidosChat={noLeidosChatActiva} />
               : carrierId ? (
                 <div className="mx-auto max-w-sm pt-4">
                   {enLinea ? (

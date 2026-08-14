@@ -41,7 +41,9 @@ export default function TransportistaPortal() {
   }, [_ordenesRaw, pagosCarrier, pagosChofer])
   const { datos: carriers } = useColeccion('carriers')
   const { datos: configs } = useColeccion('carrierConfig')
-  const { datos: mensajes } = useColeccion('messages')
+  // Solo la conversación con la OFICINA (no todos los mensajes del tenant). Los
+  // chats de cada orden se abren acotados por orderId (ChatOrden).
+  const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])
   const [tab, setTab] = useState('ordenes')
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
   const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
