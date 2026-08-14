@@ -59,8 +59,10 @@ function ForceLogoutWatcher() {
   const { usuario, rol, cerrarSesion } = useBulkAuth()
   const { datos: signals } = useColeccion('signals')
   const inicio = useRef(Date.now())
-  // Cierre por inactividad (10 min) — mismo criterio que Package.
-  useInactividad(cerrarSesion, { minutos: 10, activo: !!usuario })
+  // Cierre por inactividad (10 min) — EXCEPTO el chofer: si está en línea esperando
+  // cargas con el teléfono quieto, no queremos sacarlo (saldría de la cola). El
+  // cierre forzado por el admin (abajo) sí le aplica igual.
+  useInactividad(cerrarSesion, { minutos: 10, activo: !!usuario && rol !== 'chofer' })
   useEffect(() => {
     const sig = signals.find((s) => s.id === 'logout')
     if (logoutAplicable(sig, rol, usuario?.id) > inicio.current) cerrarSesion()
