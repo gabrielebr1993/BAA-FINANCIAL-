@@ -7,19 +7,16 @@ import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLogin() {
   const { t } = useLang()
-  const { iniciarSesion, crearSuperAdmin } = useBulkAuth()
-  const [modo, setModo] = useState('login')
-  const [form, setForm] = useState({ email: '', password: '', nombre: '', empresa: '' })
+  const { iniciarSesion } = useBulkAuth()
+  const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
-  const setup = modo === 'setup'
 
   const enviar = async (e) => {
     e.preventDefault(); setError(''); setOcupado(true)
     try {
-      if (setup) await crearSuperAdmin(form)
-      else await iniciarSesion(form.email, form.password)
+      await iniciarSesion(form.email, form.password)
     } catch (err) { setError(err.message) } finally { setOcupado(false) }
   }
 
@@ -92,14 +89,12 @@ export default function BulkLogin() {
             <span className="fr-pin" style={{ left: '92%' }} aria-hidden="true" />
             <div className="fr-truck" aria-hidden="true"><Truck size={19} strokeWidth={2} /></div>
           </div>
-          <h1 className="m-0 text-2xl font-extrabold text-white">{setup ? t('Crear administrador') : t('Bienvenido de vuelta')}</h1>
-          <p className="mb-6 mt-1 text-sm text-slate-400">{setup ? t('Configura el primer super administrador.') : t('Inicia sesión para continuar.')}</p>
+          <h1 className="m-0 text-2xl font-extrabold text-white">{t('Bienvenido de vuelta')}</h1>
+          <p className="mb-6 mt-1 text-sm text-slate-400">{t('Inicia sesión para continuar.')}</p>
 
           {error && <Aviso tipo="error" className="mb-3">{t(error)}</Aviso>}
 
           <form onSubmit={enviar} className="space-y-3">
-            {setup && <Input placeholder={t('Tu nombre')} value={form.nombre} onChange={set('nombre')} required />}
-            {setup && <Input placeholder={t('Nombre de la empresa')} value={form.empresa} onChange={set('empresa')} />}
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Correo')}</label>
               <Input type="email" placeholder={t('tucorreo@empresa.com')} value={form.email} onChange={set('email')} required />
@@ -109,13 +104,9 @@ export default function BulkLogin() {
               <Input type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required />
             </div>
             <Boton type="submit" variant="gold" disabled={ocupado} className="w-full justify-center py-2.5 text-base">
-              {ocupado ? <><Spinner /> {t('Procesando…')}</> : setup ? t('Crear super administrador') : t('Iniciar sesión')}
+              {ocupado ? <><Spinner /> {t('Procesando…')}</> : t('Iniciar sesión')}
             </Boton>
           </form>
-
-          {setup
-            ? <button onClick={() => setModo('login')} className="mt-4 w-full text-center text-sm text-slate-400 hover:text-slate-200">← {t('Volver a iniciar sesión')}</button>
-            : <button onClick={() => setModo('setup')} className="mt-4 w-full text-center text-xs text-slate-500 hover:text-slate-300">{t('¿Primer arranque? Crear administrador')}</button>}
         </div>
       </div>
     </div>
