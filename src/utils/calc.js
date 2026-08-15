@@ -454,14 +454,25 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
   const K = (nombre, ciu) => `${nombre}||${ciu}`
 
   // Claims válidos agrupados por (chofer, ciudad). Perdón = flag manual O método M3.
+  // ANTI DOBLE-COBRO: un mismo tracking (waybill) NO se le cobra dos veces al mismo
+  // chofer aunque aparezca en varias ciudades/facturas de la semana. Se cobra en la
+  // PRIMERA ocurrencia; las demás se tratan como perdón (no suman al descuento). El
+  // descuento real de Gofo (descGofoPorCh) SÍ cuenta cada uno (es tu pérdida real).
   const activosDet = {}, totalPorCh = {}, descGofoPorCh = {}
+  const trackCobrado = new Set() // `${chofer}||${waybill}` ya cobrado a este chofer
+  const claveTrack = (c) => `${(c.courier || '').trim().toLowerCase()}||${(c.waybill || '').trim().toUpperCase()}`
   for (const c of claimsValidos(claims)) {
     const ciu = ciudadDeClaim(c)
     const key = K(c.courier, ciu)
     totalPorCh[key] = (totalPorCh[key] || 0) + 1
     descGofoPorCh[key] = (descGofoPorCh[key] || 0) + Math.abs(Number(c.montoGofo) || 0)
-    const perdon = c.perdonado || metodoDe(inv, ciu, c) === 'M3'
-    if (!perdon) (activosDet[key] = activosDet[key] || []).push(c)
+    const wb = (c.waybill || '').trim()
+    const duplicadoTracking = wb && trackCobrado.has(claveTrack(c))
+    const perdon = c.perdonado || metodoDe(inv, ciu, c) === 'M3' || duplicadoTracking
+    if (!perdon) {
+      (activosDet[key] = activosDet[key] || []).push(c)
+      if (wb) trackCobrado.add(claveTrack(c))
+    }
   }
 
   const filas = choferes.map((ch) => {

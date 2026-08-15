@@ -84,7 +84,16 @@ export default function Claims() {
   const activos = totalClaims - perdonados
   // Descuento a choferes = suma de la multa de cada claim activo, según su tipo/modo
   // (general, reducida para tracking interruption/lost, o "real" = lo de Gofo).
-  const descuentoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => a + feeDeClaim(selectedInvoice, c.ciudad, c), 0)
+  // ANTI DOBLE-COBRO: un mismo tracking se cobra UNA vez por chofer aunque esté en
+  // varias ciudades (igual que en el pago real).
+  const _trackVisto = new Set()
+  const descuentoChoferes = validos.filter((c) => !c.perdonado).reduce((a, c) => {
+    const wb = (c.waybill || '').trim()
+    const k = `${(c.courier || '').trim().toLowerCase()}||${wb.toUpperCase()}`
+    if (wb && _trackVisto.has(k)) return a // duplicado de otra ciudad → no se recobra
+    if (wb) _trackVisto.add(k)
+    return a + feeDeClaim(selectedInvoice, c.ciudad, c)
+  }, 0)
   const descuentoGofo = base.reduce((a, c) => a + (c.montoGofo || 0), 0)
 
   // ---- multiselección (respeta los filtros activos) ----
