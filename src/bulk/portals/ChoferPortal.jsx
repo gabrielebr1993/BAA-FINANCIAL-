@@ -8,7 +8,7 @@ import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import { convChofer, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
-import { useColeccion } from '../data/useColeccion'
+import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, crearConId, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
@@ -64,7 +64,10 @@ export default function ChoferPortal() {
   // ajenos.
   const { datos: mensajesOficina } = useColeccion('messages', [where('orderId', '==', convChofer(usuario?.nombre) || '__none__')])
   const { datos: presencias } = useColeccion('presence', [where('uid', '==', usuario?.id || '__none__')])
-  const { datos: driverProfiles } = useColeccion('driverProfiles', [where('uid', '==', usuario?.id || '__none__')])
+  // Mi perfil: se lee por ID de documento (= mi uid), NO como consulta de colección.
+  // Una consulta `where('uid','==',uid)` la BLOQUEA la regla (que se basa en el id del
+  // doc), y por eso la foto/banco salían en blanco en la app aunque estaban guardados.
+  const { dato: miPerfilDoc } = useDoc('driverProfiles', usuario?.id)
   const { datos: signals } = useColeccion('signals')
   const liberacionAuto = (signals || []).some((s) => s.id === 'liberacion' && s.auto === true)
   const [tab, setTab] = useState('ordenes')
@@ -152,7 +155,7 @@ export default function ChoferPortal() {
   const miPresencia = (presencias || []).find((p) => p.uid === usuario?.id)
   const enLinea = miPresencia?.enLinea === true
   // Perfil propio del chofer (foto, datos, banco) — editable por él mismo.
-  const miPerfil = (driverProfiles || []).find((p) => p.uid === usuario?.id) || null
+  const miPerfil = miPerfilDoc || null
   // Los EQUIPOS los asigna el administrador (roster); el chofer solo los ve.
   const miEquipos = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : [])
   const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipos: miEquipos, jobs: miChofer?.jobs || [] })
@@ -174,7 +177,7 @@ export default function ChoferPortal() {
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {
     if (entrante && entrante.id !== prevEntrante.current) {
-      if (sonidoActivo()) beep()
+      if (sonidoActivo()) tonoOrden()
       notificar(t('Nueva orden asignada'), t('Tienes una orden nueva por aceptar.'))
     }
     prevEntrante.current = entrante?.id || null

@@ -325,7 +325,8 @@ service cloud.firestore {
     // (docId = su uid); el staff lo lee (para pagarle). Datos bancarios visibles
     // solo para el dueño del perfil y el staff.
     match /bulk_driverProfiles/{id} {
-      allow read: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && request.auth.uid == id);
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (request.auth.uid == id || resource.data.uid == request.auth.uid));
       allow create, update: if bSame(request.resource.data.tenantId) && (request.auth.uid == id || bStaff(request.resource.data.tenantId));
       allow delete: if bStaff(resource.data.tenantId);
     }

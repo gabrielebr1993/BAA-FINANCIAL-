@@ -47,6 +47,13 @@ export async function obtener(nombre, id) {
   return s.exists() ? { id: s.id, ...s.data() } : null
 }
 
+// Suscripción en tiempo real a UN documento por id. A diferencia de una consulta de
+// colección, un `get` por id cumple reglas del tipo `request.auth.uid == id` sin
+// necesitar que la consulta lo garantice (evita el bloqueo de listas por reglas).
+export function suscribirDoc(nombre, id, cb) {
+  return onSnapshot(ref(nombre, id), (snap) => cb(snap.exists() ? { id: snap.id, ...snap.data() } : null), () => cb(null))
+}
+
 export async function crear(nombre, tenantId, datos) {
   const payload = { ...datos, tenantId, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp() }
   const r = await addDoc(col(nombre), payload)

@@ -1,7 +1,22 @@
 // Hook: suscribe una colección `bulk_<nombre>` del tenant actual en tiempo real.
 import { useEffect, useState } from 'react'
-import { suscribir } from './repo'
+import { suscribir, suscribirDoc } from './repo'
 import { useBulkAuth } from '../BulkAuthContext'
+
+// Suscribe UN documento por id (get en vivo). Útil cuando la regla se basa en el id
+// del documento (p. ej. el propio perfil del chofer): una consulta de lista por un
+// campo la bloquearía, pero un get por id sí pasa.
+export function useDoc(nombre, id) {
+  const [dato, setDato] = useState(null)
+  const [cargando, setCargando] = useState(true)
+  useEffect(() => {
+    if (!id) { setDato(null); setCargando(false); return }
+    setCargando(true)
+    const off = suscribirDoc(nombre, id, (d) => { setDato(d); setCargando(false) })
+    return off
+  }, [nombre, id])
+  return { dato, cargando }
+}
 
 export function useColeccion(nombre, filtros = [], opts = {}) {
   const { tenantId } = useBulkAuth()

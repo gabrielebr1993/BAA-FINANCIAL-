@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban, AlertTriangle } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
@@ -32,19 +32,31 @@ const horaCorta = (v) => { const ms = tsMillis(v); return ms ? new Date(ms).toLo
 const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
 // Tarjeta-pill con número grande y etiqueta (indicadores de la parte superior).
-function StatPill({ label, val, color, icon: Icon }) {
-  const c = {
-    amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400',
-    gold: 'text-brand-gold', blue: 'text-sky-600 dark:text-sky-400', navy: 'text-brand-navy dark:text-slate-100',
-  }[color]
+// Tarjeta indicador: número grande + etiqueta, CLICABLE (lleva a su sección/página).
+// `activo` la resalta (p. ej. el filtro de canceladas encendido).
+const STAT_THEME = {
+  amber: { txt: 'text-amber-600 dark:text-amber-400', ring: 'hover:border-amber-400 dark:hover:border-amber-500/60', bar: 'bg-amber-500', soft: 'bg-amber-500/10' },
+  emerald: { txt: 'text-emerald-600 dark:text-emerald-400', ring: 'hover:border-emerald-400 dark:hover:border-emerald-500/60', bar: 'bg-emerald-500', soft: 'bg-emerald-500/10' },
+  gold: { txt: 'text-brand-gold', ring: 'hover:border-amber-400 dark:hover:border-amber-500/60', bar: 'bg-brand-gold', soft: 'bg-amber-400/10' },
+  blue: { txt: 'text-sky-600 dark:text-sky-400', ring: 'hover:border-sky-400 dark:hover:border-sky-500/60', bar: 'bg-sky-500', soft: 'bg-sky-500/10' },
+  navy: { txt: 'text-brand-navy dark:text-slate-100', ring: 'hover:border-slate-400 dark:hover:border-slate-500', bar: 'bg-brand-navy dark:bg-slate-300', soft: 'bg-slate-500/10' },
+  rose: { txt: 'text-rose-500', ring: 'hover:border-rose-400 dark:hover:border-rose-500/60', bar: 'bg-rose-500', soft: 'bg-rose-500/10' },
+}
+function StatCard({ label, val, color, icon: Icon, onClick, activo, pulse }) {
+  const c = STAT_THEME[color] || STAT_THEME.navy
   return (
-    <div className="flex min-w-[7rem] flex-1 items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 dark:border-slate-700/60 dark:bg-slate-900">
-      <Icon size={20} className={c} strokeWidth={1.9} />
-      <div className="min-w-0">
-        <div className={`text-2xl font-black tabular-nums leading-none ${c}`}>{val}</div>
-        <div className="mt-0.5 truncate text-[11px] font-medium text-slate-400">{label}</div>
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex min-w-[7.5rem] flex-1 items-center gap-3 overflow-hidden rounded-2xl border bg-white px-3.5 py-3 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 dark:bg-slate-900 ${activo ? 'border-current ' + c.txt : 'border-slate-200 dark:border-slate-700/60'} ${c.ring}`}
+    >
+      <span className={`absolute inset-y-0 left-0 w-1 ${c.bar} ${activo ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100'}`} />
+      <span className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${c.soft} ${c.txt} ${pulse && val > 0 ? 'animate-pulse' : ''}`}><Icon size={19} strokeWidth={2} /></span>
+      <span className="min-w-0">
+        <span className={`block text-2xl font-black tabular-nums leading-none ${c.txt}`}>{val}</span>
+        <span className="mt-0.5 block truncate text-[11px] font-semibold text-slate-400">{label}</span>
+      </span>
+    </button>
   )
 }
 
@@ -67,7 +79,18 @@ export default function Ordenes() {
   const [chatOrden, setChatOrden] = useState(null)
   const [cancelar, setCancelar] = useState(null) // orden a cancelar (modal)
   const [verCanceladas, setVerCanceladas] = useState(false)
+  const [verEntregadas, setVerEntregadas] = useState(false)
   const [buscar, setBuscar] = useState('')
+  const navigate = useNavigate()
+  // Refs para que las tarjetas indicador lleven a su sección (scroll + destello).
+  const colaRef = useRef(null)
+  const procesoRef = useRef(null)
+  const entregadasRef = useRef(null)
+  const [destello, setDestello] = useState(null) // 'cola' | 'proceso' | 'entregadas'
+  const irA = (ref, clave) => {
+    if (ref?.current) ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setDestello(clave); setTimeout(() => setDestello((d) => (d === clave ? null : d)), 1600)
+  }
   const [toasts, setToasts] = useState([]) // notificaciones estilo sistema (abajo-derecha)
 
   // Reloj de 1s: refresca frescura de presencia, contadores 2:00 y dispara timeouts.
@@ -162,17 +185,14 @@ export default function Ordenes() {
         </div>
       )}
 
-      {/* Indicadores */}
+      {/* Indicadores — cada tarjeta lleva a su sección o página */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <StatPill label={t('Órdenes en cola')} val={porAsignar.length} color="amber" icon={Radio} />
-        <StatPill label={t('Choferes en línea')} val={libresN} color="emerald" icon={Wifi} />
-        <StatPill label={t('Emparejando')} val={emparejando.length} color="gold" icon={RefreshCw} />
-        <StatPill label={t('En proceso')} val={enProceso.length} color="blue" icon={Truck} />
-        <StatPill label={t('Entregadas')} val={entregadas.length} color="navy" icon={CheckCircle2} />
-        <button type="button" onClick={() => setVerCanceladas((v) => !v)} className={`flex min-w-[7rem] flex-1 items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-left transition ${verCanceladas ? 'border-rose-400 bg-rose-50 dark:border-rose-500/50 dark:bg-rose-500/10' : 'border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-900'}`}>
-          <Ban size={20} className="text-rose-500" strokeWidth={1.9} />
-          <div className="min-w-0"><div className="text-2xl font-black tabular-nums leading-none text-rose-500">{canceladas.length}</div><div className="mt-0.5 truncate text-[11px] font-medium text-slate-400">{t('Canceladas')}</div></div>
-        </button>
+        <StatCard label={t('Órdenes en cola')} val={porAsignar.length} color="amber" icon={Radio} pulse onClick={() => irA(colaRef, 'cola')} />
+        <StatCard label={t('Choferes en línea')} val={libresN} color="emerald" icon={Wifi} onClick={() => navigate('/bulk/mapa')} />
+        <StatCard label={t('Emparejando')} val={emparejando.length} color="gold" icon={RefreshCw} pulse onClick={() => irA(colaRef, 'cola')} />
+        <StatCard label={t('En proceso')} val={enProceso.length} color="blue" icon={Truck} onClick={() => (enProceso.length ? irA(procesoRef, 'proceso') : navigate('/bulk/mapa'))} />
+        <StatCard label={t('Entregadas')} val={entregadas.length} color="navy" icon={CheckCircle2} activo={verEntregadas} onClick={() => { setVerEntregadas((v) => { const nv = !v; if (nv) setTimeout(() => irA(entregadasRef, 'entregadas'), 60); return nv }) }} />
+        <StatCard label={t('Canceladas')} val={canceladas.length} color="rose" icon={Ban} activo={verCanceladas} onClick={() => setVerCanceladas((v) => !v)} />
         <div className="relative ml-auto self-center">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar orden o chofer…')} className="w-56 pl-8" />
@@ -226,7 +246,7 @@ export default function Ordenes() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div ref={colaRef} className={`grid gap-4 rounded-3xl lg:grid-cols-2 ${destello === 'cola' ? 'ring-2 ring-amber-400 ring-offset-4 ring-offset-[#f2f3f7] transition dark:ring-offset-slate-950' : ''}`}>
         {/* IZQUIERDA · Órdenes por asignar */}
         <Card className="p-4">
           <div className="mb-3 flex items-center gap-2"><Radio size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Órdenes por asignar')} ({izquierda.length})</h3></div>
@@ -312,7 +332,8 @@ export default function Ordenes() {
 
       {/* En proceso (observación) */}
       {enProceso.length > 0 && (
-        <Card className="mt-4 p-4">
+        <div ref={procesoRef} className={`mt-4 rounded-2xl ${destello === 'proceso' ? 'ring-2 ring-sky-400 ring-offset-4 ring-offset-[#f2f3f7] dark:ring-offset-slate-950' : ''}`}>
+        <Card className="p-4">
           <div className="mb-3 flex items-center gap-2"><Truck size={17} className="text-sky-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('En proceso')} ({enProceso.length})</h3></div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {enProceso.filter(coincideO).map((o) => (
@@ -334,6 +355,29 @@ export default function Ordenes() {
             ))}
           </div>
         </Card>
+        </div>
+      )}
+
+      {/* Entregadas (toggle desde el indicador) */}
+      {verEntregadas && (
+        <div ref={entregadasRef} className={`mt-4 rounded-2xl ${destello === 'entregadas' ? 'ring-2 ring-slate-400 ring-offset-4 ring-offset-[#f2f3f7] dark:ring-offset-slate-950' : ''}`}>
+        <Card className="p-4">
+          <div className="mb-3 flex items-center gap-2"><CheckCircle2 size={17} className="text-emerald-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Entregadas')} ({entregadas.length})</h3></div>
+          {entregadas.length === 0 ? <p className="py-4 text-center text-sm text-slate-400">{t('Aún no hay órdenes entregadas.')}</p> : (
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {entregadas.filter(coincideO).map((o) => (
+                <Link key={o.id} to={`/bulk/ordenes/${o.id}`} className="block rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 transition hover:shadow-sm dark:border-emerald-500/20 dark:bg-emerald-500/5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Badge color="green">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12} className="text-emerald-500" /> {o.choferNombre || nombreCarrier(o.transportistaId)} · {t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+        </div>
       )}
 
       {/* Historial de canceladas (toggle desde el indicador) */}

@@ -26,23 +26,49 @@ export function beep(veces = 2) {
   } catch { /* noop */ }
 }
 
-// Sirena URGENTE y FUERTE para una orden entrante (~1.4 s): alterna dos tonos altos
-// con onda cuadrada (penetrante) y volumen alto — difícil de ignorar. Suena de una.
+// Un "ding" brillante tipo campana (dos osciladores afinados) en un instante dado.
+function campana(c, t, f, vol = 0.55, dur = 0.5) {
+  ;[f, f * 2.01].forEach((freq, k) => {
+    const o = c.createOscillator(); const g = c.createGain()
+    o.connect(g); g.connect(c.destination); o.type = k === 0 ? 'triangle' : 'sine'; o.frequency.value = freq
+    const v = k === 0 ? vol : vol * 0.4
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(v, t + 0.008)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+    o.start(t); o.stop(t + dur + 0.02)
+  })
+}
+
+// Sirena que SUBE de tono (glissando) para máxima atención, en un instante dado.
+function sirena(c, t, f0, f1, dur = 0.5, vol = 0.5) {
+  const o = c.createOscillator(); const g = c.createGain()
+  o.connect(g); g.connect(c.destination); o.type = 'sawtooth'
+  o.frequency.setValueAtTime(f0, t)
+  o.frequency.linearRampToValueAtTime(f1, t + dur)
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.02)
+  g.gain.setValueAtTime(vol, t + dur - 0.06)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  o.start(t); o.stop(t + dur + 0.02)
+}
+
+// Alerta URGENTE y LLAMATIVA para una orden entrante (~1.4 s): arpegio de campana
+// ascendente + doble barrido de sirena, con volumen alto y vibración fuerte. Es un
+// sonido distintivo (estilo "cha-ching" + alarma) difícil de ignorar.
 export function tonoOrden() {
   try {
     const c = ac()
-    const notas = [1046, 1318, 1046, 1318, 1046, 1318, 1046]
-    notas.forEach((f, i) => {
-      const t = c.currentTime + i * 0.2
-      const o = c.createOscillator(); const g = c.createGain()
-      o.connect(g); g.connect(c.destination); o.type = 'square'; o.frequency.value = f
-      g.gain.setValueAtTime(0.0001, t)
-      g.gain.exponentialRampToValueAtTime(0.6, t + 0.012)
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.17)
-      o.start(t); o.stop(t + 0.18)
-    })
-    // Pequeña vibración en móviles compatibles (refuerza el aviso).
-    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]) } catch { /* noop */ }
+    const t0 = c.currentTime
+    // Arpegio brillante ascendente (do-mi-sol-do) — el "gancho" que llama la atención.
+    campana(c, t0 + 0.00, 784, 0.5, 0.35)   // G5
+    campana(c, t0 + 0.12, 988, 0.5, 0.35)   // B5
+    campana(c, t0 + 0.24, 1175, 0.55, 0.4)  // D6
+    campana(c, t0 + 0.38, 1568, 0.6, 0.6)   // G6 (remate más largo)
+    // Dos barridos de sirena que suben — refuerzan la urgencia.
+    sirena(c, t0 + 0.62, 700, 1500, 0.42, 0.42)
+    sirena(c, t0 + 1.06, 700, 1500, 0.42, 0.42)
+    // Vibración fuerte tipo alarma en móviles compatibles.
+    try { if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 400]) } catch { /* noop */ }
   } catch { /* noop */ }
 }
 
