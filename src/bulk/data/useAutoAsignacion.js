@@ -85,7 +85,23 @@ export function useAutoAsignacion() {
     try {
       // Los choferes DEMO (presencia de prueba) se muestran en la columna de en
       // línea pero NO se les ofrecen órdenes, para que un chofer real reciba la carga.
-      const pool = (presencias || []).filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo)
+      // Además, se ENRIQUECE cada presencia con los Trabajos/equipos ACTUALES del
+      // roster (no la foto que se guardó al conectarse): así, si el admin agrega/
+      // quita un Trabajo o un equipo, aplica al instante SIN que el chofer tenga que
+      // reconectarse.
+      const rosterDe = (uid, carrierId) => {
+        const carrier = (carriers || []).find((c) => c.id === carrierId)
+        return (carrier?.choferes || []).find((d) => d.uid === uid) || null
+      }
+      const pool = (presencias || [])
+        .filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo)
+        .map((p) => {
+          const r = rosterDe(p.uid, p.carrierId)
+          if (!r) return p
+          const equipos = (r.equipos && r.equipos.length) ? r.equipos : (r.equipo ? [r.equipo] : (p.equipos || []))
+          const jobs = Array.isArray(r.jobs) ? r.jobs : (p.jobs || [])
+          return { ...p, equipos, jobs }
+        })
       const pares = emparejar(porAsignar, pool, Date.now())
       for (const { orden, chofer } of pares) {
         if (enVuelo.current.has(orden.id)) continue
@@ -94,7 +110,7 @@ export function useAutoAsignacion() {
       }
     } catch { /* no romper */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAsignar, presencias, esStaff, serverSide])
+  }, [porAsignar, presencias, carriers, esStaff, serverSide])
 
   // Vencimiento 2:00 (o notificando heredada sin contador) → reencolar.
   const revirtiendo = useRef(new Set())

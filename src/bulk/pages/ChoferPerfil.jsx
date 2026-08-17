@@ -163,7 +163,7 @@ export default function ChoferPerfil() {
             )}
             {trabajos.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-400">{t('Trabajos')}:</span>
+                <span className="text-xs text-slate-400">{t('Ha trabajado en')}:</span>
                 {trabajos.map((j) => <Badge key={j.id} color="gold"><Briefcase size={10} className="mr-0.5 inline" />{j.nombre}</Badge>)}
               </div>
             )}
