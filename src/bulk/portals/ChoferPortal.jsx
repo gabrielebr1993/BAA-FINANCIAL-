@@ -28,11 +28,21 @@ import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
+// Captura el GPS pero NUNCA se queda colgado: si el navegador tarda (o el permiso
+// se queda abierto sin responder), a los 6 s resolvemos null igual. Sin esto, el
+// botón "Guardando…" se quedaba trabado esperando una posición que nunca llegaba.
 const capturarGPS = () => new Promise((res) => {
   if (!navigator.geolocation) return res(null)
-  navigator.geolocation.getCurrentPosition(
-    (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude, ts: ahora() }),
-    () => res(null), { timeout: 4000 })
+  let listo = false
+  const acabar = (v) => { if (listo) return; listo = true; res(v) }
+  const tope = setTimeout(() => acabar(null), 6000) // red de seguridad dura
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (p) => { clearTimeout(tope); acabar({ lat: p.coords.latitude, lng: p.coords.longitude, ts: ahora() }) },
+      () => { clearTimeout(tope); acabar(null) },
+      { timeout: 5000, maximumAge: 60000, enableHighAccuracy: false },
+    )
+  } catch { clearTimeout(tope); acabar(null) }
 })
 
 export default function ChoferPortal() {
@@ -129,23 +139,14 @@ export default function ChoferPortal() {
   // roster o por nombre) — así también aparece la pantalla de aceptar cuando me la
   // asignaron a mano por el id del roster (antes solo salía si era por uid).
   // Órdenes que YA respondí (acepté/rechacé) en este dispositivo: se ocultan al
-  // instante aunque Firestore tarde en propagar, para que NUNCA reaparezca la misma
-  // oferta ni el sonido siga sonando tras responder. (Anti-inundación robusto.)
+  // instante y NO vuelven a aparecer en esta sesión, aunque el emparejador las
+  // reencole o Firestore tarde en propagar. (Anti-inundación DEFINITIVO.)
+  // Es "pegajoso" a propósito: si la escritura falla, se DESMARCA en el catch para
+  // que el chofer pueda reintentar; si tiene éxito, la orden ya no reaparece.
   const [respondidas, setRespondidas] = useState(() => new Set())
   const marcarRespondida = (id) => setRespondidas((s) => new Set(s).add(id))
+  const desmarcarRespondida = (id) => setRespondidas((s) => { const n = new Set(s); n.delete(id); return n })
   const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && !respondidas.has(o.id)) : null
-  // Suelta el "ya respondí" en cuanto Firestore refleja el cambio (la orden deja de
-  // estar NOTIFICANDO para mí). Así una oferta futura legítima sí vuelve a aparecer.
-  useEffect(() => {
-    setRespondidas((prev) => {
-      if (prev.size === 0) return prev
-      const vivos = new Set(misOrdenes.filter((o) => o.estado === E.NOTIFICANDO).map((o) => o.id))
-      let cambia = false; const next = new Set()
-      for (const id of prev) { if (vivos.has(id)) next.add(id); else cambia = true }
-      return cambia ? next : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [misOrdenes])
   const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
   // Chat de MI orden activa (acotado por orderId) — para el contador de no leídos.
   const { datos: mensajesActiva } = useColeccion('messages', [where('orderId', '==', activa?.id || '__none__')])
@@ -376,14 +377,14 @@ export default function ChoferPortal() {
       </nav>
 
       {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
-      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} onResponder={marcarRespondida} miChofer={miChofer} />}
+      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} onResponder={marcarRespondida} onDesmarcar={desmarcarRespondida} miChofer={miChofer} />}
     </div>
   )
 }
 
 // Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
 // y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
-function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo, onResponder, miChofer }) {
+function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo, onResponder, onDesmarcar, miChofer }) {
   const { t } = useLang()
   const OFERTA_MS = 120000
   const [ocupado, setOcupado] = useState(false)
@@ -409,24 +410,35 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
     if (ocupado) return
     setOcupado(true)
     onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
-    await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, asignacionExpira: null, asignacionManual: false, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
-    await ocupar(usuario.id, orden.id) // salgo de la cola de disponibles
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
+    try {
+      await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, asignacionExpira: null, asignacionManual: false, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
+      await ocupar(usuario.id, orden.id) // salgo de la cola de disponibles
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
+    } catch (e) {
+      // Falló la escritura (p. ej. permisos): desmarco para poder reintentar y aviso.
+      onDesmarcar?.(orden.id); setOcupado(false)
+      window.alert(t('No se pudo aceptar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : ''))
+    }
   }
   const rechazar = async (motivo) => {
     if (ocupado) return
     const m = motivo || window.prompt(t('Motivo del rechazo:')) || 'Sin motivo'
     setOcupado(true)
     onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
-    // Excluye TODOS mis identificadores (uid + id del roster) para que el motor no me
-    // reasigne la misma orden por otra vía; y limpio choferNombre para que no vuelva a
-    // "engancharse" por nombre.
-    const misIds = [usuario.id, miChofer?.id, usuario.nombre].filter(Boolean)
-    const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), ...misIds])]
-    await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
-    await liberar(usuario.id) // vuelvo al final de la cola de en línea
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
-    await onRechazo?.()
+    try {
+      // Excluye TODOS mis identificadores (uid + id del roster + nombre) para que el
+      // motor no me reasigne la misma orden por otra vía; limpio choferNombre para que
+      // no vuelva a "engancharse" por nombre.
+      const misIds = [usuario.id, miChofer?.id, usuario.nombre].filter(Boolean)
+      const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), ...misIds])]
+      await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
+      await liberar(usuario.id) // vuelvo al final de la cola de en línea
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
+      await onRechazo?.()
+    } catch (e) {
+      onDesmarcar?.(orden.id); setOcupado(false)
+      window.alert(t('No se pudo rechazar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : ''))
+    }
   }
   // Auto-rechazo por timeout si el contador llega a 0 (respaldo si el dispatcher no lo hace).
   const venciendo = useRef(false)
@@ -753,10 +765,12 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     if (paso.requiere === 'ticket') return setModal('ticket')
     if (paso.requiere === 'pod') return setModal('pod')
     setOcupado(true)
-    const g = await capturarGPS()
-    await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}`, entidad: 'orden', entidadId: orden.id })
-    setOcupado(false)
+    try {
+      const g = await capturarGPS() // ya no se cuelga (tope de 6 s)
+      await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}`, entidad: 'orden', entidadId: orden.id })
+    } catch (e) { window.alert(t('No se pudo guardar el avance. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
+    finally { setOcupado(false) }
   }
 
   // Override manual cuando el GPS no fija: registra la llegada SIN verificación de
@@ -767,71 +781,79 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     if (paso.requiere === 'ticket') return setModal('ticket')
     if (paso.requiere === 'pod') return setModal('pod')
     setOcupado(true)
-    const g = await capturarGPS()
-    await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g, [`manual_${paso.hito}`]: true })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}_manual`, entidad: 'orden', entidadId: orden.id, detalle: 'sin verificación GPS' })
-    setOcupado(false)
+    try {
+      const g = await capturarGPS()
+      await guardar('orders', orden.id, { estado: paso.next, hitos: { ...(orden.hitos || {}), [paso.hito]: ahora() }, [`gps_${paso.hito}`]: g, [`manual_${paso.hito}`]: true })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: `hito_${paso.hito}_manual`, entidad: 'orden', entidadId: orden.id, detalle: 'sin verificación GPS' })
+    } catch (e) { window.alert(t('No se pudo guardar. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
+    finally { setOcupado(false) }
   }
 
   const guardarTicket = async () => {
     setOcupado(true)
-    const g = await capturarGPS()
-    // Peso OFICIAL: si el OCR leyó el ticket, MANDA el ticket (fuente de verdad); si
-    // no, vale el que puso el chofer a mano. Cuando difieren, se registra la
-    // diferencia para auditoría (la oficina la puede revisar).
-    const manual = Number(peso) || null
-    const desdeOcr = pesoOcr != null
-    const oficial = desdeOcr ? pesoOcr : manual
-    const fuente = desdeOcr ? 'ocr' : 'manual'
-    const difiere = desdeOcr && manual != null && Math.abs(manual - pesoOcr) >= 0.5
-    const ticket = {
-      numero: ticketNum || null, foto: foto || null,
-      peso: oficial, pesoOcr, pesoManual: manual, unidad: 'ton', fuente, ts: ahora(),
-      ...(difiere ? { diferencia: { manual, ocr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
-    }
-    await guardar('orders', orden.id, {
-      estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
-      pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente,
-      ticket, gps_carga: g,
-    })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: difiere ? 'ticket_diferencia_peso' : (desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga'), entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${difiere ? ` · a mano ${manual}` : ''}` })
-    setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
+    try {
+      const g = await capturarGPS()
+      // Peso OFICIAL: si el OCR leyó el ticket, MANDA el ticket (fuente de verdad); si
+      // no, vale el que puso el chofer a mano. Cuando difieren, se registra la
+      // diferencia para auditoría (la oficina la puede revisar).
+      const manual = Number(peso) || null
+      const desdeOcr = pesoOcr != null
+      const oficial = desdeOcr ? pesoOcr : manual
+      const fuente = desdeOcr ? 'ocr' : 'manual'
+      const difiere = desdeOcr && manual != null && Math.abs(manual - pesoOcr) >= 0.5
+      const ticket = {
+        numero: ticketNum || null, foto: foto || null,
+        peso: oficial, pesoOcr, pesoManual: manual, unidad: 'ton', fuente, ts: ahora(),
+        ...(difiere ? { diferencia: { manual, ocr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
+      }
+      await guardar('orders', orden.id, {
+        estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
+        pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente,
+        ticket, gps_carga: g,
+      })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: difiere ? 'ticket_diferencia_peso' : (desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga'), entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${difiere ? ` · a mano ${manual}` : ''}` })
+      setModal(null); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
+    } catch (e) { window.alert(t('No se pudo guardar la carga. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
+    finally { setOcupado(false) }
   }
 
   const guardarPOD = async () => {
     if (!foto) { window.alert(t('Toma la foto de la entrega.')); return }
     if (!firma) { window.alert(t('Falta la firma.')); return }
     setOcupado(true)
-    const g = await capturarGPS()
-    const ordenPOD = { ...orden, pod: { firma, foto: foto || null }, gps_entrega: g }
-    // Motor de liberación por confianza: ¿la entrega está dentro de la zona de destino?
-    const objEnt = geocercaObjetivo(orden, 'entrega', geocercas, plantas)
-    const objEntL = objEnt ? (Array.isArray(objEnt) ? objEnt : [objEnt]) : []
-    const dentroGeocercaEntrega = objEntL.length ? (g ? objEntL.some((gf) => dentroGeocerca(g, gf)) : false) : null
-    const evalLib = evaluarLiberacion(ordenPOD, { dentroGeocercaEntrega })
-    const auto = liberacionAuto && liberacionAutomatica(evalLib)
-    const podData = { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() }
-    if (auto) {
-      // Confianza alta + liberación automática activa: se libera sin código de supervisor.
-      // Usa la clave de hito 'liberacion' (la misma que muestra la línea de tiempo).
-      await guardar('orders', orden.id, {
-        estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberacion: ahora() },
-        pod: podData, gps_entrega: g,
-        liberacion: { modo: 'auto', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
-      })
-      await liberar(usuario.id) // liberación automática: vuelvo a la cola de disponibles
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
-    } else {
-      // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
-      const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
-      await guardar('orders', orden.id, {
-        estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
-        pod: podData, gps_entrega: g,
-        liberacion: { modo: 'manual', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
-      })
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
-    }
-    setModal(null); setOcupado(false); setFoto(null); setFirma(null); setComent('')
+    try {
+      const g = await capturarGPS()
+      const ordenPOD = { ...orden, pod: { firma, foto: foto || null }, gps_entrega: g }
+      // Motor de liberación por confianza: ¿la entrega está dentro de la zona de destino?
+      const objEnt = geocercaObjetivo(orden, 'entrega', geocercas, plantas)
+      const objEntL = objEnt ? (Array.isArray(objEnt) ? objEnt : [objEnt]) : []
+      const dentroGeocercaEntrega = objEntL.length ? (g ? objEntL.some((gf) => dentroGeocerca(g, gf)) : false) : null
+      const evalLib = evaluarLiberacion(ordenPOD, { dentroGeocercaEntrega })
+      const auto = liberacionAuto && liberacionAutomatica(evalLib)
+      const podData = { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() }
+      if (auto) {
+        // Confianza alta + liberación automática activa: se libera sin código de supervisor.
+        // Usa la clave de hito 'liberacion' (la misma que muestra la línea de tiempo).
+        await guardar('orders', orden.id, {
+          estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberacion: ahora() },
+          pod: podData, gps_entrega: g,
+          liberacion: { modo: 'auto', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
+        })
+        await liberar(usuario.id) // liberación automática: vuelvo a la cola de disponibles
+        await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
+      } else {
+        // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
+        const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
+        await guardar('orders', orden.id, {
+          estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
+          pod: podData, gps_entrega: g,
+          liberacion: { modo: 'manual', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
+        })
+        await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
+      }
+      setModal(null); setFoto(null); setFirma(null); setComent('')
+    } catch (e) { window.alert(t('No se pudo guardar la entrega. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
+    finally { setOcupado(false) }
   }
 
   const liberarConCodigo = async () => {

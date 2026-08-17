@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, Trash2, Download } from 'lucide-react'
+import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, FileSpreadsheet, Trash2, Download } from 'lucide-react'
+import { exportarExcel, exportarPDF } from '../../utils/exportar'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { guardar } from '../data/repo'
@@ -34,6 +35,7 @@ export default function ChoferPerfil() {
   const jobsAct = jobs.filter((j) => j.activo !== false)
   const [subiendo, setSubiendo] = useState(false)
   const [zoomFoto, setZoomFoto] = useState(null) // foto ampliada (lightbox)
+  const [menuDescarga, setMenuDescarga] = useState(false) // Excel / PDF
 
   const perfil = useMemo(
     () => perfilDeChofer({ ordenes, carriers, jobs, clientes, plants, incidents, nombre }),
@@ -90,38 +92,59 @@ export default function ChoferPerfil() {
       const a = document.createElement('a'); a.href = dataUrl; a.download = `${base}.${ext}`; a.click()
     } catch { /* noop */ }
   }
-  const descargarFicha = () => {
+  // Filas de la ficha (mismas para Excel y PDF).
+  const fichaFilas = () => {
     const b = perfilDriver?.banco || {}
-    const L = [
-      `FICHA DEL CHOFER — ${nombre}`, '='.repeat(40),
-      `Transporte: ${rosterCarrier?.nombre || '—'}`,
-      `Estado: ${activo ? 'Activo' : activo === false ? 'Inactivo' : '—'}`,
-      `Teléfono: ${rosterChofer?.telefono || '—'}`,
-      `Licencia: ${rosterChofer?.licencia || '—'}`,
-      `Equipos: ${(equipos || []).join(', ') || '—'}`,
-      `Trabajos afiliado: ${(rosterChofer?.jobsNombres && rosterChofer.jobsNombres.length ? rosterChofer.jobsNombres : (rosterChofer?.jobs || []).map(nombreJob)).join(', ') || '—'}`,
-      '', 'DESEMPEÑO',
-      `Órdenes: ${stats.total}   Entregadas: ${stats.entregadas}   Toneladas: ${stats.ton}`,
-      `Pago acumulado: ${money(stats.pago)}   Aceptación: ${tasaAceptacion != null ? tasaAceptacion + '%' : '—'}   Puntualidad: ${puntualidad != null ? puntualidad + '%' : '—'}`,
-      `Rechazos: ${rechazos}   Calificación: ${rating != null ? rating : '—'}`,
-      '', 'DATOS BANCARIOS (MilePay)',
-      `Titular: ${b.titular || '—'}   Banco: ${b.banco || '—'}`,
-      `Cuenta: ${b.cuenta || '—'}   Routing/CLABE: ${b.routing || '—'}`,
-      '', `Generado: ${new Date().toLocaleString('es')}`,
+    return [
+      ['Chofer', nombre],
+      ['Transporte', rosterCarrier?.nombre || '—'],
+      ['Estado', activo ? 'Activo' : activo === false ? 'Inactivo' : '—'],
+      ['Teléfono', rosterChofer?.telefono || '—'],
+      ['Licencia', rosterChofer?.licencia || '—'],
+      ['Equipos', (equipos || []).join(', ') || '—'],
+      ['Trabajos afiliado', (rosterChofer?.jobsNombres && rosterChofer.jobsNombres.length ? rosterChofer.jobsNombres : (rosterChofer?.jobs || []).map(nombreJob)).join(', ') || '—'],
+      ['Órdenes', String(stats.total)],
+      ['Entregadas', String(stats.entregadas)],
+      ['Toneladas', String(stats.ton)],
+      ['Pago acumulado', money(stats.pago)],
+      ['Aceptación', tasaAceptacion != null ? tasaAceptacion + '%' : '—'],
+      ['Puntualidad', puntualidad != null ? puntualidad + '%' : '—'],
+      ['Rechazos', String(rechazos)],
+      ['Calificación', rating != null ? String(rating) : '—'],
+      ['Banco · Titular', b.titular || '—'],
+      ['Banco', b.banco || '—'],
+      ['Cuenta', b.cuenta || '—'],
+      ['Routing/CLABE', b.routing || '—'],
     ]
-    try {
-      const blob = new Blob([L.join('\n')], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `chofer_${(nombre || '').replace(/\s+/g, '_')}.txt`; a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1500)
-    } catch { /* noop */ }
+  }
+  const baseArchivo = () => `chofer_${(nombre || '').replace(/\s+/g, '_')}`
+  const descargarExcel = () => {
+    setMenuDescarga(false)
+    const rows = fichaFilas().map(([Campo, Valor]) => ({ Campo, Valor }))
+    exportarExcel(baseArchivo(), [{ nombre: 'Ficha', rows }])
+  }
+  const descargarPDF = async () => {
+    setMenuDescarga(false)
+    await exportarPDF(baseArchivo(), nombre, t('Ficha del chofer'), [{ titulo: null, head: [t('Campo'), t('Valor')], body: fichaFilas() }])
   }
 
   return (
     <div className="mx-auto w-full max-w-[100rem]">
       <div className="mb-3 flex items-center gap-3">
         <Link to="/bulk/transportistas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
-        <button onClick={descargarFicha} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-brand-navy shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><Download size={15} /> {t('Descargar ficha')}</button>
+        <div className="relative ml-auto">
+          <button onClick={() => setMenuDescarga((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-brand-navy shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><Download size={15} /> {t('Descargar ficha')} <span className="text-slate-400">▾</span></button>
+          {menuDescarga && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuDescarga(false)} />
+              <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                <div className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400 dark:border-slate-800">{t('Descargar como')}</div>
+                <button onClick={descargarExcel} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-brand-navy transition hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><FileSpreadsheet size={15} className="text-emerald-600" /> {t('Excel')}</button>
+                <button onClick={descargarPDF} className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-brand-navy transition hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><FileText size={15} className="text-rose-600" /> {t('PDF')}</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Cabecera estilo perfil */}
