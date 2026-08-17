@@ -417,7 +417,8 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
     } catch (e) {
       // Falló la escritura (p. ej. permisos): desmarco para poder reintentar y aviso.
       onDesmarcar?.(orden.id); setOcupado(false)
-      window.alert(t('No se pudo aceptar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : ''))
+      const diag = `rol=${rol} tenant=${tenantId} carrier=${usuario?.carrierId || '—'} | orden.transp=${orden.transportistaId || '—'} orden.chofer=${orden.choferId || '—'} yo=${usuario?.id || '—'}`
+      window.alert(t('No se pudo aceptar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : '') + `\n\n[diagnóstico]\n${diag}`)
     }
   }
   const rechazar = async (motivo) => {

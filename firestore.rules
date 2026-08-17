@@ -230,20 +230,24 @@ service cloud.firestore {
       //  - pagoChofer: el transportista SÍ lo fija al asignar; el chofer/supervisor NO.
       // El chofer puede avanzar la orden que es suya por uid, por su carrier, o que se
       // le ofreció por NOMBRE (asignación por id del roster).
+      // Protección por diff().affectedKeys(): el no-staff puede avanzar la orden pero
+      // NO puede CAMBIAR los precios. Este patrón NUNCA falla por campos ausentes
+      // (a diferencia de comparar resource.data.precioX, que rompía la regla y daba
+      // "Missing permissions"). Todas las lecturas de identidad usan .get(…) por si
+      // a la orden le falta algún campo.
       allow update: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId)
-            && request.resource.data.get('precioCliente', 0) == resource.data.get('precioCliente', 0)
-            && request.resource.data.get('precioTransportista', 0) == resource.data.get('precioTransportista', 0)
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['precioCliente', 'precioTransportista'])
             && (
-             (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
+             (bRole() == 'transportista' && resource.data.get('transportistaId', '') == bCarrier())
           || (bRole() == 'chofer'
-                && request.resource.data.get('pagoChofer', 0) == resource.data.get('pagoChofer', 0)
-                && (resource.data.choferId == request.auth.uid
-                    || (bCarrier() != null && resource.data.transportistaId == bCarrier())
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer'])
+                && (resource.data.get('choferId', '') == request.auth.uid
+                    || (bCarrier() != null && resource.data.get('transportistaId', '') == bCarrier())
                     || resource.data.get('choferNombre', '') == bMyName()))
           || (bRole() == 'supervisor_planta'
-                && resource.data.plantaId == bMyPlanta()
-                && request.resource.data.get('pagoChofer', 0) == resource.data.get('pagoChofer', 0))));
+                && resource.data.get('plantaId', '') == bMyPlanta()
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer']))));
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
