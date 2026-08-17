@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, Trash2 } from 'lucide-react'
+import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camera, Briefcase, Phone, IdCard, ThumbsDown, CheckCircle2, Clock, Loader, Gauge, Timer, Layers, Building2, MapPin, AlertTriangle, TrendingUp, CalendarDays, Scale, FileText, Trash2, Download } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { guardar } from '../data/repo'
@@ -83,9 +83,46 @@ export default function ChoferPerfil() {
 
   const activo = rosterChofer ? rosterChofer.activo !== false : null
 
+  // Descargas: imagen (documento/foto) y ficha completa en texto.
+  const descargarImagen = (dataUrl, base) => {
+    try {
+      const ext = (String(dataUrl).match(/^data:image\/(\w+)/) || [])[1] || 'jpg'
+      const a = document.createElement('a'); a.href = dataUrl; a.download = `${base}.${ext}`; a.click()
+    } catch { /* noop */ }
+  }
+  const descargarFicha = () => {
+    const b = perfilDriver?.banco || {}
+    const L = [
+      `FICHA DEL CHOFER — ${nombre}`, '='.repeat(40),
+      `Transporte: ${rosterCarrier?.nombre || '—'}`,
+      `Estado: ${activo ? 'Activo' : activo === false ? 'Inactivo' : '—'}`,
+      `Teléfono: ${rosterChofer?.telefono || '—'}`,
+      `Licencia: ${rosterChofer?.licencia || '—'}`,
+      `Equipos: ${(equipos || []).join(', ') || '—'}`,
+      `Trabajos afiliado: ${(rosterChofer?.jobsNombres && rosterChofer.jobsNombres.length ? rosterChofer.jobsNombres : (rosterChofer?.jobs || []).map(nombreJob)).join(', ') || '—'}`,
+      '', 'DESEMPEÑO',
+      `Órdenes: ${stats.total}   Entregadas: ${stats.entregadas}   Toneladas: ${stats.ton}`,
+      `Pago acumulado: ${money(stats.pago)}   Aceptación: ${tasaAceptacion != null ? tasaAceptacion + '%' : '—'}   Puntualidad: ${puntualidad != null ? puntualidad + '%' : '—'}`,
+      `Rechazos: ${rechazos}   Calificación: ${rating != null ? rating : '—'}`,
+      '', 'DATOS BANCARIOS (MilePay)',
+      `Titular: ${b.titular || '—'}   Banco: ${b.banco || '—'}`,
+      `Cuenta: ${b.cuenta || '—'}   Routing/CLABE: ${b.routing || '—'}`,
+      '', `Generado: ${new Date().toLocaleString('es')}`,
+    ]
+    try {
+      const blob = new Blob([L.join('\n')], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `chofer_${(nombre || '').replace(/\s+/g, '_')}.txt`; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1500)
+    } catch { /* noop */ }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[100rem]">
-      <Link to="/bulk/transportistas" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
+      <div className="mb-3 flex items-center gap-3">
+        <Link to="/bulk/transportistas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
+        <button onClick={descargarFicha} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-brand-navy shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"><Download size={15} /> {t('Descargar ficha')}</button>
+      </div>
 
       {/* Cabecera estilo perfil */}
       <Card className="mb-4 overflow-hidden p-0">
@@ -180,8 +217,11 @@ export default function ChoferPerfil() {
             {[{ campo: 'licenciaFoto', l: t('Licencia') }, { campo: 'socialFoto', l: t('Seguro social') }].map((d) => perfilDriver[d.campo] && (
               <div key={d.campo} className="relative">
                 <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{d.l}</div>
-                <a href={perfilDriver[d.campo]} target="_blank" rel="noreferrer"><img src={perfilDriver[d.campo]} alt={d.l} className="h-32 rounded-lg border border-slate-200 object-cover dark:border-slate-700" /></a>
-                <button onClick={() => { if (window.confirm(`${t('¿Borrar')} ${d.l}? ${t('El chofer podrá subirla de nuevo.')}`)) guardar('driverProfiles', perfilDriver.id, { [d.campo]: null }) }} title={t('Borrar')} className="absolute right-1 top-6 grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white shadow"><Trash2 size={13} /></button>
+                <img src={perfilDriver[d.campo]} alt={d.l} onClick={() => setZoomFoto(perfilDriver[d.campo])} title={t('Ver en grande')} className="h-32 cursor-zoom-in rounded-lg border border-slate-200 object-cover transition hover:brightness-95 dark:border-slate-700" />
+                <div className="absolute right-1 top-6 flex flex-col gap-1">
+                  <button onClick={() => descargarImagen(perfilDriver[d.campo], `${nombre}_${d.campo}`)} title={t('Descargar')} className="grid h-6 w-6 place-items-center rounded-full bg-brand-navy text-white shadow dark:bg-slate-700"><Download size={13} /></button>
+                  <button onClick={() => { if (window.confirm(`${t('¿Borrar')} ${d.l}? ${t('El chofer podrá subirla de nuevo.')}`)) guardar('driverProfiles', perfilDriver.id, { [d.campo]: null }) }} title={t('Borrar')} className="grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white shadow"><Trash2 size={13} /></button>
+                </div>
               </div>
             ))}
           </div>
