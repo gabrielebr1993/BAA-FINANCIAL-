@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Truck, ArrowLeft, MapPin, MessageSquare, FileCheck2 } from 'lucide-react'
+import { Truck, ArrowLeft, MapPin, MessageSquare, FileCheck2, Eye, EyeOff } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useBulkAuth } from './BulkAuthContext'
 import { Boton, Input, Aviso, Spinner } from '../components/ui'
@@ -9,6 +9,7 @@ export default function BulkLogin() {
   const { t } = useLang()
   const { iniciarSesion } = useBulkAuth()
   const [form, setForm] = useState({ email: '', password: '' })
+  const [verPass, setVerPass] = useState(false)
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -101,7 +102,12 @@ export default function BulkLogin() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Contraseña')}</label>
-              <Input type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required />
+              <div className="relative">
+                <Input type={verPass ? 'text' : 'password'} className="pr-11" placeholder="••••••••" value={form.password} onChange={set('password')} required />
+                <button type="button" onClick={() => setVerPass((v) => !v)} aria-label={verPass ? t('Ocultar contraseña') : t('Mostrar contraseña')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 transition hover:text-slate-200">
+                  {verPass ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+                </button>
+              </div>
             </div>
             <Boton type="submit" variant="gold" disabled={ocupado} className="w-full justify-center py-2.5 text-base">
               {ocupado ? <><Spinner /> {t('Procesando…')}</> : t('Iniciar sesión')}
