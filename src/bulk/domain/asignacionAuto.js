@@ -31,6 +31,29 @@ export function trabajoCompatible(jobsChofer, jobId) {
   return jobsChofer.includes(jobId)
 }
 
+// Enriquece cada presencia con los Trabajos/equipos ACTUALES del roster del
+// transportista (no la foto que el chofer guardó al conectarse). Engancha su ficha
+// por uid y, si no, por nombre — así los cambios del admin (agregar/quitar un
+// Trabajo o equipo) aplican al instante SIN que el chofer tenga que reconectarse.
+// Se usa igual en el motor y en el diagnóstico para que siempre coincidan.
+export function enriquecerConRoster(presencias, carriers) {
+  const norm = (s) => (s || '').trim().toLowerCase()
+  const rosterDe = (p) => {
+    const carrier = (carriers || []).find((c) => c.id === p.carrierId)
+    const lista = carrier?.choferes || []
+    return lista.find((d) => d.uid && d.uid === p.uid)
+      || lista.find((d) => norm(d.nombre) === norm(p.nombre))
+      || null
+  }
+  return (presencias || []).map((p) => {
+    const r = rosterDe(p)
+    if (!r) return p
+    const equipos = (r.equipos && r.equipos.length) ? r.equipos : (r.equipo ? [r.equipo] : (p.equipos || []))
+    const jobs = Array.isArray(r.jobs) ? r.jobs : (p.jobs || [])
+    return { ...p, equipos, jobs }
+  })
+}
+
 // ¿Está esta presencia libre y viva ahora mismo?
 export function choferDisponible(p, ahoraMs) {
   if (!p || p.enLinea !== true) return false

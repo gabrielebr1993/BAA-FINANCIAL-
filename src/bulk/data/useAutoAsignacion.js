@@ -13,7 +13,7 @@ import { reservar, liberar } from './presencia'
 import { auditar } from './auditoria'
 import { asignarPagos, liberarPagosAsignacion } from './ordenPagos'
 import { enviarPush } from '../integraciones/notificaciones'
-import { emparejar, ofertaVencida, ESPERA_RESPUESTA_MS } from '../domain/asignacionAuto'
+import { emparejar, ofertaVencida, ESPERA_RESPUESTA_MS, enriquecerConRoster } from '../domain/asignacionAuto'
 import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 
@@ -85,23 +85,11 @@ export function useAutoAsignacion() {
     try {
       // Los choferes DEMO (presencia de prueba) se muestran en la columna de en
       // línea pero NO se les ofrecen órdenes, para que un chofer real reciba la carga.
-      // Además, se ENRIQUECE cada presencia con los Trabajos/equipos ACTUALES del
-      // roster (no la foto que se guardó al conectarse): así, si el admin agrega/
-      // quita un Trabajo o un equipo, aplica al instante SIN que el chofer tenga que
-      // reconectarse.
-      const rosterDe = (uid, carrierId) => {
-        const carrier = (carriers || []).find((c) => c.id === carrierId)
-        return (carrier?.choferes || []).find((d) => d.uid === uid) || null
-      }
-      const pool = (presencias || [])
+      // Se ENRIQUECE cada presencia con los Trabajos/equipos ACTUALES del roster
+      // (mismo criterio que el diagnóstico) para que los cambios del admin apliquen
+      // al instante sin reconectar.
+      const pool = enriquecerConRoster(presencias, carriers)
         .filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo)
-        .map((p) => {
-          const r = rosterDe(p.uid, p.carrierId)
-          if (!r) return p
-          const equipos = (r.equipos && r.equipos.length) ? r.equipos : (r.equipo ? [r.equipo] : (p.equipos || []))
-          const jobs = Array.isArray(r.jobs) ? r.jobs : (p.jobs || [])
-          return { ...p, equipos, jobs }
-        })
       const pares = emparejar(porAsignar, pool, Date.now())
       for (const { orden, chofer } of pares) {
         if (enVuelo.current.has(orden.id)) continue
