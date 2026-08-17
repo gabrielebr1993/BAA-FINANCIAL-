@@ -160,7 +160,7 @@ export default function ChoferPortal() {
   useEffect(() => {
     if (!entrante || !sonidoActivo()) return
     tonoOrden()
-    const id = setInterval(() => tonoOrden(), 3000)
+    const id = setInterval(() => tonoOrden(), 2000)
     return () => clearInterval(id)
   }, [entrante?.id])
   // Aviso local cuando llega un mensaje nuevo de la oficina.

@@ -2,35 +2,47 @@
 // está abierta. El push a apps CERRADAS requiere FCM + backend (ver notificaciones.js).
 let ctx
 
+// Devuelve el AudioContext y lo REANUDA si el navegador lo suspendió (política de
+// autoplay en iOS/Chrome): sin esto el primer sonido "tardaba" o no salía.
+function ac() {
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)()
+  if (ctx.state === 'suspended') { try { ctx.resume() } catch { /* noop */ } }
+  return ctx
+}
+
+// Un pitido corto (avisos de mensajes). Onda cuadrada = más audible.
 export function beep(veces = 2) {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)()
+    const c = ac()
     for (let i = 0; i < veces; i++) {
-      const t = ctx.currentTime + i * 0.35
-      const o = ctx.createOscillator(); const g = ctx.createGain()
-      o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = 880
+      const t = c.currentTime + i * 0.28
+      const o = c.createOscillator(); const g = c.createGain()
+      o.connect(g); g.connect(c.destination); o.type = 'square'; o.frequency.value = 950
       g.gain.setValueAtTime(0.0001, t)
-      g.gain.exponentialRampToValueAtTime(0.35, t + 0.02)
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3)
-      o.start(t); o.stop(t + 0.32)
+      g.gain.exponentialRampToValueAtTime(0.5, t + 0.01)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22)
+      o.start(t); o.stop(t + 0.24)
     }
   } catch { /* noop */ }
 }
 
-// Tono LARGO tipo timbre (~1.6s) para una orden entrante — más difícil de ignorar.
+// Sirena URGENTE y FUERTE para una orden entrante (~1.4 s): alterna dos tonos altos
+// con onda cuadrada (penetrante) y volumen alto — difícil de ignorar. Suena de una.
 export function tonoOrden() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)()
-    const notas = [880, 1175, 880, 1175, 880, 1175]
+    const c = ac()
+    const notas = [1046, 1318, 1046, 1318, 1046, 1318, 1046]
     notas.forEach((f, i) => {
-      const t = ctx.currentTime + i * 0.26
-      const o = ctx.createOscillator(); const g = ctx.createGain()
-      o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = f
+      const t = c.currentTime + i * 0.2
+      const o = c.createOscillator(); const g = c.createGain()
+      o.connect(g); g.connect(c.destination); o.type = 'square'; o.frequency.value = f
       g.gain.setValueAtTime(0.0001, t)
-      g.gain.exponentialRampToValueAtTime(0.4, t + 0.03)
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24)
-      o.start(t); o.stop(t + 0.25)
+      g.gain.exponentialRampToValueAtTime(0.6, t + 0.012)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.17)
+      o.start(t); o.stop(t + 0.18)
     })
+    // Pequeña vibración en móviles compatibles (refuerza el aviso).
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]) } catch { /* noop */ }
   } catch { /* noop */ }
 }
 

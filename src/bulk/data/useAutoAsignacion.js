@@ -19,6 +19,10 @@ import { ORDEN_ESTADO as E } from '../domain/constants'
 
 const STAFF = ['super_admin', 'admin', 'dispatcher']
 const iso = () => new Date().toISOString()
+// Estados en los que un chofer ya está "comprometido" con una orden y NO se le debe
+// ofrecer otra: se le está ofreciendo, la aceptó, va en camino, o entregó y espera
+// liberación. Solo cuando la orden se LIBERA/CIERRA/CANCELA vuelve a estar libre.
+const OCUPADO_EST = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
 
 export function useAutoAsignacion() {
   const { tenantId, usuario, rol } = useBulkAuth()
@@ -88,8 +92,14 @@ export function useAutoAsignacion() {
       // Se ENRIQUECE cada presencia con los Trabajos/equipos ACTUALES del roster
       // (mismo criterio que el diagnóstico) para que los cambios del admin apliquen
       // al instante sin reconectar.
+      // ANTI-FLOOD: excluye a los choferes que YA tienen una orden en curso o
+      // pendiente de aceptar (no solo por su presencia, que tarda en actualizarse).
+      // Así, tras aceptar una, NO le siguen entrando más órdenes sin parar.
+      const ocupadosUid = new Set(
+        ordenes.filter((o) => OCUPADO_EST.includes(o.estado)).map((o) => o.choferId).filter(Boolean),
+      )
       const pool = enriquecerConRoster(presencias, carriers)
-        .filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo)
+        .filter((p) => !enVueloChofer.current.has(p.uid) && !p.demo && !ocupadosUid.has(p.uid))
       const pares = emparejar(porAsignar, pool, Date.now())
       for (const { orden, chofer } of pares) {
         if (enVuelo.current.has(orden.id)) continue
@@ -98,7 +108,7 @@ export function useAutoAsignacion() {
       }
     } catch { /* no romper */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAsignar, presencias, carriers, esStaff, serverSide])
+  }, [porAsignar, ordenes, presencias, carriers, esStaff, serverSide])
 
   // Vencimiento 2:00 (o notificando heredada sin contador) → reencolar.
   const revirtiendo = useRef(new Set())
