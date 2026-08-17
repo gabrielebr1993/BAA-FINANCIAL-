@@ -182,7 +182,10 @@ service cloud.firestore {
 
     // Catálogos y entidades gestionadas por staff del tenant.
     match /bulk_clients/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
-    match /bulk_plants/{id}    { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    // Plantas = puntos de RECOGIDA. Cualquier usuario del tenant (chofer, transportista,
+    // supervisor, cliente) necesita el nombre/dirección/GPS para navegar; no hay precios
+    // aquí. Escritura solo staff.
+    match /bulk_plants/{id}    { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     // Config del transportista (cómo le paga a sus choferes). SOLO el propio

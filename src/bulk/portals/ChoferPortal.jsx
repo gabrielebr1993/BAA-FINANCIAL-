@@ -16,7 +16,7 @@ import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTOR
 import { puedeMarcarLlegada, geocercaObjetivo, distanciaM, dentroGeocerca } from '../domain/geo'
 import { evaluarLiberacion, liberacionAutomatica } from '../domain/liberacion'
 import { tsMillis } from '../data/chatKeys'
-import { conectar, desconectar, latir, ocupar, liberar } from '../data/presencia'
+import { conectar, desconectar, latir, ocupar, liberar, reportarUbicacion } from '../data/presencia'
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
 import { useGeoPos } from './useGeoPos'
@@ -125,7 +125,24 @@ export default function ChoferPortal() {
   // Oferta entrante = cualquier orden NOTIFICANDO que sea MÍA (por uid, por id del
   // roster o por nombre) — así también aparece la pantalla de aceptar cuando me la
   // asignaron a mano por el id del roster (antes solo salía si era por uid).
-  const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO) : null
+  // Órdenes que YA respondí (acepté/rechacé) en este dispositivo: se ocultan al
+  // instante aunque Firestore tarde en propagar, para que NUNCA reaparezca la misma
+  // oferta ni el sonido siga sonando tras responder. (Anti-inundación robusto.)
+  const [respondidas, setRespondidas] = useState(() => new Set())
+  const marcarRespondida = (id) => setRespondidas((s) => new Set(s).add(id))
+  const entrante = !activa ? misOrdenes.find((o) => o.estado === E.NOTIFICANDO && !respondidas.has(o.id)) : null
+  // Suelta el "ya respondí" en cuanto Firestore refleja el cambio (la orden deja de
+  // estar NOTIFICANDO para mí). Así una oferta futura legítima sí vuelve a aparecer.
+  useEffect(() => {
+    setRespondidas((prev) => {
+      if (prev.size === 0) return prev
+      const vivos = new Set(misOrdenes.filter((o) => o.estado === E.NOTIFICANDO).map((o) => o.id))
+      let cambia = false; const next = new Set()
+      for (const id of prev) { if (vivos.has(id)) next.add(id); else cambia = true }
+      return cambia ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [misOrdenes])
   const pos = useGeoPos(!!activa || !!entrante) // posición en vivo: habilita "Llegué" y la distancia en la oferta
   // Chat de MI orden activa (acotado por orderId) — para el contador de no leídos.
   const { datos: mensajesActiva } = useColeccion('messages', [where('orderId', '==', activa?.id || '__none__')])
@@ -140,10 +157,13 @@ export default function ChoferPortal() {
   const miEquipos = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : [])
   const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipos: miEquipos, jobs: miChofer?.jobs || [] })
   const desconectarme = () => desconectar(usuario.id)
-  // Latido cada 30 s mientras esté en línea; al cerrar la pestaña, me desconecta.
+  // Latido + UBICACIÓN cada 30 s mientras esté en línea (aunque no tenga orden), para
+  // que el dispatcher lo vea en el Mapa en vivo. Al cerrar la pestaña, me desconecta.
   useEffect(() => {
     if (!enLinea) return
-    const id = setInterval(() => latir(usuario.id), 30000)
+    const reportar = async () => { const p = await capturarGPS(); await reportarUbicacion(usuario.id, p) }
+    reportar()
+    const id = setInterval(reportar, 30000)
     const salir = () => desconectar(usuario.id)
     window.addEventListener('beforeunload', salir)
     return () => { clearInterval(id); window.removeEventListener('beforeunload', salir) }
@@ -353,14 +373,14 @@ export default function ChoferPortal() {
       </nav>
 
       {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
-      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} />}
+      {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} onResponder={marcarRespondida} miChofer={miChofer} />}
     </div>
   )
 }
 
 // Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
 // y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
-function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo }) {
+function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo, onResponder, miChofer }) {
   const { t } = useLang()
   const OFERTA_MS = 120000
   const [ocupado, setOcupado] = useState(false)
@@ -370,6 +390,11 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
   const mmss = rest != null ? `${Math.floor(rest / 60000)}:${String(Math.floor((rest % 60000) / 1000)).padStart(2, '0')}` : null
   const pct = rest != null ? Math.max(0, Math.min(100, (rest / OFERTA_MS) * 100)) : 100
   const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
+  // Fallback por geocerca (misma razón que en OrdenActiva): el chofer no siempre
+  // puede leer la planta, pero SÍ su geocerca — de ahí sacamos nombre/dirección.
+  const _geoRec = (geocercas || []).find((g) => g.plantaId && g.plantaId === orden.plantaId) || null
+  const plantaNom = planta?.nombre || _geoRec?.nombre || orden.plantaNombre || t('Planta')
+  const plantaDir = planta?.direccion || ''
   // $/tonelada y distancia a la recogida (contexto para decidir la oferta).
   const porTon = orden.pesoEstimado ? Number(orden.pagoChofer || 0) / Number(orden.pesoEstimado) : null
   const objRecogida = geocercaObjetivo(orden, 'recogida', geocercas, plantas)
@@ -378,16 +403,24 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
   const distTxt = distM == null || !isFinite(distM) ? null : (distM >= 1000 ? `${(distM / 1000).toFixed(1)} km` : `${Math.round(distM)} m`)
 
   const aceptar = async () => {
+    if (ocupado) return
     setOcupado(true)
-    await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
+    onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
+    await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, asignacionExpira: null, asignacionManual: false, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
     await ocupar(usuario.id, orden.id) // salgo de la cola de disponibles
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
   }
   const rechazar = async (motivo) => {
+    if (ocupado) return
     const m = motivo || window.prompt(t('Motivo del rechazo:')) || 'Sin motivo'
     setOcupado(true)
-    const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), usuario.id])]
-    await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
+    onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
+    // Excluye TODOS mis identificadores (uid + id del roster) para que el motor no me
+    // reasigne la misma orden por otra vía; y limpio choferNombre para que no vuelva a
+    // "engancharse" por nombre.
+    const misIds = [usuario.id, miChofer?.id, usuario.nombre].filter(Boolean)
+    const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), ...misIds])]
+    await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
     await liberar(usuario.id) // vuelvo al final de la cola de en línea
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
     await onRechazo?.()
@@ -438,7 +471,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
               <div className="min-w-0 flex-1 space-y-3">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Recoger')}</div>
-                  <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{planta?.nombre || t('Planta')}{planta?.direccion ? ` · ${planta.direccion}` : ''}</div>
+                  <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{plantaNom}{plantaDir ? ` · ${plantaDir}` : ''}</div>
                 </div>
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Entregar')}</div>
@@ -670,8 +703,14 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   // Destino de la fase actual: recogida = planta; entrega = dirección de entrega.
   const planta = (plantas || []).find((p) => p.id === orden.plantaId) || null
   const enRecogida = fase === 'recogida'
-  const gps = enRecogida ? planta?.gps : null
-  const dirTexto = enRecogida ? (planta?.direccion || planta?.nombre || '') : (orden.direccionEntrega || '')
+  // FALLBACK robusto: si el chofer no puede leer la planta (colección restringida),
+  // usamos la GEOCERCA de la planta (que SÍ puede leer) para el nombre y las
+  // coordenadas de navegación. Así el botón Navegar y la dirección SIEMPRE aparecen.
+  const geoRecogida = (geocercas || []).find((g) => g.plantaId && g.plantaId === orden.plantaId && g.lat != null) || null
+  const plantaGps = planta?.gps || (geoRecogida ? { lat: geoRecogida.lat, lng: geoRecogida.lng } : null)
+  const plantaNombre = planta?.nombre || geoRecogida?.nombre || orden.plantaNombre || ''
+  const gps = enRecogida ? plantaGps : null
+  const dirTexto = enRecogida ? (planta?.direccion || plantaNombre || '') : (orden.direccionEntrega || '')
   const mapsUrl = (gps && gps.lat != null) ? `https://maps.google.com/?q=${gps.lat},${gps.lng}`
     : (dirTexto ? `https://maps.google.com/?q=${encodeURIComponent(dirTexto)}` : null)
   const copiaTexto = (gps && gps.lat != null) ? `${gps.lat}, ${gps.lng}` : dirTexto
@@ -724,21 +763,25 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const guardarTicket = async () => {
     setOcupado(true)
     const g = await capturarGPS()
-    // Peso OFICIAL: el del ticket (OCR) manda. Solo cambia por excepción con motivo.
-    const desdeOcr = pesoOcr != null && !excepcionPeso
-    const oficial = desdeOcr ? pesoOcr : (Number(peso) || null)
-    const fuente = desdeOcr ? 'ocr' : (pesoOcr != null ? 'manual_excepcion' : 'manual')
+    // Peso OFICIAL: si el OCR leyó el ticket, MANDA el ticket (fuente de verdad); si
+    // no, vale el que puso el chofer a mano. Cuando difieren, se registra la
+    // diferencia para auditoría (la oficina la puede revisar).
+    const manual = Number(peso) || null
+    const desdeOcr = pesoOcr != null
+    const oficial = desdeOcr ? pesoOcr : manual
+    const fuente = desdeOcr ? 'ocr' : 'manual'
+    const difiere = desdeOcr && manual != null && Math.abs(manual - pesoOcr) >= 0.5
     const ticket = {
       numero: ticketNum || null, foto: foto || null,
-      peso: oficial, pesoOcr, unidad: 'ton', fuente, ts: ahora(),
-      ...(fuente === 'manual_excepcion' ? { excepcion: { motivo: motivoPeso.trim() || 'Sin motivo', valorManual: Number(peso) || null, valorOcr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
+      peso: oficial, pesoOcr, pesoManual: manual, unidad: 'ton', fuente, ts: ahora(),
+      ...(difiere ? { diferencia: { manual, ocr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
     }
     await guardar('orders', orden.id, {
       estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
       pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente,
       ticket, gps_carga: g,
     })
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: fuente === 'manual_excepcion' ? 'ticket_excepcion_peso' : 'ticket_carga', entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})` })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: difiere ? 'ticket_diferencia_peso' : (desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga'), entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${difiere ? ` · a mano ${manual}` : ''}` })
     setModal(null); setOcupado(false); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
   }
 
@@ -790,6 +833,24 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
 
   const onFoto = async (e) => setFoto(await leerFotoReducida(e.target.files?.[0]))
 
+  // Escaneo de ticket: abre la cámara, reduce la foto y CORRE EL OCR de una vez
+  // (el chofer no tiene que tocar otro botón). Al terminar, si el peso leído difiere
+  // del que puso a mano, la UI muestra una alerta y usa el del ticket.
+  const onEscanearTicket = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const img = await leerFotoReducida(file)
+    setFoto(img)
+    setOcr({ cargando: true, progreso: 0 })
+    try {
+      const escaneada = await escanearParaOCR(img)
+      const r = await leerTicket(escaneada, (p) => setOcr({ cargando: true, progreso: p }))
+      if (r?.pesoNeto) { setPesoOcr(r.pesoNeto); setExcepcionPeso(false) }
+      if (r?.ticket) setTicketNum(r.ticket)
+      setOcr({ cargando: false, msg: r?.pesoNeto ? null : t('No se pudo leer el peso. Escribe el peso del ticket a mano abajo.') })
+    } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket. Escribe el peso a mano abajo.') }) }
+  }
+
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2">
@@ -812,7 +873,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
             {enRecogida ? <Building2 size={13} /> : <MapPin size={13} />} {enRecogida ? t('Recoger en la planta') : t('Llevar a la entrega')}
           </div>
-          {enRecogida && planta?.nombre && <div className="mt-1 text-sm font-bold text-brand-navy dark:text-slate-100">{planta.nombre}</div>}
+          {enRecogida && plantaNombre && <div className="mt-1 text-sm font-bold text-brand-navy dark:text-slate-100">{plantaNombre}</div>}
           {dirTexto && <div className="mt-0.5 text-sm text-brand-navy dark:text-slate-100">{dirTexto}</div>}
           <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300">
             <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {orden.material || '—'} · {orden.pesoReal ?? orden.pesoEstimado} ton</span>
@@ -920,54 +981,42 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
       {/* Modal ticket de carga — el PESO OFICIAL sale del ticket (OCR), no del chofer */}
       {modal === 'ticket' && (
         <Modal onClose={() => setModal(null)} titulo={t('Ticket de carga')}>
+          {/* 1) Peso a mano (lo que el chofer lee del ticket). 2) Escanea el ticket:
+              se abre la cámara y el OCR lee el peso. Si difieren, se avisa y manda el ticket. */}
           <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
-          <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
-            <Camera size={18} /> {foto ? t('Foto lista ✓ (toca para reemplazar)') : t('Tomar foto del ticket')}
-            <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
+
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-400">{t('Peso (ton)')}</label>
+          <Input type="number" inputMode="decimal" placeholder={t('Escribe el peso del ticket, ej. 24')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-3" />
+
+          {/* Botón grande: abre la cámara y escanea el ticket automáticamente */}
+          <label className={`mb-2 flex cursor-pointer items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg ${ocr?.cargando ? 'bg-slate-400' : 'bg-brand-navy dark:bg-amber-500 dark:text-slate-900'}`}>
+            {ocr?.cargando ? <><Spinner /> {t('Escaneando…')} {ocr.progreso || 0}%</> : <><ScanLine size={18} /> {foto ? t('Volver a escanear ticket') : t('Escanear ticket con la cámara')}</>}
+            <input type="file" accept="image/*" capture="environment" onChange={onEscanearTicket} disabled={ocr?.cargando} className="hidden" />
           </label>
           {foto && <div className="mb-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
-          {foto && (
-            <button type="button" disabled={ocr?.cargando}
-              onClick={async () => {
-                setOcr({ cargando: true, progreso: 0 })
-                try {
-                  const escaneada = await escanearParaOCR(foto)
-                  const r = await leerTicket(escaneada, (p) => setOcr({ cargando: true, progreso: p }))
-                  if (r) { if (r.pesoNeto) { setPesoOcr(r.pesoNeto); setExcepcionPeso(false) } if (r.ticket) setTicketNum(r.ticket) }
-                  setOcr({ cargando: false, msg: r && r.pesoNeto ? t('Peso leído del ticket.') : t('No se pudo leer el peso. Revisa la foto o registra una excepción.') })
-                } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket.') }) }
-              }}
-              className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy py-2 text-sm font-semibold text-white disabled:opacity-60 dark:bg-amber-500 dark:text-slate-900">
-              {ocr?.cargando ? <><Spinner /> {t('Escaneando…')} {ocr.progreso || 0}%</> : <><ScanLine size={15} /> {t('Escanear ticket')}</>}
-            </button>
-          )}
-          {ocr?.msg && <p className="mb-1 text-[11px] text-amber-600 dark:text-amber-400">{ocr.msg}</p>}
+          {ocr?.msg && <p className="mb-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">{ocr.msg}</p>}
 
-          {/* Peso oficial (del ticket) — solo lectura; corregir requiere excepción */}
-          {pesoOcr != null && !excepcionPeso && (
-            <div className="mb-2 rounded-xl border border-emerald-300 bg-emerald-500/10 p-3 dark:border-emerald-500/40">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('Peso oficial (del ticket)')}</div>
-              <div className="text-2xl font-black text-brand-navy dark:text-slate-100">{pesoOcr} ton</div>
-              <button type="button" onClick={() => { setExcepcionPeso(true); setPeso(String(pesoOcr)) }} className="mt-1 text-[11px] font-semibold text-amber-600 underline dark:text-amber-400">{t('El ticket dice otra cosa — corregir (excepción)')}</button>
-            </div>
-          )}
-          {excepcionPeso && (
-            <div className="mb-2 rounded-xl border border-amber-300 bg-amber-500/10 p-3 dark:border-amber-500/40">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">{t('Excepción de peso (queda auditada)')}</div>
-              <Input type="number" placeholder={t('Peso correcto (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mt-2" />
-              <Input placeholder={t('Motivo de la corrección')} value={motivoPeso} onChange={(e) => setMotivoPeso(e.target.value)} className="mt-2" />
-              {pesoOcr != null && <button type="button" onClick={() => setExcepcionPeso(false)} className="mt-1 text-[11px] text-slate-400 underline">{t('Cancelar excepción')}</button>}
-            </div>
-          )}
-          {pesoOcr == null && !excepcionPeso && (
-            <div className="mb-2">
-              <Input type="number" placeholder={t('Peso (ton) — sin lectura de ticket')} value={peso} onChange={(e) => setPeso(e.target.value)} />
-              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Sin OCR: este peso queda marcado como manual para revisión.')}</p>
-            </div>
-          )}
+          {/* Peso leído del ticket + alerta si difiere del que puso a mano */}
+          {pesoOcr != null && (() => {
+            const manual = Number(peso) || null
+            const difiere = manual != null && Math.abs(manual - pesoOcr) >= 0.5
+            return (
+              <div className="mb-2 rounded-xl border border-emerald-300 bg-emerald-500/10 p-3 dark:border-emerald-500/40">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('Peso leído del ticket')}</div>
+                <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-brand-navy dark:text-slate-100">{pesoOcr}</span><span className="text-sm text-slate-500">ton</span></div>
+                {difiere && (
+                  <div className="mt-2 rounded-lg bg-rose-500/10 px-2.5 py-2 text-[12px] text-rose-600 dark:text-rose-400">
+                    <b>⚠ {t('Diferencia detectada.')}</b> {t('Escribiste')} {manual} ton {t('pero el ticket dice')} {pesoOcr} ton. {t('Se usará el del ticket.')}
+                    <button type="button" onClick={() => setPeso(String(pesoOcr))} className="ml-1 font-bold underline">{t('Igualar a la cámara')}</button>
+                  </div>
+                )}
+                <button type="button" onClick={() => { setPesoOcr(null); setOcr(null) }} className="mt-1.5 text-[11px] font-semibold text-slate-400 underline">{t('El ticket dice otra cosa — usar mi peso a mano')}</button>
+              </div>
+            )
+          })()}
 
           <Boton variant="gold" onClick={guardarTicket} className="w-full justify-center"
-            disabled={ocupado || !((pesoOcr != null && !excepcionPeso) || (excepcionPeso && peso && motivoPeso.trim()) || (pesoOcr == null && peso))}>
+            disabled={ocupado || !(pesoOcr != null || peso)}>
             {ocupado ? <Spinner /> : t('Confirmar carga')}
           </Boton>
         </Modal>

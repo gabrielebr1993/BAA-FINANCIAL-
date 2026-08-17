@@ -8,6 +8,10 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { metricasRecorrido } from '../domain/geo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { ESTADOS_ACTIVOS_CHOFER } from '../domain/flujo'
+import { tsMillis } from '../data/chatKeys'
+
+// Un chofer se considera "en línea ahora" si latió en los últimos 90 s.
+const PRESENCIA_TTL_MS = 90 * 1000
 import MapaLeaflet from '../components/MapaLeaflet'
 import { PageTitle, Card, Badge, Cargando, Select, Input } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -20,6 +24,7 @@ export default function MapaVivo() {
   const { tenantId } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: geocercas } = useColeccion('geofences')
+  const { datos: presencias } = useColeccion('presence')
   const [sel, setSel] = useState('')
   const [track, setTrack] = useState([])
   const [verChat, setVerChat] = useState(false)
@@ -48,15 +53,37 @@ export default function MapaVivo() {
     .filter((o) => o.ultimaPos && o.ultimaPos.lat != null)
     .map((o) => ({ lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, label: `${o.numero} · ${o.choferNombre || 'sin chofer'}`, color: colorPunto(o.estado) })), [filtradas])
 
+  // Reloj para recalcular la frescura de las presencias (que un chofer se caiga del
+  // mapa a los 90 s sin latido, aunque no llegue un cambio nuevo).
+  const [ahoraMs, setAhoraMs] = useState(Date.now())
+  useEffect(() => { const id = setInterval(() => setAhoraMs(Date.now()), 15000); return () => clearInterval(id) }, [])
+
+  // Choferes EN LÍNEA con posición GPS que NO tienen una orden activa (esos ya salen
+  // por su recorrido). Así el dispatcher ve a TODOS los choferes disponibles en vivo.
+  const conOrden = useMemo(() => new Set(activas.map((o) => o.choferId).filter(Boolean)), [activas])
+  const choferesVivos = useMemo(() => (presencias || []).filter((p) =>
+    p.enLinea === true && p.lat != null &&
+    (ahoraMs - tsMillis(p.heartbeat || p.posTs || p.desde)) <= PRESENCIA_TTL_MS &&
+    !conOrden.has(p.uid) && !p.demo), [presencias, conOrden, ahoraMs])
+  const qMatch = (p) => { const q = buscar.trim().toLowerCase(); return !q || (p.nombre || '').toLowerCase().includes(q) }
+  const marcadoresChoferes = useMemo(() => choferesVivos.filter(qMatch)
+    .map((p) => ({ lat: p.lat, lng: p.lng, label: `${p.nombre || 'chofer'} · ${p.estado === 'reservado' ? 'reservado' : 'libre'}`, color: '#64748b' })),
+    [choferesVivos, buscar])
+
   const estados = [...new Set(activas.map((o) => o.estado))]
+  const hayAlgo = activas.length > 0 || choferesVivos.length > 0
+  // Sin órdenes activas pero con choferes en línea: forzamos la vista "todos" para
+  // que el mapa aparezca con los choferes disponibles.
+  const soloChoferes = activas.length === 0 && choferesVivos.length > 0
+  const verTodosEf = verTodos || soloChoferes
 
   if (cargando) return <Cargando />
 
   return (
     <div>
       <PageTitle right={
-        <button onClick={() => setVerTodos((v) => !v)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${verTodos ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800'}`}>
-          {verTodos ? <Users size={15} /> : <Layers size={15} />} {verTodos ? t('Viendo todos') : t('Ver todos')}
+        <button onClick={() => setVerTodos((v) => !v)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${verTodosEf ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'border border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800'}`}>
+          {verTodosEf ? <Users size={15} /> : <Layers size={15} />} {verTodosEf ? t('Viendo todos') : t('Ver todos')}
         </button>
       }>{t('Mapa en vivo')}</PageTitle>
 
@@ -71,9 +98,10 @@ export default function MapaVivo() {
           {estados.map((s) => <option key={s} value={s}>{t(ORDEN_ESTADO_LABEL[s])}</option>)}
         </Select>
         <span className="text-xs text-slate-400">{filtradas.length} {t('en movimiento')}</span>
+        {choferesVivos.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-slate-400"><span className="h-2 w-2 rounded-full bg-slate-500" /> {choferesVivos.length} {t('en línea (sin orden)')}</span>}
       </div>
 
-      {activas.length === 0 ? (
+      {!hayAlgo ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <div className="grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-500"><Navigation size={24} /></div>
           <div>
@@ -87,12 +115,13 @@ export default function MapaVivo() {
           {/* ===== MAPA A PANTALLA ===== */}
           <Card className="mb-4 p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
-              {verTodos ? (
+              {verTodosEf ? (
                 <>
-                  <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Todos los choferes')} ({marcadores.length})</span>
+                  <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Todos los choferes')} ({marcadores.length + marcadoresChoferes.length})</span>
                   <span className="ml-2 flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> {t('En ruta')}</span>
                   <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> {t('En destino')}</span>
                   <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> {t('En planta')}</span>
+                  <span className="flex items-center gap-1 text-xs text-slate-400"><span className="h-2.5 w-2.5 rounded-full bg-slate-500" /> {t('En línea (libre)')}</span>
                 </>
               ) : orden ? (
                 <>
@@ -105,9 +134,9 @@ export default function MapaVivo() {
                 </>
               ) : null}
             </div>
-            {!verTodos && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
-            <MapaLeaflet marcadores={verTodos ? marcadores : []} puntos={verTodos ? [] : track} geocercas={geocercas} alto="62vh" />
-            {!verTodos && orden && (
+            {!verTodosEf && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
+            <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} alto="62vh" />
+            {!verTodosEf && orden && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Metrica icon={RouteIcon} label={t('Recorrido')} val={`${met.km} km`} />
                 <Metrica icon={Gauge} label={t('Vel. máx / prom')} val={`${met.velMaxKmh}/${met.velPromKmh} km/h`} />
@@ -115,7 +144,7 @@ export default function MapaVivo() {
                 <Metrica icon={Clock} label={t('Detenido')} val={`${met.minDetenido} min`} />
               </div>
             )}
-            {verTodos && marcadores.length === 0 && <p className="mt-2 px-1 text-xs text-slate-400">{t('Ningún chofer tiene posición GPS todavía. En cuanto empiecen a moverse, aparecerán aquí.')}</p>}
+            {verTodosEf && (marcadores.length + marcadoresChoferes.length) === 0 && <p className="mt-2 px-1 text-xs text-slate-400">{t('Ningún chofer tiene posición GPS todavía. En cuanto se conecten o empiecen a moverse, aparecerán aquí.')}</p>}
           </Card>
 
           {/* ===== LISTA DE ÓRDENES DEBAJO ===== */}

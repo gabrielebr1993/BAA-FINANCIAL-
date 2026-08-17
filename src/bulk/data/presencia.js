@@ -22,6 +22,13 @@ export async function conectar(tenantId, { uid, nombre, carrierId, carrierNombre
 // Latido para mantener "viva" la presencia (el matcher descarta las obsoletas).
 export async function latir(uid) { try { await guardar('presence', uid, { heartbeat: ahora() }) } catch { /* noop */ } }
 
+// Reporta la ubicación EN VIVO del chofer mientras está en línea (aunque no tenga
+// orden), para verlo en el Mapa en vivo. También sirve de latido.
+export async function reportarUbicacion(uid, pos) {
+  if (!pos || pos.lat == null) return latir(uid)
+  try { await guardar('presence', uid, { lat: pos.lat, lng: pos.lng, posTs: ahora(), heartbeat: ahora() }) } catch { /* noop */ }
+}
+
 // Sale de línea (se desconecta manualmente o cierra la app).
 export async function desconectar(uid) { try { await guardar('presence', uid, { enLinea: false, estado: 'offline', ordenId: null, heartbeat: ahora() }) } catch { /* noop */ } }
 
