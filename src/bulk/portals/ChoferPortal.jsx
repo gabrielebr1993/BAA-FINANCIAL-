@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX, AlertTriangle } from 'lucide-react'
 import { sonidoActivo, setSonido } from '../integraciones/sonido'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
@@ -793,25 +793,23 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     setOcupado(true)
     try {
       const g = await capturarGPS()
-      // Peso OFICIAL: si el OCR leyó el ticket, MANDA el ticket (fuente de verdad); si
-      // no, vale el que puso el chofer a mano. Cuando difieren, se registra la
-      // diferencia para auditoría (la oficina la puede revisar).
+      // Peso OFICIAL: el del OCR MANDA. Solo si el OCR no lo detectó, el chofer lo pone
+      // a mano y la carga queda MARCADA para revisión de la oficina (pesoRevisar).
       const manual = Number(peso) || null
       const desdeOcr = pesoOcr != null
       const oficial = desdeOcr ? pesoOcr : manual
       const fuente = desdeOcr ? 'ocr' : 'manual'
-      const difiere = desdeOcr && manual != null && Math.abs(manual - pesoOcr) >= 0.5
+      const revisar = !desdeOcr // no se pudo leer del ticket → pendiente de revisar
       const ticket = {
         numero: ticketNum || null, foto: foto || null,
-        peso: oficial, pesoOcr, pesoManual: manual, unidad: 'ton', fuente, ts: ahora(),
-        ...(difiere ? { diferencia: { manual, ocr: pesoOcr, por: usuario?.nombre || usuario?.email || '', ts: ahora() } } : {}),
+        peso: oficial, pesoOcr, pesoManual: desdeOcr ? null : manual, unidad: 'ton', fuente, revisar, ts: ahora(),
       }
       await guardar('orders', orden.id, {
         estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
-        pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente,
+        pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente, pesoRevisar: revisar,
         ticket, gps_carga: g,
       })
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: difiere ? 'ticket_diferencia_peso' : (desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga'), entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${difiere ? ` · a mano ${manual}` : ''}` })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga_manual_revisar', entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${revisar ? ' · OCR no detectó, revisar' : ''}` })
       setModal(null); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
     } catch (e) { window.alert(t('No se pudo guardar la carga. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
     finally { setOcupado(false) }
@@ -1025,49 +1023,49 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </Modal>
       )}
 
-      {/* Modal ticket de carga — el PESO OFICIAL sale del ticket (OCR), no del chofer */}
-      {modal === 'ticket' && (
+      {/* Modal ticket de carga — el PESO lo pone el OCR. El chofer NO lo escribe;
+          solo si el OCR no lo detecta se habilita el manual (y queda marcado para revisión). */}
+      {modal === 'ticket' && (() => {
+        const escaneoFallido = !!foto && pesoOcr == null && ocr && !ocr.cargando // escaneó pero no leyó el peso
+        return (
         <Modal onClose={() => setModal(null)} titulo={t('Ticket de carga')}>
-          {/* 1) Peso a mano (lo que el chofer lee del ticket). 2) Escanea el ticket:
-              se abre la cámara y el OCR lee el peso. Si difieren, se avisa y manda el ticket. */}
-          <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-2" />
-
-          <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-400">{t('Peso (ton)')}</label>
-          <Input type="number" inputMode="decimal" placeholder={t('Escribe el peso del ticket, ej. 24')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mb-3" />
+          <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-3" />
 
           {/* Botón grande: abre la cámara y escanea el ticket automáticamente */}
-          <label className={`mb-2 flex cursor-pointer items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg ${ocr?.cargando ? 'bg-slate-400' : 'bg-brand-navy dark:bg-amber-500 dark:text-slate-900'}`}>
+          <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg ${ocr?.cargando ? 'bg-slate-400' : 'bg-brand-navy dark:bg-amber-500 dark:text-slate-900'}`}>
             {ocr?.cargando ? <><Spinner /> {t('Escaneando…')} {ocr.progreso || 0}%</> : <><ScanLine size={18} /> {foto ? t('Volver a escanear ticket') : t('Escanear ticket con la cámara')}</>}
             <input type="file" accept="image/*" capture="environment" onChange={onEscanearTicket} disabled={ocr?.cargando} className="hidden" />
           </label>
-          {foto && <div className="mb-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
-          {ocr?.msg && <p className="mb-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">{ocr.msg}</p>}
+          {foto && <div className="mt-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
 
-          {/* Peso leído del ticket + alerta si difiere del que puso a mano */}
-          {pesoOcr != null && (() => {
-            const manual = Number(peso) || null
-            const difiere = manual != null && Math.abs(manual - pesoOcr) >= 0.5
-            return (
-              <div className="mb-2 rounded-xl border border-emerald-300 bg-emerald-500/10 p-3 dark:border-emerald-500/40">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">{t('Peso leído del ticket')}</div>
-                <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-brand-navy dark:text-slate-100">{pesoOcr}</span><span className="text-sm text-slate-500">ton</span></div>
-                {difiere && (
-                  <div className="mt-2 rounded-lg bg-rose-500/10 px-2.5 py-2 text-[12px] text-rose-600 dark:text-rose-400">
-                    <b>⚠ {t('Diferencia detectada.')}</b> {t('Escribiste')} {manual} ton {t('pero el ticket dice')} {pesoOcr} ton. {t('Se usará el del ticket.')}
-                    <button type="button" onClick={() => setPeso(String(pesoOcr))} className="ml-1 font-bold underline">{t('Igualar a la cámara')}</button>
-                  </div>
-                )}
-                <button type="button" onClick={() => { setPesoOcr(null); setOcr(null) }} className="mt-1.5 text-[11px] font-semibold text-slate-400 underline">{t('El ticket dice otra cosa — usar mi peso a mano')}</button>
-              </div>
-            )
-          })()}
+          {/* CASO 1 · OCR detectó el peso: se usa ESE, el chofer no edita nada. */}
+          {pesoOcr != null && (
+            <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-500/10 p-4 text-center dark:border-emerald-500/40">
+              <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400"><CheckCircle2 size={13} /> {t('Peso leído del ticket')}</div>
+              <div className="mt-1"><span className="text-4xl font-black text-brand-navy dark:text-slate-100">{pesoOcr}</span> <span className="text-base text-slate-500">ton</span></div>
+              <div className="mt-1 text-[11px] text-slate-400">{t('Este es el peso oficial. Si es incorrecto, vuelve a escanear el ticket.')}</div>
+            </div>
+          )}
 
-          <Boton variant="gold" onClick={guardarTicket} className="w-full justify-center"
-            disabled={ocupado || !(pesoOcr != null || peso)}>
+          {/* CASO 2 · No se detectó: alerta + peso a mano (queda MARCADO para revisión). */}
+          {escaneoFallido && (
+            <div className="mt-3 rounded-xl border border-rose-300 bg-rose-500/10 p-3 dark:border-rose-500/40">
+              <div className="flex items-center gap-1.5 text-[12px] font-bold text-rose-600 dark:text-rose-400"><AlertTriangle size={14} /> {t('No se pudo leer el peso del ticket')}</div>
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-300">{t('Escríbelo a mano. Esta carga quedará MARCADA para que la oficina la revise.')}</div>
+              <Input type="number" inputMode="decimal" placeholder={t('Peso del ticket (ton)')} value={peso} onChange={(e) => setPeso(e.target.value)} className="mt-2" />
+            </div>
+          )}
+
+          {/* Antes de escanear: guía */}
+          {!foto && <p className="mt-3 text-center text-[11px] text-slate-400">{t('Toca el botón, fotografía el ticket de báscula y el peso se lee solo.')}</p>}
+
+          <Boton variant="gold" onClick={guardarTicket} className="mt-4 w-full justify-center"
+            disabled={ocupado || ocr?.cargando || !(pesoOcr != null || (escaneoFallido && peso))}>
             {ocupado ? <Spinner /> : t('Confirmar carga')}
           </Boton>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* Modal POD */}
       {modal === 'pod' && (

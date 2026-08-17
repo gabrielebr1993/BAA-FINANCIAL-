@@ -129,8 +129,14 @@ export default function OrdenDetalle() {
               <h1 className="m-0 font-mono text-2xl font-black text-brand-navy dark:text-slate-100">{orden.numero}</h1>
               <Badge color={COLOR_ESTADO[orden.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[orden.estado])}</Badge>
               {orden.urgente && <Badge color="red">{t('Urgente')}</Badge>}
+              {orden.pesoRevisar && <Badge color="red">{t('Revisar peso')}</Badge>}
             </div>
             <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t(orden.material || 'material s/e')} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo || t('equipo s/e')}</div>
+            {orden.pesoRevisar && (
+              <div className="mt-2 inline-flex items-start gap-1.5 rounded-lg bg-rose-500/10 px-2.5 py-1.5 text-[12px] font-medium text-rose-600 dark:text-rose-400">
+                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" /> {t('El OCR no pudo leer el peso del ticket; el chofer lo puso a mano. Verifica el peso contra la foto del ticket.')}
+              </div>
+            )}
           </div>
           <div className="ml-auto text-right">
             <div className="text-[11px] uppercase text-slate-400">{t('Avance')}</div>
