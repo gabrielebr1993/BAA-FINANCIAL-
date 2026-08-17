@@ -33,6 +33,7 @@ export default function ChoferPerfil() {
   const perfilDriver = driverProfiles.find((p) => clave(p.nombre) === clave(nombre)) || null
   const jobsAct = jobs.filter((j) => j.activo !== false)
   const [subiendo, setSubiendo] = useState(false)
+  const [zoomFoto, setZoomFoto] = useState(null) // foto ampliada (lightbox)
 
   const perfil = useMemo(
     () => perfilDeChofer({ ordenes, carriers, jobs, clientes, plants, incidents, nombre }),
@@ -93,7 +94,7 @@ export default function ChoferPerfil() {
           <div className="-mt-12 flex flex-wrap items-end gap-4">
             <div className="relative">
               {(perfilDriver?.foto || rosterChofer?.foto)
-                ? <img src={perfilDriver?.foto || rosterChofer.foto} alt={nombre} className="h-24 w-24 flex-shrink-0 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-900" />
+                ? <img src={perfilDriver?.foto || rosterChofer.foto} alt={nombre} onClick={() => setZoomFoto(perfilDriver?.foto || rosterChofer.foto)} title={t('Ver foto en grande')} className="h-24 w-24 flex-shrink-0 cursor-zoom-in rounded-full border-4 border-white object-cover shadow-lg transition hover:brightness-95 dark:border-slate-900" />
                 : <div className="grid h-24 w-24 flex-shrink-0 place-items-center rounded-full border-4 border-white bg-brand-navy text-4xl font-black text-white shadow-lg dark:border-slate-900">{(nombre || '?').charAt(0).toUpperCase()}</div>}
               <label className="absolute bottom-0 right-0 grid h-8 w-8 cursor-pointer place-items-center rounded-full border-2 border-white bg-amber-500 text-slate-900 shadow dark:border-slate-900" title={t('Cambiar foto')}>
                 {subiendo ? <Spinner /> : <Camera size={15} />}
@@ -355,6 +356,14 @@ export default function ChoferPerfil() {
           </Card>
         </div>
       </div>
+
+      {/* Visor de foto a pantalla completa: se cierra al tocar en cualquier lado. */}
+      {zoomFoto && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4" onClick={() => setZoomFoto(null)}>
+          <img src={zoomFoto} alt={nombre} className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setZoomFoto(null)} className="absolute right-4 top-4 rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white hover:bg-white/25">{t('Cerrar')}</button>
+        </div>
+      )}
     </div>
   )
 }
