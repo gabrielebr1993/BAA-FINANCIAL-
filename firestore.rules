@@ -169,6 +169,9 @@ service cloud.firestore {
     function bCarrier() { return request.auth != null ? request.auth.token.bulkCarrierId : null; }
     // Planta asignada al supervisor (en su doc de usuario). Para acotar sus lecturas.
     function bMyPlanta() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.plantaId : null; }
+    // Nombre del chofer (de su doc de usuario). Sirve para que pueda avanzar/aceptar
+    // una orden que se le ofreció por NOMBRE o por id del roster (no solo por uid).
+    function bMyName() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.nombre : null; }
 
     // Perfiles Bulk: lee el propio o admin del tenant. Alta/edición: backend (Admin SDK).
     match /bulk_users/{id} {
@@ -220,21 +223,27 @@ service cloud.firestore {
           || (bRole() == 'supervisor_planta' && bMyPlanta() != null && resource.data.plantaId == bMyPlanta())));
       allow create: if bStaff(request.resource.data.tenantId);
       // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
-      // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo:
+      // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo con .get(…,0)
+      // para NO fallar si a la orden le falta algún campo de precio (antes eso
+      // rompía la regla y denegaba el avance del chofer — "Missing permissions").
       //  - precioCliente y precioTransportista: intocables por cualquier no-staff.
-      //  - pagoChofer: el transportista SÍ lo fija al asignar a su chofer; el
-      //    chofer y el supervisor NO pueden tocarlo.
+      //  - pagoChofer: el transportista SÍ lo fija al asignar; el chofer/supervisor NO.
+      // El chofer puede avanzar la orden que es suya por uid, por su carrier, o que se
+      // le ofreció por NOMBRE (asignación por id del roster).
       allow update: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId)
-            && request.resource.data.precioCliente == resource.data.precioCliente
-            && request.resource.data.precioTransportista == resource.data.precioTransportista
+            && request.resource.data.get('precioCliente', 0) == resource.data.get('precioCliente', 0)
+            && request.resource.data.get('precioTransportista', 0) == resource.data.get('precioTransportista', 0)
             && (
              (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
-          || (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier())
-                && request.resource.data.pagoChofer == resource.data.pagoChofer)
+          || (bRole() == 'chofer'
+                && request.resource.data.get('pagoChofer', 0) == resource.data.get('pagoChofer', 0)
+                && (resource.data.choferId == request.auth.uid
+                    || (bCarrier() != null && resource.data.transportistaId == bCarrier())
+                    || resource.data.get('choferNombre', '') == bMyName()))
           || (bRole() == 'supervisor_planta'
                 && resource.data.plantaId == bMyPlanta()
-                && request.resource.data.pagoChofer == resource.data.pagoChofer)));
+                && request.resource.data.get('pagoChofer', 0) == resource.data.get('pagoChofer', 0))));
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
