@@ -66,7 +66,7 @@ export default function ClientePerfil() {
   const inicial = (cliente.nombre || '?').charAt(0).toUpperCase()
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-[100rem]">
       <Link to="/bulk/clientes" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Clientes y Plantas')}</Link>
 
       <Card className="mb-4 overflow-hidden p-0">

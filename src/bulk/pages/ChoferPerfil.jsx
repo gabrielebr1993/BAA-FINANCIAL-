@@ -83,7 +83,7 @@ export default function ChoferPerfil() {
   const activo = rosterChofer ? rosterChofer.activo !== false : null
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-[100rem]">
       <Link to="/bulk/transportistas" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
 
       {/* Cabecera estilo perfil */}
@@ -201,7 +201,7 @@ export default function ChoferPerfil() {
       )}
 
       {/* KPIs */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-12">
         <Mini icon={Package} label={t('Órdenes')} val={stats.total} />
         <Mini icon={Award} label={t('Entregadas')} val={stats.entregadas} />
         <Mini icon={Loader} label={t('En proceso')} val={enProcesoN} />

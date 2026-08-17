@@ -109,7 +109,7 @@ export default function TransportistaPerfil() {
   const inicial = (carrier.nombre || '?').charAt(0).toUpperCase()
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto w-full max-w-[100rem]">
       <Link to="/bulk/transportistas" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
 
       {/* Portada tipo perfil */}
