@@ -178,7 +178,7 @@ export default function ChoferPortal() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
       <IndicadorConexion />
-      <header className="bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 pt-3.5 text-white">
+      <header className="head-safe bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 text-white">
         <div className="flex items-center gap-2.5">
           <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} /></div>
           <div className="min-w-0 flex-1">
@@ -317,7 +317,7 @@ export default function ChoferPortal() {
         )}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <nav className="nav-safe fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosOficina }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
           <button key={it.k} onClick={() => setTab(it.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === it.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
             <span className="relative">
@@ -378,7 +378,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl">
+      <div className="pb-safe w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-3xl">
         {/* Barra de tiempo (2:00) */}
         <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800">
           <div className="h-full rounded-r-full bg-amber-500 transition-[width] duration-300 ease-linear" style={{ width: `${pct}%` }} />
@@ -998,7 +998,7 @@ function Lightbox({ src, onClose }) {
 function Modal({ titulo, children, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-2xl bg-white p-4 dark:bg-slate-900 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="pb-safe w-full max-w-md rounded-t-2xl bg-white p-4 dark:bg-slate-900 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</h3>
         {children}
       </div>

@@ -66,7 +66,7 @@ export default function SupervisorPortal() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-100 dark:bg-slate-950">
-      <header className="flex items-center gap-2 bg-slate-900 px-4 py-3 text-white">
+      <header className="head-safe flex items-center gap-2 bg-slate-900 px-4 pb-3 text-white">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><ShieldCheck size={18} /></div>
         <div><div className="text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Supervisor de planta')}</div></div>
         <button onClick={() => navigate('/elegir')} className="ml-auto rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>

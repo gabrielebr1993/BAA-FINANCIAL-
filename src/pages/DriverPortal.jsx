@@ -213,7 +213,7 @@ export default function DriverPortal() {
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
       {/* Header propio del portal */}
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
+      <header className="pt-safe sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy"><FileText size={18} strokeWidth={1.9} className="text-brand-gold" /></div>
         <div>
           <div className="text-base font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
