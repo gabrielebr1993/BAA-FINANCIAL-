@@ -677,10 +677,20 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   )
 }
 
+// Instrucción en lenguaje claro (estilo DoorDash): qué hacer AHORA, paso a paso.
+const GUIA_CHOFER = {
+  [E.ACEPTADA]:   { paso: 1, txt: 'Ve a la planta a recoger la carga' },
+  [E.EN_PLANTA]:  { paso: 2, txt: 'Carga y escanea el ticket de báscula' },
+  [E.EN_RUTA]:    { paso: 3, txt: 'Lleva la carga al punto de entrega' },
+  [E.EN_DESTINO]: { paso: 4, txt: 'Descarga y registra la entrega (foto + firma)' },
+  [E.ENTREGADA]:  { paso: 5, txt: 'Pide el código al supervisor para cerrar' },
+}
+
 function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, liberacionAuto = false, noLeidosChat = 0 }) {
   const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
   const fase = faseChofer(orden.estado)
+  const guia = GUIA_CHOFER[orden.estado] || null
   const [modal, setModal] = useState(null) // 'ticket' | 'pod' | 'chat'
   const [ocupado, setOcupado] = useState(false)
   const [peso, setPeso] = useState('')
@@ -862,6 +872,18 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </button>
       </div>
       <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
+
+      {/* Guía "qué hacer ahora" en lenguaje claro (paso X de 5) — estilo DoorDash */}
+      {guia && (
+        <div className="mt-2.5 flex items-center gap-3 rounded-2xl bg-brand-navy p-3 text-white dark:bg-slate-800">
+          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/15 text-xs font-black">{guia.paso}/5</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-300">{t('Qué hacer ahora')}</div>
+            <div className="text-sm font-bold leading-tight">{t(guia.txt)}{distTxt ? ` · ${distTxt}` : ''}</div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-2 flex items-baseline gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
         <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{money(orden.pagoChofer)}</span>
         <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago por este viaje')}</span>
