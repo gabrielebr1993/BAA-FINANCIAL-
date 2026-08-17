@@ -20,11 +20,15 @@ export function equipoCompatible(equipoChofer, tipoEquipoReq) {
 }
 
 // ¿El chofer está habilitado para el trabajo de la orden?
-// Si el chofer no tiene trabajos configurados, puede recibir de cualquiera (no
-// restringe). Si tiene una lista, la orden debe pertenecer a uno de esos trabajos.
+//  - Chofer sin trabajos configurados → recibe de cualquiera (sin restricción).
+//  - Orden SIN trabajo (orden directa por cliente) → la puede recibir cualquiera,
+//    aunque el chofer tenga trabajos: los trabajos del chofer solo LIMITAN las
+//    órdenes que SÍ pertenecen a un trabajo, no las órdenes directas.
+//  - Orden CON trabajo → el chofer debe estar afiliado a ese trabajo.
 export function trabajoCompatible(jobsChofer, jobId) {
   if (!jobsChofer || jobsChofer.length === 0) return true
-  return !!jobId && jobsChofer.includes(jobId)
+  if (!jobId) return true
+  return jobsChofer.includes(jobId)
 }
 
 // ¿Está esta presencia libre y viva ahora mismo?
