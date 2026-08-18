@@ -42,6 +42,8 @@ export default function Tarifas() {
 
   const uni = UNIDAD_CORTA[f.tipo] || ''
   const esViaje = f.tipo === TIPO_BASE.POR_VIAJE
+  const cobroLabel = esViaje ? t('Cobro al cliente ($/viaje)') : `${t('Cobro al cliente')} ($/${uni})`
+  const pagoLabel = esViaje ? t('Pago al transportista ($/viaje)') : `${t('Pago al transportista')} ($/${uni})`
   // Vista previa EN VIVO.
   const reglaForm = {
     tipo: f.tipo, valorCliente: Number(f.valorCliente) || 0,
@@ -68,34 +70,34 @@ export default function Tarifas() {
       <p className="-mt-1 mb-4 text-sm text-slate-500 dark:text-slate-400">{t('Define qué COBRAS al cliente y qué PAGAS al transportista. La diferencia es tu utilidad. El pago al chofer lo fija el transportista en el perfil del chofer.')}</p>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
         {/* ── Formulario ─────────────────────────────────────────── */}
-        <Card className="p-5">
-          <div className="mb-4 flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400"><Plus size={17} /></span><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nueva regla de tarifa')}</h3></div>
+        <Card className="p-5 sm:p-6">
+          <div className="mb-5 flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400"><Plus size={17} /></span><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nueva regla de tarifa')}</h3></div>
 
           {/* Paso 1 · Datos */}
           <Grupo n="1" titulo={t('Datos')} icon={Tag}>
-            <div className="grid gap-3 sm:grid-cols-[1fr_130px]">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px]">
               <Campo label={t('Nombre de la regla')}><Input placeholder={t('Ej. Grava — obra centro')} value={f.nombre} onChange={set('nombre')} /></Campo>
-              <Campo label={t('Prioridad')} hint={t('mayor gana el empate')}><Input type="number" placeholder="0" value={f.prioridad} onChange={set('prioridad')} /></Campo>
+              <Campo label={t('Prioridad')} hint={t('mayor gana')}><Input type="number" placeholder="0" value={f.prioridad} onChange={set('prioridad')} /></Campo>
             </div>
           </Grupo>
 
-          {/* Paso 2 · Precios */}
+          {/* Paso 2 · Precios — todo en una fila que llena el ancho */}
           <Grupo n="2" titulo={t('Precios')} icon={DollarSign}>
-            <Campo label={t('Cómo se cobra')}>
-              <Select value={f.tipo} onChange={set('tipo')}>{Object.values(TIPO_BASE).map((tb) => <option key={tb} value={tb}>{t(TIPO_BASE_LABEL[tb])}</option>)}</Select>
-            </Campo>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Campo label={esViaje ? t('COBRO al cliente ($/viaje)') : `${t('COBRO al cliente')} ($/${uni})`} acento="emerald">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Campo label={t('Cómo se cobra')}>
+                <Select value={f.tipo} onChange={set('tipo')}>{Object.values(TIPO_BASE).map((tb) => <option key={tb} value={tb}>{t(TIPO_BASE_LABEL[tb])}</option>)}</Select>
+              </Campo>
+              <Campo label={cobroLabel} acento="emerald">
                 <Input type="number" inputMode="decimal" placeholder={t('Ej. 18')} value={f.valorCliente} onChange={set('valorCliente')} />
               </Campo>
-              <Campo label={esViaje ? t('PAGO al transportista ($/viaje)') : `${t('PAGO al transportista')} ($/${uni})`} acento="amber">
+              <Campo label={pagoLabel} acento="amber">
                 <Input type="number" inputMode="decimal" placeholder={t('Ej. 13')} value={f.valorTransportista} onChange={set('valorTransportista')} />
               </Campo>
-            </div>
-            <div className="mt-3">
-              <Campo label={t('Recargo por urgencia (opcional, ej. 0.15 = +15%)')}><Input type="number" step="0.01" placeholder="0" value={f.recargoUrgencia} onChange={set('recargoUrgencia')} className="sm:w-48" /></Campo>
+              <Campo label={t('Recargo urgencia')} hint="ej. 0.15">
+                <Input type="number" step="0.01" placeholder="0" value={f.recargoUrgencia} onChange={set('recargoUrgencia')} />
+              </Campo>
             </div>
           </Grupo>
 
@@ -117,8 +119,8 @@ export default function Tarifas() {
         </Card>
 
         {/* ── Resumen en vivo (sticky) ───────────────────────────── */}
-        <div>
-          <Card className="sticky top-4 overflow-hidden p-0">
+        <div className="sticky top-4 space-y-4 self-start">
+          <Card className="overflow-hidden p-0">
             <div className="flex items-center gap-2 bg-brand-navy px-4 py-3 text-white dark:bg-slate-800">
               <Calculator size={16} className="text-amber-400" /> <span className="text-sm font-bold">{t('Resumen del cobro')}</span>
               {preview && <span className="ml-auto rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-bold">{CANT_TXT[f.tipo]}</span>}
@@ -134,13 +136,23 @@ export default function Tarifas() {
                     <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{t('Tu utilidad')}</div>
                     <div className="text-3xl font-black text-brand-navy dark:text-slate-100">{money(preview.utilidad)}</div>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${margen >= 0 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'}`}>{margen}%</span>
+                  <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${margen >= 0 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'}`}>{margen}% {t('margen')}</span>
                 </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-slate-400">{t('El transportista decide, en el perfil del chofer, cuánto de lo que recibe le paga a su chofer (por % o monto fijo).')}</p>
               </div>
             ) : (
-              <div className="p-6 text-center text-sm text-slate-400"><DollarSign size={28} className="mx-auto mb-2 text-slate-300" /> {t('Escribe el COBRO al cliente para ver el resumen.')}</div>
+              <div className="p-8 text-center text-sm text-slate-400"><div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-slate-100 text-slate-300 dark:bg-slate-800"><DollarSign size={26} /></div> {t('Escribe el cobro al cliente y el pago al transportista para ver tu utilidad aquí.')}</div>
             )}
+          </Card>
+
+          {/* Cómo funciona (llena el espacio y guía) */}
+          <Card className="p-4">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{t('Cómo funciona')}</div>
+            <ul className="space-y-2.5 text-[13px] text-slate-600 dark:text-slate-300">
+              <Tip color="emerald" n="1">{t('Pones cuánto COBRAS al cliente.')}</Tip>
+              <Tip color="amber" n="2">{t('Pones cuánto PAGAS al transportista.')}</Tip>
+              <Tip color="navy" n="3">{t('La diferencia es TU utilidad.')}</Tip>
+              <Tip color="slate" n="4">{t('El transportista fija el pago al chofer en el perfil del chofer (% o monto fijo).')}</Tip>
+            </ul>
           </Card>
         </div>
       </div>
@@ -238,6 +250,16 @@ function MultiChips({ titulo, icon: Icon, opciones, sel, onToggle, vacioTxt }) {
           })}
       </div>
     </div>
+  )
+}
+
+function Tip({ color, n, children }) {
+  const c = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', navy: 'bg-brand-navy dark:bg-slate-300', slate: 'bg-slate-400' }[color] || 'bg-slate-400'
+  return (
+    <li className="flex items-start gap-2.5">
+      <span className={`mt-0.5 grid h-5 w-5 flex-shrink-0 place-items-center rounded-full text-[11px] font-black text-white ${c}`}>{n}</span>
+      <span>{children}</span>
+    </li>
   )
 }
 
