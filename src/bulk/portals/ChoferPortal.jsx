@@ -120,17 +120,25 @@ export default function ChoferPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miCarrier?.id, miChofer?.id])
   // Cuenta un rechazo; al llegar a 3 me desactiva (salgo de la cola de espera).
-  const registrarRechazo = async () => {
-    if (!miCarrier || !miChofer) return
-    const nRech = (miChofer.rechazos || 0) + 1
-    const off = nRech >= 3
-    // El chofer NO puede escribir bulk_carriers (solo staff). Lo intentamos y, si las
-    // reglas lo deniegan, degradamos SIN romper el rechazo de la orden. (El conteo de
-    // rechazos es un extra; el rechazo de la orden ya se guardó antes.)
-    try {
-      await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
-      if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
-    } catch { /* sin permiso para el roster: no rompe el rechazo */ }
+  // Contador de rechazos VOLUNTARIOS de ESTA sesión. Al llegar a 2, se le cierra la
+  // sesión (al reingresar, el contador vuelve a 0 y se vuelve a la cola al conectarse).
+  // La orden rechazada NO se detiene: sigue ofreciéndose a otros choferes disponibles.
+  const rechazosSesion = useRef(0)
+  const registrarRechazo = async (esTimeout = false) => {
+    // Intento (best-effort) de reflejar el conteo en el roster; si el chofer no tiene
+    // permiso (solo staff escribe bulk_carriers), se ignora sin romper nada.
+    if (miCarrier && miChofer) {
+      const nRech = (miChofer.rechazos || 0) + 1
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, rechazos: nRech } : d)) }).catch(() => {})
+    }
+    if (esTimeout) return // no responder a tiempo NO cuenta como rechazo voluntario
+    rechazosSesion.current += 1
+    if (rechazosSesion.current >= 2) {
+      notificar(t('Sesión cerrada'), t('Rechazaste 2 órdenes. Vuelve a iniciar sesión para seguir recibiendo cargas.'))
+      window.alert(t('Rechazaste 2 órdenes. Se cerrará tu sesión. Vuelve a entrar y conéctate para volver a la cola.'))
+      try { await desconectar(usuario.id) } catch { /* noop */ } // salgo de la cola de inmediato
+      cerrarSesion()
+    }
   }
   // Una orden es "mía" si me la asignaron por mi uid de login, por mi id en el
   // roster del transporte (d_xxx, cuando la asigna el transportista) o por mi nombre.
@@ -442,7 +450,8 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
       await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
       await liberar(usuario.id) // vuelvo al final de la cola de en línea
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
-      await onRechazo?.()
+      // esTimeout = no respondió a tiempo (no cuenta como rechazo voluntario).
+      await onRechazo?.(motivo === 'timeout')
     } catch (e) {
       onDesmarcar?.(orden.id); setOcupado(false)
       const proj = import.meta.env.VITE_FIREBASE_PROJECT_ID || '—'
