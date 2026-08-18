@@ -58,7 +58,7 @@ export default function Tarifas() {
   const eqActivos = equipos.filter((e) => e.activo !== false)
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageTitle>{t('Motor de tarifas')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
@@ -123,7 +123,7 @@ export default function Tarifas() {
       </Card>
 
       {reglas.length === 0 ? <EstadoVacio titulo={t('Sin reglas de tarifa')} texto={t('Crea la primera arriba. Al generar órdenes, el precio se calculará solo.')} mostrarBoton={false} /> : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {reglas.slice().sort((a, b) => (b.prioridad || 0) - (a.prioridad || 0)).map((r) => {
             const mats = (r.condiciones?.materiales && r.condiciones.materiales.length ? r.condiciones.materiales : (r.condiciones?.material ? [r.condiciones.material] : []))
             const eqs = (r.condiciones?.equipos && r.condiciones.equipos.length ? r.condiciones.equipos : (r.condiciones?.tipoEquipo ? [r.condiciones.tipoEquipo] : []))
