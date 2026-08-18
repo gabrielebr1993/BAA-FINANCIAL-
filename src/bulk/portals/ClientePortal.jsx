@@ -90,7 +90,7 @@ export default function ClientePortal() {
           </div>
         ) : (
           <>
-            <div className="mb-4 flex flex-wrap gap-3">
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <KPI label={t('Órdenes')} value={stats.total} icon={ClipboardList} accent="navy" />
               <KPI label={t('Entregadas')} value={stats.entregadas} icon={ClipboardList} accent="green" />
               <KPI label={t('Toneladas entregadas')} value={Math.round(stats.ton)} icon={Weight} accent="gold" />
