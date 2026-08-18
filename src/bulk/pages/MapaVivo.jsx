@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Navigation, Gauge, Route as RouteIcon, Clock, MessageSquare, FlaskConical, Search, Users, Layers } from 'lucide-react'
+import { MapPin, Navigation, Gauge, Route as RouteIcon, Clock, MessageSquare, FlaskConical, Search, Users, Layers, X, Truck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
@@ -49,35 +49,11 @@ export default function MapaVivo() {
   }, [tenantId, orden?.id, verTodos])
 
   const met = useMemo(() => metricasRecorrido(track), [track])
-
-  // Mini ventana (popup) al hacer clic en un camión: info resumida de la orden que
-  // lleva (con % de progreso) o del chofer si está libre.
-  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-  const popupOrden = (o) => {
-    const total = ORDEN_HITOS.length
-    const hechos = ORDEN_HITOS.filter((h) => o.hitos?.[h.key]).length
-    const pct = Math.round((hechos / Math.max(1, total)) * 100)
-    return `<div style="min-width:200px;font-family:system-ui,-apple-system,sans-serif;color:#0f172a;">`
-      + `<div style="font-weight:800;font-size:14px;">${esc(o.choferNombre || t('Chofer'))}</div>`
-      + `<div style="font-size:12px;color:#64748b;margin-top:1px;">${t('Orden')} <b style="font-family:monospace;color:#13233f;">${esc(o.numero)}</b> · ${esc(t(ORDEN_ESTADO_LABEL[o.estado] || o.estado))}</div>`
-      + `<div style="font-size:12px;margin:6px 0 5px;">${esc(t(o.material || 'material s/e'))} · ${esc(String(o.pesoReal ?? o.pesoEstimado))} ton</div>`
-      + `<div style="height:7px;background:#e2e8f0;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#15b66b;"></div></div>`
-      + `<div style="font-size:11px;color:#64748b;margin-top:3px;">${pct}% ${t('completado')}</div>`
-      + `</div>`
-  }
-  const popupChofer = (p) => {
-    const eqs = (p.equipos && p.equipos.length ? p.equipos.join(', ') : p.equipo) || t('sin equipo')
-    return `<div style="min-width:180px;font-family:system-ui,-apple-system,sans-serif;color:#0f172a;">`
-      + `<div style="font-weight:800;font-size:14px;">${esc(p.nombre || t('Chofer'))}</div>`
-      + `<div style="font-size:12px;color:#16a34a;margin-top:1px;">● ${t('En línea')} · ${t('libre')}</div>`
-      + `<div style="font-size:12px;color:#64748b;margin-top:5px;">🚛 ${esc(eqs)}</div>`
-      + (p.carrierNombre ? `<div style="font-size:12px;color:#64748b;">${esc(p.carrierNombre)}</div>` : '')
-      + `</div>`
-  }
+  const [selMarca, setSelMarca] = useState(null) // id del camión seleccionado (panel)
 
   const marcadores = useMemo(() => filtradas
     .filter((o) => o.ultimaPos && o.ultimaPos.lat != null)
-    .map((o) => ({ lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto(o.estado), popupHtml: popupOrden(o) })),
+    .map((o) => ({ id: `o_${o.id}`, lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto(o.estado), label: `${o.numero} · ${o.choferNombre || t('sin chofer')}` })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [filtradas])
 
@@ -95,9 +71,18 @@ export default function MapaVivo() {
     !conOrden.has(p.uid) && !p.demo), [presencias, conOrden, ahoraMs])
   const qMatch = (p) => { const q = buscar.trim().toLowerCase(); return !q || (p.nombre || '').toLowerCase().includes(q) }
   const marcadoresChoferes = useMemo(() => choferesVivos.filter(qMatch)
-    .map((p) => ({ lat: p.lat, lng: p.lng, icon: 'truck', color: '#64748b', popupHtml: popupChofer(p) })),
+    .map((p) => ({ id: `p_${p.uid || p.id}`, lat: p.lat, lng: p.lng, icon: 'truck', color: '#64748b', label: `${p.nombre || t('chofer')} · ${t('libre')}` })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [choferesVivos, buscar])
+
+  // Datos para el panel al hacer clic en un camión (orden o chofer libre).
+  const infoMarca = useMemo(() => {
+    const m = {}
+    filtradas.forEach((o) => { if (o.ultimaPos?.lat != null) m[`o_${o.id}`] = { tipo: 'orden', o } })
+    choferesVivos.forEach((p) => { m[`p_${p.uid || p.id}`] = { tipo: 'chofer', p } })
+    return m
+  }, [filtradas, choferesVivos])
+  const marcaSel = selMarca ? infoMarca[selMarca] : null
 
   const estados = [...new Set(activas.map((o) => o.estado))]
   const hayAlgo = activas.length > 0 || choferesVivos.length > 0
@@ -164,7 +149,10 @@ export default function MapaVivo() {
               ) : null}
             </div>
             {!verTodosEf && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
-            <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} alto="62vh" />
+            <div className="relative">
+              <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} alto="62vh" onMarcador={setSelMarca} />
+              {marcaSel && <PanelMarca sel={marcaSel} onClose={() => setSelMarca(null)} t={t} />}
+            </div>
             {!verTodosEf && orden && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Metrica icon={RouteIcon} label={t('Recorrido')} val={`${met.km} km`} />
@@ -209,6 +197,40 @@ function Metrica({ icon: Icon, label, val }) {
     <div className="rounded-xl border border-slate-200 p-2.5 dark:border-slate-700/60">
       <div className="flex items-center gap-1 text-[11px] text-slate-400"><Icon size={12} /> {label}</div>
       <div className="text-sm font-bold text-brand-navy dark:text-slate-100">{val}</div>
+    </div>
+  )
+}
+
+// Panel (mini pestaña) al hacer clic en un camión. El NOMBRE del chofer abre su perfil.
+function PanelMarca({ sel, onClose, t }) {
+  const cerrar = (
+    <button onClick={onClose} className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"><X size={14} /></button>
+  )
+  if (sel.tipo === 'orden') {
+    const o = sel.o
+    const total = ORDEN_HITOS.length
+    const hechos = ORDEN_HITOS.filter((h) => o.hitos?.[h.key]).length
+    const pct = Math.round((hechos / Math.max(1, total)) * 100)
+    return (
+      <div className="absolute bottom-3 left-3 z-[1000] w-64 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+        {cerrar}
+        <Link to={`/bulk/chofer/${encodeURIComponent(o.choferNombre || '')}`} className="pr-6 text-sm font-black text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.choferNombre || t('Chofer')}</Link>
+        <div className="mt-0.5 text-xs text-slate-400"><Link to={`/bulk/ordenes/${o.id}`} className="font-mono font-bold text-slate-500 hover:text-amber-600 hover:underline dark:text-slate-300">{o.numero}</Link> · {t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</div>
+        <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-300">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full rounded-full bg-[#15b66b]" style={{ width: `${pct}%` }} /></div>
+        <div className="mt-1 text-[11px] text-slate-400">{pct}% {t('completado')}</div>
+      </div>
+    )
+  }
+  const p = sel.p
+  const eqs = (p.equipos && p.equipos.length ? p.equipos.join(', ') : p.equipo) || t('sin equipo')
+  return (
+    <div className="absolute bottom-3 left-3 z-[1000] w-60 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+      {cerrar}
+      <Link to={`/bulk/chofer/${encodeURIComponent(p.nombre || '')}`} className="pr-6 text-sm font-black text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{p.nombre || t('Chofer')}</Link>
+      <div className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t('En línea')} · {t('libre')}</div>
+      <div className="mt-1.5 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-300"><Truck size={12} className="text-amber-500" /> {eqs}</div>
+      {p.carrierNombre && <div className="text-xs text-slate-400">{p.carrierNombre}</div>}
     </div>
   )
 }

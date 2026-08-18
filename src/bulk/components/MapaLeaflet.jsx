@@ -13,12 +13,14 @@ const truckHtml = (color) => `<div style="width:38px;height:38px;display:flex;al
 
 // puntos: track de UNA orden (polilínea + posición). marcadores: varios choferes a
 // la vez [{lat,lng,label,color}]. geocercas: círculos de planta/destino.
-export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null }) {
+export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null, onMarcador = null }) {
   const cont = useRef(null)
   const map = useRef(null)
   const capas = useRef([])
   const onPickRef = useRef(onPick)
   onPickRef.current = onPick
+  const onMarcadorRef = useRef(onMarcador)
+  onMarcadorRef.current = onMarcador
 
   useEffect(() => {
     if (!cont.current) return
@@ -31,20 +33,22 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
     if (onPickRef.current && cont.current) cont.current.style.cursor = 'crosshair'
     const m = map.current
     capas.current.forEach((c) => m.removeLayer(c)); capas.current = []
-    const bounds = []
+    // boundsFoco = SOLO choferes/ruta (para acercar el mapa a donde están los choferes).
+    // boundsGeo = geocercas (se dibujan siempre, pero solo encuadran si no hay choferes).
+    const boundsFoco = []; const boundsGeo = []
+    // Geocercas SIEMPRE visibles (relleno + etiqueta fija con el nombre).
     for (const g of geocercas) {
       if (g.lat == null) continue
-      const c = L.circle([g.lat, g.lng], { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.12, weight: 1.5, dashArray: '4 3' }).addTo(m)
-      c.bindTooltip(g.nombre, { permanent: false })
-      capas.current.push(c); bounds.push([g.lat, g.lng])
+      const c = L.circle([g.lat, g.lng], { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.15, weight: 2 }).addTo(m)
+      c.bindTooltip(g.nombre || '', { permanent: false, direction: 'center', className: 'bulk-geo-lbl' })
+      capas.current.push(c); boundsGeo.push([g.lat, g.lng])
     }
     const ll = puntos.filter((p) => p && p.lat != null).map((p) => [p.lat, p.lng])
     if (ll.length > 1) { const pl = L.polyline(ll, { color: '#13233f', weight: 4 }).addTo(m); capas.current.push(pl) }
-    ll.forEach((x) => bounds.push(x))
+    ll.forEach((x) => boundsFoco.push(x))
     const last = ll[ll.length - 1]
     if (last) { const mk = L.circleMarker(last, { radius: 8, color: '#fff', weight: 2, fillColor: '#f59e0b', fillOpacity: 1 }).addTo(m); mk.bindTooltip('Posición actual'); capas.current.push(mk) }
-    // Múltiples choferes a la vez. Si el marcador es 'truck', se dibuja un CAMIÓN
-    // (no un punto) y, al hacer clic, abre una mini ventana con su info (popupHtml).
+    // Choferes = CAMIONES. Clic → onMarcador(id) (abre panel en React) o popup.
     for (const mk of marcadores) {
       if (mk == null || mk.lat == null) continue
       let capa
@@ -53,11 +57,14 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
       } else {
         capa = L.circleMarker([mk.lat, mk.lng], { radius: 8, color: '#fff', weight: 2, fillColor: mk.color || '#f59e0b', fillOpacity: 1 }).addTo(m)
       }
-      if (mk.popupHtml) capa.bindPopup(mk.popupHtml, { closeButton: true, minWidth: 200 })
-      else capa.bindTooltip(mk.label || '', { permanent: false, direction: 'top' })
-      capas.current.push(capa); bounds.push([mk.lat, mk.lng])
+      capa.bindTooltip(mk.label || '', { permanent: false, direction: 'top' })
+      if (mk.id != null && onMarcadorRef.current) capa.on('click', () => onMarcadorRef.current(mk.id))
+      else if (mk.popupHtml) capa.bindPopup(mk.popupHtml, { closeButton: true, minWidth: 200 })
+      capas.current.push(capa); boundsFoco.push([mk.lat, mk.lng])
     }
-    if (bounds.length) { try { m.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 }) } catch { /* noop */ } }
+    // Encuadre: prioriza a los CHOFERES (más cerca). Solo si no hay, usa las geocercas.
+    const fit = boundsFoco.length ? boundsFoco : boundsGeo
+    if (fit.length) { try { m.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }) } catch { /* noop */ } }
     setTimeout(() => m.invalidateSize(), 50)
   }, [puntos, geocercas, marcadores])
 
