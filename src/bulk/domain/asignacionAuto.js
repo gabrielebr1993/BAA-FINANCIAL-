@@ -48,8 +48,17 @@ export function enriquecerConRoster(presencias, carriers) {
   return (presencias || []).map((p) => {
     const r = rosterDe(p)
     if (!r) return p
-    const equipos = (r.equipos && r.equipos.length) ? r.equipos : (r.equipo ? [r.equipo] : (p.equipos || []))
-    const jobs = Array.isArray(r.jobs) ? r.jobs : (p.jobs || [])
+    // UNIÓN de equipos/trabajos de la PRESENCIA (lo que el chofer llevaba al conectarse)
+    // y del ROSTER (lo que el admin tiene puesto). Así, si CUALQUIERA de los dos tiene el
+    // equipo requerido, el chofer es compatible. (Antes el roster PISABA la presencia:
+    // si el roster estaba incompleto, el chofer quedaba fuera aunque su app mostrara el
+    // equipo correcto — ese era el caso de "carlos sí tiene End Dump pero no le llega".)
+    const pEquipos = (p.equipos && p.equipos.length) ? p.equipos : (p.equipo ? [p.equipo] : [])
+    const rEquipos = (r.equipos && r.equipos.length) ? r.equipos : (r.equipo ? [r.equipo] : [])
+    const equipos = [...new Set([...pEquipos, ...rEquipos])]
+    const pJobs = Array.isArray(p.jobs) ? p.jobs : []
+    const rJobs = Array.isArray(r.jobs) ? r.jobs : []
+    const jobs = [...new Set([...pJobs, ...rJobs])]
     return { ...p, equipos, jobs }
   })
 }

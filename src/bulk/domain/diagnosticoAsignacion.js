@@ -4,7 +4,24 @@
 // emparejamiento para explicar, orden por orden, qué está bloqueando el match.
 // Es solo lectura: no cambia nada, solo informa al dispatcher.
 // ============================================================================
-import { choferDisponible, equipoCompatible, trabajoCompatible } from './asignacionAuto'
+import { choferDisponible, equipoCompatible, trabajoCompatible, PRESENCIA_TTL_MS } from './asignacionAuto'
+import { tsMillis } from '../data/chatKeys'
+
+// Explica por qué UN chofer en línea NO está recibiendo una orden de la cola (o 'ok').
+export function diagnosticarChofer(p, ordenesCola, ahoraMs) {
+  if (!p) return { tipo: 'na', texto: '' }
+  if (p.demo) return { tipo: 'demo', texto: 'Chofer de prueba (demo): no recibe órdenes reales' }
+  if (p.ordenId || (p.estado && p.estado !== 'libre')) return { tipo: 'ocupado', texto: 'Tiene una orden asignada u ofreciéndose' }
+  if ((ahoraMs - tsMillis(p.heartbeat || p.desde)) > PRESENCIA_TTL_MS) return { tipo: 'viejo', texto: 'Sin latido reciente (app cerrada): pídele reconectarse' }
+  const equipos = (p.equipos && p.equipos.length) ? p.equipos : (p.equipo ? [p.equipo] : [])
+  const cola = ordenesCola || []
+  if (cola.length === 0) return { tipo: 'sin_cola', texto: 'No hay órdenes en cola' }
+  const conEquipo = cola.filter((o) => equipoCompatible(equipos, o.tipoEquipo))
+  if (conEquipo.length === 0) return { tipo: 'equipo', texto: `Su equipo (${equipos.join(', ') || '—'}) no coincide con las órdenes en cola` }
+  const noRech = conEquipo.filter((o) => !(o.rechazadoPor || []).includes(p.uid || p.id))
+  if (noRech.length === 0) return { tipo: 'rechazo', texto: 'Ya rechazó (o se le venció) todas las órdenes en cola compatibles' }
+  return { tipo: 'ok', texto: 'Disponible — recibirá una orden en breve' }
+}
 
 // Choferes REALES (no demo) en línea, libres y con latido fresco ahora mismo.
 export function choferesReales(presencias, ahoraMs) {

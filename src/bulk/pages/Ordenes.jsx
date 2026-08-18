@@ -14,7 +14,7 @@ import { liberar } from '../data/presencia'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { choferesLibres, PRESENCIA_TTL_MS, equipoCompatible, enriquecerConRoster } from '../domain/asignacionAuto'
-import { diagnosticarCola, choferesReales } from '../domain/diagnosticoAsignacion'
+import { diagnosticarCola, choferesReales, diagnosticarChofer } from '../domain/diagnosticoAsignacion'
 import { alertaOrden } from '../domain/alertas'
 import { beep, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
 import { desgloseVisible } from '../domain/pagos'
@@ -105,15 +105,16 @@ export default function Ordenes() {
   const canceladas = useMemo(() => ordenes.filter((o) => o.estado === E.CANCELADA), [ordenes])
   // Órdenes atrasadas (>3h sin recoger o sin entregar) → alerta en rojo.
   const atrasadasN = useMemo(() => ordenes.filter((o) => alertaOrden(o, now)).length, [ordenes, now])
+  // Presencia enriquecida con los Trabajos/equipos ACTUALES del roster (UNIÓN con lo
+  // que el chofer tenía al conectarse), mismo criterio que el motor: así el conteo, la
+  // lista y el diagnóstico reflejan EXACTAMENTE lo que ve el emparejador.
+  const presenciasReales = useMemo(() => enriquecerConRoster(presencias, carriers), [presencias, carriers])
   // Choferes en línea (vivos) que se muestran: libres + reservados (los ocupados salen).
-  const enLinea = useMemo(() => (presencias || [])
+  // Se usa la presencia ENRIQUECIDA para mostrar el mismo equipo que usa el motor.
+  const enLinea = useMemo(() => (presenciasReales || [])
     .filter((p) => p.enLinea === true && p.estado !== 'ocupado' && p.estado !== 'offline')
     .filter((p) => (now - tsMillis(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS)
-    .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde)), [presencias, now])
-  // Presencia enriquecida con los Trabajos/equipos ACTUALES del roster (mismo
-  // criterio que el motor), para que el conteo y el diagnóstico reflejen la realidad
-  // y no la foto vieja que el chofer guardó al conectarse.
-  const presenciasReales = useMemo(() => enriquecerConRoster(presencias, carriers), [presencias, carriers])
+    .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde)), [presenciasReales, now])
   const libresN = choferesLibres(presenciasReales, now).length
   const realesN = useMemo(() => choferesReales(presenciasReales, now).length, [presenciasReales, now])
   // Diagnóstico: por qué cada orden en cola no se está emparejando (solo lectura).
@@ -307,6 +308,8 @@ export default function Ordenes() {
               {derecha.map((p) => {
                 const entrando = numOrdenPorChofer[p.uid]
                 const rest = entrando?.expira ? tsMillis(entrando.expira) - now : 0
+                // Por qué (o no) recibe orden — solo si NO tiene una entrando ahora.
+                const dr = entrando ? null : diagnosticarChofer(p, porAsignar, now)
                 return (
                   <Link key={p.id} to={`/bulk/chofer/${encodeURIComponent(p.nombre || '')}`} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition hover:shadow-sm ${entrando ? 'animate-pulse border-amber-400 bg-amber-50 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>
                     <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-sm font-black ${entrando ? 'bg-amber-400 text-slate-900' : 'bg-brand-navy text-white dark:bg-slate-700'}`}>{inicial(p.nombre)}</div>
@@ -320,6 +323,11 @@ export default function Ordenes() {
                         <span>· {p.carrierNombre || '—'}</span>
                         <span>· {t('desde')} {horaCorta(p.desde)}</span>
                       </div>
+                      {dr && dr.tipo !== 'na' && (
+                        <div className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${dr.tipo === 'ok' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : dr.tipo === 'sin_cola' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}`}>
+                          {dr.tipo === 'ok' ? <CheckCircle2 size={11} /> : dr.tipo === 'sin_cola' ? null : <AlertTriangle size={11} />} {t(dr.texto)}
+                        </div>
+                      )}
                     </div>
                     {entrando && <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300"><Clock size={11} /> {entrando.numero} · {mmss(rest)}</span>}
                   </Link>
