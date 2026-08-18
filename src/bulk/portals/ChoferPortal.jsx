@@ -20,7 +20,7 @@ import { conectar, desconectar, latir, ocupar, liberar, reportarUbicacion } from
 import { leerFotoReducida } from '../components/foto'
 import { useGpsTracker } from './useGpsTracker'
 import { useGeoPos } from './useGeoPos'
-import { beep, tonoOrden, notificar, pedirPermisoNotif } from '../integraciones/alertasLocales'
+import { beep, tonoOrden, notificar, pedirPermisoNotif, desbloquearAudio, engancharDesbloqueoAudio } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
@@ -106,7 +106,8 @@ export default function ChoferPortal() {
   // emparejamiento sea estable aunque cambie el nombre.
   useEffect(() => {
     if (miCarrier && miChofer && !miChofer.uid && usuario?.id) {
-      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, uid: usuario.id } : d)) })
+      // Solo el staff puede escribir el roster; si el chofer no tiene permiso, se ignora.
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, uid: usuario.id } : d)) }).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miCarrier?.id, miChofer?.id, usuario?.id])
@@ -114,7 +115,7 @@ export default function ChoferPortal() {
   // poner en la cola de espera (resetea el contador).
   useEffect(() => {
     if (miCarrier && miChofer && (miChofer.activo === false || (miChofer.rechazos || 0) > 0)) {
-      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, activo: true, rechazos: 0 } : d)) })
+      guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, activo: true, rechazos: 0 } : d)) }).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miCarrier?.id, miChofer?.id])
@@ -123,8 +124,13 @@ export default function ChoferPortal() {
     if (!miCarrier || !miChofer) return
     const nRech = (miChofer.rechazos || 0) + 1
     const off = nRech >= 3
-    await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
-    if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
+    // El chofer NO puede escribir bulk_carriers (solo staff). Lo intentamos y, si las
+    // reglas lo deniegan, degradamos SIN romper el rechazo de la orden. (El conteo de
+    // rechazos es un extra; el rechazo de la orden ya se guardó antes.)
+    try {
+      await guardar('carriers', miCarrier.id, { choferes: miCarrier.choferes.map((d) => (d.id === miChofer.id ? { ...d, rechazos: nRech, activo: off ? false : d.activo !== false } : d)) })
+      if (off) notificar(t('Cuenta desactivada'), t('Rechazaste 3 órdenes. Cierra sesión y vuelve a entrar para reactivarte.'))
+    } catch { /* sin permiso para el roster: no rompe el rechazo */ }
   }
   // Una orden es "mía" si me la asignaron por mi uid de login, por mi id en el
   // roster del transporte (d_xxx, cuando la asigna el transportista) o por mi nombre.
@@ -159,7 +165,7 @@ export default function ChoferPortal() {
   const miPerfil = miPerfilDoc || null
   // Los EQUIPOS los asigna el administrador (roster); el chofer solo los ve.
   const miEquipos = (miChofer?.equipos && miChofer.equipos.length) ? miChofer.equipos : (miChofer?.equipo ? [miChofer.equipo] : [])
-  const conectarme = () => conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipos: miEquipos, jobs: miChofer?.jobs || [] })
+  const conectarme = () => { desbloquearAudio(); return conectar(tenantId, { uid: usuario.id, nombre: usuario.nombre, carrierId, carrierNombre: miCarrier?.nombre, equipos: miEquipos, jobs: miChofer?.jobs || [] }) }
   const desconectarme = () => desconectar(usuario.id)
   // Latido + UBICACIÓN cada 30 s mientras esté en línea (aunque no tenga orden), para
   // que el dispatcher lo vea en el Mapa en vivo. Al cerrar la pestaña, me desconecta.
@@ -175,7 +181,7 @@ export default function ChoferPortal() {
 
   // Alerta local: al ofrecerme una orden nueva, suena y muestra notificación.
   const prevEntrante = useRef(null)
-  useEffect(() => { pedirPermisoNotif() }, [])
+  useEffect(() => { pedirPermisoNotif(); engancharDesbloqueoAudio() }, [])
   useEffect(() => {
     if (entrante && entrante.id !== prevEntrante.current) {
       if (sonidoActivo()) tonoOrden()

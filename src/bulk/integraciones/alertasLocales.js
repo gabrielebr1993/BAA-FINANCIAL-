@@ -10,6 +10,33 @@ function ac() {
   return ctx
 }
 
+// DESBLOQUEA el audio. Los navegadores (sobre todo iOS/Safari) NO dejan sonar nada
+// hasta que el usuario TOCA la pantalla. Hay que llamar esto DENTRO de un gesto
+// (tap/click): reanuda el contexto y suena un tono casi inaudible para "abrirlo".
+// Después ya suenan las alertas de órdenes aunque lleguen sin tocar nada.
+export function desbloquearAudio() {
+  try {
+    const c = ac()
+    if (c.state === 'suspended') c.resume()
+    const o = c.createOscillator(); const g = c.createGain()
+    g.gain.value = 0.0001
+    o.connect(g); g.connect(c.destination)
+    o.start(); o.stop(c.currentTime + 0.02)
+  } catch { /* noop */ }
+}
+
+// Engancha UN desbloqueo global al primer toque/click/tecla del usuario. Idempotente.
+let audioEnganchado = false
+export function engancharDesbloqueoAudio() {
+  if (audioEnganchado || typeof window === 'undefined') return
+  audioEnganchado = true
+  const fn = () => { desbloquearAudio() }
+  const opts = { once: true, passive: true }
+  window.addEventListener('pointerdown', fn, opts)
+  window.addEventListener('touchstart', fn, opts)
+  window.addEventListener('keydown', fn, opts)
+}
+
 // Un pitido corto (avisos de mensajes). Onda cuadrada = más audible.
 export function beep(veces = 2) {
   try {
