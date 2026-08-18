@@ -129,7 +129,7 @@ export default function ChoferPerfil() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[100rem]">
+    <div className="w-full">
       <div className="mb-3 flex items-center gap-3">
         <Link to="/bulk/transportistas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Transportistas')}</Link>
         <div className="relative ml-auto">
