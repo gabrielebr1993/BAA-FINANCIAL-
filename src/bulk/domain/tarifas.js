@@ -40,15 +40,18 @@ const eq = (a, b) => !a || String(a).toLowerCase() === String(b || '').toLowerCa
 // Lista (materiales/equipos): vacía = aplica a todos; si tiene valores, ctx debe estar en ella.
 const enLista = (lista, val) => !lista || lista.length === 0 || lista.some((x) => eq(x, val))
 // Normaliza condiciones nuevas (arrays) y viejas (campos simples).
-function matsDe(c) { return c.materiales && c.materiales.length ? c.materiales : (c.material ? [c.material] : []) }
-function eqsDe(c) { return c.equipos && c.equipos.length ? c.equipos : (c.tipoEquipo ? [c.tipoEquipo] : []) }
+export function matsDe(c) { return (c && c.materiales && c.materiales.length) ? c.materiales : (c && c.material ? [c.material] : []) }
+export function eqsDe(c) { return (c && c.equipos && c.equipos.length) ? c.equipos : (c && c.tipoEquipo ? [c.tipoEquipo] : []) }
+export function clientesDe(c) { return (c && c.clientes && c.clientes.length) ? c.clientes : (c && c.clienteId ? [c.clienteId] : []) }
+export function plantasDe(c) { return (c && c.plantas && c.plantas.length) ? c.plantas : (c && c.plantaId ? [c.plantaId] : []) }
+const enIds = (lista, val) => !lista || lista.length === 0 || lista.includes(val)
 
 export function reglaAplica(regla, ctx) {
   const c = regla.condiciones || {}
   if (!enLista(matsDe(c), ctx.material)) return false
   if (!enLista(eqsDe(c), ctx.tipoEquipo)) return false
-  if (c.clienteId && c.clienteId !== ctx.clienteId) return false
-  if (c.plantaId && c.plantaId !== ctx.plantaId) return false
+  if (!enIds(clientesDe(c), ctx.clienteId)) return false
+  if (!enIds(plantasDe(c), ctx.plantaId)) return false
   if (c.zona && !eq(c.zona, ctx.zona)) return false
   if (c.soloUrgente && !ctx.urgente) return false
   return true
@@ -60,8 +63,8 @@ function especificidad(r) {
   let n = 0
   if (matsDe(c).length) n++
   if (eqsDe(c).length) n++
-  if (c.clienteId) n++
-  if (c.plantaId) n++
+  if (clientesDe(c).length) n++
+  if (plantasDe(c).length) n++
   if (c.zona) n++
   if (c.soloUrgente) n++
   return n
