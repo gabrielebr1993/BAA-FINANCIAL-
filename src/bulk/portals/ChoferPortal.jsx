@@ -417,8 +417,9 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
     } catch (e) {
       // Falló la escritura (p. ej. permisos): desmarco para poder reintentar y aviso.
       onDesmarcar?.(orden.id); setOcupado(false)
-      const diag = `rol=${rol} tenant=${tenantId} carrier=${usuario?.carrierId || '—'} | orden.transp=${orden.transportistaId || '—'} orden.chofer=${orden.choferId || '—'} yo=${usuario?.id || '—'}`
-      window.alert(t('No se pudo aceptar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : '') + `\n\n[diagnóstico]\n${diag}`)
+      const proj = import.meta.env.VITE_FIREBASE_PROJECT_ID || '—'
+      const diag = `code=${e?.code || '—'}\nproyecto=${proj}\nrol=${rol} tenant=${tenantId} carrier=${usuario?.carrierId || '—'}\norden.transp=${orden.transportistaId || '—'}\norden.chofer=${orden.choferId || '—'}\nyo=${usuario?.id || '—'}`
+      window.alert(t('No se pudo aceptar la orden. Vuelve a intentarlo.') + `\n\n[diagnóstico]\n${diag}`)
     }
   }
   const rechazar = async (motivo) => {
