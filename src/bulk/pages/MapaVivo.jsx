@@ -6,7 +6,7 @@ import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
 import { useBulkAuth } from '../BulkAuthContext'
 import { metricasRecorrido } from '../domain/geo'
-import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
+import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { ESTADOS_ACTIVOS_CHOFER } from '../domain/flujo'
 import { tsMillis } from '../data/chatKeys'
 
@@ -49,9 +49,37 @@ export default function MapaVivo() {
   }, [tenantId, orden?.id, verTodos])
 
   const met = useMemo(() => metricasRecorrido(track), [track])
+
+  // Mini ventana (popup) al hacer clic en un camión: info resumida de la orden que
+  // lleva (con % de progreso) o del chofer si está libre.
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  const popupOrden = (o) => {
+    const total = ORDEN_HITOS.length
+    const hechos = ORDEN_HITOS.filter((h) => o.hitos?.[h.key]).length
+    const pct = Math.round((hechos / Math.max(1, total)) * 100)
+    return `<div style="min-width:200px;font-family:system-ui,-apple-system,sans-serif;color:#0f172a;">`
+      + `<div style="font-weight:800;font-size:14px;">${esc(o.choferNombre || t('Chofer'))}</div>`
+      + `<div style="font-size:12px;color:#64748b;margin-top:1px;">${t('Orden')} <b style="font-family:monospace;color:#13233f;">${esc(o.numero)}</b> · ${esc(t(ORDEN_ESTADO_LABEL[o.estado] || o.estado))}</div>`
+      + `<div style="font-size:12px;margin:6px 0 5px;">${esc(t(o.material || 'material s/e'))} · ${esc(String(o.pesoReal ?? o.pesoEstimado))} ton</div>`
+      + `<div style="height:7px;background:#e2e8f0;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#15b66b;"></div></div>`
+      + `<div style="font-size:11px;color:#64748b;margin-top:3px;">${pct}% ${t('completado')}</div>`
+      + `</div>`
+  }
+  const popupChofer = (p) => {
+    const eqs = (p.equipos && p.equipos.length ? p.equipos.join(', ') : p.equipo) || t('sin equipo')
+    return `<div style="min-width:180px;font-family:system-ui,-apple-system,sans-serif;color:#0f172a;">`
+      + `<div style="font-weight:800;font-size:14px;">${esc(p.nombre || t('Chofer'))}</div>`
+      + `<div style="font-size:12px;color:#16a34a;margin-top:1px;">● ${t('En línea')} · ${t('libre')}</div>`
+      + `<div style="font-size:12px;color:#64748b;margin-top:5px;">🚛 ${esc(eqs)}</div>`
+      + (p.carrierNombre ? `<div style="font-size:12px;color:#64748b;">${esc(p.carrierNombre)}</div>` : '')
+      + `</div>`
+  }
+
   const marcadores = useMemo(() => filtradas
     .filter((o) => o.ultimaPos && o.ultimaPos.lat != null)
-    .map((o) => ({ lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, label: `${o.numero} · ${o.choferNombre || 'sin chofer'}`, color: colorPunto(o.estado) })), [filtradas])
+    .map((o) => ({ lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto(o.estado), popupHtml: popupOrden(o) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtradas])
 
   // Reloj para recalcular la frescura de las presencias (que un chofer se caiga del
   // mapa a los 90 s sin latido, aunque no llegue un cambio nuevo).
@@ -67,7 +95,8 @@ export default function MapaVivo() {
     !conOrden.has(p.uid) && !p.demo), [presencias, conOrden, ahoraMs])
   const qMatch = (p) => { const q = buscar.trim().toLowerCase(); return !q || (p.nombre || '').toLowerCase().includes(q) }
   const marcadoresChoferes = useMemo(() => choferesVivos.filter(qMatch)
-    .map((p) => ({ lat: p.lat, lng: p.lng, label: `${p.nombre || 'chofer'} · ${p.estado === 'reservado' ? 'reservado' : 'libre'}`, color: '#64748b' })),
+    .map((p) => ({ lat: p.lat, lng: p.lng, icon: 'truck', color: '#64748b', popupHtml: popupChofer(p) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [choferesVivos, buscar])
 
   const estados = [...new Set(activas.map((o) => o.estado))]
