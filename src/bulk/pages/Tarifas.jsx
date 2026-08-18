@@ -34,8 +34,21 @@ export default function Tarifas() {
     setF(vacio); setMsg({ tipo: 'ok', txt: t('Regla de tarifa creada.') })
   }
 
-  // Vista previa con 25 ton (viaje lleno).
-  const preview = calcularTarifa(reglas, { material: f.material, tipoEquipo: f.tipoEquipo, clienteId: f.clienteId, ton: 25 })
+  // Etiqueta del campo "Valor" según el tipo elegido (deja claro qué precio pones).
+  const valorLabel = f.tipo === TIPO_BASE.POR_TONELADA ? t('Precio POR TONELADA ($)')
+    : f.tipo === TIPO_BASE.POR_MILLA ? t('Precio POR MILLA ($)')
+    : t('Precio FIJO por viaje ($)')
+  const tonEj = 25, millasEj = 50
+  // Vista previa EN VIVO con lo que estás escribiendo (no solo con reglas guardadas).
+  const reglaForm = {
+    tipo: f.tipo, valor: Number(f.valor) || 0, condiciones: {},
+    pctTransportista: Number(f.pctTransportista) || 0.72,
+    pctChofer: Number(f.pctChofer) || 0.8,
+    recargoUrgencia: f.recargoUrgencia ? Number(f.recargoUrgencia) : null, activo: true,
+  }
+  const preview = Number(f.valor) > 0
+    ? calcularTarifa([reglaForm], { material: f.material, tipoEquipo: f.tipoEquipo, clienteId: f.clienteId, ton: tonEj, millas: millasEj })
+    : null
 
   if (cargando) return <Cargando />
   const nombreCliente = (id) => clientes.find((c) => c.id === id)?.nombre || t('Todos')
@@ -46,12 +59,13 @@ export default function Tarifas() {
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nueva regla')}</h3>
+        <h3 className="m-0 mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nueva regla')}</h3>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('El PRECIO lo defines con Tipo + Valor: “Por tonelada” = $/ton, “Por viaje” = precio fijo. Los porcentajes de abajo solo REPARTEN ese precio entre transportista y chofer.')}</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Input placeholder={t('Nombre de la regla')} value={f.nombre} onChange={set('nombre')} />
-          <Select value={f.tipo} onChange={set('tipo')}>{Object.values(TIPO_BASE).map((tb) => <option key={tb} value={tb}>{t(TIPO_BASE_LABEL[tb])}</option>)}</Select>
-          <Input type="number" placeholder={t('Valor ($)')} value={f.valor} onChange={set('valor')} />
-          <Input type="number" placeholder={t('Prioridad')} value={f.prioridad} onChange={set('prioridad')} />
+          <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('Nombre')}</div><Input placeholder={t('Ej. Grava estándar')} value={f.nombre} onChange={set('nombre')} /></div>
+          <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('Tipo de cobro')}</div><Select value={f.tipo} onChange={set('tipo')}>{Object.values(TIPO_BASE).map((tb) => <option key={tb} value={tb}>{t(TIPO_BASE_LABEL[tb])}</option>)}</Select></div>
+          <div><div className="mb-1 text-[11px] font-bold uppercase text-amber-600 dark:text-amber-400">{valorLabel}</div><Input type="number" inputMode="decimal" placeholder={t('Ej. 12')} value={f.valor} onChange={set('valor')} /></div>
+          <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('Prioridad')}</div><Input type="number" placeholder="0" value={f.prioridad} onChange={set('prioridad')} /></div>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <Select value={f.material} onChange={set('material')}><option value="">{t('Cualquier material')}</option>{materiales.filter((m) => m.activo !== false).map((m) => <option key={m.id} value={m.nombre}>{m.nombre}</option>)}</Select>
@@ -63,10 +77,18 @@ export default function Tarifas() {
           <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('% del transportista al chofer (0–1)')}</div><Input type="number" step="0.01" value={f.pctChofer} onChange={set('pctChofer')} /></div>
           <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('Recargo urgencia (ej. 0.15)')}</div><Input type="number" step="0.01" value={f.recargoUrgencia} onChange={set('recargoUrgencia')} /></div>
         </div>
-        {preview && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
-            <Calculator size={14} className="text-amber-500" /> {t('Ejemplo (25 ton): cliente')} <b>{money(preview.precioCliente)}</b> · {t('transportista')} <b>{money(preview.precioTransportista)}</b> · {t('chofer')} <b>{money(preview.pagoChofer)}</b> · {t('utilidad dueño')} <b>{money(preview.precioCliente - preview.precioTransportista)}</b>
+        {preview ? (
+          <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
+            <div className="mb-1 flex items-center gap-1.5 font-semibold text-brand-navy dark:text-slate-100"><Calculator size={14} className="text-amber-500" /> {t('Ejemplo')}: {f.tipo === TIPO_BASE.POR_TONELADA ? `${tonEj} ${t('ton')}` : f.tipo === TIPO_BASE.POR_MILLA ? `${millasEj} ${t('millas')}` : t('1 viaje')}</div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>{t('Cobras al cliente')} <b className="text-brand-navy dark:text-slate-100">{money(preview.precioCliente)}</b></span>
+              <span>· {t('paga al transportista')} <b>{money(preview.precioTransportista)}</b></span>
+              <span>· {t('recibe el chofer')} <b>{money(preview.pagoChofer)}</b></span>
+              <span>· {t('tu utilidad')} <b className="text-emerald-600 dark:text-emerald-400">{money(preview.precioCliente - preview.precioTransportista)}</b></span>
+            </div>
           </div>
+        ) : (
+          <div className="mt-3 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">{t('Escribe un Valor mayor que 0 para ver el ejemplo de cobro.')}</div>
         )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><Plus size={16} /> {t('Crear regla')}</Boton></div>
       </Card>
