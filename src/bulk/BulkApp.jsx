@@ -17,7 +17,6 @@ const OrdenDetalle = lazy(() => import('./pages/OrdenDetalle'))
 const MapaVivo = lazy(() => import('./pages/MapaVivo'))
 const Mensajes = lazy(() => import('./pages/Mensajes'))
 const Geocercas = lazy(() => import('./pages/Geocercas'))
-const Tarifas = lazy(() => import('./pages/Tarifas'))
 const Facturacion = lazy(() => import('./pages/Facturacion'))
 const Incidencias = lazy(() => import('./pages/Incidencias'))
 const Documentos = lazy(() => import('./pages/Documentos'))
@@ -100,7 +99,8 @@ function Interno() {
       <Route path="/bulk/mapa" element={<P roles={R}><MapaVivo /></P>} />
       <Route path="/bulk/mensajes" element={<P roles={R}><Mensajes /></P>} />
       <Route path="/bulk/geocercas" element={<P roles={CAT}><Geocercas /></P>} />
-      <Route path="/bulk/tarifas" element={<P roles={CAT}><Tarifas /></P>} />
+      {/* Motor de tarifas retirado: ahora vive en el perfil de cada cliente. */}
+      <Route path="/bulk/tarifas" element={<Navigate to="/bulk/clientes" replace />} />
       <Route path="/bulk/facturacion" element={<P roles={CAT}><Facturacion /></P>} />
       <Route path="/bulk/incidencias" element={<P roles={R}><Incidencias /></P>} />
       <Route path="/bulk/documentos" element={<P roles={CAT}><Documentos /></P>} />

@@ -9,6 +9,7 @@ import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
+import TarifasCliente from '../components/TarifasCliente'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
@@ -36,6 +37,8 @@ export default function ClientePerfil() {
   const { datos: plants } = useColeccion('plants')
   const { datos: invoices } = useColeccion('invoices')
   const { datos: jobs } = useColeccion('jobs')
+  const { datos: materiales } = useColeccion('materials')
+  const { datos: equipos } = useColeccion('equipment')
 
   const cliente = useMemo(() => clientes.find((c) => c.id === id) || null, [clientes, id])
   const misOrdenes = useMemo(
@@ -95,6 +98,9 @@ export default function ClientePerfil() {
         <Mini icon={DollarSign} label={t('Gasto')} val={money(stats.gasto)} />
         <Mini icon={FileText} label={t('Facturado')} val={money(stats.facturado)} />
       </div>
+
+      {/* Motor de tarifas PROPIO de este cliente */}
+      <div className="mb-4"><TarifasCliente cliente={cliente} materiales={materiales} equipos={equipos} /></div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">

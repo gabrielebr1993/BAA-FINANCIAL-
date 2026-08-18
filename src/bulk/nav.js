@@ -19,7 +19,7 @@ export const NAV = [
   { path: 'incidencias', label: 'Incidencias', icon: AlertTriangle, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { path: 'documentos', label: 'Documentos', icon: FileWarning, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'geocercas', label: 'Geocercas', icon: MapPin, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { path: 'tarifas', label: 'Motor de tarifas', icon: Calculator, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  // El motor de tarifas ahora vive DENTRO del perfil de cada cliente (Clientes y Plantas).
   { path: 'materiales', label: 'Materiales', icon: Boxes, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'equipos', label: 'Tipos de equipo', icon: Package, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { path: 'usuarios', label: 'Usuarios y roles', icon: Users, roles: [R.SUPER_ADMIN, R.ADMIN] },

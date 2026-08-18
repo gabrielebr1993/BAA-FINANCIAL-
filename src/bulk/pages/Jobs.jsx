@@ -128,7 +128,9 @@ export default function Jobs() {
 
 function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
   const { t } = useLang()
-  const { datos: reglas } = useColeccion('tariffs')
+  // Tarifas PROPIAS del cliente de este trabajo (ya no una colección global).
+  const { datos: clientes } = useColeccion('clients')
+  const reglas = (clientes.find((c) => c.id === job.clienteId)?.tarifas) || []
   const [cant, setCant] = useState('')
   const [material, setMaterial] = useState((job.materiales || [])[0] || '')
   const [precioCliente, setPrecioCliente] = useState('')
