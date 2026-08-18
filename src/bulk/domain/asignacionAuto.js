@@ -70,9 +70,10 @@ export function choferesLibres(presencias, ahoraMs) {
 // Empareja: para cada orden en cola (más antigua primero), toma el chofer libre
 // COMPATIBLE POR EQUIPO que lleva más tiempo en línea (orden de llegada), saltando a
 // quienes ya la rechazaron. 1 orden → 1 chofer (un chofer no recibe dos a la vez).
-// Así, con N órdenes y N choferes libres con el equipo correcto, se asignan las N al
-// mismo tiempo (una por chofer). La afiliación al Trabajo YA NO bloquea: basta con
-// tener el equipo requerido y estar libre.
+// La afiliación al Trabajo se toma en cuenta como PREFERENCIA: primero se ofrece a
+// los choferes afiliados al Job de la orden; si NINGUNO afiliado está libre, cae a
+// cualquier chofer con el equipo correcto (así las órdenes nunca se quedan atascadas).
+// Con N órdenes y N choferes libres con el equipo correcto → N asignaciones a la vez.
 // Devuelve [{ orden, chofer }] listo para persistir.
 export function emparejar(ordenesCola, presencias, ahoraMs) {
   const libres = choferesLibres(presencias, ahoraMs)
@@ -81,10 +82,13 @@ export function emparejar(ordenesCola, presencias, ahoraMs) {
   const pares = []
   for (const orden of cola) {
     const rechazadoPor = orden.rechazadoPor || []
-    const cand = libres
+    const disponibles = libres
       .filter((p) => !usados.has(p.id))
       .filter((p) => !rechazadoPor.includes(p.uid || p.id))
       .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
+    // Preferencia por afiliación al Trabajo; si no hay afiliados libres, cualquiera con el equipo.
+    const afiliados = disponibles.filter((p) => trabajoCompatible(p.jobs, orden.jobId))
+    const cand = (afiliados.length ? afiliados : disponibles)
       .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde))
     if (cand.length) { pares.push({ orden, chofer: cand[0] }); usados.add(cand[0].id) }
   }
