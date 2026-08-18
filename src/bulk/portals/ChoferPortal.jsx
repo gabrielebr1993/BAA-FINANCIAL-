@@ -445,7 +445,9 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
       await onRechazo?.()
     } catch (e) {
       onDesmarcar?.(orden.id); setOcupado(false)
-      window.alert(t('No se pudo rechazar la orden. Vuelve a intentarlo.') + (e?.message ? `\n(${e.message})` : ''))
+      const proj = import.meta.env.VITE_FIREBASE_PROJECT_ID || '—'
+      const diag = `code=${e?.code || '—'}\nproyecto=${proj}\nrol=${rol} tenant=${tenantId} carrier=${usuario?.carrierId || '—'}\norden.transp=${orden.transportistaId || '—'}\norden.chofer=${orden.choferId || '—'}\nyo=${usuario?.id || '—'}`
+      window.alert(t('No se pudo rechazar la orden. Vuelve a intentarlo.') + `\n\n[diagnóstico]\n${diag}`)
     }
   }
   // Auto-rechazo por timeout si el contador llega a 0 (respaldo si el dispatcher no lo hace).
