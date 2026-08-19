@@ -137,10 +137,13 @@ function TopBranch() {
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />
-  // Raíz pública: un visitante nuevo (sin módulo elegido) ve la LANDING de marketing.
-  // El botón "Iniciar sesión" lo lleva a /elegir. Los usuarios que ya eligieron módulo
-  // siguen entrando a su app en / exactamente como hoy (nada cambia para ellos).
-  if (!getModulo() && pathname === '/') return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
+  // Landing PÚBLICA de marketing:
+  //  - /inicio → SIEMPRE la landing (link compartible; se ve aunque ya tengas sesión).
+  //  - / → la landing solo para visitantes NUEVOS (sin módulo elegido). Quien ya eligió
+  //    módulo entra a su app en / exactamente como hoy (nada cambia para ellos).
+  if (pathname === '/inicio' || (!getModulo() && pathname === '/')) {
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
+  }
   return <PackageApp />
 }
 
