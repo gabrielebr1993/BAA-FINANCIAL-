@@ -1,7 +1,7 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight, Route } from 'lucide-react'
+import { FileText, Truck, ArrowRight, Route, ArrowLeft } from 'lucide-react'
 import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
@@ -43,6 +43,13 @@ export default function ModuleSelector() {
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-4">
+      {/* Volver a la portada pública (landing) */}
+      <button
+        onClick={() => navigate('/')}
+        className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-semibold text-slate-300 backdrop-blur-xl transition-all hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
+      >
+        <ArrowLeft size={16} strokeWidth={2.2} /> {t('Inicio')}
+      </button>
       <div className="absolute right-4 top-4 z-10"><LangToggle /></div>
       {/* fondo decorativo */}
       <div className="pointer-events-none absolute inset-0">
@@ -52,12 +59,12 @@ export default function ModuleSelector() {
 
       <div className="relative w-full max-w-4xl">
         <div className="ms-in mb-7 flex flex-col items-center">
-          <div className="flex items-center gap-2.5">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2.5 transition-opacity hover:opacity-80" aria-label={t('Inicio')}>
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-900 shadow-lg shadow-amber-500/25">
               <Route size={22} strokeWidth={2.4} />
             </div>
             <div className="text-[2.1rem] font-black leading-none tracking-tight text-white">Mile<span className="text-amber-400">Pay</span></div>
-          </div>
+          </button>
           <div className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">{t('Plataforma de logística')}</div>
         </div>
 
