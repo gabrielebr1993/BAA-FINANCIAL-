@@ -60,9 +60,27 @@ export default function LandingFreight() {
       const h = () => setLang(b.dataset.lang); b.addEventListener('click', h); return [b, h]
     })
 
-    // ── Scroll reveal ──────────────────────────────────────────────────────
-    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }), { threshold: 0.14 })
-    root.querySelectorAll('.reveal').forEach((el) => io.observe(el))
+    // ── Scroll reveal (robusto: NUNCA deja una sección en blanco) ───────────
+    // Un umbral fijo (0.14) puede no dispararse en secciones altas o en algunos
+    // navegadores → la sección se quedaba invisible (huecos en blanco). Ahora:
+    //  1) lo que ya está a la vista al cargar se muestra de inmediato,
+    //  2) lo de más abajo se anima al entrar (umbral 0, con margen),
+    //  3) una red de seguridad revela todo por si el observador falla.
+    const revealEls = [...root.querySelectorAll('.reveal')]
+    const revelar = (el) => el && el.classList.add('in')
+    let io = null
+    if ('IntersectionObserver' in window) {
+      io = new IntersectionObserver((es) => es.forEach((e) => {
+        if (e.isIntersecting) { revelar(e.target); io.unobserve(e.target) }
+      }), { threshold: 0, rootMargin: '0px 0px -6% 0px' })
+    }
+    revealEls.forEach((el) => {
+      const top = el.getBoundingClientRect().top
+      if (!io || top < window.innerHeight * 0.95) revelar(el) // ya visible o sin soporte
+      else io.observe(el)
+    })
+    // Red de seguridad: si algo quedó sin revelar, se muestra tras un momento.
+    setT(() => revealEls.forEach(revelar), 2200)
 
     // ── Menú móvil ─────────────────────────────────────────────────────────
     const navToggle = root.querySelector('#navToggle')
@@ -128,7 +146,7 @@ export default function LandingFreight() {
     return () => {
       running = false
       timers.forEach(clearTimeout)
-      io.disconnect()
+      io?.disconnect()
       langHandlers.forEach(([b, h]) => b.removeEventListener('click', h))
       if (navToggle) navToggle.removeEventListener('click', navToggleH)
       navLinkHandlers.forEach(([a, h]) => a.removeEventListener('click', h))
