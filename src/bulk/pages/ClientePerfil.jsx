@@ -10,6 +10,7 @@ import { Card, Badge, Cargando, EstadoVacio } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 import TarifasCliente from '../components/TarifasCliente'
+import { Gate } from '../components/Gate'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
@@ -100,7 +101,9 @@ export default function ClientePerfil() {
       </div>
 
       {/* Motor de tarifas PROPIO de este cliente */}
-      <div className="mb-4"><TarifasCliente cliente={cliente} materiales={materiales} equipos={equipos} /></div>
+      {/* El motor de tarifas revela la tarifa del cliente (= margen): solo lo ve quien
+          tiene ese permiso financiero (admin). El dispatcher no ve tarifas. */}
+      <Gate perm="fin.precioCliente"><div className="mb-4"><TarifasCliente cliente={cliente} materiales={materiales} equipos={equipos} /></div></Gate>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
