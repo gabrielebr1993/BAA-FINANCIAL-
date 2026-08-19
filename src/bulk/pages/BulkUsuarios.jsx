@@ -7,6 +7,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { cerrarTodos, cerrarPorRol, cerrarUsuario } from '../data/sesiones'
 import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
+import { rolesPersonalizados, etiquetaRol } from '../domain/permisos'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -17,11 +18,16 @@ const ROLES_ASIGNABLES = [
 
 export default function BulkUsuarios() {
   const { t } = useLang()
-  const { tenantId, usuario, rol, crearUsuario } = useBulkAuth()
+  const { tenantId, usuario, rol, crearUsuario, rolesConfig } = useBulkAuth()
   const { datos: usuarios, cargando } = useColeccion('users')
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
+
+  // Roles asignables = built-in + los ROLES NUEVOS que el admin haya creado (Fase 4).
+  const asignables = [...ROLES_ASIGNABLES, ...rolesPersonalizados(rolesConfig)]
+  // Etiqueta de un rol: built-in traducido, o el nombre del rol personalizado.
+  const label = (r) => (BULK_ROLES_LABEL[r] ? t(BULK_ROLES_LABEL[r]) : etiquetaRol(r, rolesConfig))
 
   // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
   // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.
@@ -119,10 +125,10 @@ export default function BulkUsuarios() {
     setMsg({ tipo: 'ok', txt: t('Se cerró la sesión de todos los usuarios.') })
   }
   const forzarRol = async (r) => {
-    if (!window.confirm(`${t('¿Cerrar la sesión de todos los usuarios con el rol')} "${t(BULK_ROLES_LABEL[r])}"?`)) return
+    if (!window.confirm(`${t('¿Cerrar la sesión de todos los usuarios con el rol')} "${label(r)}"?`)) return
     await cerrarPorRol(tenantId, r)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cerrar_sesiones', entidad: 'rol', detalle: r })
-    setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión del rol')} ${t(BULK_ROLES_LABEL[r])}.` })
+    setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión del rol')} ${label(r)}.` })
   }
   const forzarUsuario = async (u) => {
     if (!window.confirm(`${t('¿Cerrar la sesión de')} ${u.email}?`)) return
@@ -153,7 +159,7 @@ export default function BulkUsuarios() {
           <Input type="email" placeholder={t('Correo')} value={f.email} onChange={set('email')} />
           <Input type="password" placeholder={t('Contraseña')} value={f.password} onChange={set('password')} />
           <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '', chofer: '' }))}>
-            {ROLES_ASIGNABLES.map((r) => <option key={r} value={r}>{t(BULK_ROLES_LABEL[r])}</option>)}
+            {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
           </Select>
         </div>
         {(necesitaCliente || necesitaCarrier) && (
@@ -188,8 +194,8 @@ export default function BulkUsuarios() {
         <div className="flex flex-wrap items-center gap-2">
           <Boton variant="danger" onClick={forzarTodos}><Power size={15} /> {t('Cerrar sesión a TODOS')}</Boton>
           <span className="mx-1 text-xs font-semibold uppercase text-slate-400">{t('por rol')}:</span>
-          {ROLES_ASIGNABLES.map((r) => (
-            <Boton key={r} variant="ghost" onClick={() => forzarRol(r)} className="px-3 py-1 text-xs">{t(BULK_ROLES_LABEL[r])}</Boton>
+          {asignables.map((r) => (
+            <Boton key={r} variant="ghost" onClick={() => forzarRol(r)} className="px-3 py-1 text-xs">{label(r)}</Boton>
           ))}
         </div>
       </Card>
@@ -198,11 +204,11 @@ export default function BulkUsuarios() {
         <Tabla
           columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'planta', label: t('Planta') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
           rows={usuarios
-            .filter((u) => { const s = buscar.trim().toLowerCase(); return !s || (u.nombre || '').toLowerCase().includes(s) || (u.email || '').toLowerCase().includes(s) || (t(BULK_ROLES_LABEL[u.rol]) || u.rol || '').toLowerCase().includes(s) })
+            .filter((u) => { const s = buscar.trim().toLowerCase(); return !s || (u.nombre || '').toLowerCase().includes(s) || (u.email || '').toLowerCase().includes(s) || (label(u.rol) || u.rol || '').toLowerCase().includes(s) })
             .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => ({ ...u, _key: u.id }))}
           emptyText={t('Sin usuarios.')}
           renderCell={(row, key) => {
-            if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{t(BULK_ROLES_LABEL[row.rol]) || row.rol}</Badge>
+            if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>
             if (key === 'planta') {
               if (row.rol !== BULK_ROLES.SUPERVISOR_PLANTA) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
               return (

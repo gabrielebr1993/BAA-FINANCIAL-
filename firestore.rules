@@ -163,7 +163,12 @@ service cloud.firestore {
     function bRole() { return request.auth != null ? request.auth.token.bulkRole : null; }
     function bSigned() { return request.auth != null && bT() != null; }
     function bSame(cid) { return bSigned() && bT() == cid; }
-    function bStaff(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin', 'dispatcher']); }
+    // Staff = miembro del tenant que NO es un rol de la CADENA (cliente/transportista/
+    // chofer/supervisor). Así, además de super_admin/admin/dispatcher, cualquier ROL
+    // PERSONALIZADO (accountant, auditor, broker…) tiene acceso operativo de staff. Los
+    // roles de la cadena siguen aislados por sus propias reglas. Los límites duros
+    // (gestión de usuarios, margen del cliente, borrar órdenes) son bAdmin, no bStaff.
+    function bStaff(cid) { return bSame(cid) && bRole() != null && !(bRole() in ['cliente', 'transportista', 'chofer', 'supervisor_planta']); }
     function bAdmin(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin']); }
     function bCliente() { return request.auth != null ? request.auth.token.bulkClienteId : null; }
     function bCarrier() { return request.auth != null ? request.auth.token.bulkCarrierId : null; }

@@ -20,7 +20,7 @@
 // DENTRO de lo que las reglas ya autorizan (p. ej. ocultarle al dispatcher la
 // ganancia del dueño), nunca la amplían.
 // ============================================================================
-import { BULK_ROLES as R } from './constants'
+import { BULK_ROLES as R, BULK_ROLES_LABEL } from './constants'
 
 // ---- Acciones genéricas ----------------------------------------------------
 export const ACCION_LABEL = {
@@ -159,4 +159,32 @@ export function tienePermiso(permisos, clave) {
 // (Equivalente por-permiso de camposVisiblesPorRol de domain/pagos.js.)
 export function camposFinancierosVisibles(permisos) {
   return FIN_PERMISOS.filter((p) => p.campo && tienePermiso(permisos, p.key)).map((p) => p.campo)
+}
+
+// ============================================================================
+// ROLES PERSONALIZADOS (Fase 4) — el admin puede crear roles nuevos (Accountant,
+// Auditor, Broker…). Se guardan en bulk_roles/{tenantId}.roles[key] = { nombre,
+// permisos, custom:true }. Son de tipo STAFF (usan el panel); las reglas los tratan
+// como staff no-admin. El backend (crearUsuarioBulk) valida el rol contra esa config.
+// ============================================================================
+
+// Roles de la CADENA (portales) — NO son staff; su aislamiento es por reglas/claims.
+export const ROLES_CADENA = new Set([R.CLIENTE, R.TRANSPORTISTA, R.CHOFER, R.SUPERVISOR_PLANTA])
+
+// Etiqueta legible de un rol: built-in, o el nombre que le puso el admin al crearlo.
+export function etiquetaRol(rol, rolesConfig) {
+  return BULK_ROLES_LABEL[rol] || rolesConfig?.[rol]?.nombre || rol
+}
+
+// Claves de roles PERSONALIZADOS presentes en la config (las que no son built-in).
+export function rolesPersonalizados(rolesConfig) {
+  return Object.keys(rolesConfig || {}).filter((k) => !(k in BULK_ROLES_LABEL))
+}
+
+// Genera una CLAVE segura para un rol nuevo a partir de su nombre. Prefijo `rol_`
+// para no colisionar NUNCA con un rol built-in (evita escalada de privilegios).
+export function slugRol(nombre) {
+  const base = String(nombre || '').trim().toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32)
+  return base ? 'rol_' + base : ''
 }

@@ -10,7 +10,7 @@
 // nunca puede otorgar una lectura que las reglas no permitan.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { ShieldCheck, Save, RotateCcw, Lock, DollarSign, Info, Check } from 'lucide-react'
+import { ShieldCheck, Save, RotateCcw, Lock, DollarSign, Info, Check, Plus, X, Trash2 } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { crearConId } from '../data/repo'
 import { auditar } from '../data/auditoria'
@@ -18,8 +18,9 @@ import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
 import {
   MODULOS, FIN_PERMISOS, ACCION_LABEL, permKey,
   permisosDeRol, PRESET_ROLES, ROLES_TOTALES,
+  rolesPersonalizados, etiquetaRol, slugRol,
 } from '../domain/permisos'
-import { PageTitle, Card, Boton, Badge, Aviso } from '../../components/ui'
+import { PageTitle, Card, Boton, Badge, Aviso, Input } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 // Roles que el admin puede personalizar (super_admin siempre tiene acceso total).
@@ -58,7 +59,12 @@ export default function BulkRoles() {
   const [dirty, setDirty] = useState(false)
   const [msg, setMsg] = useState(null)
   const [guardando, setGuardando] = useState(false)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [creando, setCreando] = useState(false)
 
+  // Roles personalizados creados por el admin (además de los built-in editables).
+  const personalizados = useMemo(() => rolesPersonalizados(rolesConfig), [rolesConfig])
+  const esCustom = personalizados.includes(selRol)
   const bloqueado = ROLES_TOTALES.has(selRol) // super_admin: no editable
 
   // (Re)inicializa el borrador cuando cambia el rol seleccionado o llega config nueva.
@@ -98,7 +104,8 @@ export default function BulkRoles() {
     if (bloqueado || !tenantId) return
     setGuardando(true)
     try {
-      const roles = { ...(rolesConfig || {}), [selRol]: { permisos: [...draft] } }
+      // Conserva nombre/custom de un rol personalizado al guardar sus permisos.
+      const roles = { ...(rolesConfig || {}), [selRol]: { ...(rolesConfig?.[selRol] || {}), permisos: [...draft] } }
       await crearConId('roles', tenantId, tenantId, { roles })
       await auditar(tenantId, {
         usuario: usuario?.nombre || usuario?.email, rol,
@@ -111,6 +118,41 @@ export default function BulkRoles() {
     } catch (e) {
       setMsg({ tipo: 'error', txt: (e?.message || t('No se pudo guardar.')) })
     } finally { setGuardando(false) }
+  }
+
+  // Crear un ROL NUEVO (personalizado). Clave segura con prefijo rol_ (sin colisión).
+  const crearRol = async () => {
+    const nombre = nuevoNombre.trim()
+    if (!nombre || !tenantId) return
+    const key = slugRol(nombre)
+    if (!key) { setMsg({ tipo: 'error', txt: t('Nombre no válido.') }); return }
+    if ((key in BULK_ROLES_LABEL) || rolesConfig?.[key]) { setMsg({ tipo: 'error', txt: t('Ya existe un rol con ese nombre.') }); return }
+    setGuardando(true)
+    try {
+      const roles = { ...(rolesConfig || {}), [key]: { nombre, custom: true, permisos: [] } }
+      await crearConId('roles', tenantId, tenantId, { roles })
+      await auditar(tenantId, { usuario: usuario?.nombre || usuario?.email, rol, accion: 'rol_creado', entidad: 'role', entidadId: key, detalle: nombre })
+      setNuevoNombre(''); setCreando(false); setSelRol(key)
+      setMsg({ tipo: 'ok', txt: t('Rol creado. Marca sus permisos y ya puedes asignarlo a usuarios.') })
+    } catch (e) { setMsg({ tipo: 'error', txt: e?.message || t('No se pudo crear el rol.') }) }
+    finally { setGuardando(false) }
+  }
+
+  // Eliminar un rol personalizado (los usuarios con ese rol quedan sin permisos hasta
+  // reasignarlos; por eso conviene mover primero a esos usuarios).
+  const eliminarRol = async () => {
+    if (!esCustom || !tenantId) return
+    if (!window.confirm(t('¿Eliminar este rol? Los usuarios que lo tengan se quedarán sin permisos hasta que les asignes otro rol.'))) return
+    setGuardando(true)
+    try {
+      const roles = { ...(rolesConfig || {}) }
+      delete roles[selRol]
+      await crearConId('roles', tenantId, tenantId, { roles })
+      await auditar(tenantId, { usuario: usuario?.nombre || usuario?.email, rol, accion: 'rol_eliminado', entidad: 'role', entidadId: selRol })
+      setSelRol(BULK_ROLES.DISPATCHER)
+      setMsg({ tipo: 'ok', txt: t('Rol eliminado.') })
+    } catch (e) { setMsg({ tipo: 'error', txt: e?.message || t('No se pudo eliminar.') }) }
+    finally { setGuardando(false) }
   }
 
   const totalPerms = draft.size
@@ -141,7 +183,7 @@ export default function BulkRoles() {
         >
           <Lock size={12} /> {t(BULK_ROLES_LABEL[BULK_ROLES.SUPER_ADMIN])}
         </button>
-        {ROLES_EDITABLES.map((r) => (
+        {[...ROLES_EDITABLES, ...personalizados].map((r) => (
           <button
             key={r} type="button" onClick={() => setSelRol(r)}
             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
@@ -150,21 +192,40 @@ export default function BulkRoles() {
                 : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
           >
-            <ShieldCheck size={13} /> {t(BULK_ROLES_LABEL[r] || r)}
+            <ShieldCheck size={13} /> {personalizados.includes(r) ? etiquetaRol(r, rolesConfig) : t(BULK_ROLES_LABEL[r] || r)}
           </button>
         ))}
+        {/* Crear rol nuevo */}
+        {creando ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Input autoFocus value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && crearRol()}
+              placeholder={t('Nombre del rol (ej. Contador)')} className="h-8 w-48 text-xs" />
+            <Boton variant="gold" onClick={crearRol} disabled={guardando || !nuevoNombre.trim()} className="px-2.5 py-1 text-xs"><Check size={14} /></Boton>
+            <button type="button" onClick={() => { setCreando(false); setNuevoNombre('') }} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={14} /></button>
+          </span>
+        ) : (
+          <button type="button" onClick={() => setCreando(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-amber-400 hover:text-amber-600 dark:border-slate-600 dark:text-slate-400">
+            <Plus size={13} /> {t('Rol nuevo')}
+          </button>
+        )}
       </div>
 
       {/* Barra de acciones del rol seleccionado */}
       <Card className="mb-4 flex flex-wrap items-center gap-3 p-4">
         <div>
-          <div className="text-sm font-bold text-brand-navy dark:text-slate-100">{t(BULK_ROLES_LABEL[selRol] || selRol)}</div>
+          <div className="flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">
+            {etiquetaRol(selRol, rolesConfig)} {esCustom && <Badge color="blue">{t('Rol nuevo')}</Badge>}
+          </div>
           <div className="mt-0.5 text-xs text-slate-400">
-            {totalPerms} {t('permisos')} · {personalizado ? <Badge color="gold">{t('Personalizado')}</Badge> : <span className="text-slate-400">{t('Usando preset por defecto')}</span>}
+            {totalPerms} {t('permisos')} · {esCustom ? <span className="text-slate-400">{t('Rol creado por ti')}</span> : personalizado ? <Badge color="gold">{t('Personalizado')}</Badge> : <span className="text-slate-400">{t('Usando preset por defecto')}</span>}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Boton variant="ghost" onClick={restablecer} disabled={bloqueado} className="text-xs"><RotateCcw size={14} /> {t('Restablecer al preset')}</Boton>
+          {esCustom
+            ? <Boton variant="ghost" onClick={eliminarRol} disabled={guardando} className="text-xs text-rose-500"><Trash2 size={14} /> {t('Eliminar rol')}</Boton>
+            : <Boton variant="ghost" onClick={restablecer} disabled={bloqueado} className="text-xs"><RotateCcw size={14} /> {t('Restablecer al preset')}</Boton>}
           <Boton variant="gold" onClick={guardar} disabled={bloqueado || guardando || !dirty}><Save size={15} /> {guardando ? t('Guardando…') : t('Guardar cambios')}</Boton>
         </div>
       </Card>

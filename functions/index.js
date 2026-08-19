@@ -22,6 +22,19 @@ const db = admin.firestore()
 const ROLES = ['super_admin', 'admin', 'dispatcher', 'cliente', 'transportista', 'chofer', 'supervisor_planta']
 const esAdminClaim = (t) => t && (t.bulkRole === 'super_admin' || t.bulkRole === 'admin')
 
+// Rol válido para asignar: built-in, o rol PERSONALIZADO definido por el tenant en
+// bulk_roles/{tenantId}.roles (RBAC configurable). Los roles personalizados son de
+// tipo staff (usan el panel); las reglas de Firestore los tratan como staff no-admin.
+async function rolValido(tenantId, rol) {
+  if (ROLES.includes(rol)) return true
+  if (!tenantId || !rol) return false
+  try {
+    const s = await db.collection('bulk_roles').doc(tenantId).get()
+    const roles = s.exists ? (s.data().roles || {}) : {}
+    return !!roles[rol]
+  } catch (e) { return false }
+}
+
 // --- Claims que se copian al token del usuario -----------------------------
 function claimsDe(perfil) {
   const c = { bulkTenant: perfil.tenantId, bulkRole: perfil.rol }
@@ -38,7 +51,8 @@ exports.crearUsuarioBulk = onCall(async (req) => {
   const t = req.auth && req.auth.token
   if (!t || !t.bulkTenant) throw new HttpsError('permission-denied', 'No autorizado.')
   const { nombre, email, password, rol, clienteId, carrierId } = req.data || {}
-  if (!email || !password || !ROLES.includes(rol)) throw new HttpsError('invalid-argument', 'Datos inválidos.')
+  if (!email || !password || !rol) throw new HttpsError('invalid-argument', 'Datos inválidos.')
+  if (!(await rolValido(t.bulkTenant, rol))) throw new HttpsError('invalid-argument', 'Rol no reconocido.')
   // Admin crea cualquiera; un transportista solo puede crear CHOFERES de su propio carrier.
   const esTransCreandoChofer = t.bulkRole === 'transportista' && rol === 'chofer' && carrierId && carrierId === t.bulkCarrierId
   if (!esAdminClaim(t) && !esTransCreandoChofer) throw new HttpsError('permission-denied', 'Sin permiso para crear este usuario.')

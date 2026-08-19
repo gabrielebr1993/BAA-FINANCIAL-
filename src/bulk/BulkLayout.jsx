@@ -4,6 +4,7 @@ import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
 import { navVisible } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
+import { etiquetaRol } from './domain/permisos'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useColeccion } from './data/useColeccion'
 import { noLeidosPorConv } from './data/chat'
@@ -16,7 +17,7 @@ import { useState } from 'react'
 import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLayout({ children }) {
-  const { usuario, rol, cerrarSesion, puede } = useBulkAuth()
+  const { usuario, rol, cerrarSesion, puede, rolesConfig } = useBulkAuth()
   const { t } = useLang()
   const navigate = useNavigate()
   const items = useMemo(() => navVisible(puede), [puede])
@@ -71,7 +72,7 @@ export default function BulkLayout({ children }) {
         <div className="mt-2 flex-shrink-0 border-t border-slate-200 pt-2 dark:border-slate-800">
           <div className="px-3 py-1 text-xs">
             <div className="font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || usuario?.email}</div>
-            <div className="text-slate-400">{t(BULK_ROLES_LABEL[rol] || rol)}</div>
+            <div className="text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
           </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
           <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>
