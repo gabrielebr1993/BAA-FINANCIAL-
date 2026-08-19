@@ -14,7 +14,7 @@ export default function Onboarding() {
   const paso2 = invoices.length > 0
   const listos = paso1 && paso2
 
-  const finalizar = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes(); navigate('/') }
+  const finalizar = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes(); navigate('/dashboard') }
   const omitir = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes() }
 
   const pasos = [

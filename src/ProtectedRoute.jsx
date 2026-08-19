@@ -22,10 +22,10 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, rol
   // Blindaje del rol driver: solo su portal; cualquier otra ruta -> /portal.
   if (esDriver && !soloDriver) return <Navigate to="/portal" replace />
   // Un no-chofer no necesita el portal del chofer -> al inicio.
-  if (soloDriver && !esDriver) return <Navigate to="/" replace />
+  if (soloDriver && !esDriver) return <Navigate to="/dashboard" replace />
   // Sección solo para súper-admin (ej. /empresas): un owner/manager NO puede
   // entrar ni por URL; se le redirige a su dashboard sin ver ni cargar nada.
-  if (soloSuperAdmin && !esSuperAdmin) return <Navigate to="/" replace />
+  if (soloSuperAdmin && !esSuperAdmin) return <Navigate to="/dashboard" replace />
   // Ruta abierta a ciertos ROLES (además del súper-admin), sin depender de los
   // permisos granulares (ej. la IA: dueño + admin). Si no calza, al inicio.
   if (roles && !(esSuperAdmin || roles.includes(perfil?.role))) {

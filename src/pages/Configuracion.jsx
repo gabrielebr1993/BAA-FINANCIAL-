@@ -171,7 +171,7 @@ export default function Configuracion() {
         <Card className="p-5">
           <h3 className="m-0 mb-2 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Compass size={18} strokeWidth={1.8} className="text-brand-gold" /> {t('Primeros pasos')}</h3>
           <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('¿Quieres volver a ver la guía de configuración inicial (agregar ciudades, cargar tu primera factura y revisar el dashboard)?')}</p>
-          <Boton variant="ghost" disabled={!activeCompanyId} onClick={async () => { await setOnboardingCompleto(activeCompanyId, false); await reloadAjustes(); navigate('/') }}>
+          <Boton variant="ghost" disabled={!activeCompanyId} onClick={async () => { await setOnboardingCompleto(activeCompanyId, false); await reloadAjustes(); navigate('/dashboard') }}>
             <Compass size={16} strokeWidth={1.8} /> {t('Ver guía de primeros pasos')}
           </Boton>
         </Card>

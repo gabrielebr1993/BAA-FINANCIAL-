@@ -19,7 +19,7 @@ import {
 } from '../utils/asistente'
 
 const RUTA_SECCION = {
-  dashboard: '/', pagos: '/pagos', choferes: '/choferes', rutas: '/rutas', claims: '/claims',
+  dashboard: '/dashboard', pagos: '/pagos', choferes: '/choferes', rutas: '/rutas', claims: '/claims',
   financiero: '/financiero', performance: '/performance', alertas: '/alertas', reclamos: '/reclamos',
   configuracion: '/configuracion', stripe: '/stripe', backups: '/backups', historial: '/historial',
 }

@@ -121,7 +121,7 @@ export const ROLES = ['owner', 'admin', 'manager', 'driver']
 
 // Secciones del menú lateral. Cada una gated por su permiso. Iconos = Lucide.
 export const SECCIONES = [
-  { path: '/', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard },
+  { path: '/dashboard', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard },
   { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: Upload },
   { path: '/historial', label: 'Facturas', permiso: 'subirFacturas', icon: FileText },
   { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign },

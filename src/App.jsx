@@ -11,7 +11,7 @@ import { DataProvider } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
 import { Cargando } from './components/ui'
-import ModuleSelector, { getModulo } from './ModuleSelector'
+import ModuleSelector from './ModuleSelector'
 
 // Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
 const BulkApp = lazy(() => import('./bulk/BulkApp'))
@@ -96,7 +96,7 @@ function PackageApp() {
             <SesionGuard />
             <Routes>
               <Route path="/portal" element={<PortalPage><DriverPortal /></PortalPage>} />
-              <Route path="/" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
+              <Route path="/dashboard" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
               <Route path="/facturas" element={<Page filtro="subirFacturas"><CargarFactura /></Page>} />
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
             <Route path="/configuracion" element={<Page filtro="gestionarConfiguracion"><Configuracion /></Page>} />
@@ -137,11 +137,11 @@ function TopBranch() {
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />
-  // Landing PÚBLICA de marketing:
-  //  - /inicio → SIEMPRE la landing (link compartible; se ve aunque ya tengas sesión).
-  //  - / → la landing solo para visitantes NUEVOS (sin módulo elegido). Quien ya eligió
-  //    módulo entra a su app en / exactamente como hoy (nada cambia para ellos).
-  if (pathname === '/inicio' || (!getModulo() && pathname === '/')) {
+  // Landing PÚBLICA de marketing en la raíz: la portada del sitio es SIEMPRE la landing
+  // (como cualquier web de empresa). Para entrar a la app se usa «Iniciar sesión» → /elegir.
+  // /inicio queda como alias equivalente (link compartible). La app de Package vive bajo
+  // /dashboard y sus rutas propias; Freight bajo /bulk. Nada de eso cambia por dentro.
+  if (pathname === '/' || pathname === '/inicio') {
     return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
   }
   return <PackageApp />

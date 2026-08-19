@@ -39,7 +39,7 @@ const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow 
 export default function ModuleSelector() {
   const navigate = useNavigate()
   const { t } = useLang()
-  const elegir = (m) => { setModulo(m); navigate(m === 'bulk' ? '/bulk' : '/', { replace: true }) }
+  const elegir = (m) => { setModulo(m); navigate(m === 'bulk' ? '/bulk' : '/dashboard', { replace: true }) }
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-4">

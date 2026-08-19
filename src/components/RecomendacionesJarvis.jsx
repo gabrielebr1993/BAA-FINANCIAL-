@@ -9,7 +9,7 @@ import { useAuth } from '../AuthContext'
 import { obtenerRecomendaciones } from '../utils/recomendaciones'
 import { Card, Spinner } from './ui'
 
-const RUTA = { pagos: '/pagos', choferes: '/choferes', rutas: '/rutas', performance: '/performance', financiero: '/financiero', claims: '/claims', dashboard: '/' }
+const RUTA = { pagos: '/pagos', choferes: '/choferes', rutas: '/rutas', performance: '/performance', financiero: '/financiero', claims: '/claims', dashboard: '/dashboard' }
 const COLOR_PRIO = ['#c9a24b', '#c9a24b', '#d97706', '#64748b', '#64748b']
 
 export default function RecomendacionesJarvis() {
