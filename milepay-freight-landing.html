@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MilePay Freight — Despacho para transporte de materiales a granel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#13233f;--navy-deep:#0d1a30;--navy-800:#1b3050;
+  --gold:#c9a24b;--gold-bright:#e0b95f;--cream:#f8f3eb;--cream-line:#ece3d3;
+  --concrete:#8a8578;--steel:#5b6b82;--white:#ffffff;--ink:#0d1a30;--ok:#3f9d6b;
+  --font-display:'Space Grotesk',sans-serif;--font-body:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);color:var(--navy);background:var(--cream);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;line-height:1.08;letter-spacing:-.02em}
+.wrap{max-width:1200px;margin:0 auto;padding:0 28px}
+.mono{font-family:var(--font-mono)}
+a{color:inherit;text-decoration:none}
+
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,26,48,.72);backdrop-filter:blur(14px);border-bottom:1px solid rgba(201,162,75,.18)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:68px}
+.brand{display:flex;align-items:center;gap:11px;color:var(--cream)}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--gold),#a9863a);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand-mark svg{width:19px;height:19px;stroke:var(--navy-deep)}
+.brand-name{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:-.01em}
+.brand-name span{color:var(--gold)}
+.nav-right{display:flex;align-items:center;gap:16px}
+.nav-links{display:flex;align-items:center;gap:30px}
+.nav-links a{color:rgba(248,243,235,.72);font-size:14.5px;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--cream)}
+.nav-cta{background:var(--gold);color:var(--navy-deep)!important;padding:9px 18px;border-radius:9px;font-weight:600;font-size:14px;transition:transform .15s,background .2s}
+.nav-cta:hover{background:var(--gold-bright);transform:translateY(-1px)}
+.nav-login{display:inline-flex;align-items:center;gap:8px;color:var(--cream);border:1px solid rgba(248,243,235,.28);padding:8px 16px;border-radius:9px;font-weight:600;font-size:14px;transition:background .2s,border-color .2s;white-space:nowrap}
+.nav-login:hover{background:rgba(248,243,235,.07);border-color:rgba(248,243,235,.5)}
+.nav-login svg{width:15px;height:15px;stroke:currentColor;flex-shrink:0}
+.lang-toggle{display:inline-flex;border:1px solid rgba(201,162,75,.32);border-radius:8px;overflow:hidden}
+.lang-toggle button{background:transparent;color:rgba(248,243,235,.6);border:none;padding:7px 11px;font-family:var(--font-mono);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.04em}
+.lang-toggle button.active{background:var(--gold);color:var(--navy-deep)}
+.nav-toggle{display:none;background:none;border:none;color:var(--cream);cursor:pointer}
+
+.hero{position:relative;background:var(--navy-deep);color:var(--cream);padding:132px 0 90px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.14),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(91,107,130,.22),transparent 55%);pointer-events:none}
+.hero-grid{position:relative;display:grid;grid-template-columns:1.02fr 1.1fr;gap:56px;align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(201,162,75,.3);padding:7px 14px;border-radius:100px;margin-bottom:26px}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 rgba(201,162,75,.6);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(201,162,75,.55)}70%{box-shadow:0 0 0 9px rgba(201,162,75,0)}100%{box-shadow:0 0 0 0 rgba(201,162,75,0)}}
+.hero h1{font-size:clamp(40px,5.2vw,62px);font-weight:700;margin-bottom:22px}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.hero-sub{font-size:19px;color:rgba(248,243,235,.78);max-width:520px;margin-bottom:34px;line-height:1.5}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.btn-primary{background:var(--gold);color:var(--navy-deep);padding:15px 28px;border-radius:11px;font-weight:600;font-size:15.5px;transition:transform .15s,box-shadow .2s;box-shadow:0 10px 30px -10px rgba(201,162,75,.5)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 16px 38px -12px rgba(201,162,75,.6)}
+.btn-ghost{color:var(--cream);padding:15px 24px;border-radius:11px;font-weight:600;font-size:15.5px;border:1px solid rgba(248,243,235,.24);transition:background .2s,border-color .2s;display:inline-flex;align-items:center;gap:9px}
+.btn-ghost:hover{background:rgba(248,243,235,.06);border-color:rgba(248,243,235,.4)}
+.hero-note{margin-top:22px;font-size:13.5px;color:rgba(248,243,235,.5);display:flex;align-items:center;gap:8px}
+.hero-note svg{width:15px;height:15px;stroke:var(--gold);flex-shrink:0}
+
+.board{background:linear-gradient(160deg,#16294a,#101f38);border:1px solid rgba(201,162,75,.2);border-radius:20px;padding:18px;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);position:relative}
+.board-head{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 14px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:14px}
+.board-title{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:rgba(248,243,235,.55)}
+.board-live{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:11.5px;color:var(--gold)}
+.board-live .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.35}}
+.board-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.col-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:rgba(248,243,235,.4);margin-bottom:10px;display:flex;justify-content:space-between}
+.col-label b{color:var(--gold);font-weight:600}
+.stack{display:flex;flex-direction:column;gap:9px;min-height:230px}
+.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:11px 12px;transition:all .45s cubic-bezier(.4,0,.2,1);position:relative}
+.card.matching{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 22px -4px rgba(201,162,75,.5);animation:flick 1s ease-in-out infinite}
+@keyframes flick{0%,100%{box-shadow:0 0 0 1px var(--gold),0 0 22px -4px rgba(201,162,75,.5)}50%{box-shadow:0 0 0 1px var(--gold),0 0 8px -2px rgba(201,162,75,.3)}}
+.card.done{opacity:0;transform:translateX(8px) scale(.96);pointer-events:none}
+.card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.card-id{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--cream)}
+.chip{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:5px;font-weight:600}
+.chip.wait{background:rgba(201,162,75,.14);color:var(--gold)}
+.chip.online{background:rgba(63,157,107,.16);color:#67c295}
+.card-body{display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(248,243,235,.72)}
+.card-body svg{width:14px;height:14px;stroke:var(--concrete);flex-shrink:0}
+.card-meta{font-family:var(--font-mono);font-size:11px;color:rgba(248,243,235,.45);margin-top:5px}
+.board-foot{margin-top:14px;padding-top:13px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:9px;font-size:12.5px;color:rgba(248,243,235,.6)}
+.board-foot .tick{width:18px;height:18px;border-radius:50%;background:rgba(63,157,107,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.board-foot .tick svg{width:11px;height:11px;stroke:#67c295}
+#matchText{font-family:var(--font-mono);font-size:12px;color:var(--gold)}
+
+.strip{background:var(--navy);border-top:1px solid rgba(201,162,75,.14);border-bottom:1px solid rgba(201,162,75,.14);padding:26px 0}
+.strip-in{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:22px}
+.strip-item{display:flex;align-items:center;gap:12px;color:rgba(248,243,235,.82)}
+.strip-item svg{width:22px;height:22px;stroke:var(--gold);flex-shrink:0}
+.strip-item b{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--cream)}
+.strip-item span{font-size:12.5px;color:rgba(248,243,235,.5)}
+
+.section{padding:96px 0}
+.sec-eyebrow{font-family:var(--font-mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;font-weight:500}
+.sec-head{max-width:680px;margin-bottom:56px}
+.sec-head h2{font-size:clamp(30px,3.6vw,44px);margin-bottom:18px;color:var(--navy)}
+.sec-head p{font-size:18px;color:var(--steel);line-height:1.55}
+
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.fcard{background:var(--white);border:1px solid var(--cream-line);border-radius:16px;padding:28px 26px;transition:transform .25s,box-shadow .25s,border-color .25s}
+.fcard:hover{transform:translateY(-4px);box-shadow:0 22px 44px -24px rgba(19,35,63,.28);border-color:#dcd0ba}
+.fcard .ico{width:46px;height:46px;border-radius:12px;background:var(--navy);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.fcard .ico svg{width:22px;height:22px;stroke:var(--gold)}
+.fcard h3{font-size:19.5px;margin-bottom:9px;color:var(--navy)}
+.fcard p{font-size:14.5px;color:var(--steel);line-height:1.6}
+
+.model{background:var(--navy-deep);color:var(--cream);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:.95fr 1.05fr}
+.model-copy{padding:56px 48px}
+.model-copy .sec-eyebrow{color:var(--gold)}
+.model-copy h2{font-size:clamp(28px,3.2vw,38px);color:var(--cream);margin-bottom:20px}
+.model-copy p{font-size:16.5px;color:rgba(248,243,235,.74);margin-bottom:14px;line-height:1.6}
+.model-copy p b{color:var(--gold);font-weight:600}
+.flow{position:relative;background:linear-gradient(160deg,#16294a,#0f1d35);padding:48px 40px;display:flex;flex-direction:column;justify-content:center;gap:0}
+.node{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:15px 18px;display:flex;align-items:center;gap:14px;position:relative;z-index:2}
+.node .n-ico{width:38px;height:38px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.node .n-ico svg{width:19px;height:19px}
+.node.client .n-ico{background:rgba(91,107,130,.25)}.node.client .n-ico svg{stroke:#a9b6c9}
+.node.job .n-ico{background:rgba(201,162,75,.18)}.node.job .n-ico svg{stroke:var(--gold)}
+.node .n-t{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--cream)}
+.node .n-d{font-size:12px;color:rgba(248,243,235,.5);font-family:var(--font-mono)}
+.connector{width:2px;height:26px;margin-left:37px;background:linear-gradient(var(--gold),rgba(201,162,75,.15))}
+.carriers-row{display:flex;gap:10px;margin-left:0}
+.mini-carrier{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;text-align:center}
+.mini-carrier .mc-t{font-family:var(--font-mono);font-size:11px;color:var(--gold);margin-bottom:4px}
+.mini-carrier .mc-d{font-size:10.5px;color:rgba(248,243,235,.45)}
+
+.split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.split.rev .split-visual{order:2}
+.split-copy h2{font-size:clamp(26px,3vw,36px);margin-bottom:18px;color:var(--navy)}
+.split-copy p{font-size:16.5px;color:var(--steel);margin-bottom:22px;line-height:1.6}
+.checklist{list-style:none;display:flex;flex-direction:column;gap:13px}
+.checklist li{display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--navy)}
+.checklist .ck{width:24px;height:24px;border-radius:7px;background:rgba(63,157,107,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.checklist .ck svg{width:14px;height:14px;stroke:var(--ok)}
+
+.map-visual{background:var(--navy-deep);border-radius:20px;padding:22px;position:relative;border:1px solid rgba(201,162,75,.18);box-shadow:0 30px 60px -28px rgba(19,35,63,.4);aspect-ratio:1.15;overflow:hidden}
+.map-grid{position:absolute;inset:22px;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:38px 38px;border-radius:12px}
+.geo{position:absolute;border:1.5px dashed rgba(201,162,75,.5);border-radius:50%}
+.geo1{width:120px;height:120px;top:26%;left:14%}
+.geo2{width:96px;height:96px;bottom:16%;right:16%}
+.geo-lbl{position:absolute;font-family:var(--font-mono);font-size:10px;color:var(--gold);background:rgba(13,26,48,.85);padding:3px 7px;border-radius:5px;white-space:nowrap}
+.truck{position:absolute;width:30px;height:30px;border-radius:9px;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px -4px rgba(201,162,75,.6);z-index:3}
+.truck svg{width:17px;height:17px;stroke:var(--navy-deep)}
+.truck.t1{top:32%;left:22%;animation:drive1 7s ease-in-out infinite}
+.truck.t2{bottom:24%;right:26%;background:#67c295}
+.truck.t2 svg{stroke:var(--navy-deep)}
+@keyframes drive1{0%,100%{transform:translate(0,0)}50%{transform:translate(120px,60px)}}
+.route{position:absolute;height:2px;background:linear-gradient(90deg,var(--gold),transparent);top:40%;left:26%;width:180px;transform:rotate(24deg);opacity:.5}
+.map-badge{position:absolute;bottom:16px;left:16px;background:rgba(13,26,48,.9);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 13px;display:flex;align-items:center;gap:9px;z-index:4}
+.map-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:blink 1.6s infinite}
+.map-badge span{font-family:var(--font-mono);font-size:11.5px;color:var(--cream)}
+
+.phone{width:270px;margin:0 auto;background:var(--navy-deep);border-radius:34px;padding:11px;box-shadow:0 40px 70px -30px rgba(19,35,63,.5);border:1px solid rgba(201,162,75,.2)}
+.phone-screen{background:var(--cream);border-radius:26px;overflow:hidden;height:520px;display:flex;flex-direction:column}
+.ph-head{background:linear-gradient(150deg,var(--navy),var(--navy-800));padding:22px 18px 20px;color:var(--cream)}
+.ph-head .ph-hi{font-size:12px;color:rgba(248,243,235,.6);font-family:var(--font-mono)}
+.ph-head .ph-name{font-family:var(--font-display);font-weight:600;font-size:19px;margin-top:2px}
+.ph-body{padding:16px;display:flex;flex-direction:column;gap:12px;flex:1;overflow:hidden}
+.ph-card{background:var(--white);border:1px solid var(--cream-line);border-radius:14px;padding:14px}
+.ph-order-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.ph-oid{font-family:var(--font-mono);font-weight:600;font-size:13px;color:var(--navy)}
+.ph-badge{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.05em;background:rgba(201,162,75,.16);color:#a9863a;padding:3px 8px;border-radius:5px;font-weight:600}
+.ph-order-body{font-size:12.5px;color:var(--steel)}
+.ph-pay{background:linear-gradient(140deg,#2f8f5f,#256b48);border-radius:14px;padding:16px;color:#fff}
+.ph-pay .lbl{font-size:11px;opacity:.8;font-family:var(--font-mono)}
+.ph-pay .amt{font-family:var(--font-display);font-weight:700;font-size:28px;margin-top:2px}
+.ph-pick{background:var(--cream);border:1px dashed var(--gold);border-radius:12px;padding:12px 13px}
+.ph-pick .pk-l{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:#a9863a;text-transform:uppercase}
+.ph-pick .pk-v{font-size:13px;font-weight:600;color:var(--navy);margin-top:3px}
+.ph-cta{margin-top:auto;background:var(--ok);color:#fff;text-align:center;padding:13px;border-radius:12px;font-family:var(--font-display);font-weight:600;font-size:14px}
+.ph-nav{background:var(--white);border-top:1px solid var(--cream-line);display:flex;justify-content:space-around;padding:11px 0 8px}
+.ph-nav svg{width:20px;height:20px;stroke:#b7ae9d}
+.ph-nav .on svg{stroke:var(--gold)}
+
+.band{background:var(--navy);color:var(--cream);padding:70px 0}
+.band-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;text-align:center}
+.stat .num{font-family:var(--font-display);font-weight:700;font-size:clamp(34px,4vw,50px);color:var(--gold);letter-spacing:-.02em}
+.stat .lbl{font-size:14px;color:rgba(248,243,235,.66);margin-top:6px}
+.band-divider{height:1px;background:rgba(201,162,75,.16);max-width:1200px;margin:0 auto 46px}
+
+.tags{display:flex;flex-wrap:wrap;gap:11px;margin-top:8px}
+.tag{background:var(--white);border:1px solid var(--cream-line);border-radius:100px;padding:9px 17px;font-size:14px;font-weight:500;color:var(--navy);display:flex;align-items:center;gap:9px}
+.tag svg{width:16px;height:16px;stroke:var(--gold)}
+
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.role{background:var(--white);border:1px solid var(--cream-line);border-radius:14px;padding:22px}
+.role h4{font-size:16px;margin-bottom:6px;color:var(--navy)}
+.role p{font-size:13.5px;color:var(--steel);line-height:1.5}
+.role .r-ico{width:38px;height:38px;border-radius:10px;background:var(--cream);display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.role .r-ico svg{width:19px;height:19px;stroke:var(--navy)}
+
+.cta-final{background:linear-gradient(155deg,var(--navy),var(--navy-deep));color:var(--cream);border-radius:28px;padding:70px 56px;text-align:center;position:relative;overflow:hidden}
+.cta-final::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%,rgba(201,162,75,.16),transparent 60%)}
+.cta-final h2{position:relative;font-size:clamp(30px,4vw,46px);margin-bottom:18px}
+.cta-final p{position:relative;font-size:18px;color:rgba(248,243,235,.75);max-width:520px;margin:0 auto 32px}
+.cta-final .hero-cta{position:relative;justify-content:center}
+
+.footer{background:var(--navy-deep);color:rgba(248,243,235,.6);padding:54px 0 34px;border-top:1px solid rgba(201,162,75,.14)}
+.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:36px;margin-bottom:40px}
+.foot-brand p{font-size:14px;margin-top:14px;max-width:280px;line-height:1.6}
+.foot-col h5{font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--cream);text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px}
+.foot-col a{display:block;font-size:14px;margin-bottom:10px;transition:color .2s}
+.foot-col a:hover{color:var(--gold)}
+.foot-bottom{border-top:1px solid rgba(255,255,255,.08);padding-top:24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;font-size:13px;color:rgba(248,243,235,.4)}
+
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+
+@media(max-width:960px){
+  .hero-grid{grid-template-columns:1fr;gap:44px}
+  .model{grid-template-columns:1fr}
+  .split,.split.rev{grid-template-columns:1fr;gap:36px}
+  .split.rev .split-visual{order:0}
+  .fgrid{grid-template-columns:1fr 1fr}
+  .roles{grid-template-columns:1fr 1fr}
+  .band-grid{grid-template-columns:1fr 1fr;gap:36px}
+  .foot-grid{grid-template-columns:1fr 1fr}
+  .nav-links{display:none}
+  .nav-links.open{display:flex;position:absolute;top:68px;left:0;right:0;flex-direction:column;background:var(--navy-deep);padding:20px 28px;gap:18px;border-bottom:1px solid rgba(201,162,75,.2)}
+  .nav-toggle{display:block}
+}
+@media(max-width:560px){
+  .wrap{padding:0 20px}
+  .fgrid,.roles,.band-grid,.foot-grid{grid-template-columns:1fr}
+  .board-cols{grid-template-columns:1fr}
+  .col-online{display:none}
+  .strip-in{justify-content:flex-start;gap:16px}
+  .cta-final{padding:50px 26px}
+  .model-copy,.flow{padding:36px 26px}
+}
+@media(max-width:480px){
+  .nav-login span{display:none}
+  .nav-login{padding:8px 10px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+      <span class="brand-name">MilePay <span>Freight</span></span>
+    </a>
+    <div class="nav-right">
+      <div class="nav-links" id="navLinks">
+        <a href="#producto" data-en="Product">Producto</a>
+        <a href="#asignacion" data-en="Assignment">Asignación</a>
+        <a href="#operacion" data-en="Operations">Operación</a>
+        <a href="#roles" data-en="Roles">Roles</a>
+        <a href="#demo" class="nav-cta" data-en="Request demo">Solicitar demo</a>
+      </div>
+      <a href="#" data-login class="nav-login"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg><span data-en="Log in">Iniciar sesión</span></a>
+      <div class="lang-toggle" id="langToggle">
+        <button data-lang="es">ES</button>
+        <button data-lang="en">EN</button>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Menú"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow"><span class="dot"></span><span data-en="Bulk materials dispatch">Despacho de materiales a granel</span></span>
+      <h1 data-en="Your truck dispatch, <em>on autopilot.</em>">El despacho de tus camiones, <em>en automático.</em></h1>
+      <p class="hero-sub" data-en="MilePay Freight takes in every order and matches it to the right driver — by truck type, availability and job. No calls, no spreadsheets, no chaos. You see it all live.">MilePay Freight recibe cada orden y la empareja con el chofer correcto — por tipo de camión, disponibilidad y trabajo. Sin llamadas, sin planillas, sin caos. Tú lo ves todo en vivo.</p>
+      <div class="hero-cta">
+        <a href="#demo" class="btn-primary" data-en="Request demo">Solicitar demo</a>
+        <a href="#asignacion" class="btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg><span data-en="See how it works">Ver cómo funciona</span></a>
+      </div>
+      <div style="margin-top:18px;font-size:14px;color:rgba(248,243,235,.6)"><span data-en="Already a customer?">¿Ya eres cliente?</span> <a href="#" data-login style="color:var(--gold);font-weight:600;border-bottom:1px solid rgba(201,162,75,.4)"><span data-en="Log in">Inicia sesión</span></a></div>
+      <div class="hero-note"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span data-en="Asphalt, gravel, concrete, sand and stone — one system.">Asfalto, grava, concreto, arena y piedra — un solo sistema.</span></div>
+    </div>
+
+    <div class="board" aria-hidden="true">
+      <div class="board-head">
+        <span class="board-title" data-en="Dispatch board">Tablero de despacho</span>
+        <span class="board-live"><span class="dot"></span><span data-en="LIVE">EN VIVO</span></span>
+      </div>
+      <div class="board-cols">
+        <div>
+          <div class="col-label"><span data-en="Orders in queue">Órdenes en cola</span> <b id="qCount">3</b></div>
+          <div class="stack" id="ordersStack">
+            <div class="card" data-truck="dump">
+              <div class="card-top"><span class="card-id">JRV-0148</span><span class="chip wait" data-en="Waiting">Esperando</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg><span data-en="Gravel · 19.1 t · Dump Truck">Grava · 19.1 ton · Dump Truck</span></div>
+              <div class="card-meta" data-en="North Plant → Site 41">Planta Norte → Obra 41</div>
+            </div>
+            <div class="card" data-truck="mixer">
+              <div class="card-top"><span class="card-id">JRV-0149</span><span class="chip wait" data-en="Waiting">Esperando</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M9 18h6M3 6h9l3 6v6M12 6v12"/></svg><span data-en="Concrete · 8 m³ · Mixer">Concreto · 8 m³ · Mixer</span></div>
+              <div class="card-meta" data-en="South Plant → Site 12">Planta Sur → Obra 12</div>
+            </div>
+            <div class="card" data-truck="enddump">
+              <div class="card-top"><span class="card-id">JRV-0150</span><span class="chip wait" data-en="Waiting">Esperando</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg><span data-en="Asphalt · 24 t · End Dump">Asfalto · 24 ton · End Dump</span></div>
+              <div class="card-meta" data-en="East Plant → Highway 9">Planta Este → Autopista 9</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-online">
+          <div class="col-label"><span data-en="Drivers online">Choferes en línea</span> <b id="dCount">3</b></div>
+          <div class="stack" id="driversStack">
+            <div class="card" data-truck="dump">
+              <div class="card-top"><span class="card-id">M. Reyes</span><span class="chip online" data-en="Online">En línea</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-en="Dump Truck · Vega Carrier">Dump Truck · Transp. Vega</span></div>
+              <div class="card-meta" data-en="4 min from North Plant">A 4 min de Planta Norte</div>
+            </div>
+            <div class="card" data-truck="mixer">
+              <div class="card-top"><span class="card-id">L. Ortiz</span><span class="chip online" data-en="Online">En línea</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-en="Concrete Mixer · Cruz Carrier">Concrete Mixer · Transp. Cruz</span></div>
+              <div class="card-meta" data-en="6 min from South Plant">A 6 min de Planta Sur</div>
+            </div>
+            <div class="card" data-truck="enddump">
+              <div class="card-top"><span class="card-id">J. Sáenz</span><span class="chip online" data-en="Online">En línea</span></div>
+              <div class="card-body"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-en="End Dump · Vega Carrier">End Dump · Transp. Vega</span></div>
+              <div class="card-meta" data-en="3 min from East Plant">A 3 min de Planta Este</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="board-foot">
+        <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span id="matchText">Emparejando por tipo de camión…</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="wrap strip-in">
+    <div class="strip-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><div><b data-en="Live assignment">Asignación en vivo</b><br><span data-en="from order to driver in minutes">del pedido al chofer en minutos</span></div></div>
+    <div class="strip-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><div><b data-en="GPS tracking">Seguimiento GPS</b><br><span data-en="every truck on the map">cada camión en el mapa</span></div></div>
+    <div class="strip-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg><div><b data-en="Driver app">App del chofer</b><br><span data-en="trip, pay and tickets">viaje, pago y tickets</span></div></div>
+    <div class="strip-item"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><div><b data-en="Built-in billing">Facturación integrada</b><br><span data-en="rates, statements and invoices">tarifas, estados y facturas</span></div></div>
+  </div>
+</div>
+
+<section class="section" id="producto">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-eyebrow" data-en="All your dispatch in one place">Todo el despacho en un lugar</div>
+      <h2 data-en="A system built to move material, not to fill out spreadsheets.">Un sistema hecho para mover material, no para llenar planillas.</h2>
+      <p data-en="MilePay Freight replaces WhatsApp groups, phone calls and scattered spreadsheets with one connected operation — from order to invoice.">MilePay Freight reemplaza los grupos de WhatsApp, las llamadas y los Excel sueltos con una sola operación conectada — de la orden a la factura.</p>
+    </div>
+    <div class="fgrid">
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+        <h3 data-en="Order queue">Cola de órdenes</h3>
+        <p data-en="Every job's orders land in one clear queue. Filter by plant, material, truck type or status without losing track.">Las órdenes de cada trabajo entran a una cola clara. Filtra por planta, material, tipo de camión o estado sin perderte.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/></svg></div>
+        <h3 data-en="Automatic assignment">Asignación automática</h3>
+        <p data-en="The system matches each order to the available driver from the right carrier, by truck type and arrival order.">El sistema empareja cada orden con el chofer disponible del transportista correcto, por tipo de camión y orden de llegada.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <h3 data-en="Live map and geofences">Mapa en vivo y geocercas</h3>
+        <p data-en="See every truck on the map. Geofences at plants and sites mark arrival, loading, departure and delivery automatically.">Ve cada camión en el mapa. Las geocercas en plantas y obras marcan llegada, carga, salida y entrega en automático.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+        <h3 data-en="Driver app">App del chofer</h3>
+        <p data-en="Each driver works from their phone: their trip, their pay, the step-by-step of loading and delivery, and the load ticket.">Cada chofer trabaja desde su teléfono: su viaje, su pago, el paso a paso de carga y entrega, y el ticket de carga.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <h3 data-en="Rate engine and billing">Motor de tarifas y facturación</h3>
+        <p data-en="Rates by material, route, ton or trip. Generate carrier statements and client invoices without redoing the numbers.">Tarifas por material, ruta, tonelada o viaje. Genera estados de cuenta a transportistas y facturas a clientes sin rehacer números.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+        <h3 data-en="Incidents and documents">Incidencias y documentos</h3>
+        <p data-en="Log incidents with evidence, store truck and driver documents, and keep every move audited.">Registra incidencias con evidencia, guarda documentos de camión y chofer, y ten cada movimiento auditado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="asignacion" style="padding-top:0">
+  <div class="wrap">
+    <div class="model reveal">
+      <div class="model-copy">
+        <div class="sec-eyebrow" data-en="The difference">La diferencia</div>
+        <h2 data-en="One job. Multiple carriers. Zero bottlenecks.">Un trabajo. Varios transportistas. Cero cuellos de botella.</h2>
+        <p data-en="Each <b>client</b> has their jobs. Each <b>job</b> is affiliated with one or more carriers, and their drivers receive that job's orders.">Cada <b>cliente</b> tiene sus trabajos. Cada <b>trabajo</b> se afilia a uno o varios transportistas, y sus choferes reciben las órdenes de ese trabajo.</p>
+        <p data-en="A carrier can't keep up? Affiliate another to the job and its drivers join the pool <b>instantly</b> — with nothing to reconfigure.">¿Un transportista no da abasto? Afilias otro al trabajo y sus choferes entran al pool <b>al instante</b> — sin reconfigurar nada.</p>
+        <p data-en="Orders never reach the wrong driver: only someone belonging to a carrier affiliated with that job, with the right truck type, can see them.">Las órdenes nunca llegan al chofer equivocado: solo las ve quien pertenece a un transportista afiliado a ese trabajo, con el tipo de camión correcto.</p>
+      </div>
+      <div class="flow">
+        <div class="node client">
+          <span class="n-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg></span>
+          <div><div class="n-t" data-en="Client">Cliente</div><div class="n-d" data-en="Álamo Construction">Constructora Álamo</div></div>
+        </div>
+        <div class="connector"></div>
+        <div class="node job">
+          <span class="n-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></span>
+          <div><div class="n-t" data-en="Job · Highway 9">Trabajo · Autopista 9</div><div class="n-d" data-en="3 carriers affiliated">3 transportistas afiliados</div></div>
+        </div>
+        <div class="connector"></div>
+        <div class="carriers-row">
+          <div class="mini-carrier"><div class="mc-t" data-en="Vega Carrier">Transp. Vega</div><div class="mc-d" data-en="6 drivers">6 choferes</div></div>
+          <div class="mini-carrier"><div class="mc-t" data-en="Cruz Carrier">Transp. Cruz</div><div class="mc-d" data-en="4 drivers">4 choferes</div></div>
+          <div class="mini-carrier"><div class="mc-t" data-en="Ríos Carrier">Transp. Ríos</div><div class="mc-d" data-en="5 drivers">5 choferes</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="operacion" style="padding-top:0">
+  <div class="wrap">
+    <div class="split reveal">
+      <div class="split-visual map-visual" aria-hidden="true">
+        <div class="map-grid"></div>
+        <div class="geo geo1"></div>
+        <div class="geo-lbl" style="top:24%;left:12%" data-en="North Plant">Planta Norte</div>
+        <div class="geo geo2"></div>
+        <div class="geo-lbl" style="bottom:12%;right:14%" data-en="Site 41">Obra 41</div>
+        <div class="route"></div>
+        <div class="truck t1"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+        <div class="truck t2"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+        <div class="map-badge"><span class="dot"></span><span data-en="6 trucks en route">6 camiones en ruta</span></div>
+      </div>
+      <div class="split-copy">
+        <div class="sec-eyebrow" data-en="Real-time operations">Operación en tiempo real</div>
+        <h2 data-en="You know where every truck is, without asking.">Sabes dónde está cada camión, sin preguntar.</h2>
+        <p data-en="The live map shows each unit's location. Geofences turn arrivals and departures into automatic records — without the driver having to report anything by phone.">El mapa en vivo muestra la ubicación de cada unidad. Las geocercas convierten llegadas y salidas en registros automáticos — sin que el chofer tenga que reportar nada por teléfono.</p>
+        <ul class="checklist">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="Geofences at plants and destinations mark every stage">Geocercas en plantas y destinos marcan cada etapa</span></li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="Per-order timeline: loading, departure, delivery and close">Línea de tiempo por orden: carga, salida, entrega y cierre</span></li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="Direct messaging between dispatch and driver">Mensajería directa entre despacho y chofer</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="split rev reveal">
+      <div class="split-visual">
+        <div class="phone" aria-hidden="true">
+          <div class="phone-screen">
+            <div class="ph-head">
+              <div class="ph-hi" data-en="Hi, Manuel">Hola, Manuel</div>
+              <div class="ph-name" data-en="Your active trip">Tu viaje activo</div>
+            </div>
+            <div class="ph-body">
+              <div class="ph-card">
+                <div class="ph-order-top"><span class="ph-oid">JRV-0148</span><span class="ph-badge" data-en="At plant">En planta</span></div>
+                <div class="ph-order-body" data-en="Gravel · 19.1 t · Dump Truck">Grava · 19.1 ton · Dump Truck</div>
+              </div>
+              <div class="ph-pay">
+                <div class="lbl" data-en="Your pay for this trip">Tu pago por este viaje</div>
+                <div class="amt">$242.03</div>
+              </div>
+              <div class="ph-pick">
+                <div class="pk-l" data-en="◉ Pick up at the plant">◉ Recoger en la planta</div>
+                <div class="pk-v" data-en="North Plant · Bay 3">Planta Norte · Bahía 3</div>
+              </div>
+              <div class="ph-cta" data-en="Log load ticket">Registrar ticket de carga</div>
+            </div>
+            <div class="ph-nav">
+              <span class="on"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H5a2 2 0 0 0-2 2v7h6zM15 3H9v17h6zM21 8h-6v12h6z"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="split-copy">
+        <div class="sec-eyebrow" data-en="For your drivers">Para tus choferes</div>
+        <h2 data-en="An app any driver gets in a minute.">Una app que cualquier chofer entiende en un minuto.</h2>
+        <p data-en="No training. The driver sees their trip, how much they'll earn, the step-by-step of loading and delivery, and logs their ticket — all from the phone, in Spanish or English.">Sin capacitación. El chofer ve su viaje, cuánto va a cobrar, el paso a paso de la carga y la entrega, y registra su ticket — todo desde el teléfono, en español o inglés.</p>
+        <ul class="checklist">
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="Accept or decline orders from their phone">Acepta o rechaza órdenes desde su celular</span></li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="See per-trip pay and weekly earnings">Ve su pago por viaje y sus ganancias de la semana</span></li>
+          <li><span class="ck"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span data-en="Trip history and messaging with dispatch">Historial de viajes y mensajería con despacho</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="band-grid wrap reveal">
+    <div class="stat"><div class="num">4</div><div class="lbl" data-en="Truck types: Dump, End Dump, Mixer, Belly Dump">Tipos de camión: Dump, End Dump, Mixer, Belly Dump</div></div>
+    <div class="stat"><div class="num">1</div><div class="lbl" data-en="Single screen from order to invoice">Sola pantalla de la orden a la factura</div></div>
+    <div class="stat"><div class="num">&lt;2<span style="font-size:.5em">min</span></div><div class="lbl" data-en="From queued order to assigned driver">De la orden en cola al chofer asignado</div></div>
+    <div class="stat"><div class="num">24/7</div><div class="lbl" data-en="Tracking and dispatch without relying on calls">Seguimiento y despacho sin depender de llamadas</div></div>
+  </div>
+  <div class="band-divider"></div>
+  <div class="wrap">
+    <div class="sec-eyebrow" style="text-align:center" data-en="Materials and equipment it already handles">Materiales y equipo que ya maneja</div>
+    <div class="tags" style="justify-content:center;margin-top:18px">
+      <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22l10-10M12 12l4-4"/><circle cx="18" cy="6" r="3"/></svg><span data-en="Asphalt">Asfalto</span></span>
+      <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2"/><circle cx="14" cy="8" r="2"/><circle cx="17" cy="15" r="2"/><circle cx="10" cy="16" r="2"/></svg><span data-en="Gravel">Grava</span></span>
+      <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M9 18h6M3 6h9l3 6v6M12 6v12"/></svg><span data-en="Concrete">Concreto</span></span>
+      <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20l4-9 4 4 3-7 5 12"/></svg><span data-en="Sand">Arena</span></span>
+      <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 18 3 21 9 12 21 3 9"/></svg><span data-en="Stone">Piedra</span></span>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="roles">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="sec-eyebrow" data-en="Multi-company and roles">Multi-empresa y roles</div>
+      <h2 data-en="Everyone sees exactly what's theirs.">Cada quien ve exactamente lo que le toca.</h2>
+      <p data-en="Dispatch, carriers, drivers, clients and plants work in the same system — each role with its own view and permissions.">Despacho, transportistas, choferes, clientes y plantas trabajan en el mismo sistema — cada rol con su propia vista y sus permisos.</p>
+    </div>
+    <div class="roles">
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-2-2-3 3"/></svg></div>
+        <h4 data-en="Dispatch">Despacho</h4>
+        <p data-en="See the queue, drivers online and the map. Oversee assignment without lifting a finger.">Ve la cola, los choferes en línea y el mapa. Supervisa la asignación sin mover un dedo.</p>
+      </div>
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+        <h4 data-en="Carrier">Transportista</h4>
+        <p data-en="Manage its drivers and trucks, and see the jobs it's affiliated with, plus its statement.">Administra sus choferes y camiones, y ve los trabajos donde está afiliado con su estado de cuenta.</p>
+      </div>
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <h4 data-en="Driver">Chofer</h4>
+        <p data-en="Receive, accept and run trips from the app. Log tickets and see earnings.">Recibe, acepta y ejecuta sus viajes desde la app. Registra tickets y ve sus ganancias.</p>
+      </div>
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg></div>
+        <h4 data-en="Client">Cliente</h4>
+        <p data-en="Create jobs, track order progress and receive invoices — with full transparency.">Crea trabajos, ve el avance de sus órdenes y recibe sus facturas — con total transparencia.</p>
+      </div>
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V10l8-6 8 6v10M9 20v-6h6v6"/></svg></div>
+        <h4 data-en="Plant supervisor">Supervisor de planta</h4>
+        <p data-en="Confirm loads at the plant and keep the outbound flow ordered by bay.">Confirma cargas en la planta y mantiene el flujo de salida ordenado por bahía.</p>
+      </div>
+      <div class="role reveal">
+        <div class="r-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h4 data-en="Administrator">Administrador</h4>
+        <p data-en="Control rates, materials, geofences and users. The whole module under one panel.">Controla tarifas, materiales, geocercas y usuarios. Todo el módulo bajo un solo panel.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="demo" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final reveal">
+      <h2 data-en="Let dispatch run itself.">Deja que el despacho se haga solo.</h2>
+      <p data-en="We'll show you MilePay Freight with your own plants, materials and routes in a 20-minute demo.">Te mostramos MilePay Freight con tus propias plantas, materiales y rutas en una demo de 20 minutos.</p>
+      <div class="hero-cta">
+        <a href="#" class="btn-primary" data-en="Request demo">Solicitar demo</a>
+        <a href="#" class="btn-ghost" data-en="Talk to sales">Hablar con ventas</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span><span class="brand-name">MilePay <span>Freight</span></span></a>
+        <p data-en="The dispatch system for bulk materials transport. From order to invoice, in one place.">El sistema de despacho para transporte de materiales a granel. De la orden a la factura, en un solo lugar.</p>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Product">Producto</h5>
+        <a href="#asignacion" data-en="Automatic assignment">Asignación automática</a>
+        <a href="#operacion" data-en="Live map">Mapa en vivo</a>
+        <a href="#operacion" data-en="Driver app">App del chofer</a>
+        <a href="#producto" data-en="Billing">Facturación</a>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Company">Empresa</h5>
+        <a href="#" data-en="About">Nosotros</a>
+        <a href="#" data-en="Contact">Contacto</a>
+        <a href="#demo" data-en="Request demo">Solicitar demo</a>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Legal">Legal</h5>
+        <a href="#" data-en="Privacy">Privacidad</a>
+        <a href="#" data-en="Terms">Términos</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 MilePay · milepay.io</span>
+      <span data-en="Built to move material.">Hecho para mover material.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// i18n
+(function(){
+  const nodes=[...document.querySelectorAll('[data-en]')];
+  nodes.forEach(n=>{n._es=n.innerHTML;});
+  const board={
+    matchBy:{es:'Emparejando por tipo de camión…',en:'Matching by truck type…'},
+    matching:{es:'Emparejando ',en:'Matching '},
+    ellipsis:'…',
+    accepted:{es:function(id){return 'Orden '+id+' aceptada';},en:function(id){return 'Order '+id+' accepted';}},
+    trucks:{dump:{es:'Dump Truck',en:'Dump Truck'},mixer:{es:'Concrete Mixer',en:'Concrete Mixer'},enddump:{es:'End Dump',en:'End Dump'}}
+  };
+  window.__lang='es';
+  window.__board=board;
+  window.setLang=function(lang){
+    window.__lang=lang;
+    document.documentElement.lang=lang;
+    nodes.forEach(n=>{n.innerHTML = lang==='en' ? n.getAttribute('data-en') : n._es;});
+    document.querySelectorAll('#langToggle button').forEach(b=>b.classList.toggle('active',b.dataset.lang===lang));
+    const mt=document.getElementById('matchText');
+    if(mt && !mt.dataset.dyn){mt.textContent=board.matchBy[lang];}
+  };
+  document.querySelectorAll('#langToggle button').forEach(b=>{
+    b.addEventListener('click',()=>window.setLang(b.dataset.lang));
+  });
+})();
+
+// scroll reveal
+const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.14});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// mobile nav
+const t=document.getElementById('navToggle'),l=document.getElementById('navLinks');
+t&&t.addEventListener('click',()=>l.classList.toggle('open'));
+l&&l.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>l.classList.remove('open')));
+
+// live dispatch board simulation
+(function(){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const orders=document.getElementById('ordersStack');
+  const drivers=document.getElementById('driversStack');
+  const matchText=document.getElementById('matchText');
+  const qCount=document.getElementById('qCount');
+  const dCount=document.getElementById('dCount');
+  if(!orders||!drivers)return;
+  let running=true;
+  function L(){return window.__lang||'es';}
+  function cycle(){
+    const oCards=[...orders.querySelectorAll('.card:not(.done)')];
+    const dCards=[...drivers.querySelectorAll('.card:not(.done)')];
+    if(!oCards.length||!dCards.length){setTimeout(reset,1400);return;}
+    const o=oCards[0];const type=o.dataset.truck;
+    const d=dCards.find(c=>c.dataset.truck===type)||dCards[0];
+    const b=window.__board;
+    matchText.dataset.dyn='1';
+    matchText.textContent=b.matching[L()]+(b.trucks[type]?b.trucks[type][L()]:'')+b.ellipsis;
+    o.classList.add('matching');d.classList.add('matching');
+    setTimeout(()=>{
+      o.classList.remove('matching');d.classList.remove('matching');
+      matchText.textContent=b.accepted[L()](o.querySelector('.card-id').textContent);
+      o.classList.add('done');d.classList.add('done');
+      setTimeout(()=>{
+        qCount.textContent=orders.querySelectorAll('.card:not(.done)').length;
+        dCount.textContent=drivers.querySelectorAll('.card:not(.done)').length;
+        if(running)cycle();
+      },700);
+    },1900);
+  }
+  function reset(){
+    orders.querySelectorAll('.card').forEach(c=>c.classList.remove('done','matching'));
+    drivers.querySelectorAll('.card').forEach(c=>c.classList.remove('done','matching'));
+    qCount.textContent=orders.querySelectorAll('.card').length;
+    dCount.textContent=drivers.querySelectorAll('.card').length;
+    matchText.dataset.dyn='';
+    matchText.textContent=window.__board.matchBy[L()];
+    setTimeout(cycle,1200);
+  }
+  setTimeout(cycle,1400);
+})();
+
+// ===== LOGIN / ACCESO =====
+// Cambia esta URL por la ruta real de tu app donde el usuario elige módulo e inicia sesión.
+// Ej: 'https://milepay.io/login'  o  '/app'  o  '/seleccionar-modulo'
+var LOGIN_URL = 'https://milepay.io';
+document.querySelectorAll('[data-login]').forEach(function(a){ a.setAttribute('href', LOGIN_URL); });
+
+// Idioma por defecto del sitio (cambia a 'en' si prefieres inglés).
+// Para detectar el idioma del navegador automáticamente, descomenta la línea de abajo.
+// var initLang = (navigator.language||'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+var initLang = 'es';
+window.setLang(initLang);
+</script>
+</body>
+</html>
