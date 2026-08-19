@@ -10,6 +10,7 @@
 // ============================================================================
 import { crear, crearConId, crearLote, listar, eliminar, guardar, where } from './repo'
 import { ORDEN_ESTADO as E } from '../domain/constants'
+import { escribirPreciosBase, asignarPagos } from './ordenPagos'
 
 // ---- utilidades -----------------------------------------------------------
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
@@ -236,7 +237,18 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   orders.push(buildOrder(0, 92, E.CREADA, false, { equipo: 'Concrete Mixer' }))
   // Una orden CANCELADA (para poblar el historial de canceladas).
   orders.push({ ...buildOrder(0, 93, E.CANCELADA), cancelacion: { por: 'Dispatch', motivo: 'Cliente canceló', ts: iso(daysAgo(1)) } })
-  const ordersCreados = await crearLote('orders', tenantId, orders)
+  // Aislamiento financiero: la orden se guarda SIN precios (igual que en producción,
+  // Jobs.jsx). Los importes van a los docs de pago por audiencia (bulk_orderPay_*),
+  // así un transportista/chofer/cliente demo nunca lee un margen ajeno del doc de la
+  // orden. Los precios se reatan EN MEMORIA para la lógica demo (facturas), no al doc.
+  const sinPrecio = orders.map(({ precioCliente, precioTransportista, pagoChofer, ...rest }) => rest)
+  const ordersCreados = await crearLote('orders', tenantId, sinPrecio)
+  ordersCreados.forEach((o, i) => { o.precioCliente = orders[i].precioCliente; o.precioTransportista = orders[i].precioTransportista; o.pagoChofer = orders[i].pagoChofer })
+  // Proyecta importes a los 3 pay-docs y fija el dueño de las órdenes ya asignadas.
+  await Promise.all(ordersCreados.map((o) => escribirPreciosBase(tenantId, o)))
+  await Promise.all(ordersCreados
+    .filter((o) => o.transportistaId || o.choferId)
+    .map((o) => asignarPagos(tenantId, o.id, { transportistaId: o.transportistaId, choferId: o.choferId, pagoChofer: o.pagoChofer, numero: o.numero })))
   conteo.ordenes = ordersCreados.length
 
   // 8) Recorridos GPS de las órdenes en ruta ---------------------------------

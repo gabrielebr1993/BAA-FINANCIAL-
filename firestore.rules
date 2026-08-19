@@ -173,6 +173,44 @@ service cloud.firestore {
     // una orden que se le ofreció por NOMBRE o por id del roster (no solo por uid).
     function bMyName() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.nombre : null; }
 
+    // Aislamiento financiero DURO de la orden: el documento de la orden NUNCA debe
+    // quedar con un precio con valor (los importes viven en bulk_orderPay_*). Así,
+    // aunque un transportista/cliente/chofer pueda LEER su orden, no hay márgenes
+    // que leer en ella. Vale para cualquier escritor (incluido staff).
+    function bSinValorPrecio(d) {
+      return (!('precioCliente' in d) || d.precioCliente == null)
+          && (!('precioTransportista' in d) || d.precioTransportista == null)
+          && (!('pagoChofer' in d) || d.pagoChofer == null);
+    }
+    // En UPDATE se permite: (a) que el doc resultante no tenga precios con valor
+    // (incluye el "corte" que los borra), o (b) que la escritura no TOQUE ningún
+    // campo de precio (avanzar el estado de una orden vieja sin migrar). Bloquea
+    // fijar o inflar cualquier precio en la orden.
+    function bOrdenPrecioOk() {
+      return bSinValorPrecio(request.resource.data)
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['precioCliente', 'precioTransportista', 'pagoChofer']);
+    }
+    // Quién puede ACTUALIZAR una orden (además del guardián de precios de arriba):
+    // el staff todo; los no-staff pueden AVANZAR la operación (estado, hitos, ticket,
+    // POD, GPS) pero NUNCA cambiar precioCliente/precioTransportista; el chofer y el
+    // supervisor tampoco pagoChofer (ese lo fija el transportista al asignar). Todas
+    // las lecturas de identidad usan .get(…) para no romper si falta un campo.
+    function bPuedeActualizarOrden() {
+      return bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId)
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['precioCliente', 'precioTransportista'])
+            && (
+             (bRole() == 'transportista' && resource.data.get('transportistaId', '') == bCarrier())
+          || (bRole() == 'chofer'
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer'])
+                && (resource.data.get('choferId', '') == request.auth.uid
+                    || (bCarrier() != null && resource.data.get('transportistaId', '') == bCarrier())
+                    || resource.data.get('choferNombre', '') == bMyName()))
+          || (bRole() == 'supervisor_planta'
+                && resource.data.get('plantaId', '') == bMyPlanta()
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer']))));
+    }
+
     // Perfiles Bulk: lee el propio o admin del tenant. Alta/edición: backend (Admin SDK).
     match /bulk_users/{id} {
       allow read: if bSame(resource.data.tenantId) && (request.auth.uid == id || bAdmin(resource.data.tenantId));
@@ -232,7 +270,8 @@ service cloud.firestore {
           || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
           || (bRole() == 'supervisor_planta' && bMyPlanta() != null && resource.data.plantaId == bMyPlanta())));
-      allow create: if bStaff(request.resource.data.tenantId);
+      // La orden se crea SIEMPRE sin precios (viven en bulk_orderPay_*). El staff crea.
+      allow create: if bStaff(request.resource.data.tenantId) && bSinValorPrecio(request.resource.data);
       // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
       // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo con .get(…,0)
       // para NO fallar si a la orden le falta algún campo de precio (antes eso
@@ -246,19 +285,7 @@ service cloud.firestore {
       // (a diferencia de comparar resource.data.precioX, que rompía la regla y daba
       // "Missing permissions"). Todas las lecturas de identidad usan .get(…) por si
       // a la orden le falta algún campo.
-      allow update: if bStaff(resource.data.tenantId)
-        || (bSame(resource.data.tenantId)
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['precioCliente', 'precioTransportista'])
-            && (
-             (bRole() == 'transportista' && resource.data.get('transportistaId', '') == bCarrier())
-          || (bRole() == 'chofer'
-                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer'])
-                && (resource.data.get('choferId', '') == request.auth.uid
-                    || (bCarrier() != null && resource.data.get('transportistaId', '') == bCarrier())
-                    || resource.data.get('choferNombre', '') == bMyName()))
-          || (bRole() == 'supervisor_planta'
-                && resource.data.get('plantaId', '') == bMyPlanta()
-                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer']))));
+      allow update: if bOrdenPrecioOk() && bPuedeActualizarOrden();
       allow delete: if bAdmin(resource.data.tenantId);
     }
 
