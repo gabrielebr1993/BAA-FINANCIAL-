@@ -99,15 +99,17 @@ const soloVer = (...keys) => keys.map((k) => permKey(k, 'ver'))
 
 const TODO = [...TODOS_LOS_PERMISOS]
 
-// Staff operativo (dispatcher): ve el panel operativo, opera órdenes, pero NO ve
-// la ganancia del dueño ni la tarifa del cliente (igual que camposVisiblesPorRol).
+// Staff operativo (dispatcher): reproduce EXACTAMENTE su acceso actual (antes, "ver
+// una página = CRUD completo"). Ve y opera los módulos operativos con todas sus
+// acciones, pero NO ve la ganancia del dueño ni la tarifa del cliente (igual que
+// camposVisiblesPorRol). El admin puede recortarle acciones desde la pantalla de Roles.
 const PRESET_DISPATCHER = [
   ...soloVer('dashboard', 'mapa', 'mensajes'),
-  ...['ver', 'crear', 'editar', 'asignar'].map((a) => permKey('ordenes', a)),
-  permKey('jobs', 'ver'),
-  permKey('clientes', 'ver'),
-  permKey('transportistas', 'ver'),
-  ...['ver', 'crear', 'editar'].map((a) => permKey('incidencias', a)),
+  ...modTodo('ordenes'),
+  ...modTodo('jobs'),
+  ...modTodo('clientes'),
+  ...modTodo('transportistas'),
+  ...modTodo('incidencias'),
   'fin.precioTransportista',
   'fin.pagoChofer',
 ]

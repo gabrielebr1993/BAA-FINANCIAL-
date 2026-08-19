@@ -3,6 +3,7 @@ import { ClipboardList, Truck, Building2, Weight, DollarSign, Timer, AlertTriang
 import { Link } from 'react-router-dom'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
+import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { tiempoPromedioEntregaMin, estadoDocumento } from '../domain/facturacion'
 import { alertaOrden, LIMITE_ALERTA_MS, LIMITE_RIESGO_MS } from '../domain/alertas'
@@ -19,6 +20,10 @@ const n = (v) => Number(v) || 0
 
 export default function BulkDashboard() {
   const { t } = useLang()
+  const { puede } = useBulkAuth()
+  // ¿Este rol puede ver dinero global (ingresos/$ por ton)? Si no, el panel muestra
+  // métricas operativas en su lugar (mismo diseño, sin números que no le tocan).
+  const verIngresos = puede('fin.ingresos')
   const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
@@ -130,7 +135,9 @@ export default function BulkDashboard() {
 
       <Grupo titulo={t('Negocio')} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KPI label={t('Ingresos')} value={money(s.ingresos)} icon={DollarSign} accent="blue" trend={s.trIngresos} sub={s.trIngresos != null ? t('vs. 7 días previos') : undefined} />
+        {verIngresos
+          ? <KPI label={t('Ingresos')} value={money(s.ingresos)} icon={DollarSign} accent="blue" trend={s.trIngresos} sub={s.trIngresos != null ? t('vs. 7 días previos') : undefined} />
+          : <KPI label={t('Entregadas')} value={s.entregadas} icon={ClipboardList} accent="green" />}
         <KPI label={t('Toneladas entregadas')} value={Math.round(s.ton)} icon={Weight} accent="green" trend={s.trTon} sub={s.trTon != null ? t('vs. 7 días previos') : undefined} />
         <KPI label={t('Clientes')} value={clientes.length} icon={Building2} accent="slate" />
         <KPI label={t('Transportistas')} value={carriers.length} icon={Truck} accent="slate" />
@@ -162,8 +169,8 @@ export default function BulkDashboard() {
             <DonutCard title={t('Órdenes por estado')} data={s.estadoData} fmt={(v) => v} />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <Scorecard titulo={t('Transportistas · desempeño')} filas={s.scT} t={t} />
-            <Scorecard titulo={t('Choferes · desempeño')} filas={s.scC} t={t} />
+            <Scorecard titulo={t('Transportistas · desempeño')} filas={s.scT} t={t} verMonto={verIngresos} />
+            <Scorecard titulo={t('Choferes · desempeño')} filas={s.scC} t={t} verMonto={verIngresos} />
           </div>
         </>
       )}
@@ -181,7 +188,7 @@ function Grupo({ titulo }) {
 }
 
 // Tabla de desempeño (scorecard): viajes, ton, puntualidad, $/ton y score con barra.
-function Scorecard({ titulo, filas, t }) {
+function Scorecard({ titulo, filas, t, verMonto = true }) {
   const colorScore = (v) => (v >= 80 ? 'bg-emerald-500' : v >= 50 ? 'bg-amber-500' : 'bg-rose-500')
   return (
     <Card className="p-4">
@@ -195,7 +202,7 @@ function Scorecard({ titulo, filas, t }) {
                 <th className="py-1 px-2 text-right font-semibold">{t('Viajes')}</th>
                 <th className="py-1 px-2 text-right font-semibold">{t('Ton')}</th>
                 <th className="py-1 px-2 text-right font-semibold">{t('Punt.')}</th>
-                <th className="py-1 px-2 text-right font-semibold">$/ton</th>
+                {verMonto && <th className="py-1 px-2 text-right font-semibold">$/ton</th>}
                 <th className="py-1 pl-2 text-left font-semibold">{t('Score')}</th>
               </tr>
             </thead>
@@ -206,7 +213,7 @@ function Scorecard({ titulo, filas, t }) {
                   <td className="py-1.5 px-2 text-right text-slate-500">{f.viajes}</td>
                   <td className="py-1.5 px-2 text-right text-slate-500">{f.ton}</td>
                   <td className="py-1.5 px-2 text-right text-slate-500">{f.puntualidad == null ? '—' : `${f.puntualidad}%`}</td>
-                  <td className="py-1.5 px-2 text-right text-slate-500">{f.porTon == null ? '—' : money(f.porTon)}</td>
+                  {verMonto && <td className="py-1.5 px-2 text-right text-slate-500">{f.porTon == null ? '—' : money(f.porTon)}</td>}
                   <td className="py-1.5 pl-2">
                     <div className="flex items-center gap-1.5">
                       <span className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><span className={`block h-full rounded-full ${colorScore(f.score)}`} style={{ width: `${Math.max(4, Math.min(100, f.score))}%` }} /></span>

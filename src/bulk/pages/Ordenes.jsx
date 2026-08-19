@@ -62,7 +62,7 @@ function StatCard({ label, val, color, icon: Icon, onClick, activo, pulse }) {
 
 export default function Ordenes() {
   const { t } = useLang()
-  const { tenantId, usuario, rol } = useBulkAuth()
+  const { tenantId, usuario, rol, permisos } = useBulkAuth()
   const esStaff = STAFF.includes(rol)
   const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: carriers } = useColeccion('carriers')
@@ -256,7 +256,7 @@ export default function Ordenes() {
           ) : (
             <div className="scroll-thin grid max-h-[calc(100vh-15rem)] grid-cols-1 gap-2 overflow-y-auto pr-1">
               {izquierda.map((o) => {
-                const fin = desgloseVisible(o, rol)
+                const fin = desgloseVisible(o, rol, permisos)
                 const ofrecida = o.estado === E.NOTIFICANDO
                 const rest = ofrecida && o.asignacionExpira ? tsMillis(o.asignacionExpira) - now : 0
                 const compat = choferesLibres(presenciasReales, now).some((p) => equipoCompatible(p.equipos || p.equipo, o.tipoEquipo) && !(o.rechazadoPor || []).includes(p.uid))

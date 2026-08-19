@@ -34,7 +34,7 @@ export default function OrdenDetalle() {
   const { t } = useLang()
   const { id } = useParams()
   const navigate = useNavigate()
-  const { tenantId, rol, usuario } = useBulkAuth()
+  const { tenantId, rol, usuario, permisos } = useBulkAuth()
   const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
@@ -69,7 +69,7 @@ export default function OrdenDetalle() {
   const cliente = clientes.find((c) => c.id === orden.clienteId)
   const carrier = carriers.find((c) => c.id === orden.transportistaId)
   const planta = plantas.find((p) => p.id === orden.plantaId)
-  const fin = desgloseVisible(orden, rol)
+  const fin = desgloseVisible(orden, rol, permisos)
   const incs = incidencias.filter((i) => i.orden && i.orden === orden.numero)
   const hitosHechos = ORDEN_HITOS.filter((h) => orden.hitos?.[h.key]).length
   const atrasada = alertaOrden(orden, Date.now())

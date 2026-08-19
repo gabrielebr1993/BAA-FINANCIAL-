@@ -12,6 +12,7 @@ import { MAX_TON_POR_VIAJE, ORDEN_ESTADO as E } from '../domain/constants'
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
 const EN_PROCESO = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio, Aviso, Spinner } from '../../components/ui'
+import { Gate } from '../components/Gate'
 import { useLang } from '../../i18n'
 
 export default function Jobs() {
@@ -114,7 +115,7 @@ export default function Jobs() {
             </div>
           </div>
         </div>
-        <div className="mt-3"><Boton variant="gold" onClick={crearJob}><Plus size={16} /> {t('Crear trabajo')}</Boton></div>
+        <div className="mt-3"><Gate perm="jobs.crear"><Boton variant="gold" onClick={crearJob}><Plus size={16} /> {t('Crear trabajo')}</Boton></Gate></div>
       </Card>
 
       {jobs.length === 0 ? <EstadoVacio titulo={t('Sin trabajos')} texto={t('Crea el primero arriba.')} mostrarBoton={false} /> : (
@@ -189,7 +190,7 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
         <span className="text-xs text-slate-400">{t('Cliente')}: {nombreCliente(job.clienteId)}</span>
         {job.tipoEquipo && <Badge color="navy">{t('Equipo:')} {job.tipoEquipo}</Badge>}
         <span className="text-xs text-slate-400">· {conteo.cola} {t('en cola')} · {conteo.proceso} {t('en proceso')}</span>
-        <button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
+        <Gate perm="jobs.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
       </div>
       {(job.materiales || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{job.materiales.map((m) => <Badge key={m} color="green">{t(m)}</Badge>)}</div>}
 

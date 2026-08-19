@@ -295,7 +295,11 @@ service cloud.firestore {
     // el staff (nadie puede inflar lo que se le cobra/paga). El pago al chofer lo
     // fija su transportista.
     match /bulk_orderPay_cliente/{id} {
-      allow read: if bStaff(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
+      // La tarifa del cliente revela el MARGEN del dueño (margen = tarifa − pago
+      // al transportista). Por eso su LECTURA es solo ADMIN (no dispatcher): así un
+      // dispatcher no puede deducir la ganancia del negocio ni por API. El cliente
+      // ve la suya. La escritura sigue siendo de staff (se crea al generar la orden).
+      allow read: if bAdmin(resource.data.tenantId) || (bRole() == 'cliente' && bSame(resource.data.tenantId) && resource.data.clienteId == bCliente());
       allow create, update, delete: if bStaff(request.resource.data.tenantId) || bStaff(resource.data.tenantId);
     }
     match /bulk_orderPay_carrier/{id} {

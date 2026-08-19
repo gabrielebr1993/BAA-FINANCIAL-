@@ -6,6 +6,7 @@ import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { PageTitle, Card, Boton, Input, Select, Cargando, EstadoVacio } from '../../components/ui'
+import { Gate } from '../components/Gate'
 
 const nuevoId = () => `d_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
@@ -102,7 +103,7 @@ export default function GestionChoferes() {
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar chofer…" className="w-64 pl-8" />
         </div>
-        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> Cerrar</> : <><Plus size={16} /> Nuevo chofer</>}</Boton>
+        <Gate perm="choferes.crear"><Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> Cerrar</> : <><Plus size={16} /> Nuevo chofer</>}</Boton></Gate>
       </div>
 
       {/* Alta (colapsable) */}

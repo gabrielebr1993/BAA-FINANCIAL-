@@ -6,6 +6,7 @@ import { crear, eliminar } from '../data/repo'
 import { where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
+import { Gate } from '../components/Gate'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -113,7 +114,7 @@ export default function Clientes() {
           <Input placeholder={t('Contacto')} value={f.contacto} onChange={set('contacto')} />
           <Input placeholder={t('Datos de facturación')} value={f.facturacion} onChange={set('facturacion')} />
         </div>
-        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim()}><Plus size={16} /> {t('Agregar cliente')}</Boton></div>
+        <div className="mt-3"><Gate perm="clientes.crear"><Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim()}><Plus size={16} /> {t('Agregar cliente')}</Boton></Gate></div>
       </Card>
 
       {clientes.length === 0 ? <EstadoVacio titulo={t('Sin clientes')} texto={t('Agrega el primero arriba.')} mostrarBoton={false} /> : (
@@ -125,7 +126,7 @@ export default function Clientes() {
                 <Link to={`/bulk/cliente/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 {c.rfc && <Badge color="slate">{c.rfc}</Badge>}
                 <button onClick={() => setAbierto(abierto === c.id ? null : c.id)} className="ml-auto text-xs text-amber-600 hover:underline">{abierto === c.id ? t('Ocultar plantas') : t('Ver / agregar plantas')}</button>
-                <button onClick={() => window.confirm(`${t('¿Eliminar cliente "')}${c.nombre}${t('"?')}`) && eliminar('clients', c.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
+                <Gate perm="clientes.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar cliente "')}${c.nombre}${t('"?')}`) && eliminar('clients', c.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
               </div>
               {(c.contacto || c.facturacion) && <div className="mt-1 text-xs text-slate-400">{c.contacto}{c.facturacion ? ` · ${c.facturacion}` : ''}</div>}
               {abierto === c.id && <Plantas cliente={c} />}
