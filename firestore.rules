@@ -244,7 +244,18 @@ service cloud.firestore {
     // aquí. Escritura solo staff.
     match /bulk_plants/{id}    { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     match /bulk_jobs/{id}      { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
-    match /bulk_carriers/{id}  { allow read: if bSame(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
+    // Transportistas: staff gestiona todo. Además, el PROPIO transportista puede
+    // gestionar SU roster de choferes (solo el campo `choferes` de SU carrier), para
+    // dar de alta/activar sus choferes desde su portal. No puede tocar tenantId,
+    // nombre, equipos, ni el carrier de otro. Aislamiento estricto por bCarrier()==id.
+    match /bulk_carriers/{id} {
+      allow read: if bSame(resource.data.tenantId);
+      allow create: if bStaff(request.resource.data.tenantId);
+      allow update: if bStaff(resource.data.tenantId)
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && bCarrier() == id
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['choferes', 'actualizadoEn']));
+      allow delete: if bStaff(resource.data.tenantId);
+    }
     // Config del transportista (cómo le paga a sus choferes). SOLO el propio
     // transportista (rol transportista + su carrierId) o el staff. Un chofer NO
     // puede leerla ni escribirla aunque comparta bulkCarrierId (fuga L5 cerrada).

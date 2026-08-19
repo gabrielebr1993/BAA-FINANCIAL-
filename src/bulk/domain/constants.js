@@ -61,6 +61,13 @@ export const ORDEN_ESTADO_LABEL = {
   cancelada: 'Cancelada',
 }
 
+// Color de cada estado para los badges (mismo lenguaje visual en todos los roles).
+export const ORDEN_ESTADO_COLOR = {
+  creada: 'slate', en_cola: 'slate', notificando: 'gold', aceptada: 'navy', en_planta: 'navy',
+  cargando: 'navy', en_ruta: 'blue', en_destino: 'blue', entregada: 'green', liberada: 'green',
+  cerrada: 'green', cancelada: 'red', rechazada: 'red',
+}
+
 // Marcas de tiempo que la orden registra automáticamente durante su ciclo.
 export const ORDEN_HITOS = [
   { key: 'tomada', label: 'Tomada por el chofer' },

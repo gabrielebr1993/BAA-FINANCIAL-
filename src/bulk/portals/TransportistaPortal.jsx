@@ -1,35 +1,57 @@
+// ============================================================================
+// BULK · Portal del TRANSPORTISTA — mismo lenguaje visual del panel del admin
+// (KPIs, tablas, badges, colores navy/dorado/verde/crema), pero mostrando SOLO lo
+// de su propio carrier. AISLAMIENTO: todas las consultas filtran por su carrierId
+// (== bulkCarrierId del claim); las reglas de Firestore refuerzan el aislamiento.
+//   Pestañas: Órdenes · Mis choferes · Equipos · Estado de cuenta · Mensajes.
+// ============================================================================
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Package, Phone, IdCard, MessageSquare } from 'lucide-react'
+import {
+  Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Phone, IdCard,
+  MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin,
+} from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
-import { crearConId, where, documentId } from '../data/repo'
+import { crearConId, guardar, where, documentId } from '../data/repo'
 import { asignarOrdenManual } from '../data/asignacionManual'
+import { auditar } from '../data/auditoria'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesTransportista } from '../domain/notificaciones'
-import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { desgloseVisible } from '../domain/pagos'
+import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
-import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton } from '../../components/ui'
+import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
+import { tsMillis } from '../data/chatKeys'
+import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
 const ENTREGADAS = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const FINAL = [...ENTREGADAS, E.CANCELADA]
+const nuevoId = (p) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+const fecha = (v) => (v ? new Date(tsMillis(v) || v).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—')
+const FLOTA_ESTADO = { disponible: { c: 'green', l: 'Disponible' }, en_viaje: { c: 'blue', l: 'En viaje' }, mantenimiento: { c: 'gold', l: 'Mantenimiento' } }
 
 export default function TransportistaPortal() {
   const { t } = useLang()
-  const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
+  const { usuario, cerrarSesion, tenantId, rol, crearUsuario } = useBulkAuth()
   const navigate = useNavigate()
   const carrierId = usuario?.carrierId || '__none__'
+
+  // ── Datos (TODO filtrado a MI carrier) ─────────────────────────────────────
   const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
-  // Inc.2 Fase 2: los pagos se leen de los docs de pago por audiencia (el
-  // transportista NO ve precioCliente). Fallback a los campos de la orden.
   const { datos: pagosCarrier } = useColeccion('orderPay_carrier', [where('transportistaId', '==', carrierId)])
   const { datos: pagosChofer } = useColeccion('orderPay_chofer', [where('transportistaId', '==', carrierId)])
+  const { datos: carriers } = useColeccion('carriers', [where(documentId(), '==', carrierId)])
+  const { datos: configs } = useColeccion('carrierConfig', [where(documentId(), '==', carrierId)])
+  const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
+  const { datos: presencias } = useColeccion('presence', [where('carrierId', '==', carrierId)])
+  const { datos: plantas } = useColeccion('plants')
+  const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])
+
   const ordenes = useMemo(() => {
     const mc = {}; for (const p of pagosCarrier || []) mc[p.orderId || p.id] = p.precioTransportista
     const md = {}; for (const p of pagosChofer || []) md[p.orderId || p.id] = p.pagoChofer
@@ -39,71 +61,89 @@ export default function TransportistaPortal() {
       pagoChofer: md[o.id] != null ? md[o.id] : o.pagoChofer,
     }))
   }, [_ordenesRaw, pagosCarrier, pagosChofer])
-  // Solo MI transportista y MI config (no los de la competencia).
-  const { datos: carriers } = useColeccion('carriers', [where(documentId(), '==', carrierId)])
-  const { datos: configs } = useColeccion('carrierConfig', [where(documentId(), '==', carrierId)])
-  // Solo la conversación con la OFICINA (no todos los mensajes del tenant). Los
-  // chats de cada orden se abren acotados por orderId (ChatOrden).
-  const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])
+
   const [tab, setTab] = useState('ordenes')
+  const carrier = carriers.find((c) => c.id === carrierId)
+  const choferes = carrier?.choferes || []
+  const config = configs.find((c) => c.id === carrierId) || {}
+  const pagoChoferes = config.pagoChoferes || {}
+  const flota = config.flota || []
+  const nombrePlanta = (id) => plantas.find((p) => p.id === id)?.nombre || ''
+  const rosterIdDe = (id) => choferes.find((c) => c.uid === id)?.id || id
+
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
-  const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
   const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
   const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
-  const carrier = carriers.find((c) => c.id === carrierId)
-  const choferes = carrier?.choferes || [] // plantilla del transporte (la gestiona el admin)
-  // Un choferId en una orden puede ser el uid de la cuenta (lo normal) o el id del
-  // roster (asignaciones antiguas). Estos helpers resuelven ambos.
-  const nombreChofer = (id) => choferes.find((c) => c.id === id || c.uid === id)?.nombre || ''
-  const rosterIdDe = (id) => choferes.find((c) => c.uid === id)?.id || id
-  const pagoChoferes = (configs.find((c) => c.id === carrierId)?.pagoChoferes) || {}
-
-  // Cuánto se le ha pagado (acumulado) a cada chofer por sus cargas entregadas.
-  const pagadoPorChofer = useMemo(() => {
-    const acc = {}
-    for (const o of ordenes) {
-      if (!o.choferId || !ENTREGADAS.includes(o.estado)) continue
-      const rid = rosterIdDe(o.choferId)
-      acc[rid] = (acc[rid] || 0) + (Number(o.pagoChofer) || 0)
+  // Presencia viva (en línea) por uid de chofer.
+  const now = Date.now()
+  const enLineaUid = useMemo(() => {
+    const s = new Set()
+    for (const p of presencias || []) {
+      if (p.enLinea === true && (now - tsMillis(p.heartbeat || p.desde)) <= PRESENCIA_TTL_MS) s.add(p.uid || p.id)
     }
-    return acc
-  }, [ordenes, choferes]) // eslint-disable-line react-hooks/exhaustive-deps
+    return s
+  }, [presencias, now])
+  const choferEnLinea = (c) => enLineaUid.has(c.uid) || enLineaUid.has(c.id)
+  const viajeActual = (c) => ordenes.find((o) => !FINAL.includes(o.estado) && (o.choferId === c.uid || o.choferId === c.id))
 
-  // Guarda (o cambia) cómo se le paga a un chofer: % de la carga o valor fijo.
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
+    const util = entregadas.reduce((a, o) => a + ((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0)), 0)
+    const ganado = entregadas.reduce((a, o) => a + (Number(o.precioTransportista) || 0), 0)
+    return { viajes: entregadas.length, activas: ordenes.filter((o) => !FINAL.includes(o.estado)).length, util, ganado, entregadas }
+  }, [ordenes])
+  const choferesEnLineaN = choferes.filter(choferEnLinea).length
+
+  // ── Estado de cuenta ────────────────────────────────────────────────────────
+  const cuenta = useMemo(() => {
+    const pagado = (statements || []).filter((s) => s.estado === 'pagado').reduce((a, s) => a + (Number(s.total) || 0), 0)
+    return { ganado: stats.ganado, pagado, pendiente: Math.max(0, stats.ganado - pagado) }
+  }, [statements, stats.ganado])
+
+  // ── Acciones ────────────────────────────────────────────────────────────────
   const guardarPago = async (driverId, tipo, valor) => {
-    const next = { ...pagoChoferes, [driverId]: { tipo, valor: Number(valor) || 0 } }
-    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: next })
+    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: { ...pagoChoferes, [driverId]: { tipo, valor: Number(valor) || 0 } } })
   }
   const quitarPago = async (driverId) => {
     const next = { ...pagoChoferes }; delete next[driverId]
     await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: next })
   }
-  const stats = useMemo(() => {
-    const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
-    const util = entregadas.reduce((a, o) => a + ((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0)), 0)
-    return { viajes: entregadas.length, activas: ordenes.filter((o) => !FINAL.includes(o.estado)).length, util }
-  }, [ordenes])
-
-  // El transporte asigna (o cambia) uno de SUS choferes a una de sus órdenes.
-  // Se OFRECE la carga (el chofer la acepta) — igual que cualquier otra vía; así se
-  // maneja bien la presencia y no hay doble-booking. Si la orden ya tenía otro
-  // chofer, se libera (transferencia). El pago del chofer sale de la config del
-  // transportista y se fija de una vez.
   const asignarChofer = async (orden, driverId) => {
     const d = choferes.find((c) => c.id === driverId)
-    // Si el transportista definió cómo paga a este chofer, calculamos su pago.
     const pago = calcularPagoChofer(orden.precioTransportista, configDeChofer(pagoChoferes, driverId))
-    await asignarOrdenManual(
-      tenantId,
-      orden,
-      { uid: d?.uid || null, id: driverId, nombre: d?.nombre || '', carrierId: orden.transportistaId || carrierId },
-      { usuario, rol },
-      { pagoChofer: pago != null ? pago : undefined },
-    )
+    await asignarOrdenManual(tenantId, orden, { uid: d?.uid || null, id: driverId, nombre: d?.nombre || '', carrierId: orden.transportistaId || carrierId }, { usuario, rol }, { pagoChofer: pago != null ? pago : undefined })
   }
+  // Alta de chofer: agrega al roster de MI carrier y, si se dio correo/clave, crea su
+  // cuenta de acceso (rol chofer, mismo carrier) para que entre a la app del chofer.
+  const agregarChofer = async ({ nombre, email, password, telefono, licencia, equipo }) => {
+    let uid = null
+    if (email && password) {
+      const r = await crearUsuario({ nombre, email, password, rol: BULK_ROLES.CHOFER, carrierId })
+      uid = r?.uid || null
+    }
+    const chofer = { id: nuevoId('d'), nombre: nombre.trim(), telefono: (telefono || '').trim(), licencia: (licencia || '').trim(), equipos: equipo ? [equipo] : [], equipo: equipo || '', uid, activo: true }
+    await guardar('carriers', carrierId, { choferes: [...choferes, chofer] })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'alta_chofer', entidad: 'chofer', detalle: `${chofer.nombre}${uid ? ' (con acceso)' : ''}` })
+  }
+  const toggleActivoChofer = async (chofer) => {
+    await guardar('carriers', carrierId, { choferes: choferes.map((d) => (d.id === chofer.id ? { ...d, activo: d.activo === false } : d)) })
+  }
+  // Flota (equipos/camiones) del carrier → vive en carrierConfig (lo escribe el propio
+  // transportista). No toca carrier.equipos (tipos aprobados, que gestiona el admin).
+  const guardarFlota = async (lista) => { await crearConId('carrierConfig', carrierId, tenantId, { flota: lista }) }
+  const agregarEquipo = async (v) => guardarFlota([...flota, { id: nuevoId('v'), ...v }])
+  const editarEquipo = async (id, patch) => guardarFlota(flota.map((f) => (f.id === id ? { ...f, ...patch } : f)))
+  const eliminarEquipo = async (id) => guardarFlota(flota.filter((f) => f.id !== id))
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
+
+  const TABS = [
+    { k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') },
+    { k: 'equipos', l: t('Equipos') }, { k: 'cuenta', l: t('Estado de cuenta') },
+    { k: 'mensajes', l: t('Mensajes'), badge: noLeidosOficina },
+  ]
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -115,7 +155,7 @@ export default function TransportistaPortal() {
         <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10"><LogOut size={18} /></button>
       </header>
 
-      <main className="mx-auto max-w-5xl p-4">
+      <main className="mx-auto max-w-6xl p-4">
         {!usuario?.carrierId && (
           <Aviso tipo="warn" className="mb-3">
             <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
@@ -123,15 +163,17 @@ export default function TransportistaPortal() {
           </Aviso>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-3">
+        {/* KPIs (mismas tarjetas del admin) */}
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
           <KPI label={t('Viajes hechos')} value={stats.viajes} icon={Truck} accent="green" />
-          <KPI label={t('Choferes')} value={choferes.length} icon={Users} accent="gold" />
+          <KPI label={t('Choferes en línea')} value={choferesEnLineaN} icon={Users} accent="gold" />
           <KPI label={t('Tu utilidad')} value={money(stats.util)} icon={DollarSign} accent="blue" />
         </div>
 
-        <div className="mb-4 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-          {[{ k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') }, { k: 'equipos', l: t('Equipos') }, { k: 'mensajes', l: t('Mensajes'), badge: noLeidosOficina }].map((it) => (
+        {/* Tabs */}
+        <div className="mb-4 flex flex-wrap overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+          {TABS.map((it) => (
             <button key={it.k} onClick={() => setTab(it.k)} className={`px-4 py-2 text-sm font-medium ${tab === it.k ? 'bg-amber-500 text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
               {it.l}
               {it.badge > 0 && <span className="ml-1.5 inline-grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 align-middle text-[10px] font-bold text-white">{it.badge}</span>}
@@ -139,63 +181,10 @@ export default function TransportistaPortal() {
           ))}
         </div>
 
-        {tab === 'ordenes' && (
-          ordenes.length === 0 ? <EstadoVacio texto={t('Cuando el dispatcher te asigne órdenes, aparecerán aquí para que asignes tus choferes.')} mostrarBoton={false} /> : (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((o) => {
-                const fin = desgloseVisible(o, BULK_ROLES.TRANSPORTISTA)
-                return (
-                  <div key={o.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 dark:border-slate-700/60 dark:bg-slate-900">
-                    <div className="flex items-center gap-2"><span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span><Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge><Badge color="slate">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge></div>
-                    <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.tipoEquipo}</div>
-                    <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/60">
-                      <span className="text-slate-500 dark:text-slate-400">{t('Recibes')} <b className="text-brand-navy dark:text-slate-100">{money(fin.precioTransportista)}</b></span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">{t('utilidad')} {money(fin.utilidadTransportista)}</span>
-                    </div>
-                    {o.choferNombre && <div className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Chofer:')} {o.choferNombre}</div>}
-                    {!FINAL.includes(o.estado) && (
-                      choferes.length > 0 ? (
-                        <Select className="mt-2 w-full py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
-                          <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
-                          {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                        </Select>
-                      ) : <div className="mt-2 text-[11px] text-slate-400">{t('El administrador aún no te ha registrado choferes.')}</div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )
-        )}
-
-        {tab === 'choferes' && (
-          <>
-            <Aviso tipo="info" className="mb-3">{t('Tus choferes los da de alta el administrador. Aquí defines cómo le pagas a cada uno: un porcentaje de lo que recibes por cada carga, o un valor fijo por carga entregada. Se aplica al asignarlo a una orden.')}</Aviso>
-            {choferes.length === 0 ? <EstadoVacio titulo={t('Sin choferes')} texto={t('Pídele al administrador que registre tus choferes.')} mostrarBoton={false} /> : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {choferes.map((c) => (
-                  <PagoChoferCard
-                    key={c.id} c={c}
-                    config={pagoChoferes[c.id]}
-                    pagado={pagadoPorChofer[c.id] || 0}
-                    onGuardar={(tipo, valor) => guardarPago(c.id, tipo, valor)}
-                    onQuitar={() => quitarPago(c.id)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'equipos' && (
-          <Card className="p-4">
-            <div className="mb-2 flex items-center gap-2"><Package size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis tipos de equipo')}</h3></div>
-            <div className="flex flex-wrap gap-1.5">
-              {(carrier?.equipos || []).length ? carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>) : <span className="text-sm text-slate-400">{t('El administrador aún no registró tus equipos.')}</span>}
-            </div>
-          </Card>
-        )}
-
+        {tab === 'ordenes' && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }} />}
+        {tab === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }} />}
+        {tab === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
+        {tab === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
         {tab === 'mensajes' && (
           <Card className="flex h-[70vh] flex-col p-3">
             <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
@@ -209,46 +198,274 @@ export default function TransportistaPortal() {
   )
 }
 
-// Tarjeta de un chofer con el modo de pago (porcentaje / fijo) editable por el transportista.
-function PagoChoferCard({ c, config, pagado, onGuardar, onQuitar }) {
-  const { t } = useLang()
-  const [tipo, setTipo] = useState(config?.tipo || 'porcentaje')
-  const [valor, setValor] = useState(config?.valor != null ? String(config.valor) : '')
-  const [editando, setEditando] = useState(false)
-  const guardar = async () => { await onGuardar(tipo, valor); setEditando(false) }
-  const etiqueta = etiquetaPago(config)
+// ── Tab Órdenes: tabla filtrada a MIS órdenes, con estados de color ───────────
+function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }) {
+  const [q, setQ] = useState('')
+  const [fEstado, setFEstado] = useState('')
+  const estados = [...new Set(ordenes.map((o) => o.estado))]
+  const rows = ordenes
+    .filter((o) => !fEstado || o.estado === fEstado)
+    .filter((o) => { const s = q.trim().toLowerCase(); return !s || `${o.numero} ${o.material} ${o.choferNombre}`.toLowerCase().includes(s) })
+    .sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
+    .map((o) => ({ ...o, _key: o.id }))
+
+  if (ordenes.length === 0) return <EstadoVacio titulo={t('Aún no tienes órdenes asignadas')} texto={t('Cuando el dispatcher te asigne órdenes, aparecerán aquí para que asignes tus choferes.')} mostrarBoton={false} />
+
+  const cols = [
+    { key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') },
+    { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'tipoEquipo', label: t('Camión') },
+    { key: 'chofer', label: t('Chofer') }, { key: 'ruta', label: t('Ruta'), wrap: true },
+    { key: 'estado', label: t('Estado') }, { key: 'fecha', label: t('Fecha') },
+    { key: 'pago', label: t('Pago del viaje'), align: 'right' },
+  ]
+  const render = (o, k) => {
+    if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{o.numero}</span>
+    if (k === 'material') return t(o.material || '—')
+    if (k === 'ton') return o.pesoReal ?? o.pesoEstimado ?? '—'
+    if (k === 'tipoEquipo') return o.tipoEquipo || '—'
+    if (k === 'chofer') {
+      if (!FINAL.includes(o.estado) && choferes.length > 0) {
+        return (
+          <Select className="w-full min-w-[9rem] py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
+            <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
+            {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </Select>
+        )
+      }
+      return o.choferNombre || <span className="text-slate-400">{t('Sin asignar')}</span>
+    }
+    if (k === 'ruta') return <span className="text-xs text-slate-500 dark:text-slate-400">{nombrePlanta(o.plantaId) || t('Planta')} → {o.direccionEntrega || '—'}</span>
+    if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+    if (k === 'fecha') return <span className="text-xs text-slate-500">{fecha(o.creadoEn)}</span>
+    if (k === 'pago') return <span className="font-semibold text-brand-navy dark:text-slate-100">{money(o.precioTransportista)}</span>
+    return null
+  }
 
   return (
-    <Card className="p-3">
-      <div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
-      <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-slate-400">
-        {c.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {c.telefono}</span>}
-        {c.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {c.licencia}</span>}
+    <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Buscar orden, material o chofer…')} className="w-64 pl-8" /></div>
+        <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className="py-2"><option value="">{t('Todos los estados')}</option>{estados.map((s) => <option key={s} value={s}>{t(ORDEN_ESTADO_LABEL[s] || s)}</option>)}</Select>
+        <span className="ml-auto text-xs text-slate-400">{rows.length} {t('órdenes')}</span>
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        <Badge color={c.activo === false ? 'slate' : 'green'}>{c.activo === false ? t('Inactivo') : t('Activo')}</Badge>
-        {etiqueta && <Badge color="gold"><DollarSign size={10} className="mr-0.5 inline" />{t(etiqueta)}</Badge>}
-      </div>
-      {pagado > 0 && <div className="mt-1 text-[11px] text-slate-400">{t('Pagado (entregadas):')} <b className="text-emerald-600 dark:text-emerald-400">{money(pagado)}</b></div>}
+      <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[860px]" emptyText={t('Ninguna orden coincide con el filtro.')} />
+    </>
+  )
+}
 
-      {!editando ? (
-        <button onClick={() => setEditando(true)} className="mt-2 text-xs font-medium text-amber-600 hover:underline">
-          {etiqueta ? t('Cambiar forma de pago') : t('Definir forma de pago')}
-        </button>
+// ── Tab Mis choferes: tabla con estado en línea, viaje actual y forma de pago ──
+function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }) {
+  const [alta, setAlta] = useState(false)
+  const [pagoEdit, setPagoEdit] = useState(null) // chofer.id en edición de pago
+
+  return (
+    <>
+      <div className="mb-3 flex items-center gap-2">
+        <Aviso tipo="info" className="flex-1">{t('Gestiona tu flota de choferes. Define cómo le pagas a cada uno (porcentaje o valor fijo por carga); se aplica al asignarlo a una orden.')}</Aviso>
+        <Boton variant="gold" onClick={() => setAlta((v) => !v)}>{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Agregar chofer')}</>}</Boton>
+      </div>
+
+      {alta && <AltaChoferForm t={t} onCrear={async (d) => { await agregarChofer(d); setAlta(false) }} />}
+
+      {choferes.length === 0 ? (
+        <EstadoVacio titulo={t('Agrega tu primer chofer')} texto={t('Da de alta a tus choferes para asignarles cargas y definir su pago.')} mostrarBoton={false} />
       ) : (
-        <div className="mt-2 space-y-1.5 rounded-lg border border-slate-200 p-2 dark:border-slate-700/60">
-          <Select className="w-full py-1 text-xs" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            <option value="porcentaje">{t('Porcentaje de la carga (%)')}</option>
-            <option value="fijo">{t('Valor fijo por carga ($)')}</option>
-          </Select>
-          <Input type="number" step="0.01" className="w-full py-1 text-xs" placeholder={tipo === 'porcentaje' ? t('Ej. 80 (= 80%)') : t('Ej. 120 ($ por carga)')} value={valor} onChange={(e) => setValor(e.target.value)} />
-          <div className="flex flex-wrap gap-1.5">
-            <Boton variant="gold" onClick={guardar} disabled={!(Number(valor) > 0)} className="px-2.5 py-1 text-xs">{t('Guardar')}</Boton>
-            <Boton variant="ghost" onClick={() => setEditando(false)} className="px-2.5 py-1 text-xs">{t('Cancelar')}</Boton>
-            {config && <Boton variant="ghost" onClick={() => { onQuitar(); setEditando(false) }} className="px-2.5 py-1 text-xs text-rose-500">{t('Quitar')}</Boton>}
-          </div>
+        <div className="space-y-2">
+          {choferes.map((c) => {
+            const viaje = viajeActual(c)
+            const online = choferEnLinea(c)
+            return (
+              <Card key={c.id} className="p-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <div className="min-w-[9rem]">
+                    <div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
+                      {c.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {c.telefono}</span>}
+                      {c.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {c.licencia}</span>}
+                    </div>
+                  </div>
+                  <Badge color="navy">{c.equipo || (c.equipos || [])[0] || t('Sin equipo')}</Badge>
+                  <Badge color={online ? 'green' : 'slate'}>{online ? t('En línea') : t('Fuera de línea')}</Badge>
+                  {viaje ? <Badge color="blue">{t('En viaje')} · {viaje.numero}</Badge> : <span className="text-xs text-slate-400">{t('Sin viaje')}</span>}
+                  {etiquetaPago(pagoChoferes[c.id]) && <Badge color="gold"><DollarSign size={10} className="mr-0.5 inline" />{t(etiquetaPago(pagoChoferes[c.id]))}</Badge>}
+                  {c.uid ? <Badge color="green">{t('Con acceso')}</Badge> : <Badge color="slate">{t('Sin acceso')}</Badge>}
+                  <div className="ml-auto flex items-center gap-2">
+                    <button onClick={() => setPagoEdit(pagoEdit === c.id ? null : c.id)} className="text-xs font-medium text-amber-600 hover:underline">{etiquetaPago(pagoChoferes[c.id]) ? t('Cambiar pago') : t('Definir pago')}</button>
+                    <button onClick={() => toggleActivoChofer(c)} className={`text-xs font-medium hover:underline ${c.activo === false ? 'text-emerald-600' : 'text-rose-500'}`}>{c.activo === false ? t('Activar') : t('Desactivar')}</button>
+                  </div>
+                </div>
+                {pagoEdit === c.id && (
+                  <PagoEditor t={t} config={pagoChoferes[c.id]} onGuardar={async (tipo, valor) => { await guardarPago(c.id, tipo, valor); setPagoEdit(null) }} onQuitar={async () => { await quitarPago(c.id); setPagoEdit(null) }} />
+                )}
+              </Card>
+            )
+          })}
         </div>
       )}
+    </>
+  )
+}
+
+function AltaChoferForm({ t, onCrear }) {
+  const [f, setF] = useState({ nombre: '', email: '', password: '', telefono: '', licencia: '', equipo: '' })
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const [msg, setMsg] = useState(null)
+  const [ocupado, setOcupado] = useState(false)
+  const crear = async () => {
+    if (!f.nombre.trim()) return
+    setOcupado(true); setMsg(null)
+    try { await onCrear(f) }
+    catch (e) { setMsg(e?.message || t('No se pudo crear el chofer.')); setOcupado(false) }
+  }
+  return (
+    <Card className="mb-3 p-4">
+      <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo chofer')}</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} />
+        <Input placeholder={t('Teléfono')} value={f.telefono} onChange={set('telefono')} />
+        <Input placeholder={t('Licencia')} value={f.licencia} onChange={set('licencia')} />
+        <Input placeholder={t('Tipo de camión (ej. Dump Truck)')} value={f.equipo} onChange={set('equipo')} />
+        <Input type="email" placeholder={t('Correo (para su acceso a la app)')} value={f.email} onChange={set('email')} />
+        <Input type="password" placeholder={t('Contraseña (opcional)')} value={f.password} onChange={set('password')} />
+      </div>
+      {msg && <div className="mt-2 text-xs text-rose-500">{msg}</div>}
+      <p className="mt-2 text-[11px] text-slate-400">{t('Si pones correo y contraseña, se crea su cuenta para entrar a la app del chofer. Si no, queda solo en tu lista para asignarle cargas.')}</p>
+      <div className="mt-3"><Boton variant="gold" onClick={crear} disabled={ocupado || !f.nombre.trim()}><UserPlus size={16} /> {ocupado ? t('Creando…') : t('Agregar chofer')}</Boton></div>
     </Card>
+  )
+}
+
+function PagoEditor({ t, config, onGuardar, onQuitar }) {
+  const [tipo, setTipo] = useState(config?.tipo || 'porcentaje')
+  const [valor, setValor] = useState(config?.valor != null ? String(config.valor) : '')
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 p-2 dark:border-slate-700/60">
+      <Select className="py-1 text-xs" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+        <option value="porcentaje">{t('Porcentaje de la carga (%)')}</option>
+        <option value="fijo">{t('Valor fijo por carga ($)')}</option>
+      </Select>
+      <Input type="number" step="0.01" className="w-40 py-1 text-xs" placeholder={tipo === 'porcentaje' ? t('Ej. 80 (= 80%)') : t('Ej. 120 ($ por carga)')} value={valor} onChange={(e) => setValor(e.target.value)} />
+      <Boton variant="gold" onClick={() => onGuardar(tipo, valor)} disabled={!(Number(valor) > 0)} className="px-2.5 py-1 text-xs">{t('Guardar')}</Boton>
+      {config && <Boton variant="ghost" onClick={onQuitar} className="px-2.5 py-1 text-xs text-rose-500">{t('Quitar')}</Boton>}
+    </div>
+  )
+}
+
+// ── Tab Equipos: flota de camiones del carrier (carrierConfig.flota) ──────────
+function TabEquipos({ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }) {
+  const [alta, setAlta] = useState(false)
+  const tiposBase = (carrier?.equipos || [])
+  const nombreChofer = (id) => choferes.find((c) => c.id === id)?.nombre || ''
+
+  return (
+    <>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="text-sm text-slate-500 dark:text-slate-400">{t('Tus camiones y su estado. El tipo debe estar entre los equipos aprobados por el administrador.')}</div>
+        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> {t('Cerrar')}</> : <><Plus size={16} /> {t('Agregar equipo')}</>}</Boton>
+      </div>
+      {alta && <AltaEquipoForm t={t} tipos={tiposBase} choferes={choferes} onCrear={async (v) => { await agregarEquipo(v); setAlta(false) }} />}
+
+      {flota.length === 0 ? (
+        <EstadoVacio titulo={t('Agrega tu primer equipo')} texto={t('Registra tus camiones (tipo, placa y estado) para llevar el control de tu flota.')} mostrarBoton={false} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {flota.map((v) => {
+            const est = FLOTA_ESTADO[v.estado] || FLOTA_ESTADO.disponible
+            return (
+              <Card key={v.id} className="p-3.5">
+                <div className="flex items-start gap-2">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-navy text-brand-gold"><Truck size={20} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-brand-navy dark:text-slate-100">{v.tipo || t('Camión')}</div>
+                    <div className="font-mono text-xs text-slate-400">{v.placa || t('sin placa')}</div>
+                  </div>
+                  <button onClick={() => eliminarEquipo(v.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge color={est.c}>{t(est.l)}</Badge>
+                  {v.choferId && <Badge color="navy">{nombreChofer(v.choferId)}</Badge>}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Select className="py-1 text-xs" value={v.estado || 'disponible'} onChange={(e) => editarEquipo(v.id, { estado: e.target.value })}>
+                    {Object.entries(FLOTA_ESTADO).map(([k, o]) => <option key={k} value={k}>{t(o.l)}</option>)}
+                  </Select>
+                  <Select className="py-1 text-xs" value={v.choferId || ''} onChange={(e) => editarEquipo(v.id, { choferId: e.target.value || null })}>
+                    <option value="">{t('Sin chofer')}</option>
+                    {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </Select>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
+function AltaEquipoForm({ t, tipos, onCrear }) {
+  const [f, setF] = useState({ tipo: tipos[0] || '', placa: '', estado: 'disponible' })
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  return (
+    <Card className="mb-3 p-4">
+      <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo equipo')}</h3>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {tipos.length
+          ? <Select value={f.tipo} onChange={set('tipo')}>{tipos.map((x) => <option key={x} value={x}>{x}</option>)}</Select>
+          : <Input placeholder={t('Tipo (ej. Dump Truck)')} value={f.tipo} onChange={set('tipo')} />}
+        <Input placeholder={t('Placa / identificador')} value={f.placa} onChange={set('placa')} />
+        <Select value={f.estado} onChange={set('estado')}>{Object.entries(FLOTA_ESTADO).map(([k, o]) => <option key={k} value={k}>{t(o.l)}</option>)}</Select>
+      </div>
+      <div className="mt-3"><Boton variant="gold" onClick={() => f.tipo && onCrear(f)} disabled={!f.tipo}><Plus size={16} /> {t('Agregar equipo')}</Boton></div>
+    </Card>
+  )
+}
+
+// ── Tab Estado de cuenta: resumen + detalle por viaje (usa el cálculo existente) ─
+function TabCuenta({ t, cuenta, stats, statements }) {
+  const rows = stats.entregadas
+    .slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
+    .map((o) => ({ ...o, _key: o.id }))
+  const cols = [
+    { key: 'numero', label: t('Viaje') }, { key: 'material', label: t('Material') },
+    { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'tarifa', label: t('Tarifa'), align: 'right' },
+    { key: 'pagoChofer', label: t('Pago chofer'), align: 'right' }, { key: 'util', label: t('Tu utilidad'), align: 'right' },
+    { key: 'fecha', label: t('Fecha') },
+  ]
+  const render = (o, k) => {
+    if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{o.numero}</span>
+    if (k === 'material') return t(o.material || '—')
+    if (k === 'ton') return o.pesoReal ?? o.pesoEstimado ?? '—'
+    if (k === 'tarifa') return money(o.precioTransportista)
+    if (k === 'pagoChofer') return <span className="text-slate-500">{money(o.pagoChofer)}</span>
+    if (k === 'util') return <span className="font-semibold text-emerald-600 dark:text-emerald-400">{money((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0))}</span>
+    if (k === 'fecha') return <span className="text-xs text-slate-500">{fecha(o.hitos?.entrega || o.creadoEn)}</span>
+    return null
+  }
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KPI label={t('Total ganado (periodo)')} value={money(cuenta.ganado)} icon={Wallet} accent="navy" />
+        <KPI label={t('Pagado')} value={money(cuenta.pagado)} icon={DollarSign} accent="green" />
+        <KPI label={t('Pendiente')} value={money(cuenta.pendiente)} icon={ClipboardList} accent="gold" />
+      </div>
+      {statements && statements.length > 0 && (
+        <Card className="mb-4 p-4">
+          <h3 className="m-0 mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago')}</h3>
+          <div className="flex flex-wrap gap-2">
+            {statements.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => (
+              <div key={s.id} className="rounded-xl border border-slate-200 px-3 py-2 text-xs dark:border-slate-700/60">
+                <div className="font-mono font-semibold text-brand-navy dark:text-slate-100">{s.numero}</div>
+                <div className="text-slate-500">{money(s.total)} · <Badge color={s.estado === 'pagado' ? 'green' : 'gold'}>{t(s.estado === 'pagado' ? 'Pagado' : 'Pendiente')}</Badge></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      <div className="mb-2 flex items-center gap-2"><MapPin size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Detalle por viaje')}</h3></div>
+      {rows.length === 0
+        ? <EstadoVacio titulo={t('Aún no hay viajes cerrados')} texto={t('Cuando completes viajes, su detalle y tu utilidad aparecerán aquí.')} mostrarBoton={false} />
+        : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[720px]" />}
+    </>
   )
 }
