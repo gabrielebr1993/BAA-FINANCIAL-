@@ -15,6 +15,9 @@ import ModuleSelector, { getModulo } from './ModuleSelector'
 
 // Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
 const BulkApp = lazy(() => import('./bulk/BulkApp'))
+// Landing PÚBLICA de Freight (marketing, sin autenticación). Se muestra en la raíz a
+// los visitantes que aún no han elegido módulo (clientes potenciales).
+const LandingFreight = lazy(() => import('./pages/LandingFreight'))
 
 // Páginas cargadas bajo demanda (code-splitting por ruta): cada una es su propio
 // chunk, así el arranque solo descarga lo imprescindible y cada pantalla se baja
@@ -132,7 +135,12 @@ function TopBranch() {
   if (pathname === '/bulk' || pathname.startsWith('/bulk/')) {
     return <Suspense fallback={<Cargando texto="Cargando Freight…" />}><BulkApp /></Suspense>
   }
-  if (pathname === '/elegir' || (!getModulo() && pathname === '/')) return <ModuleSelector />
+  // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
+  if (pathname === '/elegir') return <ModuleSelector />
+  // Raíz pública: un visitante nuevo (sin módulo elegido) ve la LANDING de marketing.
+  // El botón "Iniciar sesión" lo lleva a /elegir. Los usuarios que ya eligieron módulo
+  // siguen entrando a su app en / exactamente como hoy (nada cambia para ellos).
+  if (!getModulo() && pathname === '/') return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
   return <PackageApp />
 }
 
