@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, LogOut, Grid2x2, Weight, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
+import { Building2, LogOut, Grid2x2, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import { useColeccion } from '../data/useColeccion'
 import { where, guardar } from '../data/repo'
-import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
+import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
+import { Layers } from 'lucide-react'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import FirmaPad from '../components/FirmaPad'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
@@ -15,7 +16,11 @@ import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
 const ENTREGADAS = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
+const FINAL = [...ENTREGADAS, E.CANCELADA]
 const n = (v) => Number(v) || 0
+// Código de proyecto derivado del número de orden (ej. "ABC-0012" → "ABC"). El
+// cliente no puede leer bulk_jobs (reglas), así que agrupamos por sus propias órdenes.
+const codigoProyecto = (o) => o.jobId || String(o.numero || '').split('-').slice(0, -1).join('-') || '—'
 const fechaEntrega = (o) => o?.hitos?.entrega ? new Date(o.hitos.entrega) : null
 
 export default function ClientePortal() {
@@ -46,8 +51,21 @@ export default function ClientePortal() {
     const sum = (arr) => arr.reduce((a, o) => a + n(o.precioCliente), 0)
     const porMaterial = {}
     for (const o of entregadas) { const m = o.material || '—'; porMaterial[m] = porMaterial[m] || { material: m, ton: 0, gasto: 0 }; porMaterial[m].ton += n(o.pesoReal ?? o.pesoEstimado); porMaterial[m].gasto += n(o.precioCliente) }
+    // Proyectos: agrupa TODAS sus órdenes por código de proyecto.
+    const proy = {}
+    for (const o of ordenes) {
+      const k = codigoProyecto(o)
+      proy[k] = proy[k] || { key: k, codigo: k, total: 0, enCurso: 0, entregadas: 0, gasto: 0 }
+      proy[k].total += 1
+      if (!FINAL.includes(o.estado)) proy[k].enCurso += 1
+      if (ENTREGADAS.includes(o.estado)) { proy[k].entregadas += 1; proy[k].gasto += n(o.precioCliente) }
+    }
+    const proyectos = Object.values(proy).sort((a, b) => b.total - a.total)
     return {
       total: ordenes.length, entregadas: entregadas.length, ton, gasto,
+      activas: ordenes.filter((o) => !FINAL.includes(o.estado)).length,
+      proyectosActivos: proyectos.filter((p) => p.enCurso > 0).length,
+      proyectos,
       hoy: sum(entregadas.filter((o) => enRango(o, d0))),
       semana: sum(entregadas.filter((o) => enRango(o, semana))),
       mes: sum(entregadas.filter((o) => enRango(o, mes))),
@@ -91,9 +109,9 @@ export default function ClientePortal() {
         ) : (
           <>
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <KPI label={t('Órdenes')} value={stats.total} icon={ClipboardList} accent="navy" />
+              <KPI label={t('Proyectos activos')} value={stats.proyectosActivos} icon={Layers} accent="navy" />
+              <KPI label={t('Órdenes en curso')} value={stats.activas} icon={ClipboardList} accent="gold" />
               <KPI label={t('Entregadas')} value={stats.entregadas} icon={ClipboardList} accent="green" />
-              <KPI label={t('Toneladas entregadas')} value={Math.round(stats.ton)} icon={Weight} accent="gold" />
               <KPI label={t('Gasto total')} value={money(stats.gasto)} icon={DollarSign} accent="blue" />
             </div>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -111,6 +129,20 @@ export default function ClientePortal() {
               )}
             </Card>
 
+            <Card className="mb-4 p-4">
+              <div className="mb-3 flex items-center gap-2"><Layers size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis proyectos')}</h3></div>
+              {stats.proyectos.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no tienes proyectos.')}</p> : (
+                <Tabla columns={[{ key: 'codigo', label: t('Proyecto') }, { key: 'total', label: t('Órdenes'), align: 'right' }, { key: 'enCurso', label: t('En curso'), align: 'right' }, { key: 'entregadas', label: t('Entregadas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
+                  rows={stats.proyectos.map((p) => ({ ...p, _key: p.key }))}
+                  renderCell={(r, k) => {
+                    if (k === 'codigo') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{r.codigo}</span>
+                    if (k === 'enCurso') return r.enCurso > 0 ? <Badge color="gold">{r.enCurso}</Badge> : <span className="text-slate-400">0</span>
+                    if (k === 'gasto') return money(r.gasto)
+                    return r[k]
+                  }} minWidth="min-w-[520px]" />
+              )}
+            </Card>
+
             <Card className="p-4">
               <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Órdenes recientes')}</h3>
               {ordenes.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay órdenes.')}</p> : (
@@ -119,7 +151,7 @@ export default function ClientePortal() {
                   renderCell={(o, k) => {
                     if (k === 'ton') return o.pesoReal ?? o.pesoEstimado
                     if (k === 'precioCliente') return o.precioCliente != null ? money(o.precioCliente) : '—'
-                    if (k === 'estado') return <Badge color={ENTREGADAS.includes(o.estado) ? 'green' : 'navy'}>{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
+                    if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
                     return o[k]
                   }} />
               )}
