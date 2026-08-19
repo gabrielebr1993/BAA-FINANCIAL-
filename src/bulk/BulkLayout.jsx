@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
-import { NAV, puedeVer } from './nav'
+import { navVisible } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useColeccion } from './data/useColeccion'
@@ -16,10 +16,10 @@ import { useState } from 'react'
 import { useLang, LangToggle } from '../i18n'
 
 export default function BulkLayout({ children }) {
-  const { usuario, rol, cerrarSesion } = useBulkAuth()
+  const { usuario, rol, cerrarSesion, puede } = useBulkAuth()
   const { t } = useLang()
   const navigate = useNavigate()
-  const items = NAV.filter((i) => puedeVer(rol, i.roles))
+  const items = useMemo(() => navVisible(puede), [puede])
   const [verClave, setVerClave] = useState(false)
   // Menú lateral: se puede ocultar/mostrar. Recordamos la preferencia.
   const [menuAbierto, setMenuAbierto] = useState(() => {

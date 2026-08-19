@@ -5,12 +5,13 @@
 // bulkClienteId, bulkCarrierId). Aquí solo iniciamos sesión y leemos esos claims;
 // las reglas de Firestore aíslan por tenant/rol.
 // ============================================================================
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { getDoc } from 'firebase/firestore'
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth'
 import { httpsCallable } from 'firebase/functions'
 import { authBulk, funcsBulk } from './firebaseBulk'
-import { ref } from './data/repo'
+import { ref, suscribirDoc } from './data/repo'
+import { permisosDeRol, tienePermiso } from './domain/permisos'
 
 const Ctx = createContext(null)
 export const useBulkAuth = () => useContext(Ctx)
@@ -18,6 +19,9 @@ export const useBulkAuth = () => useContext(Ctx)
 export function BulkAuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null)
   const [cargando, setCargando] = useState(true)
+  // Configuración de roles del tenant (RBAC): { [rol]: { permisos: [...] } }.
+  // Si no hay doc, permisosDeRol cae a los PRESETS (comportamiento actual).
+  const [rolesConfig, setRolesConfig] = useState(null)
 
   // La sesión la maneja Firebase Auth (persistente). Al cambiar, cargamos claims + perfil.
   useEffect(() => {
@@ -62,6 +66,20 @@ export function BulkAuthProvider({ children }) {
     })
     return off
   }, [])
+
+  // Suscripción a la configuración de roles del tenant (un doc: bulk_roles/{tenantId}).
+  // Tiempo real: si un admin cambia los permisos de un rol, se refleja al instante.
+  const tenantId = usuario?.tenantId || null
+  useEffect(() => {
+    if (!tenantId) { setRolesConfig(null); return }
+    const off = suscribirDoc('roles', tenantId, (doc) => setRolesConfig(doc?.roles || {}))
+    return off
+  }, [tenantId])
+
+  // Conjunto EFECTIVO de permisos del usuario (config del tenant o preset del rol).
+  const permisos = useMemo(() => permisosDeRol(usuario?.rol, rolesConfig), [usuario?.rol, rolesConfig])
+  // Chequeo granular: ¿el usuario puede esta capacidad? (clave del catálogo de permisos)
+  const puede = useCallback((clave) => tienePermiso(permisos, clave), [permisos])
 
   const iniciarSesion = useCallback(async (email, password) => {
     try {
@@ -114,6 +132,7 @@ export function BulkAuthProvider({ children }) {
     existeSuperAdmin: true, // el backend valida el primer arranque (idempotente)
     tenantId: usuario?.tenantId || null,
     rol: usuario?.rol || null,
+    permisos, puede, rolesConfig, // RBAC granular
     iniciarSesion, cerrarSesion, crearSuperAdmin, crearUsuario, repararPermisos,
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

@@ -9,6 +9,7 @@ import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import { puedeVer } from './nav'
 import { Cargando } from '../components/ui'
+const BulkRoles = lazy(() => import('./pages/BulkRoles'))
 import { useLang } from '../i18n'
 
 const BulkDashboard = lazy(() => import('./pages/BulkDashboard'))
@@ -44,11 +45,14 @@ const PORTALES = {
   supervisor_planta: SupervisorPortal,
 }
 
-// Envuelve una página con verificación de rol + layout de Bulk.
-function P({ roles, children }) {
+// Envuelve una página con verificación de PERMISO (RBAC) + layout de Bulk.
+//   perm  = clave de permiso requerida (p. ej. 'ordenes.ver'). Es el gate real.
+//   roles = respaldo por rol (compat) para rutas sin `perm`.
+function P({ perm, roles, children }) {
   const { t } = useLang()
-  const { rol } = useBulkAuth()
-  if (roles && !puedeVer(rol, roles)) return <BulkLayout><div className="p-6 text-slate-400">{t('No tienes acceso a esta sección.')}</div></BulkLayout>
+  const { rol, puede } = useBulkAuth()
+  const permitido = perm ? puede(perm) : (!roles || puedeVer(rol, roles))
+  if (!permitido) return <BulkLayout><div className="p-6 text-slate-400">{t('No tienes acceso a esta sección.')}</div></BulkLayout>
   return <BulkLayout><Suspense fallback={<Cargando texto={t('Cargando…')} />}>{children}</Suspense></BulkLayout>
 }
 
@@ -85,36 +89,35 @@ function Interno() {
   if (!usuario) return <BulkLogin />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
-  const R = ['super_admin', 'admin', 'dispatcher']
-  const CAT = ['super_admin', 'admin']
   if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
   return (
     <>
     <PushSetup />
     <ForceLogoutWatcher />
     <Routes>
-      <Route path="/bulk" element={<P roles={R}><BulkDashboard /></P>} />
-      <Route path="/bulk/ordenes" element={<P roles={R}><Ordenes /></P>} />
-      <Route path="/bulk/ordenes/:id" element={<P roles={R}><OrdenDetalle /></P>} />
-      <Route path="/bulk/mapa" element={<P roles={R}><MapaVivo /></P>} />
-      <Route path="/bulk/mensajes" element={<P roles={R}><Mensajes /></P>} />
-      <Route path="/bulk/geocercas" element={<P roles={CAT}><Geocercas /></P>} />
+      <Route path="/bulk" element={<P perm="dashboard.ver"><BulkDashboard /></P>} />
+      <Route path="/bulk/ordenes" element={<P perm="ordenes.ver"><Ordenes /></P>} />
+      <Route path="/bulk/ordenes/:id" element={<P perm="ordenes.ver"><OrdenDetalle /></P>} />
+      <Route path="/bulk/mapa" element={<P perm="mapa.ver"><MapaVivo /></P>} />
+      <Route path="/bulk/mensajes" element={<P perm="mensajes.ver"><Mensajes /></P>} />
+      <Route path="/bulk/geocercas" element={<P perm="geocercas.ver"><Geocercas /></P>} />
       {/* Motor de tarifas retirado: ahora vive en el perfil de cada cliente. */}
       <Route path="/bulk/tarifas" element={<Navigate to="/bulk/clientes" replace />} />
-      <Route path="/bulk/facturacion" element={<P roles={CAT}><Facturacion /></P>} />
-      <Route path="/bulk/incidencias" element={<P roles={R}><Incidencias /></P>} />
-      <Route path="/bulk/documentos" element={<P roles={CAT}><Documentos /></P>} />
-      <Route path="/bulk/jobs" element={<P roles={R}><Jobs /></P>} />
-      <Route path="/bulk/clientes" element={<P roles={R}><Clientes /></P>} />
-      <Route path="/bulk/cliente/:id" element={<P roles={R}><ClientePerfil /></P>} />
-      <Route path="/bulk/transportistas" element={<P roles={R}><Transportistas /></P>} />
-      <Route path="/bulk/transportistas/:id" element={<P roles={R}><TransportistaPerfil /></P>} />
-      <Route path="/bulk/choferes" element={<P roles={CAT}><GestionChoferes /></P>} />
-      <Route path="/bulk/chofer/:nombre" element={<P roles={R}><ChoferPerfil /></P>} />
-      <Route path="/bulk/materiales" element={<P roles={CAT}><Materiales /></P>} />
-      <Route path="/bulk/equipos" element={<P roles={CAT}><Equipos /></P>} />
-      <Route path="/bulk/usuarios" element={<P roles={CAT}><BulkUsuarios /></P>} />
-      <Route path="/bulk/demo" element={<P roles={CAT}><ModoTest /></P>} />
+      <Route path="/bulk/facturacion" element={<P perm="facturacion.ver"><Facturacion /></P>} />
+      <Route path="/bulk/incidencias" element={<P perm="incidencias.ver"><Incidencias /></P>} />
+      <Route path="/bulk/documentos" element={<P perm="documentos.ver"><Documentos /></P>} />
+      <Route path="/bulk/jobs" element={<P perm="jobs.ver"><Jobs /></P>} />
+      <Route path="/bulk/clientes" element={<P perm="clientes.ver"><Clientes /></P>} />
+      <Route path="/bulk/cliente/:id" element={<P perm="clientes.ver"><ClientePerfil /></P>} />
+      <Route path="/bulk/transportistas" element={<P perm="transportistas.ver"><Transportistas /></P>} />
+      <Route path="/bulk/transportistas/:id" element={<P perm="transportistas.ver"><TransportistaPerfil /></P>} />
+      <Route path="/bulk/choferes" element={<P perm="choferes.ver"><GestionChoferes /></P>} />
+      <Route path="/bulk/chofer/:nombre" element={<P perm="choferes.ver"><ChoferPerfil /></P>} />
+      <Route path="/bulk/materiales" element={<P perm="materiales.ver"><Materiales /></P>} />
+      <Route path="/bulk/equipos" element={<P perm="equipos.ver"><Equipos /></P>} />
+      <Route path="/bulk/usuarios" element={<P perm="usuarios.ver"><BulkUsuarios /></P>} />
+      <Route path="/bulk/roles" element={<P perm="roles.gestionar"><BulkRoles /></P>} />
+      <Route path="/bulk/demo" element={<P perm="demo.ver"><ModoTest /></P>} />
       <Route path="/bulk/*" element={<Navigate to="/bulk" replace />} />
     </Routes>
     </>

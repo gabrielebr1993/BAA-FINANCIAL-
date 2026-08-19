@@ -3,6 +3,7 @@
 // Cliente paga → Transportista recibe → Chofer recibe. Cada nivel ve solo lo suyo.
 // ============================================================================
 import { BULK_ROLES } from './constants'
+import { camposFinancierosVisibles } from './permisos'
 
 const n = (v) => Number(v) || 0
 
@@ -46,10 +47,15 @@ export function camposVisiblesPorRol(rol) {
   }
 }
 
-// Devuelve el desglose YA filtrado a lo que el rol puede ver.
-export function desgloseVisible(orden, rol) {
+// Devuelve el desglose YA filtrado a lo que el usuario puede ver.
+//   - Si se pasa un conjunto de PERMISOS (RBAC granular), manda ese conjunto
+//     (permite ocultar campos por permiso, no solo por rol).
+//   - Si no, cae al mapa por rol (comportamiento histórico, sin regresión).
+export function desgloseVisible(orden, rol, permisos) {
   const full = desgloseOrden(orden)
-  const permitidos = new Set(camposVisiblesPorRol(rol))
+  const permitidos = permisos
+    ? new Set(camposFinancierosVisibles(permisos))
+    : new Set(camposVisiblesPorRol(rol))
   const out = {}
   for (const k of Object.keys(full)) if (permitidos.has(k)) out[k] = full[k]
   return out

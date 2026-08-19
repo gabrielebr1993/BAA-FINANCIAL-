@@ -183,6 +183,17 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    // RBAC configurable: permisos por rol del tenant. Doc id = tenantId; el campo
+    // `roles` = { [rol]: { permisos: [...] } }. Lo LEE cualquier miembro del tenant
+    // (para conocer los permisos de su propio rol); solo un admin/super_admin lo
+    // ESCRIBE. NO afecta el aislamiento financiero (lo imponen las reglas de
+    // bulk_orderPay_*): esto solo configura módulos/acciones/vista de la interfaz.
+    match /bulk_roles/{id} {
+      allow read: if bSame(id);
+      allow create, update: if bAdmin(id);
+      allow delete: if false;
+    }
+
     // Catálogos y entidades gestionadas por staff del tenant.
     match /bulk_clients/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     // Plantas = puntos de RECOGIDA. Cualquier usuario del tenant (chofer, transportista,
