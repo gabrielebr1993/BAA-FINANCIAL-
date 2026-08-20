@@ -8,7 +8,7 @@
 import { useMemo, useState } from 'react'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
-  MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin,
+  MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText,
 } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
@@ -37,7 +37,7 @@ const FLOTA_ESTADO = { disponible: { c: 'green', l: 'Disponible' }, en_viaje: { 
 
 export default function TransportistaPortal() {
   const { t } = useLang()
-  const { usuario, tenantId, rol, crearUsuario } = useBulkAuth()
+  const { usuario, tenantId, rol, crearUsuario, puede } = useBulkAuth()
   const carrierId = usuario?.carrierId || '__none__'
 
   // ── Datos (TODO filtrado a MI carrier) ─────────────────────────────────────
@@ -143,6 +143,9 @@ export default function TransportistaPortal() {
     { k: 'choferes', label: t('Mis choferes'), icon: Users },
     { k: 'equipos', label: t('Equipos'), icon: Truck },
     { k: 'cuenta', label: t('Estado de cuenta'), icon: Wallet },
+    // "Facturación" (sus avisos de pago) aparece SOLO si el admin le activó el
+    // permiso facturacion.ver en la pantalla de Roles.
+    ...(puede('facturacion.ver') ? [{ k: 'facturacion', label: t('Facturación'), icon: FileText }] : []),
     { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosOficina },
   ]
 
@@ -174,6 +177,7 @@ export default function TransportistaPortal() {
       {tab === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }} />}
       {tab === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {tab === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
+      {tab === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
       {tab === 'mensajes' && (
         <Card className="flex h-[70vh] flex-col p-3">
           <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
@@ -406,6 +410,38 @@ function AltaEquipoForm({ t, tipos, onCrear }) {
       </div>
       <div className="mt-3"><Boton variant="gold" onClick={() => f.tipo && onCrear(f)} disabled={!f.tipo}><Plus size={16} /> {t('Agregar equipo')}</Boton></div>
     </Card>
+  )
+}
+
+// ── Tab Facturación: avisos de pago del transportista (bulk_carrierStatements) ──
+function TabFacturacion({ t, statements, cuenta }) {
+  const rows = (statements || []).slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => ({ ...s, _key: s.id }))
+  const cols = [
+    { key: 'numero', label: t('Aviso') }, { key: 'periodo', label: t('Periodo') },
+    { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' },
+    { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'fechaPago', label: t('Fecha de pago') },
+  ]
+  const render = (s, k) => {
+    if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{s.numero}</span>
+    if (k === 'periodo') return <span className="text-xs text-slate-400">{s.desde || '—'} → {s.hasta || '—'}</span>
+    if (k === 'toneladas') return s.toneladas != null ? Math.round(s.toneladas) : '—'
+    if (k === 'total') return <span className="font-semibold text-brand-navy dark:text-slate-100">{money(s.total)}</span>
+    if (k === 'estado') return <Badge color={s.estado === 'pagado' ? 'green' : 'gold'}>{t(s.estado === 'pagado' ? 'Pagado' : 'Pendiente')}</Badge>
+    if (k === 'fechaPago') return <span className="text-xs text-slate-500">{s.fechaPago ? fecha(s.fechaPago) : '—'}</span>
+    return null
+  }
+  return (
+    <>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KPI label={t('Total facturado (periodo)')} value={money(cuenta.ganado)} icon={FileText} accent="navy" />
+        <KPI label={t('Pagado')} value={money(cuenta.pagado)} icon={DollarSign} accent="green" />
+        <KPI label={t('Pendiente de cobro')} value={money(cuenta.pendiente)} icon={Wallet} accent="gold" />
+      </div>
+      <div className="mb-2 flex items-center gap-2"><FileText size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago')}</h3></div>
+      {rows.length === 0
+        ? <EstadoVacio titulo={t('Aún no tienes avisos de pago')} texto={t('Cuando el administrador emita tu facturación/aviso de pago, aparecerá aquí con su detalle.')} mostrarBoton={false} />
+        : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[640px]" />}
+    </>
   )
 }
 
