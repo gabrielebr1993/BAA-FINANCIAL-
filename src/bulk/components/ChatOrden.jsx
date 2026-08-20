@@ -2,9 +2,9 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2 } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
-import { enviarMensaje, suscribirChat, marcarLeidos } from '../data/chat'
+import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Input } from '../../components/ui'
@@ -17,7 +17,13 @@ const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.len
 
 export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
   const { t } = useLang()
-  const { usuario, tenantId } = useBulkAuth()
+  const { usuario, tenantId, rol } = useBulkAuth()
+  const esAdmin = rol === 'admin' || rol === 'super_admin'
+  // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
+  const borrarMensaje = async (m) => {
+    if (!window.confirm(t('¿Eliminar este mensaje? Esta acción no se puede deshacer.'))) return
+    try { await eliminarMensaje(m.id) } catch { /* sin permiso o error de red */ }
+  }
   const [msgs, setMsgs] = useState([])
   const [texto, setTexto] = useState('')
   const [urgente, setUrgente] = useState(false)
@@ -63,9 +69,13 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         {msgs.map((m) => {
           const mio = m.autorId === usuario?.id
           const leidoPorOtro = (m.leidoPor || []).some((u) => u !== m.autorId)
+          const puedeBorrar = mio || esAdmin
           return (
-            <div key={m.id} className={`flex ${mio ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.urgente ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10' : mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
+            <div key={m.id} className={`group flex items-center gap-1.5 ${mio ? 'justify-end' : 'justify-start'}`}>
+              {mio && puedeBorrar && (
+                <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
+              )}
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10' : mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
                 {!mio && <div className="mb-0.5 text-[10px] font-semibold opacity-70">{m.autorNombre} · {t(BULK_ROLES_LABEL[m.autorRol]) || m.autorRol}</div>}
                 {m.urgente && <div className="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-rose-600"><AlertTriangle size={11} /> {t('URGENTE')}</div>}
                 {m.tipo === 'foto' && m.foto && <img src={m.foto} alt="foto" className="mb-1 max-h-40 rounded-lg" />}
@@ -78,6 +88,9 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                   {mio && (leidoPorOtro ? <CheckCheck size={11} /> : <Check size={11} />)}
                 </div>
               </div>
+              {!mio && esAdmin && (
+                <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
+              )}
             </div>
           )
         })}

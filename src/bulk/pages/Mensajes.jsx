@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search, Plus, Truck, User, Building2, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { convChofer, convCarrier, convClienteOrden, resumenPorConversacion } from '../data/chat'
+import { convChofer, convCarrier, convClienteOrden, resumenPorConversacion, eliminarConversacion } from '../data/chat'
 import { conversacionesAdmin } from '../domain/conversaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E } from '../domain/constants'
@@ -14,7 +14,7 @@ const CHATEABLES = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUT
 
 export default function Mensajes() {
   const { t } = useLang()
-  const { usuario } = useBulkAuth()
+  const { usuario, tenantId } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: clientes } = useColeccion('clients')
@@ -88,6 +88,14 @@ export default function Mensajes() {
     setTimeout(() => setAbrir(null), 0)
   }
 
+  // Eliminar TODA una conversación de forma permanente ("sin respaldo"). Solo admin.
+  const eliminarConv = async (item) => {
+    if (!item?.chatId) return
+    if (!window.confirm(t('¿Estás seguro de que deseas eliminar esta conversación? Se borrará de forma permanente para todos y no se puede deshacer.'))) return
+    setDirectos((s) => s.filter((d) => d.key !== item.key))
+    try { await eliminarConversacion(tenantId, item.chatId) } catch { /* noop */ }
+  }
+
   if (cargando) return <Cargando />
 
   return (
@@ -96,6 +104,7 @@ export default function Mensajes() {
         secciones={secciones}
         abrir={abrir}
         titulo={t('Mensajes')}
+        onEliminarConversacion={eliminarConv}
         accion={<Boton variant="gold" className="px-3 py-1.5 text-sm" onClick={() => setNuevo(true)}><Plus size={15} /> {t('Nueva conversación')}</Boton>}
       />
 

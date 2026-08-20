@@ -10,7 +10,7 @@
 // No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield } from 'lucide-react'
+import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2 } from 'lucide-react'
 import ChatOrden from './ChatOrden'
 import { tsMillis } from '../data/chatKeys'
 import { BULK_ROLES_LABEL } from '../domain/constants'
@@ -44,7 +44,7 @@ function horaCorta(ts) {
     : d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' })
 }
 
-export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, alturaClass = 'h-[calc(100vh-6.5rem)]' }) {
+export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, alturaClass = 'h-[calc(100vh-6.5rem)]' }) {
   const { t } = useLang()
   const [tab, setTab] = useState(secciones[0]?.k || '')
   const [sel, setSel] = useState('')
@@ -151,15 +151,19 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                     <span className="truncate font-bold text-brand-navy dark:text-slate-100">{activa.titulo}</span>
                     {activa.rolLabel && <Badge color={activa.rolColor || 'slate'}>{activa.rolLabel}</Badge>}
                   </div>
-                  {(activa.viaje || activa.material || activa.carrierNombre || activa.operacion) && (
+                  {(activa.viaje || activa.material || activa.carga || activa.carrierNombre || activa.operacion) && (
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                       {activa.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{activa.viaje}</span>}
                       {activa.operacion && <span className="inline-flex items-center gap-0.5"><MessageSquare size={11} /> {activa.operacion}</span>}
                       {activa.material && <span>{activa.material}</span>}
+                      {activa.carga && <span className="text-slate-400">· {activa.carga}</span>}
                       {activa.carrierNombre && <span className="inline-flex items-center gap-0.5"><Truck size={11} /> {activa.carrierNombre}</span>}
                     </div>
                   )}
                 </div>
+                {onEliminarConversacion && (
+                  <button type="button" onClick={() => onEliminarConversacion(activa)} title={t('Eliminar conversación')} className="ml-auto flex-shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 size={17} /></button>
+                )}
               </div>
               <div className="min-h-0 flex-1">
                 <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} fill />

@@ -361,7 +361,10 @@ service cloud.firestore {
       );
       allow create: if bSame(request.resource.data.tenantId);
       allow update: if bSame(resource.data.tenantId);
-      allow delete: if bAdmin(resource.data.tenantId);
+      // Borrado permanente: el ADMIN (cualquier chat/mensaje) o el AUTOR de su propio
+      // mensaje. Así un usuario no puede borrar mensajes de otros (requisito 13).
+      allow delete: if bAdmin(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && resource.data.autorId == request.auth.uid);
     }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 

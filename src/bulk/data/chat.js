@@ -1,6 +1,6 @@
 // BULK · Mensajería en tiempo real por orden (`bulk_messages`).
 // Realtime vía onSnapshot de Firestore. Lectura por usuario (leidoPor) y urgentes.
-import { crear, suscribir, where, ref } from './repo'
+import { crear, suscribir, where, ref, listar, eliminar } from './repo'
 import { updateDoc, arrayUnion } from 'firebase/firestore'
 
 // Claves/utilidades puras (sin Firebase). Se re-exportan para no cambiar imports.
@@ -40,4 +40,20 @@ export async function marcarLeidos(mensajes, uid) {
       try { await updateDoc(ref('messages', m.id), { leidoPor: arrayUnion(uid) }) } catch { /* noop */ }
     }
   }
+}
+
+// Elimina UN mensaje de forma permanente ("sin respaldo"). Las reglas de Firestore
+// solo permiten borrarlo a su AUTOR o al administrador (no se confía en el frontend).
+export async function eliminarMensaje(id) {
+  await eliminar('messages', id)
+}
+
+// Elimina TODA una conversación (todos los mensajes con ese orderId) de forma
+// permanente. Uso previsto: administrador. Las reglas validan cada borrado.
+export async function eliminarConversacion(tenantId, orderId) {
+  const docs = await listar('messages', tenantId, [where('orderId', '==', orderId)])
+  for (const d of docs) {
+    try { await eliminar('messages', d.id) } catch { /* noop: sin permiso sobre ese mensaje */ }
+  }
+  return docs.length
 }
