@@ -7,7 +7,7 @@ import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { tsMillis } from '../data/chatKeys'
-import { fechaOrden } from '../domain/perfilChofer'
+import { fechaOrden, calificacionTransporte } from '../domain/perfilChofer'
 import { estadoDocumento } from '../domain/facturacion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio, Boton, Spinner, Input } from '../../components/ui'
@@ -107,6 +107,10 @@ export default function TransportistaPerfil() {
   const porEstado = misOrdenes.reduce((m, o) => { m[o.estado] = (m[o.estado] || 0) + 1; return m }, {})
   const maxTonMat = Math.max(1, ...porMaterial.map((m) => m.ton))
   const inicial = (carrier.nombre || '?').charAt(0).toUpperCase()
+  // Rendimiento de la compañía = promedio de las calificaciones de sus choferes
+  // (mejores choferes → mejor compañía). Solo el admin lo ve, para comparar quién rinde mejor.
+  const esAdmin = rol === 'admin' || rol === 'super_admin'
+  const calif = useMemo(() => calificacionTransporte({ ordenes: misOrdenes, choferesRoster: carrier?.choferes || [] }), [misOrdenes, carrier])
 
   return (
     <div className="w-full">
@@ -118,13 +122,30 @@ export default function TransportistaPerfil() {
         <div className="px-5 pb-5">
           {/* Avatar SOLO sobre la portada; el nombre va debajo (sin taparse). */}
           <div className="-mt-12 grid h-20 w-20 place-items-center rounded-2xl border-4 border-white bg-amber-500 text-3xl font-black text-slate-900 shadow-lg dark:border-slate-900">{inicial}</div>
-          <div className="mt-3 min-w-0">
-            <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{carrier.nombre}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-              {carrier.contacto && <span className="inline-flex items-center gap-1"><Phone size={12} /> {carrier.contacto}</span>}
-              {carrier.calificacion != null && <span className="inline-flex items-center gap-1 text-amber-500"><Star size={12} className="fill-amber-500" /> {carrier.calificacion}</span>}
-              <span className="inline-flex items-center gap-1"><User size={12} /> {choferes.length} {t('chofer(es)')}</span>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{carrier.nombre}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                {carrier.contacto && <span className="inline-flex items-center gap-1"><Phone size={12} /> {carrier.contacto}</span>}
+                <span className="inline-flex items-center gap-1"><User size={12} /> {choferes.length} {t('chofer(es)')}</span>
+              </div>
             </div>
+            {/* Rendimiento de la compañía (promedio de sus choferes) — solo admin. */}
+            {esAdmin && (
+              <div className="flex flex-col items-end gap-1">
+                {calif.rating != null ? (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex">
+                        {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={16} className={i <= Math.round(calif.rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-300 dark:text-slate-600'} />)}
+                      </div>
+                      <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{calif.rating.toFixed(1)}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">{t('Rendimiento (promedio de')} {calif.calificados} {t('chofer(es))')}</span>
+                  </>
+                ) : <span className="text-xs text-slate-400">{t('Sin calificación de choferes')}</span>}
+              </div>
+            )}
           </div>
           {(carrier.equipos || []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">{carrier.equipos.map((e) => <Badge key={e} color="navy">{e}</Badge>)}</div>

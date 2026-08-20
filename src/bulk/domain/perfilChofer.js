@@ -103,3 +103,35 @@ export function perfilDeChofer({ ordenes = [], carriers = [], jobs = [], cliente
     misIncidencias, rating, rechazaMucho, confiable, tasaAceptacion, existe,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Calificación del TRANSPORTISTA (carrier) = promedio de las calificaciones de
+// SUS choferes. La idea: mientras mejor rinden sus choferes (más entregas, menos
+// rechazos), mejor es el rendimiento de la compañía. Uso: solo lo ve el admin,
+// para comparar qué compañía rinde mejor.
+//
+// Cada chofer se califica con la MISMA fórmula del perfil individual:
+//   rating = entregadas / (entregadas + rechazos) * 5
+// Se promedian SOLO los choferes con actividad calificable (base > 0).
+//   ordenes: órdenes del carrier (ya filtradas por transportistaId)
+//   choferesRoster: carrier.choferes (para incluir nombres aunque aún no tengan órdenes)
+// Devuelve { rating: number|null, calificados: number, total: number }
+export function calificacionTransporte({ ordenes = [], choferesRoster = [] } = {}) {
+  // Universo de choferes: los del roster + los que aparecen en las órdenes.
+  const nombres = new Set()
+  for (const d of choferesRoster) if (d?.nombre) nombres.add(clave(d.nombre))
+  for (const o of ordenes) if (o.choferNombre) nombres.add(clave(o.choferNombre))
+
+  const ratings = []
+  for (const k of nombres) {
+    if (!k) continue
+    const entregadas = ordenes.filter((o) => clave(o.choferNombre) === k && FIN.includes(o.estado)).length
+    const rechazos = ordenes.filter((o) => clave(o.rechazo?.por) === k).length
+    const base = entregadas + rechazos
+    if (base <= 0) continue
+    ratings.push((entregadas / base) * 5)
+  }
+  if (ratings.length === 0) return { rating: null, calificados: 0, total: nombres.size }
+  const prom = ratings.reduce((a, b) => a + b, 0) / ratings.length
+  return { rating: Math.round(prom * 10) / 10, calificados: ratings.length, total: nombres.size }
+}

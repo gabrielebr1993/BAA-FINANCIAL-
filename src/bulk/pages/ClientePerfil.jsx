@@ -75,11 +75,11 @@ export default function ClientePerfil() {
 
       <Card className="mb-4 overflow-hidden p-0">
         <div className="h-20 bg-gradient-to-r from-brand-navy via-slate-800 to-emerald-600" />
-        {/* Solo el avatar sube sobre el degradado; el nombre queda SIEMPRE debajo, en
-            zona blanca (antes se encimaba con los colores al reajustarse). */}
-        <div className="flex flex-col gap-3 px-5 pb-5 sm:flex-row sm:items-end">
-          <div className="-mt-12 grid h-20 w-20 flex-shrink-0 place-items-center rounded-2xl border-4 border-white bg-emerald-500 text-3xl font-black text-white shadow-lg dark:border-slate-900">{inicial}</div>
-          <div className="min-w-0 flex-1">
+        {/* Avatar SOLO sobre el degradado; el nombre va debajo (igual que el perfil
+            del transportista y del chofer, sin taparse). */}
+        <div className="px-5 pb-5">
+          <div className="-mt-12 grid h-20 w-20 place-items-center rounded-2xl border-4 border-white bg-emerald-500 text-3xl font-black text-white shadow-lg dark:border-slate-900">{inicial}</div>
+          <div className="mt-3 min-w-0">
             <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{cliente.nombre}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="inline-flex items-center gap-1"><Building2 size={12} /> {t('Cliente')}</span>
