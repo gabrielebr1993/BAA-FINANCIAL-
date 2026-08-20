@@ -26,6 +26,8 @@ import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pago
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla } from '../../components/ui'
+import BuscadorFacturas from '../components/BuscadorFacturas'
+import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -466,7 +468,10 @@ function AltaEquipoForm({ t, tipos, onCrear }) {
 
 // ── Tab Facturación: avisos de pago del transportista (bulk_carrierStatements) ──
 function TabFacturacion({ t, statements, cuenta }) {
-  const rows = (statements || []).slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => ({ ...s, _key: s.id }))
+  // Buscador: solo reduce el listado de SUS avisos (ya aislados por carrierId).
+  const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
+  const filtrados = filtrarFacturas(statements, busq)
+  const rows = filtrados.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => ({ ...s, _key: s.id }))
   const cols = [
     { key: 'numero', label: t('Aviso') }, { key: 'periodo', label: t('Periodo') },
     { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' },
@@ -489,9 +494,12 @@ function TabFacturacion({ t, statements, cuenta }) {
         <KPI label={t('Pendiente de cobro')} value={money(cuenta.pendiente)} icon={Wallet} accent="gold" />
       </div>
       <div className="mb-2 flex items-center gap-2"><FileText size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago')}</h3></div>
-      {rows.length === 0
+      {(statements || []).length > 0 && <BuscadorFacturas f={busq} setF={setBusq} montoLabel={t('Monto de pago…')} />}
+      {(statements || []).length === 0
         ? <EstadoVacio titulo={t('Aún no tienes avisos de pago')} texto={t('Cuando el administrador emita tu facturación/aviso de pago, aparecerá aquí con su detalle.')} mostrarBoton={false} />
-        : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[640px]" />}
+        : rows.length === 0
+          ? <p className="text-sm text-slate-400">{t('No hay avisos de pago que coincidan con los criterios de búsqueda.')}</p>
+          : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[640px]" />}
     </>
   )
 }

@@ -10,6 +10,8 @@ import { where, guardar } from '../data/repo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import FirmaPad from '../components/FirmaPad'
+import BuscadorFacturas from '../components/BuscadorFacturas'
+import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
@@ -38,6 +40,9 @@ export default function ClientePortal() {
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [firma, setFirma] = useState(null)
+  // Buscador: solo reduce el listado de SUS facturas (ya aisladas por la consulta).
+  const [busqFac, setBusqFac] = useState(FILTRO_FACTURAS_VACIO)
+  const facturasFiltradas = useMemo(() => filtrarFacturas(facturas, busqFac), [facturas, busqFac])
 
   const stats = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
@@ -174,9 +179,11 @@ export default function ClientePortal() {
             {tab === 'facturas' && (
               <Card className="p-4">
                 <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas')}</h3></div>
-                {facturas.length === 0 ? <EstadoVacio titulo={t('Aún no tienes facturas')} texto={t('Cuando el administrador emita una factura, aparecerá aquí para revisar y firmar.')} mostrarBoton={false} /> : (
+                {facturas.length > 0 && <BuscadorFacturas f={busqFac} setF={setBusqFac} montoLabel={t('Monto de cobro…')} />}
+                {facturas.length === 0 ? <EstadoVacio titulo={t('Aún no tienes facturas')} texto={t('Cuando el administrador emita una factura, aparecerá aquí para revisar y firmar.')} mostrarBoton={false} />
+                  : facturasFiltradas.length === 0 ? <p className="text-sm text-slate-400">{t('No hay facturas que coincidan con los criterios de búsqueda.')}</p> : (
                   <Tabla columns={[{ key: 'numero', label: t('Factura') }, { key: 'periodo', label: t('Periodo') }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
-                    rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
+                    rows={facturasFiltradas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
                     renderCell={(r, k) => {
                       if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
                       if (k === 'total') return money(r.total)

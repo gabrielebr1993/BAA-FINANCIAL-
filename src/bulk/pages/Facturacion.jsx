@@ -9,6 +9,8 @@ import { armarFactura, armarAvisoPago, estadoDocumento } from '../domain/factura
 import { enlacesEnvio } from '../domain/envio'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
+import BuscadorFacturas from '../components/BuscadorFacturas'
+import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -50,10 +52,13 @@ export default function Facturacion() {
 // ── Facturas a CLIENTES (para que me paguen) ────────────────────────────────
 function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usuario, rol, setMsg, t }) {
   const [f, setF] = useState({ clienteId: '', desde: '', hasta: '' })
+  const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const cliente = (id) => clientes.find((c) => c.id === id)
   const nombreCliente = (id) => cliente(id)?.nombre || '—'
   const preview = useMemo(() => f.clienteId ? armarFactura(ordenes.filter((o) => o.clienteId === f.clienteId), { desde: f.desde, hasta: f.hasta }) : null, [ordenes, f])
+  // Listado filtrado (no altera datos ni orden; solo reduce por criterios de búsqueda).
+  const facturasFiltradas = useMemo(() => filtrarFacturas(facturas, busq, { nombreKey: 'clienteNombre' }), [facturas, busq])
 
   // El staff marca una factura como pagada (o revierte). Auditado.
   const marcarPagada = async (r) => {
@@ -97,11 +102,13 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
       </Card>
 
       <Card className="p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas emitidas')} ({facturas.length})</h3>
-        {facturas.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay facturas.')}</p> : (
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas emitidas')} ({hayFiltroActivo(busq) ? `${facturasFiltradas.length}/${facturas.length}` : facturas.length})</h3>
+        {facturas.length > 0 && <BuscadorFacturas f={busq} setF={setBusq} conNombre placeholderTexto={t('Número o cliente…')} />}
+        {facturas.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay facturas.')}</p>
+          : facturasFiltradas.length === 0 ? <p className="text-sm text-slate-400">{t('No hay facturas que coincidan con los criterios de búsqueda.')}</p> : (
           <Tabla
             columns={[{ key: 'numero', label: t('Factura') }, { key: 'clienteNombre', label: t('Cliente') }, { key: 'periodo', label: t('Periodo') }, { key: 'vence', label: t('Vence') }, { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: t('Enviar'), align: 'right' }]}
-            rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
+            rows={facturasFiltradas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
             renderCell={(r, k) => {
               if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
               if (k === 'vence') { const ed = estadoDocumento(r.vence); return <span className={`text-xs ${r.estado !== 'pagada' && ed.estado === 'vencido' ? 'font-bold text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>{r.vence || '—'}</span> }
@@ -134,10 +141,12 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
 // ── Avisos de PAGO a TRANSPORTISTAS (para que sepan cuándo/cuánto les pago) ───
 function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usuario, rol, setMsg, t }) {
   const [f, setF] = useState({ carrierId: '', desde: '', hasta: '', fechaPago: '' })
+  const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const carrier = (id) => carriers.find((c) => c.id === id)
   const nombreCarrier = (id) => carrier(id)?.nombre || '—'
   const preview = useMemo(() => f.carrierId ? armarAvisoPago(ordenes.filter((o) => o.transportistaId === f.carrierId), { desde: f.desde, hasta: f.hasta }) : null, [ordenes, f])
+  const avisosFiltrados = useMemo(() => filtrarFacturas(avisos, busq, { nombreKey: 'carrierNombre' }), [avisos, busq])
 
   const generar = async () => {
     if (!f.carrierId || !preview || preview.n === 0) { setMsg({ tipo: 'warn', txt: t('Selecciona un transportista con cargas entregadas en el periodo.') }); return }
@@ -177,11 +186,13 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
       </Card>
 
       <Card className="p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago emitidos')} ({avisos.length})</h3>
-        {avisos.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay avisos de pago.')}</p> : (
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago emitidos')} ({hayFiltroActivo(busq) ? `${avisosFiltrados.length}/${avisos.length}` : avisos.length})</h3>
+        {avisos.length > 0 && <BuscadorFacturas f={busq} setF={setBusq} conNombre placeholderTexto={t('Número o transportista…')} montoLabel={t('Monto de pago…')} />}
+        {avisos.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay avisos de pago.')}</p>
+          : avisosFiltrados.length === 0 ? <p className="text-sm text-slate-400">{t('No hay avisos de pago que coincidan con los criterios de búsqueda.')}</p> : (
           <Tabla
             columns={[{ key: 'numero', label: t('Aviso') }, { key: 'carrierNombre', label: t('Transportista') }, { key: 'periodo', label: t('Periodo') }, { key: 'fechaPago', label: t('Pago') }, { key: 'total', label: t('Le pagas'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: t('Enviar'), align: 'right' }]}
-            rows={avisos.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
+            rows={avisosFiltrados.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
             renderCell={(r, k) => {
               if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
               if (k === 'fechaPago') return <span className="text-xs text-slate-400">{r.fechaPago || '—'}</span>
