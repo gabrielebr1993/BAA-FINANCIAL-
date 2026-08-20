@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers } from 'lucide-react'
+import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
+import PanelConversaciones from '../components/PanelConversaciones'
+import { convClienteOrden, resumenPorConversacion } from '../data/chat'
 import { useColeccion } from '../data/useColeccion'
 import { where, guardar } from '../data/repo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
@@ -86,6 +88,27 @@ export default function ClientePortal() {
   }
   // El cliente disputa/rechaza una factura enviada, con motivo (queda para el staff).
   const notifsC = useMemo(() => notificacionesCliente({ facturas }), [facturas])
+
+  // Mensajes: SOLO con la oficina/administrador, ORGANIZADOS POR VIAJE. Cada viaje
+  // usa un canal propio cliente↔oficina (co_<orderId>) donde no participan chofer ni
+  // transporte. La consulta trae únicamente los mensajes donde el cliente participa
+  // (aislamiento garantizado por reglas). No se mezclan viajes distintos.
+  const { datos: misMensajes } = useColeccion('messages', [where('participantes', 'array-contains', clienteId)])
+  const resumenMsg = useMemo(() => resumenPorConversacion(misMensajes, usuario?.id), [misMensajes, usuario])
+  const ordenesChat = useMemo(
+    () => ordenes.filter((o) => !FINAL.includes(o.estado) || resumenMsg[convClienteOrden(o.id)]),
+    [ordenes, resumenMsg],
+  )
+  const seccionesMsg = useMemo(() => {
+    const items = ordenesChat.map((o) => {
+      const key = convClienteOrden(o.id)
+      const r = resumenMsg[key] || {}
+      return { key, chatId: key, icon: 'admin', titulo: o.numero || t('Viaje'), rolLabel: t('Administrador'), rolColor: 'navy', material: o.material || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [clienteId] }
+    })
+    return [{ k: 'admin', label: t('Administrador'), icon: 'admin', items, vacio: t('Aún no tienes conversaciones. Se crean por viaje cuando escribes al administrador.') }]
+  }, [ordenesChat, resumenMsg, clienteId, t])
+  const noLeidosMsg = useMemo(() => Object.values(resumenMsg).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenMsg])
+
   const rechazarFactura = async (r) => {
     const motivo = window.prompt(t('¿Por qué disputas esta factura?'))
     if (motivo == null) return
@@ -100,6 +123,7 @@ export default function ClientePortal() {
     { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
     { k: 'proyectos', label: t('Proyectos'), icon: Layers },
     { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg },
   ]
 
   return (
@@ -199,6 +223,10 @@ export default function ClientePortal() {
                     }} />
                 )}
               </Card>
+            )}
+
+            {tab === 'mensajes' && (
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
             )}
           </>
         )}

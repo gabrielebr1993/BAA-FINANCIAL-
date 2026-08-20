@@ -10,10 +10,10 @@ import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
 } from 'lucide-react'
-import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
-import { convCarrier, noLeidosPorConv } from '../data/chat'
+import PanelConversaciones from '../components/PanelConversaciones'
+import { convCarrier, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { crearConId, guardar, where, documentId } from '../data/repo'
@@ -52,6 +52,9 @@ export default function TransportistaPortal() {
   const { datos: presencias } = useColeccion('presence', [where('carrierId', '==', carrierId)])
   const { datos: plantas } = useColeccion('plants')
   const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])
+  // Chats de ORDEN en los que participa este transporte (para hablar con sus choferes,
+  // organizados por viaje). El aislamiento lo garantizan las reglas (carrierId ∈ participantes).
+  const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', carrierId)])
 
   const ordenes = useMemo(() => {
     const mc = {}; for (const p of pagosCarrier || []) mc[p.orderId || p.id] = p.precioTransportista
@@ -73,7 +76,26 @@ export default function TransportistaPortal() {
   const rosterIdDe = (id) => choferes.find((c) => c.uid === id)?.id || id
 
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
-  const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
+  // Resumen de los chats de orden (por chofer/viaje) para la sección CHOFERES.
+  const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
+  const noLeidosChoferes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
+  const mensajesNuevos = noLeidosOficina + noLeidosChoferes
+  // Secciones del panel de mensajes: CHOFERES (chats por viaje) · ADMINISTRADOR (oficina).
+  const seccionesMsg = useMemo(() => {
+    const itemsChoferes = ordenes
+      .filter((o) => resumenOrd[o.id] || !FINAL.includes(o.estado))
+      .filter((o) => o.choferNombre) // solo órdenes con chofer asignado (a quién escribir)
+      .map((o) => {
+        const r = resumenOrd[o.id] || {}
+        return { key: o.id, chatId: o.id, icon: 'chofer', titulo: o.choferNombre, rolLabel: t('Chofer'), rolColor: 'navy', viaje: o.numero || '', material: o.material || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean) }
+      })
+    const rOfi = resumenPorConversacion(mensajes, usuario?.id)[convCarrier(carrierId)] || {}
+    const itemsAdmin = [{ key: convCarrier(carrierId), chatId: convCarrier(carrierId), icon: 'admin', titulo: t('Administrador / Oficina'), rolLabel: t('Administrador'), rolColor: 'navy', lastText: rOfi.lastText || '', lastTs: rOfi.lastTs || '', noLeidos: noLeidosOficina, participantes: null }]
+    return [
+      { k: 'choferes', label: t('Choferes'), icon: 'chofer', items: itemsChoferes, vacio: t('Sin conversaciones con tus choferes todavía.') },
+      { k: 'admin', label: t('Administrador'), icon: 'admin', items: itemsAdmin, vacio: t('Sin mensajes con la oficina.') },
+    ]
+  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, t])
   const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
   // Presencia viva (en línea) por uid de chofer.
@@ -154,7 +176,7 @@ export default function TransportistaPortal() {
     // "Facturación" (sus avisos de pago) aparece SOLO si el admin le activó el
     // permiso facturacion.ver en la pantalla de Roles.
     ...(puede('facturacion.ver') ? [{ k: 'facturacion', label: t('Facturación'), icon: FileText }] : []),
-    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosOficina },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: mensajesNuevos },
   ]
   // Sección activa: si la actual quedó oculta por permisos, cae a la primera visible.
   const activo = items.some((i) => i.k === tab) ? tab : (items[0]?.k || 'mensajes')
@@ -190,12 +212,9 @@ export default function TransportistaPortal() {
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
       {activo === 'mensajes' && (
-        <Card className="flex h-[70vh] flex-col p-3">
-          <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
-          {usuario?.carrierId
-            ? <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convCarrier(carrierId), numero: t('Oficina') }} fill /></div>
-            : <span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span>}
-        </Card>
+        usuario?.carrierId
+          ? <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
+          : <Card className="p-4"><span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span></Card>
       )}
     </PortalLayout>
   )

@@ -1,31 +1,29 @@
 import { useMemo, useState } from 'react'
-import { MessageSquare, Search, Plus, Truck, User, X } from 'lucide-react'
+import { Search, Plus, Truck, User, Building2, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import ChatOrden from '../components/ChatOrden'
-import { convChofer, convCarrier, esConvDirecta, tsMillis, noLeidosPorConv } from '../data/chat'
+import { convChofer, convCarrier, convClienteOrden, resumenPorConversacion } from '../data/chat'
+import { conversacionesAdmin } from '../domain/conversaciones'
 import { useBulkAuth } from '../BulkAuthContext'
-import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
-import { PageTitle, Card, Badge, Cargando, EstadoVacio, Input, Boton } from '../../components/ui'
+import { ORDEN_ESTADO as E } from '../domain/constants'
+import PanelConversaciones from '../components/PanelConversaciones'
+import { Card, Cargando, Input, Boton } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 // Órdenes con las que tiene sentido chatear: en cola asignada o en proceso.
 const CHATEABLES = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA]
-const COLOR_EST = { notificando: 'gold', aceptada: 'navy', en_planta: 'navy', cargando: 'navy', en_ruta: 'blue', en_destino: 'blue', entregada: 'green' }
 
 export default function Mensajes() {
   const { t } = useLang()
   const { usuario } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
+  const { datos: clientes } = useColeccion('clients')
   const { datos: mensajes } = useColeccion('messages')
-  const unread = useMemo(() => noLeidosPorConv(mensajes, usuario?.id), [mensajes, usuario])
-  const [sel, setSel] = useState('')
-  const [buscar, setBuscar] = useState('')
-  const [soloNoLeidos, setSoloNoLeidos] = useState(false)
   const [nuevo, setNuevo] = useState(false)
   const [buscarNuevo, setBuscarNuevo] = useState('')
-  // Conversaciones directas iniciadas en esta sesión (aún sin mensajes): {id, nombre, tipo}.
+  // Conversaciones iniciadas en esta sesión (aún sin mensajes): filas listas para el panel.
   const [directos, setDirectos] = useState([])
+  const [abrir, setAbrir] = useState(null)
 
   // Choferes = plantilla de todos los transportes (carrier.choferes).
   const choferes = useMemo(
@@ -33,138 +31,73 @@ export default function Mensajes() {
     [carriers],
   )
 
-  // Órdenes que YA tienen al menos un mensaje: solo esas aparecen como
-  // conversación. Una orden sin chat no ensucia la lista (el chat es solo chat).
-  const ordenesConMensajes = useMemo(() => {
-    const s = new Set()
-    for (const m of mensajes) if (!esConvDirecta(m.orderId)) s.add(m.orderId)
-    return s
-  }, [mensajes])
-
-  // Conversaciones de ORDEN: únicamente las chateables que ya tienen historial.
-  const ordenConvos = useMemo(
-    () => ordenes
-      .filter((o) => CHATEABLES.includes(o.estado) && ordenesConMensajes.has(o.id))
-      .map((o) => ({ key: o.id, chatId: o.id, tipo: 'orden', estado: o.estado, nombre: o.numero || '', sub: `${o.choferNombre || t('sin chofer')} · ${o.material || ''}`, ts: o.actualizadoEn || o.creadoEn || '' })),
-    [ordenes, ordenesConMensajes, t],
+  // Categorización de TODAS las conversaciones con historial en 3 secciones.
+  const cats = useMemo(
+    () => conversacionesAdmin({ mensajes, ordenes, carriers, clientes, uid: usuario?.id }),
+    [mensajes, ordenes, carriers, clientes, usuario],
   )
 
-  // Conversaciones DIRECTAS: derivadas de los mensajes dm_* + las iniciadas ahora.
-  const directoConvos = useMemo(() => {
-    const ids = new Set(directos.map((d) => d.id))
-    const lastTs = {}
-    for (const m of mensajes) {
-      if (esConvDirecta(m.orderId)) { ids.add(m.orderId); if (!lastTs[m.orderId] || m.ts > lastTs[m.orderId]) lastTs[m.orderId] = m.ts }
+  // Mezcla las conversaciones recién iniciadas (sin mensajes) en su sección, sin duplicar.
+  const secciones = useMemo(() => {
+    const mezclar = (base, seccion) => {
+      const keys = new Set(base.map((x) => x.key))
+      const extra = directos.filter((d) => d.seccion === seccion && !keys.has(d.key))
+      return [...extra, ...base]
     }
-    const resolver = (id) => {
-      if (id.startsWith('dm_c_')) { const c = carriers.find((x) => x.id === id.slice(5)); return { tipo: 'carrier', nombre: c?.nombre || t('Transporte') } }
-      if (id.startsWith('dm_d_')) { const d = choferes.find((x) => convChofer(x.nombre) === id); return { tipo: 'driver', nombre: d?.nombre || t('Chofer') } }
-      return { tipo: 'carrier', nombre: t('Conversación') }
-    }
-    return [...ids].map((id) => {
-      const r = resolver(id)
-      return { key: id, chatId: id, tipo: r.tipo, nombre: r.nombre, sub: r.tipo === 'carrier' ? t('Transporte') : t('Chofer'), ts: lastTs[id] || '' }
-    })
-  }, [mensajes, directos, carriers, choferes, t])
+    return [
+      { k: 'clientes', label: t('Clientes'), icon: 'cliente', items: mezclar(cats.clientes, 'clientes'), vacio: t('Sin conversaciones con clientes.') },
+      { k: 'transportistas', label: t('Transportistas'), icon: 'transportista', items: mezclar(cats.transportistas, 'transportistas'), vacio: t('Sin conversaciones con transportistas.') },
+      { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.choferes, 'conductores'), vacio: t('Sin conversaciones con conductores.') },
+    ]
+  }, [cats, directos, t])
 
-  const todas = useMemo(() => {
-    const q = buscar.trim().toLowerCase()
-    return [...directoConvos, ...ordenConvos]
-      .filter((c) => !q || (c.nombre || '').toLowerCase().includes(q) || (c.sub || '').toLowerCase().includes(q))
-      .map((c) => ({ ...c, noLeidos: unread[c.chatId] || 0 }))
-      .filter((c) => !soloNoLeidos || c.noLeidos > 0)
-      .sort((a, b) => (b.noLeidos - a.noLeidos) || (tsMillis(b.ts) - tsMillis(a.ts)))
-  }, [directoConvos, ordenConvos, buscar, unread, soloNoLeidos])
-  const totalNoLeidos = useMemo(() => Object.values(unread).reduce((a, n) => a + n, 0), [unread])
-
-  const activa = todas.find((c) => c.key === sel) || todas[0] || null
-
-  // Buscador de "nueva conversación": transportes + choferes.
+  // Buscador de "nueva conversación": transportes + choferes + clientes (por viaje).
   const resultadosNuevo = useMemo(() => {
     const q = buscarNuevo.trim().toLowerCase()
     const cs = carriers
       .filter((c) => !q || (c.nombre || '').toLowerCase().includes(q))
-      .map((c) => ({ id: convCarrier(c.id), nombre: c.nombre || '', tipo: 'carrier' }))
+      .map((c) => ({ id: convCarrier(c.id), nombre: c.nombre || '', tipo: 'carrier', seccion: 'transportistas' }))
     const ds = choferes
       .filter((d) => !q || (d.nombre || '').toLowerCase().includes(q))
-      .map((d) => ({ id: convChofer(d.nombre), nombre: d.nombre || '', tipo: 'driver', sub: d.carrierNombre }))
-    return [...cs, ...ds].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
-  }, [carriers, choferes, buscarNuevo])
+      .map((d) => ({ id: convChofer(d.nombre), nombre: d.nombre || '', tipo: 'driver', sub: d.carrierNombre, seccion: 'conductores' }))
+    const cli = ordenes
+      .filter((o) => o.clienteId && CHATEABLES.includes(o.estado))
+      .filter((o) => { const n = (o.clienteNombre || clientes.find((c) => c.id === o.clienteId)?.nombre || ''); return !q || n.toLowerCase().includes(q) || (o.numero || '').toLowerCase().includes(q) })
+      .map((o) => {
+        const n = o.clienteNombre || clientes.find((c) => c.id === o.clienteId)?.nombre || t('Cliente')
+        return { id: convClienteOrden(o.id), nombre: n, tipo: 'cliente', sub: `${o.numero || ''} · ${o.material || ''}`, seccion: 'clientes', viaje: o.numero, material: o.material, participantes: [o.clienteId].filter(Boolean) }
+      })
+    return [...cli, ...cs, ...ds].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  }, [carriers, choferes, ordenes, clientes, buscarNuevo, t])
 
   const abrirDirecto = (item) => {
-    setDirectos((s) => (s.some((d) => d.id === item.id) ? s : [...s, { id: item.id, nombre: item.nombre, tipo: item.tipo }]))
-    setSel(item.id); setNuevo(false); setBuscarNuevo('')
+    const fila = {
+      key: item.id, chatId: item.id, seccion: item.seccion,
+      icon: item.tipo === 'carrier' ? 'transportista' : item.tipo === 'cliente' ? 'cliente' : 'chofer',
+      titulo: item.nombre,
+      rolLabel: item.tipo === 'carrier' ? t('Transportista') : item.tipo === 'cliente' ? t('Cliente') : t('Chofer'),
+      rolColor: item.tipo === 'carrier' ? 'gold' : item.tipo === 'cliente' ? 'green' : 'navy',
+      viaje: item.viaje || '', material: item.material || '', carrierNombre: item.sub && item.tipo === 'driver' ? item.sub : '',
+      lastText: '', lastTs: '', noLeidos: 0, participantes: item.participantes ?? null,
+    }
+    setDirectos((s) => (s.some((d) => d.key === fila.key) ? s : [...s, fila]))
+    setAbrir(item.id); setNuevo(false); setBuscarNuevo('')
+    // Reinicia el disparador para permitir reabrir la misma conversación después.
+    setTimeout(() => setAbrir(null), 0)
   }
 
   if (cargando) return <Cargando />
 
   return (
-    <div className="flex h-[calc(100vh-6.5rem)] flex-col">
-      <div className="flex items-center gap-2">
-        <PageTitle>{t('Mensajes')}</PageTitle>
-        <Boton variant="gold" className="ml-auto px-3 py-1.5 text-sm" onClick={() => setNuevo(true)}><Plus size={15} /> {t('Nueva conversación')}</Boton>
-      </div>
+    <>
+      <PanelConversaciones
+        secciones={secciones}
+        abrir={abrir}
+        titulo={t('Mensajes')}
+        accion={<Boton variant="gold" className="px-3 py-1.5 text-sm" onClick={() => setNuevo(true)}><Plus size={15} /> {t('Nueva conversación')}</Boton>}
+      />
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-3">
-        {/* Lista de conversaciones */}
-        <Card className="flex min-h-0 flex-col p-3 lg:col-span-1">
-          <div className="relative mb-2">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar conversación, transporte o chofer…')} className="w-full pl-8" />
-          </div>
-          <button type="button" onClick={() => setSoloNoLeidos((v) => !v)}
-            className={`mb-2 inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 text-xs font-semibold transition ${soloNoLeidos ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
-            <MessageSquare size={13} /> {t('Solo no leídos')}
-            {totalNoLeidos > 0 && <span className={`grid h-4 min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-bold ${soloNoLeidos ? 'bg-white/25 text-white' : 'bg-rose-500 text-white'}`}>{totalNoLeidos}</span>}
-          </button>
-          <div className="scroll-thin min-h-0 flex-1 space-y-1 overflow-y-auto">
-            {todas.length === 0 ? (
-              <div className="px-2 py-6 text-center text-xs text-slate-400">{soloNoLeidos ? t('No hay mensajes sin leer.') : t('Sin conversaciones. Toca “Nueva conversación”.')}</div>
-            ) : todas.map((c) => (
-              <button key={c.key} onClick={() => setSel(c.key)} className={`flex w-full items-center gap-2 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800">
-                  {c.tipo === 'orden' ? <MessageSquare size={16} /> : c.tipo === 'carrier' ? <Truck size={16} /> : <User size={16} />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`truncate text-sm font-bold text-brand-navy dark:text-slate-100 ${c.tipo === 'orden' ? 'font-mono' : ''}`}>{c.nombre}</span>
-                    {c.tipo === 'orden' && <Badge color={COLOR_EST[c.estado] || 'navy'}>{t(ORDEN_ESTADO_LABEL[c.estado])}</Badge>}
-                    {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
-                  </div>
-                  <div className="truncate text-xs text-slate-400">{c.sub}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        {/* Conversación activa */}
-        <div className="min-h-0 lg:col-span-2">
-          {activa ? (
-            <Card className="flex h-full flex-col p-4">
-              <div className="mb-3 flex items-center gap-2">
-                {activa.tipo === 'orden' ? (
-                  <>
-                    <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{activa.nombre}</span>
-                    <Badge color={COLOR_EST[activa.estado] || 'navy'}>{t(ORDEN_ESTADO_LABEL[activa.estado])}</Badge>
-                  </>
-                ) : (
-                  <>
-                    {activa.tipo === 'carrier' ? <Truck size={16} className="text-amber-500" /> : <User size={16} className="text-amber-500" />}
-                    <span className="font-bold text-brand-navy dark:text-slate-100">{activa.nombre}</span>
-                    <Badge color="slate">{activa.tipo === 'carrier' ? t('Transporte') : t('Chofer')}</Badge>
-                  </>
-                )}
-              </div>
-              <div className="min-h-0 flex-1"><ChatOrden orden={{ id: activa.chatId, numero: activa.nombre }} fill /></div>
-            </Card>
-          ) : (
-            <EstadoVacio titulo={t('Sin conversaciones')} texto={t('Crea una conversación con un transporte o chofer, o chatea desde una orden activa.')} mostrarBoton={false} />
-          )}
-        </div>
-      </div>
-
-      {/* Panel: nueva conversación (buscar transporte o chofer) */}
+      {/* Panel: nueva conversación (buscar cliente/viaje, transporte o chofer) */}
       {nuevo && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-20" onClick={() => setNuevo(false)}>
           <Card className="w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
@@ -174,7 +107,7 @@ export default function Mensajes() {
             </div>
             <div className="relative mb-3">
               <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input autoFocus value={buscarNuevo} onChange={(e) => setBuscarNuevo(e.target.value)} placeholder={t('Buscar transporte o chofer…')} className="w-full pl-8" />
+              <Input autoFocus value={buscarNuevo} onChange={(e) => setBuscarNuevo(e.target.value)} placeholder={t('Buscar cliente/viaje, transporte o chofer…')} className="w-full pl-8" />
             </div>
             <div className="scroll-thin max-h-72 space-y-1 overflow-y-auto">
               {resultadosNuevo.length === 0 ? (
@@ -182,11 +115,11 @@ export default function Mensajes() {
               ) : resultadosNuevo.map((r) => (
                 <button key={r.id} onClick={() => abrirDirecto(r)} className="flex w-full items-center gap-2 rounded-xl border border-transparent p-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800">
                   <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800">
-                    {r.tipo === 'carrier' ? <Truck size={16} /> : <User size={16} />}
+                    {r.tipo === 'carrier' ? <Truck size={16} /> : r.tipo === 'cliente' ? <Building2 size={16} /> : <User size={16} />}
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{r.nombre}</div>
-                    <div className="truncate text-xs text-slate-400">{r.tipo === 'carrier' ? t('Transporte') : `${t('Chofer')}${r.sub ? ` · ${r.sub}` : ''}`}</div>
+                    <div className="truncate text-xs text-slate-400">{r.tipo === 'carrier' ? t('Transporte') : r.tipo === 'cliente' ? `${t('Cliente')} · ${r.sub}` : `${t('Chofer')}${r.sub ? ` · ${r.sub}` : ''}`}</div>
                   </div>
                 </button>
               ))}
@@ -194,6 +127,6 @@ export default function Mensajes() {
           </Card>
         </div>
       )}
-    </div>
+    </>
   )
 }

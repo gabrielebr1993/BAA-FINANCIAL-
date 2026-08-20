@@ -15,7 +15,7 @@ const EMOJIS = ['👍', '👎', '🙏', '👌', '💪', '👏', '🤝', '✌️'
 // ¿El mensaje es solo emojis (para mostrarlo grande, como WhatsApp)?
 const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.length > 0 && x.length <= 8 && !/[0-9a-zA-ZÀ-ɏ]/.test(x) }
 
-export default function ChatOrden({ orden, alto = 340, fill = false }) {
+export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
   const { t } = useLang()
   const { usuario, tenantId } = useBulkAuth()
   const [msgs, setMsgs] = useState([])
@@ -43,7 +43,9 @@ export default function ChatOrden({ orden, alto = 340, fill = false }) {
     try {
       // En chats de ORDEN, marcamos quién puede leerlo (chofer/carrier/cliente).
       // En chats de oficina estos ids no existen → participantes vacío (sin campo).
-      const participantes = [orden.choferId, orden.transportistaId, orden.clienteId].filter(Boolean)
+      // `partProp` permite acotar explícitamente (p. ej. canal cliente↔oficina: solo
+      // el cliente), sin depender de los ids de la orden.
+      const participantes = partProp != null ? partProp.filter(Boolean) : [orden.choferId, orden.transportistaId, orden.clienteId].filter(Boolean)
       await enviarMensaje(tenantId, orden.id, usuario, { texto: t, urgente, ...extra }, participantes)
       setTexto(''); setUrgente(false)
     } finally { setEnviando(false) }

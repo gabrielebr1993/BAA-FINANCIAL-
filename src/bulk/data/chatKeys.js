@@ -15,6 +15,15 @@ export const convChofer = (nombre) => `dm_d_${slugChofer(nombre)}`
 export const convCarrier = (carrierId) => `dm_c_${carrierId}`
 export const esConvDirecta = (id) => typeof id === 'string' && id.startsWith('dm_')
 
+// Chat CLIENTE ↔ OFICINA por orden/viaje. Es un canal APARTE del chat operativo de
+// la orden: aquí solo participan el cliente y el staff (el chofer/transportista NO),
+// para que el cliente se comunique ÚNICAMENTE con el administrador, por viaje.
+//   co_<orderId>
+export const convClienteOrden = (orderId) => `co_${orderId}`
+export const esConvClienteOrden = (id) => typeof id === 'string' && id.startsWith('co_')
+// Orden subyacente de una conversación (co_<id> → <id>; en chats de orden, el propio id).
+export const orderIdDeConv = (id) => (esConvClienteOrden(id) ? id.slice(3) : id)
+
 // Normaliza cualquier marca de tiempo (string ISO, número, Firestore Timestamp,
 // Date) a milisegundos, para ordenar sin depender de `.localeCompare`.
 export const tsMillis = (v) => {
@@ -34,4 +43,26 @@ export const noLeidosPorConv = (mensajes, uid) => {
     if (msg.autorId !== uid && !(msg.leidoPor || []).includes(uid)) m[msg.orderId] = (m[msg.orderId] || 0) + 1
   }
   return m
+}
+
+// Resumen por conversación: último mensaje (ts/texto/autor/rol), no leídos y total.
+// Se usa para pintar cada fila de la lista (vista previa + hora + indicador) sin
+// abrir el chat. `uid` = usuario actual (para contar no leídos ajenos).
+export const resumenPorConversacion = (mensajes, uid) => {
+  const r = {}
+  for (const m of mensajes || []) {
+    const k = m.orderId
+    if (!k) continue
+    const cur = r[k] || { lastTs: '', lastText: '', lastRol: '', lastAutor: '', noLeidos: 0, total: 0 }
+    cur.total += 1
+    if (tsMillis(m.ts) >= tsMillis(cur.lastTs)) {
+      cur.lastTs = m.ts
+      cur.lastAutor = m.autorNombre || ''
+      cur.lastRol = m.autorRol || ''
+      cur.lastText = m.tipo === 'foto' ? '📷' : m.tipo === 'ubicacion' ? '📍' : (m.texto || '')
+    }
+    if (m.autorId !== uid && !(m.leidoPor || []).includes(uid)) cur.noLeidos += 1
+    r[k] = cur
+  }
+  return r
 }

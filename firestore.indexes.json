@@ -44,6 +44,14 @@
       ]
     },
     {
+      "collectionGroup": "bulk_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "participantes", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
       "collectionGroup": "bulk_invoices",
       "queryScope": "COLLECTION",
       "fields": [

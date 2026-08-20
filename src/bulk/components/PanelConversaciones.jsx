@@ -1,0 +1,152 @@
+// ============================================================================
+// BULK · Panel de conversaciones (maestro-detalle) reutilizable para TODOS los
+// perfiles. Recibe `secciones` ya categorizadas (Clientes/Transportistas/Choferes/
+// Administrador…) y pinta:
+//   - Pestañas por sección (si hay más de una), con contador de no leídos.
+//   - Lista rica: nombre, rol, viaje/material, vista previa del último mensaje,
+//     fecha/hora e indicador de no leídos.
+//   - Chat de la conversación seleccionada (reutiliza ChatOrden).
+// Responsive: en móvil muestra la lista y, al elegir, el chat con botón "volver".
+// No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
+// ============================================================================
+import { useEffect, useMemo, useState } from 'react'
+import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield } from 'lucide-react'
+import ChatOrden from './ChatOrden'
+import { tsMillis } from '../data/chatKeys'
+import { BULK_ROLES_LABEL } from '../domain/constants'
+import { Card, Badge, Input, EstadoVacio } from '../../components/ui'
+import { useLang } from '../../i18n'
+
+const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: Shield, orden: MessageSquare }
+
+// Hora/fecha corta para la fila (hoy → hora; otro día → dd/mm).
+function horaCorta(ts) {
+  const ms = tsMillis(ts)
+  if (!ms) return ''
+  const d = new Date(ms)
+  const hoy = new Date()
+  const mismoDia = d.toDateString() === hoy.toDateString()
+  return mismoDia
+    ? d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' })
+}
+
+export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, alturaClass = 'h-[calc(100vh-6.5rem)]' }) {
+  const { t } = useLang()
+  const [tab, setTab] = useState(secciones[0]?.k || '')
+  const [sel, setSel] = useState('')
+  const [buscar, setBuscar] = useState('')
+  const [verChatMovil, setVerChatMovil] = useState(false)
+
+  // Abrir por control externo (p. ej. al iniciar una conversación nueva): salta a su
+  // sección, la selecciona y muestra el chat (también en móvil).
+  useEffect(() => {
+    if (!abrir) return
+    const s = secciones.find((x) => (x.items || []).some((c) => c.key === abrir))
+    if (s) { setTab(s.k); setSel(abrir); setVerChatMovil(true); setBuscar('') }
+  }, [abrir]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const seccion = secciones.find((s) => s.k === tab) || secciones[0] || { items: [] }
+  const items = useMemo(() => {
+    const q = buscar.trim().toLowerCase()
+    return (seccion.items || [])
+      .filter((c) => !q || [c.titulo, c.viaje, c.material, c.carrierNombre, c.lastText].filter(Boolean).some((x) => String(x).toLowerCase().includes(q)))
+      .slice()
+      .sort((a, b) => (b.noLeidos || 0) - (a.noLeidos || 0) || tsMillis(b.lastTs) - tsMillis(a.lastTs))
+  }, [seccion, buscar])
+
+  const activa = items.find((c) => c.key === sel) || items[0] || null
+
+  const elegir = (k) => { setSel(k); setVerChatMovil(true) }
+
+  return (
+    <div className={`flex flex-col ${alturaClass}`}>
+      {(titulo || accion) && (
+        <div className="mb-2 flex items-center gap-2">
+          {titulo && <h2 className="m-0 text-lg font-black text-brand-navy dark:text-slate-100">{titulo}</h2>}
+          {accion && <div className="ml-auto">{accion}</div>}
+        </div>
+      )}
+
+      {/* Pestañas por sección (solo si hay más de una). */}
+      {secciones.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {secciones.map((s) => {
+            const noLeidos = (s.items || []).reduce((a, c) => a + (c.noLeidos || 0), 0)
+            const Icono = ICONO[s.icon] || MessageSquare
+            const on = s.k === tab
+            return (
+              <button key={s.k} type="button" onClick={() => { setTab(s.k); setSel(''); setVerChatMovil(false) }}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
+                <Icono size={15} /> {s.label}
+                {noLeidos > 0 && <span className={`grid h-5 min-w-[20px] place-items-center rounded-full px-1.5 text-[11px] font-bold ${on ? 'bg-white/25 text-white dark:bg-slate-900/25 dark:text-slate-900' : 'bg-rose-500 text-white'}`}>{noLeidos}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-3">
+        {/* Lista de conversaciones */}
+        <Card className={`min-h-0 flex-col p-3 lg:col-span-1 lg:flex ${verChatMovil ? 'hidden lg:flex' : 'flex'}`}>
+          <div className="relative mb-2">
+            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar…')} className="w-full pl-8" />
+          </div>
+          <div className="scroll-thin min-h-0 flex-1 space-y-1 overflow-y-auto">
+            {items.length === 0 ? (
+              <div className="px-2 py-8 text-center text-xs text-slate-400">{seccion.vacio || t('Sin conversaciones.')}</div>
+            ) : items.map((c) => {
+              const Icono = ICONO[c.icon] || MessageSquare
+              return (
+                <button key={c.key} onClick={() => elegir(c.key)} className={`flex w-full items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                  <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${c.noLeidos > 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+                    <Icono size={17} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
+                      {c.rolLabel && <Badge color={c.rolColor || 'slate'}>{c.rolLabel}</Badge>}
+                      <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400">{horaCorta(c.lastTs)}</span>
+                    </div>
+                    {(c.viaje || c.material || c.carrierNombre) && (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        {c.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{c.viaje}</span>}
+                        {c.material && <span className="truncate">{c.material}</span>}
+                        {c.carrierNombre && <span className="inline-flex items-center gap-0.5 truncate text-slate-400"><Truck size={10} /> {c.carrierNombre}</span>}
+                      </div>
+                    )}
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className={`truncate text-xs ${c.noLeidos > 0 ? 'font-semibold text-slate-600 dark:text-slate-200' : 'text-slate-400'}`}>{c.lastText || t('Sin mensajes aún')}</span>
+                      {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </Card>
+
+        {/* Conversación activa */}
+        <div className={`min-h-0 lg:col-span-2 lg:block ${verChatMovil ? 'block' : 'hidden'}`}>
+          {activa ? (
+            <Card className="flex h-full flex-col p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
+                <span className="font-bold text-brand-navy dark:text-slate-100">{activa.titulo}</span>
+                {activa.rolLabel && <Badge color={activa.rolColor || 'slate'}>{activa.rolLabel}</Badge>}
+                {activa.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{activa.viaje}</span>}
+                {activa.material && <span className="text-xs text-slate-400">{activa.material}</span>}
+              </div>
+              <div className="min-h-0 flex-1">
+                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} fill />
+              </div>
+            </Card>
+          ) : (
+            <EstadoVacio titulo={t('Selecciona una conversación')} texto={t('Elige un chat de la lista para ver los mensajes.')} mostrarBoton={false} />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -6,7 +6,8 @@ import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
-import { convChofer, noLeidosPorConv } from '../data/chat'
+import PanelConversaciones from '../components/PanelConversaciones'
+import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, crearConId, where } from '../data/repo'
@@ -88,6 +89,29 @@ export default function ChoferPortal() {
 
   const miConv = convChofer(usuario?.nombre)
   const noLeidosOficina = useMemo(() => noLeidosPorConv(mensajesOficina, usuario?.id)[miConv] || 0, [mensajesOficina, usuario, miConv])
+  // Chats de ORDEN del chofer (con su transportista + oficina), organizados por viaje.
+  // La consulta trae solo los mensajes donde el chofer participa (aislado por reglas).
+  const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
+  const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
+  const noLeidosOrdenes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
+  const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes
+  // Secciones del panel de mensajes: ÓRDENES (por viaje/material, con transporte+oficina)
+  // y ADMINISTRADOR/OFICINA (canal general). Solo mis órdenes; nada de otros choferes.
+  const seccionesMsg = useMemo(() => {
+    const itemsOrd = (ordenes || [])
+      .filter((o) => resumenOrd[o.id] || o.choferId === usuario?.id)
+      .map((o) => {
+        const r = resumenOrd[o.id] || {}
+        return { key: o.id, chatId: o.id, icon: 'orden', titulo: o.numero || t('Viaje'), rolLabel: t('Transporte + Oficina'), rolColor: 'gold', material: o.material || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean) }
+      })
+    const rOfi = noLeidosPorConv(mensajesOficina, usuario?.id) // no da texto; usamos resumen aparte
+    const rOfiRes = resumenPorConversacion(mensajesOficina, usuario?.id)[miConv] || {}
+    const itemsOfi = [{ key: miConv, chatId: miConv, icon: 'admin', titulo: t('Administrador / Oficina'), rolLabel: t('Administrador'), rolColor: 'navy', lastText: rOfiRes.lastText || '', lastTs: rOfiRes.lastTs || '', noLeidos: rOfi[miConv] || 0, participantes: null }]
+    return [
+      { k: 'ordenes', label: t('Órdenes'), icon: 'orden', items: itemsOrd, vacio: t('Aún no tienes chats de órdenes.') },
+      { k: 'oficina', label: t('Administrador'), icon: 'admin', items: itemsOfi, vacio: t('Sin mensajes con la oficina.') },
+    ]
+  }, [ordenes, resumenOrd, mensajesOficina, usuario, miConv, t])
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
@@ -381,10 +405,7 @@ export default function ChoferPortal() {
           )
         })()}
         {tab === 'mensajes' && (
-          <Card className="flex h-[calc(100vh-11rem)] flex-col p-3">
-            <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</span></div>
-            <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convChofer(usuario?.nombre), numero: t('Oficina') }} fill /></div>
-          </Card>
+          <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
         )}
         {tab === 'perfil' && (
           <PerfilChofer usuario={usuario} tenantId={tenantId} miPerfil={miPerfil} miCarrier={miCarrier} miChofer={miChofer} carrierId={carrierId} />
@@ -392,7 +413,7 @@ export default function ChoferPortal() {
       </main>
 
       <nav className="nav-safe fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosOficina }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
+        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosMsgTotal }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
           <button key={it.k} onClick={() => setTab(it.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${tab === it.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
             <span className="relative">
               <it.I size={20} strokeWidth={tab === it.k ? 2.4 : 1.8} />
