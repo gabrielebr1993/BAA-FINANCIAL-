@@ -118,7 +118,8 @@ const PRESET_DISPATCHER = [
 // definimos sobre todo su visibilidad financiera. El aislamiento duro lo imponen
 // las reglas de Firestore sobre bulk_orderPay_*.
 const PRESET_CLIENTE = ['fin.precioCliente']
-const PRESET_TRANSPORTISTA = ['fin.precioTransportista', 'fin.pagoChofer', 'fin.utilidadTransportista']
+// El transportista ve sus órdenes por defecto (el admin puede ocultarlas desde Roles).
+const PRESET_TRANSPORTISTA = ['ordenes.ver', 'fin.precioTransportista', 'fin.pagoChofer', 'fin.utilidadTransportista']
 const PRESET_CHOFER = ['fin.pagoChofer']
 const PRESET_SUPERVISOR = [] // opera liberación, sin visibilidad financiera
 
