@@ -10,6 +10,7 @@ import BulkLayout from './BulkLayout'
 import { puedeVer } from './nav'
 import { Cargando } from '../components/ui'
 const BulkRoles = lazy(() => import('./pages/BulkRoles'))
+const BulkDiagnostico = lazy(() => import('./pages/BulkDiagnostico'))
 import { useLang } from '../i18n'
 
 const BulkDashboard = lazy(() => import('./pages/BulkDashboard'))
@@ -117,6 +118,7 @@ function Interno() {
       <Route path="/bulk/equipos" element={<P perm="equipos.ver"><Equipos /></P>} />
       <Route path="/bulk/usuarios" element={<P perm="usuarios.ver"><BulkUsuarios /></P>} />
       <Route path="/bulk/roles" element={<P perm="roles.gestionar"><BulkRoles /></P>} />
+      <Route path="/bulk/diagnostico" element={<P perm="diagnostico.ver"><BulkDiagnostico /></P>} />
       <Route path="/bulk/demo" element={<P perm="demo.ver"><ModoTest /></P>} />
       <Route path="/bulk/*" element={<Navigate to="/bulk" replace />} />
     </Routes>
