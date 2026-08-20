@@ -16,19 +16,25 @@ export default function BuscadorFacturas({ f, setF, conNombre = false, placehold
   const activo = hayFiltroActivo(f)
   return (
     <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="relative lg:col-span-2">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={f.texto} onChange={set('texto')} placeholder={placeholderTexto || (conNombre ? t('Número o nombre…') : t('Número de factura…'))} className="w-full py-1.5 pl-8 text-sm" />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <div className="mb-0.5 text-[10px] uppercase text-slate-400">{conNombre ? t('Número o nombre') : t('Número')}</div>
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input value={f.texto} onChange={set('texto')} placeholder={placeholderTexto || (conNombre ? t('Número o nombre…') : t('Número de factura…'))} className="w-full py-1.5 pl-8 text-sm" />
+          </div>
         </div>
-        <Input value={f.monto} onChange={set('monto')} inputMode="decimal" placeholder={montoLabel || t('Monto…')} className="py-1.5 text-sm" />
+        <div>
+          <div className="mb-0.5 text-[10px] uppercase text-slate-400">{t('Monto')}</div>
+          <Input value={f.monto} onChange={set('monto')} inputMode="decimal" placeholder={montoLabel || t('Monto…')} className="w-full py-1.5 text-sm" />
+        </div>
         <div>
           <div className="mb-0.5 text-[10px] uppercase text-slate-400">{t('Desde')}</div>
-          <Input type="date" value={f.desde} onChange={set('desde')} className="w-full py-1 text-sm" />
+          <Input type="date" value={f.desde} onChange={set('desde')} className="w-full py-1.5 text-sm" />
         </div>
         <div>
           <div className="mb-0.5 text-[10px] uppercase text-slate-400">{t('Hasta')}</div>
-          <Input type="date" value={f.hasta} onChange={set('hasta')} className="w-full py-1 text-sm" />
+          <Input type="date" value={f.hasta} onChange={set('hasta')} className="w-full py-1.5 text-sm" />
         </div>
       </div>
       {activo && (
