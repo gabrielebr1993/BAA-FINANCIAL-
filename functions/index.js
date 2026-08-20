@@ -153,6 +153,120 @@ exports.repararMisClaims = onCall(async (req) => {
 })
 
 // ============================================================================
+// bulkGrupoOp — operaciones de GRUPOS de chat, validadas 100% en el backend.
+// Un solo callable con `accion`. Reglas de negocio (requisito):
+//   - El CHOFER no puede CREAR grupos (sí puede ser invitado y aceptar).
+//   - Solo el CREADOR o un ADMIN pueden invitar, expulsar, renombrar o disolver.
+//   - Cada invitado acepta/rechaza SU invitación; cada miembro puede SALIR.
+//   - Todos los uids deben pertenecer al MISMO tenant (aislamiento estricto).
+// Los datos del grupo (miembros/invitados/roles/nombres/fotos) se guardan
+// desnormalizados para pintar integrantes con su rol y foto sin más lecturas.
+// data: { accion, grupoId?, nombre?, invitados?:[uid], uid? }
+// ============================================================================
+const _perfilBulk = async (uid) => {
+  const s = await db.collection('bulk_users').doc(uid).get()
+  return s.exists ? s.data() : null
+}
+const _fotoBulk = async (uid) => {
+  try { const s = await db.collection('bulk_driverProfiles').doc(uid).get(); return s.exists ? (s.data().foto || null) : null } catch { return null }
+}
+// Añade a un grupo (en memoria) los datos desnormalizados de un uid del tenant.
+async function _enriquecer(g, uid, tenant) {
+  const p = await _perfilBulk(uid)
+  if (!p || p.tenantId !== tenant) throw new HttpsError('invalid-argument', 'Usuario no pertenece a tu empresa.')
+  g.roles = g.roles || {}; g.nombres = g.nombres || {}; g.fotos = g.fotos || {}
+  g.roles[uid] = p.rol || ''
+  g.nombres[uid] = p.nombre || p.email || 'Usuario'
+  if (!(uid in g.fotos)) g.fotos[uid] = await _fotoBulk(uid)
+}
+
+exports.bulkGrupoOp = onCall(async (req) => {
+  const t = req.auth && req.auth.token
+  const uid = req.auth && req.auth.uid
+  if (!t || !t.bulkTenant || !uid) throw new HttpsError('permission-denied', 'No autorizado.')
+  const tenant = t.bulkTenant
+  const esAdmin = esAdminClaim(t)
+  const { accion, grupoId } = req.data || {}
+  const col = db.collection('bulk_groups')
+  const now = admin.firestore.FieldValue.serverTimestamp()
+
+  const cargar = async () => {
+    if (!grupoId) throw new HttpsError('invalid-argument', 'Falta grupoId.')
+    const s = await col.doc(grupoId).get()
+    if (!s.exists) throw new HttpsError('not-found', 'Grupo no encontrado.')
+    const g = s.data()
+    if (g.tenantId !== tenant) throw new HttpsError('permission-denied', 'Grupo de otra empresa.')
+    return g
+  }
+  const esGestor = (g) => esAdmin || g.creadorId === uid
+
+  if (accion === 'crear') {
+    if (t.bulkRole === 'chofer') throw new HttpsError('permission-denied', 'El chofer no puede crear grupos.')
+    const nombre = String((req.data.nombre || '')).trim().slice(0, 80)
+    if (!nombre) throw new HttpsError('invalid-argument', 'El grupo necesita un nombre.')
+    const invitados = [...new Set((req.data.invitados || []).filter((x) => x && x !== uid))].slice(0, 100)
+    const g = { tenantId: tenant, nombre, creadorId: uid, miembros: [uid], invitados, roles: {}, nombres: {}, fotos: {}, activo: true, creadoEn: now, actualizadoEn: now }
+    await _enriquecer(g, uid, tenant)
+    for (const iu of invitados) await _enriquecer(g, iu, tenant)
+    const ref = await col.add(g)
+    return { grupoId: ref.id }
+  }
+  if (accion === 'invitar') {
+    const g = await cargar()
+    if (!esGestor(g)) throw new HttpsError('permission-denied', 'Solo el creador o un admin invitan.')
+    const nuevos = [...new Set((req.data.invitados || []).filter(Boolean))].filter((x) => !(g.miembros || []).includes(x) && !(g.invitados || []).includes(x))
+    for (const iu of nuevos) await _enriquecer(g, iu, tenant)
+    await col.doc(grupoId).update({ invitados: [...(g.invitados || []), ...nuevos], roles: g.roles, nombres: g.nombres, fotos: g.fotos, actualizadoEn: now })
+    return { ok: true, invitados: nuevos.length }
+  }
+  if (accion === 'aceptar') {
+    const g = await cargar()
+    if (!(g.invitados || []).includes(uid)) throw new HttpsError('permission-denied', 'No tienes una invitación pendiente.')
+    await col.doc(grupoId).update({ miembros: [...(g.miembros || []), uid], invitados: (g.invitados || []).filter((x) => x !== uid), actualizadoEn: now })
+    return { ok: true }
+  }
+  if (accion === 'rechazar') {
+    const g = await cargar()
+    await col.doc(grupoId).update({ invitados: (g.invitados || []).filter((x) => x !== uid), actualizadoEn: now })
+    return { ok: true }
+  }
+  if (accion === 'salir') {
+    const g = await cargar()
+    if (g.creadorId === uid) throw new HttpsError('failed-precondition', 'El creador no puede salir; disuelve el grupo o transfiérelo.')
+    await col.doc(grupoId).update({ miembros: (g.miembros || []).filter((x) => x !== uid), invitados: (g.invitados || []).filter((x) => x !== uid), actualizadoEn: now })
+    return { ok: true }
+  }
+  if (accion === 'expulsar') {
+    const g = await cargar()
+    if (!esGestor(g)) throw new HttpsError('permission-denied', 'Solo el creador o un admin gestionan integrantes.')
+    const quitar = req.data.uid
+    if (!quitar || quitar === g.creadorId) throw new HttpsError('invalid-argument', 'No se puede quitar a ese integrante.')
+    await col.doc(grupoId).update({ miembros: (g.miembros || []).filter((x) => x !== quitar), invitados: (g.invitados || []).filter((x) => x !== quitar), actualizadoEn: now })
+    return { ok: true }
+  }
+  if (accion === 'renombrar') {
+    const g = await cargar()
+    if (!esGestor(g)) throw new HttpsError('permission-denied', 'Solo el creador o un admin renombran.')
+    const nombre = String((req.data.nombre || '')).trim().slice(0, 80)
+    if (!nombre) throw new HttpsError('invalid-argument', 'Nombre inválido.')
+    await col.doc(grupoId).update({ nombre, actualizadoEn: now })
+    return { ok: true }
+  }
+  if (accion === 'disolver') {
+    const g = await cargar()
+    if (!esGestor(g)) throw new HttpsError('permission-denied', 'Solo el creador o un admin disuelven el grupo.')
+    // Borra el grupo y todos sus mensajes (grp_<id>).
+    const msgs = await db.collection('bulk_messages').where('tenantId', '==', tenant).where('orderId', '==', 'grp_' + grupoId).get()
+    const batch = db.batch()
+    msgs.forEach((m) => batch.delete(m.ref))
+    batch.delete(col.doc(grupoId))
+    await batch.commit()
+    return { ok: true }
+  }
+  throw new HttpsError('invalid-argument', 'Acción no reconocida.')
+})
+
+// ============================================================================
 // procesarNotificacion — dispara al crearse un doc en bulk_notificaciones.
 // Envía SMS (Twilio) o Push (FCM) y marca `enviado`.
 // ============================================================================

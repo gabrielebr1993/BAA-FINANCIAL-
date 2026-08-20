@@ -52,6 +52,22 @@
       ]
     },
     {
+      "collectionGroup": "bulk_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "miembros", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "bulk_groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "invitados", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
       "collectionGroup": "bulk_invoices",
       "queryScope": "COLLECTION",
       "fields": [

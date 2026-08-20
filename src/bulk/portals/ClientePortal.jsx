@@ -6,6 +6,8 @@ import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
+import GruposModal from '../components/GruposModal'
+import { useGrupos } from '../data/useGrupos'
 import { convClienteOrden, resumenPorConversacion } from '../data/chat'
 import { useColeccion } from '../data/useColeccion'
 import { where, guardar } from '../data/repo'
@@ -108,6 +110,13 @@ export default function ClientePortal() {
     return [{ k: 'admin', label: t('Administrador'), icon: 'admin', items, vacio: t('Aún no tienes conversaciones. Se crean por viaje cuando escribes al administrador.') }]
   }, [ordenesChat, resumenMsg, clienteId, t])
   const noLeidosMsg = useMemo(() => Object.values(resumenMsg).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenMsg])
+  // Grupos del cliente (puede ser invitado; no crea). Se añaden como sección aparte.
+  const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
+  const [verGrupos, setVerGrupos] = useState(false)
+  const seccionesCliente = useMemo(() => [
+    { k: 'admin', label: t('Administrador'), icon: 'admin', items: seccionesMsg[0]?.items || [], vacio: seccionesMsg[0]?.vacio },
+    { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
+  ], [seccionesMsg, gruposItems, t])
 
   const rechazarFactura = async (r) => {
     const motivo = window.prompt(t('¿Por qué disputas esta factura?'))
@@ -123,7 +132,7 @@ export default function ClientePortal() {
     { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
     { k: 'proyectos', label: t('Proyectos'), icon: Layers },
     { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
-    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg + noLeidosGrupos },
   ]
 
   return (
@@ -226,7 +235,11 @@ export default function ClientePortal() {
             )}
 
             {tab === 'mensajes' && (
-              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
+              <>
+                <PanelConversaciones secciones={seccionesCliente} alturaClass="h-[calc(100vh-11rem)]"
+                  accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
+                {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+              </>
             )}
           </>
         )}

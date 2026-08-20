@@ -13,6 +13,8 @@ import {
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
+import GruposModal from '../components/GruposModal'
+import { useGrupos } from '../data/useGrupos'
 import { convCarrier, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -67,8 +69,12 @@ export default function TransportistaPortal() {
   }, [_ordenesRaw, pagosCarrier, pagosChofer])
 
   const [tab, setTab] = useState('cola')
+  const [verGrupos, setVerGrupos] = useState(false)
+  const { items: gruposItems, grupos, invitaciones } = useGrupos()
   const carrier = carriers.find((c) => c.id === carrierId)
   const choferes = carrier?.choferes || []
+  // Candidatos a grupos del transportista: sus choferes (con cuenta/uid).
+  const candidatosGrupo = useMemo(() => choferes.filter((d) => d.uid).map((d) => ({ uid: d.uid, nombre: d.nombre, rol: 'chofer', foto: d.foto || null })), [choferes])
   const config = configs.find((c) => c.id === carrierId) || {}
   const pagoChoferes = config.pagoChoferes || {}
   const flota = config.flota || []
@@ -95,8 +101,9 @@ export default function TransportistaPortal() {
     return [
       { k: 'choferes', label: t('Choferes'), icon: 'chofer', items: itemsChoferes, vacio: t('Sin conversaciones con tus choferes todavía.') },
       { k: 'admin', label: t('Administrador'), icon: 'admin', items: itemsAdmin, vacio: t('Sin mensajes con la oficina.') },
+      { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo.') },
     ]
-  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, t])
+  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, t])
   const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
   // Presencia viva (en línea) por uid de chofer.
@@ -214,7 +221,11 @@ export default function TransportistaPortal() {
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
       {activo === 'mensajes' && (
         usuario?.carrierId
-          ? <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
+          ? <>
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]"
+                accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
+              {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+            </>
           : <Card className="p-4"><span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span></Card>
       )}
     </PortalLayout>

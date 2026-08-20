@@ -366,6 +366,19 @@ service cloud.firestore {
       allow delete: if bAdmin(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && resource.data.autorId == request.auth.uid);
     }
+    // Grupos de chat. Solo los LEEN sus miembros, sus invitados (para ver/aceptar la
+    // invitación) y el admin. TODA escritura (crear/invitar/aceptar/salir/expulsar/
+    // disolver) pasa por la Cloud Function `bulkGrupoOp` (Admin SDK), que valida los
+    // permisos en el backend — el cliente NO puede escribir aquí (requisito 14). Así
+    // un usuario no puede colarse en un grupo ni invitar sin autorización.
+    match /bulk_groups/{id} {
+      allow read: if bSame(resource.data.tenantId) && (
+           bAdmin(resource.data.tenantId)
+        || request.auth.uid in resource.data.miembros
+        || request.auth.uid in resource.data.invitados
+      );
+      allow create, update, delete: if false;
+    }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.

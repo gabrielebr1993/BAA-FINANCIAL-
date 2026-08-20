@@ -10,14 +10,14 @@
 // No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2 } from 'lucide-react'
+import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users } from 'lucide-react'
 import ChatOrden from './ChatOrden'
 import { tsMillis } from '../data/chatKeys'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Card, Badge, Input, EstadoVacio } from '../../components/ui'
 import { useLang } from '../../i18n'
 
-const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: Shield, dispatcher: Shield, supervisor: Shield, orden: MessageSquare, operacion: MessageSquare }
+const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: Shield, dispatcher: Shield, supervisor: Shield, orden: MessageSquare, operacion: MessageSquare, grupo: Users }
 
 // Avatar de una conversación: FOTO real si existe; si no, ícono según su tipo. No
 // inventa imágenes — solo muestra la foto cuando el dato existe en la base.

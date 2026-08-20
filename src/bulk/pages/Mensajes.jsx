@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Search, Plus, Truck, User, Building2, X } from 'lucide-react'
+import { Search, Plus, Truck, User, Building2, X, Users } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { convChofer, convCarrier, convClienteOrden, resumenPorConversacion, eliminarConversacion } from '../data/chat'
+import { esConvGrupo, grupoIdDeConv, disolverGrupo } from '../data/grupos'
+import { useGrupos } from '../data/useGrupos'
 import { conversacionesAdmin } from '../domain/conversaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 import PanelConversaciones from '../components/PanelConversaciones'
+import GruposModal from '../components/GruposModal'
 import { Card, Cargando, Input, Boton } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -19,12 +22,21 @@ export default function Mensajes() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: clientes } = useColeccion('clients')
   const { datos: jobs } = useColeccion('jobs')
+  const { datos: usuarios } = useColeccion('users')
   const { datos: mensajes } = useColeccion('messages')
+  const { items: gruposItems, grupos, invitaciones } = useGrupos()
   const [nuevo, setNuevo] = useState(false)
   const [buscarNuevo, setBuscarNuevo] = useState('')
+  const [verGrupos, setVerGrupos] = useState(false)
   // Conversaciones iniciadas en esta sesión (aún sin mensajes): filas listas para el panel.
   const [directos, setDirectos] = useState([])
   const [abrir, setAbrir] = useState(null)
+
+  // Candidatos a grupos: el admin/staff puede enumerar a todos los usuarios del tenant.
+  const candidatos = useMemo(
+    () => (usuarios || []).filter((u) => u.id !== usuario?.id).map((u) => ({ uid: u.id, nombre: u.nombre || u.email || 'Usuario', rol: u.rol, foto: null })),
+    [usuarios, usuario],
+  )
 
   // Choferes = plantilla de todos los transportes (carrier.choferes).
   const choferes = useMemo(
@@ -50,8 +62,9 @@ export default function Mensajes() {
       { k: 'transportistas', label: t('Transportistas'), icon: 'transportista', items: mezclar(cats.transportistas, 'transportistas'), vacio: t('Sin conversaciones con transportistas.') },
       { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.conductores, 'conductores'), vacio: t('Sin conversaciones con conductores.') },
       { k: 'operaciones', label: t('Operaciones'), icon: 'operacion', items: mezclar(cats.operaciones, 'operaciones'), vacio: t('Sin conversaciones de operaciones (viajes) aún.') },
+      { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo. Toca “Grupos” para crear uno.') },
     ]
-  }, [cats, directos, t])
+  }, [cats, directos, gruposItems, t])
 
   // Buscador de "nueva conversación": transportes + choferes + clientes (por viaje).
   const resultadosNuevo = useMemo(() => {
@@ -89,8 +102,14 @@ export default function Mensajes() {
   }
 
   // Eliminar TODA una conversación de forma permanente ("sin respaldo"). Solo admin.
+  // Si es un GRUPO, se disuelve (borra grupo + mensajes) vía la función de backend.
   const eliminarConv = async (item) => {
     if (!item?.chatId) return
+    if (esConvGrupo(item.chatId)) {
+      if (!window.confirm(t('¿Disolver este grupo? Se borrará para todos sus integrantes y no se puede deshacer.'))) return
+      try { await disolverGrupo(grupoIdDeConv(item.chatId)) } catch { /* noop */ }
+      return
+    }
     if (!window.confirm(t('¿Estás seguro de que deseas eliminar esta conversación? Se borrará de forma permanente para todos y no se puede deshacer.'))) return
     setDirectos((s) => s.filter((d) => d.key !== item.key))
     try { await eliminarConversacion(tenantId, item.chatId) } catch { /* noop */ }
@@ -105,7 +124,10 @@ export default function Mensajes() {
         abrir={abrir}
         titulo={t('Mensajes')}
         onEliminarConversacion={eliminarConv}
-        accion={<Boton variant="gold" className="px-3 py-1.5 text-sm" onClick={() => setNuevo(true)}><Plus size={15} /> {t('Nueva conversación')}</Boton>}
+        accion={<div className="flex items-center gap-2">
+          <Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>
+          <Boton variant="gold" className="px-3 py-1.5 text-sm" onClick={() => setNuevo(true)}><Plus size={15} /> {t('Nueva conversación')}</Boton>
+        </div>}
       />
 
       {/* Panel: nueva conversación (buscar cliente/viaje, transporte o chofer) */}
@@ -137,6 +159,10 @@ export default function Mensajes() {
             </div>
           </Card>
         </div>
+      )}
+
+      {verGrupos && (
+        <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatos} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />
       )}
     </>
   )

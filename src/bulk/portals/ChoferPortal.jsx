@@ -7,6 +7,8 @@ import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import PanelConversaciones from '../components/PanelConversaciones'
+import GruposModal from '../components/GruposModal'
+import { useGrupos } from '../data/useGrupos'
 import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
@@ -94,7 +96,9 @@ export default function ChoferPortal() {
   const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
   const noLeidosOrdenes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
-  const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes
+  const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
+  const [verGrupos, setVerGrupos] = useState(false)
+  const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes + noLeidosGrupos
   // Secciones del panel de mensajes: ÓRDENES (por viaje/material, con transporte+oficina)
   // y ADMINISTRADOR/OFICINA (canal general). Solo mis órdenes; nada de otros choferes.
   const seccionesMsg = useMemo(() => {
@@ -110,8 +114,9 @@ export default function ChoferPortal() {
     return [
       { k: 'ordenes', label: t('Órdenes'), icon: 'orden', items: itemsOrd, vacio: t('Aún no tienes chats de órdenes.') },
       { k: 'oficina', label: t('Administrador'), icon: 'admin', items: itemsOfi, vacio: t('Sin mensajes con la oficina.') },
+      { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
     ]
-  }, [ordenes, resumenOrd, mensajesOficina, usuario, miConv, t])
+  }, [ordenes, resumenOrd, mensajesOficina, usuario, miConv, gruposItems, t])
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
@@ -405,7 +410,11 @@ export default function ChoferPortal() {
           )
         })()}
         {tab === 'mensajes' && (
-          <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]" />
+          <>
+            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]"
+              accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
+            {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+          </>
         )}
         {tab === 'perfil' && (
           <PerfilChofer usuario={usuario} tenantId={tenantId} miPerfil={miPerfil} miCarrier={miCarrier} miChofer={miChofer} carrierId={carrierId} />
