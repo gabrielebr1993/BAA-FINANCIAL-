@@ -209,8 +209,6 @@ function TabCola({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta
   const esperando = activas.filter((o) => !o.choferId).sort(orden) // recibidas, sin chofer
   const enProceso = activas.filter((o) => o.choferId).sort(orden)
 
-  if (activas.length === 0) return <EstadoVacio titulo={t('No tienes órdenes en cola')} texto={t('Cuando el dispatcher asigne una orden a tu transporte, aparecerá aquí para que le pongas un chofer.')} mostrarBoton={false} />
-
   const Tarjeta = (o, resaltar) => (
     <Card key={o.id} className={`p-3.5 ${resaltar ? 'border-amber-400 ring-1 ring-amber-300/60 dark:border-amber-500/50 dark:ring-amber-500/30' : ''}`}>
       <div className="flex flex-wrap items-center gap-2">
@@ -243,7 +241,7 @@ function TabCola({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta
         <Badge color={esperando.length ? 'red' : 'slate'}>{esperando.length}</Badge>
       </div>
       {esperando.length === 0
-        ? <Card className="mb-4 p-4 text-sm text-slate-400">{t('Todas tus órdenes recibidas ya tienen chofer asignado.')}</Card>
+        ? <Card className="mb-4 p-4 text-sm text-slate-400">{t('No hay órdenes esperando chofer. Cuando el dispatcher asigne una a tu transporte, aparecerá aquí para que le pongas un chofer.')}</Card>
         : <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{esperando.map((o) => Tarjeta(o, true))}</div>}
 
       {/* En proceso: ya tienen chofer */}
