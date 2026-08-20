@@ -200,43 +200,61 @@ export default function TransportistaPortal() {
 }
 
 // ── Tab Cola: órdenes ACTIVAS afiliadas a su transporte (para despachar choferes) ─
+// Se separan en dos grupos: las RECIÉN recibidas que aún NO tienen chofer (para
+// asignarlo cuanto antes) y las que ya están EN PROCESO con un chofer.
 function TabCola({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }) {
   const activas = ordenes.filter((o) => !FINAL.includes(o.estado))
   const PRIO = { creada: 0, en_cola: 0, notificando: 1, aceptada: 2, en_planta: 3, cargando: 4, en_ruta: 5, en_destino: 6, entregada: 7 }
-  const cola = activas.slice().sort((a, b) => (PRIO[a.estado] ?? 9) - (PRIO[b.estado] ?? 9) || (a.numero || '').localeCompare(b.numero || ''))
-  const sinChofer = cola.filter((o) => !o.choferId).length
+  const orden = (a, b) => (PRIO[a.estado] ?? 9) - (PRIO[b.estado] ?? 9) || (a.numero || '').localeCompare(b.numero || '')
+  const esperando = activas.filter((o) => !o.choferId).sort(orden) // recibidas, sin chofer
+  const enProceso = activas.filter((o) => o.choferId).sort(orden)
 
   if (activas.length === 0) return <EstadoVacio titulo={t('No tienes órdenes en cola')} texto={t('Cuando el dispatcher asigne una orden a tu transporte, aparecerá aquí para que le pongas un chofer.')} mostrarBoton={false} />
 
+  const Tarjeta = (o, resaltar) => (
+    <Card key={o.id} className={`p-3.5 ${resaltar ? 'border-amber-400 ring-1 ring-amber-300/60 dark:border-amber-500/50 dark:ring-amber-500/30' : ''}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+        <Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+        <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+      </div>
+      <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.tipoEquipo || '—'}</div>
+      <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} className="text-amber-500" /> {nombrePlanta(o.plantaId) || t('Planta')} → {o.direccionEntrega || '—'}</div>
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-1.5 text-xs dark:bg-slate-800/60">
+        <span className="text-slate-500 dark:text-slate-400">{t('Recibes')} <b className="text-brand-navy dark:text-slate-100">{money(o.precioTransportista)}</b></span>
+        <span className="font-bold text-emerald-600 dark:text-emerald-400">{money((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0))}</span>
+      </div>
+      {o.choferNombre && <div className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Chofer:')} {o.choferNombre}</div>}
+      {choferes.length > 0 ? (
+        <Select className="mt-2 w-full py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
+          <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
+          {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </Select>
+      ) : <div className="mt-2 text-[11px] text-slate-400">{t('Agrega choferes en “Mis choferes” para asignarlos.')}</div>}
+    </Card>
+  )
+
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge color="gold">{cola.length} {t('en curso')}</Badge>
-        {sinChofer > 0 && <Badge color="red">{sinChofer} {t('sin chofer')}</Badge>}
+      {/* Esperando chofer: recién recibidas, sin chofer → asignar cuanto antes */}
+      <div className="mb-2 flex items-center gap-2">
+        <Radio size={16} className="text-amber-500" />
+        <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Esperando chofer')}</h3>
+        <Badge color={esperando.length ? 'red' : 'slate'}>{esperando.length}</Badge>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {cola.map((o) => (
-          <Card key={o.id} className={`p-3.5 ${!o.choferId ? 'border-amber-300 dark:border-amber-500/40' : ''}`}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-              <Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
-              <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
-            </div>
-            <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.tipoEquipo || '—'}</div>
-            <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} className="text-amber-500" /> {nombrePlanta(o.plantaId) || t('Planta')} → {o.direccionEntrega || '—'}</div>
-            <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-1.5 text-xs dark:bg-slate-800/60">
-              <span className="text-slate-500 dark:text-slate-400">{t('Recibes')} <b className="text-brand-navy dark:text-slate-100">{money(o.precioTransportista)}</b></span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{money((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0))}</span>
-            </div>
-            {choferes.length > 0 ? (
-              <Select className="mt-2 w-full py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
-                <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
-                {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </Select>
-            ) : <div className="mt-2 text-[11px] text-slate-400">{t('Agrega choferes en “Mis choferes” para asignarlos.')}</div>}
-          </Card>
-        ))}
+      {esperando.length === 0
+        ? <Card className="mb-4 p-4 text-sm text-slate-400">{t('Todas tus órdenes recibidas ya tienen chofer asignado.')}</Card>
+        : <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{esperando.map((o) => Tarjeta(o, true))}</div>}
+
+      {/* En proceso: ya tienen chofer */}
+      <div className="mb-2 flex items-center gap-2">
+        <Truck size={16} className="text-amber-500" />
+        <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En proceso')}</h3>
+        <Badge color="gold">{enProceso.length}</Badge>
       </div>
+      {enProceso.length === 0
+        ? <Card className="p-4 text-sm text-slate-400">{t('Ninguna orden en proceso por ahora.')}</Card>
+        : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{enProceso.map((o) => Tarjeta(o, false))}</div>}
     </>
   )
 }
