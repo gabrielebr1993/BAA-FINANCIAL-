@@ -4,7 +4,7 @@
 // setTimeout que el navegador congela al minimizar).
 import { useEffect, useRef } from 'react'
 
-export function useInactividad(onIdle, { minutos = 10, activo = true } = {}) {
+export function useInactividad(onIdle, { minutos = 30, activo = true } = {}) {
   const ultima = useRef(Date.now())
   const disparado = useRef(false)
   useEffect(() => {

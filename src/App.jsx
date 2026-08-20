@@ -74,7 +74,7 @@ function PortalPage({ children }) {
 // de cierre forzado que emite el dueño en authSignals/{companyId}.
 function SesionGuard() {
   const { user, companyId, cerrarSesion } = useAuth()
-  useInactividad(cerrarSesion, { minutos: 10, activo: !!user })
+  useInactividad(cerrarSesion, { minutos: 30, activo: !!user })
   const inicio = useRef(Date.now())
   useEffect(() => {
     if (!companyId || !user) return
