@@ -151,19 +151,20 @@ export default function ChoferPerfil() {
       <Card className="mb-4 overflow-hidden p-0">
         <div className="h-24 bg-gradient-to-r from-amber-500 via-amber-600 to-brand-navy" />
         <div className="px-5 pb-5">
-          <div className="-mt-12 flex flex-wrap items-end gap-4">
-            <div className="relative">
-              {(perfilDriver?.foto || rosterChofer?.foto)
-                ? <img src={perfilDriver?.foto || rosterChofer.foto} alt={nombre} onClick={() => setZoomFoto(perfilDriver?.foto || rosterChofer.foto)} title={t('Ver foto en grande')} className="h-24 w-24 flex-shrink-0 cursor-zoom-in rounded-full border-4 border-white object-cover shadow-lg transition hover:brightness-95 dark:border-slate-900" />
-                : <div className="grid h-24 w-24 flex-shrink-0 place-items-center rounded-full border-4 border-white bg-brand-navy text-4xl font-black text-white shadow-lg dark:border-slate-900">{(nombre || '?').charAt(0).toUpperCase()}</div>}
-              <label className="absolute bottom-0 right-0 grid h-8 w-8 cursor-pointer place-items-center rounded-full border-2 border-white bg-amber-500 text-slate-900 shadow dark:border-slate-900" title={t('Cambiar foto')}>
-                {subiendo ? <Spinner /> : <Camera size={15} />}
-                <input type="file" accept="image/*" onChange={subirFoto} className="hidden" disabled={subiendo} />
-              </label>
-            </div>
-            <div className="pb-1">
+          <div className="relative -mt-12 inline-block">
+            {(perfilDriver?.foto || rosterChofer?.foto)
+              ? <img src={perfilDriver?.foto || rosterChofer.foto} alt={nombre} onClick={() => setZoomFoto(perfilDriver?.foto || rosterChofer.foto)} title={t('Ver foto en grande')} className="h-20 w-20 cursor-zoom-in rounded-2xl border-4 border-white object-cover shadow-lg transition hover:brightness-95 dark:border-slate-900" />
+              : <div className="grid h-20 w-20 place-items-center rounded-2xl border-4 border-white bg-brand-navy text-3xl font-black text-white shadow-lg dark:border-slate-900">{(nombre || '?').charAt(0).toUpperCase()}</div>}
+            <label className="absolute bottom-0 right-0 grid h-7 w-7 cursor-pointer place-items-center rounded-full border-2 border-white bg-amber-500 text-slate-900 shadow dark:border-slate-900" title={t('Cambiar foto')}>
+              {subiendo ? <Spinner /> : <Camera size={14} />}
+              <input type="file" accept="image/*" onChange={subirFoto} className="hidden" disabled={subiendo} />
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="m-0 text-xl font-black text-brand-navy dark:text-slate-100">{nombre}</h1>
+                <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{nombre}</h1>
                 {activo != null && <Badge color={activo ? 'green' : 'slate'}>{activo ? t('Activo') : t('Inactivo')}</Badge>}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
@@ -173,7 +174,7 @@ export default function ChoferPerfil() {
                 {primeraOrden && <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {t('Desde')} {fechaCorta(primeraOrden)}</span>}
               </div>
             </div>
-            <div className="ml-auto flex flex-col items-end gap-1.5 pb-1">
+            <div className="flex flex-col items-end gap-1.5">
               <div className="flex items-center gap-1.5">
                 {rating != null ? (
                   <>
