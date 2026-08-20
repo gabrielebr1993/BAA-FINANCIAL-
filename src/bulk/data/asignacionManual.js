@@ -50,3 +50,25 @@ export async function asignarOrdenManual(tenantId, orden, chofer, ctx = {}, opts
   try { enviarPush(tenantId, `chofer:${choferId}`, 'Orden asignada', `Orden ${orden.numero} — ${orden.pesoEstimado ?? ''} ton ${orden.tipoEquipo ? `(${orden.tipoEquipo})` : ''}`) } catch { /* noop */ }
   try { await auditar(tenantId, { usuario: ctx.usuario?.email, rol: ctx.rol, accion: prev ? 'transferir_orden' : 'asignar_manual', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre || choferId}${prev ? ' (transferida)' : ''}` }) } catch { /* noop */ }
 }
+
+// Asigna la orden a un TRANSPORTE (carrier) SIN chofer: cae en la Cola de ese
+// transporte, grupo "Esperando chofer", para que él le ponga uno de sus choferes.
+// El motor automático NO la toca mientras tenga transportistaId (respeta al carrier).
+export async function asignarOrdenATransporte(tenantId, orden, carrierId, ctx = {}) {
+  if (!carrierId) throw new Error('Transporte sin identificador')
+  const prev = orden.choferId
+  if (prev) { try { await liberar(prev) } catch { /* noop */ } } // suelta al chofer anterior
+  await guardar('orders', orden.id, {
+    estado: E.EN_COLA,
+    transportistaId: carrierId,
+    choferId: null,
+    choferNombre: null,
+    asignadoTransporte: true,   // marca: la maneja el transporte (el matcher la respeta)
+    asignacionManual: false,
+    asignacionExpira: null,
+  })
+  // Fija al dueño (transporte) en el doc de pago del carrier (importes ya guardados).
+  try { await asignarPagos(tenantId, orden.id, { transportistaId: carrierId, numero: orden.numero }) } catch { /* noop */ }
+  try { enviarPush(tenantId, `carrier:${carrierId}`, 'Nueva orden para tu transporte', `Orden ${orden.numero} — asígnale un chofer`) } catch { /* noop */ }
+  try { await auditar(tenantId, { usuario: ctx.usuario?.email, rol: ctx.rol, accion: 'asignar_transporte', entidad: 'orden', entidadId: orden.id, detalle: `→ transporte ${carrierId}` }) } catch { /* noop */ }
+}

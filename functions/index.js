@@ -367,7 +367,9 @@ async function matchTenant(tenantId) {
   ])
   const now = Date.now()
   const cola = ordSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    .filter((o) => PENDIENTES.includes(o.estado))
+    // No tocar las que ya están asignadas a un transporte (transportistaId): ese
+    // carrier les pone un chofer desde su Cola. El matcher solo reparte las libres.
+    .filter((o) => PENDIENTES.includes(o.estado) && !o.transportistaId)
     .sort((a, b) => tsMs(a.creadoEn || a.numero) - tsMs(b.creadoEn || b.numero))
   if (!cola.length) return
   const libres = presSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => presenciaViva(p, now))

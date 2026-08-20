@@ -47,7 +47,10 @@ export function useAutoAsignacion() {
     return rosterId ? calcularPagoChofer(orden.precioTransportista, configDeChofer(cfg, rosterId)) : null
   }
 
-  const porAsignar = useMemo(() => ordenes.filter((o) => [E.CREADA, E.EN_COLA].includes(o.estado)), [ordenes])
+  // Solo las que NO están ya asignadas a un transporte. Si un dispatcher se la dio a
+  // un carrier concreto (transportistaId), el motor NO la ofrece a otros: ese transporte
+  // le pone un chofer desde su Cola ("Esperando chofer").
+  const porAsignar = useMemo(() => ordenes.filter((o) => [E.CREADA, E.EN_COLA].includes(o.estado) && !o.transportistaId), [ordenes])
   const emparejando = useMemo(() => ordenes.filter((o) => o.estado === E.NOTIFICANDO), [ordenes])
 
   // Tic lento (5s) solo para vencer ofertas; el emparejado reacciona a los datos.

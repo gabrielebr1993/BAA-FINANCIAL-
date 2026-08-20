@@ -11,7 +11,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
 import { resumenIntentos, INTENTO_LABEL, INTENTO_COLOR } from '../domain/historialAsignacion'
 import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
-import { asignarOrdenManual } from '../data/asignacionManual'
+import { asignarOrdenManual, asignarOrdenATransporte } from '../data/asignacionManual'
 import { liberar } from '../data/presencia'
 import { equipoCompatible, choferDisponible } from '../domain/asignacionAuto'
 import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
@@ -48,6 +48,7 @@ export default function OrdenDetalle() {
   const [accion, setAccion] = useState(null) // 'cancelar' | 'eliminar' | null
   const [menu, setMenu] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [transporteSel, setTransporteSel] = useState('')
 
   const esStaff = ['super_admin', 'admin', 'dispatcher'].includes(rol)
   const esAdmin = ['super_admin', 'admin'].includes(rol)
@@ -237,6 +238,20 @@ export default function OrdenDetalle() {
               <div>
                 <div className="mb-1 text-[11px] uppercase text-slate-400">{orden.choferId ? t('Reasignar / transferir') : t('Asignar a un chofer')}</div>
                 <Boton variant="gold" onClick={() => setAccion('asignar')} className="px-3 py-2 text-sm"><UserPlus size={15} /> {orden.choferId ? t('Transferir orden') : t('Asignar manualmente')}</Boton>
+              </div>
+            )}
+            {/* Asignar a un TRANSPORTE (sin chofer): cae en la Cola de ese transporte,
+                grupo "Esperando chofer", para que él le ponga uno de sus choferes. */}
+            {![E.CANCELADA, E.ENTREGADA, E.LIBERADA, E.CERRADA].includes(orden.estado) && (
+              <div>
+                <div className="mb-1 text-[11px] uppercase text-slate-400">{t('Asignar a un transporte')}</div>
+                <div className="flex items-center gap-2">
+                  <select value={transporteSel} onChange={(e) => setTransporteSel(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                    <option value="">{t('— Elegir transporte —')}</option>
+                    {carriers.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <Boton variant="ghost" disabled={!transporteSel} onClick={async () => { await asignarOrdenATransporte(tenantId, orden, transporteSel, { usuario, rol }); setTransporteSel('') }} className="px-3 py-2 text-sm"><Truck size={15} /> {t('Asignar a transporte')}</Boton>
+                </div>
               </div>
             )}
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 dark:border-slate-600">
