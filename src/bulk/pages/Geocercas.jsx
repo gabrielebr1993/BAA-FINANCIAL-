@@ -35,7 +35,11 @@ export default function Geocercas() {
   if (cargando) return <Cargando />
   const plantasSinGeocerca = plantas.filter((p) => p.gps && !geocercas.some((g) => g.plantaId === p.id))
   // Marcador de la geocerca que se está creando (para verla antes de guardar).
-  const preview = f.lat && f.lng ? [{ lat: Number(f.lat), lng: Number(f.lng), label: f.nombre || t('Nueva geocerca'), color: COLOR[f.tipo] }] : []
+  // Solo si ambas coordenadas son números finitos (evita NaN → crash del mapa).
+  const latN = Number(f.lat), lngN = Number(f.lng)
+  const preview = Number.isFinite(latN) && Number.isFinite(lngN) && f.lat !== '' && f.lng !== ''
+    ? [{ lat: latN, lng: lngN, label: f.nombre || t('Nueva geocerca'), color: COLOR[f.tipo] }] : []
+  const coordTxt = (v) => (Number.isFinite(Number(v)) ? Number(v).toFixed(5) : '—')
 
   return (
     <div>
@@ -81,7 +85,7 @@ export default function Geocercas() {
           {geocercas.map((g) => (
             <Card key={g.id} className="p-3">
               <div className="flex items-center gap-2"><MapPin size={16} style={{ color: COLOR[g.tipo] || '#c9a24b' }} /><span className="font-semibold text-brand-navy dark:text-slate-100">{g.nombre}</span><Badge color="navy">{g.tipo}</Badge><button onClick={() => window.confirm(`${t('¿Eliminar geocerca')} "${g.nombre}"?`) && eliminar('geofences', g.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button></div>
-              <div className="mt-1 text-xs text-slate-400">{g.lat.toFixed(5)}, {g.lng.toFixed(5)} · {t('radio')} {g.radio} m</div>
+              <div className="mt-1 text-xs text-slate-400">{coordTxt(g.lat)}, {coordTxt(g.lng)} · {t('radio')} {g.radio} m</div>
             </Card>
           ))}
         </div>

@@ -5,6 +5,14 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+// Coordenada válida SOLO si lat/lng son números finitos (evita el crash de Leaflet
+// "Invalid LatLng object: (NaN, NaN)" con datos vacíos, strings o NaN). Devuelve
+// [lat, lng] numérico o null.
+const coord = (lat, lng) => {
+  const a = Number(lat), b = Number(lng)
+  return Number.isFinite(a) && Number.isFinite(b) ? [a, b] : null
+}
+
 // Ícono de CAMIÓN (SVG blanco sobre círculo de color según el estado del chofer/orden).
 const truckHtml = (color) => `<div style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;">`
   + `<div style="width:34px;height:34px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;">`
@@ -38,29 +46,32 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
     const boundsFoco = []; const boundsGeo = []
     // Geocercas SIEMPRE visibles (relleno + etiqueta fija con el nombre).
     for (const g of geocercas) {
-      if (g.lat == null) continue
-      const c = L.circle([g.lat, g.lng], { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.15, weight: 2 }).addTo(m)
+      const xy = coord(g.lat, g.lng)
+      if (!xy) continue
+      const c = L.circle(xy, { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.15, weight: 2 }).addTo(m)
       c.bindTooltip(g.nombre || '', { permanent: false, direction: 'center', className: 'bulk-geo-lbl' })
-      capas.current.push(c); boundsGeo.push([g.lat, g.lng])
+      capas.current.push(c); boundsGeo.push(xy)
     }
-    const ll = puntos.filter((p) => p && p.lat != null).map((p) => [p.lat, p.lng])
+    const ll = puntos.map((p) => p && coord(p.lat, p.lng)).filter(Boolean)
     if (ll.length > 1) { const pl = L.polyline(ll, { color: '#13233f', weight: 4 }).addTo(m); capas.current.push(pl) }
     ll.forEach((x) => boundsFoco.push(x))
     const last = ll[ll.length - 1]
     if (last) { const mk = L.circleMarker(last, { radius: 8, color: '#fff', weight: 2, fillColor: '#f59e0b', fillOpacity: 1 }).addTo(m); mk.bindTooltip('Posición actual'); capas.current.push(mk) }
     // Choferes = CAMIONES. Clic → onMarcador(id) (abre panel en React) o popup.
     for (const mk of marcadores) {
-      if (mk == null || mk.lat == null) continue
+      if (mk == null) continue
+      const xy = coord(mk.lat, mk.lng)
+      if (!xy) continue
       let capa
       if (mk.icon === 'truck') {
-        capa = L.marker([mk.lat, mk.lng], { icon: L.divIcon({ html: truckHtml(mk.color || '#f59e0b'), className: 'bulk-truck-icon', iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -18] }) }).addTo(m)
+        capa = L.marker(xy, { icon: L.divIcon({ html: truckHtml(mk.color || '#f59e0b'), className: 'bulk-truck-icon', iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -18] }) }).addTo(m)
       } else {
-        capa = L.circleMarker([mk.lat, mk.lng], { radius: 8, color: '#fff', weight: 2, fillColor: mk.color || '#f59e0b', fillOpacity: 1 }).addTo(m)
+        capa = L.circleMarker(xy, { radius: 8, color: '#fff', weight: 2, fillColor: mk.color || '#f59e0b', fillOpacity: 1 }).addTo(m)
       }
       capa.bindTooltip(mk.label || '', { permanent: false, direction: 'top' })
       if (mk.id != null && onMarcadorRef.current) capa.on('click', () => onMarcadorRef.current(mk.id))
       else if (mk.popupHtml) capa.bindPopup(mk.popupHtml, { closeButton: true, minWidth: 200 })
-      capas.current.push(capa); boundsFoco.push([mk.lat, mk.lng])
+      capas.current.push(capa); boundsFoco.push(xy)
     }
     // Encuadre: prioriza a los CHOFERES (más cerca). Solo si no hay, usa las geocercas.
     const fit = boundsFoco.length ? boundsFoco : boundsGeo
