@@ -110,7 +110,8 @@ export default function TransportistaPerfil() {
   // Rendimiento de la compañía = promedio de las calificaciones de sus choferes
   // (mejores choferes → mejor compañía). Solo el admin lo ve, para comparar quién rinde mejor.
   const esAdmin = rol === 'admin' || rol === 'super_admin'
-  const calif = useMemo(() => calificacionTransporte({ ordenes: misOrdenes, choferesRoster: carrier?.choferes || [] }), [misOrdenes, carrier])
+  // Cálculo plano (NO hook) porque va después de los early-returns de arriba.
+  const calif = calificacionTransporte({ ordenes: misOrdenes, choferesRoster: carrier?.choferes || [] })
 
   return (
     <div className="w-full">
