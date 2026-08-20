@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings, UserPlus, Wifi, Search } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings, UserPlus, Wifi, Search, History } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { suscribirTrack } from '../data/tracking'
@@ -9,6 +9,7 @@ import { auditar } from '../data/auditoria'
 import { leerFotoReducida } from '../components/foto'
 import { useBulkAuth } from '../BulkAuthContext'
 import { desgloseVisible } from '../domain/pagos'
+import { resumenIntentos, INTENTO_LABEL, INTENTO_COLOR } from '../domain/historialAsignacion'
 import { eliminarOrden, ordenFacturada, puedeCancelar } from '../data/ordenAcciones'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { liberar } from '../data/presencia'
@@ -186,6 +187,36 @@ export default function OrdenDetalle() {
           </div>
         )}
       </Card>
+
+      {/* Recorrido de asignación (auditoría): a quién se ofreció, quién rechazó / dejó
+          vencer el tiempo y quién aceptó. Solo staff. */}
+      {esStaff && orden.intentos?.length > 0 && (() => {
+        const res = resumenIntentos(orden.intentos)
+        const dur = res.tiempoTotalMs != null ? `${Math.floor(res.tiempoTotalMs / 60000)}m ${Math.round((res.tiempoTotalMs % 60000) / 1000)}s` : null
+        return (
+          <Card className="mb-4 p-4">
+            <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><History size={16} className="text-amber-500" /> {t('Recorrido de asignación')}</div>
+            <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+              <Badge color="navy">{t('Intentos')}: {res.total}</Badge>
+              {res.rechazados > 0 && <Badge color="red">{t('Rechazados')}: {res.rechazados}</Badge>}
+              {res.expirados > 0 && <Badge color="slate">{t('Expirados')}: {res.expirados}</Badge>}
+              {res.aceptado && <Badge color="green">{t('Aceptó')}: {res.aceptado.choferNombre}</Badge>}
+              {dur && <Badge color="gold">{t('Tiempo total')}: {dur}</Badge>}
+            </div>
+            <ol className="space-y-2">
+              {orden.intentos.map((it, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-2 border-l-2 border-slate-200 pl-3 text-sm dark:border-slate-700">
+                  <Badge color={INTENTO_COLOR[it.estado] || 'slate'}>{t(INTENTO_LABEL[it.estado] || it.estado)}</Badge>
+                  <span className="font-semibold text-brand-navy dark:text-slate-100">{it.choferNombre || t('Chofer')}</span>
+                  {it.ronda > 1 && <span className="text-[11px] text-slate-400">· {t('ronda')} {it.ronda}</span>}
+                  <span className="ml-auto text-xs text-slate-400">{hora(it.ofrecidoEn) || '—'}{it.respondidoEn ? ` → ${hora(it.respondidoEn)}` : ''}</span>
+                  {it.motivo && <span className="w-full text-[11px] text-slate-400">{t('Motivo')}: {it.motivo}</span>}
+                </li>
+              ))}
+            </ol>
+          </Card>
+        )
+      })()}
 
       {accion === 'asignar' && <ModalAsignar orden={orden} carriers={carriers} presencias={presencias} carrierConfigs={carrierConfigs} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} t={t} />}
       {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}

@@ -22,6 +22,22 @@ const db = admin.firestore()
 const ROLES = ['super_admin', 'admin', 'dispatcher', 'cliente', 'transportista', 'chofer', 'supervisor_planta']
 const esAdminClaim = (t) => t && (t.bulkRole === 'super_admin' || t.bulkRole === 'admin')
 
+// Historial de asignación (mismo modelo que domain/historialAsignacion.js del front):
+// registra cada oferta y su desenlace en el arreglo `intentos` de la orden.
+const INTENTO_MAX = 80
+function agregarOfertaFn(intentos, choferId, choferNombre, ts) {
+  const prev = Array.isArray(intentos) ? intentos : []
+  const ronda = prev.filter((i) => i.choferId === choferId).length + 1
+  return prev.concat([{ choferId: choferId || null, choferNombre: choferNombre || '', ronda, ofrecidoEn: ts || null, respondidoEn: null, estado: 'ofrecida' }]).slice(-INTENTO_MAX)
+}
+function cerrarOfertaFn(intentos, estado, ts) {
+  const out = (Array.isArray(intentos) ? intentos : []).slice()
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].estado === 'ofrecida') { out[i] = Object.assign({}, out[i], { estado, respondidoEn: ts || null }); break }
+  }
+  return out
+}
+
 // Rol válido para asignar: built-in, o rol PERSONALIZADO definido por el tenant en
 // bulk_roles/{tenantId}.roles (RBAC configurable). Los roles personalizados son de
 // tipo staff (usan el panel); las reglas de Firestore los tratan como staff no-admin.
@@ -334,6 +350,7 @@ async function ofrecerTx(orderId, presenceId) {
       estado: 'notificando', transportistaId: p.carrierId || null, choferId: p.uid || presenceId,
       choferNombre: p.nombre || '', asignadoEn: nowIso,
       asignacionExpira: new Date(Date.now() + ESPERA_RESPUESTA_MS).toISOString(),
+      intentos: agregarOfertaFn(o.intentos, p.uid || presenceId, p.nombre || '', nowIso),
       actualizadoEn: FieldValue.serverTimestamp(),
     })
     tx.set(pref, { ordenId: orderId, estado: 'reservado', heartbeat: nowIso, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })
@@ -387,6 +404,7 @@ async function reofertar(orderId) {
     tx.update(oref, {
       estado: 'creada', transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor,
       ultimoRechazo: { por: o.choferNombre || '', motivo: 'timeout', ts: new Date().toISOString() },
+      intentos: cerrarOfertaFn(o.intentos, 'expirada', new Date().toISOString()),
       actualizadoEn: FieldValue.serverTimestamp(),
     })
     return { tenantId: o.tenantId, uid }

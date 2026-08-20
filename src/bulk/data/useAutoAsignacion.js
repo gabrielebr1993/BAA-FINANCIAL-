@@ -14,6 +14,7 @@ import { auditar } from './auditoria'
 import { asignarPagos, liberarPagosAsignacion } from './ordenPagos'
 import { enviarPush } from '../integraciones/notificaciones'
 import { emparejar, ofertaVencida, ESPERA_RESPUESTA_MS, enriquecerConRoster } from '../domain/asignacionAuto'
+import { agregarOferta, cerrarOferta } from '../domain/historialAsignacion'
 import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 
@@ -57,6 +58,7 @@ export function useAutoAsignacion() {
     await guardar('orders', orden.id, {
       estado: E.NOTIFICANDO, transportistaId: chofer.carrierId, choferId: chofer.uid, choferNombre: chofer.nombre,
       asignadoEn: iso(), asignacionExpira: new Date(Date.now() + ESPERA_RESPUESTA_MS).toISOString(),
+      intentos: agregarOferta(orden.intentos, { choferId: chofer.uid, choferNombre: chofer.nombre, ts: iso() }),
     })
     await reservar(chofer.uid, orden.id)
     // Inc.2: fija al dueño (transportista/chofer) en los docs de pago; los importes
@@ -74,6 +76,8 @@ export function useAutoAsignacion() {
     await guardar('orders', orden.id, {
       estado: E.CREADA, transportistaId: null, choferId: null, asignacionExpira: null,
       rechazadoPor, ultimoRechazo: { por: orden.choferNombre || '', motivo, ts: iso() },
+      // timeout/reencolar = no aceptación → se cierra la oferta como "expirada".
+      intentos: cerrarOferta(orden.intentos, 'expirada', iso()),
     })
     if (uid) await liberar(uid)
     // Inc.2: al liberar, quita solo al dueño en los docs de pago (conserva importes).

@@ -11,6 +11,7 @@ import { asignarPagos } from './ordenPagos'
 import { enviarPush } from '../integraciones/notificaciones'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 import { auditar } from './auditoria'
+import { agregarOferta } from '../domain/historialAsignacion'
 
 const iso = () => new Date().toISOString()
 
@@ -38,6 +39,8 @@ export async function asignarOrdenManual(tenantId, orden, chofer, ctx = {}, opts
     asignacionManual: true,
     // Al reasignar a mano, no arrastramos el veto anterior: damos vía libre.
     rechazadoPor: choferId ? (orden.rechazadoPor || []).filter((u) => u !== choferId) : (orden.rechazadoPor || []),
+    // Historial: registra la oferta manual (marca "manual" en el motivo del intento).
+    intentos: agregarOferta(orden.intentos, { choferId, choferNombre: `${chofer.nombre || choferId} (manual)`, ts: iso() }),
   })
 
   // Si está en línea, lo reservamos para que salga de la cola de disponibles.

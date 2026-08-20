@@ -15,6 +15,7 @@ import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/co
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { puedeMarcarLlegada, geocercaObjetivo, distanciaM, dentroGeocerca } from '../domain/geo'
 import { evaluarLiberacion, liberacionAutomatica } from '../domain/liberacion'
+import { cerrarOferta } from '../domain/historialAsignacion'
 import { tsMillis } from '../data/chatKeys'
 import { conectar, desconectar, latir, ocupar, liberar, reportarUbicacion } from '../data/presencia'
 import { leerFotoReducida } from '../components/foto'
@@ -425,7 +426,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
     setOcupado(true)
     onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
     try {
-      await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, asignacionExpira: null, asignacionManual: false, hitos: { ...(orden.hitos || {}), tomada: ahora() } })
+      await guardar('orders', orden.id, { choferId: usuario.id, choferNombre: usuario.nombre, estado: E.ACEPTADA, asignacionExpira: null, asignacionManual: false, hitos: { ...(orden.hitos || {}), tomada: ahora() }, intentos: cerrarOferta(orden.intentos, 'aceptada', ahora()) })
       await ocupar(usuario.id, orden.id) // salgo de la cola de disponibles
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_acepta', entidad: 'orden', entidadId: orden.id })
     } catch (e) {
@@ -447,7 +448,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
       // no vuelva a "engancharse" por nombre.
       const misIds = [usuario.id, miChofer?.id, usuario.nombre].filter(Boolean)
       const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), ...misIds])]
-      await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() } })
+      await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() }, intentos: cerrarOferta(orden.intentos, 'rechazada', ahora(), { motivo: m }) })
       await liberar(usuario.id) // vuelvo al final de la cola de en línea
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
       // esTimeout = no respondió a tiempo (no cuenta como rechazo voluntario).
