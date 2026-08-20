@@ -132,6 +132,17 @@ exports.repararMisClaims = onCall(async (req) => {
     if (!yaSuper.empty) throw new HttpsError('failed-precondition', 'Tu usuario no tiene perfil. Pide a un administrador que te cree.')
     perfil = { nombre: auth.token.name || 'Super Admin', email, rol: 'super_admin', tenantId: 't_' + uid.slice(0, 10).toLowerCase(), activo: true, empresa: 'B&A American group', creadoEn: admin.firestore.FieldValue.serverTimestamp() }
   }
+  // CHOFER: el carrier AUTORITATIVO es el del ROSTER que lo contiene (por uid). Así,
+  // si el claim/perfil quedó con un carrierId desalineado, se corrige al carrier real
+  // y su presencia/órdenes vuelven a coincidir con las de su transportista.
+  if ((perfil.rol || '') === 'chofer' && perfil.tenantId) {
+    try {
+      const cs = await db.collection('bulk_carriers').where('tenantId', '==', perfil.tenantId).get()
+      let carrierReal = null
+      cs.forEach((d) => { const ch = (d.data().choferes || []); if (ch.some((x) => x && x.uid === uid)) carrierReal = d.id })
+      if (carrierReal) perfil.carrierId = carrierReal
+    } catch (e) { /* noop */ }
+  }
   // Refleja el perfil bajo el uid actual y aplica los claims al token.
   await usersCol.doc(uid).set(perfil, { merge: true })
   const claims = { bulkTenant: perfil.tenantId, bulkRole: perfil.rol || 'super_admin' }

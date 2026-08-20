@@ -48,12 +48,12 @@ const capturarGPS = () => new Promise((res) => {
 
 export default function ChoferPortal() {
   const { t } = useLang()
-  const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
+  const { usuario, cerrarSesion, tenantId, rol, repararPermisos } = useBulkAuth()
   const navigate = useNavigate()
   const { datos: carriers } = useColeccion('carriers')
-  // carrierId EFECTIVO: el del login y, si no lo trae, el del transporte donde
-  // aparezco en la plantilla (por nombre). Así las órdenes llegan aunque la cuenta
-  // no tenga el claim de carrier.
+  // carrierId EFECTIVO: el del login (claim) y, si no lo trae, el del transporte donde
+  // aparezco en la plantilla (por nombre). El claim debe coincidir con las reglas de
+  // Firestore, por eso NO se sustituye por el del roster (rompería la consulta).
   const _norm = (s) => (s || '').trim().toLowerCase()
   const _miCarrierBoot = carriers.find((c) => (c.choferes || []).some((d) => _norm(d.nombre) === _norm(usuario?.nombre)))
   const carrierId = usuario?.carrierId || _miCarrierBoot?.id || null
@@ -112,6 +112,18 @@ export default function ChoferPortal() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miCarrier?.id, miChofer?.id, usuario?.id])
+  // AUTO-REPARACIÓN de acceso: si mi claim `carrierId` NO coincide con el id del
+  // transporte cuyo roster me contiene, mis órdenes/presencia usan un carrier distinto
+  // al de mi transportista y no le aparezco. Re-sincronizo el claim desde mi perfil
+  // (una sola vez) para que todo apunte al mismo carrier. Requiere el backend desplegado.
+  const reparoRef = useRef(false)
+  useEffect(() => {
+    if (reparoRef.current) return
+    if (miCarrier?.id && usuario?.carrierId && miCarrier.id !== usuario.carrierId && repararPermisos) {
+      reparoRef.current = true
+      repararPermisos()
+    }
+  }, [miCarrier?.id, usuario?.carrierId, repararPermisos])
   // Al abrir sesión: si estaba desactivado (3 rechazos), me reactiva y me vuelve a
   // poner en la cola de espera (resetea el contador).
   useEffect(() => {
