@@ -6,13 +6,13 @@
 //   Pestañas: Órdenes · Mis choferes · Equipos · Estado de cuenta · Mensajes.
 // ============================================================================
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
-  Truck, LogOut, Grid2x2, ClipboardList, Users, DollarSign, Phone, IdCard,
+  Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin,
 } from 'lucide-react'
 import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
+import PortalLayout from '../components/PortalLayout'
 import { convCarrier, noLeidosPorConv } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
@@ -37,8 +37,7 @@ const FLOTA_ESTADO = { disponible: { c: 'green', l: 'Disponible' }, en_viaje: { 
 
 export default function TransportistaPortal() {
   const { t } = useLang()
-  const { usuario, cerrarSesion, tenantId, rol, crearUsuario } = useBulkAuth()
-  const navigate = useNavigate()
+  const { usuario, tenantId, rol, crearUsuario } = useBulkAuth()
   const carrierId = usuario?.carrierId || '__none__'
 
   // ── Datos (TODO filtrado a MI carrier) ─────────────────────────────────────
@@ -139,62 +138,51 @@ export default function TransportistaPortal() {
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
-  const TABS = [
-    { k: 'ordenes', l: t('Órdenes') }, { k: 'choferes', l: t('Mis choferes') },
-    { k: 'equipos', l: t('Equipos') }, { k: 'cuenta', l: t('Estado de cuenta') },
-    { k: 'mensajes', l: t('Mensajes'), badge: noLeidosOficina },
+  const items = [
+    { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
+    { k: 'choferes', label: t('Mis choferes'), icon: Users },
+    { k: 'equipos', label: t('Equipos'), icon: Truck },
+    { k: 'cuenta', label: t('Estado de cuenta'), icon: Wallet },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosOficina },
   ]
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
-      <header className="head-safe flex items-center gap-2 bg-slate-900 px-4 pb-3 text-white">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={18} /></div>
-        <div><div className="text-sm font-bold">{carrier?.nombre || usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Transportista')}</div></div>
-        <div className="ml-auto"><CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" invertido /></div>
-        <button onClick={() => navigate('/elegir')} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
-        <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10"><LogOut size={18} /></button>
-      </header>
+    <PortalLayout
+      icon={Truck}
+      titulo={carrier?.nombre || usuario?.nombre}
+      subtitulo={t('Transportista')}
+      items={items}
+      activo={tab}
+      onSelect={setTab}
+      campana={<CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" />}
+      aviso={!usuario?.carrierId && (
+        <Aviso tipo="warn" className="mb-3">
+          <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
+          <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
+        </Aviso>
+      )}
+    >
+      {/* KPIs (mismas tarjetas del admin), persistentes arriba del contenido */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
+        <KPI label={t('Viajes hechos')} value={stats.viajes} icon={Truck} accent="green" />
+        <KPI label={t('Choferes en línea')} value={choferesEnLineaN} icon={Users} accent="gold" />
+        <KPI label={t('Tu utilidad')} value={money(stats.util)} icon={DollarSign} accent="blue" />
+      </div>
 
-      <main className="mx-auto max-w-6xl p-4">
-        {!usuario?.carrierId && (
-          <Aviso tipo="warn" className="mb-3">
-            <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
-            <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
-          </Aviso>
-        )}
-
-        {/* KPIs (mismas tarjetas del admin) */}
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
-          <KPI label={t('Viajes hechos')} value={stats.viajes} icon={Truck} accent="green" />
-          <KPI label={t('Choferes en línea')} value={choferesEnLineaN} icon={Users} accent="gold" />
-          <KPI label={t('Tu utilidad')} value={money(stats.util)} icon={DollarSign} accent="blue" />
-        </div>
-
-        {/* Tabs */}
-        <div className="mb-4 flex flex-wrap overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-          {TABS.map((it) => (
-            <button key={it.k} onClick={() => setTab(it.k)} className={`px-4 py-2 text-sm font-medium ${tab === it.k ? 'bg-amber-500 text-slate-900' : 'bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
-              {it.l}
-              {it.badge > 0 && <span className="ml-1.5 inline-grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 align-middle text-[10px] font-bold text-white">{it.badge}</span>}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'ordenes' && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }} />}
-        {tab === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }} />}
-        {tab === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
-        {tab === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
-        {tab === 'mensajes' && (
-          <Card className="flex h-[70vh] flex-col p-3">
-            <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
-            {usuario?.carrierId
-              ? <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convCarrier(carrierId), numero: t('Oficina') }} fill /></div>
-              : <span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span>}
-          </Card>
-        )}
-      </main>
-    </div>
+      {tab === 'ordenes' && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }} />}
+      {tab === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }} />}
+      {tab === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
+      {tab === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
+      {tab === 'mensajes' && (
+        <Card className="flex h-[70vh] flex-col p-3">
+          <div className="mb-2 flex items-center gap-2"><MessageSquare size={16} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mensajes con la oficina')}</h3></div>
+          {usuario?.carrierId
+            ? <div className="min-h-0 flex-1"><ChatOrden orden={{ id: convCarrier(carrierId), numero: t('Oficina') }} fill /></div>
+            : <span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span>}
+        </Card>
+      )}
+    </PortalLayout>
   )
 }
 

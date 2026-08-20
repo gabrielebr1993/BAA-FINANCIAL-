@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Building2, LogOut, Grid2x2, DollarSign, ClipboardList, FileText, Download, PenLine } from 'lucide-react'
+import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
+import PortalLayout from '../components/PortalLayout'
 import { useColeccion } from '../data/useColeccion'
 import { where, guardar } from '../data/repo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
-import { Layers } from 'lucide-react'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import FirmaPad from '../components/FirmaPad'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
@@ -25,8 +24,8 @@ const fechaEntrega = (o) => o?.hitos?.entrega ? new Date(o.hitos.entrega) : null
 
 export default function ClientePortal() {
   const { t } = useLang()
-  const { usuario, cerrarSesion } = useBulkAuth()
-  const navigate = useNavigate()
+  const { usuario } = useBulkAuth()
+  const [tab, setTab] = useState('resumen')
   const clienteId = usuario?.clienteId || '__none__'
   const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('clienteId', '==', clienteId)])
   // Inc.2 Fase 2: el precio del cliente se lee de su doc de pago por audiencia
@@ -90,17 +89,25 @@ export default function ClientePortal() {
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
-  return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
-      <header className="head-safe flex items-center gap-2 bg-slate-900 px-4 pb-3 text-white">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Building2 size={18} /></div>
-        <div><div className="text-sm font-bold">{usuario?.nombre}</div><div className="text-[11px] text-slate-400">{t('Portal del cliente')}</div></div>
-        <div className="ml-auto"><CampanaNotificaciones notifs={notifsC} claveLS="bulk_notif_cliente" invertido /></div>
-        <button onClick={() => navigate('/elegir')} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><Grid2x2 size={18} /></button>
-        <button onClick={cerrarSesion} className="rounded-lg p-2 text-rose-300 hover:bg-white/10"><LogOut size={18} /></button>
-      </header>
+  const facturasPend = facturas.filter((x) => x.estado === 'enviada').length
+  const items = [
+    { k: 'resumen', label: t('Resumen'), icon: LayoutDashboard },
+    { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
+    { k: 'proyectos', label: t('Proyectos'), icon: Layers },
+    { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
+  ]
 
-      <main className="mx-auto max-w-5xl p-4">
+  return (
+    <>
+      <PortalLayout
+        icon={Building2}
+        titulo={usuario?.nombre}
+        subtitulo={t('Portal del cliente')}
+        items={usuario?.clienteId ? items : []}
+        activo={tab}
+        onSelect={setTab}
+        campana={<CampanaNotificaciones notifs={notifsC} claveLS="bulk_notif_cliente" />}
+      >
         {!usuario?.clienteId ? (
           <div className="text-center">
             <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.')} mostrarBoton={false} />
@@ -108,78 +115,87 @@ export default function ClientePortal() {
           </div>
         ) : (
           <>
-            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <KPI label={t('Proyectos activos')} value={stats.proyectosActivos} icon={Layers} accent="navy" />
-              <KPI label={t('Órdenes en curso')} value={stats.activas} icon={ClipboardList} accent="gold" />
-              <KPI label={t('Entregadas')} value={stats.entregadas} icon={ClipboardList} accent="green" />
-              <KPI label={t('Gasto total')} value={money(stats.gasto)} icon={DollarSign} accent="blue" />
-            </div>
-            <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto hoy')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.hoy)}</div></Card>
-              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto esta semana')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.semana)}</div></Card>
-              <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto este mes')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.mes)}</div></Card>
-            </div>
+            {tab === 'resumen' && (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KPI label={t('Proyectos activos')} value={stats.proyectosActivos} icon={Layers} accent="navy" />
+                  <KPI label={t('Órdenes en curso')} value={stats.activas} icon={ClipboardList} accent="gold" />
+                  <KPI label={t('Entregadas')} value={stats.entregadas} icon={ClipboardList} accent="green" />
+                  <KPI label={t('Gasto total')} value={money(stats.gasto)} icon={DollarSign} accent="blue" />
+                </div>
+                <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                  <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto hoy')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.hoy)}</div></Card>
+                  <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto esta semana')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.semana)}</div></Card>
+                  <Card className="p-4"><div className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{t('Gasto este mes')}</div><div className="mt-0.5 text-2xl font-black text-brand-navy dark:text-slate-100">{money(stats.mes)}</div></Card>
+                </div>
+                <Card className="p-4">
+                  <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Costos por material')}</h3>
+                  {stats.porMaterial.length === 0 ? <p className="text-sm text-slate-400">{t('Sin entregas todavía.')}</p> : (
+                    <Tabla columns={[{ key: 'material', label: t('Material') }, { key: 'ton', label: t('Toneladas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
+                      rows={stats.porMaterial.map((m) => ({ ...m, _key: m.material }))}
+                      renderCell={(r, k) => k === 'gasto' ? money(r.gasto) : k === 'ton' ? Math.round(r.ton) : r[k]} />
+                  )}
+                </Card>
+              </>
+            )}
 
-            <Card className="mb-4 p-4">
-              <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Costos por material')}</h3>
-              {stats.porMaterial.length === 0 ? <p className="text-sm text-slate-400">{t('Sin entregas todavía.')}</p> : (
-                <Tabla columns={[{ key: 'material', label: t('Material') }, { key: 'ton', label: t('Toneladas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
-                  rows={stats.porMaterial.map((m) => ({ ...m, _key: m.material }))}
-                  renderCell={(r, k) => k === 'gasto' ? money(r.gasto) : k === 'ton' ? Math.round(r.ton) : r[k]} />
-              )}
-            </Card>
+            {tab === 'proyectos' && (
+              <Card className="p-4">
+                <div className="mb-3 flex items-center gap-2"><Layers size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis proyectos')}</h3></div>
+                {stats.proyectos.length === 0 ? <EstadoVacio titulo={t('Aún no tienes proyectos')} texto={t('Cuando tengas órdenes, se agruparán aquí por proyecto.')} mostrarBoton={false} /> : (
+                  <Tabla columns={[{ key: 'codigo', label: t('Proyecto') }, { key: 'total', label: t('Órdenes'), align: 'right' }, { key: 'enCurso', label: t('En curso'), align: 'right' }, { key: 'entregadas', label: t('Entregadas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
+                    rows={stats.proyectos.map((p) => ({ ...p, _key: p.key }))}
+                    renderCell={(r, k) => {
+                      if (k === 'codigo') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{r.codigo}</span>
+                      if (k === 'enCurso') return r.enCurso > 0 ? <Badge color="gold">{r.enCurso}</Badge> : <span className="text-slate-400">0</span>
+                      if (k === 'gasto') return money(r.gasto)
+                      return r[k]
+                    }} minWidth="min-w-[520px]" />
+                )}
+              </Card>
+            )}
 
-            <Card className="mb-4 p-4">
-              <div className="mb-3 flex items-center gap-2"><Layers size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis proyectos')}</h3></div>
-              {stats.proyectos.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no tienes proyectos.')}</p> : (
-                <Tabla columns={[{ key: 'codigo', label: t('Proyecto') }, { key: 'total', label: t('Órdenes'), align: 'right' }, { key: 'enCurso', label: t('En curso'), align: 'right' }, { key: 'entregadas', label: t('Entregadas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
-                  rows={stats.proyectos.map((p) => ({ ...p, _key: p.key }))}
-                  renderCell={(r, k) => {
-                    if (k === 'codigo') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{r.codigo}</span>
-                    if (k === 'enCurso') return r.enCurso > 0 ? <Badge color="gold">{r.enCurso}</Badge> : <span className="text-slate-400">0</span>
-                    if (k === 'gasto') return money(r.gasto)
-                    return r[k]
-                  }} minWidth="min-w-[520px]" />
-              )}
-            </Card>
+            {tab === 'ordenes' && (
+              <Card className="p-4">
+                <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis órdenes')}</h3>
+                {ordenes.length === 0 ? <EstadoVacio titulo={t('Aún no hay órdenes')} texto={t('Aquí verás tus órdenes con su estado en tiempo real.')} mostrarBoton={false} /> : (
+                  <Tabla columns={[{ key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') }, { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'precioCliente', label: t('Precio'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }]}
+                    rows={ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).slice(0, 100).map((o) => ({ ...o, _key: o.id }))}
+                    renderCell={(o, k) => {
+                      if (k === 'ton') return o.pesoReal ?? o.pesoEstimado
+                      if (k === 'precioCliente') return o.precioCliente != null ? money(o.precioCliente) : '—'
+                      if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                      return o[k]
+                    }} />
+                )}
+              </Card>
+            )}
 
-            <Card className="p-4">
-              <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Órdenes recientes')}</h3>
-              {ordenes.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no hay órdenes.')}</p> : (
-                <Tabla columns={[{ key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') }, { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'precioCliente', label: t('Precio'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }]}
-                  rows={ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).slice(0, 50).map((o) => ({ ...o, _key: o.id }))}
-                  renderCell={(o, k) => {
-                    if (k === 'ton') return o.pesoReal ?? o.pesoEstimado
-                    if (k === 'precioCliente') return o.precioCliente != null ? money(o.precioCliente) : '—'
-                    if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
-                    return o[k]
-                  }} />
-              )}
-            </Card>
-
-            <Card className="mt-4 p-4">
-              <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas')}</h3></div>
-              {facturas.length === 0 ? <p className="text-sm text-slate-400">{t('Aún no tienes facturas.')}</p> : (
-                <Tabla columns={[{ key: 'numero', label: t('Factura') }, { key: 'periodo', label: t('Periodo') }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
-                  rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
-                  renderCell={(r, k) => {
-                    if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
-                    if (k === 'total') return money(r.total)
-                    if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : 'gold'}>{r.estado}</Badge>
-                    if (k === 'acciones') return (
-                      <div className="flex justify-end gap-1.5">
-                        {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> {t('Revisar y firmar')}</Boton>}
-                        {r.estado === 'enviada' && <Boton variant="ghost" onClick={() => rechazarFactura(r)} className="px-2.5 py-1 text-xs">{t('Disputar')}</Boton>}
-                        <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Freight' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
-                      </div>
-                    )
-                    return r[k]
-                  }} />
-              )}
-            </Card>
+            {tab === 'facturas' && (
+              <Card className="p-4">
+                <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas')}</h3></div>
+                {facturas.length === 0 ? <EstadoVacio titulo={t('Aún no tienes facturas')} texto={t('Cuando el administrador emita una factura, aparecerá aquí para revisar y firmar.')} mostrarBoton={false} /> : (
+                  <Tabla columns={[{ key: 'numero', label: t('Factura') }, { key: 'periodo', label: t('Periodo') }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
+                    rows={facturas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
+                    renderCell={(r, k) => {
+                      if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
+                      if (k === 'total') return money(r.total)
+                      if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : 'gold'}>{r.estado}</Badge>
+                      if (k === 'acciones') return (
+                        <div className="flex justify-end gap-1.5">
+                          {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> {t('Revisar y firmar')}</Boton>}
+                          {r.estado === 'enviada' && <Boton variant="ghost" onClick={() => rechazarFactura(r)} className="px-2.5 py-1 text-xs">{t('Disputar')}</Boton>}
+                          <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Freight' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
+                        </div>
+                      )
+                      return r[k]
+                    }} />
+                )}
+              </Card>
+            )}
           </>
         )}
-      </main>
+      </PortalLayout>
 
       {firmando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setFirmando(null)}>
@@ -200,6 +216,6 @@ export default function ClientePortal() {
           </Card>
         </div>
       )}
-    </div>
+    </>
   )
 }
