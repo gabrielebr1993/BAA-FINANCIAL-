@@ -102,7 +102,7 @@ export default function ChoferPortal() {
       .filter((o) => resumenOrd[o.id] || o.choferId === usuario?.id)
       .map((o) => {
         const r = resumenOrd[o.id] || {}
-        return { key: o.id, chatId: o.id, icon: 'orden', titulo: o.numero || t('Viaje'), rolLabel: t('Transporte + Oficina'), rolColor: 'gold', material: o.material || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean) }
+        return { key: o.id, chatId: o.id, icon: 'orden', titulo: o.numero || t('Viaje'), rolLabel: t('Transporte + Oficina'), rolColor: 'gold', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean) }
       })
     const rOfi = noLeidosPorConv(mensajesOficina, usuario?.id) // no da texto; usamos resumen aparte
     const rOfiRes = resumenPorConversacion(mensajesOficina, usuario?.id)[miConv] || {}

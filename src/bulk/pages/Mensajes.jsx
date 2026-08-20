@@ -18,6 +18,7 @@ export default function Mensajes() {
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: clientes } = useColeccion('clients')
+  const { datos: jobs } = useColeccion('jobs')
   const { datos: mensajes } = useColeccion('messages')
   const [nuevo, setNuevo] = useState(false)
   const [buscarNuevo, setBuscarNuevo] = useState('')
@@ -31,10 +32,10 @@ export default function Mensajes() {
     [carriers],
   )
 
-  // Categorización de TODAS las conversaciones con historial en 3 secciones.
+  // Categorización de TODAS las conversaciones con historial en 4 secciones.
   const cats = useMemo(
-    () => conversacionesAdmin({ mensajes, ordenes, carriers, clientes, uid: usuario?.id }),
-    [mensajes, ordenes, carriers, clientes, usuario],
+    () => conversacionesAdmin({ mensajes, ordenes, carriers, clientes, jobs, uid: usuario?.id }),
+    [mensajes, ordenes, carriers, clientes, jobs, usuario],
   )
 
   // Mezcla las conversaciones recién iniciadas (sin mensajes) en su sección, sin duplicar.
@@ -47,7 +48,8 @@ export default function Mensajes() {
     return [
       { k: 'clientes', label: t('Clientes'), icon: 'cliente', items: mezclar(cats.clientes, 'clientes'), vacio: t('Sin conversaciones con clientes.') },
       { k: 'transportistas', label: t('Transportistas'), icon: 'transportista', items: mezclar(cats.transportistas, 'transportistas'), vacio: t('Sin conversaciones con transportistas.') },
-      { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.choferes, 'conductores'), vacio: t('Sin conversaciones con conductores.') },
+      { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.conductores, 'conductores'), vacio: t('Sin conversaciones con conductores.') },
+      { k: 'operaciones', label: t('Operaciones'), icon: 'operacion', items: mezclar(cats.operaciones, 'operaciones'), vacio: t('Sin conversaciones de operaciones (viajes) aún.') },
     ]
   }, [cats, directos, t])
 

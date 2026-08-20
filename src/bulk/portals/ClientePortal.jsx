@@ -103,7 +103,7 @@ export default function ClientePortal() {
     const items = ordenesChat.map((o) => {
       const key = convClienteOrden(o.id)
       const r = resumenMsg[key] || {}
-      return { key, chatId: key, icon: 'admin', titulo: o.numero || t('Viaje'), rolLabel: t('Administrador'), rolColor: 'navy', material: o.material || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [clienteId] }
+      return { key, chatId: key, icon: 'admin', titulo: o.numero || t('Viaje'), rolLabel: t('Administrador'), rolColor: 'navy', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [clienteId] }
     })
     return [{ k: 'admin', label: t('Administrador'), icon: 'admin', items, vacio: t('Aún no tienes conversaciones. Se crean por viaje cuando escribes al administrador.') }]
   }, [ordenesChat, resumenMsg, clienteId, t])

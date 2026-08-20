@@ -17,7 +17,20 @@ import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Card, Badge, Input, EstadoVacio } from '../../components/ui'
 import { useLang } from '../../i18n'
 
-const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: Shield, orden: MessageSquare }
+const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: Shield, dispatcher: Shield, supervisor: Shield, orden: MessageSquare, operacion: MessageSquare }
+
+// Avatar de una conversación: FOTO real si existe; si no, ícono según su tipo. No
+// inventa imágenes — solo muestra la foto cuando el dato existe en la base.
+function Avatar({ foto, icon, nombre, size = 40, resalte = false }) {
+  const Icono = ICONO[icon] || MessageSquare
+  const px = { width: size, height: size }
+  if (foto) return <img src={foto} alt={nombre || ''} style={px} className="flex-shrink-0 rounded-xl border border-slate-200 object-cover dark:border-slate-700" />
+  return (
+    <div style={px} className={`grid flex-shrink-0 place-items-center rounded-xl ${resalte ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+      <Icono size={Math.round(size * 0.42)} />
+    </div>
+  )
+}
 
 // Hora/fecha corta para la fila (hoy → hora; otro día → dd/mm).
 function horaCorta(ts) {
@@ -68,17 +81,17 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         </div>
       )}
 
-      {/* Pestañas por sección (solo si hay más de una). */}
+      {/* Pestañas por sección — ocupan todo el ancho, equilibradas (solo si hay más de una). */}
       {secciones.length > 1 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex flex-wrap gap-1.5 sm:gap-2">
           {secciones.map((s) => {
             const noLeidos = (s.items || []).reduce((a, c) => a + (c.noLeidos || 0), 0)
             const Icono = ICONO[s.icon] || MessageSquare
             const on = s.k === tab
             return (
               <button key={s.k} type="button" onClick={() => { setTab(s.k); setSel(''); setVerChatMovil(false) }}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
-                <Icono size={15} /> {s.label}
+                className={`inline-flex flex-1 basis-[45%] items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold transition sm:basis-0 ${on ? 'bg-brand-navy text-white shadow-sm dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
+                <Icono size={16} /> <span className="truncate">{s.label}</span>
                 {noLeidos > 0 && <span className={`grid h-5 min-w-[20px] place-items-center rounded-full px-1.5 text-[11px] font-bold ${on ? 'bg-white/25 text-white dark:bg-slate-900/25 dark:text-slate-900' : 'bg-rose-500 text-white'}`}>{noLeidos}</span>}
               </button>
             )
@@ -97,22 +110,21 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             {items.length === 0 ? (
               <div className="px-2 py-8 text-center text-xs text-slate-400">{seccion.vacio || t('Sin conversaciones.')}</div>
             ) : items.map((c) => {
-              const Icono = ICONO[c.icon] || MessageSquare
               return (
                 <button key={c.key} onClick={() => elegir(c.key)} className={`flex w-full items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                  <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${c.noLeidos > 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
-                    <Icono size={17} />
-                  </div>
+                  <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={40} resalte={c.noLeidos > 0} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
                       {c.rolLabel && <Badge color={c.rolColor || 'slate'}>{c.rolLabel}</Badge>}
                       <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400">{horaCorta(c.lastTs)}</span>
                     </div>
-                    {(c.viaje || c.material || c.carrierNombre) && (
+                    {(c.viaje || c.material || c.carga || c.operacion || c.carrierNombre) && (
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                         {c.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{c.viaje}</span>}
                         {c.material && <span className="truncate">{c.material}</span>}
+                        {c.carga && <span className="truncate text-slate-400">· {c.carga}</span>}
+                        {c.operacion && <span className="truncate text-slate-400">· {c.operacion}</span>}
                         {c.carrierNombre && <span className="inline-flex items-center gap-0.5 truncate text-slate-400"><Truck size={10} /> {c.carrierNombre}</span>}
                       </div>
                     )}
@@ -131,12 +143,23 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         <div className={`min-h-0 lg:col-span-2 lg:block ${verChatMovil ? 'block' : 'hidden'}`}>
           {activa ? (
             <Card className="flex h-full flex-col p-4">
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
-                <span className="font-bold text-brand-navy dark:text-slate-100">{activa.titulo}</span>
-                {activa.rolLabel && <Badge color={activa.rolColor || 'slate'}>{activa.rolLabel}</Badge>}
-                {activa.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{activa.viaje}</span>}
-                {activa.material && <span className="text-xs text-slate-400">{activa.material}</span>}
+                <Avatar foto={activa.foto} icon={activa.icon} nombre={activa.titulo} size={42} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-bold text-brand-navy dark:text-slate-100">{activa.titulo}</span>
+                    {activa.rolLabel && <Badge color={activa.rolColor || 'slate'}>{activa.rolLabel}</Badge>}
+                  </div>
+                  {(activa.viaje || activa.material || activa.carrierNombre || activa.operacion) && (
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      {activa.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{activa.viaje}</span>}
+                      {activa.operacion && <span className="inline-flex items-center gap-0.5"><MessageSquare size={11} /> {activa.operacion}</span>}
+                      {activa.material && <span>{activa.material}</span>}
+                      {activa.carrierNombre && <span className="inline-flex items-center gap-0.5"><Truck size={11} /> {activa.carrierNombre}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="min-h-0 flex-1">
                 <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} fill />
