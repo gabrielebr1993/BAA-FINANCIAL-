@@ -206,8 +206,8 @@ function TabCola({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta
   const activas = ordenes.filter((o) => !FINAL.includes(o.estado))
   const PRIO = { creada: 0, en_cola: 0, notificando: 1, aceptada: 2, en_planta: 3, cargando: 4, en_ruta: 5, en_destino: 6, entregada: 7 }
   const orden = (a, b) => (PRIO[a.estado] ?? 9) - (PRIO[b.estado] ?? 9) || (a.numero || '').localeCompare(b.numero || '')
-  const esperando = activas.filter((o) => !o.choferId).sort(orden) // recibidas, sin chofer
-  const enProceso = activas.filter((o) => o.choferId).sort(orden)
+  const cola = activas.slice().sort(orden)
+  const sinChofer = cola.filter((o) => !o.choferId).length // recibidas, aún sin chofer
 
   const Tarjeta = (o, resaltar) => (
     <Card key={o.id} className={`p-3.5 ${resaltar ? 'border-amber-400 ring-1 ring-amber-300/60 dark:border-amber-500/50 dark:ring-amber-500/30' : ''}`}>
@@ -234,25 +234,15 @@ function TabCola({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta
 
   return (
     <>
-      {/* Esperando chofer: recién recibidas, sin chofer → asignar cuanto antes */}
-      <div className="mb-2 flex items-center gap-2">
-        <Radio size={16} className="text-amber-500" />
-        <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Esperando chofer')}</h3>
-        <Badge color={esperando.length ? 'red' : 'slate'}>{esperando.length}</Badge>
-      </div>
-      {esperando.length === 0
-        ? <Card className="mb-4 p-4 text-sm text-slate-400">{t('No hay órdenes esperando chofer. Cuando el dispatcher asigne una a tu transporte, aparecerá aquí para que le pongas un chofer.')}</Card>
-        : <div className="mb-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{esperando.map((o) => Tarjeta(o, true))}</div>}
-
-      {/* En proceso: ya tienen chofer */}
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <Truck size={16} className="text-amber-500" />
         <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En proceso')}</h3>
-        <Badge color="gold">{enProceso.length}</Badge>
+        <Badge color="gold">{cola.length}</Badge>
+        {sinChofer > 0 && <Badge color="red">{sinChofer} {t('sin chofer')}</Badge>}
       </div>
-      {enProceso.length === 0
-        ? <Card className="p-4 text-sm text-slate-400">{t('Ninguna orden en proceso por ahora.')}</Card>
-        : <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{enProceso.map((o) => Tarjeta(o, false))}</div>}
+      {cola.length === 0
+        ? <EstadoVacio titulo={t('No tienes órdenes en cola')} texto={t('Cuando el dispatcher asigne una orden a tu transporte, aparecerá aquí para que le pongas un chofer.')} mostrarBoton={false} />
+        : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{cola.map((o) => Tarjeta(o, !o.choferId))}</div>}
     </>
   )
 }
