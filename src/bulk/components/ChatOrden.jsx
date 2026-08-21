@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
+import { esConvGrupo } from '../data/grupos'
 import PerfilRapido from './PerfilRapido'
 import Avatar from './Avatar'
 import { useAvatares } from '../data/useCodigoUsuario'
@@ -23,7 +24,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
   const avatares = useAvatares()
-  const { iniciar, pedirLlamadaGrupo } = useLlamada()
+  const { iniciar, iniciarGrupo, pedirLlamadaGrupo } = useLlamada()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
   const borrarMensaje = async (m) => {
@@ -84,11 +85,16 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   // solo respondieron administradores, la llamada iba al último admin en vez de al titular.
   // Si `contacto` viene definido pero sin uid (empresa sin cuenta), no hay a quién llamar.
   // Si NO viene (canales de oficina genéricos), se cae al autor más reciente distinto a mí.
+  // ¿Es un chat de GRUPO? Entonces las llamadas son SIEMPRE grupales (a todos los
+  // miembros); nunca 1-a-1 al último que escribió.
+  const esGrupo = esConvGrupo(orden?.id)
   let otroAuto = null
   for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otroAuto = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
-  const otro = contacto !== null
-    ? (contacto.uid && contacto.uid !== usuario?.id ? { id: contacto.uid, nombre: contacto.nombre || '', rol: contacto.rol || '' } : null)
-    : otroAuto
+  const otro = esGrupo
+    ? null
+    : (contacto !== null
+        ? (contacto.uid && contacto.uid !== usuario?.id ? { id: contacto.uid, nombre: contacto.nombre || '', rol: contacto.rol || '' } : null)
+        : otroAuto)
   // Todos los OTROS participantes distintos (por autor de mensaje) → para llamada GRUPAL.
   const otrosChat = []
   const vistosChat = new Set()
@@ -100,15 +106,28 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   // Abre el selector de personas (directorio + matriz) preseleccionando al TITULAR del
   // chat (p. ej. el transportista Aguilar) y a quienes ya participaron. Así NO se
   // preselecciona por error al último que escribió (un admin). Garantiza uids REALES.
-  const nombreSala = orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal')
+  // Miembros del grupo (uids reales) = participantes del chat de grupo, menos yo.
+  const miembrosGrupo = esGrupo ? [...new Set((partProp || []).filter((u) => u && u !== usuario?.id))] : []
+  const nombreSala = esGrupo ? (orden?.numero || t('Grupo')) : (orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal'))
   const preseleccionGrupo = [...new Set([contacto?.uid, ...otrosChat.map((x) => x.uid)].filter((u) => u && u !== usuario?.id))]
-  const llamarGrupo = (tipo) => pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, preseleccionGrupo)
+  // En un GRUPO se llama DIRECTO a todos los miembros (sin filtrar por la matriz: el
+  // grupo ya define quién participa). En otros chats se abre el selector de contactos.
+  const llamarGrupo = (tipo) => {
+    if (esGrupo) {
+      if (!miembrosGrupo.length) return
+      iniciarGrupo(miembrosGrupo.map((uid) => ({ uid })), tipo, ctxGrupo, nombreSala)
+    } else {
+      pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, preseleccionGrupo)
+    }
+  }
 
   // Encabezado a mostrar: el titular del chat (con o sin cuenta). Si no hay ninguno
   // (canal vacío sin contacto conocido), no se pinta cabecera.
-  const cab = otro || (contacto && (contacto.nombre || contacto.uid)
-    ? { id: contacto.uid || null, nombre: contacto.nombre || t('Conversación'), rol: contacto.rol || '' }
-    : null)
+  const cab = esGrupo
+    ? { id: null, nombre: orden?.numero || t('Grupo'), rol: '', grupo: true }
+    : (otro || (contacto && (contacto.nombre || contacto.uid)
+        ? { id: contacto.uid || null, nombre: contacto.nombre || t('Conversación'), rol: contacto.rol || '' }
+        : null))
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
       {cab && (
