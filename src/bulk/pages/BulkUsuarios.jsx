@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound, LogOut, Power } from 'lucide-react'
+import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar, guardarCampos } from '../data/repo'
 import { authBulk } from '../firebaseBulk'
@@ -67,6 +67,9 @@ export default function BulkUsuarios() {
   const [alta, setAlta] = useState(false)
   const [objetivoCierre, setObjetivoCierre] = useState('') // '' | 'ALL' | <rol> — a quién cerrar sesión
   const [usuarioCierre, setUsuarioCierre] = useState('')   // uid de la persona específica a cerrar sesión
+  const [editar, setEditar] = useState(null)               // usuario en edición (modal) o null
+  const [edicion, setEdicion] = useState({ nombre: '', email: '', password: '', plantaId: '' })
+  const [guardandoEd, setGuardandoEd] = useState(false)
   // Copia el ID (uid) de un usuario al portapapeles (para pegarlo/buscarlo cómodo).
   const copiarId = async (id) => {
     try { await navigator.clipboard.writeText(id || ''); setMsg({ tipo: 'ok', txt: `${t('ID copiado')}: ${id}` }) } catch { /* noop */ }
@@ -137,20 +140,41 @@ export default function BulkUsuarios() {
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo eliminar (¿backend desplegado?).') }) }
   }
   const toggle = async (u) => { if (u.rol !== BULK_ROLES.SUPER_ADMIN) await guardar('users', u.id, { activo: u.activo === false }) }
-  // Admin fija una nueva contraseña a un usuario (vía endpoint con Admin SDK).
-  const cambiarClave = async (u) => {
+  // ── Editar usuario (nombre, correo, contraseña y planta) ──────────────────
+  // Abre un panel; guarda vía endpoint con Admin SDK (Auth + doc bulk_users).
+  const abrirEditar = (u) => {
     setMsg(null)
-    const nueva = window.prompt(`${t('Nueva contraseña para')} ${u.email}:`)
-    if (nueva == null) return
-    if (String(nueva).length < 6) { setMsg({ tipo: 'error', txt: t('La contraseña debe tener al menos 6 caracteres.') }); return }
+    setEditar(u)
+    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '' })
+  }
+  const setEd = (k) => (e) => setEdicion((s) => ({ ...s, [k]: e.target.value }))
+  const guardarEdicion = async () => {
+    if (!editar) return
+    setMsg(null)
+    const nombre = (edicion.nombre || '').trim()
+    const email = (edicion.email || '').trim().toLowerCase()
+    if (!nombre || !email) { setMsg({ tipo: 'warn', txt: t('El nombre y el correo son obligatorios.') }); return }
+    if (edicion.password && edicion.password.length < 6) { setMsg({ tipo: 'error', txt: t('La contraseña debe tener al menos 6 caracteres.') }); return }
+    const esSupervisor = editar.rol === BULK_ROLES.SUPERVISOR_PLANTA
+    setGuardandoEd(true)
     try {
       const token = await authBulk.currentUser.getIdToken()
-      const r = await fetch('/api/cambiar-clave', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ email: u.email, password: nueva }) })
+      const r = await fetch('/api/editar-usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          uid: editar.id, nombre, email,
+          password: edicion.password || undefined,
+          plantaId: esSupervisor ? (edicion.plantaId || null) : undefined,
+        }),
+      })
       const data = await r.json()
       if (!data.ok) throw new Error(data.error || 'Error')
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cambiar_clave', entidad: 'usuario', detalle: u.email })
-      setMsg({ tipo: 'ok', txt: `${t('Contraseña actualizada para')} ${u.email}.` })
-    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo cambiar la contraseña (¿backend desplegado?).') }) }
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_usuario', entidad: 'usuario', detalle: `${email}${edicion.password ? ' · contraseña' : ''}` })
+      setMsg({ tipo: 'ok', txt: `${t('Usuario actualizado')}: ${email}.` })
+      setEditar(null)
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo actualizar (¿backend desplegado?).') }) }
+    finally { setGuardandoEd(false) }
   }
 
   // ── Cierre de sesión forzado (a todos / por rol / a un usuario) ──────────
@@ -323,7 +347,7 @@ export default function BulkUsuarios() {
             if (key === 'acciones') return (
               <div className="flex justify-end gap-1.5">
                 <Boton variant="ghost" onClick={() => forzarUsuario(row)} className="px-2.5 py-1 text-xs" title={t('Cerrar sesión de este usuario')}><LogOut size={13} /></Boton>
-                <Boton variant="ghost" onClick={() => cambiarClave(row)} className="px-2.5 py-1 text-xs" title={t('Cambiar contraseña')}><KeyRound size={13} /></Boton>
+                <Boton variant="ghost" onClick={() => abrirEditar(row)} className="px-2.5 py-1 text-xs" title={t('Editar usuario')}><Pencil size={13} /></Boton>
                 {row.rol === BULK_ROLES.SUPER_ADMIN ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><ShieldCheck size={13} /> {t('protegido')}</span> : <Boton variant="danger" onClick={() => borrar(row)} className="px-2.5 py-1 text-xs"><Trash2 size={13} /></Boton>}
               </div>
             )
@@ -331,6 +355,50 @@ export default function BulkUsuarios() {
           }}
         />
       </Card>
+
+      {/* ── Modal EDITAR USUARIO ── */}
+      {editar && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !guardandoEd && setEditar(null)}>
+          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-gold/15 text-brand-gold"><Pencil size={17} /></span>
+              <div className="min-w-0">
+                <h3 className="m-0 truncate text-sm font-bold text-brand-navy dark:text-slate-100">{t('Editar usuario')}</h3>
+                <p className="m-0 truncate text-xs text-slate-400">{t('ID')}: {idVisible(editar)} · {label(editar.rol) || editar.rol}</p>
+              </div>
+              <button type="button" onClick={() => !guardandoEd && setEditar(null)} className="ml-auto text-slate-400 hover:text-rose-500"><X size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Nombre')}</div>
+                <Input value={edicion.nombre} onChange={setEd('nombre')} placeholder={t('Nombre')} className="w-full" />
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Correo')}</div>
+                <Input type="email" value={edicion.email} onChange={setEd('email')} placeholder={t('Correo')} className="w-full" />
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Nueva contraseña')}</div>
+                <Input type="password" value={edicion.password} onChange={setEd('password')} placeholder={t('Dejar en blanco para no cambiarla')} className="w-full" />
+                <p className="mt-1 text-[11px] text-slate-400">{t('Mínimo 6 caracteres. Si lo dejas vacío, la contraseña no cambia.')}</p>
+              </div>
+              {editar.rol === BULK_ROLES.SUPERVISOR_PLANTA && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Planta')}</div>
+                  <Select value={edicion.plantaId} onChange={setEd('plantaId')} className="w-full">
+                    <option value="">{t('Sin planta')}</option>
+                    {plantas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Boton variant="ghost" onClick={() => setEditar(null)} disabled={guardandoEd}>{t('Cancelar')}</Boton>
+              <Boton variant="gold" onClick={guardarEdicion} disabled={guardandoEd}><Save size={16} /> {guardandoEd ? t('Guardando…') : t('Guardar cambios')}</Boton>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
