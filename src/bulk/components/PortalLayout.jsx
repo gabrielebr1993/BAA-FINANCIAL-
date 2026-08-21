@@ -55,6 +55,14 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
           </div>
           <button onClick={alternarMenu} title={t('Ocultar menú')} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
+        {/* Mi perfil (arriba, separado de la marca): avatar + ID + nombre. */}
+        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-800/40">
+          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+          <div className="min-w-0">
+            {usuario?.codigo && <UserId codigo={usuario.codigo} />}
+            <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || titulo}</div>
+          </div>
+        </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {items.map((i) => (
             <button
@@ -69,14 +77,6 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
           ))}
         </nav>
         <div className="mt-2 flex-shrink-0 border-t border-slate-200 pt-2 dark:border-slate-800">
-          {/* Mi perfil: avatar (subir/cambiar/quitar), nombre e ID. */}
-          <div className="flex items-center gap-2.5 px-3 py-1.5">
-            <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || titulo}</div>
-              {usuario?.codigo && <UserId codigo={usuario.codigo} />}
-            </div>
-          </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
           <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>
           <button onClick={() => navigate('/elegir')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><Grid2x2 size={16} /> {t('Cambiar módulo')}</button>
