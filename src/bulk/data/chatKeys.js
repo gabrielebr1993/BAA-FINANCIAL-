@@ -15,6 +15,11 @@ export const convChofer = (nombre) => `dm_d_${slugChofer(nombre)}`
 export const convCarrier = (carrierId) => `dm_c_${carrierId}`
 export const esConvDirecta = (id) => typeof id === 'string' && id.startsWith('dm_')
 
+// Chat INTERNO entre personal del STAFF (operaciones): dos uids ordenados.
+//   st_<uidA>__<uidB>
+export const convStaff = (a, b) => `st_${[a, b].filter(Boolean).sort().join('__')}`
+export const esConvStaff = (id) => typeof id === 'string' && id.startsWith('st_')
+
 // Chat CLIENTE ↔ OFICINA por orden/viaje. Es un canal APARTE del chat operativo de
 // la orden: aquí solo participan el cliente y el staff (el chofer/transportista NO),
 // para que el cliente se comunique ÚNICAMENTE con el administrador, por viaje.

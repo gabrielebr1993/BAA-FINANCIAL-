@@ -34,6 +34,7 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     if (d?.nombre) choferPorSlug[slugChofer(d.nombre)] = { nombre: d.nombre, carrierNombre: c.nombre, foto: d.foto || (d.uid && avatares[d.uid]) || null }
   }
   const operacionDe = (o) => (o?.jobId && jobPorId[o.jobId]?.nombre) || ''
+  const usuarioPorId = Object.fromEntries((usuarios || []).map((u) => [u.id, u]))
 
   const out = { clientes: [], transportistas: [], conductores: [], operaciones: [] }
 
@@ -56,6 +57,14 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     if (key.startsWith('dm_d_')) {
       const info = choferPorSlug[key.slice(5)]
       out.conductores.push({ ...base, icon: 'chofer', foto: info?.foto || null, titulo: info?.nombre || 'Conductor', rolLabel: 'Conductor', rolColor: 'navy', carrierNombre: info?.carrierNombre || '' })
+      continue
+    }
+    // Chat INTERNO del staff (operaciones) → sección OPERACIONES.
+    if (key.startsWith('st_')) {
+      const uids = key.slice(3).split('__')
+      const otroId = uids.find((u) => u !== uid) || uids[0]
+      const u = usuarioPorId[otroId]
+      out.operaciones.push({ ...base, icon: 'operacion', foto: avatares[otroId] || null, titulo: u?.nombre || r.lastAutor || 'Staff', rolLabel: 'Staff', rolColor: 'slate', participantes: uids })
       continue
     }
     // Chat OPERATIVO de una orden (viaje/material/carga) → sección CONDUCTORES, porque

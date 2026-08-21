@@ -10,7 +10,7 @@
 // No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users } from 'lucide-react'
+import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus } from 'lucide-react'
 import ChatOrden from './ChatOrden'
 import { tsMillis } from '../data/chatKeys'
 import { BULK_ROLES_LABEL } from '../domain/constants'
@@ -102,6 +102,12 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-3">
         {/* Lista de conversaciones */}
         <Card className={`min-h-0 flex-col p-3 lg:col-span-1 lg:flex ${verChatMovil ? 'hidden lg:flex' : 'flex'}`}>
+          {/* Botón propio de cada pestaña: crear conversación (o grupo) filtrado por su rol. */}
+          {seccion.onNueva && (
+            <button type="button" onClick={seccion.onNueva} className="mb-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-slate-900 transition hover:bg-amber-600">
+              <Plus size={16} /> {seccion.nuevaLabel || t('Nueva conversación')}
+            </button>
+          )}
           <div className="relative mb-2">
             <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar…')} className="w-full pl-8" />
