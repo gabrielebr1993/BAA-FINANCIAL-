@@ -3,7 +3,7 @@
 // sea independiente de la de Package (login separado real).
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore, getFirestore } from 'firebase/firestore'
 import { getFunctions } from 'firebase/functions'
 
 const cfg = {
@@ -26,7 +26,20 @@ export const authBulk = getAuth(appBulk)
 // "Cargando…". Se puede reintroducir más adelante con un enfoque probado por
 // dispositivo. La resiliencia de conexión se mantiene con el banner y con la
 // cola de escrituras en memoria del propio SDK mientras la app está abierta.
-export const dbBulk = getFirestore(appBulk)
+// IMPORTANTE (tiempo real): en algunas redes/navegadores el transporte por defecto
+// de Firestore (WebChannel/streaming) queda BLOQUEADO y las suscripciones onSnapshot
+// dejan de recibir actualizaciones (error "Listen/channel ... access control checks").
+// Eso rompía el tiempo real: mensajes que no llegan al instante y, sobre todo, las
+// LLAMADAS que nunca entran al otro lado. `experimentalAutoDetectLongPolling` detecta
+// ese bloqueo y cambia a long-polling automáticamente → tiempo real fiable en todas
+// las redes. try/catch por si la instancia ya fue inicializada (hot-reload).
+let _db
+try {
+  _db = initializeFirestore(appBulk, { experimentalAutoDetectLongPolling: true })
+} catch (e) {
+  _db = getFirestore(appBulk)
+}
+export const dbBulk = _db
 // Región por defecto us-central1; si despliegas las functions en otra región,
 // cámbiala aquí: getFunctions(appBulk, 'us-east1').
 export const funcsBulk = getFunctions(appBulk)
