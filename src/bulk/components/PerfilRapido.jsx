@@ -9,6 +9,7 @@ import { X, Phone, ExternalLink, Video } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useLlamada } from './LlamadaProvider'
+import { UserIdDeUid } from './UserId'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Badge } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -58,6 +59,8 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
             </div>
             {autor?.rol && <div className="mt-1"><Badge color={COLOR_ROL[autor.rol] || 'slate'}>{t(BULK_ROLES_LABEL[autor.rol]) || autor.rol}</Badge></div>}
             {infoChofer?.carrierNombre && <div className="mt-1 text-xs text-slate-400">{infoChofer.carrierNombre}</div>}
+            {/* ID único del usuario — solo visible para admin o el propio usuario (reglas). */}
+            <div className="mt-1"><UserIdDeUid uid={autor?.id} /></div>
           </div>
         </div>
 

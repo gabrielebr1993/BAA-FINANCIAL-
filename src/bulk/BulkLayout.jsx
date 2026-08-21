@@ -10,6 +10,7 @@ import { useColeccion } from './data/useColeccion'
 import { noLeidosPorConv } from './data/chat'
 import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import CambiarClave from './components/CambiarClave'
+import { UserId } from './components/UserId'
 import IndicadorConexion from './components/IndicadorConexion'
 import NotificacionesCentro from './components/NotificacionesCentro'
 import { KeyRound } from 'lucide-react'
@@ -73,6 +74,7 @@ export default function BulkLayout({ children }) {
           <div className="px-3 py-1 text-xs">
             <div className="font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || usuario?.email}</div>
             <div className="text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
+            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
           </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
           <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>

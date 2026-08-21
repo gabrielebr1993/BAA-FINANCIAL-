@@ -8,6 +8,7 @@ import { guardar } from '../data/repo'
 import { tsMillis } from '../data/chatKeys'
 import { perfilDeChofer, fechaOrden } from '../domain/perfilChofer'
 import { leerFotoReducida } from '../components/foto'
+import { UserIdDeUid } from '../components/UserId'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
@@ -169,6 +170,7 @@ export default function ChoferPerfil() {
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                 <span className="inline-flex items-center gap-1"><User size={12} /> {t('Chofer')}</span>
+                {rosterChofer?.uid && <UserIdDeUid uid={rosterChofer.uid} />}
                 {rosterChofer?.telefono && <span className="inline-flex items-center gap-1"><Phone size={11} /> {rosterChofer.telefono}</span>}
                 {rosterChofer?.licencia && <span className="inline-flex items-center gap-1"><IdCard size={11} /> {rosterChofer.licencia}</span>}
                 {primeraOrden && <span className="inline-flex items-center gap-1"><CalendarDays size={11} /> {t('Desde')} {fechaCorta(primeraOrden)}</span>}

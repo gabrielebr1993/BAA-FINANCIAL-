@@ -9,6 +9,7 @@ import { cerrarTodos, cerrarPorRol, cerrarUsuario } from '../data/sesiones'
 import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
 import { rolesPersonalizados, etiquetaRol } from '../domain/permisos'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
+import { UserId } from '../components/UserId'
 import { useLang } from '../../i18n'
 
 const ROLES_ASIGNABLES = [
@@ -70,10 +71,6 @@ export default function BulkUsuarios() {
   const [editar, setEditar] = useState(null)               // usuario en edición (modal) o null
   const [edicion, setEdicion] = useState({ nombre: '', email: '', password: '', plantaId: '' })
   const [guardandoEd, setGuardandoEd] = useState(false)
-  // Copia el ID (uid) de un usuario al portapapeles (para pegarlo/buscarlo cómodo).
-  const copiarId = async (id) => {
-    try { await navigator.clipboard.writeText(id || ''); setMsg({ tipo: 'ok', txt: `${t('ID copiado')}: ${id}` }) } catch { /* noop */ }
-  }
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const necesitaCliente = f.rol === BULK_ROLES.CLIENTE
   const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA
@@ -348,7 +345,7 @@ export default function BulkUsuarios() {
             if (key === 'nombre') return (
               <div className="min-w-0">
                 <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
-                <button type="button" onClick={() => copiarId(idVisible(row))} title={t('Copiar ID')} className="font-mono text-[11px] tracking-wide text-slate-400 hover:text-brand-gold">ID: {idVisible(row)}</button>
+                {Number.isFinite(codigoNum(row)) ? <UserId codigo={row.codigo} /> : <span className="font-mono text-[11px] tracking-wide text-slate-400">{t('ID')}: ········</span>}
               </div>
             )
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>
@@ -382,7 +379,7 @@ export default function BulkUsuarios() {
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-gold/15 text-brand-gold"><Pencil size={17} /></span>
               <div className="min-w-0">
                 <h3 className="m-0 truncate text-sm font-bold text-brand-navy dark:text-slate-100">{t('Editar usuario')}</h3>
-                <p className="m-0 truncate text-xs text-slate-400">{t('ID')}: {idVisible(editar)} · {label(editar.rol) || editar.rol}</p>
+                <p className="m-0 truncate text-xs text-slate-400">{t('ID')}: {Number.isFinite(codigoNum(editar)) ? `#${editar.codigo}` : '········'} · {label(editar.rol) || editar.rol}</p>
               </div>
               <button type="button" onClick={() => !guardandoEd && setEditar(null)} className="ml-auto text-slate-400 hover:text-rose-500"><X size={18} /></button>
             </div>
