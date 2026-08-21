@@ -18,6 +18,7 @@ import { useGrupos } from '../data/useGrupos'
 import { convCarrier, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { crearConId, guardar, where, documentId } from '../data/repo'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { auditar } from '../data/auditoria'
@@ -45,6 +46,7 @@ export default function TransportistaPortal() {
   const carrierId = usuario?.carrierId || '__none__'
 
   // ── Datos (TODO filtrado a MI carrier) ─────────────────────────────────────
+  const avatares = useAvatares()
   const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('transportistaId', '==', carrierId)])
   const { datos: pagosCarrier } = useColeccion('orderPay_carrier', [where('transportistaId', '==', carrierId)])
   const { datos: pagosChofer } = useColeccion('orderPay_chofer', [where('transportistaId', '==', carrierId)])
@@ -97,7 +99,7 @@ export default function TransportistaPortal() {
   const mensajesNuevos = noLeidosOficina + noLeidosChoferes
   // Secciones del panel de mensajes: CHOFERES (chats por viaje) · ADMINISTRADOR (oficina).
   const seccionesMsg = useMemo(() => {
-    const fotoChofer = (nombre) => { const k = (nombre || '').trim().toLowerCase(); return (choferes.find((d) => (d.nombre || '').trim().toLowerCase() === k)?.foto) || null }
+    const fotoChofer = (nombre) => { const k = (nombre || '').trim().toLowerCase(); const d = choferes.find((x) => (x.nombre || '').trim().toLowerCase() === k); return d?.foto || (d?.uid && avatares[d.uid]) || null }
     const itemsChoferes = ordenes
       .filter((o) => resumenOrd[o.id] || !FINAL.includes(o.estado))
       .filter((o) => o.choferNombre) // solo órdenes con chofer asignado (a quién escribir)
@@ -112,7 +114,7 @@ export default function TransportistaPortal() {
       { k: 'admin', label: t('Administrador'), icon: 'admin', items: itemsAdmin, vacio: t('Sin mensajes con la oficina.') },
       { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo.') },
     ]
-  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, t])
+  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, avatares, t])
   const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
   // Presencia viva (en línea) por uid de chofer.
