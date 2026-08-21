@@ -5,6 +5,7 @@ import { convChofer, convCarrier, convClienteOrden, resumenPorConversacion, elim
 import { esConvGrupo, grupoIdDeConv, disolverGrupo } from '../data/grupos'
 import { useGrupos } from '../data/useGrupos'
 import { conversacionesAdmin } from '../domain/conversaciones'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E } from '../domain/constants'
 import PanelConversaciones from '../components/PanelConversaciones'
@@ -24,6 +25,7 @@ export default function Mensajes() {
   const { datos: jobs } = useColeccion('jobs')
   const { datos: usuarios } = useColeccion('users')
   const { datos: mensajes } = useColeccion('messages')
+  const avatares = useAvatares()
   const { items: gruposItems, grupos, invitaciones } = useGrupos()
   const [nuevo, setNuevo] = useState(false)
   const [buscarNuevo, setBuscarNuevo] = useState('')
@@ -46,8 +48,8 @@ export default function Mensajes() {
 
   // Categorización de TODAS las conversaciones con historial en 4 secciones.
   const cats = useMemo(
-    () => conversacionesAdmin({ mensajes, ordenes, carriers, clientes, jobs, uid: usuario?.id }),
-    [mensajes, ordenes, carriers, clientes, jobs, usuario],
+    () => conversacionesAdmin({ mensajes, ordenes, carriers, clientes, jobs, usuarios, avatares, uid: usuario?.id }),
+    [mensajes, ordenes, carriers, clientes, jobs, usuarios, avatares, usuario],
   )
 
   // Mezcla las conversaciones recién iniciadas (sin mensajes) en su sección, sin duplicar.

@@ -13,16 +13,25 @@ import { resumenPorConversacion, esConvClienteOrden, orderIdDeConv, slugChofer }
 
 const nombreDe = (m, id, campo = 'nombre') => (m[id] ? (m[id][campo] || '') : '')
 
-export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = [], clientes = [], jobs = [], uid } = {}) {
+export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = [], clientes = [], jobs = [], usuarios = [], avatares = {}, uid } = {}) {
   const resumen = resumenPorConversacion(mensajes, uid)
   const ordenPorId = Object.fromEntries(ordenes.map((o) => [o.id, o]))
   const carrierPorId = Object.fromEntries(carriers.map((c) => [c.id, c]))
   const clientePorId = Object.fromEntries(clientes.map((c) => [c.id, c]))
   const jobPorId = Object.fromEntries(jobs.map((j) => [j.id, j]))
+  // Cuenta de usuario (uid) por empresa cliente / transportista → para su foto (avatar).
+  const uidPorCliente = {}, uidPorCarrier = {}
+  for (const u of usuarios) {
+    if (u.rol === 'cliente' && u.clienteId && !uidPorCliente[u.clienteId]) uidPorCliente[u.clienteId] = u.id
+    if (u.rol === 'transportista' && u.carrierId && !uidPorCarrier[u.carrierId]) uidPorCarrier[u.carrierId] = u.id
+  }
+  const fotoCliente = (clienteId) => avatares[uidPorCliente[clienteId]] || null
+  const fotoCarrier = (carrierId) => avatares[uidPorCarrier[carrierId]] || null
   // Foto e info del conductor por slug de su nombre (clave del dm_d_ y del choferNombre).
+  // Foto = la del roster o, si no, la del avatar de su cuenta (bulk_avatars por uid).
   const choferPorSlug = {}
   for (const c of carriers) for (const d of (c.choferes || [])) {
-    if (d?.nombre) choferPorSlug[slugChofer(d.nombre)] = { nombre: d.nombre, carrierNombre: c.nombre, foto: d.foto || null }
+    if (d?.nombre) choferPorSlug[slugChofer(d.nombre)] = { nombre: d.nombre, carrierNombre: c.nombre, foto: d.foto || (d.uid && avatares[d.uid]) || null }
   }
   const operacionDe = (o) => (o?.jobId && jobPorId[o.jobId]?.nombre) || ''
 
@@ -35,12 +44,13 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     if (esConvClienteOrden(key)) {
       const o = ordenPorId[orderIdDeConv(key)] || {}
       const cliNombre = o.clienteNombre || nombreDe(clientePorId, o.clienteId) || 'Cliente'
-      out.clientes.push({ ...base, icon: 'cliente', titulo: cliNombre, rolLabel: 'Cliente', rolColor: 'green', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o), participantes: [o.clienteId].filter(Boolean) })
+      out.clientes.push({ ...base, icon: 'cliente', foto: fotoCliente(o.clienteId), titulo: cliNombre, rolLabel: 'Cliente', rolColor: 'green', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o), participantes: [o.clienteId].filter(Boolean) })
       continue
     }
     if (key.startsWith('dm_c_')) {
-      const c = carrierPorId[key.slice(5)]
-      out.transportistas.push({ ...base, icon: 'transportista', titulo: c?.nombre || 'Transportista', rolLabel: 'Transportista', rolColor: 'gold' })
+      const cid = key.slice(5)
+      const c = carrierPorId[cid]
+      out.transportistas.push({ ...base, icon: 'transportista', foto: fotoCarrier(cid), titulo: c?.nombre || 'Transportista', rolLabel: 'Transportista', rolColor: 'gold' })
       continue
     }
     if (key.startsWith('dm_d_')) {
