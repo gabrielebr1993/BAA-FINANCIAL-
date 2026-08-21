@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2 } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -30,6 +30,8 @@ export default function LlamadaProvider({ children }) {
   const [camOff, setCamOff] = useState(false)
   const [min, setMin] = useState(false)   // llamada minimizada (seguir usando la web)
   const [tick, setTick] = useState(0)      // refresca el cronómetro cada segundo
+  const [compartiendo, setCompartiendo] = useState(false)
+  const pantallaRef = useRef(null)
 
   const pcRef = useRef(null)
   const localRef = useRef(null)
@@ -103,7 +105,8 @@ export default function LlamadaProvider({ children }) {
     try { pcRef.current && pcRef.current.close() } catch { /* noop */ }
     pcRef.current = null
     try { (localRef.current?.getTracks() || []).forEach((tr) => tr.stop()) } catch { /* noop */ }
-    localRef.current = null; remoteRef.current = null
+    try { (pantallaRef.current?.getTracks() || []).forEach((tr) => tr.stop()) } catch { /* noop */ }
+    localRef.current = null; remoteRef.current = null; pantallaRef.current = null
     if (id) limpiarLlamada(id)
     callIdRef.current = null
     setFase('idle'); setInfo(null); setEntrante(null); setMicOff(false); setCamOff(false)
@@ -209,6 +212,34 @@ export default function LlamadaProvider({ children }) {
   const toggleMic = () => { const s = localRef.current; if (!s) return; const on = micOff; s.getAudioTracks().forEach((tr) => (tr.enabled = on)); setMicOff(!on) }
   const toggleCam = () => { const s = localRef.current; if (!s) return; const on = camOff; s.getVideoTracks().forEach((tr) => (tr.enabled = on)); setCamOff(!on) }
 
+  // Compartir pantalla: sustituye la pista de video de la cámara por la pantalla
+  // (replaceTrack, sin renegociar). Al terminar, vuelve a la cámara.
+  const volverCamara = async () => {
+    const pc = pcRef.current
+    const cam = localRef.current?.getVideoTracks?.()[0]
+    const sender = pc?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
+    if (sender && cam) { try { await sender.replaceTrack(cam) } catch { /* noop */ } }
+    try { pantallaRef.current?.getTracks?.().forEach((tr) => tr.stop()) } catch { /* noop */ }
+    pantallaRef.current = null
+    setCompartiendo(false)
+    if (localVid.current) localVid.current.srcObject = localRef.current
+  }
+  const compartirPantalla = async () => {
+    const pc = pcRef.current
+    const sender = pc?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
+    if (!sender) { alert(t('Compartir pantalla está disponible en videollamadas.')); return }
+    if (compartiendo) { volverCamara(); return }
+    try {
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+      pantallaRef.current = screen
+      const track = screen.getVideoTracks()[0]
+      await sender.replaceTrack(track)
+      track.onended = () => { volverCamara() } // el usuario detiene desde el navegador
+      setCompartiendo(true)
+      if (localVid.current) localVid.current.srcObject = screen
+    } catch { /* el usuario canceló el diálogo */ }
+  }
+
   // ── Escuchar entrantes ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!usuario?.id || !tenantId) return
@@ -225,7 +256,7 @@ export default function LlamadaProvider({ children }) {
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
   // Al colgar/entrar/salir, restablece minimizado.
-  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0) } }, [fase])
+  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false) } }, [fase])
   // Cronómetro de la llamada activa.
   useEffect(() => {
     if (fase !== 'activa') return
@@ -240,73 +271,113 @@ export default function LlamadaProvider({ children }) {
 
   const esVideo = info?.tipo === 'video' || entrante?.tipo === 'video'
 
-  // Medios (video remoto/local o audio) — se reutiliza en pantalla completa y minimizado.
+  const inicialCon = ((info?.con || entrante?.de?.nombre || '?').trim().charAt(0) || '?').toUpperCase()
+
+  // Elementos de MEDIOS (video remoto + self-view, o audio). El avatar/adornos van aparte.
   const medios = (mini) => esVideo ? (
     <>
-      <video ref={remoteVid} autoPlay playsInline className={mini ? 'h-full w-full bg-slate-900 object-cover' : 'h-full w-full bg-slate-900 object-cover'} />
-      {/* El que llama TAMBIÉN se ve (su propia cámara). */}
-      <video ref={localVid} autoPlay playsInline muted className={mini ? 'absolute bottom-1 right-1 h-14 w-10 rounded-md border border-white/30 object-cover' : 'absolute bottom-24 right-4 h-36 w-24 rounded-xl border-2 border-white/30 object-cover shadow-lg'} />
+      <video ref={remoteVid} autoPlay playsInline className="h-full w-full bg-slate-900 object-cover" />
+      <div className={mini ? 'absolute bottom-1.5 right-1.5' : 'absolute bottom-5 right-5'}>
+        <video ref={localVid} autoPlay playsInline muted className={mini ? 'h-14 w-10 rounded-lg border border-white/25 object-cover' : 'h-40 w-28 rounded-2xl border-2 border-white/20 object-cover shadow-2xl'} />
+        {!mini && <span className="mt-1 block text-center text-[10px] font-medium text-white/60">{compartiendo ? t('Tu pantalla') : t('Tú')}</span>}
+      </div>
     </>
   ) : (
-    <div className="flex h-full w-full flex-col items-center justify-center">
-      {!mini && <div className="grid h-28 w-28 place-items-center rounded-full bg-amber-500/20 text-amber-400"><Phone size={44} /></div>}
-      <audio ref={remoteVid} autoPlay />
-    </div>
+    <audio ref={remoteVid} autoPlay />
+  )
+
+  // Botón de control redondo con etiqueta (estilo moderno tipo Zoom+).
+  const Ctrl = ({ onClick, label, children, activo, danger, size = 'h-14 w-14' }) => (
+    <button type="button" onClick={onClick} title={label} className="group flex flex-col items-center gap-1.5">
+      <span className={`grid ${size} place-items-center rounded-full backdrop-blur transition active:scale-90 group-hover:scale-105 ${danger ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-600' : activo ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'}`}>{children}</span>
+      <span className="text-[11px] font-medium text-white/70">{label}</span>
+    </button>
   )
 
   return (
     <LlamadaContext.Provider value={{ iniciar, enLlamada: fase !== 'idle' }}>
       {children}
 
-      {/* Timbre de llamada ENTRANTE */}
+      {/* Timbre de llamada ENTRANTE — moderno, con anillo pulsante */}
       {fase === 'entrante' && entrante && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900">
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-amber-500/20 text-amber-500"><PhoneIncoming size={34} /></div>
-            <h3 className="mt-4 text-lg font-black text-brand-navy dark:text-slate-100">{entrante.de?.nombre || t('Alguien')}</h3>
-            <p className="text-sm text-slate-500">{entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}</p>
-            <div className="mt-6 flex items-center justify-center gap-6">
-              <button onClick={rechazar} className="grid h-14 w-14 place-items-center rounded-full bg-rose-500 text-white shadow-lg transition hover:bg-rose-600"><PhoneOff size={24} /></button>
-              <button onClick={aceptar} className="grid h-14 w-14 place-items-center rounded-full bg-emerald-500 text-white shadow-lg transition hover:bg-emerald-600">{entrante.tipo === 'video' ? <Video size={24} /> : <Phone size={24} />}</button>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-2xl ring-1 ring-white/10">
+            <div className="relative mx-auto h-24 w-24">
+              <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/30" />
+              <div className="relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">{(entrante.de?.nombre || '?').charAt(0).toUpperCase()}</div>
+            </div>
+            <h3 className="mt-5 text-xl font-black text-white">{entrante.de?.nombre || t('Alguien')}</h3>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/60">{entrante.tipo === 'video' ? <Video size={14} /> : <PhoneIncoming size={14} />} {entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}</p>
+            <div className="mt-8 flex items-center justify-center gap-10">
+              <div className="flex flex-col items-center gap-1.5">
+                <button onClick={rechazar} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 transition hover:scale-105 hover:bg-rose-600 active:scale-95"><PhoneOff size={26} /></button>
+                <span className="text-[11px] text-white/60">{t('Rechazar')}</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <button onClick={aceptar} className="grid h-16 w-16 animate-bounce place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition hover:scale-105 hover:bg-emerald-600 active:scale-95">{entrante.tipo === 'video' ? <Video size={26} /> : <Phone size={26} />}</button>
+                <span className="text-[11px] text-white/60">{t('Aceptar')}</span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Llamada SALIENTE o ACTIVA — PANTALLA COMPLETA */}
+      {/* Llamada SALIENTE o ACTIVA — PANTALLA COMPLETA (moderna) */}
       {(fase === 'saliente' || fase === 'activa') && !min && (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-slate-950">
-          <div className="relative flex-1">
-            {medios(false)}
-            {/* Botón MINIMIZAR (seguir usando la web) */}
-            <button onClick={() => setMin(true)} title={t('Minimizar')} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"><Minimize2 size={18} /></button>
-            {/* Estado + nombre + cronómetro */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-1 p-6 text-center">
-              <h3 className="text-xl font-black text-white">{info?.con || t('Llamada')}</h3>
-              <p className="text-sm text-white/70">{duracion()}</p>
+        <div className="fixed inset-0 z-[80] flex flex-col bg-gradient-to-b from-slate-900 via-slate-950 to-black">
+          <div className="relative flex-1 overflow-hidden">
+            {esVideo ? medios(false) : (
+              <>
+                {medios(false)}
+                <div className="flex h-full w-full flex-col items-center justify-center">
+                  <div className="relative h-40 w-40">
+                    {fase === 'saliente' && <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/20" />}
+                    <div className="relative grid h-40 w-40 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-6xl font-black text-slate-900 shadow-2xl">{inicialCon}</div>
+                  </div>
+                </div>
+              </>
+            )}
+            {/* Barra superior: nombre, estado, minimizar */}
+            <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/50 to-transparent p-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-2xl font-black text-white drop-shadow">{info?.con || t('Llamada')}</h3>
+                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-white/70">
+                  <span className={`h-2 w-2 rounded-full ${fase === 'activa' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'}`} />
+                  {duracion()}{compartiendo ? ` · ${t('compartiendo pantalla')}` : ''}
+                </p>
+              </div>
+              <button onClick={() => setMin(true)} title={t('Minimizar')} className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 backdrop-blur transition hover:bg-white/20"><Minimize2 size={18} /></button>
             </div>
           </div>
-          {/* Controles */}
-          <div className="flex items-center justify-center gap-5 bg-slate-900/80 p-5">
-            <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-14 w-14 place-items-center rounded-full ${micOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</button>
-            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg transition hover:bg-rose-600"><PhoneOff size={26} /></button>
-            {esVideo && <button onClick={toggleCam} title={camOff ? t('Activar cámara') : t('Apagar cámara')} className={`grid h-14 w-14 place-items-center rounded-full ${camOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</button>}
+          {/* Barra de controles moderna */}
+          <div className="flex items-end justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-6 sm:gap-6">
+            <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
+            {esVideo && <Ctrl onClick={toggleCam} label={camOff ? t('Cámara') : t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
+            {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
+            <Ctrl onClick={() => limpiar(false)} label={t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
           </div>
         </div>
       )}
 
-      {/* Llamada MINIMIZADA — widget flotante; la web sigue usándose por debajo */}
+      {/* Llamada MINIMIZADA — widget flotante moderno */}
       {(fase === 'saliente' || fase === 'activa') && min && (
-        <div className="fixed bottom-4 right-4 z-[80] w-60 overflow-hidden rounded-2xl bg-slate-900 shadow-2xl ring-1 ring-white/10">
-          <div className="relative h-32 bg-slate-950">{medios(true)}</div>
-          <div className="flex items-center gap-2 px-3 py-2">
+        <div className="fixed bottom-4 right-4 z-[80] w-64 overflow-hidden rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 shadow-2xl ring-1 ring-white/10">
+          <div className="relative h-32 bg-slate-950">
+            {esVideo ? medios(true) : (
+              <div className="flex h-full w-full items-center justify-center">
+                {medios(true)}
+                <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-2xl font-black text-slate-900">{inicialCon}</div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-bold text-white">{info?.con || t('Llamada')}</div>
-              <div className="text-[11px] text-white/60">{duracion()}</div>
+              <div className="flex items-center gap-1 text-[11px] text-white/60"><span className={`h-1.5 w-1.5 rounded-full ${fase === 'activa' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'}`} />{duracion()}</div>
             </div>
-            <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-8 w-8 place-items-center rounded-full ${micOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{micOff ? <MicOff size={15} /> : <Mic size={15} />}</button>
-            <button onClick={() => setMin(false)} title={t('Ampliar')} className="grid h-8 w-8 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25"><Maximize2 size={15} /></button>
-            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-8 w-8 place-items-center rounded-full bg-rose-500 text-white hover:bg-rose-600"><PhoneOff size={16} /></button>
+            <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-9 w-9 place-items-center rounded-full transition active:scale-90 ${micOff ? 'bg-white text-slate-900' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'}`}>{micOff ? <MicOff size={15} /> : <Mic size={15} />}</button>
+            <button onClick={() => setMin(false)} title={t('Ampliar')} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/20 active:scale-90"><Maximize2 size={15} /></button>
+            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-9 w-9 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600 active:scale-90"><PhoneOff size={16} /></button>
           </div>
         </div>
       )}
