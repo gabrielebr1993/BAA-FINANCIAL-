@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2 } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
+import PerfilRapido from './PerfilRapido'
 import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Input } from '../../components/ui'
@@ -29,6 +30,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const [urgente, setUrgente] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [verEmojis, setVerEmojis] = useState(false)
+  const [perfilRapido, setPerfilRapido] = useState(null) // {id,nombre,rol} del autor al que se le hizo clic
   const finRef = useRef(null)
 
   useEffect(() => {
@@ -76,7 +78,12 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}
               <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10' : mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                {!mio && <div className="mb-0.5 text-[10px] font-semibold opacity-70">{m.autorNombre} · {t(BULK_ROLES_LABEL[m.autorRol]) || m.autorRol}</div>}
+                {!mio && (
+                  <button type="button" onClick={() => setPerfilRapido({ id: m.autorId, nombre: m.autorNombre, rol: m.autorRol })}
+                    className="mb-0.5 text-[10px] font-semibold opacity-70 hover:underline">
+                    {m.autorNombre} · {t(BULK_ROLES_LABEL[m.autorRol]) || m.autorRol}
+                  </button>
+                )}
                 {m.urgente && <div className="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-rose-600"><AlertTriangle size={11} /> {t('URGENTE')}</div>}
                 {m.tipo === 'foto' && m.foto && <img src={m.foto} alt="foto" className="mb-1 max-h-40 rounded-lg" />}
                 {m.tipo === 'ubicacion' && m.ubicacion && (
@@ -112,6 +119,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <Input className="flex-1" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
         <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
       </div>
+      {perfilRapido && <PerfilRapido autor={perfilRapido} onClose={() => setPerfilRapido(null)} />}
     </div>
   )
 }
