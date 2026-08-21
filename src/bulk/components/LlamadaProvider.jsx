@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Smile, Eraser, Send, X } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -34,6 +34,17 @@ export default function LlamadaProvider({ children }) {
   const pantallaRef = useRef(null)
   const [pos, setPos] = useState(null)     // posición del widget minimizado {x,y}; null = esquina
   const dragRef = useRef(null)
+  // Colaboración en llamada (por canal de datos WebRTC): pizarra, chat, reacciones.
+  const [pizarra, setPizarra] = useState(false)
+  const [chatAbierto, setChatAbierto] = useState(false)
+  const [mensajesCall, setMensajesCall] = useState([]) // {mio, texto}
+  const [reaccion, setReaccion] = useState(null)        // emoji flotante temporal
+  const [color, setColor] = useState('#f43f5e')
+  const [noLeidoCall, setNoLeidoCall] = useState(0)
+  const dcRef = useRef(null)
+  const canvasRef = useRef(null)
+  const dibujoRef = useRef(null)
+  const chatInputRef = useRef(null)
 
   const pcRef = useRef(null)
   const localRef = useRef(null)
@@ -91,6 +102,46 @@ export default function LlamadaProvider({ children }) {
     else pararTono()
   }, [fase])
 
+  // ── Colaboración por CANAL DE DATOS (pizarra / chat / reacciones) ───────────
+  const dibujarSegmento = (a, b, col) => {
+    const cv = canvasRef.current; if (!cv) return
+    const ctx = cv.getContext('2d'); if (!ctx) return
+    ctx.strokeStyle = col || '#f43f5e'; ctx.lineWidth = 3; ctx.lineCap = 'round'
+    ctx.beginPath(); ctx.moveTo(a.x * cv.width, a.y * cv.height); ctx.lineTo(b.x * cv.width, b.y * cv.height); ctx.stroke()
+  }
+  const limpiarLienzo = () => { const cv = canvasRef.current; if (cv) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height) }
+  const enviarDC = (obj) => { try { if (dcRef.current?.readyState === 'open') dcRef.current.send(JSON.stringify(obj)) } catch { /* noop */ } }
+  const manejarDC = (raw) => {
+    let m; try { m = JSON.parse(raw) } catch { return }
+    if (m.tipo === 'draw') dibujarSegmento(m.a, m.b, m.color)
+    else if (m.tipo === 'clear') limpiarLienzo()
+    else if (m.tipo === 'pizarra') setPizarra(!!m.abrir)
+    else if (m.tipo === 'chat') { setMensajesCall((s) => [...s, { mio: false, texto: m.texto }]); if (!chatAbierto) setNoLeidoCall((n) => n + 1) }
+    else if (m.tipo === 'react') { setReaccion({ e: m.emoji, k: Date.now() }); setTimeout(() => setReaccion(null), 2500) }
+  }
+  const configurarDC = (dc) => {
+    dcRef.current = dc
+    dc.onmessage = (e) => manejarDC(e.data)
+    dc.onclose = () => { if (dcRef.current === dc) dcRef.current = null }
+  }
+  const enviarChatCall = (txt) => {
+    const v = (txt || '').trim(); if (!v) return
+    setMensajesCall((s) => [...s, { mio: true, texto: v }]); enviarDC({ tipo: 'chat', texto: v })
+    if (chatInputRef.current) chatInputRef.current.value = ''
+  }
+  const enviarReaccion = (emoji) => { setReaccion({ e: emoji, k: Date.now() }); setTimeout(() => setReaccion(null), 2500); enviarDC({ tipo: 'react', emoji }) }
+  const togglePizarra = () => { const v = !pizarra; setPizarra(v); enviarDC({ tipo: 'pizarra', abrir: v }) }
+  const limpiarPizarra = () => { limpiarLienzo(); enviarDC({ tipo: 'clear' }) }
+  // Trazos en el lienzo (coordenadas normalizadas 0..1 para que coincidan en ambos).
+  const puntoNorm = (e) => { const cv = canvasRef.current; const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height } }
+  const lienzoDown = (e) => { dibujoRef.current = puntoNorm(e) }
+  const lienzoMove = (e) => {
+    if (!dibujoRef.current) return
+    const p = puntoNorm(e); const a = dibujoRef.current
+    dibujarSegmento(a, p, color); enviarDC({ tipo: 'draw', a, b: p, color }); dibujoRef.current = p
+  }
+  const lienzoUp = () => { dibujoRef.current = null }
+
   // Registra la llamada en el chat de origen (para dejar HISTORIAL: perdida o duración).
   // Solo lo hace quien LLAMÓ (tiene el contexto del chat); el mensaje lo ven ambos.
   logRef.current = (contestada, durMs) => {
@@ -142,6 +193,10 @@ export default function LlamadaProvider({ children }) {
     pc.ontrack = (e) => { (e.streams[0]?.getTracks() || []).forEach((tr) => remote.addTrack(tr)); if (remoteVid.current) remoteVid.current.srcObject = remote }
     pc.onicecandidate = (e) => { if (e.candidate) agregarCandidato(callId, lado, e.candidate.toJSON()).catch(() => {}) }
     pc.onconnectionstatechange = () => { if (['failed', 'closed', 'disconnected'].includes(pc.connectionState) && faseRef.current !== 'idle') limpiar(false) }
+    // Canal de datos para colaboración (pizarra/chat/reacciones): el que LLAMA lo crea;
+    // el que recibe lo escucha. Es aditivo: si falla, la llamada de voz/video sigue igual.
+    if (lado === 'caller') { try { configurarDC(pc.createDataChannel('colab')) } catch { /* noop */ } }
+    else { pc.ondatachannel = (e) => configurarDC(e.channel) }
     return pc
   }
 
@@ -289,7 +344,8 @@ export default function LlamadaProvider({ children }) {
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
   // Al colgar/entrar/salir, restablece minimizado.
-  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false); setPos(null) } }, [fase])
+  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false); setPos(null); setPizarra(false); setChatAbierto(false); setMensajesCall([]); setReaccion(null); setNoLeidoCall(0); dcRef.current = null } }, [fase])
+  useEffect(() => { if (chatAbierto) setNoLeidoCall(0) }, [chatAbierto])
 
   // Arrastrar el widget minimizado (pointer events; se mueve por toda la pantalla).
   const W = 256, H = 190
@@ -386,6 +442,50 @@ export default function LlamadaProvider({ children }) {
                 </div>
               </>
             )}
+            {/* PIZARRA compartida (lienzo transparente sobre el video) */}
+            {pizarra && (
+              <>
+                <canvas
+                  ref={canvasRef} width={1280} height={720}
+                  onPointerDown={lienzoDown} onPointerMove={lienzoMove} onPointerUp={lienzoUp} onPointerLeave={lienzoUp}
+                  className="absolute inset-0 h-full w-full touch-none bg-white/5"
+                  style={{ cursor: 'crosshair' }}
+                />
+                {/* Herramientas de la pizarra */}
+                <div className="absolute left-1/2 top-16 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-900/80 px-3 py-2 backdrop-blur">
+                  {['#f43f5e', '#22c55e', '#3b82f6', '#eab308', '#ffffff', '#0f172a'].map((c) => (
+                    <button key={c} onClick={() => setColor(c)} className={`h-6 w-6 rounded-full ring-2 ${color === c ? 'ring-white' : 'ring-transparent'}`} style={{ background: c }} />
+                  ))}
+                  <button onClick={limpiarPizarra} title={t('Borrar todo')} className="ml-1 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"><Eraser size={16} /></button>
+                </div>
+              </>
+            )}
+
+            {/* Reacción flotante */}
+            {reaccion && <div key={reaccion.k} className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 animate-bounce text-7xl">{reaccion.e}</div>}
+
+            {/* CHAT lateral en llamada */}
+            {chatAbierto && (
+              <div className="absolute bottom-0 right-0 top-0 flex w-full max-w-xs flex-col bg-slate-900/95 backdrop-blur sm:w-80">
+                <div className="flex items-center gap-2 border-b border-white/10 p-3">
+                  <MessageSquare size={16} className="text-amber-400" /><span className="text-sm font-bold text-white">{t('Chat de la llamada')}</span>
+                  <button onClick={() => setChatAbierto(false)} className="ml-auto text-white/60 hover:text-white"><X size={18} /></button>
+                </div>
+                <div className="scroll-thin flex-1 space-y-2 overflow-y-auto p-3">
+                  {mensajesCall.length === 0 && <p className="text-center text-xs text-white/40">{t('Escribe un mensaje durante la llamada.')}</p>}
+                  {mensajesCall.map((m, i) => (
+                    <div key={i} className={`flex ${m.mio ? 'justify-end' : 'justify-start'}`}>
+                      <span className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${m.mio ? 'bg-amber-500 text-slate-900' : 'bg-white/10 text-white'}`}>{m.texto}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 border-t border-white/10 p-2">
+                  <input ref={chatInputRef} onKeyDown={(e) => e.key === 'Enter' && enviarChatCall(e.currentTarget.value)} placeholder={t('Mensaje…')} className="flex-1 rounded-full bg-white/10 px-3 py-2 text-sm text-white placeholder-white/40 outline-none" />
+                  <button onClick={() => enviarChatCall(chatInputRef.current?.value)} className="grid h-9 w-9 place-items-center rounded-full bg-amber-500 text-slate-900"><Send size={16} /></button>
+                </div>
+              </div>
+            )}
+
             {/* Barra superior: nombre, estado, minimizar */}
             <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/50 to-transparent p-5">
               <div className="min-w-0">
@@ -398,12 +498,22 @@ export default function LlamadaProvider({ children }) {
               <button onClick={() => setMin(true)} title={t('Minimizar')} className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 backdrop-blur transition hover:bg-white/20"><Minimize2 size={18} /></button>
             </div>
           </div>
+          {/* Reacciones rápidas */}
+          <div className="flex items-center justify-center gap-2 pb-1">
+            {['👍', '❤️', '😂', '👏', '🎉', '😮'].map((e) => (
+              <button key={e} onClick={() => enviarReaccion(e)} className="rounded-full bg-white/5 px-2 py-1 text-lg transition hover:scale-125 hover:bg-white/15">{e}</button>
+            ))}
+          </div>
           {/* Barra de controles moderna */}
-          <div className="flex items-end justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-6 sm:gap-6">
+          <div className="flex flex-wrap items-end justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-4 sm:gap-5">
             <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
             {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
             {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
             {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
+            <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>
+            <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
+              <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>
+            </Ctrl>
             <Ctrl onClick={() => limpiar(false)} label={t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
           </div>
         </div>
