@@ -237,6 +237,32 @@ export default function BulkUsuarios() {
     else await forzarRol(objetivoCierre)
     setObjetivoCierre('')
   }
+
+  // ── Generar IDs faltantes A PEDIDO (con resultado visible) ─────────────────
+  // Asigna #ID a los perfiles ya creados que aún no lo tienen (usuarios, transportistas
+  // y clientes). Usa el mismo contador global; muestra cuántos se asignaron y errores.
+  const [generandoIds, setGenerandoIds] = useState(false)
+  const generarIdsFaltantes = async () => {
+    const faltanU = usuarios.filter((u) => !Number.isFinite(codigoNum(u)))
+    const faltanC = carriers.filter((c) => !Number.isFinite(codigoNum(c)))
+    const faltanK = clientes.filter((c) => !Number.isFinite(codigoNum(c)))
+    const total = faltanU.length + faltanC.length + faltanK.length
+    if (!total) { setMsg({ tipo: 'ok', txt: t('Todos los perfiles ya tienen su ID.') }); return }
+    setMsg(null); setGenerandoIds(true)
+    try {
+      const piso = Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes))
+      const codigos = await reservarCodigos(tenantId, total, piso)
+      if (codigos.length < total) throw new Error(t('No se pudieron reservar los IDs.'))
+      let i = 0, ok = 0; const errs = []
+      const asignar = async (col, lista, etq) => { for (const x of lista) { try { await guardarCampos(col, x.id, { codigo: codigos[i] }); ok++ } catch { errs.push(`${etq} ${x.nombre || x.email || x.id}`) } i++ } }
+      await asignar('users', faltanU, t('usuario'))
+      await asignar('carriers', faltanC, t('transportista'))
+      await asignar('clients', faltanK, t('cliente'))
+      if (errs.length) setMsg({ tipo: 'warn', txt: `${t('IDs asignados')}: ${ok}. ${t('No se pudo con')}: ${errs.slice(0, 4).join(', ')}${errs.length > 4 ? '…' : ''} (${t('revisa reglas/permisos')})` })
+      else setMsg({ tipo: 'ok', txt: `${t('Se asignaron')} ${ok} ${t('IDs correctamente.')}` })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudieron generar los IDs.') }) }
+    finally { setGenerandoIds(false) }
+  }
   // Cierra la sesión de UNA persona concreta elegida en el desplegable.
   const cerrarPersonaSel = async () => {
     const u = usuarios.find((x) => x.id === usuarioCierre)
@@ -258,12 +284,28 @@ export default function BulkUsuarios() {
     .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
   const hayFiltro = !!s || !!rolFiltro
   const limpiar = () => { setBuscar(''); setRolFiltro('') }
+  // Perfiles ya creados que aún no tienen #ID (usuarios + empresas).
+  const faltanId = usuarios.filter((u) => !Number.isFinite(codigoNum(u))).length
+    + carriers.filter((c) => !Number.isFinite(codigoNum(c))).length
+    + clientes.filter((c) => !Number.isFinite(codigoNum(c))).length
 
   if (cargando) return <Cargando />
   return (
     <div>
       <PageTitle>{t('Usuarios y roles')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
+
+      {/* Perfiles existentes sin ID: botón para asignarlos a todos de una vez. */}
+      {faltanId > 0 && (
+        <Aviso tipo="warn" className="mb-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span>{faltanId} {faltanId === 1 ? t('perfil no tiene su número de ID todavía.') : t('perfiles no tienen su número de ID todavía.')}</span>
+            <Boton variant="gold" onClick={generarIdsFaltantes} disabled={generandoIds} className="px-3 py-1.5 text-xs">
+              {generandoIds ? t('Asignando…') : `${t('Generar IDs faltantes')} (${faltanId})`}
+            </Boton>
+          </div>
+        </Aviso>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-60">
