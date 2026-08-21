@@ -174,7 +174,7 @@ export default function BulkUsuarios() {
       const data = await r.json()
       if (!data.ok) throw new Error(data.error || 'Error')
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_usuario', entidad: 'usuario', detalle: `${email}${data.rolCambiado ? ` · rol→${label(nuevoRol)}` : ''}${edicion.password ? ' · contraseña' : ''}` })
-      setMsg({ tipo: 'ok', txt: data.rolCambiado ? `${t('Usuario actualizado')}: ${email}. ${t('Cambió de rol: deberá volver a iniciar sesión.')}` : `${t('Usuario actualizado')}: ${email}.` })
+      setMsg({ tipo: 'ok', txt: data.rolCambiado ? `${t('Usuario actualizado')}: ${email}. ${t('Cambió a rol')} “${label(nuevoRol)}” — ${t('deberá volver a iniciar sesión.')}` : `${t('Usuario actualizado')}: ${email}.` })
       setEditar(null)
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo actualizar (¿backend desplegado?).') }) }
     finally { setGuardandoEd(false) }
