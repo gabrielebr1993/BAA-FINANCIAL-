@@ -374,20 +374,20 @@ export default function BulkUsuarios() {
             <div className="space-y-3">
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Nombre')}</div>
-                <Input value={edicion.nombre} onChange={setEd('nombre')} placeholder={t('Nombre')} className="w-full" />
+                <Input value={edicion.nombre} onChange={setEd('nombre')} placeholder={t('Nombre')} className="h-11 w-full text-sm" />
               </div>
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Correo')}</div>
-                <Input type="email" value={edicion.email} onChange={setEd('email')} placeholder={t('Correo')} className="w-full" />
+                <Input type="email" value={edicion.email} onChange={setEd('email')} placeholder={t('Correo')} className="h-11 w-full text-sm" />
               </div>
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Nueva contraseña')}</div>
-                <Input type="password" value={edicion.password} onChange={setEd('password')} placeholder={t('Dejar en blanco para no cambiarla')} className="w-full" />
+                <Input type="password" value={edicion.password} onChange={setEd('password')} placeholder={t('Dejar en blanco para no cambiarla')} className="h-11 w-full text-sm" />
                 <p className="mt-1 text-[11px] text-slate-400">{t('Mínimo 6 caracteres. Si lo dejas vacío, la contraseña no cambia.')}</p>
               </div>
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Rol')}</div>
-                <Select value={edicion.rol} onChange={setEd('rol')} className="w-full">
+                <Select value={edicion.rol} onChange={setEd('rol')} className="h-11 w-full text-sm">
                   {opcionesRolEdit.map((r) => <option key={r} value={r}>{label(r) || r}</option>)}
                 </Select>
                 {edicion.rol !== editar.rol && (
@@ -397,7 +397,7 @@ export default function BulkUsuarios() {
               {edicion.rol === BULK_ROLES.SUPERVISOR_PLANTA && (
                 <div>
                   <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Planta')}</div>
-                  <Select value={edicion.plantaId} onChange={setEd('plantaId')} className="w-full">
+                  <Select value={edicion.plantaId} onChange={setEd('plantaId')} className="h-11 w-full text-sm">
                     <option value="">{t('Sin planta')}</option>
                     {plantas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </Select>
