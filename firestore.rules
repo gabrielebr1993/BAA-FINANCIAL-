@@ -384,8 +384,13 @@ service cloud.firestore {
     // pueden leer/escribir la señalización; el audio/video NO pasa por aquí, va P2P.
     // Los candidatos ICE viven en subcolecciones y heredan el mismo control.
     match /bulk_calls/{id} {
+      // Uso de .get(...) para no fallar si a algún documento le falta un campo (eso
+      // rompería la consulta LIST del listener con "permission-denied").
       function participa() {
-        return bSame(resource.data.tenantId) && (resource.data.de.uid == request.auth.uid || resource.data.para == request.auth.uid);
+        return bSame(resource.data.tenantId) && (
+          request.auth.uid == resource.data.get('para', '')
+          || request.auth.uid == resource.data.get('de', {}).get('uid', '')
+        );
       }
       allow read: if participa() || bAdmin(resource.data.tenantId);
       allow create: if bSame(request.resource.data.tenantId) && request.resource.data.de.uid == request.auth.uid;
@@ -394,7 +399,7 @@ service cloud.firestore {
       match /{lado}/{cid} {
         function llamada() { return get(/databases/$(database)/documents/bulk_calls/$(id)).data; }
         allow read, create, delete: if request.auth != null
-          && (llamada().de.uid == request.auth.uid || llamada().para == request.auth.uid);
+          && (request.auth.uid == llamada().get('para', '') || request.auth.uid == llamada().get('de', {}).get('uid', ''));
       }
     }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
