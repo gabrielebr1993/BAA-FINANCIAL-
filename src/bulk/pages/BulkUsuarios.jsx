@@ -23,6 +23,7 @@ export default function BulkUsuarios() {
   const { t } = useLang()
   const { tenantId, usuario, rol, crearUsuario, rolesConfig } = useBulkAuth()
   const { datos: usuarios, cargando } = useColeccion('users')
+  const { datos: perfilesDriver } = useColeccion('driverProfiles')
   const avatares = useAvatares()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
@@ -43,6 +44,21 @@ export default function BulkUsuarios() {
   const codigoNum = (u) => { const n = parseInt(u?.codigo, 10); return Number.isFinite(n) ? n : NaN }
   const maxCodigo = (lista) => lista.reduce((m, u) => { const n = codigoNum(u); return Number.isFinite(n) && n > m ? n : m }, CODIGO_BASE)
   const idVisible = (u) => (Number.isFinite(codigoNum(u)) ? String(u.codigo) : '········')
+
+  // Espeja (una vez) las fotos que los CHOFERES subieron en su perfil del portal
+  // (bulk_driverProfiles) y las del roster hacia el sistema CENTRAL (bulk_avatars),
+  // para que se vean en chats, listas y demás sin que el chofer tenga que reingresar.
+  const espejoAvatarRef = useRef(false)
+  useEffect(() => {
+    if (espejoAvatarRef.current || cargando || !esAdmin) return
+    const fuentes = {}
+    for (const p of perfilesDriver || []) { const id = p.uid || p.id; if (id && p.foto) fuentes[id] = p.foto }
+    for (const c of carriers || []) for (const d of (c.choferes || [])) { if (d.uid && d.foto && !fuentes[d.uid]) fuentes[d.uid] = d.foto }
+    const pendientes = Object.entries(fuentes).filter(([uid]) => !avatares[uid])
+    if (!pendientes.length) return
+    espejoAvatarRef.current = true
+    ;(async () => { for (const [uid, foto] of pendientes) { try { await guardarAvatar(tenantId, uid, foto) } catch { /* permiso */ } } })()
+  }, [cargando, esAdmin, perfilesDriver, carriers, avatares, tenantId])
 
   // Relleno automático (una vez) de los IDs faltantes, en orden estable. El ID es
   // ÚNICO y GLOBAL entre TODOS los perfiles: usuarios, transportistas (empresa) y

@@ -12,7 +12,7 @@ import { useGrupos } from '../data/useGrupos'
 import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
-import { guardar, crearConId, where } from '../data/repo'
+import { guardar, crearConId, guardarAvatar, where } from '../data/repo'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
@@ -608,7 +608,17 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
     try { await crearConId('driverProfiles', usuario.id, tenantId, { uid: usuario.id, nombre: usuario.nombre, ...patch }) }
     catch { window.alert(t('No se pudo guardar. Puede que falten desplegar las reglas de driverProfiles.')) }
   }
-  const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; setFoto(f); await guardarCampo({ foto: f }) }
+  const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; setFoto(f); await guardarCampo({ foto: f }); try { await guardarAvatar(tenantId, usuario.id, f) } catch { /* avatar central */ } }
+  // Espeja la foto del perfil del chofer al sistema CENTRAL de avatares (bulk_avatars),
+  // para que se vea en chats, listas y demás. Solo si aún no está allí (una vez).
+  const espejadoRef = useRef(false)
+  useEffect(() => {
+    if (espejadoRef.current) return
+    const f = miPerfil?.foto
+    if (!f || !usuario?.id) return
+    espejadoRef.current = true
+    guardarAvatar(tenantId, usuario.id, f).catch(() => {})
+  }, [miPerfil?.foto, usuario?.id, tenantId])
   // Sube un documento (licencia/social) — se guarda al instante y queda bloqueado
   // para el chofer; solo el admin puede cambiarlo después.
   const subirDoc = async (campo, e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; await guardarCampo({ [campo]: f }) }
