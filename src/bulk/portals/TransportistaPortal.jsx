@@ -19,6 +19,7 @@ import { convCarrier, noLeidosPorConv, resumenPorConversacion } from '../data/ch
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useAvatares } from '../data/useCodigoUsuario'
+import Avatar from '../components/Avatar'
 import { crearConId, guardar, where, documentId } from '../data/repo'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { auditar } from '../data/auditoria'
@@ -227,7 +228,7 @@ export default function TransportistaPortal() {
 
       {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
       {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo }} />}
-      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer }} />}
+      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
@@ -353,7 +354,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
 }
 
 // ── Tab Mis choferes: tabla con estado en línea, viaje actual y forma de pago ──
-function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {} }) {
+function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {}, avatares = {} }) {
   const [alta, setAlta] = useState(false)
   const [pagoEdit, setPagoEdit] = useState(null) // chofer.id en edición de pago
   const toggleTrabajo = (c, cod) => {
@@ -379,23 +380,32 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
             const viaje = viajeActual(c)
             const online = choferEnLinea(c)
             return (
-              <Card key={c.id} className="p-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <div className="min-w-[9rem]">
-                    <div className="font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
-                      {c.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {c.telefono}</span>}
-                      {c.licencia && <span className="inline-flex items-center gap-0.5"><IdCard size={10} /> {c.licencia}</span>}
+              <Card key={c.id} className="p-3.5">
+                <div className="flex items-start gap-3">
+                  <Avatar foto={c.foto || avatares[c.uid]} nombre={c.nombre} size={46} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+                          {c.telefono && <span className="inline-flex items-center gap-1"><Phone size={10} /> {c.telefono}</span>}
+                          {c.licencia && <span className="inline-flex items-center gap-1"><IdCard size={10} /> {c.licencia}</span>}
+                        </div>
+                      </div>
+                      {/* Acciones alineadas a la derecha */}
+                      <div className="ml-auto flex flex-shrink-0 items-center gap-3">
+                        <button onClick={() => setPagoEdit(pagoEdit === c.id ? null : c.id)} className="text-xs font-semibold text-amber-600 hover:underline">{etiquetaPago(pagoChoferes[c.id]) ? t('Cambiar pago') : t('Definir pago')}</button>
+                        <button onClick={() => toggleActivoChofer(c)} className={`text-xs font-semibold hover:underline ${c.activo === false ? 'text-emerald-600' : 'text-rose-500'}`}>{c.activo === false ? t('Activar') : t('Desactivar')}</button>
+                      </div>
                     </div>
-                  </div>
-                  <Badge color="navy">{c.equipo || (c.equipos || [])[0] || t('Sin equipo')}</Badge>
-                  <Badge color={online ? 'green' : 'slate'}>{online ? t('En línea') : t('Fuera de línea')}</Badge>
-                  {viaje ? <Badge color="blue">{t('En viaje')} · {viaje.numero}</Badge> : <span className="text-xs text-slate-400">{t('Sin viaje')}</span>}
-                  {etiquetaPago(pagoChoferes[c.id]) && <Badge color="gold"><DollarSign size={10} className="mr-0.5 inline" />{t(etiquetaPago(pagoChoferes[c.id]))}</Badge>}
-                  {c.uid ? <Badge color="green">{t('Con acceso')}</Badge> : <Badge color="slate">{t('Sin acceso')}</Badge>}
-                  <div className="ml-auto flex items-center gap-2">
-                    <button onClick={() => setPagoEdit(pagoEdit === c.id ? null : c.id)} className="text-xs font-medium text-amber-600 hover:underline">{etiquetaPago(pagoChoferes[c.id]) ? t('Cambiar pago') : t('Definir pago')}</button>
-                    <button onClick={() => toggleActivoChofer(c)} className={`text-xs font-medium hover:underline ${c.activo === false ? 'text-emerald-600' : 'text-rose-500'}`}>{c.activo === false ? t('Activar') : t('Desactivar')}</button>
+                    {/* Estado del chofer: fila de badges alineada */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge color="navy">{c.equipo || (c.equipos || [])[0] || t('Sin equipo')}</Badge>
+                      <Badge color={online ? 'green' : 'slate'}>{online ? t('En línea') : t('Fuera de línea')}</Badge>
+                      {viaje ? <Badge color="blue">{t('En viaje')} · {viaje.numero}</Badge> : <Badge color="slate">{t('Sin viaje')}</Badge>}
+                      {etiquetaPago(pagoChoferes[c.id]) && <Badge color="gold"><DollarSign size={10} className="mr-0.5 inline" />{t(etiquetaPago(pagoChoferes[c.id]))}</Badge>}
+                      {c.uid ? <Badge color="green">{t('Con acceso')}</Badge> : <Badge color="slate">{t('Sin acceso')}</Badge>}
+                    </div>
                   </div>
                 </div>
                 {trabajos.length > 0 && (
