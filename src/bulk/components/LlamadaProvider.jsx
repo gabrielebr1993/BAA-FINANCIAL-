@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -126,10 +126,12 @@ export default function LlamadaProvider({ children }) {
     setFase('idle'); setInfo(null); setEntrante(null); setMicOff(false); setCamOff(false)
   }, [])
 
-  // Enlaza los streams a los elementos <video> cuando entran en escena.
+  // Enlaza los streams a los <video> SOLO si cambiaron (si se re-asigna en cada
+  // render, el video PARPADEA — el cronómetro provoca un render por segundo).
   useEffect(() => {
-    if (remoteVid.current && remoteRef.current) remoteVid.current.srcObject = remoteRef.current
-    if (localVid.current && localRef.current) localVid.current.srcObject = localRef.current
+    if (remoteVid.current && remoteRef.current && remoteVid.current.srcObject !== remoteRef.current) remoteVid.current.srcObject = remoteRef.current
+    const localStream = compartiendo ? pantallaRef.current : localRef.current
+    if (localVid.current && localStream && localVid.current.srcObject !== localStream) localVid.current.srcObject = localStream
   })
 
   const prepararPC = (callId, lado) => {
@@ -237,6 +239,23 @@ export default function LlamadaProvider({ children }) {
     pantallaRef.current = null
     setCompartiendo(false)
     if (localVid.current) localVid.current.srcObject = localRef.current
+  }
+  // Cambiar entre cámara frontal y trasera (móvil). Sustituye la pista de video.
+  const facingRef = useRef('user')
+  const cambiarCamara = async () => {
+    if (!esVideo || compartiendo) return
+    const nuevo = facingRef.current === 'user' ? 'environment' : 'user'
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nuevo }, audio: false })
+      const track = st.getVideoTracks()[0]
+      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
+      if (sender) await sender.replaceTrack(track)
+      const old = localRef.current?.getVideoTracks?.()[0]
+      if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
+      localRef.current?.addTrack(track)
+      facingRef.current = nuevo
+      if (localVid.current) localVid.current.srcObject = localRef.current
+    } catch { /* sin segunda cámara o permiso */ }
   }
   const compartirPantalla = async () => {
     const pc = pcRef.current
@@ -382,7 +401,8 @@ export default function LlamadaProvider({ children }) {
           {/* Barra de controles moderna */}
           <div className="flex items-end justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-6 sm:gap-6">
             <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
-            {esVideo && <Ctrl onClick={toggleCam} label={camOff ? t('Cámara') : t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
+            {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
+            {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
             {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
             <Ctrl onClick={() => limpiar(false)} label={t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
           </div>

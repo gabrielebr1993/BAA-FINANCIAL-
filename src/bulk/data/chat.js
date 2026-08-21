@@ -10,7 +10,7 @@ export { slugChofer, convChofer, convCarrier, esConvDirecta, convClienteOrden, e
 // autor) que pueden leer este chat de orden. Si se pasa, las reglas acotan la
 // lectura a ellos + staff. En chats de oficina (sin esos ids) queda vacío y no se
 // guarda el campo (comportamiento previo: staff y el interlocutor).
-export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', texto, foto, ubicacion, urgente } = {}, participantes = []) {
+export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', texto, foto, ubicacion, urgente, archivo, nombreArchivo, mime } = {}, participantes = []) {
   const parts = [...new Set([autor.id, ...(participantes || [])].filter(Boolean))]
   await crear('messages', tenantId, {
     orderId,
@@ -22,6 +22,8 @@ export async function enviarMensaje(tenantId, orderId, autor, { tipo = 'texto', 
     foto: foto || null,
     ubicacion: ubicacion || null,
     urgente: !!urgente,
+    // Archivo adjunto (pequeño) guardado en línea como data URI, con su nombre y tipo.
+    ...(archivo ? { archivo, nombreArchivo: nombreArchivo || 'archivo', mime: mime || '' } : {}),
     ts: new Date().toISOString(),
     leidoPor: [autor.id],
     // Solo se guarda en chats de orden (con participantes reales). Los de oficina

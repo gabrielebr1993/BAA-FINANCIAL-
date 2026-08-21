@@ -59,7 +59,7 @@ export const resumenPorConversacion = (mensajes, uid) => {
       cur.lastTs = m.ts
       cur.lastAutor = m.autorNombre || ''
       cur.lastRol = m.autorRol || ''
-      cur.lastText = m.tipo === 'foto' ? '📷' : m.tipo === 'ubicacion' ? '📍' : (m.texto || '')
+      cur.lastText = m.tipo === 'foto' ? '📷' : m.tipo === 'ubicacion' ? '📍' : m.tipo === 'archivo' ? ('📎 ' + (m.nombreArchivo || '')) : m.tipo === 'llamada' ? (m.texto || '📞') : (m.texto || '')
     }
     if (m.autorId !== uid && !(m.leidoPor || []).includes(uid)) cur.noLeidos += 1
     r[k] = cur

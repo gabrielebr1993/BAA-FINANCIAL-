@@ -2,7 +2,7 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import PerfilRapido from './PerfilRapido'
@@ -48,7 +48,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
 
   const enviar = async (extra = {}) => {
     const t = texto.trim()
-    if (!t && !extra.foto && !extra.ubicacion) return
+    if (!t && !extra.foto && !extra.ubicacion && !extra.archivo) return
     setEnviando(true)
     try {
       // En chats de ORDEN, marcamos quién puede leerlo (chofer/carrier/cliente).
@@ -61,6 +61,15 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     } finally { setEnviando(false) }
   }
   const onFoto = async (e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (f) await enviar({ tipo: 'foto', foto: f }) }
+  // Adjuntar un archivo (PDF, doc, etc.). Se guarda en línea; límite ~700 KB por el
+  // tope de tamaño de un documento en Firestore. Para archivos grandes, avisa.
+  const onArchivo = async (e) => {
+    const f = e.target.files?.[0]; if (e.target) e.target.value = ''
+    if (!f) return
+    if (f.size > 700 * 1024) { alert(t('El archivo es muy grande. Máximo 700 KB (para archivos grandes, compártelos por otro medio).')); return }
+    const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) }).catch(() => null)
+    if (dataUrl) await enviar({ tipo: 'archivo', archivo: dataUrl, nombreArchivo: f.name, mime: f.type })
+  }
   const compartirUbicacion = () => {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition((p) => enviar({ tipo: 'ubicacion', ubicacion: { lat: p.coords.latitude, lng: p.coords.longitude } }), () => {}, { timeout: 5000 })
@@ -106,6 +115,9 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                 {m.tipo === 'ubicacion' && m.ubicacion && (
                   <a href={`https://maps.google.com/?q=${m.ubicacion.lat},${m.ubicacion.lng}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline"><MapPin size={13} /> {t('Ver ubicación')}</a>
                 )}
+                {m.tipo === 'archivo' && m.archivo && (
+                  <a href={m.archivo} download={m.nombreArchivo || 'archivo'} className="mb-0.5 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 underline dark:bg-white/10"><FileText size={16} /> <span className="truncate">{m.nombreArchivo || t('Archivo')}</span></a>
+                )}
                 {m.texto && <div className={`whitespace-pre-wrap break-words ${soloEmojis(m.texto) ? 'text-3xl leading-tight' : ''}`}>{m.texto}</div>}
                 <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${mio ? 'text-white/60 dark:text-slate-900/60' : 'text-slate-400'}`}>
                   {new Date(m.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
@@ -132,6 +144,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`rounded-lg p-2 ${verEmojis ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Smile size={16} /></button>
         <button onClick={() => setUrgente((u) => !u)} title={t('Marcar urgente')} className={`rounded-lg p-2 ${urgente ? 'bg-rose-500 text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><AlertTriangle size={16} /></button>
         <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
+        <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
         <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
         <Input className="flex-1" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
         <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
