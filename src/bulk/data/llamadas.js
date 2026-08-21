@@ -36,7 +36,9 @@ export const obtenerLlamada = async (id) => { const s = await getDoc(callRef(id)
 // es único por usuario y las reglas restringen a los participantes); el estado y la
 // oferta se filtran en el cliente. Así evitamos cualquier requisito de índice.
 export function escucharEntrantes(tenantId, uid, cb) {
-  const q = query(callsCol(), where('para', '==', uid))
+  // Acota a MI empresa + para MÍ (2 igualdades, sin índice compuesto). Así la
+  // consulta nunca incluye llamadas de otra empresa que dispararían permission-denied.
+  const q = query(callsCol(), where('tenantId', '==', tenantId), where('para', '==', uid))
   return onSnapshot(q, (snap) => {
     // Timbra en cuanto la llamada está 'llamando' (la oferta puede llegar 1 instante
     // después; se re-lee al aceptar). No exige `offer` para no perder el timbre.
