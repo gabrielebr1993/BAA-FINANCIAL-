@@ -6,6 +6,8 @@ import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, 
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import PerfilRapido from './PerfilRapido'
+import Avatar from './Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { useLlamada } from './LlamadaProvider'
 import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
@@ -20,6 +22,7 @@ const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.len
 export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
+  const avatares = useAvatares()
   const { iniciar, iniciarGrupo } = useLlamada()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
@@ -92,6 +95,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
       {otro && (
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
+          <Avatar foto={avatares[otro.id]} nombre={otro.nombre} size={32} />
           <button type="button" onClick={() => setPerfilRapido(otro)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{otro.nombre}</button>
           <div className="ml-auto flex items-center gap-1.5">
             <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
@@ -114,6 +118,11 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           const puedeBorrar = mio || esAdmin
           return (
             <div key={m.id} className={`group flex items-center gap-1.5 ${mio ? 'justify-end' : 'justify-start'}`}>
+              {!mio && (
+                <div className="shrink-0 self-end">
+                  <Avatar foto={avatares[m.autorId]} nombre={m.autorNombre} size={28} />
+                </div>
+              )}
               {mio && puedeBorrar && (
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}

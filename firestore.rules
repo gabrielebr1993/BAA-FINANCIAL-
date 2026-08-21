@@ -219,12 +219,21 @@ service cloud.firestore {
     // Perfiles Bulk: lee el propio o admin del tenant. Alta/edición: backend (Admin SDK).
     match /bulk_users/{id} {
       allow read: if bSame(resource.data.tenantId) && (request.auth.uid == id || bAdmin(resource.data.tenantId));
-      // Alta/edición general: backend (Admin SDK). Excepciones sin tocar rol, tenant ni
-      // credenciales: (a) el admin asigna planta (plantaId), ID de 8 dígitos (codigo) y/o
-      // la foto de perfil (foto); (b) CUALQUIER usuario puede poner/cambiar SU PROPIA foto.
-      allow update: if (bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId', 'codigo', 'foto']))
-        || (bSame(resource.data.tenantId) && request.auth.uid == id && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['foto']));
+      // Alta/edición general: backend (Admin SDK). Excepción: el admin del tenant
+      // puede asignar SOLO la planta de un supervisor (plantaId) y el ID legible de
+      // 8 dígitos (codigo). La foto de perfil vive en bulk_avatars (ver abajo).
+      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId', 'codigo']);
       allow create, delete: if false;
+    }
+
+    // Avatares (foto de perfil). Doc id = uid del usuario. La foto NO es dato sensible
+    // y debe verse dentro de la empresa (chat, listas, tarjetas), así que la LEE cualquier
+    // miembro del tenant. La ESCRIBE el propio usuario (su avatar) o el staff (el de
+    // cualquiera). Solo contiene { tenantId, foto } — nunca rol, correo ni credenciales.
+    match /bulk_avatars/{id} {
+      allow read: if bSame(resource.data.tenantId);
+      allow create, update: if bSame(request.resource.data.tenantId) && (request.auth.uid == id || bStaff(request.resource.data.tenantId));
+      allow delete: if bStaff(resource.data.tenantId) || (bSame(resource.data.tenantId) && request.auth.uid == id);
     }
 
     // RBAC configurable: permisos por rol del tenant. Doc id = tenantId; el campo

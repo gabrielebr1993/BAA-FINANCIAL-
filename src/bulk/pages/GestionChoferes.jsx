@@ -8,6 +8,8 @@ import { auditar } from '../data/auditoria'
 import { PageTitle, Card, Boton, Input, Select, Cargando, EstadoVacio } from '../../components/ui'
 import { Gate } from '../components/Gate'
 import { UserIdDeUid } from '../components/UserId'
+import Avatar from '../components/Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 
 const nuevoId = () => `d_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
@@ -16,6 +18,7 @@ export default function GestionChoferes() {
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: equipos } = useColeccion('equipment')
   const { datos: jobs } = useColeccion('jobs')
+  const avatares = useAvatares()
   const equiposAct = equipos.filter((e) => e.activo !== false)
   const jobsAct = jobs.filter((j) => j.activo !== false)
   const nombreJob = (id) => jobs.find((j) => j.id === id)?.nombre || jobs.find((j) => j.id === id)?.codigo || id
@@ -160,7 +163,7 @@ export default function GestionChoferes() {
                 {c._cho.map((d) => (
                   <div key={d.id} className="rounded-xl border border-slate-100 p-2.5 dark:border-slate-700/50">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 dark:bg-slate-800">{(d.nombre || '?').charAt(0)}</div>
+                      <Avatar foto={d.foto || avatares[d.uid]} nombre={d.nombre} size={36} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
                           <Link to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} className="text-sm font-semibold text-brand-navy hover:text-amber-600 dark:text-slate-100">{d.nombre}</Link>

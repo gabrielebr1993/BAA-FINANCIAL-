@@ -108,6 +108,12 @@ export async function eliminar(nombre, id) {
   await deleteDoc(ref(nombre, id))
 }
 
+// Guarda (o cambia) la FOTO de perfil (avatar) de un usuario. Doc id = uid. Vive en
+// bulk_avatars (legible por toda la empresa; escribible por el propio usuario o staff).
+export async function guardarAvatar(tenantId, uid, foto) {
+  await setDoc(ref('avatars', uid), { tenantId, foto }, { merge: true })
+}
+
 // Crea muchos documentos de una sola vez (p. ej. las órdenes de un job).
 export async function crearLote(nombre, tenantId, lista) {
   const batch = writeBatch(db)

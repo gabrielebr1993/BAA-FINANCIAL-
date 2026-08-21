@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, guardarCampos, reservarCodigo, reservarCodigos } from '../data/repo'
+import { guardar, guardarCampos, reservarCodigo, reservarCodigos, guardarAvatar } from '../data/repo'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -22,6 +23,7 @@ export default function BulkUsuarios() {
   const { t } = useLang()
   const { tenantId, usuario, rol, crearUsuario, rolesConfig } = useBulkAuth()
   const { datos: usuarios, cargando } = useColeccion('users')
+  const avatares = useAvatares()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
@@ -161,13 +163,13 @@ export default function BulkUsuarios() {
   const abrirEditar = (u) => {
     setMsg(null)
     setEditar(u)
-    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '', foto: u.foto || null })
+    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '', foto: avatares[u.id] || null })
   }
   // El admin cambia la foto de perfil del usuario en edición (regla lo permite).
   const guardarFotoEditar = async (dataUrl) => {
     if (!editar) return
     setEdicion((s) => ({ ...s, foto: dataUrl }))
-    try { await guardarCampos('users', editar.id, { foto: dataUrl }); setMsg({ tipo: 'ok', txt: t('Foto de perfil actualizada.') }) }
+    try { await guardarAvatar(tenantId, editar.id, dataUrl); setMsg({ tipo: 'ok', txt: t('Foto de perfil actualizada.') }) }
     catch { setMsg({ tipo: 'error', txt: t('No se pudo guardar la foto. ¿Falta desplegar las reglas nuevas?') }) }
   }
   // Roles seleccionables al editar (incluye el actual aunque no sea "asignable", p. ej. super_admin).
@@ -436,7 +438,7 @@ export default function BulkUsuarios() {
           renderCell={(row, key) => {
             if (key === 'nombre') return (
               <div className="flex items-center gap-3">
-                <Avatar foto={row.foto} nombre={row.nombre} size={42} />
+                <Avatar foto={avatares[row.id]} nombre={row.nombre} size={42} />
                 <div className="min-w-0">
                   <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
                   {Number.isFinite(codigoNum(row)) ? <UserId codigo={row.codigo} /> : <span className="font-mono text-[11px] tracking-wide text-slate-400">{t('ID')}: ········</span>}

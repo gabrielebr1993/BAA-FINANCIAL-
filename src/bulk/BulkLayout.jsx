@@ -12,7 +12,8 @@ import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocal
 import CambiarClave from './components/CambiarClave'
 import { UserId } from './components/UserId'
 import Avatar from './components/Avatar'
-import { guardarCampos } from './data/repo'
+import { guardarAvatar } from './data/repo'
+import { useFotoUsuario } from './data/useCodigoUsuario'
 import IndicadorConexion from './components/IndicadorConexion'
 import NotificacionesCentro from './components/NotificacionesCentro'
 import { KeyRound } from 'lucide-react'
@@ -27,10 +28,11 @@ export default function BulkLayout({ children }) {
   const [verClave, setVerClave] = useState(false)
   // Foto de perfil propia (cada usuario puede ponerla). Preview local instantáneo.
   const [miFoto, setMiFoto] = useState(null)
-  const fotoMostrar = miFoto ?? usuario?.foto ?? null
+  const fotoGuardada = useFotoUsuario(usuario?.id)
+  const fotoMostrar = miFoto ?? fotoGuardada ?? null
   const cambiarMiFoto = async (dataUrl) => {
     setMiFoto(dataUrl)
-    try { if (usuario?.id) await guardarCampos('users', usuario.id, { foto: dataUrl }) } catch { /* regla no desplegada */ }
+    try { if (usuario?.id) await guardarAvatar(usuario.tenantId, usuario.id, dataUrl) } catch { /* regla no desplegada */ }
   }
   // Menú lateral: se puede ocultar/mostrar. Recordamos la preferencia.
   const [menuAbierto, setMenuAbierto] = useState(() => {
