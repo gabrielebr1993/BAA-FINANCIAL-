@@ -385,15 +385,17 @@ export default function BulkUsuarios() {
                 <Input type="password" value={edicion.password} onChange={setEd('password')} placeholder={t('Dejar en blanco para no cambiarla')} className="h-11 w-full text-sm" />
                 <p className="mt-1 text-[11px] text-slate-400">{t('Mínimo 6 caracteres. Si lo dejas vacío, la contraseña no cambia.')}</p>
               </div>
-              <div>
-                <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Rol')}</div>
-                <Select value={edicion.rol} onChange={setEd('rol')} className="h-11 w-full text-sm">
-                  {opcionesRolEdit.map((r) => <option key={r} value={r}>{label(r) || r}</option>)}
-                </Select>
-                {edicion.rol !== editar.rol && (
-                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Al cambiar el rol, la persona deberá volver a iniciar sesión.')}{[BULK_ROLES.CLIENTE, BULK_ROLES.TRANSPORTISTA, BULK_ROLES.CHOFER].includes(edicion.rol) ? ` ${t('Este rol necesita estar vinculado a un cliente/transportista (se asigna al crear la cuenta).')}` : ''}</p>
-                )}
-              </div>
+              {editar.rol !== BULK_ROLES.SUPER_ADMIN && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Rol')}</div>
+                  <Select value={edicion.rol} onChange={setEd('rol')} className="h-11 w-full text-sm">
+                    {opcionesRolEdit.map((r) => <option key={r} value={r}>{label(r) || r}</option>)}
+                  </Select>
+                  {edicion.rol !== editar.rol && (
+                    <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Al cambiar el rol, la persona deberá volver a iniciar sesión.')}{[BULK_ROLES.CLIENTE, BULK_ROLES.TRANSPORTISTA, BULK_ROLES.CHOFER].includes(edicion.rol) ? ` ${t('Este rol necesita estar vinculado a un cliente/transportista (se asigna al crear la cuenta).')}` : ''}</p>
+                  )}
+                </div>
+              )}
               {edicion.rol === BULK_ROLES.SUPERVISOR_PLANTA && (
                 <div>
                   <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Planta')}</div>
