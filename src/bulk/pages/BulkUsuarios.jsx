@@ -66,6 +66,7 @@ export default function BulkUsuarios() {
   const [rolFiltro, setRolFiltro] = useState('') // '' = todos los roles
   const [alta, setAlta] = useState(false)
   const [objetivoCierre, setObjetivoCierre] = useState('') // '' | 'ALL' | <rol> — a quién cerrar sesión
+  const [usuarioCierre, setUsuarioCierre] = useState('')   // uid de la persona específica a cerrar sesión
   // Copia el ID (uid) de un usuario al portapapeles (para pegarlo/buscarlo cómodo).
   const copiarId = async (id) => {
     try { await navigator.clipboard.writeText(id || ''); setMsg({ tipo: 'ok', txt: `${t('ID copiado')}: ${id}` }) } catch { /* noop */ }
@@ -179,6 +180,13 @@ export default function BulkUsuarios() {
     else await forzarRol(objetivoCierre)
     setObjetivoCierre('')
   }
+  // Cierra la sesión de UNA persona concreta elegida en el desplegable.
+  const cerrarPersonaSel = async () => {
+    const u = usuarios.find((x) => x.id === usuarioCierre)
+    if (!u) return
+    await forzarUsuario(u)
+    setUsuarioCierre('')
+  }
 
   // ── Filtro cómodo: texto (nombre, correo, ID o rol) + desplegable por ROL ──
   const s = buscar.trim().toLowerCase()
@@ -202,11 +210,11 @@ export default function BulkUsuarios() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1 sm:max-w-md">
-          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar por nombre, correo, ID o rol…')} className="w-full pl-8 pr-8" />
-          {buscar && <button type="button" onClick={() => setBuscar('')} title={t('Limpiar')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X size={15} /></button>}
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar por nombre, correo, ID o rol…')} className="h-11 w-full pl-9 pr-9 text-sm" />
+          {buscar && <button type="button" onClick={() => setBuscar('')} title={t('Limpiar')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X size={16} /></button>}
         </div>
-        <Select value={rolFiltro} onChange={(e) => setRolFiltro(e.target.value)} className="w-auto min-w-[150px]">
+        <Select value={rolFiltro} onChange={(e) => setRolFiltro(e.target.value)} className="h-11 w-full min-w-[180px] text-sm sm:w-auto">
           <option value="">{t('Todos los roles')}</option>
           {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
         </Select>
@@ -254,12 +262,26 @@ export default function BulkUsuarios() {
           <Power size={16} className="text-brand-gold" />
           <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cerrar sesiones')}</h3>
         </div>
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Obliga a los usuarios a volver a iniciar sesión. Útil tras un cambio de contraseña o por seguridad.')}</p>
-        {/* Selección deliberada del objetivo (evita cerrar sesión a TODOS por accidente). */}
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[220px] flex-1 sm:max-w-xs">
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('¿A quién?')}</div>
-            <Select value={objetivoCierre} onChange={(e) => setObjetivoCierre(e.target.value)}>
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">{t('Obliga a los usuarios a volver a iniciar sesión. Útil tras un cambio de contraseña o por seguridad.')}</p>
+        {/* Dos filtros del MISMO tamaño: una persona específica, o por rol / todos. */}
+        <div className="grid items-stretch gap-4 md:grid-cols-2">
+          {/* Persona específica */}
+          <div className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/40">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400"><LogOut size={14} className="text-brand-gold" /> {t('Una persona específica')}</div>
+            <Select value={usuarioCierre} onChange={(e) => setUsuarioCierre(e.target.value)} className="h-11 w-full text-sm">
+              <option value="">{t('— Selecciona una persona —')}</option>
+              {usuarios.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => (
+                <option key={u.id} value={u.id}>{(u.nombre || t('Sin nombre'))} · ID {idVisible(u)} · {label(u.rol) || u.rol}</option>
+              ))}
+            </Select>
+            <Boton variant="gold" onClick={cerrarPersonaSel} disabled={!usuarioCierre} className="mt-3 h-11 w-full">
+              <Power size={15} /> {t('Cerrar su sesión')}
+            </Boton>
+          </div>
+          {/* Por rol o todo el sistema */}
+          <div className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/40">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400"><ShieldCheck size={14} className="text-brand-gold" /> {t('Por rol o todo el sistema')}</div>
+            <Select value={objetivoCierre} onChange={(e) => setObjetivoCierre(e.target.value)} className="h-11 w-full text-sm">
               <option value="">{t('— Selecciona un objetivo —')}</option>
               <optgroup label={t('Por rol')}>
                 {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
@@ -268,14 +290,10 @@ export default function BulkUsuarios() {
                 <option value="ALL">⚠ {t('Todos los usuarios')}</option>
               </optgroup>
             </Select>
+            <Boton variant={objetivoCierre === 'ALL' ? 'danger' : 'gold'} onClick={aplicarCierre} disabled={!objetivoCierre} className="mt-3 h-11 w-full">
+              <Power size={15} /> {objetivoCierre === 'ALL' ? t('Cerrar sesión a TODOS') : objetivoCierre ? `${t('Cerrar sesión')}: ${label(objetivoCierre)}` : t('Cerrar sesión')}
+            </Boton>
           </div>
-          <Boton
-            variant={objetivoCierre === 'ALL' ? 'danger' : 'gold'}
-            onClick={aplicarCierre}
-            disabled={!objetivoCierre}
-          >
-            <Power size={15} /> {objetivoCierre === 'ALL' ? t('Cerrar sesión a TODOS') : objetivoCierre ? `${t('Cerrar sesión')}: ${label(objetivoCierre)}` : t('Cerrar sesión')}
-          </Boton>
         </div>
       </Card>
 
