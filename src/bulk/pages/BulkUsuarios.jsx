@@ -40,7 +40,12 @@ export default function BulkUsuarios() {
   const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
   const [msg, setMsg] = useState(null)
   const [buscar, setBuscar] = useState('')
+  const [rolFiltro, setRolFiltro] = useState('') // '' = todos los roles
   const [alta, setAlta] = useState(false)
+  // Copia el ID (uid) de un usuario al portapapeles (para pegarlo/buscarlo cómodo).
+  const copiarId = async (id) => {
+    try { await navigator.clipboard.writeText(id || ''); setMsg({ tipo: 'ok', txt: `${t('ID copiado')}: ${id}` }) } catch { /* noop */ }
+  }
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const necesitaCliente = f.rol === BULK_ROLES.CLIENTE
   const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA
@@ -137,6 +142,19 @@ export default function BulkUsuarios() {
     setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión de')} ${u.email}.` })
   }
 
+  // ── Filtro cómodo: texto (nombre, correo, ID o rol) + desplegable por ROL ──
+  const s = buscar.trim().toLowerCase()
+  const usuariosFiltrados = usuarios
+    .filter((u) => (rolFiltro ? u.rol === rolFiltro : true))
+    .filter((u) => !s
+      || (u.nombre || '').toLowerCase().includes(s)
+      || (u.email || '').toLowerCase().includes(s)
+      || (u.id || '').toLowerCase().includes(s)
+      || (label(u.rol) || u.rol || '').toLowerCase().includes(s))
+    .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  const hayFiltro = !!s || !!rolFiltro
+  const limpiar = () => { setBuscar(''); setRolFiltro('') }
+
   if (cargando) return <Cargando />
   return (
     <div>
@@ -144,10 +162,17 @@ export default function BulkUsuarios() {
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-md">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar usuario…')} className="w-64 pl-8" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar por nombre, correo, ID o rol…')} className="w-full pl-8 pr-8" />
+          {buscar && <button type="button" onClick={() => setBuscar('')} title={t('Limpiar')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X size={15} /></button>}
         </div>
+        <Select value={rolFiltro} onChange={(e) => setRolFiltro(e.target.value)} className="w-auto min-w-[150px]">
+          <option value="">{t('Todos los roles')}</option>
+          {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
+        </Select>
+        <span className="whitespace-nowrap text-xs font-medium text-slate-400">{usuariosFiltrados.length} {usuariosFiltrados.length === 1 ? t('usuario') : t('usuarios')}</span>
+        {hayFiltro && <Boton variant="ghost" onClick={limpiar} className="px-3 py-1 text-xs"><X size={14} /> {t('Limpiar')}</Boton>}
         <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Nuevo usuario')}</>}</Boton>
       </div>
 
@@ -203,11 +228,15 @@ export default function BulkUsuarios() {
       <Card className="p-4">
         <Tabla
           columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'planta', label: t('Planta') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
-          rows={usuarios
-            .filter((u) => { const s = buscar.trim().toLowerCase(); return !s || (u.nombre || '').toLowerCase().includes(s) || (u.email || '').toLowerCase().includes(s) || (label(u.rol) || u.rol || '').toLowerCase().includes(s) })
-            .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')).map((u) => ({ ...u, _key: u.id }))}
-          emptyText={t('Sin usuarios.')}
+          rows={usuariosFiltrados.map((u) => ({ ...u, _key: u.id }))}
+          emptyText={hayFiltro ? t('Ningún usuario coincide con el filtro.') : t('Sin usuarios.')}
           renderCell={(row, key) => {
+            if (key === 'nombre') return (
+              <div className="min-w-0">
+                <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
+                <button type="button" onClick={() => copiarId(row.id)} title={`${t('Copiar ID')}: ${row.id}`} className="max-w-[160px] truncate font-mono text-[10px] text-slate-400 hover:text-brand-gold">ID: {row.id}</button>
+              </div>
+            )
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>
             if (key === 'planta') {
               if (row.rol !== BULK_ROLES.SUPERVISOR_PLANTA) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
