@@ -7,6 +7,7 @@ import { useInactividad } from '../hooks/useInactividad'
 import { activarPush } from './integraciones/fcm'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
+import LlamadaProvider from './components/LlamadaProvider'
 import { puedeVer } from './nav'
 import { Cargando } from '../components/ui'
 const BulkRoles = lazy(() => import('./pages/BulkRoles'))
@@ -129,7 +130,9 @@ function Interno() {
 export default function BulkApp() {
   return (
     <BulkAuthProvider>
-      <Interno />
+      <LlamadaProvider>
+        <Interno />
+      </LlamadaProvider>
     </BulkAuthProvider>
   )
 }

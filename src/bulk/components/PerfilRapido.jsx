@@ -5,9 +5,10 @@
 //   teléfono (si existe). No inventa datos: solo muestra lo que hay en la base.
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, User, Phone, ExternalLink } from 'lucide-react'
+import { X, User, Phone, ExternalLink, Video } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
+import { useLlamada } from './LlamadaProvider'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Badge } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -19,10 +20,14 @@ const COLOR_ROL = { cliente: 'green', transportista: 'gold', chofer: 'navy', sup
 export default function PerfilRapido({ autor, onClose }) {
   const { t } = useLang()
   const navigate = useNavigate()
-  const { rol } = useBulkAuth()
+  const { rol, usuario } = useBulkAuth()
+  const { iniciar } = useLlamada()
   const { datos: carriers } = useColeccion('carriers')
   const esStaff = STAFF.includes(rol)
   const esChofer = autor?.rol === 'chofer'
+  // Se puede llamar por la app si el autor tiene uid y no soy yo.
+  const puedeLlamar = !!autor?.id && autor.id !== usuario?.id
+  const llamar = (tipo) => { onClose(); iniciar(autor.id, autor.nombre, tipo) }
 
   // Datos del chofer desde el roster (única fuente con foto/teléfono real).
   const infoChofer = useMemo(() => {
@@ -60,6 +65,14 @@ export default function PerfilRapido({ autor, onClose }) {
           {telefono
             ? <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><Phone size={14} className="text-amber-500" /> {telefono}</div>
             : <div className="text-xs text-slate-400"><User size={12} className="mr-1 inline" /> {t('Sin teléfono registrado.')}</div>}
+
+          {/* Llamada 1-a-1 dentro de la app (voz / video). */}
+          {puedeLlamar && (
+            <div className="flex gap-2">
+              <button type="button" onClick={() => llamar('audio')} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-bold text-white transition hover:bg-emerald-600"><Phone size={15} /> {t('Llamar')}</button>
+              <button type="button" onClick={() => llamar('video')} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-navy px-3 py-2 text-sm font-bold text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /> {t('Video')}</button>
+            </div>
+          )}
 
           {esStaff && esChofer && (
             <button
