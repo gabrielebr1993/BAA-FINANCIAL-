@@ -21,9 +21,10 @@ import {
 import { updateDoc } from 'firebase/firestore'
 import Avatar from './Avatar'
 import { useAvatares } from '../data/useCodigoUsuario'
+import LlamadaGrupoModal from './LlamadaGrupoModal'
 import { useLang } from '../../i18n'
 
-const LlamadaContext = createContext({ iniciar: () => {}, iniciarGrupo: () => {} })
+const LlamadaContext = createContext({ iniciar: () => {}, iniciarGrupo: () => {}, pedirLlamadaGrupo: () => {} })
 export const useLlamada = () => useContext(LlamadaContext)
 
 // Baldosa de un participante REMOTO en la llamada grupal. Se define fuera del
@@ -110,6 +111,9 @@ export default function LlamadaProvider({ children }) {
   //   mano, audioCtx, analyser, raf }). Una conexión P2P por cada otro participante.
   const [remotos, setRemotos] = useState([]) // [{uid, nombre, rol, hablando, mano}]
   const [agregarAbierto, setAgregarAbierto] = useState(false)
+  // Selector de personas (directorio + matriz) para INICIAR una llamada grupal o
+  // AÑADIR personas: garantiza invitar uids REALES (así el timbre sí les llega).
+  const [pickGrupo, setPickGrupo] = useState(null) // { tipo, titulo, preseleccion:[uid], onConfirmar }
   const peersRef = useRef(new Map())
   const salaIdRef = useRef(null)
   const salaDataRef = useRef(null)
@@ -551,6 +555,16 @@ export default function LlamadaProvider({ children }) {
     } catch (e) { limpiarGrupo(); avisoMedios(e) }
   }, [usuario, tenantId, rol, limpiarGrupo, t])
 
+  // Abre el selector de contactos para iniciar una llamada grupal. `preseleccion` =
+  // uids ya conocidos del chat (se muestran marcados); el usuario puede añadir/quitar.
+  const pedirLlamadaGrupo = useCallback((tipo = 'audio', ctx = null, nombre = '', preseleccion = []) => {
+    if (faseRef.current !== 'idle') return
+    setPickGrupo({
+      tipo, titulo: nombre, preseleccion: (preseleccion || []).filter(Boolean),
+      onConfirmar: (personas) => iniciarGrupo(personas, tipo, ctx, nombre),
+    })
+  }, [iniciarGrupo])
+
   const unirseAGrupo = async (sala) => {
     esGrupoRef.current = true; ctxRef.current = sala.ctx || null; tipoRef.current = sala.tipo; inicioRef.current = null
     try {
@@ -793,8 +807,21 @@ export default function LlamadaProvider({ children }) {
   const totalGrupo = remotos.length + 1
 
   return (
-    <LlamadaContext.Provider value={{ iniciar, iniciarGrupo, enLlamada: fase !== 'idle' }}>
+    <LlamadaContext.Provider value={{ iniciar, iniciarGrupo, pedirLlamadaGrupo, enLlamada: fase !== 'idle' }}>
       {children}
+
+      {/* Selector de personas para llamada grupal / añadir (directorio + matriz → uids reales). */}
+      {pickGrupo && (
+        <LlamadaGrupoModal
+          yo={{ uid: usuario?.id, rol, carrierId: usuario?.carrierId || null, clienteId: usuario?.clienteId || null }}
+          tenantId={tenantId}
+          tipo={pickGrupo.tipo}
+          titulo={pickGrupo.titulo}
+          preseleccion={pickGrupo.preseleccion}
+          onConfirmar={(personas) => pickGrupo.onConfirmar?.(personas)}
+          onClose={() => setPickGrupo(null)}
+        />
+      )}
 
       {/* Timbre de llamada ENTRANTE — moderno, con anillo pulsante */}
       {fase === 'entrante' && entrante && (
@@ -987,7 +1014,7 @@ export default function LlamadaProvider({ children }) {
             {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
             {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
             {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
-            {info?.grupo && candidatosAgregar.length > 0 && <Ctrl onClick={() => setAgregarAbierto((v) => !v)} label={t('Agregar')} activo={agregarAbierto}><UserPlus size={22} /></Ctrl>}
+            {info?.grupo && <Ctrl onClick={() => setPickGrupo({ tipo: tipoRef.current, titulo: t('Agregar a la llamada'), preseleccion: [usuario?.id, ...remotos.map((r) => r.uid)].filter(Boolean), onConfirmar: (personas) => agregarPersonas(personas) })} label={t('Agregar')}><UserPlus size={22} /></Ctrl>}
             {!info?.grupo && <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>}
             <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
               <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>

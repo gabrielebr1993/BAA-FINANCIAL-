@@ -23,7 +23,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
   const avatares = useAvatares()
-  const { iniciar, iniciarGrupo } = useLlamada()
+  const { iniciar, pedirLlamadaGrupo } = useLlamada()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
   const borrarMensaje = async (m) => {
@@ -89,7 +89,10 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const ctxLlamada = { chatId: orden?.id, participantes: partProp != null ? partProp.filter(Boolean) : [orden?.choferId, orden?.transportistaId, orden?.clienteId].filter(Boolean) }
   // Contexto para llamada grupal (incluye candidatos para "agregar personas" en curso).
   const ctxGrupo = { ...ctxLlamada, candidatos: otrosChat }
-  const llamarGrupo = (tipo) => iniciarGrupo(otrosChat, tipo, ctxGrupo, orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal'))
+  // Abre el selector de personas (directorio + matriz) preseleccionando a quienes ya
+  // participan del chat. Garantiza invitar uids REALES → el timbre les llega.
+  const nombreSala = orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal')
+  const llamarGrupo = (tipo) => pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, otrosChat.map((x) => x.uid))
 
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
@@ -100,7 +103,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           <div className="ml-auto flex items-center gap-1.5">
             <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
             <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
-            {otrosChat.length >= 2 && (
+            {(
               <>
                 <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-700" />
                 <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={15} /></button>
