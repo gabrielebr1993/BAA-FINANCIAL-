@@ -236,12 +236,12 @@ export default function BulkUsuarios() {
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1 sm:max-w-md">
+        <div className="relative w-full sm:w-60">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar por nombre, correo, ID o rol…')} className="h-11 w-full pl-9 pr-9 text-sm" />
           {buscar && <button type="button" onClick={() => setBuscar('')} title={t('Limpiar')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X size={16} /></button>}
         </div>
-        <Select value={rolFiltro} onChange={(e) => setRolFiltro(e.target.value)} className="h-11 w-full min-w-[180px] text-sm sm:w-auto">
+        <Select value={rolFiltro} onChange={(e) => setRolFiltro(e.target.value)} className="h-11 w-full text-sm sm:w-60">
           <option value="">{t('Todos los roles')}</option>
           {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
         </Select>
