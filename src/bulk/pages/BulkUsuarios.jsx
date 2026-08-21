@@ -10,6 +10,7 @@ import { BULK_ROLES, BULK_ROLES_LABEL } from '../domain/constants'
 import { rolesPersonalizados, etiquetaRol } from '../domain/permisos'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, Tabla } from '../../components/ui'
 import { UserId } from '../components/UserId'
+import Avatar from '../components/Avatar'
 import { useLang } from '../../i18n'
 
 const ROLES_ASIGNABLES = [
@@ -160,7 +161,14 @@ export default function BulkUsuarios() {
   const abrirEditar = (u) => {
     setMsg(null)
     setEditar(u)
-    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '' })
+    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '', foto: u.foto || null })
+  }
+  // El admin cambia la foto de perfil del usuario en edición (regla lo permite).
+  const guardarFotoEditar = async (dataUrl) => {
+    if (!editar) return
+    setEdicion((s) => ({ ...s, foto: dataUrl }))
+    try { await guardarCampos('users', editar.id, { foto: dataUrl }); setMsg({ tipo: 'ok', txt: t('Foto de perfil actualizada.') }) }
+    catch { setMsg({ tipo: 'error', txt: t('No se pudo guardar la foto. ¿Falta desplegar las reglas nuevas?') }) }
   }
   // Roles seleccionables al editar (incluye el actual aunque no sea "asignable", p. ej. super_admin).
   const opcionesRolEdit = editar ? [...new Set([editar.rol, ...asignables].filter(Boolean))] : []
@@ -427,9 +435,12 @@ export default function BulkUsuarios() {
           emptyText={hayFiltro ? t('Ningún usuario coincide con el filtro.') : t('Sin usuarios.')}
           renderCell={(row, key) => {
             if (key === 'nombre') return (
-              <div className="min-w-0">
-                <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
-                {Number.isFinite(codigoNum(row)) ? <UserId codigo={row.codigo} /> : <span className="font-mono text-[11px] tracking-wide text-slate-400">{t('ID')}: ········</span>}
+              <div className="flex items-center gap-3">
+                <Avatar foto={row.foto} nombre={row.nombre} size={42} />
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
+                  {Number.isFinite(codigoNum(row)) ? <UserId codigo={row.codigo} /> : <span className="font-mono text-[11px] tracking-wide text-slate-400">{t('ID')}: ········</span>}
+                </div>
               </div>
             )
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>
@@ -459,8 +470,8 @@ export default function BulkUsuarios() {
       {editar && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => !guardandoEd && setEditar(null)}>
           <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-gold/15 text-brand-gold"><Pencil size={17} /></span>
+            <div className="mb-4 flex items-center gap-3">
+              <Avatar foto={edicion.foto} nombre={edicion.nombre || editar.nombre} size={52} editable onFoto={guardarFotoEditar} />
               <div className="min-w-0">
                 <h3 className="m-0 truncate text-sm font-bold text-brand-navy dark:text-slate-100">{t('Editar usuario')}</h3>
                 <p className="m-0 truncate text-xs text-slate-400">{t('ID')}: {Number.isFinite(codigoNum(editar)) ? `#${editar.codigo}` : '········'} · {label(editar.rol) || editar.rol}</p>

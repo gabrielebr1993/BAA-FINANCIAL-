@@ -10,6 +10,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useLlamada } from './LlamadaProvider'
 import { UserIdDeUid } from './UserId'
+import { useFotoUsuario } from '../data/useCodigoUsuario'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Badge } from '../../components/ui'
 import { useLang } from '../../i18n'
@@ -41,7 +42,9 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
     return null
   }, [carriers, autor, esChofer])
 
-  const foto = infoChofer?.foto || null
+  // Foto: la del roster (chofer) o la de la cuenta de usuario (cualquier rol).
+  const fotoCuenta = useFotoUsuario(autor?.id)
+  const foto = infoChofer?.foto || fotoCuenta || null
   const telefono = infoChofer?.telefono || null
   const inicial = (autor?.nombre || '?').charAt(0).toUpperCase()
 

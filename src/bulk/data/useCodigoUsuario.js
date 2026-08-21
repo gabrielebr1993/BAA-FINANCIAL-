@@ -6,14 +6,23 @@
 import { useEffect, useState } from 'react'
 import { suscribirDoc } from './repo'
 
-export function useCodigoUsuario(uid) {
-  const [codigo, setCodigo] = useState(null)
+// Devuelve el doc de perfil del usuario (o null) respetando permisos (reglas).
+export function usePerfilUsuario(uid) {
+  const [perfil, setPerfil] = useState(null)
   useEffect(() => {
-    if (!uid) { setCodigo(null); return }
+    if (!uid) { setPerfil(null); return }
     // suscribirDoc → get en tiempo real de bulk_users/{uid}. Si las reglas lo niegan
     // (rol sin permiso), el callback recibe null y no se muestra nada.
-    const off = suscribirDoc('users', uid, (d) => setCodigo(d?.codigo || null))
+    const off = suscribirDoc('users', uid, (d) => setPerfil(d || null))
     return off
   }, [uid])
-  return codigo
+  return perfil
+}
+
+export function useCodigoUsuario(uid) {
+  return usePerfilUsuario(uid)?.codigo || null
+}
+
+export function useFotoUsuario(uid) {
+  return usePerfilUsuario(uid)?.foto || null
 }

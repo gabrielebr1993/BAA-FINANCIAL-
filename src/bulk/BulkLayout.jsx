@@ -11,6 +11,8 @@ import { noLeidosPorConv } from './data/chat'
 import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import CambiarClave from './components/CambiarClave'
 import { UserId } from './components/UserId'
+import Avatar from './components/Avatar'
+import { guardarCampos } from './data/repo'
 import IndicadorConexion from './components/IndicadorConexion'
 import NotificacionesCentro from './components/NotificacionesCentro'
 import { KeyRound } from 'lucide-react'
@@ -23,6 +25,13 @@ export default function BulkLayout({ children }) {
   const navigate = useNavigate()
   const items = useMemo(() => navVisible(puede), [puede])
   const [verClave, setVerClave] = useState(false)
+  // Foto de perfil propia (cada usuario puede ponerla). Preview local instantáneo.
+  const [miFoto, setMiFoto] = useState(null)
+  const fotoMostrar = miFoto ?? usuario?.foto ?? null
+  const cambiarMiFoto = async (dataUrl) => {
+    setMiFoto(dataUrl)
+    try { if (usuario?.id) await guardarCampos('users', usuario.id, { foto: dataUrl }) } catch { /* regla no desplegada */ }
+  }
   // Menú lateral: se puede ocultar/mostrar. Recordamos la preferencia.
   const [menuAbierto, setMenuAbierto] = useState(() => {
     try { return localStorage.getItem('bulk_menu_oculto') !== '1' } catch { return true }
@@ -71,10 +80,13 @@ export default function BulkLayout({ children }) {
           ))}
         </nav>
         <div className="mt-2 flex-shrink-0 border-t border-slate-200 pt-2 dark:border-slate-800">
-          <div className="px-3 py-1 text-xs">
-            <div className="font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || usuario?.email}</div>
-            <div className="text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
-            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
+          <div className="flex items-center gap-2.5 px-3 py-1 text-xs">
+            <Avatar foto={fotoMostrar} nombre={usuario?.nombre || usuario?.email} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || usuario?.email}</div>
+              <div className="text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
+              {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
+            </div>
           </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
           <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>

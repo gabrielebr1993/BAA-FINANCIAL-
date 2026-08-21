@@ -54,6 +54,7 @@ export function BulkAuthProvider({ children }) {
             nombre: p.nombre || u.nombre,
             empresa: p.empresa || u.empresa,
             codigo: p.codigo || u.codigo || null, // ID único de 8 dígitos (identidad del usuario)
+            foto: p.foto || u.foto || null,       // foto de perfil (dataURL reducido)
             rol: u.rol || p.rol || null,
             tenantId: u.tenantId || p.tenantId || null,
             clienteId: u.clienteId || p.clienteId || null,
