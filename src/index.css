@@ -47,6 +47,23 @@
   .animate-float {
     animation: milepayfloat 5s ease-in-out infinite;
   }
+  /* Camión EN MOVIMIENTO (marca): vaivén sutil + rebote como carretera. */
+  @keyframes truckdrive {
+    0%   { transform: translateX(-2px) translateY(0); }
+    20%  { transform: translateX(0)    translateY(-1px); }
+    40%  { transform: translateX(2px)  translateY(0); }
+    60%  { transform: translateX(0)    translateY(-1px); }
+    80%  { transform: translateX(-1px) translateY(0); }
+    100% { transform: translateX(-2px) translateY(0); }
+  }
+  .animate-truck { animation: truckdrive 1.1s ease-in-out infinite; }
+  /* Líneas de velocidad que se deslizan hacia atrás. */
+  @keyframes speeddash {
+    0%   { opacity: .15; transform: translateX(4px) scaleX(.6); }
+    50%  { opacity: .8;  transform: translateX(-3px) scaleX(1); }
+    100% { opacity: .15; transform: translateX(4px) scaleX(.6); }
+  }
+  .animate-speed { animation: speeddash .8s linear infinite; transform-origin: right center; }
   /* Scrollbar sutil para contenedores con overflow */
   .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
   .scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-600 rounded-full; }

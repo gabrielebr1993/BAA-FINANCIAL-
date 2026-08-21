@@ -47,7 +47,7 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
       {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
       <aside className={`${menuAbierto ? 'flex' : 'hidden'} pt-safe fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>
-        <div className="mb-4 flex flex-shrink-0 items-center gap-2 px-2 py-1">
+        <div className="mb-2 flex flex-shrink-0 items-center gap-2 px-2 py-1">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900">{Icon && <Icon size={19} strokeWidth={2} />}</div>
           <div className="min-w-0">
             <div className="truncate text-base font-extrabold leading-none">{titulo}</div>
@@ -55,8 +55,8 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
           </div>
           <button onClick={alternarMenu} title={t('Ocultar menú')} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
-        {/* Mi perfil (arriba, separado de la marca): avatar grande + nombre + ID. */}
-        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/40">
+        {/* Mi perfil (arriba, cerca de la marca): avatar grande + nombre + ID. */}
+        <div className="mb-3 flex flex-shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/40">
           <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
           <div className="min-w-0">
             <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{usuario?.nombre || titulo}</div>
