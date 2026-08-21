@@ -14,14 +14,26 @@ import { useNavigate } from 'react-router-dom'
 import { LogOut, Grid2x2, PanelLeftClose, PanelLeft, KeyRound } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import CambiarClave from './CambiarClave'
+import Avatar from './Avatar'
+import { UserId } from './UserId'
+import { guardarAvatar } from '../data/repo'
+import { useFotoUsuario } from '../data/useCodigoUsuario'
 import IndicadorConexion from './IndicadorConexion'
 import { LangToggle, useLang } from '../../i18n'
 
 export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = [], activo, onSelect, campana, aviso, children }) {
   const { t } = useLang()
-  const { cerrarSesion } = useBulkAuth()
+  const { cerrarSesion, usuario } = useBulkAuth()
   const navigate = useNavigate()
   const [verClave, setVerClave] = useState(false)
+  // Foto de perfil propia (cualquier rol). Preview instantáneo (undefined=guardada, null=quitada).
+  const [miFoto, setMiFoto] = useState(undefined)
+  const fotoGuardada = useFotoUsuario(usuario?.id)
+  const fotoMostrar = miFoto !== undefined ? miFoto : (fotoGuardada ?? null)
+  const cambiarMiFoto = async (dataUrl) => {
+    setMiFoto(dataUrl || null)
+    try { if (usuario?.id) await guardarAvatar(usuario.tenantId, usuario.id, dataUrl || null) } catch { /* regla no desplegada */ }
+  }
   const [menuAbierto, setMenuAbierto] = useState(() => {
     try { return localStorage.getItem('bulk_portal_menu_oculto') !== '1' } catch { return true }
   })
@@ -57,6 +69,14 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
           ))}
         </nav>
         <div className="mt-2 flex-shrink-0 border-t border-slate-200 pt-2 dark:border-slate-800">
+          {/* Mi perfil: avatar (subir/cambiar/quitar), nombre e ID. */}
+          <div className="flex items-center gap-2.5 px-3 py-1.5">
+            <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || titulo}</div>
+              {usuario?.codigo && <UserId codigo={usuario.codigo} />}
+            </div>
+          </div>
           <div className="px-3 py-1.5"><LangToggle /></div>
           <button onClick={() => setVerClave(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound size={16} /> {t('Cambiar contraseña')}</button>
           <button onClick={() => navigate('/elegir')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><Grid2x2 size={16} /> {t('Cambiar módulo')}</button>
