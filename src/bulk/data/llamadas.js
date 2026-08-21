@@ -31,13 +31,16 @@ export async function crearLlamada({ tenantId, de, para, tipo }) {
 export const actualizarLlamada = (id, datos) => updateDoc(callRef(id), datos)
 export const agregarCandidato = (id, lado, cand) => addDoc(candCol(id, lado), cand)
 
-// Escucha las llamadas ENTRANTES para `uid` (estado 'llamando'). cb recibe {id,...}.
+// Escucha las llamadas ENTRANTES para `uid`. Consulta mínima (solo `para`, que ya
+// es único por usuario y las reglas restringen a los participantes); el estado y la
+// oferta se filtran en el cliente. Así evitamos cualquier requisito de índice.
 export function escucharEntrantes(tenantId, uid, cb) {
-  const q = query(callsCol(), where('tenantId', '==', tenantId), where('para', '==', uid), where('estado', '==', 'llamando'))
+  const q = query(callsCol(), where('para', '==', uid))
   return onSnapshot(q, (snap) => {
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .filter((c) => c.tenantId === tenantId && c.estado === 'llamando' && c.offer)
     cb(docs)
-  }, () => cb([]))
+  }, (err) => { console.warn('escucharEntrantes', err && err.code); cb([]) })
 }
 
 // Borra la llamada y sus candidatos (limpieza al colgar). Best-effort.

@@ -2,10 +2,11 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2 } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import PerfilRapido from './PerfilRapido'
+import { useLlamada } from './LlamadaProvider'
 import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Input } from '../../components/ui'
@@ -19,6 +20,7 @@ const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.len
 export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
+  const { iniciar } = useLlamada()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
   const borrarMensaje = async (m) => {
@@ -64,8 +66,21 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     navigator.geolocation.getCurrentPosition((p) => enviar({ tipo: 'ubicacion', ubicacion: { lat: p.coords.latitude, lng: p.coords.longitude } }), () => {}, { timeout: 5000 })
   }
 
+  // La "otra persona" del chat = autor más reciente distinto a mí (para poder llamarla).
+  let otro = null
+  for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otro = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
+
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
+      {otro && (
+        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
+          <button type="button" onClick={() => setPerfilRapido(otro)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{otro.nombre}</button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio')} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
+            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video')} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
+          </div>
+        </div>
+      )}
       <div className={`scroll-thin space-y-2 overflow-y-auto p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
         {msgs.length === 0 && <div className="py-6 text-center text-xs text-slate-400">{t('Sin mensajes. Escribe el primero.')}</div>}
         {msgs.map((m) => {
