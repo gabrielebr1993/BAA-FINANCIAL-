@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, guardarCampos } from '../data/repo'
+import { guardar, guardarCampos, reservarCodigo, reservarCodigos } from '../data/repo'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -54,10 +54,19 @@ export default function BulkUsuarios() {
     const faltanK = orden(clientes.filter((c) => !Number.isFinite(codigoNum(c))))
     if (!faltanU.length && !faltanC.length && !faltanK.length) return
     backfillRef.current = true
-    // El siguiente ID continúa DESPUÉS del mayor existente en cualquier colección.
-    let base = Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes))
-    const asignar = async (col, lista) => { for (const x of lista) { base += 1; try { await guardarCampos(col, x.id, { codigo: String(base) }) } catch { /* regla/permiso */ } } }
-    ;(async () => { await asignar('users', faltanU); await asignar('carriers', faltanC); await asignar('clients', faltanK) })()
+    const total = faltanU.length + faltanC.length + faltanK.length
+    // Reserva un bloque de IDs del contador atómico, sembrándolo por encima del mayor
+    // ID ya existente (piso) para no colisionar con los previos ni entre colecciones.
+    const piso = Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes))
+    ;(async () => {
+      let codigos = []
+      try { codigos = await reservarCodigos(tenantId, total, piso) } catch { codigos = [] }
+      if (codigos.length < total) { backfillRef.current = false; return }
+      let i = 0
+      for (const u of faltanU) { try { await guardarCampos('users', u.id, { codigo: codigos[i] }) } catch { /* permiso */ } i++ }
+      for (const c of faltanC) { try { await guardarCampos('carriers', c.id, { codigo: codigos[i] }) } catch { /* permiso */ } i++ }
+      for (const k of faltanK) { try { await guardarCampos('clients', k.id, { codigo: codigos[i] }) } catch { /* permiso */ } i++ }
+    })()
   }, [cargando, usuarios, carriers, clientes, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
@@ -112,11 +121,13 @@ export default function BulkUsuarios() {
         clienteId: necesitaCliente ? f.vinculo : undefined,
         carrierId: necesitaCarrier ? f.vinculo : (necesitaChofer ? rd.carrierId : undefined),
       })
-      // Asigna el ID legible de 8 dígitos (secuencial) a la cuenta recién creada.
+      // Asigna el ID único de 8 dígitos (del contador atómico) a la cuenta recién creada.
       let codigo = ''
       if (res?.uid) {
-        codigo = String(maxCodigo(usuarios) + 1)
-        try { await guardarCampos('users', res.uid, { codigo }) } catch { /* regla no desplegada aún */ }
+        try {
+          codigo = await reservarCodigo(tenantId, Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes)))
+          await guardarCampos('users', res.uid, { codigo })
+        } catch { /* regla no desplegada aún */ }
       }
       // Enlaza la ficha del roster con la cuenta recién creada (por uid).
       if (necesitaChofer && rd && res?.uid) {

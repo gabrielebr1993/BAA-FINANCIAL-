@@ -76,6 +76,34 @@ export async function crearConId(nombre, id, tenantId, datos) {
   await setDoc(ref(nombre, id), { ...datos, tenantId, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp() }, { merge: true })
 }
 
+// Reserva ATÓMICAMENTE `cantidad` IDs únicos y consecutivos de 8 dígitos para el
+// tenant, usando un contador transaccional (bulk_counters/{tenantId}.codigoSeq).
+// Es la ÚNICA fuente de IDs de perfil (usuarios y empresas comparten la secuencia →
+// nunca se repiten). `piso` eleva el contador si va por debajo del mayor ID ya
+// existente (sirve para sembrarlo la primera vez sin colisionar con los ya asignados).
+// Devuelve un array de strings con los IDs reservados.
+const CODIGO_BASE_SEQ = 10000000
+export async function reservarCodigos(tenantId, cantidad = 1, piso = 0) {
+  const cref = ref('counters', tenantId)
+  const n = Math.max(1, cantidad | 0)
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(cref)
+    const actual = snap.exists() ? Number(snap.data().codigoSeq) : NaN
+    let seq = Number.isFinite(actual) ? actual : CODIGO_BASE_SEQ
+    if (Number.isFinite(piso) && piso > seq) seq = piso
+    const fin = seq + n
+    tx.set(cref, { codigoSeq: fin, tenantId }, { merge: true })
+    const codigos = []
+    for (let i = seq + 1; i <= fin; i++) codigos.push(String(i))
+    return codigos
+  })
+}
+// Atajo para reservar UN solo ID.
+export async function reservarCodigo(tenantId, piso = 0) {
+  const [c] = await reservarCodigos(tenantId, 1, piso)
+  return c
+}
+
 export async function eliminar(nombre, id) {
   await deleteDoc(ref(nombre, id))
 }

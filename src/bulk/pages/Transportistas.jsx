@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Trash2, Truck, Check, Pencil } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { crear, guardar, eliminar } from '../data/repo'
+import { crear, guardar, eliminar, reservarCodigo } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Badge, Cargando, EstadoVacio } from '../../components/ui'
 import { Gate } from '../components/Gate'
@@ -30,7 +30,10 @@ export default function Transportistas() {
   const agregar = async () => {
     if (!form.nombre.trim()) return
     setOcupado(true)
-    await crear('carriers', tenantId, { nombre: form.nombre.trim(), contacto: form.contacto.trim(), equipos: form.equipos, activo: true })
+    // ID único de perfil (mismo contador global que usuarios y clientes) al crear.
+    let codigo = null
+    try { const piso = carriers.reduce((m, c) => { const n = parseInt(c?.codigo, 10); return Number.isFinite(n) && n > m ? n : m }, 0); codigo = await reservarCodigo(tenantId, piso) } catch { /* se rellena luego en Usuarios */ }
+    await crear('carriers', tenantId, { nombre: form.nombre.trim(), contacto: form.contacto.trim(), equipos: form.equipos, activo: true, ...(codigo ? { codigo } : {}) })
     setForm({ nombre: '', contacto: '', equipos: [] }); setOcupado(false)
   }
   const borrar = async (c) => { if (window.confirm(`${t('¿Eliminar transportista')} "${c.nombre}"?`)) await eliminar('carriers', c.id) }

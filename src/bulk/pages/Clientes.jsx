@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Building2, MapPin, Trash2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { crear, eliminar } from '../data/repo'
+import { crear, eliminar, reservarCodigo } from '../data/repo'
 import { where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
@@ -99,7 +99,10 @@ export default function Clientes() {
 
   const agregar = async () => {
     if (!f.nombre.trim()) return
-    await crear('clients', tenantId, { nombre: f.nombre.trim(), rfc: f.rfc.trim(), contacto: f.contacto.trim(), facturacion: f.facturacion.trim(), activo: true })
+    // ID único de perfil (mismo contador global que usuarios y transportistas) al crear.
+    let codigo = null
+    try { const piso = clientes.reduce((m, c) => { const n = parseInt(c?.codigo, 10); return Number.isFinite(n) && n > m ? n : m }, 0); codigo = await reservarCodigo(tenantId, piso) } catch { /* se rellena luego en Usuarios */ }
+    await crear('clients', tenantId, { nombre: f.nombre.trim(), rfc: f.rfc.trim(), contacto: f.contacto.trim(), facturacion: f.facturacion.trim(), activo: true, ...(codigo ? { codigo } : {}) })
     setF({ nombre: '', rfc: '', contacto: '', facturacion: '' })
   }
 
