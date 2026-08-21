@@ -41,17 +41,24 @@ export default function BulkUsuarios() {
   const maxCodigo = (lista) => lista.reduce((m, u) => { const n = codigoNum(u); return Number.isFinite(n) && n > m ? n : m }, CODIGO_BASE)
   const idVisible = (u) => (Number.isFinite(codigoNum(u)) ? String(u.codigo) : '········')
 
-  // Relleno automático (una vez) de los IDs faltantes, en orden estable.
+  // Relleno automático (una vez) de los IDs faltantes, en orden estable. El ID es
+  // ÚNICO y GLOBAL entre TODOS los perfiles: usuarios, transportistas (empresa) y
+  // clientes (empresa). Así dos "carlos" se distinguen por su #ID, y una empresa
+  // también tiene su propio identificador de perfil.
   const backfillRef = useRef(false)
   useEffect(() => {
     if (backfillRef.current || cargando || !esAdmin) return
-    const faltan = usuarios.filter((u) => !Number.isFinite(codigoNum(u)))
-    if (!faltan.length) return
+    const orden = (l) => l.slice().sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0) || (a.nombre || '').localeCompare(b.nombre || ''))
+    const faltanU = orden(usuarios.filter((u) => !Number.isFinite(codigoNum(u))))
+    const faltanC = orden(carriers.filter((c) => !Number.isFinite(codigoNum(c))))
+    const faltanK = orden(clientes.filter((c) => !Number.isFinite(codigoNum(c))))
+    if (!faltanU.length && !faltanC.length && !faltanK.length) return
     backfillRef.current = true
-    let base = maxCodigo(usuarios)
-    const orden = faltan.slice().sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0) || (a.nombre || '').localeCompare(b.nombre || ''))
-    ;(async () => { for (const u of orden) { base += 1; try { await guardarCampos('users', u.id, { codigo: String(base) }) } catch { /* regla no desplegada */ } } })()
-  }, [cargando, usuarios, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+    // El siguiente ID continúa DESPUÉS del mayor existente en cualquier colección.
+    let base = Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes))
+    const asignar = async (col, lista) => { for (const x of lista) { base += 1; try { await guardarCampos(col, x.id, { codigo: String(base) }) } catch { /* regla/permiso */ } } }
+    ;(async () => { await asignar('users', faltanU); await asignar('carriers', faltanC); await asignar('clients', faltanK) })()
+  }, [cargando, usuarios, carriers, clientes, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
   // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.

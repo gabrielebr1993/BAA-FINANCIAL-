@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { PageTitle, Card, Badge, Cargando, Tabla, Aviso } from '../../components/ui'
+import { UserId } from '../components/UserId'
 import { useLang } from '../../i18n'
 
 const FINAL = [E.ENTREGADA, E.LIBERADA, E.CERRADA, E.CANCELADA]
@@ -23,6 +24,8 @@ export default function BulkDiagnostico() {
 
   const carrierPorId = useMemo(() => Object.fromEntries((carriers || []).map((c) => [c.id, c])), [carriers])
   const nombreCarrier = (id) => carrierPorId[id]?.nombre || null
+  // Mapa uid → #ID (codigo) para identificar choferes/presencias por su número.
+  const codigoPorUid = useMemo(() => Object.fromEntries((usuarios || []).filter((u) => u.codigo).map((u) => [u.id, u.codigo])), [usuarios])
 
   // Carriers con NOMBRE duplicado (posible causa: transportista y chofer apuntan a docs distintos).
   const duplicados = useMemo(() => {
@@ -57,8 +60,8 @@ export default function BulkDiagnostico() {
           rows={(carriers || []).map((c) => ({ ...c, _key: c.id }))}
           renderCell={(c, k) => {
             if (k === 'id') return <span className="font-mono text-xs">{c.id}</span>
-            if (k === 'choferes') return <span className="text-xs text-slate-500">{(c.choferes || []).map((d) => `${d.nombre}${d.uid ? '' : ' (sin uid)'}`).join(', ') || '—'}</span>
-            return c.nombre
+            if (k === 'choferes') return <span className="text-xs text-slate-500">{(c.choferes || []).map((d) => `${d.nombre}${d.uid ? (codigoPorUid[d.uid] ? ` #${codigoPorUid[d.uid]}` : '') : ' (sin uid)'}`).join(', ') || '—'}</span>
+            return <div className="min-w-0"><div className="font-medium text-brand-navy dark:text-slate-100">{c.nombre}</div><UserId codigo={c.codigo} /></div>
           }}
           minWidth="min-w-[560px]"
         />
@@ -75,7 +78,7 @@ export default function BulkDiagnostico() {
             if (k === 'ok') return u.carrierId
               ? (nombreCarrier(u.carrierId) ? <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 size={13} /> {nombreCarrier(u.carrierId)}</span> : <span className="inline-flex items-center gap-1 text-rose-600"><AlertTriangle size={13} /> {t('NO existe')}</span>)
               : <span className="text-rose-600">{t('sin carrierId')}</span>
-            return u.nombre
+            return <div className="min-w-0"><div className="font-medium text-brand-navy dark:text-slate-100">{u.nombre}</div><UserId codigo={u.codigo} /></div>
           }}
           minWidth="min-w-[620px]"
         />
@@ -90,7 +93,7 @@ export default function BulkDiagnostico() {
             if (k === 'enLinea') return <Badge color={p.enLinea ? 'green' : 'slate'}>{p.enLinea ? t('Sí') : t('No')}</Badge>
             if (k === 'carrierId') return <span className="font-mono text-xs">{corto(p.carrierId)}</span>
             if (k === 'carrier') return nombreCarrier(p.carrierId) || <span className="text-rose-600">{t('NO coincide con ningún carrier')}</span>
-            return p.nombre
+            return <div className="min-w-0"><div>{p.nombre}</div><UserId codigo={p.uid && codigoPorUid[p.uid]} /></div>
           }}
           minWidth="min-w-[560px]"
         />

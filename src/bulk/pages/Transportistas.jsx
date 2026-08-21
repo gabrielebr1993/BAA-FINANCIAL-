@@ -6,6 +6,7 @@ import { crear, guardar, eliminar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Badge, Cargando, EstadoVacio } from '../../components/ui'
 import { Gate } from '../components/Gate'
+import { UserId } from '../components/UserId'
 import { useLang } from '../../i18n'
 
 export default function Transportistas() {
@@ -71,6 +72,7 @@ export default function Transportistas() {
                 <Link to={`/bulk/transportistas/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 <Gate perm="transportistas.eliminar"><button onClick={() => borrar(c)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
               </div>
+              <div className="mb-1"><UserId codigo={c.codigo} /></div>
               {c.contacto && <div className="mb-2 text-xs text-slate-400">{c.contacto}</div>}
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('Equipos')}</span>

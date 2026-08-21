@@ -13,6 +13,7 @@ import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL } from '../domain/constants'
 import { Card, Badge, Cargando, EstadoVacio, Boton, Spinner, Input } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
+import { UserId } from '../components/UserId'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const ACTIVAS = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
@@ -126,6 +127,7 @@ export default function TransportistaPerfil() {
           <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{carrier.nombre}</h1>
+              <UserId codigo={carrier.codigo} />
               <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                 {carrier.contacto && <span className="inline-flex items-center gap-1"><Phone size={12} /> {carrier.contacto}</span>}
                 <span className="inline-flex items-center gap-1"><User size={12} /> {choferes.length} {t('chofer(es)')}</span>

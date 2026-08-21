@@ -7,6 +7,7 @@ import { where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
 import { Gate } from '../components/Gate'
+import { UserId } from '../components/UserId'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -124,6 +125,7 @@ export default function Clientes() {
               <div className="flex items-center gap-2">
                 <Building2 size={17} className="text-amber-500" />
                 <Link to={`/bulk/cliente/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
+                <UserId codigo={c.codigo} />
                 {c.rfc && <Badge color="slate">{c.rfc}</Badge>}
                 <button onClick={() => setAbierto(abierto === c.id ? null : c.id)} className="ml-auto text-xs text-amber-600 hover:underline">{abierto === c.id ? t('Ocultar plantas') : t('Ver / agregar plantas')}</button>
                 <Gate perm="clientes.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar cliente "')}${c.nombre}${t('"?')}`) && eliminar('clients', c.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>

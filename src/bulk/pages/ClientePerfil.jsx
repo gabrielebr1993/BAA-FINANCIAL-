@@ -11,6 +11,7 @@ import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 import TarifasCliente from '../components/TarifasCliente'
 import { Gate } from '../components/Gate'
+import { UserId } from '../components/UserId'
 
 const FIN = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
@@ -83,6 +84,7 @@ export default function ClientePerfil() {
             <h1 className="m-0 truncate text-xl font-black text-brand-navy dark:text-slate-100">{cliente.nombre}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
               <span className="inline-flex items-center gap-1"><Building2 size={12} /> {t('Cliente')}</span>
+              <UserId codigo={cliente.codigo} />
               {cliente.rfc && <span className="inline-flex items-center gap-1"><Hash size={11} /> {cliente.rfc}</span>}
               {cliente.contacto && <span>{cliente.contacto}</span>}
               {cliente.facturacion && <Badge color="slate">{cliente.facturacion}</Badge>}

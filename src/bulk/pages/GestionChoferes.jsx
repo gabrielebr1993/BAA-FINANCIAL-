@@ -7,6 +7,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { PageTitle, Card, Boton, Input, Select, Cargando, EstadoVacio } from '../../components/ui'
 import { Gate } from '../components/Gate'
+import { UserIdDeUid } from '../components/UserId'
 
 const nuevoId = () => `d_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
@@ -164,6 +165,7 @@ export default function GestionChoferes() {
                         <div className="flex items-center gap-1">
                           <Link to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} className="text-sm font-semibold text-brand-navy hover:text-amber-600 dark:text-slate-100">{d.nombre}</Link>
                           <button onClick={() => renombrar(c, d)} title="Renombrar" className="text-slate-400 hover:text-amber-600"><Pencil size={12} /></button>
+                          <UserIdDeUid uid={d.uid} />
                         </div>
                         <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
                           {d.telefono && <span className="inline-flex items-center gap-0.5"><Phone size={10} /> {d.telefono}</span>}
