@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound, LogOut, Power } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { guardar } from '../data/repo'
@@ -24,10 +24,33 @@ export default function BulkUsuarios() {
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
 
+  const esAdmin = rol === BULK_ROLES.ADMIN || rol === BULK_ROLES.SUPER_ADMIN
+
   // Roles asignables = built-in + los ROLES NUEVOS que el admin haya creado (Fase 4).
   const asignables = [...ROLES_ASIGNABLES, ...rolesPersonalizados(rolesConfig)]
   // Etiqueta de un rol: built-in traducido, o el nombre del rol personalizado.
   const label = (r) => (BULK_ROLES_LABEL[r] ? t(BULK_ROLES_LABEL[r]) : etiquetaRol(r, rolesConfig))
+
+  // ── IDENTIFICACIÓN LEGIBLE de 8 dígitos (campo `codigo`) ────────────────────
+  // El uid de Auth es una cadena larga; para el día a día cada usuario lleva un ID
+  // ÚNICO de 8 dígitos, secuencial (el siguiente = mayor existente + 1). Se asigna al
+  // crear y se rellena a los usuarios antiguos que aún no lo tengan.
+  const CODIGO_BASE = 10000000
+  const codigoNum = (u) => { const n = parseInt(u?.codigo, 10); return Number.isFinite(n) ? n : NaN }
+  const maxCodigo = (lista) => lista.reduce((m, u) => { const n = codigoNum(u); return Number.isFinite(n) && n > m ? n : m }, CODIGO_BASE)
+  const idVisible = (u) => (Number.isFinite(codigoNum(u)) ? String(u.codigo) : '········')
+
+  // Relleno automático (una vez) de los IDs faltantes, en orden estable.
+  const backfillRef = useRef(false)
+  useEffect(() => {
+    if (backfillRef.current || cargando || !esAdmin) return
+    const faltan = usuarios.filter((u) => !Number.isFinite(codigoNum(u)))
+    if (!faltan.length) return
+    backfillRef.current = true
+    let base = maxCodigo(usuarios)
+    const orden = faltan.slice().sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0) || (a.nombre || '').localeCompare(b.nombre || ''))
+    ;(async () => { for (const u of orden) { base += 1; try { await guardar('users', u.id, { codigo: String(base) }) } catch { /* regla no desplegada */ } } })()
+  }, [cargando, usuarios, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
   // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.
@@ -42,6 +65,7 @@ export default function BulkUsuarios() {
   const [buscar, setBuscar] = useState('')
   const [rolFiltro, setRolFiltro] = useState('') // '' = todos los roles
   const [alta, setAlta] = useState(false)
+  const [objetivoCierre, setObjetivoCierre] = useState('') // '' | 'ALL' | <rol> — a quién cerrar sesión
   // Copia el ID (uid) de un usuario al portapapeles (para pegarlo/buscarlo cómodo).
   const copiarId = async (id) => {
     try { await navigator.clipboard.writeText(id || ''); setMsg({ tipo: 'ok', txt: `${t('ID copiado')}: ${id}` }) } catch { /* noop */ }
@@ -80,14 +104,20 @@ export default function BulkUsuarios() {
         clienteId: necesitaCliente ? f.vinculo : undefined,
         carrierId: necesitaCarrier ? f.vinculo : (necesitaChofer ? rd.carrierId : undefined),
       })
+      // Asigna el ID legible de 8 dígitos (secuencial) a la cuenta recién creada.
+      let codigo = ''
+      if (res?.uid) {
+        codigo = String(maxCodigo(usuarios) + 1)
+        try { await guardar('users', res.uid, { codigo }) } catch { /* regla no desplegada aún */ }
+      }
       // Enlaza la ficha del roster con la cuenta recién creada (por uid).
       if (necesitaChofer && rd && res?.uid) {
         const carrier = carriers.find((c) => c.id === rd.carrierId)
         if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid } : d)) })
       }
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})${rd ? ` → ${rd.nombre}` : ''}` })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})${codigo ? ` · ID ${codigo}` : ''}${rd ? ` → ${rd.nombre}` : ''}` })
       setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
-      setMsg({ tipo: 'ok', txt: t('Usuario creado.') })
+      setMsg({ tipo: 'ok', txt: `${t('Usuario creado.')}${codigo ? ` ID: ${codigo}` : ''}` })
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo crear (¿backend desplegado?).') }) }
   }
   const borrar = async (u) => {
@@ -141,6 +171,14 @@ export default function BulkUsuarios() {
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'cerrar_sesiones', entidad: 'usuario', detalle: u.email })
     setMsg({ tipo: 'ok', txt: `${t('Se cerró la sesión de')} ${u.email}.` })
   }
+  // Aplica el cierre según el objetivo elegido en la lista (evita clics accidentales
+  // en "TODOS": hay que seleccionarlo a propósito y luego confirmar).
+  const aplicarCierre = async () => {
+    if (!objetivoCierre) return
+    if (objetivoCierre === 'ALL') await forzarTodos()
+    else await forzarRol(objetivoCierre)
+    setObjetivoCierre('')
+  }
 
   // ── Filtro cómodo: texto (nombre, correo, ID o rol) + desplegable por ROL ──
   const s = buscar.trim().toLowerCase()
@@ -149,6 +187,7 @@ export default function BulkUsuarios() {
     .filter((u) => !s
       || (u.nombre || '').toLowerCase().includes(s)
       || (u.email || '').toLowerCase().includes(s)
+      || (u.codigo || '').toLowerCase().includes(s)
       || (u.id || '').toLowerCase().includes(s)
       || (label(u.rol) || u.rol || '').toLowerCase().includes(s))
     .slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
@@ -216,12 +255,27 @@ export default function BulkUsuarios() {
           <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cerrar sesiones')}</h3>
         </div>
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Obliga a los usuarios a volver a iniciar sesión. Útil tras un cambio de contraseña o por seguridad.')}</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Boton variant="danger" onClick={forzarTodos}><Power size={15} /> {t('Cerrar sesión a TODOS')}</Boton>
-          <span className="mx-1 text-xs font-semibold uppercase text-slate-400">{t('por rol')}:</span>
-          {asignables.map((r) => (
-            <Boton key={r} variant="ghost" onClick={() => forzarRol(r)} className="px-3 py-1 text-xs">{label(r)}</Boton>
-          ))}
+        {/* Selección deliberada del objetivo (evita cerrar sesión a TODOS por accidente). */}
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[220px] flex-1 sm:max-w-xs">
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('¿A quién?')}</div>
+            <Select value={objetivoCierre} onChange={(e) => setObjetivoCierre(e.target.value)}>
+              <option value="">{t('— Selecciona un objetivo —')}</option>
+              <optgroup label={t('Por rol')}>
+                {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
+              </optgroup>
+              <optgroup label={t('Todo el sistema')}>
+                <option value="ALL">⚠ {t('Todos los usuarios')}</option>
+              </optgroup>
+            </Select>
+          </div>
+          <Boton
+            variant={objetivoCierre === 'ALL' ? 'danger' : 'gold'}
+            onClick={aplicarCierre}
+            disabled={!objetivoCierre}
+          >
+            <Power size={15} /> {objetivoCierre === 'ALL' ? t('Cerrar sesión a TODOS') : objetivoCierre ? `${t('Cerrar sesión')}: ${label(objetivoCierre)}` : t('Cerrar sesión')}
+          </Boton>
         </div>
       </Card>
 
@@ -234,7 +288,7 @@ export default function BulkUsuarios() {
             if (key === 'nombre') return (
               <div className="min-w-0">
                 <div className="truncate font-medium text-brand-navy dark:text-slate-100">{row.nombre || '—'}</div>
-                <button type="button" onClick={() => copiarId(row.id)} title={`${t('Copiar ID')}: ${row.id}`} className="max-w-[160px] truncate font-mono text-[10px] text-slate-400 hover:text-brand-gold">ID: {row.id}</button>
+                <button type="button" onClick={() => copiarId(idVisible(row))} title={t('Copiar ID')} className="font-mono text-[11px] tracking-wide text-slate-400 hover:text-brand-gold">ID: {idVisible(row)}</button>
               </div>
             )
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>

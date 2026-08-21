@@ -220,9 +220,9 @@ service cloud.firestore {
     match /bulk_users/{id} {
       allow read: if bSame(resource.data.tenantId) && (request.auth.uid == id || bAdmin(resource.data.tenantId));
       // Alta/edición general: backend (Admin SDK). Excepción: el admin del tenant
-      // puede asignar SOLO la planta de un supervisor (campo plantaId), sin tocar
-      // rol, tenant ni credenciales.
-      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId']);
+      // puede asignar SOLO la planta de un supervisor (plantaId) y el ID legible de
+      // 8 dígitos (codigo), sin tocar rol, tenant ni credenciales.
+      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId', 'codigo']);
       allow create, delete: if false;
     }
 
