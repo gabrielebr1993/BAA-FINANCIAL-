@@ -145,10 +145,17 @@ export default function BulkUsuarios() {
   const abrirEditar = (u) => {
     setMsg(null)
     setEditar(u)
-    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '' })
+    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '' })
   }
   // Roles seleccionables al editar (incluye el actual aunque no sea "asignable", p. ej. super_admin).
   const opcionesRolEdit = editar ? [...new Set([editar.rol, ...asignables].filter(Boolean))] : []
+  // Al cambiar el rol dentro del panel: si es el rol original recupera su vínculo; si es otro, lo limpia.
+  const cambiarRolEdit = (e) => {
+    const nuevo = e.target.value
+    setEdicion((s) => ({ ...s, rol: nuevo, vinculo: (editar && nuevo === editar.rol) ? (editar.clienteId || editar.carrierId || '') : '' }))
+  }
+  const edicionNecesitaCliente = edicion.rol === BULK_ROLES.CLIENTE
+  const edicionNecesitaCarrier = edicion.rol === BULK_ROLES.TRANSPORTISTA || edicion.rol === BULK_ROLES.CHOFER
   const setEd = (k) => (e) => setEdicion((s) => ({ ...s, [k]: e.target.value }))
   const guardarEdicion = async () => {
     if (!editar) return
@@ -159,6 +166,9 @@ export default function BulkUsuarios() {
     if (edicion.password && edicion.password.length < 6) { setMsg({ tipo: 'error', txt: t('La contraseña debe tener al menos 6 caracteres.') }); return }
     const nuevoRol = edicion.rol || editar.rol
     const esSupervisor = nuevoRol === BULK_ROLES.SUPERVISOR_PLANTA
+    // Roles de la cadena necesitan vínculo (a qué cliente/transportista pertenece).
+    if (edicionNecesitaCliente && !edicion.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona a qué cliente pertenece.') }); return }
+    if (edicionNecesitaCarrier && !edicion.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona a qué transportista pertenece.') }); return }
     setGuardandoEd(true)
     try {
       const token = await authBulk.currentUser.getIdToken()
@@ -169,12 +179,17 @@ export default function BulkUsuarios() {
           uid: editar.id, nombre, email, rol: nuevoRol,
           password: edicion.password || undefined,
           plantaId: esSupervisor ? (edicion.plantaId || null) : undefined,
+          clienteId: edicionNecesitaCliente ? edicion.vinculo : null,
+          carrierId: edicionNecesitaCarrier ? edicion.vinculo : null,
         }),
       })
       const data = await r.json()
       if (!data.ok) throw new Error(data.error || 'Error')
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_usuario', entidad: 'usuario', detalle: `${email}${data.rolCambiado ? ` · rol→${label(nuevoRol)}` : ''}${edicion.password ? ' · contraseña' : ''}` })
-      setMsg({ tipo: 'ok', txt: data.rolCambiado ? `${t('Usuario actualizado')}: ${email}. ${t('Cambió a rol')} “${label(nuevoRol)}” — ${t('deberá volver a iniciar sesión.')}` : `${t('Usuario actualizado')}: ${email}.` })
+      const debeReiniciar = data.rolCambiado || data.claimsCambiados
+      setMsg({ tipo: 'ok', txt: data.rolCambiado
+        ? `${t('Usuario actualizado')}: ${email}. ${t('Cambió a rol')} “${label(nuevoRol)}” — ${t('deberá volver a iniciar sesión.')}`
+        : `${t('Usuario actualizado')}: ${email}.${debeReiniciar ? ` ${t('Deberá volver a iniciar sesión.')}` : ''}` })
       setEditar(null)
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo actualizar (¿backend desplegado?).') }) }
     finally { setGuardandoEd(false) }
@@ -388,11 +403,23 @@ export default function BulkUsuarios() {
               {editar.rol !== BULK_ROLES.SUPER_ADMIN && (
                 <div>
                   <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Rol')}</div>
-                  <Select value={edicion.rol} onChange={setEd('rol')} className="h-11 w-full text-sm">
+                  <Select value={edicion.rol} onChange={cambiarRolEdit} className="h-11 w-full text-sm">
                     {opcionesRolEdit.map((r) => <option key={r} value={r}>{label(r) || r}</option>)}
                   </Select>
                   {edicion.rol !== editar.rol && (
-                    <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Al cambiar el rol, la persona deberá volver a iniciar sesión.')}{[BULK_ROLES.CLIENTE, BULK_ROLES.TRANSPORTISTA, BULK_ROLES.CHOFER].includes(edicion.rol) ? ` ${t('Este rol necesita estar vinculado a un cliente/transportista (se asigna al crear la cuenta).')}` : ''}</p>
+                    <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{t('Al cambiar el rol, la persona deberá volver a iniciar sesión.')}</p>
+                  )}
+                </div>
+              )}
+              {(edicionNecesitaCliente || edicionNecesitaCarrier) && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{edicionNecesitaCliente ? t('Cliente al que pertenece') : t('Transportista al que pertenece')}</div>
+                  <Select value={edicion.vinculo} onChange={setEd('vinculo')} className="h-11 w-full text-sm">
+                    <option value="">{t('— Seleccionar —')}</option>
+                    {(edicionNecesitaCliente ? clientes : carriers).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                  </Select>
+                  {edicionNecesitaCarrier && edicion.rol === BULK_ROLES.CHOFER && (
+                    <p className="mt-1 text-[11px] text-slate-400">{t('Para vincular la ficha del chofer (equipos/trabajos), afílialo también en la pantalla “Choferes”.')}</p>
                   )}
                 </div>
               )}
