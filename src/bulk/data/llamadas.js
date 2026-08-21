@@ -5,7 +5,7 @@
 // servidor TURN (se puede añadir luego en ICE_SERVERS). Aislamiento: las reglas de
 // Firestore solo dejan leer/escribir la llamada a sus 2 participantes.
 import { dbBulk as db } from '../firebaseBulk'
-import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDocs, query, where, orderBy } from 'firebase/firestore'
+import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where, orderBy } from 'firebase/firestore'
 
 // Servidores ICE. Para llamadas fiables en cualquier red, añade aquí un TURN:
 //   { urls: 'turn:tu-servidor:3478', username: '...', credential: '...' }
@@ -30,6 +30,7 @@ export async function crearLlamada({ tenantId, de, para, tipo }) {
 
 export const actualizarLlamada = (id, datos) => updateDoc(callRef(id), datos)
 export const agregarCandidato = (id, lado, cand) => addDoc(candCol(id, lado), cand)
+export const obtenerLlamada = async (id) => { const s = await getDoc(callRef(id)); return s.exists() ? { id: s.id, ...s.data() } : null }
 
 // Escucha las llamadas ENTRANTES para `uid`. Consulta mínima (solo `para`, que ya
 // es único por usuario y las reglas restringen a los participantes); el estado y la
@@ -37,10 +38,13 @@ export const agregarCandidato = (id, lado, cand) => addDoc(candCol(id, lado), ca
 export function escucharEntrantes(tenantId, uid, cb) {
   const q = query(callsCol(), where('para', '==', uid))
   return onSnapshot(q, (snap) => {
+    // Timbra en cuanto la llamada está 'llamando' (la oferta puede llegar 1 instante
+    // después; se re-lee al aceptar). No exige `offer` para no perder el timbre.
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((c) => c.tenantId === tenantId && c.estado === 'llamando' && c.offer)
+      .filter((c) => c.tenantId === tenantId && c.estado === 'llamando')
+    console.log('[llamada] entrantes:', snap.size, '→ para mí:', docs.length)
     cb(docs)
-  }, (err) => { console.warn('escucharEntrantes', err && err.code); cb([]) })
+  }, (err) => { console.warn('[llamada] error listener entrantes:', err && err.code, err && err.message); cb([]) })
 }
 
 // Borra la llamada y sus candidatos (limpieza al colgar). Best-effort.

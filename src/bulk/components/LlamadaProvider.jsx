@@ -12,7 +12,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
   nuevaConexion, callRef, candCol, crearLlamada, actualizarLlamada,
-  agregarCandidato, escucharEntrantes, limpiarLlamada, onSnapshot,
+  agregarCandidato, escucharEntrantes, limpiarLlamada, onSnapshot, obtenerLlamada,
 } from '../data/llamadas'
 import { useLang } from '../../i18n'
 
@@ -148,6 +148,7 @@ export default function LlamadaProvider({ children }) {
     try {
       const stream = await conMedios(tipo)
       const callId = await crearLlamada({ tenantId, de: { uid: usuario.id, nombre: usuario.nombre || usuario.email || '', rol }, para: paraUid, tipo })
+      console.log('[llamada] creada', callId, 'para', paraUid, 'tenant', tenantId)
       callIdRef.current = callId
       const pc = prepararPC(callId, 'caller')
       stream.getTracks().forEach((tr) => pc.addTrack(tr, stream))
@@ -173,9 +174,12 @@ export default function LlamadaProvider({ children }) {
 
   // ── Aceptar llamada entrante ───────────────────────────────────────────────
   const aceptar = useCallback(async () => {
-    const call = entrante
+    let call = entrante
     if (!call) return
     try {
+      // La oferta puede no haber llegado al momento del timbre: re-léela ahora.
+      if (!call.offer) { const fresco = await obtenerLlamada(call.id); if (fresco?.offer) call = fresco }
+      if (!call.offer) throw new Error('SIN_OFERTA')
       const stream = await conMedios(call.tipo)
       callIdRef.current = call.id
       const pc = prepararPC(call.id, 'callee')
@@ -206,10 +210,11 @@ export default function LlamadaProvider({ children }) {
   // ── Escuchar entrantes ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!usuario?.id || !tenantId) return
+    console.log('[llamada] escuchando entrantes para uid', usuario.id, 'tenant', tenantId)
     const off = escucharEntrantes(tenantId, usuario.id, (docs) => {
       if (faseRef.current !== 'idle') return
-      const call = docs.find((c) => c.offer) // ya con oferta lista
-      if (call) { setEntrante(call); setFase('entrante') }
+      const call = docs[0]
+      if (call) { console.log('[llamada] ENTRANTE detectada', call.id); setEntrante(call); setFase('entrante') }
     })
     return off
   }, [usuario?.id, tenantId])
