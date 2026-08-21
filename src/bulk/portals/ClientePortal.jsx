@@ -135,12 +135,17 @@ export default function ClientePortal() {
     { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg + noLeidosGrupos },
   ]
 
+  // Nombre de la empresa cliente (denormalizado en sus órdenes/facturas; el cliente no
+  // puede leer bulk_clients por reglas).
+  const empresaCliente = (ordenes.find((o) => o.clienteNombre)?.clienteNombre) || (facturas.find((f) => f.clienteNombre)?.clienteNombre) || ''
+
   return (
     <>
       <PortalLayout
         icon={Building2}
+        empresa={empresaCliente}
         titulo={usuario?.nombre}
-        subtitulo={t('Portal del cliente')}
+        subtitulo={t('Cliente')}
         items={usuario?.clienteId ? items : []}
         activo={tab}
         onSelect={setTab}

@@ -203,7 +203,8 @@ export default function TransportistaPortal() {
   return (
     <PortalLayout
       icon={Truck}
-      titulo={carrier?.nombre || usuario?.nombre}
+      empresa={carrier?.nombre || ''}
+      titulo={usuario?.nombre}
       subtitulo={t('Transportista')}
       items={items}
       activo={activo}

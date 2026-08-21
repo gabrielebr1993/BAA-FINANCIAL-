@@ -21,7 +21,7 @@ import { useFotoUsuario } from '../data/useCodigoUsuario'
 import IndicadorConexion from './IndicadorConexion'
 import { LangToggle, useLang } from '../../i18n'
 
-export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = [], activo, onSelect, campana, aviso, children }) {
+export default function PortalLayout({ icon: Icon, titulo, subtitulo, empresa, items = [], activo, onSelect, campana, aviso, children }) {
   const { t } = useLang()
   const { cerrarSesion, usuario } = useBulkAuth()
   const navigate = useNavigate()
@@ -47,20 +47,25 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
       {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
       <aside className={`${menuAbierto ? 'flex' : 'hidden'} pt-safe fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>
-        <div className="mb-2 flex flex-shrink-0 items-center gap-2 px-1 py-1">
-          {/* Marca: ícono del rol EN MOVIMIENTO (mismo estilo que la barra del staff). */}
-          <div className="grid h-11 w-11 flex-shrink-0 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-900 shadow-sm">{Icon && <Icon size={24} strokeWidth={2} className="animate-truck drop-shadow-sm" />}</div>
-          <div className="min-w-0">
-            <div className="truncate text-base font-extrabold leading-none">{titulo}</div>
-            <div className="truncate text-[11px] text-slate-400">{subtitulo}</div>
+        <div className="mb-2 flex flex-shrink-0 items-center gap-1.5 px-1 py-1">
+          {/* Marca: recuadro ancho con el ícono del rol EN MOVIMIENTO (líneas de velocidad). */}
+          <div className="flex h-11 flex-1 items-center justify-center gap-2.5 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-900 shadow-sm">
+            <span className="flex flex-col items-end gap-1">
+              <span className="animate-speed block h-[3px] w-3 rounded-full bg-slate-900/50" style={{ animationDelay: '0ms' }} />
+              <span className="animate-speed block h-[3px] w-5 rounded-full bg-slate-900/50" style={{ animationDelay: '120ms' }} />
+              <span className="animate-speed block h-[3px] w-4 rounded-full bg-slate-900/50" style={{ animationDelay: '240ms' }} />
+            </span>
+            {Icon && <Icon size={28} strokeWidth={2} className="animate-truck drop-shadow-sm" />}
           </div>
-          <button onClick={alternarMenu} title={t('Ocultar menú')} className="-mr-1 ml-auto grid h-8 w-7 flex-shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
+          <button onClick={alternarMenu} title={t('Ocultar menú')} className="-mr-1 grid h-8 w-7 flex-shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
-        {/* Mi perfil (arriba, cerca de la marca): avatar grande + nombre + ID. */}
+        {/* Mi perfil: empresa (1) · nombre de usuario (2) · rol (3) · ID (4). */}
         <div className="mb-3 flex flex-shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/40">
-          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || empresa || titulo} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{usuario?.nombre || titulo}</div>
+            {empresa && <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{empresa}</div>}
+            <div className={`truncate leading-tight ${empresa ? 'text-[13px] font-semibold text-slate-600 dark:text-slate-300' : 'text-[15px] font-bold text-brand-navy dark:text-slate-100'}`}>{usuario?.nombre || titulo}</div>
+            {subtitulo && <div className="text-[11px] text-slate-400">{subtitulo}</div>}
             {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
           </div>
         </div>
