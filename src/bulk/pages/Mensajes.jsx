@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search, Truck, User, Building2, X, Users, Shield } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { convChofer, convCarrier, convClienteOrden, convStaff, resumenPorConversacion, eliminarConversacion } from '../data/chat'
-import { esConvGrupo, grupoIdDeConv, disolverGrupo } from '../data/grupos'
+import { esConvGrupo, grupoIdDeConv, convGrupo, disolverGrupo, salirGrupo } from '../data/grupos'
 import { useGrupos } from '../data/useGrupos'
 import { conversacionesAdmin } from '../domain/conversaciones'
 import { useAvatares } from '../data/useCodigoUsuario'
@@ -18,7 +18,8 @@ const CHATEABLES = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUT
 
 export default function Mensajes() {
   const { t } = useLang()
-  const { usuario, tenantId } = useBulkAuth()
+  const { usuario, tenantId, rol } = useBulkAuth()
+  const esAdmin = rol === 'admin' || rol === 'super_admin'
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: clientes } = useColeccion('clients')
@@ -123,18 +124,44 @@ export default function Mensajes() {
     setTimeout(() => setAbrir(null), 0)
   }
 
-  // Eliminar TODA una conversación de forma permanente ("sin respaldo"). Solo admin.
-  // Si es un GRUPO, se disuelve (borra grupo + mensajes) vía la función de backend.
-  const eliminarConv = async (item) => {
+  // Mapa clave→grupo, para conocer el rol del usuario en cada grupo (creador/admin/normal).
+  const grupoPorConv = useMemo(() => Object.fromEntries((grupos || []).map((g) => [convGrupo(g.id), g])), [grupos])
+
+  // ── Acciones DIFERENCIADAS y con permisos claros ──────────────────────────
+  // 1) SALIR del grupo (cualquier miembro; el grupo sigue existiendo para los demás).
+  const salirDelGrupo = async (g) => {
+    if (!g) return
+    if (!window.confirm(`${t('¿Quieres salir de este grupo?')}\n\n${t('El grupo continuará existiendo para los demás miembros, pero dejarás de formar parte de él.')}`)) return
+    setDirectos((s) => s.filter((d) => d.key !== convGrupo(g.id)))
+    try { await salirGrupo(g.id) } catch (e) { window.alert(e?.message || t('No se pudo salir del grupo.')) }
+  }
+  // 2) ELIMINAR el grupo para TODOS (solo creador/admin). Confirmación fuerte.
+  const eliminarGrupoTodos = async (g) => {
+    if (!g) return
+    if (!window.confirm(`${t('¿Eliminar este grupo para todos?')}\n\n${t('Esta acción eliminará definitivamente el grupo y todos sus miembros dejarán de tener acceso. Esta acción no se puede deshacer.')}`)) return
+    try { await disolverGrupo(g.id) } catch (e) { window.alert(e?.message || t('No se pudo eliminar el grupo.')) }
+  }
+  // 3) Eliminar una conversación DIRECTA (no grupo) de forma permanente (admin/staff).
+  const eliminarDirecto = async (item) => {
     if (!item?.chatId) return
-    if (esConvGrupo(item.chatId)) {
-      if (!window.confirm(t('¿Disolver este grupo? Se borrará para todos sus integrantes y no se puede deshacer.'))) return
-      try { await disolverGrupo(grupoIdDeConv(item.chatId)) } catch { /* noop */ }
-      return
-    }
-    if (!window.confirm(t('¿Estás seguro de que deseas eliminar esta conversación? Se borrará de forma permanente para todos y no se puede deshacer.'))) return
+    if (!window.confirm(`${t('¿Eliminar este chat?')}\n\n${t('Esta acción eliminará el chat de forma permanente para todos y no se puede deshacer.')}`)) return
     setDirectos((s) => s.filter((d) => d.key !== item.key))
     try { await eliminarConversacion(tenantId, item.chatId) } catch { /* noop */ }
+  }
+
+  // Menú contextual (⋮) de cada conversación, según su tipo y el rol del usuario.
+  const menuConversacion = (item) => {
+    const key = item?.key || item?.chatId
+    if (esConvGrupo(key)) {
+      const g = grupoPorConv[key]
+      if (!g) return []
+      const gestor = g.creadorId === usuario?.id || esAdmin
+      const m = []
+      if (g.creadorId !== usuario?.id) m.push({ label: t('Salir del grupo'), icon: 'salir', onClick: () => salirDelGrupo(g) })
+      if (gestor) m.push({ label: t('Eliminar grupo para todos'), icon: 'eliminar', danger: true, onClick: () => eliminarGrupoTodos(g) })
+      return m
+    }
+    return [{ label: t('Eliminar chat'), icon: 'eliminar', danger: true, onClick: () => eliminarDirecto(item) }]
   }
 
   const tituloNuevo = { clientes: t('Nueva conversación con cliente'), transportistas: t('Nueva conversación con transportista'), conductores: t('Nueva conversación con conductor'), operaciones: t('Nueva conversación con staff') }
@@ -148,7 +175,7 @@ export default function Mensajes() {
         secciones={secciones}
         abrir={abrir}
         titulo={t('Mensajes')}
-        onEliminarConversacion={eliminarConv}
+        menuConversacion={menuConversacion}
         accion={invitaciones.length > 0 ? <Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Invitaciones')}<span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span></Boton> : null}
       />
 

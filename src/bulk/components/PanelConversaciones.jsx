@@ -10,7 +10,7 @@
 // No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus } from 'lucide-react'
+import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus, MoreVertical, LogOut } from 'lucide-react'
 import ChatOrden from './ChatOrden'
 import { tsMillis } from '../data/chatKeys'
 import { BULK_ROLES_LABEL } from '../domain/constants'
@@ -44,12 +44,22 @@ function horaCorta(ts) {
     : d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' })
 }
 
-export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, alturaClass = 'h-mensajes' }) {
+export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, menuConversacion = null, alturaClass = 'h-mensajes' }) {
   const { t } = useLang()
   const [tab, setTab] = useState(secciones[0]?.k || '')
   const [sel, setSel] = useState('')
   const [buscar, setBuscar] = useState('')
   const [verChatMovil, setVerChatMovil] = useState(false)
+  const [menuKey, setMenuKey] = useState(null) // conversación cuyo menú ⋮ está abierto
+
+  // Acciones del menú ⋮ de una conversación: usa `menuConversacion` si se pasó; si no,
+  // cae al viejo `onEliminarConversacion` (compatibilidad). Devuelve [] si no hay acciones.
+  const menuDe = (item) => {
+    if (menuConversacion) return menuConversacion(item) || []
+    if (onEliminarConversacion) return [{ label: t('Eliminar conversación'), icon: 'eliminar', danger: true, onClick: () => onEliminarConversacion(item) }]
+    return []
+  }
+  const ICONO_MENU = { eliminar: Trash2, salir: LogOut }
 
   // Abrir por control externo (p. ej. al iniciar una conversación nueva): salta a su
   // sección, la selecciona y muestra el chat (también en móvil).
@@ -116,14 +126,36 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             {items.length === 0 ? (
               <div className="px-2 py-8 text-center text-xs text-slate-400">{seccion.vacio || t('Sin conversaciones.')}</div>
             ) : items.map((c) => {
+              const menu = menuDe(c)
               return (
-                <button key={c.key} onClick={() => elegir(c.key)} className={`flex w-full items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                   <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={40} resalte={c.noLeidos > 0} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
                       {c.rolLabel && <Badge color={c.rolColor || 'slate'}>{c.rolLabel}</Badge>}
                       <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400">{horaCorta(c.lastTs)}</span>
+                      {/* Menú ⋮ para actuar sin abrir el chat (eliminar / salir). */}
+                      {menu.length > 0 && (
+                        <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button type="button" onClick={() => setMenuKey(menuKey === c.key ? null : c.key)} title={t('Opciones')} className="rounded-md p-0.5 text-slate-400 opacity-100 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-700 sm:opacity-0 sm:group-hover:opacity-100" style={menuKey === c.key ? { opacity: 1 } : undefined}><MoreVertical size={16} /></button>
+                          {menuKey === c.key && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setMenuKey(null)} />
+                              <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                                {menu.map((m, i) => {
+                                  const IcoM = ICONO_MENU[m.icon] || Trash2
+                                  return (
+                                    <button key={i} type="button" onClick={() => { setMenuKey(null); m.onClick() }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${m.danger ? 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'}`}>
+                                      <IcoM size={15} /> {m.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {(c.viaje || c.material || c.carga || c.operacion || c.carrierNombre) && (
                       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -139,7 +171,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                       {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
                     </div>
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
@@ -167,8 +199,26 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                     </div>
                   )}
                 </div>
-                {onEliminarConversacion && (
-                  <button type="button" onClick={() => onEliminarConversacion(activa)} title={t('Eliminar conversación')} className="ml-auto flex-shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 size={17} /></button>
+                {/* Menú ⋮ del chat abierto: acciones diferenciadas (salir / eliminar). */}
+                {menuDe(activa).length > 0 && (
+                  <div className="relative ml-auto flex-shrink-0">
+                    <button type="button" onClick={() => setMenuKey(menuKey === 'activa' ? null : 'activa')} title={t('Opciones')} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"><MoreVertical size={18} /></button>
+                    {menuKey === 'activa' && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setMenuKey(null)} />
+                        <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                          {menuDe(activa).map((m, i) => {
+                            const IcoM = ICONO_MENU[m.icon] || Trash2
+                            return (
+                              <button key={i} type="button" onClick={() => { setMenuKey(null); m.onClick() }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${m.danger ? 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'}`}>
+                                <IcoM size={15} /> {m.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="min-h-0 flex-1">

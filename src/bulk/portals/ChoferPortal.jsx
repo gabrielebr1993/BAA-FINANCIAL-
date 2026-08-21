@@ -9,6 +9,7 @@ import IndicadorConexion from '../components/IndicadorConexion'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import { useGrupos } from '../data/useGrupos'
+import { menuGrupoConv } from '../data/grupos'
 import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
@@ -414,6 +415,7 @@ export default function ChoferPortal() {
         {tab === 'mensajes' && (
           <>
             <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal"
+              menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
           </>
