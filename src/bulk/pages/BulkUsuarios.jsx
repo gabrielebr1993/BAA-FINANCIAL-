@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, KeyRound, LogOut, Power } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { guardar } from '../data/repo'
+import { guardar, guardarCampos } from '../data/repo'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -49,14 +49,14 @@ export default function BulkUsuarios() {
     backfillRef.current = true
     let base = maxCodigo(usuarios)
     const orden = faltan.slice().sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0) || (a.nombre || '').localeCompare(b.nombre || ''))
-    ;(async () => { for (const u of orden) { base += 1; try { await guardar('users', u.id, { codigo: String(base) }) } catch { /* regla no desplegada */ } } })()
+    ;(async () => { for (const u of orden) { base += 1; try { await guardarCampos('users', u.id, { codigo: String(base) }) } catch { /* regla no desplegada */ } } })()
   }, [cargando, usuarios, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
   // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.
   const asignarPlanta = async (u, plantaId) => {
     try {
-      await guardar('users', u.id, { plantaId: plantaId || null })
+      await guardarCampos('users', u.id, { plantaId: plantaId || null })
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_planta', entidad: 'usuario', detalle: `${u.email} → ${plantas.find((p) => p.id === plantaId)?.nombre || 'sin planta'}` })
     } catch { setMsg({ tipo: 'error', txt: t('No se pudo asignar la planta. Puede que falte desplegar las reglas nuevas.') }) }
   }
@@ -109,7 +109,7 @@ export default function BulkUsuarios() {
       let codigo = ''
       if (res?.uid) {
         codigo = String(maxCodigo(usuarios) + 1)
-        try { await guardar('users', res.uid, { codigo }) } catch { /* regla no desplegada aún */ }
+        try { await guardarCampos('users', res.uid, { codigo }) } catch { /* regla no desplegada aún */ }
       }
       // Enlaza la ficha del roster con la cuenta recién creada (por uid).
       if (necesitaChofer && rd && res?.uid) {

@@ -64,6 +64,14 @@ export async function guardar(nombre, id, datos) {
   await updateDoc(ref(nombre, id), { ...datos, actualizadoEn: serverTimestamp() })
 }
 
+// Igual que `guardar` pero escribe EXACTAMENTE los campos dados (sin añadir
+// `actualizadoEn`). Necesario para updates restringidos por reglas del tipo
+// diff().hasOnly([...]) — p. ej. el admin fijando plantaId/codigo en bulk_users —,
+// donde un campo extra haría fallar la regla con permission-denied.
+export async function guardarCampos(nombre, id, datos) {
+  await updateDoc(ref(nombre, id), datos)
+}
+
 export async function crearConId(nombre, id, tenantId, datos) {
   await setDoc(ref(nombre, id), { ...datos, tenantId, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp() }, { merge: true })
 }
