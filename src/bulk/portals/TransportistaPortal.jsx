@@ -81,6 +81,15 @@ export default function TransportistaPortal() {
   const nombrePlanta = (id) => plantas.find((p) => p.id === id)?.nombre || ''
   const rosterIdDe = (id) => choferes.find((c) => c.uid === id)?.id || id
 
+  // TRABAJOS (jobs) del transporte: se derivan de SUS órdenes (no puede leer bulk_jobs).
+  // El "código" del trabajo es el prefijo del número de orden (ABC-0012 → ABC).
+  const codigoTrabajo = (o) => String(o?.numero || '').split('-').slice(0, -1).join('-') || (o?.jobId || '')
+  const trabajos = useMemo(() => [...new Set((ordenes || []).map(codigoTrabajo).filter(Boolean))].sort(), [ordenes])
+  // Asigna a un chofer los trabajos que puede atender (se guarda en su ficha del roster).
+  const guardarTrabajosChofer = async (choferId, jobs) => {
+    await guardar('carriers', carrierId, { choferes: choferes.map((d) => (d.id === choferId ? { ...d, jobs } : d)), actualizadoEn: new Date().toISOString() })
+  }
+
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
   // Resumen de los chats de orden (por chofer/viaje) para la sección CHOFERES.
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
@@ -213,9 +222,9 @@ export default function TransportistaPortal() {
         <KPI label={t('Tu utilidad')} value={money(stats.util)} icon={DollarSign} accent="blue" />
       </div>
 
-      {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta }} />}
-      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }} />}
-      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }} />}
+      {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
+      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo }} />}
+      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
@@ -236,17 +245,22 @@ export default function TransportistaPortal() {
 // un chofer YA ACEPTÓ y están en curso (aceptada → en destino). La asignación de
 // choferes se hace en la pestaña "Órdenes"; aquí no se asigna.
 const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
-function TabCola({ t, ordenes, nombrePlanta }) {
+function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () => '' }) {
   const PRIO = { aceptada: 0, en_planta: 1, cargando: 2, en_ruta: 3, en_destino: 4 }
+  const [fTrabajo, setFTrabajo] = useState('')
   const cola = ordenes.filter((o) => EN_PROCESO_EST.includes(o.estado))
+    .filter((o) => !fTrabajo || codigoTrabajo(o) === fTrabajo)
     .sort((a, b) => (PRIO[a.estado] ?? 9) - (PRIO[b.estado] ?? 9) || (a.numero || '').localeCompare(b.numero || ''))
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Truck size={16} className="text-amber-500" />
         <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En proceso')}</h3>
         <Badge color="gold">{cola.length}</Badge>
+        {trabajos.length > 0 && (
+          <Select value={fTrabajo} onChange={(e) => setFTrabajo(e.target.value)} className="ml-auto py-1.5 text-sm"><option value="">{t('Todos los trabajos')}</option>{trabajos.map((c) => <option key={c} value={c}>{c}</option>)}</Select>
+        )}
       </div>
       {cola.length === 0
         ? <EstadoVacio titulo={t('No hay órdenes en proceso')} texto={t('Aquí verás tus órdenes una vez que un chofer las acepte y estén en curso.')} mostrarBoton={false} />
@@ -275,12 +289,17 @@ function TabCola({ t, ordenes, nombrePlanta }) {
 }
 
 // ── Tab Órdenes: tabla filtrada a MIS órdenes, con estados de color ───────────
-function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta }) {
+function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '' }) {
   const [q, setQ] = useState('')
   const [fEstado, setFEstado] = useState('')
+  const [fTrabajo, setFTrabajo] = useState('')
   const estados = [...new Set(ordenes.map((o) => o.estado))]
+  // Choferes que atienden un trabajo (los que lo tienen en su ficha); si ninguno está
+  // asignado a ese trabajo, se ofrecen todos. Así el transporte manda al driver correcto.
+  const choferesDeTrabajo = (cod) => { const asig = choferes.filter((c) => (c.jobs || []).includes(cod)); return asig.length ? asig : choferes }
   const rows = ordenes
     .filter((o) => !fEstado || o.estado === fEstado)
+    .filter((o) => !fTrabajo || codigoTrabajo(o) === fTrabajo)
     .filter((o) => { const s = q.trim().toLowerCase(); return !s || `${o.numero} ${o.material} ${o.choferNombre}`.toLowerCase().includes(s) })
     .sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
     .map((o) => ({ ...o, _key: o.id }))
@@ -304,7 +323,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
         return (
           <Select className="w-full min-w-[9rem] py-1 text-xs" value={rosterIdDe(o.choferId) || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => e.target.value && asignarChofer(o, e.target.value)}>
             <option value="">{o.choferId ? t('Cambiar chofer…') : t('Asignar chofer…')}</option>
-            {choferes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            {choferesDeTrabajo(codigoTrabajo(o)).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </Select>
         )
       }
@@ -322,6 +341,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative"><Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Buscar orden, material o chofer…')} className="w-64 pl-8" /></div>
         <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className="py-2"><option value="">{t('Todos los estados')}</option>{estados.map((s) => <option key={s} value={s}>{t(ORDEN_ESTADO_LABEL[s] || s)}</option>)}</Select>
+        {trabajos.length > 0 && <Select value={fTrabajo} onChange={(e) => setFTrabajo(e.target.value)} className="py-2"><option value="">{t('Todos los trabajos')}</option>{trabajos.map((c) => <option key={c} value={c}>{c}</option>)}</Select>}
         <span className="ml-auto text-xs text-slate-400">{rows.length} {t('órdenes')}</span>
       </div>
       <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[860px]" emptyText={t('Ninguna orden coincide con el filtro.')} />
@@ -330,9 +350,14 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
 }
 
 // ── Tab Mis choferes: tabla con estado en línea, viaje actual y forma de pago ──
-function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer }) {
+function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {} }) {
   const [alta, setAlta] = useState(false)
   const [pagoEdit, setPagoEdit] = useState(null) // chofer.id en edición de pago
+  const toggleTrabajo = (c, cod) => {
+    const cur = c.jobs || []
+    const jobs = cur.includes(cod) ? cur.filter((x) => x !== cod) : [...cur, cod]
+    guardarTrabajosChofer(c.id, jobs)
+  }
 
   return (
     <>
@@ -370,6 +395,16 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
                     <button onClick={() => toggleActivoChofer(c)} className={`text-xs font-medium hover:underline ${c.activo === false ? 'text-emerald-600' : 'text-rose-500'}`}>{c.activo === false ? t('Activar') : t('Desactivar')}</button>
                   </div>
                 </div>
+                {trabajos.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-800">
+                    <span className="text-[11px] font-semibold uppercase text-slate-400">{t('Trabajos:')}</span>
+                    {trabajos.map((cod) => {
+                      const on = (c.jobs || []).includes(cod)
+                      return <button key={cod} type="button" onClick={() => toggleTrabajo(c, cod)} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{cod}</button>
+                    })}
+                    {(c.jobs || []).length === 0 && <span className="text-[11px] text-slate-400">{t('todos (sin restringir)')}</span>}
+                  </div>
+                )}
                 {pagoEdit === c.id && (
                   <PagoEditor t={t} config={pagoChoferes[c.id]} onGuardar={async (tipo, valor) => { await guardarPago(c.id, tipo, valor); setPagoEdit(null) }} onQuitar={async () => { await quitarPago(c.id); setPagoEdit(null) }} />
                 )}
