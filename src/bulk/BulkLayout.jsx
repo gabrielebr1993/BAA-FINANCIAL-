@@ -82,8 +82,8 @@ export default function BulkLayout({ children }) {
           <Avatar foto={fotoMostrar} nombre={usuario?.nombre || usuario?.email} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
           <div className="min-w-0">
             <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{usuario?.nombre || usuario?.email}</div>
-            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
-            <div className="mt-0.5 text-[11px] text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
+            <div className="text-[11px] leading-tight text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
+            {usuario?.codigo && <UserId codigo={usuario.codigo} />}
           </div>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">

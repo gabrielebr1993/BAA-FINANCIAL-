@@ -65,8 +65,8 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, empresa, i
           <div className="min-w-0">
             {empresa && <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{empresa}</div>}
             <div className={`truncate leading-tight ${empresa ? 'text-[13px] font-semibold text-slate-600 dark:text-slate-300' : 'text-[15px] font-bold text-brand-navy dark:text-slate-100'}`}>{usuario?.nombre || titulo}</div>
-            {subtitulo && <div className="text-[11px] text-slate-400">{subtitulo}</div>}
-            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
+            {subtitulo && <div className="text-[11px] leading-tight text-slate-400">{subtitulo}</div>}
+            {usuario?.codigo && <UserId codigo={usuario.codigo} />}
           </div>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
