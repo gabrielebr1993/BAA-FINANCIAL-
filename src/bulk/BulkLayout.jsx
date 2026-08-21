@@ -26,13 +26,14 @@ export default function BulkLayout({ children }) {
   const navigate = useNavigate()
   const items = useMemo(() => navVisible(puede), [puede])
   const [verClave, setVerClave] = useState(false)
-  // Foto de perfil propia (cada usuario puede ponerla). Preview local instantáneo.
-  const [miFoto, setMiFoto] = useState(null)
+  // Foto de perfil propia (cada usuario puede ponerla/cambiarla/quitarla). Preview local
+  // instantáneo (undefined = usar la guardada; null = quitada; dataUrl = nueva).
+  const [miFoto, setMiFoto] = useState(undefined)
   const fotoGuardada = useFotoUsuario(usuario?.id)
-  const fotoMostrar = miFoto ?? fotoGuardada ?? null
+  const fotoMostrar = miFoto !== undefined ? miFoto : (fotoGuardada ?? null)
   const cambiarMiFoto = async (dataUrl) => {
-    setMiFoto(dataUrl)
-    try { if (usuario?.id) await guardarAvatar(usuario.tenantId, usuario.id, dataUrl) } catch { /* regla no desplegada */ }
+    setMiFoto(dataUrl || null)
+    try { if (usuario?.id) await guardarAvatar(usuario.tenantId, usuario.id, dataUrl || null) } catch { /* regla no desplegada */ }
   }
   // Menú lateral: se puede ocultar/mostrar. Recordamos la preferencia.
   const [menuAbierto, setMenuAbierto] = useState(() => {

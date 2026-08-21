@@ -7,6 +7,8 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Badge, Cargando, EstadoVacio } from '../../components/ui'
 import { Gate } from '../components/Gate'
 import { UserId } from '../components/UserId'
+import Avatar from '../components/Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { useLang } from '../../i18n'
 
 export default function Transportistas() {
@@ -14,6 +16,10 @@ export default function Transportistas() {
   const { tenantId } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: equipos } = useColeccion('equipment')
+  const { datos: usuarios } = useColeccion('users')
+  const avatares = useAvatares()
+  const uidPorCarrier = {}
+  for (const u of usuarios || []) if (u.rol === 'transportista' && u.carrierId && !uidPorCarrier[u.carrierId]) uidPorCarrier[u.carrierId] = u.id
   const [form, setForm] = useState({ nombre: '', contacto: '', equipos: [] })
   const [ocupado, setOcupado] = useState(false)
   const [editando, setEditando] = useState(null) // id del transportista al que se le editan equipos
@@ -71,6 +77,7 @@ export default function Transportistas() {
           {carriers.map((c) => (
             <Card key={c.id} className="p-4">
               <div className="mb-1 flex items-center gap-2">
+                <Avatar foto={avatares[uidPorCarrier[c.id]]} nombre={c.nombre} size={40} />
                 <Truck size={17} className="text-amber-500" />
                 <Link to={`/bulk/transportistas/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 <Gate perm="transportistas.eliminar"><button onClick={() => borrar(c)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>

@@ -8,6 +8,8 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
 import { Gate } from '../components/Gate'
 import { UserId } from '../components/UserId'
+import Avatar from '../components/Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -93,6 +95,10 @@ export default function Clientes() {
   const { t } = useLang()
   const { tenantId } = useBulkAuth()
   const { datos: clientes, cargando } = useColeccion('clients')
+  const { datos: usuarios } = useColeccion('users')
+  const avatares = useAvatares()
+  const uidPorCliente = {}
+  for (const u of usuarios || []) if (u.rol === 'cliente' && u.clienteId && !uidPorCliente[u.clienteId]) uidPorCliente[u.clienteId] = u.id
   const [f, setF] = useState({ nombre: '', rfc: '', contacto: '', facturacion: '' })
   const [abierto, setAbierto] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
@@ -126,6 +132,7 @@ export default function Clientes() {
           {clientes.map((c) => (
             <Card key={c.id} className="p-4">
               <div className="flex items-center gap-2">
+                <Avatar foto={avatares[uidPorCliente[c.id]]} nombre={c.nombre} size={40} />
                 <Building2 size={17} className="text-amber-500" />
                 <Link to={`/bulk/cliente/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
                 <UserId codigo={c.codigo} />

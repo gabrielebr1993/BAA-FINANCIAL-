@@ -3,7 +3,7 @@
 // un botón de cámara que abre un menú para elegir la foto DE LA GALERÍA o TOMARLA con la
 // cámara del dispositivo (la reduce antes de guardar).
 import { useRef, useState } from 'react'
-import { Camera, Image as ImageIcon, X } from 'lucide-react'
+import { Camera, Image as ImageIcon, X, Trash2 } from 'lucide-react'
 import { leerFotoReducida } from './foto'
 import { useLang } from '../../i18n'
 
@@ -51,6 +51,11 @@ export default function Avatar({ foto, nombre, size = 40, editable = false, onFo
                 <button type="button" onClick={() => camRef.current?.click()} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800">
                   <Camera size={18} className="text-brand-gold" /> {t('Tomar una foto')}
                 </button>
+                {foto && onFoto && (
+                  <button type="button" onClick={() => { setMenu(false); onFoto(null) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">
+                    <Trash2 size={18} /> {t('Eliminar foto')}
+                  </button>
+                )}
               </div>
             </div>
           )}

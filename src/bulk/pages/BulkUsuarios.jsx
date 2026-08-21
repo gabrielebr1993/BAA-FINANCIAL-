@@ -168,8 +168,8 @@ export default function BulkUsuarios() {
   // El admin cambia la foto de perfil del usuario en edición (regla lo permite).
   const guardarFotoEditar = async (dataUrl) => {
     if (!editar) return
-    setEdicion((s) => ({ ...s, foto: dataUrl }))
-    try { await guardarAvatar(tenantId, editar.id, dataUrl); setMsg({ tipo: 'ok', txt: t('Foto de perfil actualizada.') }) }
+    setEdicion((s) => ({ ...s, foto: dataUrl || null }))
+    try { await guardarAvatar(tenantId, editar.id, dataUrl || null); setMsg({ tipo: 'ok', txt: dataUrl ? t('Foto de perfil actualizada.') : t('Foto de perfil eliminada.') }) }
     catch { setMsg({ tipo: 'error', txt: t('No se pudo guardar la foto. ¿Falta desplegar las reglas nuevas?') }) }
   }
   // Roles seleccionables al editar (incluye el actual aunque no sea "asignable", p. ej. super_admin).

@@ -12,15 +12,12 @@ import { crearGrupo, invitarAGrupo, aceptarGrupo, rechazarGrupo, salirGrupo, exp
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Card, Boton, Input, Badge, Aviso } from '../../components/ui'
 import { useLang } from '../../i18n'
-
-function Avatar({ foto, nombre, size = 34 }) {
-  const px = { width: size, height: size }
-  if (foto) return <img src={foto} alt={nombre || ''} style={px} className="flex-shrink-0 rounded-lg object-cover" />
-  return <div style={px} className="grid flex-shrink-0 place-items-center rounded-lg bg-slate-200 text-xs font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{(nombre || '?').charAt(0).toUpperCase()}</div>
-}
+import Avatar from './Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 
 export default function GruposModal({ grupos = [], invitaciones = [], candidatos = [], puedeCrear = false, uid, onClose }) {
   const { t } = useLang()
+  const avatares = useAvatares()
   const [vista, setVista] = useState('lista') // 'lista' | 'crear' | grupoId
   const [nombre, setNombre] = useState('')
   const [sel, setSel] = useState(() => new Set())
@@ -99,7 +96,7 @@ export default function GruposModal({ grupos = [], invitaciones = [], candidatos
               {candidatosFiltrados.length === 0 ? <p className="py-4 text-center text-xs text-slate-400">{t('No hay personas que puedas agregar.')}</p> : candidatosFiltrados.map((c) => (
                 <label key={c.uid} className="flex cursor-pointer items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
                   <input type="checkbox" checked={sel.has(c.uid)} onChange={() => toggle(c.uid)} className="h-4 w-4 accent-amber-500" />
-                  <Avatar foto={c.foto} nombre={c.nombre} />
+                  <Avatar foto={avatares[c.uid]} nombre={c.nombre} size={28} />
                   <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div></div>
                   <Badge color="slate">{rolLabel(c.rol)}</Badge>
                 </label>
@@ -120,6 +117,7 @@ export default function GruposModal({ grupos = [], invitaciones = [], candidatos
 
 function GestionGrupo({ grupo: g, uid, candidatos, rolLabel, correr, busy, onCerrar }) {
   const { t } = useLang()
+  const avatares = useAvatares()
   const [invitando, setInvitando] = useState(false)
   const [buscar, setBuscar] = useState('')
   const esGestor = g.creadorId === uid
@@ -135,7 +133,7 @@ function GestionGrupo({ grupo: g, uid, candidatos, rolLabel, correr, busy, onCer
       <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">{t('Integrantes')} ({miembros.length})</div>
       {miembros.map((m) => (
         <div key={m} className="flex items-center gap-2 rounded-lg p-1.5">
-          <Avatar foto={g.fotos?.[m]} nombre={g.nombres?.[m]} />
+          <Avatar foto={avatares[m]} nombre={g.nombres?.[m]} size={28} />
           <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{g.nombres?.[m] || t('Usuario')}{m === uid ? ` (${t('tú')})` : ''}{m === g.creadorId ? ' · ' : ''}{m === g.creadorId && <span className="text-[11px] font-normal text-amber-600 dark:text-amber-400">{t('creador')}</span>}</div></div>
           <Badge color="slate">{rolLabel(g.roles?.[m])}</Badge>
           {esGestor && m !== g.creadorId && <button title={t('Quitar')} disabled={busy} onClick={() => correr(() => expulsarDeGrupo(g.id, m))} className="text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>}
@@ -146,7 +144,7 @@ function GestionGrupo({ grupo: g, uid, candidatos, rolLabel, correr, busy, onCer
           <div className="mb-1 mt-2 text-[11px] font-bold uppercase text-slate-400">{t('Invitaciones pendientes')} ({invitados.length})</div>
           {invitados.map((m) => (
             <div key={m} className="flex items-center gap-2 rounded-lg p-1.5 opacity-70">
-              <Avatar foto={g.fotos?.[m]} nombre={g.nombres?.[m]} />
+              <Avatar foto={avatares[m]} nombre={g.nombres?.[m]} size={28} />
               <div className="min-w-0 flex-1"><div className="truncate text-sm text-slate-500">{g.nombres?.[m] || t('Usuario')}</div></div>
               <Badge color="gold">{t('pendiente')}</Badge>
               {esGestor && <button title={t('Cancelar invitación')} disabled={busy} onClick={() => correr(() => expulsarDeGrupo(g.id, m))} className="text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>}
@@ -165,7 +163,7 @@ function GestionGrupo({ grupo: g, uid, candidatos, rolLabel, correr, busy, onCer
               <div className="scroll-thin max-h-40 overflow-y-auto">
                 {porInvitar.length === 0 ? <p className="py-3 text-center text-xs text-slate-400">{t('No hay más personas para invitar.')}</p> : porInvitar.map((c) => (
                   <div key={c.uid} className="flex items-center gap-2 rounded-lg p-1.5">
-                    <Avatar foto={c.foto} nombre={c.nombre} />
+                    <Avatar foto={avatares[c.uid]} nombre={c.nombre} size={28} />
                     <div className="min-w-0 flex-1"><div className="truncate text-sm text-brand-navy dark:text-slate-100">{c.nombre}</div></div>
                     <Badge color="slate">{rolLabel(c.rol)}</Badge>
                     <Boton variant="gold" disabled={busy} onClick={() => correr(() => invitarAGrupo(g.id, [c.uid]))} className="px-2 py-0.5 text-xs">{t('Invitar')}</Boton>

@@ -19,6 +19,8 @@ import {
   enviarSenal, escucharSenales, escucharSalasEntrantes, salaRef,
 } from '../data/salas'
 import { updateDoc } from 'firebase/firestore'
+import Avatar from './Avatar'
+import { useAvatares } from '../data/useCodigoUsuario'
 import { useLang } from '../../i18n'
 
 const LlamadaContext = createContext({ iniciar: () => {}, iniciarGrupo: () => {} })
@@ -50,6 +52,7 @@ function TileRemoto({ stream, nombre, rol, hablando, mano, esVideo, t }) {
 export default function LlamadaProvider({ children }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
+  const avatares = useAvatares()
 
   const [fase, setFase] = useState('idle') // idle | saliente | entrante | activa
   const [info, setInfo] = useState(null)    // { callId, con, tipo, saliente }
@@ -799,7 +802,11 @@ export default function LlamadaProvider({ children }) {
           <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-2xl ring-1 ring-white/10">
             <div className="relative mx-auto h-24 w-24">
               <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/30" />
-              <div className="relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">{entrante.grupo ? <Users size={40} /> : (entrante.de?.nombre || '?').charAt(0).toUpperCase()}</div>
+              <div className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">
+                {entrante.grupo ? <Users size={40} />
+                  : avatares[entrante.de?.uid] ? <img src={avatares[entrante.de.uid]} alt="" className="h-full w-full object-cover" />
+                  : (entrante.de?.nombre || '?').charAt(0).toUpperCase()}
+              </div>
             </div>
             <h3 className="mt-5 text-xl font-black text-white">{entrante.grupo ? (entrante.nombre || t('Llamada grupal')) : (entrante.de?.nombre || t('Alguien'))}</h3>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/60">
@@ -924,7 +931,7 @@ export default function LlamadaProvider({ children }) {
                   {candidatosAgregar.length === 0 && <p className="py-3 text-center text-xs text-white/40">{t('No hay más personas para agregar.')}</p>}
                   {candidatosAgregar.map((c) => (
                     <button key={c.uid} onClick={() => agregarPersonas([c])} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/10">
-                      <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-xs font-black text-slate-900">{(c.nombre || '?').charAt(0).toUpperCase()}</span>
+                      <Avatar foto={avatares[c.uid]} nombre={c.nombre} size={32} />
                       <span className="min-w-0 flex-1 truncate">{c.nombre}</span>
                       <UserPlus size={15} className="flex-shrink-0 text-amber-400" />
                     </button>
