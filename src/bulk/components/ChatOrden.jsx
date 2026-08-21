@@ -20,7 +20,7 @@ const EMOJIS = ['👍', '👎', '🙏', '👌', '💪', '👏', '🤝', '✌️'
 // ¿El mensaje es solo emojis (para mostrarlo grande, como WhatsApp)?
 const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.length > 0 && x.length <= 8 && !/[0-9a-zA-ZÀ-ɏ]/.test(x) }
 
-export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null }) {
+export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null, grupoUids = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
   const avatares = useAvatares()
@@ -106,15 +106,16 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   // Abre el selector de personas (directorio + matriz) preseleccionando al TITULAR del
   // chat (p. ej. el transportista Aguilar) y a quienes ya participaron. Así NO se
   // preselecciona por error al último que escribió (un admin). Garantiza uids REALES.
-  // Miembros del grupo (uids reales) = participantes del chat de grupo, menos yo.
-  const miembrosGrupo = esGrupo ? [...new Set((partProp || []).filter((u) => u && u !== usuario?.id))] : []
+  // A quién llamar en un grupo = TODOS los uids del grupo (miembros + invitados), menos
+  // yo. Usa `grupoUids` (roster completo); si no llega, cae a los participantes/miembros.
+  const miembrosGrupo = esGrupo ? [...new Set([...(grupoUids || partProp || [])].filter((u) => u && u !== usuario?.id))] : []
   const nombreSala = esGrupo ? (orden?.numero || t('Grupo')) : (orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal'))
   const preseleccionGrupo = [...new Set([contacto?.uid, ...otrosChat.map((x) => x.uid)].filter((u) => u && u !== usuario?.id))]
   // En un GRUPO se llama DIRECTO a todos los miembros (sin filtrar por la matriz: el
   // grupo ya define quién participa). En otros chats se abre el selector de contactos.
   const llamarGrupo = (tipo) => {
     if (esGrupo) {
-      if (!miembrosGrupo.length) return
+      if (!miembrosGrupo.length) { window.alert(t('Este grupo no tiene otros integrantes a quienes llamar.')); return }
       iniciarGrupo(miembrosGrupo.map((uid) => ({ uid })), tipo, ctxGrupo, nombreSala)
     } else {
       pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, preseleccionGrupo)

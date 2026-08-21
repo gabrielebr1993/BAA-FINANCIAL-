@@ -25,6 +25,9 @@ export function useGrupos() {
       titulo: g.nombre || 'Grupo', rolLabel: 'Grupo', rolColor: 'blue',
       operacion: `${(g.miembros || []).length} ${(g.miembros || []).length === 1 ? 'integrante' : 'integrantes'}`,
       participantes: g.miembros || [], lastText: r.lastText || '', lastTs: r.lastTs || g.actualizadoEn || '', noLeidos: r.noLeidos || 0,
+      // Para LLAMAR al grupo: todos los uids asociados (miembros + invitados aún
+      // pendientes de aceptar), así el timbre llega a todos, no solo a los aceptados.
+      grupoUids: [...new Set([...(g.miembros || []), ...(g.invitados || [])])],
       _grupo: g,
     }
   }), [grupos, resumen])

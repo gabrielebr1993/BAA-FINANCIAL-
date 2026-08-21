@@ -222,7 +222,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                 )}
               </div>
               <div className="min-h-0 flex-1">
-                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} fill />
+                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill />
               </div>
             </Card>
           ) : (
