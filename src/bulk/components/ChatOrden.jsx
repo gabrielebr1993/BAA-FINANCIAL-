@@ -97,10 +97,12 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const ctxLlamada = { chatId: orden?.id, participantes: partProp != null ? partProp.filter(Boolean) : [orden?.choferId, orden?.transportistaId, orden?.clienteId].filter(Boolean) }
   // Contexto para llamada grupal (incluye candidatos para "agregar personas" en curso).
   const ctxGrupo = { ...ctxLlamada, candidatos: otrosChat }
-  // Abre el selector de personas (directorio + matriz) preseleccionando a quienes ya
-  // participan del chat. Garantiza invitar uids REALES → el timbre les llega.
+  // Abre el selector de personas (directorio + matriz) preseleccionando al TITULAR del
+  // chat (p. ej. el transportista Aguilar) y a quienes ya participaron. Así NO se
+  // preselecciona por error al último que escribió (un admin). Garantiza uids REALES.
   const nombreSala = orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal')
-  const llamarGrupo = (tipo) => pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, otrosChat.map((x) => x.uid))
+  const preseleccionGrupo = [...new Set([contacto?.uid, ...otrosChat.map((x) => x.uid)].filter((u) => u && u !== usuario?.id))]
+  const llamarGrupo = (tipo) => pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, preseleccionGrupo)
 
   // Encabezado a mostrar: el titular del chat (con o sin cuenta). Si no hay ninguno
   // (canal vacío sin contacto conocido), no se pinta cabecera.
