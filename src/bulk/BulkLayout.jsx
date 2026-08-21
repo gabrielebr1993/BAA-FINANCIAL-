@@ -66,20 +66,24 @@ export default function BulkLayout({ children }) {
       {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
       <aside className={`${menuAbierto ? 'flex' : 'hidden'} pt-safe fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>
         <div className="mb-4 flex flex-shrink-0 items-center gap-2 px-2 py-1">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-slate-900"><Truck size={19} strokeWidth={2} /></div>
-          <div>
-            <div className="text-base font-extrabold leading-none">Freight</div>
-            <div className="text-[11px] text-slate-400">{t('Transporte de materiales')}</div>
+          {/* Marca: recuadro ancho con un CAMIÓN EN MOVIMIENTO (líneas de velocidad). */}
+          <div className="flex h-12 flex-1 items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-900 shadow-sm">
+            <span className="flex flex-col items-end gap-1">
+              <span className="block h-[3px] w-3 rounded-full bg-slate-900/45 animate-pulse" style={{ animationDelay: '0ms' }} />
+              <span className="block h-[3px] w-5 rounded-full bg-slate-900/45 animate-pulse" style={{ animationDelay: '150ms' }} />
+              <span className="block h-[3px] w-4 rounded-full bg-slate-900/45 animate-pulse" style={{ animationDelay: '300ms' }} />
+            </span>
+            <Truck size={30} strokeWidth={2} className="drop-shadow-sm" />
           </div>
-          <button onClick={alternarMenu} title={t('Ocultar menú')} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
+          <button onClick={alternarMenu} title={t('Ocultar menú')} className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
-        {/* Mi perfil (arriba, separado de la marca): avatar + ID + nombre + rol. */}
-        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-800/40">
-          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || usuario?.email} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+        {/* Mi perfil (arriba, separado de la marca): avatar grande + nombre + ID + rol. */}
+        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/40">
+          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || usuario?.email} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
           <div className="min-w-0">
-            {usuario?.codigo && <UserId codigo={usuario.codigo} />}
-            <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || usuario?.email}</div>
-            <div className="text-[11px] text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
+            <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{usuario?.nombre || usuario?.email}</div>
+            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
+            <div className="mt-0.5 text-[11px] text-slate-400">{BULK_ROLES_LABEL[rol] ? t(BULK_ROLES_LABEL[rol]) : etiquetaRol(rol, rolesConfig)}</div>
           </div>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">

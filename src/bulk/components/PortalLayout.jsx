@@ -55,12 +55,12 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, items = []
           </div>
           <button onClick={alternarMenu} title={t('Ocultar menú')} className="ml-auto grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"><PanelLeftClose size={18} /></button>
         </div>
-        {/* Mi perfil (arriba, separado de la marca): avatar + ID + nombre. */}
-        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-800/40">
-          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={40} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
+        {/* Mi perfil (arriba, separado de la marca): avatar grande + nombre + ID. */}
+        <div className="mb-3 mt-1 flex flex-shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/40">
+          <Avatar foto={fotoMostrar} nombre={usuario?.nombre || titulo} size={52} editable onFoto={cambiarMiFoto} title={t('Cambiar mi foto de perfil')} />
           <div className="min-w-0">
-            {usuario?.codigo && <UserId codigo={usuario.codigo} />}
-            <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{usuario?.nombre || titulo}</div>
+            <div className="truncate text-[15px] font-bold leading-tight text-brand-navy dark:text-slate-100">{usuario?.nombre || titulo}</div>
+            {usuario?.codigo && <div className="mt-0.5"><UserId codigo={usuario.codigo} /></div>}
           </div>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
