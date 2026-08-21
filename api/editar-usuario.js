@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const { getAuth, getFirestore } = a
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-    const { uid, nombre, email, password, plantaId } = body
+    const { uid, nombre, email, password, plantaId, rol } = body
     if (!uid) return res.status(400).json({ ok: false, error: 'Falta el identificador del usuario.' })
     if (email != null && !esEmail(email)) return res.status(400).json({ ok: false, error: 'El correo no tiene un formato válido.' })
     if (password != null && password !== '' && String(password).length < 6) return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 6 caracteres.' })
@@ -89,14 +89,38 @@ export default async function handler(req, res) {
       }
     }
 
+    // ---- cambio de ROL (recalcula custom claims y fuerza re-login) ----
+    let rolCambiado = false
+    const nuevoRol = typeof rol === 'string' && rol.trim() ? rol.trim() : null
+    if (nuevoRol && nuevoRol !== target.rol) {
+      // Solo un super admin (o superadmin por correo) puede ascender a super_admin.
+      if (nuevoRol === 'super_admin' && !esSuperEmail && (decoded.bulkRole || '') !== 'super_admin') {
+        return res.status(403).json({ ok: false, error: 'Solo un super administrador puede asignar el rol Super Admin.' })
+      }
+      // Nadie puede degradar a un super_admin desde aquí salvo un super admin.
+      if (target.rol === 'super_admin' && !esSuperEmail && (decoded.bulkRole || '') !== 'super_admin') {
+        return res.status(403).json({ ok: false, error: 'No puedes cambiar el rol de un super administrador.' })
+      }
+      // Claims según el nuevo rol: los vínculos (cliente/carrier) solo aplican al rol que los usa.
+      const claims = { bulkTenant: target.tenantId, bulkRole: nuevoRol }
+      if (nuevoRol === 'cliente' && target.clienteId) claims.bulkClienteId = target.clienteId
+      if (['transportista', 'chofer'].includes(nuevoRol) && target.carrierId) claims.bulkCarrierId = target.carrierId
+      try {
+        await getAuth().setCustomUserClaims(uid, claims)
+        await getAuth().revokeRefreshTokens(uid) // fuerza a re-iniciar sesión con el nuevo rol
+        rolCambiado = true
+      } catch (e) { return res.status(400).json({ ok: false, error: 'No se pudo cambiar el rol: ' + (e?.message || 'desconocido') }) }
+    }
+
     // ---- actualizar el documento bulk_users ----
     const docUpdate = {}
     if (nombre != null) docUpdate.nombre = String(nombre)
     if (nuevoEmail) docUpdate.email = nuevoEmail
     if (plantaId !== undefined) docUpdate.plantaId = plantaId || null
+    if (rolCambiado) docUpdate.rol = nuevoRol
     if (Object.keys(docUpdate).length) await db.collection('bulk_users').doc(uid).set(docUpdate, { merge: true })
 
-    return res.status(200).json({ ok: true, uid })
+    return res.status(200).json({ ok: true, uid, rolCambiado })
   } catch (e) {
     return res.status(400).json({ ok: false, error: 'Error inesperado: ' + (e?.message || 'desconocido') })
   }
