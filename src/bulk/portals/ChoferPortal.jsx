@@ -13,6 +13,7 @@ import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/cha
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, crearConId, guardarAvatar, where } from '../data/repo'
+import { UserId } from '../components/UserId'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
@@ -263,9 +264,10 @@ export default function ChoferPortal() {
       <IndicadorConexion />
       <header className="head-safe bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 text-white">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} /></div>
+          <div className="grid h-11 w-11 flex-shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} className="animate-truck" /></div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-base font-black leading-tight">{usuario?.nombre}</div>
+            {usuario?.codigo && <UserId codigo={usuario.codigo} className="!text-slate-300" />}
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-300">
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${enLinea ? 'bg-emerald-400' : 'bg-slate-500'}`} />
               {enLinea ? t('En línea') : t('Desconectado')} · {t('Chofer')}
