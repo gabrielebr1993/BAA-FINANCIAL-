@@ -137,6 +137,13 @@ export default async function handler(req, res) {
     if (caId !== (target.carrierId || null)) docUpdate.carrierId = caId
     if (Object.keys(docUpdate).length) await db.collection('bulk_users').doc(uid).set(docUpdate, { merge: true })
 
+    // ---- mantener el DIRECTORIO (bulk_directorio) en sincronía ----
+    // Ficha no sensible para el descubrimiento de contactos del chat interno.
+    try {
+      const dir = { tenantId: target.tenantId, uid, nombre: (nombre != null ? String(nombre) : (target.nombre || '')), rol: finalRol, carrierId: caId, clienteId: cId }
+      await db.collection('bulk_directorio').doc(uid).set(dir, { merge: true })
+    } catch (e) { /* no bloquea la edición */ }
+
     return res.status(200).json({ ok: true, uid, rolCambiado, claimsCambiados })
   } catch (e) {
     return res.status(400).json({ ok: false, error: 'Error inesperado: ' + (e?.message || 'desconocido') })

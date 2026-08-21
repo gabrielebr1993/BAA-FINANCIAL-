@@ -9,7 +9,8 @@
 //   - foto del conductor: carrier.choferes[].foto (roster) — único rol con foto.
 //   - viaje = order.numero · material = order.material · carga = order.tipoEquipo
 //   - operación = job.nombre (por order.jobId)
-import { resumenPorConversacion, esConvClienteOrden, orderIdDeConv, slugChofer } from '../data/chatKeys'
+import { resumenPorConversacion, esConvClienteOrden, orderIdDeConv, slugChofer, esConvPrivada, uidsDePrivada } from '../data/chatKeys'
+import { esRolStaff } from './comunicacion'
 
 const nombreDe = (m, id, campo = 'nombre') => (m[id] ? (m[id][campo] || '') : '')
 
@@ -57,6 +58,22 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     if (key.startsWith('dm_d_')) {
       const info = choferPorSlug[key.slice(5)]
       out.conductores.push({ ...base, icon: 'chofer', foto: info?.foto || null, titulo: info?.nombre || 'Conductor', rolLabel: 'Conductor', rolColor: 'navy', carrierNombre: info?.carrierNombre || '' })
+      continue
+    }
+    // Chat PRIVADO 1-a-1 (pv_) del chat interno por roles. Se muestra SOLO si el admin
+    // es participante (sus propias conversaciones privadas); se clasifica según el ROL
+    // del OTRO (conductor/transportista/cliente/operaciones). Las conversaciones privadas
+    // ENTRE TERCEROS no se vuelcan en la consola del admin.
+    if (esConvPrivada(key)) {
+      const uids = uidsDePrivada(key)
+      if (!uids.includes(uid)) continue
+      const otroId = uids.find((u) => u !== uid) || uids[0]
+      const u = usuarioPorId[otroId] || {}
+      const fila = { ...base, foto: avatares[otroId] || null, titulo: u.nombre || r.lastAutor || 'Usuario', participantes: uids }
+      if (u.rol === 'cliente') out.clientes.push({ ...fila, icon: 'cliente', rolLabel: 'Cliente', rolColor: 'green' })
+      else if (u.rol === 'transportista') out.transportistas.push({ ...fila, icon: 'transportista', rolLabel: 'Transportista', rolColor: 'gold' })
+      else if (u.rol === 'chofer') out.conductores.push({ ...fila, icon: 'chofer', rolLabel: 'Conductor', rolColor: 'navy' })
+      else out.operaciones.push({ ...fila, icon: 'operacion', rolLabel: esRolStaff(u.rol) ? 'Staff' : (u.rol || 'Usuario'), rolColor: 'slate' })
       continue
     }
     // Chat INTERNO del staff (operaciones) → sección OPERACIONES.

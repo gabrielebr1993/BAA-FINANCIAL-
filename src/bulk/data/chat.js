@@ -4,7 +4,7 @@ import { crear, suscribir, where, ref, listar, eliminar } from './repo'
 import { updateDoc, arrayUnion } from 'firebase/firestore'
 
 // Claves/utilidades puras (sin Firebase). Se re-exportan para no cambiar imports.
-export { slugChofer, convChofer, convCarrier, esConvDirecta, convClienteOrden, esConvClienteOrden, orderIdDeConv, tsMillis, noLeidosPorConv, resumenPorConversacion, convStaff, esConvStaff } from './chatKeys'
+export { slugChofer, convChofer, convCarrier, esConvDirecta, convClienteOrden, esConvClienteOrden, orderIdDeConv, tsMillis, noLeidosPorConv, resumenPorConversacion, convStaff, esConvStaff, convPrivada, esConvPrivada, uidsDePrivada } from './chatKeys'
 
 // `participantes`: identificadores (uid del chofer, id del carrier, id del cliente,
 // autor) que pueden leer este chat de orden. Si se pasa, las reglas acotan la

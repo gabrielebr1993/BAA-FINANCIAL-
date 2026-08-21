@@ -14,6 +14,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
+import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
 import { menuGrupoConv } from '../data/grupos'
 import { convCarrier, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
@@ -61,6 +62,9 @@ export default function TransportistaPortal() {
   // Chats de ORDEN en los que participa este transporte (para hablar con sus choferes,
   // organizados por viaje). El aislamiento lo garantizan las reglas (carrierId ∈ participantes).
   const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', carrierId)])
+  // Chats PRIVADOS 1-a-1 del transportista: se identifican por su UID (no por el
+  // carrierId), por eso llevan su propia suscripción por `participantes ∋ mi uid`.
+  const { datos: mensajesPriv } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
 
   const ordenes = useMemo(() => {
     const mc = {}; for (const p of pagosCarrier || []) mc[p.orderId || p.id] = p.precioTransportista
@@ -98,7 +102,10 @@ export default function TransportistaPortal() {
   // Resumen de los chats de orden (por chofer/viaje) para la sección CHOFERES.
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
   const noLeidosChoferes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
-  const mensajesNuevos = noLeidosOficina + noLeidosChoferes
+  // Chat interno PRIVADO 1-a-1 (transportista↔chofer de su flota, transportista↔oficina…).
+  const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'transportista', carrierId: carrierId || null }), [usuario?.id, carrierId])
+  const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesPriv, uid: usuario?.id, tenantId, yo: yoPriv })
+  const mensajesNuevos = noLeidosOficina + noLeidosChoferes + noLeidosPriv
   // Secciones del panel de mensajes: CHOFERES (chats por viaje) · ADMINISTRADOR (oficina).
   const seccionesMsg = useMemo(() => {
     const fotoChofer = (nombre) => { const k = (nombre || '').trim().toLowerCase(); const d = choferes.find((x) => (x.nombre || '').trim().toLowerCase() === k); return d?.foto || (d?.uid && avatares[d.uid]) || null }
@@ -114,9 +121,10 @@ export default function TransportistaPortal() {
     return [
       { k: 'choferes', label: t('Choferes'), icon: 'chofer', items: itemsChoferes, vacio: t('Sin conversaciones con tus choferes todavía.') },
       { k: 'admin', label: t('Administrador'), icon: 'admin', items: itemsAdmin, vacio: t('Sin mensajes con la oficina.') },
+      seccionPriv,
       { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo.') },
     ]
-  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, avatares, t])
+  }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, avatares, seccionPriv, t])
   const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
 
   // Presencia viva (en línea) por uid de chofer.
@@ -236,10 +244,11 @@ export default function TransportistaPortal() {
       {activo === 'mensajes' && (
         usuario?.carrierId
           ? <>
-              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal"
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirPriv}
                 menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
                 accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
               {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+              {modalPriv}
             </>
           : <Card className="p-4"><span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span></Card>
       )}

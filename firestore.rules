@@ -247,6 +247,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // DIRECTORIO del tenant (descubrimiento de contactos del chat interno). Doc id =
+    // uid. Contiene SOLO datos NO sensibles { tenantId, uid, nombre, rol, carrierId?,
+    // clienteId?, codigo? } para que CUALQUIER miembro (incluido un chofer, que NO puede
+    // leer bulk_users) pueda descubrir a sus contactos permitidos. Lo escribe el propio
+    // usuario (su ficha) o el staff (backfill/altas). Nunca lleva correo ni credenciales.
+    match /bulk_directorio/{id} {
+      allow read: if bSame(resource.data.tenantId);
+      allow create, update: if bSame(request.resource.data.tenantId) && (request.auth.uid == id || bStaff(request.resource.data.tenantId));
+      allow delete: if bStaff(resource.data.tenantId);
+    }
+
+    // MATRIZ de comunicación configurable (quién puede chatear con quién, por rol).
+    // Doc id = tenantId; `pares` = { 'rolA|rolB': true|false }. La LEE cualquier miembro
+    // (para saber con quién puede hablar); solo un admin/super_admin la ESCRIBE, de modo
+    // que la política se ajusta SIN TOCAR CÓDIGO. No afecta el aislamiento financiero.
+    match /bulk_comMatrix/{id} {
+      allow read: if bSame(id);
+      allow create, update: if bAdmin(id);
+      allow delete: if false;
+    }
+
+    // Registro de CONVERSACIONES privadas (chat interno 1-a-1). La crea SOLO el backend
+    // (Cloud Function bulkChatPrivado) tras validar la matriz + la misma compañía; el
+    // cliente NO puede escribir aquí. La LEEN sus participantes (para listarla) y el
+    // admin. Sirve además de guardián: un mensaje pv_ solo se acepta si su conversación
+    // existe y el autor es participante (ver bulk_messages).
+    match /bulk_conversaciones/{id} {
+      allow read: if bSame(resource.data.tenantId) && (bAdmin(resource.data.tenantId) || request.auth.uid in resource.data.participantes);
+      allow create, update, delete: if false;
+    }
+
     // Catálogos y entidades gestionadas por staff del tenant.
     match /bulk_clients/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     // Plantas = puntos de RECOGIDA. Cualquier usuario del tenant (chofer, transportista,
@@ -369,7 +400,15 @@ service cloud.firestore {
         || (bCarrier() != null && bCarrier() in resource.data.participantes)
         || (bCliente() != null && bCliente() in resource.data.participantes)
       );
-      allow create: if bSame(request.resource.data.tenantId);
+      // Crear mensaje: mismo tenant. ADEMÁS, un mensaje de chat PRIVADO (orderId pv_)
+      // solo se acepta si SU conversación ya existe en bulk_conversaciones (creada por
+      // el backend tras validar la matriz + misma compañía) y el AUTOR es participante.
+      // Así la política de roles se hace cumplir en el BACKEND, no solo en el frontend:
+      // nadie puede saltarse el picker y escribir directo a un pv_ no autorizado.
+      allow create: if bSame(request.resource.data.tenantId)
+        && ( !request.resource.data.orderId.matches('pv_.*')
+             || ( exists(/databases/$(database)/documents/bulk_conversaciones/$(request.resource.data.orderId))
+                  && request.auth.uid in get(/databases/$(database)/documents/bulk_conversaciones/$(request.resource.data.orderId)).data.participantes ) );
       allow update: if bSame(resource.data.tenantId);
       // Borrado permanente: el ADMIN (cualquier chat/mensaje) o el AUTOR de su propio
       // mensaje. Así un usuario no puede borrar mensajes de otros (requisito 13).

@@ -8,9 +8,10 @@ import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
+import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
 import { menuGrupoConv } from '../data/grupos'
-import { convChofer, noLeidosPorConv, resumenPorConversacion } from '../data/chat'
+import { convChofer, noLeidosPorConv, resumenPorConversacion, esConvPrivada } from '../data/chat'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, crearConId, guardarAvatar, where } from '../data/repo'
@@ -97,10 +98,17 @@ export default function ChoferPortal() {
   // La consulta trae solo los mensajes donde el chofer participa (aislado por reglas).
   const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
-  const noLeidosOrdenes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
+  // No leídos de ÓRDENES: excluye las conversaciones privadas (pv_), que se cuentan
+  // aparte en su propia sección para no duplicar el indicador.
+  const noLeidosOrdenes = useMemo(() => Object.entries(resumenOrd).reduce((a, [k, r]) => a + (esConvPrivada(k) ? 0 : (r.noLeidos || 0)), 0), [resumenOrd])
   const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
   const [verGrupos, setVerGrupos] = useState(false)
-  const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes + noLeidosGrupos
+  // Chat interno PRIVADO 1-a-1 (chofer↔chofer del mismo transporte, chofer↔transportista,
+  // chofer↔oficina…) según la matriz de comunicación. Reusa la misma suscripción de
+  // mensajes (participantes array-contains mi uid), por lo que llega en tiempo real.
+  const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'chofer', carrierId: carrierId || null }), [usuario?.id, carrierId])
+  const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesOrdenes, uid: usuario?.id, tenantId, yo: yoPriv })
+  const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes + noLeidosGrupos + noLeidosPriv
   // Secciones del panel de mensajes: ÓRDENES (por viaje/material, con transporte+oficina)
   // y ADMINISTRADOR/OFICINA (canal general). Solo mis órdenes; nada de otros choferes.
   const seccionesMsg = useMemo(() => {
@@ -116,9 +124,10 @@ export default function ChoferPortal() {
     return [
       { k: 'ordenes', label: t('Órdenes'), icon: 'orden', items: itemsOrd, vacio: t('Aún no tienes chats de órdenes.') },
       { k: 'oficina', label: t('Administrador'), icon: 'admin', items: itemsOfi, vacio: t('Sin mensajes con la oficina.') },
+      seccionPriv,
       { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
     ]
-  }, [ordenes, resumenOrd, mensajesOficina, usuario, miConv, gruposItems, t])
+  }, [ordenes, resumenOrd, mensajesOficina, usuario, miConv, gruposItems, seccionPriv, t])
 
   // Mi ficha en la plantilla del transporte (por nombre). Sirve para el contador de
   // rechazos y para reactivarme al reingresar.
@@ -414,10 +423,11 @@ export default function ChoferPortal() {
         })()}
         {tab === 'mensajes' && (
           <>
-            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal"
+            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirPriv}
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+            {modalPriv}
           </>
         )}
         {tab === 'perfil' && (

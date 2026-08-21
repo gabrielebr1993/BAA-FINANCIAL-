@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, guardarCampos, reservarCodigo, reservarCodigos, guardarAvatar } from '../data/repo'
+import { guardar, guardarCampos, reservarCodigo, reservarCodigos, guardarAvatar, guardarDirectorio } from '../data/repo'
 import { useAvatares } from '../data/useCodigoUsuario'
+import { useDirectorio, useMatrizComunicacion } from '../data/useComunicacion'
+import MatrizComunicacion from '../components/MatrizComunicacion'
 import { authBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
@@ -28,6 +30,9 @@ export default function BulkUsuarios() {
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
+  const directorio = useDirectorio()
+  const matrizCom = useMatrizComunicacion(tenantId)
+  const [verMatriz, setVerMatriz] = useState(false)
 
   const esAdmin = rol === BULK_ROLES.ADMIN || rol === BULK_ROLES.SUPER_ADMIN
 
@@ -59,6 +64,29 @@ export default function BulkUsuarios() {
     espejoAvatarRef.current = true
     ;(async () => { for (const [uid, foto] of pendientes) { try { await guardarAvatar(tenantId, uid, foto) } catch { /* permiso */ } } })()
   }, [cargando, esAdmin, perfilesDriver, carriers, avatares, tenantId])
+
+  // Sincroniza (una vez por sesión de admin) el DIRECTORIO del tenant a partir de los
+  // usuarios: ficha NO sensible (uid, nombre, rol, carrier/cliente, código) legible por
+  // cualquier miembro para descubrir contactos del chat interno. Escribe solo lo que
+  // falta o cambió, para no repetir escrituras.
+  const dirRef = useRef(false)
+  useEffect(() => {
+    if (dirRef.current || cargando || !esAdmin) return
+    const porUid = Object.fromEntries((directorio || []).map((d) => [d.uid || d.id, d]))
+    const pend = []
+    for (const u of usuarios || []) {
+      if (!u.id || !u.rol) continue
+      const d = porUid[u.id]
+      const codigo = Number.isFinite(codigoNum(u)) ? String(u.codigo) : (d?.codigo || null)
+      const cambia = !d || d.nombre !== (u.nombre || '') || d.rol !== u.rol
+        || (d.carrierId || null) !== (u.carrierId || null) || (d.clienteId || null) !== (u.clienteId || null)
+        || (d.codigo || null) !== codigo
+      if (cambia) pend.push({ uid: u.id, datos: { nombre: u.nombre || '', rol: u.rol, carrierId: u.carrierId || null, clienteId: u.clienteId || null, codigo } })
+    }
+    if (!pend.length) return
+    dirRef.current = true
+    ;(async () => { for (const p of pend) { try { await guardarDirectorio(tenantId, p.uid, p.datos) } catch { /* permiso */ } } })()
+  }, [cargando, esAdmin, usuarios, directorio, tenantId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Relleno automático (una vez) de los IDs faltantes, en orden estable. El ID es
   // ÚNICO y GLOBAL entre TODOS los perfiles: usuarios, transportistas (empresa) y
@@ -369,8 +397,19 @@ export default function BulkUsuarios() {
         </Select>
         <span className="whitespace-nowrap text-xs font-medium text-slate-400">{usuariosFiltrados.length} {usuariosFiltrados.length === 1 ? t('usuario') : t('usuarios')}</span>
         {hayFiltro && <Boton variant="ghost" onClick={limpiar} className="px-3 py-1 text-xs"><X size={14} /> {t('Limpiar')}</Boton>}
-        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Nuevo usuario')}</>}</Boton>
+        {esAdmin && <Boton variant="ghost" onClick={() => setVerMatriz(true)} className="ml-auto px-3 py-1.5 text-xs"><ShieldCheck size={15} /> {t('Reglas de chat')}</Boton>}
+        <Boton variant="gold" onClick={() => setAlta((v) => !v)} className={esAdmin ? '' : 'ml-auto'}>{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Nuevo usuario')}</>}</Boton>
       </div>
+
+      {verMatriz && (
+        <MatrizComunicacion
+          tenantId={tenantId}
+          matriz={matrizCom}
+          rolesConfig={rolesConfig}
+          roles={[...asignables, BULK_ROLES.SUPER_ADMIN]}
+          onClose={() => setVerMatriz(false)}
+        />
+      )}
 
       {alta && (
       <Card className="mb-4 p-4">

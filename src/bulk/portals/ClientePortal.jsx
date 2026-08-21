@@ -7,6 +7,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
+import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
 import { menuGrupoConv } from '../data/grupos'
 import { convClienteOrden, resumenPorConversacion } from '../data/chat'
@@ -31,7 +32,7 @@ const fechaEntrega = (o) => o?.hitos?.entrega ? new Date(o.hitos.entrega) : null
 
 export default function ClientePortal() {
   const { t } = useLang()
-  const { usuario } = useBulkAuth()
+  const { usuario, tenantId } = useBulkAuth()
   const [tab, setTab] = useState('resumen')
   const clienteId = usuario?.clienteId || '__none__'
   const { datos: _ordenesRaw, cargando } = useColeccion('orders', [where('clienteId', '==', clienteId)])
@@ -98,6 +99,8 @@ export default function ClientePortal() {
   // (aislamiento garantizado por reglas). No se mezclan viajes distintos.
   const { datos: misMensajes } = useColeccion('messages', [where('participantes', 'array-contains', clienteId)])
   const resumenMsg = useMemo(() => resumenPorConversacion(misMensajes, usuario?.id), [misMensajes, usuario])
+  // Chats PRIVADOS 1-a-1 del cliente (con la oficina/administración), por su UID.
+  const { datos: mensajesPriv } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
   const ordenesChat = useMemo(
     () => ordenes.filter((o) => !FINAL.includes(o.estado) || resumenMsg[convClienteOrden(o.id)]),
     [ordenes, resumenMsg],
@@ -114,10 +117,13 @@ export default function ClientePortal() {
   // Grupos del cliente (puede ser invitado; no crea). Se añaden como sección aparte.
   const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
   const [verGrupos, setVerGrupos] = useState(false)
+  const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'cliente', clienteId: usuario?.clienteId || null }), [usuario?.id, usuario?.clienteId])
+  const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesPriv, uid: usuario?.id, tenantId, yo: yoPriv })
   const seccionesCliente = useMemo(() => [
     { k: 'admin', label: t('Administrador'), icon: 'admin', items: seccionesMsg[0]?.items || [], vacio: seccionesMsg[0]?.vacio },
+    seccionPriv,
     { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
-  ], [seccionesMsg, gruposItems, t])
+  ], [seccionesMsg, gruposItems, seccionPriv, t])
 
   const rechazarFactura = async (r) => {
     const motivo = window.prompt(t('¿Por qué disputas esta factura?'))
@@ -133,7 +139,7 @@ export default function ClientePortal() {
     { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
     { k: 'proyectos', label: t('Proyectos'), icon: Layers },
     { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
-    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg + noLeidosGrupos },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg + noLeidosGrupos + noLeidosPriv },
   ]
 
   // Nombre de la empresa cliente (denormalizado en sus órdenes/facturas; el cliente no
@@ -242,10 +248,11 @@ export default function ClientePortal() {
 
             {tab === 'mensajes' && (
               <>
-                <PanelConversaciones secciones={seccionesCliente} alturaClass="h-mensajes-portal"
+                <PanelConversaciones secciones={seccionesCliente} alturaClass="h-mensajes-portal" abrir={abrirPriv}
                   menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
                   accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
                 {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+                {modalPriv}
               </>
             )}
           </>

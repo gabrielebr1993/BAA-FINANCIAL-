@@ -114,6 +114,27 @@ export async function guardarAvatar(tenantId, uid, foto) {
   await setDoc(ref('avatars', uid), { tenantId, foto }, { merge: true })
 }
 
+// DIRECTORIO del tenant (bulk_directorio/{uid}): fuente LEGIBLE POR TODA LA EMPRESA
+// para que CUALQUIER usuario (también los que no pueden leer bulk_users, p. ej. un
+// chofer) pueda descubrir a sus contactos permitidos. NO contiene datos sensibles:
+// solo { tenantId, uid, nombre, rol, carrierId?, clienteId?, codigo? }. Lo escribe el
+// staff (backfill/edición) o el propio usuario (su ficha). Doc id = uid.
+export async function guardarDirectorio(tenantId, uid, datos) {
+  await setDoc(ref('directorio', uid), { tenantId, uid, ...limpio(datos) }, { merge: true })
+}
+// Quita claves con undefined (Firestore no las acepta) sin perder null intencional.
+function limpio(o = {}) {
+  const r = {}
+  for (const k of Object.keys(o)) if (o[k] !== undefined) r[k] = o[k]
+  return r
+}
+
+// MATRIZ de comunicación configurable (bulk_comMatrix/{tenantId}). La escribe SOLO el
+// admin. `pares` = { 'rolA|rolB': true|false }. Merge para no pisar otros pares.
+export async function guardarMatrizComunicacion(tenantId, pares) {
+  await setDoc(ref('comMatrix', tenantId), { tenantId, pares }, { merge: true })
+}
+
 // Crea muchos documentos de una sola vez (p. ej. las órdenes de un job).
 export async function crearLote(nombre, tenantId, lista) {
   const batch = writeBatch(db)

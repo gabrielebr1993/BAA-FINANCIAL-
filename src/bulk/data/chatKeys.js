@@ -20,6 +20,15 @@ export const esConvDirecta = (id) => typeof id === 'string' && id.startsWith('dm
 export const convStaff = (a, b) => `st_${[a, b].filter(Boolean).sort().join('__')}`
 export const esConvStaff = (id) => typeof id === 'string' && id.startsWith('st_')
 
+// Chat PRIVADO 1-a-1 entre DOS personas cualesquiera (según la matriz de
+// comunicación por roles): dos uids ORDENADOS, de modo que Juan→Carlos y
+// Carlos→Juan resuelven a la MISMA clave (no se duplican conversaciones).
+//   pv_<uidA>__<uidB>
+export const convPrivada = (a, b) => `pv_${[a, b].filter(Boolean).sort().join('__')}`
+export const esConvPrivada = (id) => typeof id === 'string' && id.startsWith('pv_')
+// Los dos uids que participan en una conversación privada (o []).
+export const uidsDePrivada = (id) => (esConvPrivada(id) ? id.slice(3).split('__').filter(Boolean) : [])
+
 // Chat CLIENTE ↔ OFICINA por orden/viaje. Es un canal APARTE del chat operativo de
 // la orden: aquí solo participan el cliente y el staff (el chofer/transportista NO),
 // para que el cliente se comunique ÚNICAMENTE con el administrador, por viaje.

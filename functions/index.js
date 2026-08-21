@@ -84,6 +84,15 @@ exports.crearUsuarioBulk = onCall(async (req) => {
   }
   await admin.auth().setCustomUserClaims(user.uid, claimsDe(perfil))
   await db.collection('bulk_users').doc(user.uid).set(perfil, { merge: true })
+  // Ficha de DIRECTORIO (no sensible) para el descubrimiento de contactos del chat
+  // interno: la pueden leer todos los miembros del tenant (incl. choferes). El `codigo`
+  // (ID de 8 dígitos) se rellena al asignarse; aquí puede ir ausente.
+  try {
+    await db.collection('bulk_directorio').doc(user.uid).set({
+      tenantId: t.bulkTenant, uid: user.uid, nombre: perfil.nombre || '', rol,
+      carrierId: carrierId || null, clienteId: clienteId || null,
+    }, { merge: true })
+  } catch (e) { /* no bloquea el alta */ }
   return { uid: user.uid }
 })
 
@@ -264,6 +273,72 @@ exports.bulkGrupoOp = onCall(async (req) => {
     return { ok: true }
   }
   throw new HttpsError('invalid-argument', 'Acción no reconocida.')
+})
+
+// ============================================================================
+// bulkChatPrivado — abre (o recupera) un chat PRIVADO 1-a-1 entre dos personas,
+// validando en el BACKEND la MATRIZ de comunicación por roles y la MISMA compañía.
+// Espejo de src/bulk/domain/comunicacion.js (mantener ambos en sincronía). Fuente de
+// verdad: bulk_users (nunca se confía en datos que envíe el cliente). Crea el registro
+// idempotente en bulk_conversaciones (clave pv_ ordenada → nunca se duplica). El envío
+// de mensajes usa bulk_messages con `participantes`, cuya lectura ya aíslan las reglas.
+// data: { paraUid }
+// ============================================================================
+const _ROLES_CADENA = ['cliente', 'transportista', 'chofer', 'supervisor_planta']
+const _esStaffRol = (rol) => !!rol && !_ROLES_CADENA.includes(rol)
+const _clavePar = (a, b) => [a || '', b || ''].sort().join('|')
+function _permisoDefecto(a, b) {
+  if (!a || !b) return false
+  if (_esStaffRol(a) || _esStaffRol(b)) return true
+  const set = new Set([a, b])
+  const soloDe = (roles) => [...set].every((r) => roles.includes(r))
+  if (soloDe(['chofer', 'transportista'])) return true
+  if (set.has('supervisor_planta') && soloDe(['supervisor_planta', 'chofer', 'transportista'])) return true
+  return false
+}
+function _puedeChatearRol(a, b, matriz) {
+  const pares = (matriz && matriz.pares) || {}
+  const k = _clavePar(a, b)
+  if (Object.prototype.hasOwnProperty.call(pares, k)) return !!pares[k]
+  return _permisoDefecto(a, b)
+}
+function _mismaCompania(yo, otro) {
+  if (!yo || !otro) return false
+  if (_esStaffRol(yo.rol) || _esStaffRol(otro.rol)) return true
+  if (yo.rol === 'supervisor_planta' || otro.rol === 'supervisor_planta') return true
+  if ((yo.rol === 'chofer' || yo.rol === 'transportista') && (otro.rol === 'chofer' || otro.rol === 'transportista')) {
+    return !!yo.carrierId && yo.carrierId === otro.carrierId
+  }
+  return false
+}
+exports.bulkChatPrivado = onCall(async (req) => {
+  const t = req.auth && req.auth.token
+  const uid = req.auth && req.auth.uid
+  if (!t || !t.bulkTenant || !uid) throw new HttpsError('permission-denied', 'No autorizado.')
+  const tenant = t.bulkTenant
+  const paraUid = req.data && req.data.paraUid
+  if (!paraUid || paraUid === uid) throw new HttpsError('invalid-argument', 'Destinatario inválido.')
+  const [yoP, otroP] = await Promise.all([_perfilBulk(uid), _perfilBulk(paraUid)])
+  if (!yoP) throw new HttpsError('failed-precondition', 'Tu perfil no está disponible.')
+  if (!otroP) throw new HttpsError('not-found', 'El contacto no existe.')
+  if (yoP.tenantId !== tenant || otroP.tenantId !== tenant) throw new HttpsError('permission-denied', 'No puedes contactar usuarios de otra empresa.')
+  const yo = { uid, rol: yoP.rol, carrierId: yoP.carrierId || null, clienteId: yoP.clienteId || null }
+  const otro = { uid: paraUid, rol: otroP.rol, carrierId: otroP.carrierId || null, clienteId: otroP.clienteId || null }
+  let matriz = {}
+  try { const s = await db.collection('bulk_comMatrix').doc(tenant).get(); if (s.exists) matriz = s.data() || {} } catch (e) { /* usa defaults */ }
+  if (!_puedeChatearRol(yo.rol, otro.rol, matriz) || !_mismaCompania(yo, otro)) {
+    throw new HttpsError('permission-denied', 'La comunicación entre estos perfiles no está permitida.')
+  }
+  const participantes = [uid, paraUid].sort()
+  const key = 'pv_' + participantes.join('__')
+  const now = admin.firestore.FieldValue.serverTimestamp()
+  await db.collection('bulk_conversaciones').doc(key).set({
+    tenantId: tenant, tipo: 'privado', key, participantes,
+    roles: { [uid]: yo.rol, [paraUid]: otro.rol },
+    nombres: { [uid]: yoP.nombre || yoP.email || 'Usuario', [paraUid]: otroP.nombre || otroP.email || 'Usuario' },
+    creadoPor: uid, creadoEn: now, actualizadoEn: now,
+  }, { merge: true })
+  return { key, participantes, otro: { uid: paraUid, nombre: otroP.nombre || otroP.email || 'Usuario', rol: otro.rol } }
 })
 
 // ============================================================================
