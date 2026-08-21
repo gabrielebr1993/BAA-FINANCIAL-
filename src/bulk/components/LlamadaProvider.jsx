@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Smile, Eraser, Send, X } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -45,6 +45,20 @@ export default function LlamadaProvider({ children }) {
   const canvasRef = useRef(null)
   const dibujoRef = useRef(null)
   const chatInputRef = useRef(null)
+  // Extras: grabar, levantar mano, subtítulos, quién habla, dispositivos.
+  const [grabando, setGrabando] = useState(false)
+  const [manoMia, setManoMia] = useState(false)
+  const [manoOtro, setManoOtro] = useState(false)
+  const [subsOn, setSubsOn] = useState(false)
+  const [subMio, setSubMio] = useState('')
+  const [subOtro, setSubOtro] = useState('')
+  const [hablaOtro, setHablaOtro] = useState(false)
+  const [ajustes, setAjustes] = useState(false)
+  const [dispos, setDispos] = useState({ mics: [], cams: [], salidas: [] })
+  const recorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const recognitionRef = useRef(null)
+  const analizaRef = useRef(null)
 
   const pcRef = useRef(null)
   const localRef = useRef(null)
@@ -118,6 +132,8 @@ export default function LlamadaProvider({ children }) {
     else if (m.tipo === 'pizarra') setPizarra(!!m.abrir)
     else if (m.tipo === 'chat') { setMensajesCall((s) => [...s, { mio: false, texto: m.texto }]); if (!chatAbierto) setNoLeidoCall((n) => n + 1) }
     else if (m.tipo === 'react') { setReaccion({ e: m.emoji, k: Date.now() }); setTimeout(() => setReaccion(null), 2500) }
+    else if (m.tipo === 'mano') setManoOtro(!!m.arriba)
+    else if (m.tipo === 'sub') setSubOtro(m.texto || '')
   }
   const configurarDC = (dc) => {
     dcRef.current = dc
@@ -141,6 +157,110 @@ export default function LlamadaProvider({ children }) {
     dibujarSegmento(a, p, color); enviarDC({ tipo: 'draw', a, b: p, color }); dibujoRef.current = p
   }
   const lienzoUp = () => { dibujoRef.current = null }
+
+  // ── Grabar la llamada (local → descarga) ────────────────────────────────────
+  const toggleGrabar = () => {
+    if (grabando) { try { recorderRef.current?.stop() } catch { /* noop */ } return }
+    try {
+      const tracks = [
+        ...(remoteRef.current?.getTracks() || []),
+        ...(localRef.current?.getAudioTracks() || []),
+      ]
+      if (!tracks.length) return
+      const mezcla = new MediaStream(tracks)
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm'
+      const rec = new MediaRecorder(mezcla, { mimeType: mime })
+      chunksRef.current = []
+      rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data) }
+      rec.onstop = () => {
+        try {
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a'); a.href = url; a.download = `llamada-${info?.con || ''}.webm`; a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 4000)
+        } catch { /* noop */ }
+        setGrabando(false)
+      }
+      rec.start(); recorderRef.current = rec; setGrabando(true)
+    } catch { alert(t('Este navegador no permite grabar la llamada.')) }
+  }
+
+  // ── Levantar la mano ────────────────────────────────────────────────────────
+  const toggleMano = () => { const v = !manoMia; setManoMia(v); enviarDC({ tipo: 'mano', arriba: v }) }
+
+  // ── Subtítulos en vivo (voz → texto) ────────────────────────────────────────
+  const toggleSubs = () => {
+    if (subsOn) { try { recognitionRef.current?.stop() } catch { /* noop */ } recognitionRef.current = null; setSubsOn(false); setSubMio(''); enviarDC({ tipo: 'sub', texto: '', fin: true }); return }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert(t('Tu navegador no soporta subtítulos en vivo (usa Chrome).')); return }
+    try {
+      const rec = new SR(); rec.lang = 'es-ES'; rec.continuous = true; rec.interimResults = true
+      rec.onresult = (e) => {
+        let txt = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) txt = e.results[i][0].transcript
+        setSubMio(txt); enviarDC({ tipo: 'sub', texto: txt })
+      }
+      rec.onend = () => { if (recognitionRef.current) { try { rec.start() } catch { /* noop */ } } }
+      rec.start(); recognitionRef.current = rec; setSubsOn(true)
+    } catch { setSubsOn(false) }
+  }
+
+  // ── Indicador de "quién habla" (nivel de audio del remoto) ──────────────────
+  useEffect(() => {
+    if (fase !== 'activa' || !remoteRef.current) return
+    let raf, ctx, analyser
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      ctx = new AC(); const src = ctx.createMediaStreamSource(remoteRef.current)
+      analyser = ctx.createAnalyser(); analyser.fftSize = 512; src.connect(analyser)
+      const datos = new Uint8Array(analyser.frequencyBinCount)
+      let ultimo = 0
+      const loop = () => {
+        analyser.getByteFrequencyData(datos)
+        const vol = datos.reduce((a, b) => a + b, 0) / datos.length
+        const ahora = vol > 18
+        const tNow = Date.now()
+        if (tNow - ultimo > 180) { setHablaOtro(ahora); ultimo = tNow }
+        raf = requestAnimationFrame(loop)
+      }
+      loop()
+    } catch { /* noop */ }
+    return () => { try { cancelAnimationFrame(raf); ctx?.close() } catch { /* noop */ } }
+  }, [fase])
+
+  // ── Elegir dispositivos (mic / cámara / altavoz) ────────────────────────────
+  const cargarDispositivos = async () => {
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices()
+      setDispos({
+        mics: list.filter((d) => d.kind === 'audioinput'),
+        cams: list.filter((d) => d.kind === 'videoinput'),
+        salidas: list.filter((d) => d.kind === 'audiooutput'),
+      })
+    } catch { /* noop */ }
+  }
+  const usarMic = async (deviceId) => {
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } })
+      const track = st.getAudioTracks()[0]
+      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'audio')
+      if (sender) await sender.replaceTrack(track)
+      const old = localRef.current?.getAudioTracks?.()[0]; if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
+      localRef.current?.addTrack(track)
+    } catch { /* noop */ }
+  }
+  const usarCam = async (deviceId) => {
+    try {
+      const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } })
+      const track = st.getVideoTracks()[0]
+      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
+      if (sender) await sender.replaceTrack(track)
+      const old = localRef.current?.getVideoTracks?.()[0]; if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
+      localRef.current?.addTrack(track)
+      if (localVid.current) localVid.current.srcObject = localRef.current
+    } catch { /* noop */ }
+  }
+  const usarSalida = async (deviceId) => { try { await remoteVid.current?.setSinkId?.(deviceId) } catch { /* noop */ } }
 
   // Registra la llamada en el chat de origen (para dejar HISTORIAL: perdida o duración).
   // Solo lo hace quien LLAMÓ (tiene el contexto del chat); el mensaje lo ven ambos.
@@ -344,7 +464,15 @@ export default function LlamadaProvider({ children }) {
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
   // Al colgar/entrar/salir, restablece minimizado.
-  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false); setPos(null); setPizarra(false); setChatAbierto(false); setMensajesCall([]); setReaccion(null); setNoLeidoCall(0); dcRef.current = null } }, [fase])
+  useEffect(() => {
+    if (fase === 'idle') {
+      setMin(false); setTick(0); setCompartiendo(false); setPos(null); setPizarra(false); setChatAbierto(false)
+      setMensajesCall([]); setReaccion(null); setNoLeidoCall(0); dcRef.current = null
+      setManoMia(false); setManoOtro(false); setSubMio(''); setSubOtro(''); setHablaOtro(false); setAjustes(false)
+      try { recorderRef.current?.stop() } catch { /* noop */ } recorderRef.current = null; setGrabando(false)
+      try { recognitionRef.current?.stop() } catch { /* noop */ } recognitionRef.current = null; setSubsOn(false)
+    }
+  }, [fase])
   useEffect(() => { if (chatAbierto) setNoLeidoCall(0) }, [chatAbierto])
 
   // Arrastrar el widget minimizado (pointer events; se mueve por toda la pantalla).
@@ -437,6 +565,7 @@ export default function LlamadaProvider({ children }) {
                 <div className="flex h-full w-full flex-col items-center justify-center">
                   <div className="relative h-40 w-40">
                     {fase === 'saliente' && <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/20" />}
+                    {hablaOtro && <span className="absolute -inset-2 animate-pulse rounded-full ring-4 ring-emerald-400/70" />}
                     <div className="relative grid h-40 w-40 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-6xl font-black text-slate-900 shadow-2xl">{inicialCon}</div>
                   </div>
                 </div>
@@ -463,6 +592,36 @@ export default function LlamadaProvider({ children }) {
 
             {/* Reacción flotante */}
             {reaccion && <div key={reaccion.k} className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 animate-bounce text-7xl">{reaccion.e}</div>}
+
+            {/* Grabando */}
+            {grabando && <div className="absolute left-4 top-20 flex items-center gap-1.5 rounded-full bg-rose-500/90 px-3 py-1 text-xs font-bold text-white"><span className="h-2 w-2 animate-pulse rounded-full bg-white" /> REC</div>}
+            {/* Mano levantada del otro */}
+            {manoOtro && <div className="absolute left-1/2 top-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-sm font-bold text-slate-900"><Hand size={15} /> {info?.con || t('El otro')} {t('levantó la mano')}</div>}
+
+            {/* Subtítulos en vivo */}
+            {(subsOn || subOtro) && (subMio || subOtro) && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-4 flex flex-col items-center gap-1 px-4">
+                {subOtro && <span className="max-w-2xl rounded-lg bg-black/70 px-3 py-1.5 text-center text-sm text-white"><b className="text-amber-300">{info?.con}: </b>{subOtro}</span>}
+                {subMio && <span className="max-w-2xl rounded-lg bg-black/60 px-3 py-1.5 text-center text-sm text-white/90"><b className="text-emerald-300">{t('Tú')}: </b>{subMio}</span>}
+              </div>
+            )}
+
+            {/* Panel de AJUSTES de dispositivos */}
+            {ajustes && (
+              <div className="absolute right-4 top-20 w-72 rounded-2xl bg-slate-900/95 p-4 text-sm text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
+                <div className="mb-2 flex items-center gap-2"><Settings size={15} className="text-amber-400" /><b>{t('Dispositivos')}</b><button onClick={() => setAjustes(false)} className="ml-auto text-white/60 hover:text-white"><X size={16} /></button></div>
+                <label className="mt-2 block text-[11px] uppercase text-white/50">{t('Micrófono')}</label>
+                <select onChange={(e) => usarMic(e.target.value)} className="mt-1 w-full rounded-lg bg-white/10 px-2 py-1.5 outline-none">{dispos.mics.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || t('Micrófono')}</option>)}</select>
+                {esVideo && <>
+                  <label className="mt-3 block text-[11px] uppercase text-white/50">{t('Cámara')}</label>
+                  <select onChange={(e) => usarCam(e.target.value)} className="mt-1 w-full rounded-lg bg-white/10 px-2 py-1.5 outline-none">{dispos.cams.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || t('Cámara')}</option>)}</select>
+                </>}
+                {dispos.salidas.length > 0 && <>
+                  <label className="mt-3 block text-[11px] uppercase text-white/50">{t('Altavoz')}</label>
+                  <select onChange={(e) => usarSalida(e.target.value)} className="mt-1 w-full rounded-lg bg-white/10 px-2 py-1.5 outline-none">{dispos.salidas.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || t('Altavoz')}</option>)}</select>
+                </>}
+              </div>
+            )}
 
             {/* CHAT lateral en llamada */}
             {chatAbierto && (
@@ -514,6 +673,10 @@ export default function LlamadaProvider({ children }) {
             <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
               <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>
             </Ctrl>
+            <Ctrl onClick={toggleMano} label={t('Mano')} activo={manoMia}><Hand size={22} /></Ctrl>
+            <Ctrl onClick={toggleSubs} label={t('Subtítulos')} activo={subsOn}><Captions size={22} /></Ctrl>
+            <Ctrl onClick={toggleGrabar} label={grabando ? t('Detener') : t('Grabar')} activo={grabando}>{grabando ? <StopCircle size={22} /> : <Disc size={22} />}</Ctrl>
+            <Ctrl onClick={() => { setAjustes((v) => !v); cargarDispositivos() }} label={t('Ajustes')} activo={ajustes}><Settings size={22} /></Ctrl>
             <Ctrl onClick={() => limpiar(false)} label={t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
           </div>
         </div>

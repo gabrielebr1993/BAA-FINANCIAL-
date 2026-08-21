@@ -7,10 +7,18 @@
 import { dbBulk as db } from '../firebaseBulk'
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, query, where, orderBy } from 'firebase/firestore'
 
-// Servidores ICE. Para llamadas fiables en cualquier red, añade aquí un TURN:
-//   { urls: 'turn:tu-servidor:3478', username: '...', credential: '...' }
+// Servidores ICE. STUN gratis de Google + (opcional) TURN para conectar en CUALQUIER
+// red. El TURN se configura con variables de entorno en Vercel (sin tocar código):
+//   VITE_TURN_URL   = turn:tu-servidor:3478   (o turns:...:5349)
+//   VITE_TURN_USER  = usuario
+//   VITE_TURN_CRED  = credencial
+// Si no están definidas, se usa solo STUN (funciona en la mayoría de las redes).
+const TURN_URL = import.meta.env.VITE_TURN_URL
+const TURN_USER = import.meta.env.VITE_TURN_USER
+const TURN_CRED = import.meta.env.VITE_TURN_CRED
 export const ICE_SERVERS = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ...(TURN_URL ? [{ urls: TURN_URL.split(',').map((s) => s.trim()), username: TURN_USER || '', credential: TURN_CRED || '' }] : []),
 ]
 
 export const nuevaConexion = () => new RTCPeerConnection({ iceServers: ICE_SERVERS })
