@@ -32,8 +32,11 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
   // Foto = la del roster o, si no, la del avatar de su cuenta (bulk_avatars por uid).
   const choferPorSlug = {}
   for (const c of carriers) for (const d of (c.choferes || [])) {
-    if (d?.nombre) choferPorSlug[slugChofer(d.nombre)] = { nombre: d.nombre, carrierNombre: c.nombre, foto: d.foto || (d.uid && avatares[d.uid]) || null }
+    if (d?.nombre) choferPorSlug[slugChofer(d.nombre)] = { nombre: d.nombre, carrierNombre: c.nombre, foto: d.foto || (d.uid && avatares[d.uid]) || null, uid: d.uid || null }
   }
+  // uid del CHOFER por nombre (cuenta de usuario), por si su ficha del roster no lo trae.
+  const uidChoferPorSlug = {}
+  for (const u of usuarios) if (u.rol === 'chofer' && u.nombre) uidChoferPorSlug[slugChofer(u.nombre)] = u.id
   const operacionDe = (o) => (o?.jobId && jobPorId[o.jobId]?.nombre) || ''
   const usuarioPorId = Object.fromEntries((usuarios || []).map((u) => [u.id, u]))
 
@@ -46,18 +49,19 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     if (esConvClienteOrden(key)) {
       const o = ordenPorId[orderIdDeConv(key)] || {}
       const cliNombre = o.clienteNombre || nombreDe(clientePorId, o.clienteId) || 'Cliente'
-      out.clientes.push({ ...base, icon: 'cliente', foto: fotoCliente(o.clienteId), titulo: cliNombre, rolLabel: 'Cliente', rolColor: 'green', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o), participantes: [o.clienteId].filter(Boolean) })
+      out.clientes.push({ ...base, icon: 'cliente', foto: fotoCliente(o.clienteId), titulo: cliNombre, rolLabel: 'Cliente', rolColor: 'green', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o), participantes: [o.clienteId].filter(Boolean), contacto: { uid: uidPorCliente[o.clienteId] || null, nombre: cliNombre, rol: 'cliente' } })
       continue
     }
     if (key.startsWith('dm_c_')) {
       const cid = key.slice(5)
       const c = carrierPorId[cid]
-      out.transportistas.push({ ...base, icon: 'transportista', foto: fotoCarrier(cid), titulo: c?.nombre || 'Transportista', rolLabel: 'Transportista', rolColor: 'gold' })
+      out.transportistas.push({ ...base, icon: 'transportista', foto: fotoCarrier(cid), titulo: c?.nombre || 'Transportista', rolLabel: 'Transportista', rolColor: 'gold', contacto: { uid: uidPorCarrier[cid] || null, nombre: c?.nombre || 'Transportista', rol: 'transportista' } })
       continue
     }
     if (key.startsWith('dm_d_')) {
-      const info = choferPorSlug[key.slice(5)]
-      out.conductores.push({ ...base, icon: 'chofer', foto: info?.foto || null, titulo: info?.nombre || 'Conductor', rolLabel: 'Conductor', rolColor: 'navy', carrierNombre: info?.carrierNombre || '' })
+      const slug = key.slice(5)
+      const info = choferPorSlug[slug]
+      out.conductores.push({ ...base, icon: 'chofer', foto: info?.foto || null, titulo: info?.nombre || 'Conductor', rolLabel: 'Conductor', rolColor: 'navy', carrierNombre: info?.carrierNombre || '', contacto: { uid: info?.uid || uidChoferPorSlug[slug] || null, nombre: info?.nombre || 'Conductor', rol: 'chofer' } })
       continue
     }
     // Chat PRIVADO 1-a-1 (pv_) del chat interno por roles. Se muestra SOLO si el admin
@@ -69,7 +73,7 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
       if (!uids.includes(uid)) continue
       const otroId = uids.find((u) => u !== uid) || uids[0]
       const u = usuarioPorId[otroId] || {}
-      const fila = { ...base, foto: avatares[otroId] || null, titulo: u.nombre || r.lastAutor || 'Usuario', participantes: uids }
+      const fila = { ...base, foto: avatares[otroId] || null, titulo: u.nombre || r.lastAutor || 'Usuario', participantes: uids, contacto: { uid: otroId, nombre: u.nombre || '', rol: u.rol || '' } }
       if (u.rol === 'cliente') out.clientes.push({ ...fila, icon: 'cliente', rolLabel: 'Cliente', rolColor: 'green' })
       else if (u.rol === 'transportista') out.transportistas.push({ ...fila, icon: 'transportista', rolLabel: 'Transportista', rolColor: 'gold' })
       else if (u.rol === 'chofer') out.conductores.push({ ...fila, icon: 'chofer', rolLabel: 'Conductor', rolColor: 'navy' })
@@ -81,7 +85,7 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
       const uids = key.slice(3).split('__')
       const otroId = uids.find((u) => u !== uid) || uids[0]
       const u = usuarioPorId[otroId]
-      out.operaciones.push({ ...base, icon: 'operacion', foto: avatares[otroId] || null, titulo: u?.nombre || r.lastAutor || 'Staff', rolLabel: 'Staff', rolColor: 'slate', participantes: uids })
+      out.operaciones.push({ ...base, icon: 'operacion', foto: avatares[otroId] || null, titulo: u?.nombre || r.lastAutor || 'Staff', rolLabel: 'Staff', rolColor: 'slate', participantes: uids, contacto: { uid: otroId, nombre: u?.nombre || '', rol: u?.rol || '' } })
       continue
     }
     // Chat OPERATIVO de una orden (viaje/material/carga) → sección CONDUCTORES, porque
@@ -89,7 +93,9 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
     // (aceptada / en proceso / liberada) según cómo esté al momento del chat.
     const o = ordenPorId[key]
     if (o) {
-      const info = choferPorSlug[slugChofer(o.choferNombre || '')]
+      const slugO = slugChofer(o.choferNombre || '')
+      const info = choferPorSlug[slugO]
+      const uidChofer = info?.uid || uidChoferPorSlug[slugO] || o.choferId || null
       const est = estadoBadge(o.estado)
       out.conductores.push({
         ...base, icon: 'chofer', foto: info?.foto || null,
@@ -98,6 +104,7 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
         viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o),
         carrierNombre: nombreDe(carrierPorId, o.transportistaId) || '',
         participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean),
+        contacto: { uid: uidChofer, nombre: o.choferNombre || 'Conductor', rol: 'chofer' },
       })
       continue
     }

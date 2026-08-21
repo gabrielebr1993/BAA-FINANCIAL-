@@ -19,7 +19,7 @@ const EMOJIS = ['👍', '👎', '🙏', '👌', '💪', '👏', '🤝', '✌️'
 // ¿El mensaje es solo emojis (para mostrarlo grande, como WhatsApp)?
 const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.length > 0 && x.length <= 8 && !/[0-9a-zA-ZÀ-ɏ]/.test(x) }
 
-export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
+export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
   const avatares = useAvatares()
@@ -78,9 +78,17 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     navigator.geolocation.getCurrentPosition((p) => enviar({ tipo: 'ubicacion', ubicacion: { lat: p.coords.latitude, lng: p.coords.longitude } }), () => {}, { timeout: 5000 })
   }
 
-  // La "otra persona" del chat = autor más reciente distinto a mí (para poder llamarla).
-  let otro = null
-  for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otro = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
+  // La "otra persona" del chat (a quién llamar en 1-a-1). PRIORIDAD: el TITULAR real del
+  // chat cuando se conoce (prop `contacto` = el transportista/chofer/cliente/persona con
+  // quien es la conversación), NO "el último que escribió". Sin esto, en un canal donde
+  // solo respondieron administradores, la llamada iba al último admin en vez de al titular.
+  // Si `contacto` viene definido pero sin uid (empresa sin cuenta), no hay a quién llamar.
+  // Si NO viene (canales de oficina genéricos), se cae al autor más reciente distinto a mí.
+  let otroAuto = null
+  for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otroAuto = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
+  const otro = contacto !== null
+    ? (contacto.uid && contacto.uid !== usuario?.id ? { id: contacto.uid, nombre: contacto.nombre || '', rol: contacto.rol || '' } : null)
+    : otroAuto
   // Todos los OTROS participantes distintos (por autor de mensaje) → para llamada GRUPAL.
   const otrosChat = []
   const vistosChat = new Set()
@@ -94,22 +102,28 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const nombreSala = orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal')
   const llamarGrupo = (tipo) => pedirLlamadaGrupo(tipo, ctxGrupo, nombreSala, otrosChat.map((x) => x.uid))
 
+  // Encabezado a mostrar: el titular del chat (con o sin cuenta). Si no hay ninguno
+  // (canal vacío sin contacto conocido), no se pinta cabecera.
+  const cab = otro || (contacto && (contacto.nombre || contacto.uid)
+    ? { id: contacto.uid || null, nombre: contacto.nombre || t('Conversación'), rol: contacto.rol || '' }
+    : null)
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
-      {otro && (
+      {cab && (
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
-          <Avatar foto={avatares[otro.id]} nombre={otro.nombre} size={32} />
-          <button type="button" onClick={() => setPerfilRapido(otro)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{otro.nombre}</button>
+          <Avatar foto={cab.id ? avatares[cab.id] : null} nombre={cab.nombre} size={32} />
+          <button type="button" onClick={() => cab.id && setPerfilRapido(cab)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{cab.nombre}</button>
           <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
-            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
-            {(
+            {/* Llamada 1-a-1: SOLO si el titular tiene cuenta (uid). Llama a ESA persona. */}
+            {otro && (
               <>
+                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
+                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
                 <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-700" />
-                <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={15} /></button>
-                <button type="button" onClick={() => llamarGrupo('video')} title={t('Videollamada grupal')} className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={13} /><Video size={9} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-brand-navy p-[1px] text-white" /></button>
               </>
             )}
+            <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={15} /></button>
+            <button type="button" onClick={() => llamarGrupo('video')} title={t('Videollamada grupal')} className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={13} /><Video size={9} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-brand-navy p-[1px] text-white" /></button>
           </div>
         </div>
       )}

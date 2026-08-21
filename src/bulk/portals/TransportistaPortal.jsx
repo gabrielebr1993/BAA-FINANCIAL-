@@ -108,13 +108,15 @@ export default function TransportistaPortal() {
   const mensajesNuevos = noLeidosOficina + noLeidosChoferes + noLeidosPriv
   // Secciones del panel de mensajes: CHOFERES (chats por viaje) · ADMINISTRADOR (oficina).
   const seccionesMsg = useMemo(() => {
-    const fotoChofer = (nombre) => { const k = (nombre || '').trim().toLowerCase(); const d = choferes.find((x) => (x.nombre || '').trim().toLowerCase() === k); return d?.foto || (d?.uid && avatares[d.uid]) || null }
+    const choferPorNombre = (nombre) => { const k = (nombre || '').trim().toLowerCase(); return choferes.find((x) => (x.nombre || '').trim().toLowerCase() === k) || null }
+    const fotoChofer = (nombre) => { const d = choferPorNombre(nombre); return d?.foto || (d?.uid && avatares[d.uid]) || null }
     const itemsChoferes = ordenes
       .filter((o) => resumenOrd[o.id] || !FINAL.includes(o.estado))
       .filter((o) => o.choferNombre) // solo órdenes con chofer asignado (a quién escribir)
       .map((o) => {
         const r = resumenOrd[o.id] || {}
-        return { key: o.id, chatId: o.id, icon: 'chofer', foto: fotoChofer(o.choferNombre), titulo: o.choferNombre, rolLabel: t('Conductor'), rolColor: 'navy', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean) }
+        const d = choferPorNombre(o.choferNombre)
+        return { key: o.id, chatId: o.id, icon: 'chofer', foto: fotoChofer(o.choferNombre), titulo: o.choferNombre, rolLabel: t('Conductor'), rolColor: 'navy', viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', lastText: r.lastText || '', lastTs: r.lastTs || o.creadoEn || '', noLeidos: r.noLeidos || 0, participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean), contacto: { uid: d?.uid || o.choferId || null, nombre: o.choferNombre, rol: 'chofer' } }
       })
     const rOfi = resumenPorConversacion(mensajes, usuario?.id)[convCarrier(carrierId)] || {}
     const itemsAdmin = [{ key: convCarrier(carrierId), chatId: convCarrier(carrierId), icon: 'admin', titulo: t('Administrador / Oficina'), rolLabel: t('Administrador'), rolColor: 'navy', lastText: rOfi.lastText || '', lastTs: rOfi.lastTs || '', noLeidos: noLeidosOficina, participantes: null }]

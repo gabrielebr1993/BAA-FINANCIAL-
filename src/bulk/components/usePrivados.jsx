@@ -51,6 +51,8 @@ export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig }) {
       icon: ICONO_ROL(c.rol),
       rolLabel: label(c.rol),
       rolColor: COLOR_ROL(c.rol),
+      // Titular real del chat (para llamar a la persona correcta, no al último autor).
+      contacto: { uid: c.otroUid || null, nombre: c.nombre || '', rol: c.rol || '' },
     }))
   }, [base, extra, t]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -63,6 +65,7 @@ export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig }) {
   const onAbrir = ({ key, participantes, contacto }) => {
     setExtra((s) => (s.some((d) => d.key === key) ? s : [...s, {
       key, chatId: key,
+      otroUid: contacto?.uid || (participantes || []).find((u) => u !== uid) || null,
       nombre: contacto?.nombre || t('Usuario'), rol: contacto?.rol || '',
       foto: contacto?.foto || null, lastText: '', lastTs: '', noLeidos: 0,
       participantes: participantes || null,
