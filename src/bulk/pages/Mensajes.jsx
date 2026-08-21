@@ -62,8 +62,8 @@ export default function Mensajes() {
     return [
       { k: 'clientes', label: t('Clientes'), icon: 'cliente', items: mezclar(cats.clientes, 'clientes'), vacio: t('Sin conversaciones con clientes.') },
       { k: 'transportistas', label: t('Transportistas'), icon: 'transportista', items: mezclar(cats.transportistas, 'transportistas'), vacio: t('Sin conversaciones con transportistas.') },
-      { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.conductores, 'conductores'), vacio: t('Sin conversaciones con conductores.') },
-      { k: 'operaciones', label: t('Operaciones'), icon: 'operacion', items: mezclar(cats.operaciones, 'operaciones'), vacio: t('Sin conversaciones de operaciones (viajes) aún.') },
+      { k: 'conductores', label: t('Conductores'), icon: 'chofer', items: mezclar(cats.conductores, 'conductores'), vacio: t('Sin conversaciones con conductores (por viaje/carga) aún.') },
+      { k: 'operaciones', label: t('Operaciones'), icon: 'operacion', items: mezclar(cats.operaciones, 'operaciones'), vacio: t('Sin conversaciones internas con el equipo del staff.') },
       { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo. Toca “Grupos” para crear uno.') },
     ]
   }, [cats, directos, gruposItems, t])

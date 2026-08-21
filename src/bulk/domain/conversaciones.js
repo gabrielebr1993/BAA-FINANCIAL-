@@ -58,17 +58,36 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
       out.conductores.push({ ...base, icon: 'chofer', foto: info?.foto || null, titulo: info?.nombre || 'Conductor', rolLabel: 'Conductor', rolColor: 'navy', carrierNombre: info?.carrierNombre || '' })
       continue
     }
-    // Chat OPERATIVO de una orden (viaje/material/orden) → sección OPERACIONES.
+    // Chat OPERATIVO de una orden (viaje/material/carga) → sección CONDUCTORES, porque
+    // es el chat CON EL CONDUCTOR sobre su carga/viaje. Muestra el ESTADO de la orden
+    // (aceptada / en proceso / liberada) según cómo esté al momento del chat.
     const o = ordenPorId[key]
-    if (!o) continue
-    const info = choferPorSlug[slugChofer(o.choferNombre || '')]
-    out.operaciones.push({
-      ...base, icon: 'operacion', foto: info?.foto || null,
-      titulo: o.choferNombre || o.numero || 'Operación', rolLabel: 'Operación', rolColor: 'blue',
-      viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o),
-      carrierNombre: nombreDe(carrierPorId, o.transportistaId) || '',
-      participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean),
-    })
+    if (o) {
+      const info = choferPorSlug[slugChofer(o.choferNombre || '')]
+      const est = estadoBadge(o.estado)
+      out.conductores.push({
+        ...base, icon: 'chofer', foto: info?.foto || null,
+        titulo: o.choferNombre || o.numero || 'Conductor',
+        rolLabel: est.label, rolColor: est.color,
+        viaje: o.numero || '', material: o.material || '', carga: o.tipoEquipo || '', operacion: operacionDe(o),
+        carrierNombre: nombreDe(carrierPorId, o.transportistaId) || '',
+        participantes: [o.choferId, o.transportistaId, o.clienteId].filter(Boolean),
+      })
+      continue
+    }
+    // Cualquier otra conversación (interna / de oficina, sin conductor/cliente/transporte)
+    // → sección OPERACIONES: solo chats del equipo del staff.
+    out.operaciones.push({ ...base, icon: 'operacion', titulo: r.lastAutor || 'Equipo', rolLabel: 'Staff', rolColor: 'slate' })
   }
   return out
+}
+
+// Estado simplificado de la orden para el badge del chat del conductor.
+function estadoBadge(estado) {
+  if (estado === 'aceptada') return { label: 'Aceptada', color: 'gold' }
+  if (['en_planta', 'cargando', 'en_ruta', 'en_destino', 'entregada'].includes(estado)) return { label: 'En proceso', color: 'blue' }
+  if (['liberada', 'cerrada'].includes(estado)) return { label: 'Liberada', color: 'green' }
+  if (estado === 'rechazada') return { label: 'Rechazada', color: 'slate' }
+  if (estado === 'cancelada') return { label: 'Cancelada', color: 'slate' }
+  return { label: 'Pendiente', color: 'slate' }
 }
