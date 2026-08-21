@@ -7,17 +7,45 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle, Users, UserPlus, MicOff as MicOffMini } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
   nuevaConexion, callRef, candCol, crearLlamada, actualizarLlamada,
   agregarCandidato, escucharEntrantes, limpiarLlamada, onSnapshot, obtenerLlamada,
 } from '../data/llamadas'
+import {
+  crearSala, unirseSala, salirSala, invitarASala, escucharSala,
+  enviarSenal, escucharSenales, escucharSalasEntrantes, salaRef,
+} from '../data/salas'
+import { updateDoc } from 'firebase/firestore'
 import { useLang } from '../../i18n'
 
-const LlamadaContext = createContext({ iniciar: () => {} })
+const LlamadaContext = createContext({ iniciar: () => {}, iniciarGrupo: () => {} })
 export const useLlamada = () => useContext(LlamadaContext)
+
+// Baldosa de un participante REMOTO en la llamada grupal. Se define fuera del
+// proveedor para que no se re-monte en cada render (evita parpadeo del video).
+function TileRemoto({ stream, nombre, rol, hablando, mano, esVideo, t }) {
+  const ref = useRef(null)
+  useEffect(() => { if (ref.current && stream && ref.current.srcObject !== stream) ref.current.srcObject = stream })
+  const inicial = ((nombre || '?').trim().charAt(0) || '?').toUpperCase()
+  const tieneVideo = esVideo && stream && stream.getVideoTracks().some((tr) => tr.enabled)
+  return (
+    <div className={`relative flex items-center justify-center overflow-hidden rounded-2xl bg-slate-800 ring-1 transition ${hablando ? 'ring-2 ring-emerald-400' : 'ring-white/10'}`}>
+      {esVideo && <video ref={ref} autoPlay playsInline className={`h-full w-full object-cover ${tieneVideo ? '' : 'hidden'}`} />}
+      {!esVideo && <audio ref={ref} autoPlay />}
+      {!tieneVideo && (
+        <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-2xl font-black text-slate-900">{inicial}</div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-1.5">
+        <span className="truncate text-xs font-semibold text-white">{nombre || t('Participante')}</span>
+        {mano && <Hand size={13} className="ml-auto flex-shrink-0 text-amber-400" />}
+      </div>
+      {hablando && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow" />}
+    </div>
+  )
+}
 
 export default function LlamadaProvider({ children }) {
   const { t } = useLang()
@@ -74,7 +102,22 @@ export default function LlamadaProvider({ children }) {
   const inicioRef = useRef(null)  // ms en que se contestó (para la duración)
   const logRef = useRef(() => {})
   const tonoRef = useRef(null)
+  // ── LLAMADA GRUPAL (malla / mesh) ───────────────────────────────────────────
+  // peersRef: Map(uid → { pc, stream, nombre, rol, dc, pendientesIce, hablando,
+  //   mano, audioCtx, analyser, raf }). Una conexión P2P por cada otro participante.
+  const [remotos, setRemotos] = useState([]) // [{uid, nombre, rol, hablando, mano}]
+  const [agregarAbierto, setAgregarAbierto] = useState(false)
+  const peersRef = useRef(new Map())
+  const salaIdRef = useRef(null)
+  const salaDataRef = useRef(null)
+  const esGrupoRef = useRef(false)
+  const unsubSala = useRef(null)
+  const unsubSenales = useRef(null)
+  const localGridRef = useRef(null)
+  const compartiendoRef = useRef(false)
+  const miNombre = () => usuario?.nombre || usuario?.email || ''
   useEffect(() => { faseRef.current = fase }, [fase])
+  useEffect(() => { compartiendoRef.current = compartiendo }, [compartiendo])
 
   // Tono de repique CONTINUO. saliente = "ringback" (tono doble largo repetido);
   // entrante = melodía tri-tono más marcada. Se agenda por ciclos con Web Audio.
@@ -140,12 +183,14 @@ export default function LlamadaProvider({ children }) {
     dc.onmessage = (e) => manejarDC(e.data)
     dc.onclose = () => { if (dcRef.current === dc) dcRef.current = null }
   }
+  // Difunde por el/los canal(es) de datos: en grupo a todos los peers, en 1-a-1 al único.
+  const difundir = (obj) => { if (esGrupoRef.current) enviarDCGrupo(obj); else enviarDC(obj) }
   const enviarChatCall = (txt) => {
     const v = (txt || '').trim(); if (!v) return
-    setMensajesCall((s) => [...s, { mio: true, texto: v }]); enviarDC({ tipo: 'chat', texto: v })
+    setMensajesCall((s) => [...s, { mio: true, texto: v }]); difundir({ tipo: 'chat', texto: v })
     if (chatInputRef.current) chatInputRef.current.value = ''
   }
-  const enviarReaccion = (emoji) => { setReaccion({ e: emoji, k: Date.now() }); setTimeout(() => setReaccion(null), 2500); enviarDC({ tipo: 'react', emoji }) }
+  const enviarReaccion = (emoji) => { setReaccion({ e: emoji, k: Date.now() }); setTimeout(() => setReaccion(null), 2500); difundir({ tipo: 'react', emoji }) }
   const togglePizarra = () => { const v = !pizarra; setPizarra(v); enviarDC({ tipo: 'pizarra', abrir: v }) }
   const limpiarPizarra = () => { limpiarLienzo(); enviarDC({ tipo: 'clear' }) }
   // Trazos en el lienzo (coordenadas normalizadas 0..1 para que coincidan en ambos).
@@ -186,7 +231,7 @@ export default function LlamadaProvider({ children }) {
   }
 
   // ── Levantar la mano ────────────────────────────────────────────────────────
-  const toggleMano = () => { const v = !manoMia; setManoMia(v); enviarDC({ tipo: 'mano', arriba: v }) }
+  const toggleMano = () => { const v = !manoMia; setManoMia(v); difundir({ tipo: 'mano', arriba: v }) }
 
   // ── Subtítulos en vivo (voz → texto) ────────────────────────────────────────
   const toggleSubs = () => {
@@ -243,8 +288,7 @@ export default function LlamadaProvider({ children }) {
     try {
       const st = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } })
       const track = st.getAudioTracks()[0]
-      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'audio')
-      if (sender) await sender.replaceTrack(track)
+      await reemplazarEnTodos('audio', track)
       const old = localRef.current?.getAudioTracks?.()[0]; if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
       localRef.current?.addTrack(track)
     } catch { /* noop */ }
@@ -253,11 +297,11 @@ export default function LlamadaProvider({ children }) {
     try {
       const st = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } })
       const track = st.getVideoTracks()[0]
-      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
-      if (sender) await sender.replaceTrack(track)
+      await reemplazarEnTodos('video', track)
       const old = localRef.current?.getVideoTracks?.()[0]; if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
       localRef.current?.addTrack(track)
       if (localVid.current) localVid.current.srcObject = localRef.current
+      if (localGridRef.current) localGridRef.current.srcObject = localRef.current
     } catch { /* noop */ }
   }
   const usarSalida = async (deviceId) => { try { await remoteVid.current?.setSinkId?.(deviceId) } catch { /* noop */ } }
@@ -303,6 +347,7 @@ export default function LlamadaProvider({ children }) {
     if (remoteVid.current && remoteRef.current && remoteVid.current.srcObject !== remoteRef.current) remoteVid.current.srcObject = remoteRef.current
     const localStream = compartiendo ? pantallaRef.current : localRef.current
     if (localVid.current && localStream && localVid.current.srcObject !== localStream) localVid.current.srcObject = localStream
+    if (localGridRef.current && localStream && localGridRef.current.srcObject !== localStream) localGridRef.current.srcObject = localStream
   })
 
   const prepararPC = (callId, lado) => {
@@ -336,6 +381,199 @@ export default function LlamadaProvider({ children }) {
     if (n === 'NotFoundError') return alert(t('No se encontró micrófono/cámara en este dispositivo.'))
     return alert(t('No se pudo iniciar la llamada. Revisa los permisos de micrófono/cámara.'))
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  LLAMADA GRUPAL — malla WebRTC (una conexión P2P por cada otro participante)
+  // ════════════════════════════════════════════════════════════════════════
+  const refrescarRemotos = useCallback(() => {
+    setRemotos(Array.from(peersRef.current.entries()).map(([uid, e]) => ({
+      uid, nombre: e.nombre, rol: e.rol, hablando: !!e.hablando, mano: !!e.mano,
+    })))
+  }, [])
+
+  // Pistas que estoy ENVIANDO ahora (audio del micro + video de cámara o pantalla).
+  const pistasSalientes = () => {
+    const out = []
+    const a = localRef.current?.getAudioTracks?.()[0]; if (a) out.push(a)
+    const v = (compartiendoRef.current ? pantallaRef.current : localRef.current)?.getVideoTracks?.()[0]; if (v) out.push(v)
+    return out
+  }
+
+  const configurarAnalyser = (uid, stream) => {
+    const e = peersRef.current.get(uid)
+    if (!e || e.analyser || !stream.getAudioTracks().length) return
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      const ctx = new AC(); const src = ctx.createMediaStreamSource(stream)
+      const an = ctx.createAnalyser(); an.fftSize = 512; src.connect(an)
+      const datos = new Uint8Array(an.frequencyBinCount); let ultimo = 0
+      const loop = () => {
+        an.getByteFrequencyData(datos)
+        const vol = datos.reduce((x, y) => x + y, 0) / datos.length
+        const hab = vol > 18; const tn = Date.now()
+        if (tn - ultimo > 220) { if (e.hablando !== hab) { e.hablando = hab; refrescarRemotos() } ultimo = tn }
+        e.raf = requestAnimationFrame(loop)
+      }
+      e.audioCtx = ctx; e.analyser = an; loop()
+    } catch { /* noop */ }
+  }
+
+  const enviarDCGrupo = (obj) => {
+    for (const e of peersRef.current.values()) { try { if (e.dc?.readyState === 'open') e.dc.send(JSON.stringify(obj)) } catch { /* noop */ } }
+  }
+  const manejarDCGrupo = (uid, raw) => {
+    let m; try { m = JSON.parse(raw) } catch { return }
+    const e = peersRef.current.get(uid)
+    if (m.tipo === 'chat') { setMensajesCall((s) => [...s, { mio: false, autor: e?.nombre || '', texto: m.texto }]); if (!chatAbierto) setNoLeidoCall((n) => n + 1) }
+    else if (m.tipo === 'react') { setReaccion({ e: m.emoji, k: Date.now(), quien: e?.nombre }); setTimeout(() => setReaccion(null), 2500) }
+    else if (m.tipo === 'mano') { if (e) { e.mano = !!m.arriba; refrescarRemotos() } }
+  }
+  const configurarDCGrupo = (uid, dc) => {
+    const e = peersRef.current.get(uid); if (e) e.dc = dc
+    dc.onmessage = (ev) => manejarDCGrupo(uid, ev.data)
+  }
+
+  const flushIce = (e) => { (e.pendientesIce || []).forEach((c) => e.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {})); e.pendientesIce = [] }
+
+  const quitarPeer = (uid) => {
+    const e = peersRef.current.get(uid); if (!e) return
+    try { e.raf && cancelAnimationFrame(e.raf) } catch { /* noop */ }
+    try { e.audioCtx && e.audioCtx.close() } catch { /* noop */ }
+    try { e.pc && e.pc.close() } catch { /* noop */ }
+    peersRef.current.delete(uid)
+    refrescarRemotos()
+  }
+
+  const crearPeer = (uid, nombre, rol_, iniciador) => {
+    if (peersRef.current.has(uid)) return peersRef.current.get(uid)
+    const pc = nuevaConexion()
+    const stream = new MediaStream()
+    const e = { pc, stream, nombre: nombre || '', rol: rol_ || '', dc: null, pendientesIce: [], hablando: false, mano: false }
+    peersRef.current.set(uid, e)
+    pistasSalientes().forEach((tr) => { try { pc.addTrack(tr) } catch { /* noop */ } })
+    pc.ontrack = (ev) => {
+      const tracks = ev.streams[0]?.getTracks() || (ev.track ? [ev.track] : [])
+      tracks.forEach((tr) => { if (!stream.getTracks().includes(tr)) stream.addTrack(tr) })
+      refrescarRemotos(); configurarAnalyser(uid, stream)
+    }
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate && salaIdRef.current) enviarSenal(salaIdRef.current, { de: usuario.id, deNombre: miNombre(), deRol: rol, para: uid, kind: 'ice', data: ev.candidate.toJSON() }).catch(() => {})
+    }
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) quitarPeer(uid) }
+    if (iniciador) { try { configurarDCGrupo(uid, pc.createDataChannel('colab')) } catch { /* noop */ } negociarOferta(uid, pc) }
+    else { pc.ondatachannel = (ev) => configurarDCGrupo(uid, ev.channel) }
+    refrescarRemotos()
+    return e
+  }
+
+  const negociarOferta = async (uid, pc) => {
+    try {
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer)
+      await enviarSenal(salaIdRef.current, { de: usuario.id, deNombre: miNombre(), deRol: rol, para: uid, kind: 'offer', data: { type: offer.type, sdp: offer.sdp } })
+    } catch { /* noop */ }
+  }
+
+  const manejarSenal = async (s) => {
+    const { de, kind, data, deNombre, deRol } = s
+    if (!de || de === usuario.id) return
+    let e = peersRef.current.get(de)
+    if (kind === 'offer') {
+      if (!e) e = crearPeer(de, deNombre, deRol, false)
+      try {
+        await e.pc.setRemoteDescription(new RTCSessionDescription(data))
+        flushIce(e)
+        const answer = await e.pc.createAnswer(); await e.pc.setLocalDescription(answer)
+        await enviarSenal(salaIdRef.current, { de: usuario.id, deNombre: miNombre(), deRol: rol, para: de, kind: 'answer', data: { type: answer.type, sdp: answer.sdp } })
+      } catch { /* noop */ }
+    } else if (kind === 'answer') {
+      if (e?.pc && !e.pc.currentRemoteDescription) { try { await e.pc.setRemoteDescription(new RTCSessionDescription(data)); flushIce(e) } catch { /* noop */ } }
+    } else if (kind === 'ice') {
+      if (!e) e = crearPeer(de, deNombre, deRol, false)
+      if (e.pc.remoteDescription) e.pc.addIceCandidate(new RTCIceCandidate(data)).catch(() => {})
+      else e.pendientesIce = [...(e.pendientesIce || []), data]
+    }
+  }
+
+  const sincronizarPeers = (sala) => {
+    const parts = sala?.participantes || {}
+    const otros = Object.keys(parts).filter((u) => u !== usuario.id)
+    for (const u of otros) {
+      const ex = peersRef.current.get(u)
+      if (!ex) crearPeer(u, parts[u]?.nombre, parts[u]?.rol, String(usuario.id) < String(u))
+      else if (parts[u]?.nombre && ex.nombre !== parts[u].nombre) { ex.nombre = parts[u].nombre; ex.rol = parts[u].rol }
+    }
+    for (const u of Array.from(peersRef.current.keys())) { if (!otros.includes(u)) quitarPeer(u) }
+    refrescarRemotos()
+  }
+
+  const engancharSala = (salaId) => {
+    unsubSala.current = escucharSala(salaId, (sala) => {
+      if (!sala || sala.estado === 'terminada') { limpiarGrupo(true); return }
+      salaDataRef.current = sala
+      sincronizarPeers(sala)
+    })
+    unsubSenales.current = escucharSenales(salaId, usuario.id, (s) => { manejarSenal(s) })
+  }
+
+  const limpiarGrupo = useCallback((remoto = false) => {
+    const salaId = salaIdRef.current
+    // Historial en el chat de origen (si vino de un chat).
+    if (ctxRef.current?.chatId && inicioRef.current) { try { logRef.current(true, Date.now() - inicioRef.current) } catch { /* noop */ } }
+    try { unsubSala.current && unsubSala.current() } catch { /* noop */ }
+    try { unsubSenales.current && unsubSenales.current() } catch { /* noop */ }
+    unsubSala.current = null; unsubSenales.current = null
+    for (const uid of Array.from(peersRef.current.keys())) quitarPeer(uid)
+    peersRef.current.clear()
+    try { (localRef.current?.getTracks() || []).forEach((tr) => tr.stop()) } catch { /* noop */ }
+    try { (pantallaRef.current?.getTracks() || []).forEach((tr) => tr.stop()) } catch { /* noop */ }
+    localRef.current = null; pantallaRef.current = null
+    if (salaId && !remoto) salirSala(salaId, usuario.id)
+    salaIdRef.current = null; esGrupoRef.current = false; salaDataRef.current = null
+    ctxRef.current = null; inicioRef.current = null
+    setRemotos([]); setFase('idle'); setInfo(null); setEntrante(null); setMicOff(false); setCamOff(false); setAgregarAbierto(false)
+  }, [usuario])
+
+  const iniciarGrupo = useCallback(async (invitados, tipo = 'audio', ctx = null, nombreSala = '') => {
+    if (faseRef.current !== 'idle') return
+    const lista = (invitados || []).filter((p) => p && p.uid && p.uid !== usuario?.id)
+    if (!lista.length) return
+    esGrupoRef.current = true; ctxRef.current = ctx || null; tipoRef.current = tipo; inicioRef.current = null
+    try {
+      await conMedios(tipo)
+      const salaId = await crearSala({ tenantId, de: { uid: usuario.id, nombre: miNombre(), rol }, tipo, nombre: nombreSala || t('Llamada grupal'), invitados: lista, ctx })
+      salaIdRef.current = salaId
+      setInfo({ grupo: true, con: nombreSala || t('Llamada grupal'), tipo, saliente: true })
+      inicioRef.current = Date.now(); setFase('activa')
+      engancharSala(salaId)
+    } catch (e) { limpiarGrupo(); avisoMedios(e) }
+  }, [usuario, tenantId, rol, limpiarGrupo, t])
+
+  const unirseAGrupo = async (sala) => {
+    esGrupoRef.current = true; ctxRef.current = sala.ctx || null; tipoRef.current = sala.tipo; inicioRef.current = null
+    try {
+      await conMedios(sala.tipo)
+      salaIdRef.current = sala.id
+      setInfo({ grupo: true, con: sala.nombre || t('Llamada grupal'), tipo: sala.tipo, saliente: false })
+      setEntrante(null); inicioRef.current = Date.now(); setFase('activa')
+      await unirseSala(sala.id, { uid: usuario.id, nombre: miNombre(), rol })
+      engancharSala(sala.id)
+    } catch (e) { limpiarGrupo(); avisoMedios(e) }
+  }
+
+  const rechazarSala = async (sala) => {
+    try { await updateDoc(salaRef(sala.id), { invitados: (sala.invitados || []).filter((u) => u !== usuario.id) }) } catch { /* noop */ }
+    setEntrante(null); setFase('idle')
+  }
+
+  // Añadir más personas a la llamada grupal en curso.
+  const agregarPersonas = async (personas) => {
+    if (!salaIdRef.current) return
+    try { await invitarASala(salaIdRef.current, personas) } catch { /* noop */ }
+    setAgregarAbierto(false)
+  }
+
+  // Colgar unificado: grupo o 1-a-1.
+  const colgar = () => { if (esGrupoRef.current) limpiarGrupo(false); else limpiar(false) }
 
   // ── Iniciar llamada saliente ───────────────────────────────────────────────
   const iniciar = useCallback(async (paraUid, nombre, tipo = 'audio', ctx = null) => {
@@ -403,17 +641,23 @@ export default function LlamadaProvider({ children }) {
   const toggleMic = () => { const s = localRef.current; if (!s) return; const on = micOff; s.getAudioTracks().forEach((tr) => (tr.enabled = on)); setMicOff(!on) }
   const toggleCam = () => { const s = localRef.current; if (!s) return; const on = camOff; s.getVideoTracks().forEach((tr) => (tr.enabled = on)); setCamOff(!on) }
 
+  // Senders de video/audio: en grupo, uno por cada peer; en 1-a-1, el único pc.
+  const sendersDe = (kind) => {
+    if (esGrupoRef.current) return Array.from(peersRef.current.values()).map((e) => e.pc?.getSenders?.().find((s) => s.track && s.track.kind === kind)).filter(Boolean)
+    const s = pcRef.current?.getSenders?.().find((x) => x.track && x.track.kind === kind); return s ? [s] : []
+  }
+  const reemplazarEnTodos = async (kind, track) => { for (const s of sendersDe(kind)) { try { await s.replaceTrack(track) } catch { /* noop */ } } }
+
   // Compartir pantalla: sustituye la pista de video de la cámara por la pantalla
   // (replaceTrack, sin renegociar). Al terminar, vuelve a la cámara.
   const volverCamara = async () => {
-    const pc = pcRef.current
     const cam = localRef.current?.getVideoTracks?.()[0]
-    const sender = pc?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
-    if (sender && cam) { try { await sender.replaceTrack(cam) } catch { /* noop */ } }
+    if (cam) await reemplazarEnTodos('video', cam)
     try { pantallaRef.current?.getTracks?.().forEach((tr) => tr.stop()) } catch { /* noop */ }
     pantallaRef.current = null
     setCompartiendo(false)
     if (localVid.current) localVid.current.srcObject = localRef.current
+    if (localGridRef.current) localGridRef.current.srcObject = localRef.current
   }
   // Cambiar entre cámara frontal y trasera (móvil). Sustituye la pista de video.
   const facingRef = useRef('user')
@@ -423,32 +667,31 @@ export default function LlamadaProvider({ children }) {
     try {
       const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: nuevo }, audio: false })
       const track = st.getVideoTracks()[0]
-      const sender = pcRef.current?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
-      if (sender) await sender.replaceTrack(track)
+      await reemplazarEnTodos('video', track)
       const old = localRef.current?.getVideoTracks?.()[0]
       if (old && localRef.current) { localRef.current.removeTrack(old); old.stop() }
       localRef.current?.addTrack(track)
       facingRef.current = nuevo
       if (localVid.current) localVid.current.srcObject = localRef.current
+      if (localGridRef.current) localGridRef.current.srcObject = localRef.current
     } catch { /* sin segunda cámara o permiso */ }
   }
   const compartirPantalla = async () => {
-    const pc = pcRef.current
-    const sender = pc?.getSenders?.().find((s) => s.track && s.track.kind === 'video')
-    if (!sender) { alert(t('Compartir pantalla está disponible en videollamadas.')); return }
+    if (!sendersDe('video').length) { alert(t('Compartir pantalla está disponible en videollamadas.')); return }
     if (compartiendo) { volverCamara(); return }
     try {
       const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
       pantallaRef.current = screen
       const track = screen.getVideoTracks()[0]
-      await sender.replaceTrack(track)
+      await reemplazarEnTodos('video', track)
       track.onended = () => { volverCamara() } // el usuario detiene desde el navegador
       setCompartiendo(true)
       if (localVid.current) localVid.current.srcObject = screen
+      if (localGridRef.current) localGridRef.current.srcObject = screen
     } catch { /* el usuario canceló el diálogo */ }
   }
 
-  // ── Escuchar entrantes ─────────────────────────────────────────────────────
+  // ── Escuchar entrantes (1-a-1) ─────────────────────────────────────────────
   useEffect(() => {
     if (!usuario?.id || !tenantId) return
     console.log('[llamada] escuchando entrantes para uid', usuario.id, 'tenant', tenantId)
@@ -459,6 +702,21 @@ export default function LlamadaProvider({ children }) {
     })
     return off
   }, [usuario?.id, tenantId])
+
+  // ── Escuchar salas GRUPALES entrantes ──────────────────────────────────────
+  useEffect(() => {
+    if (!usuario?.id || !tenantId) return
+    const off = escucharSalasEntrantes(usuario.id, (salas) => {
+      if (faseRef.current !== 'idle') return
+      const s = salas.find((x) => x.tenantId === tenantId && x.creadaPor !== usuario.id && (x.invitados || []).includes(usuario.id))
+      if (s) { setEntrante({ grupo: true, id: s.id, tipo: s.tipo, nombre: s.nombre, de: { nombre: s.creadaPorNombre || t('Grupo') }, sala: s }); setFase('entrante') }
+    })
+    return off
+  }, [usuario?.id, tenantId, t])
+
+  // Aceptar/rechazar unificado (1-a-1 o grupo) desde el timbre.
+  const onAceptar = () => { if (entrante?.grupo) unirseAGrupo(entrante.sala); else aceptar() }
+  const onRechazar = () => { if (entrante?.grupo) rechazarSala(entrante.sala); else rechazar() }
 
   // Limpieza al desmontar / cerrar sesión.
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
@@ -527,8 +785,12 @@ export default function LlamadaProvider({ children }) {
     </button>
   )
 
+  // Personas que puedo AÑADIR a la llamada grupal en curso (del contexto del chat de origen).
+  const candidatosAgregar = (ctxRef.current?.candidatos || []).filter((c) => c && c.uid && c.uid !== usuario?.id && !remotos.some((r) => r.uid === c.uid))
+  const totalGrupo = remotos.length + 1
+
   return (
-    <LlamadaContext.Provider value={{ iniciar, enLlamada: fase !== 'idle' }}>
+    <LlamadaContext.Provider value={{ iniciar, iniciarGrupo, enLlamada: fase !== 'idle' }}>
       {children}
 
       {/* Timbre de llamada ENTRANTE — moderno, con anillo pulsante */}
@@ -537,17 +799,20 @@ export default function LlamadaProvider({ children }) {
           <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-2xl ring-1 ring-white/10">
             <div className="relative mx-auto h-24 w-24">
               <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/30" />
-              <div className="relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">{(entrante.de?.nombre || '?').charAt(0).toUpperCase()}</div>
+              <div className="relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">{entrante.grupo ? <Users size={40} /> : (entrante.de?.nombre || '?').charAt(0).toUpperCase()}</div>
             </div>
-            <h3 className="mt-5 text-xl font-black text-white">{entrante.de?.nombre || t('Alguien')}</h3>
-            <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/60">{entrante.tipo === 'video' ? <Video size={14} /> : <PhoneIncoming size={14} />} {entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}</p>
+            <h3 className="mt-5 text-xl font-black text-white">{entrante.grupo ? (entrante.nombre || t('Llamada grupal')) : (entrante.de?.nombre || t('Alguien'))}</h3>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/60">
+              {entrante.grupo ? <Users size={14} /> : entrante.tipo === 'video' ? <Video size={14} /> : <PhoneIncoming size={14} />}
+              {entrante.grupo ? `${t('Llamada grupal de')} ${entrante.de?.nombre || ''}` : entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}
+            </p>
             <div className="mt-8 flex items-center justify-center gap-10">
               <div className="flex flex-col items-center gap-1.5">
-                <button onClick={rechazar} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 transition hover:scale-105 hover:bg-rose-600 active:scale-95"><PhoneOff size={26} /></button>
+                <button onClick={onRechazar} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 transition hover:scale-105 hover:bg-rose-600 active:scale-95"><PhoneOff size={26} /></button>
                 <span className="text-[11px] text-white/60">{t('Rechazar')}</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <button onClick={aceptar} className="grid h-16 w-16 animate-bounce place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition hover:scale-105 hover:bg-emerald-600 active:scale-95">{entrante.tipo === 'video' ? <Video size={26} /> : <Phone size={26} />}</button>
+                <button onClick={onAceptar} className="grid h-16 w-16 animate-bounce place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition hover:scale-105 hover:bg-emerald-600 active:scale-95">{entrante.tipo === 'video' ? <Video size={26} /> : <Phone size={26} />}</button>
                 <span className="text-[11px] text-white/60">{t('Aceptar')}</span>
               </div>
             </div>
@@ -559,7 +824,35 @@ export default function LlamadaProvider({ children }) {
       {(fase === 'saliente' || fase === 'activa') && !min && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-gradient-to-b from-slate-900 via-slate-950 to-black">
           <div className="relative flex-1 overflow-hidden">
-            {esVideo ? medios(false) : (
+            {info?.grupo ? (
+              /* ── Cuadrícula de la llamada GRUPAL ── */
+              <div
+                className="grid h-full w-full gap-2 p-2 sm:gap-3 sm:p-3"
+                style={{ gridTemplateColumns: `repeat(${totalGrupo <= 1 ? 1 : totalGrupo <= 4 ? 2 : totalGrupo <= 9 ? 3 : 4}, minmax(0, 1fr))` }}
+              >
+                {remotos.map((r) => (
+                  <TileRemoto key={r.uid} stream={peersRef.current.get(r.uid)?.stream} nombre={r.nombre} rol={r.rol} hablando={r.hablando} mano={r.mano} esVideo={esVideo} t={t} />
+                ))}
+                {/* Mi propia baldosa */}
+                <div className="relative flex items-center justify-center overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-white/10">
+                  {esVideo ? (
+                    <video ref={localGridRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-2xl font-black text-slate-900">{(miNombre().charAt(0) || t('Tú').charAt(0)).toUpperCase()}</div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-1.5">
+                    <span className="truncate text-xs font-semibold text-white">{t('Tú')}{compartiendo ? ` · ${t('pantalla')}` : ''}</span>
+                    {micOff && <MicOffMini size={13} className="ml-auto flex-shrink-0 text-rose-400" />}
+                    {manoMia && <Hand size={13} className="flex-shrink-0 text-amber-400" />}
+                  </div>
+                </div>
+                {remotos.length === 0 && (
+                  <div className="col-span-full flex items-center justify-center">
+                    <p className="animate-pulse text-sm text-white/50">{t('Esperando a que se unan…')}</p>
+                  </div>
+                )}
+              </div>
+            ) : esVideo ? medios(false) : (
               <>
                 {medios(false)}
                 <div className="flex h-full w-full flex-col items-center justify-center">
@@ -623,6 +916,23 @@ export default function LlamadaProvider({ children }) {
               </div>
             )}
 
+            {/* AGREGAR personas a la llamada grupal */}
+            {agregarAbierto && info?.grupo && (
+              <div className="absolute left-1/2 top-20 w-72 -translate-x-1/2 rounded-2xl bg-slate-900/95 p-4 text-sm text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
+                <div className="mb-2 flex items-center gap-2"><UserPlus size={15} className="text-amber-400" /><b>{t('Agregar a la llamada')}</b><button onClick={() => setAgregarAbierto(false)} className="ml-auto text-white/60 hover:text-white"><X size={16} /></button></div>
+                <div className="scroll-thin max-h-64 space-y-1 overflow-y-auto">
+                  {candidatosAgregar.length === 0 && <p className="py-3 text-center text-xs text-white/40">{t('No hay más personas para agregar.')}</p>}
+                  {candidatosAgregar.map((c) => (
+                    <button key={c.uid} onClick={() => agregarPersonas([c])} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/10">
+                      <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-xs font-black text-slate-900">{(c.nombre || '?').charAt(0).toUpperCase()}</span>
+                      <span className="min-w-0 flex-1 truncate">{c.nombre}</span>
+                      <UserPlus size={15} className="flex-shrink-0 text-amber-400" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* CHAT lateral en llamada */}
             {chatAbierto && (
               <div className="absolute bottom-0 right-0 top-0 flex w-full max-w-xs flex-col bg-slate-900/95 backdrop-blur sm:w-80">
@@ -633,7 +943,8 @@ export default function LlamadaProvider({ children }) {
                 <div className="scroll-thin flex-1 space-y-2 overflow-y-auto p-3">
                   {mensajesCall.length === 0 && <p className="text-center text-xs text-white/40">{t('Escribe un mensaje durante la llamada.')}</p>}
                   {mensajesCall.map((m, i) => (
-                    <div key={i} className={`flex ${m.mio ? 'justify-end' : 'justify-start'}`}>
+                    <div key={i} className={`flex flex-col ${m.mio ? 'items-end' : 'items-start'}`}>
+                      {!m.mio && info?.grupo && m.autor && <span className="mb-0.5 px-1 text-[10px] font-semibold text-amber-300/80">{m.autor}</span>}
                       <span className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${m.mio ? 'bg-amber-500 text-slate-900' : 'bg-white/10 text-white'}`}>{m.texto}</span>
                     </div>
                   ))}
@@ -648,10 +959,10 @@ export default function LlamadaProvider({ children }) {
             {/* Barra superior: nombre, estado, minimizar */}
             <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/50 to-transparent p-5">
               <div className="min-w-0">
-                <h3 className="truncate text-2xl font-black text-white drop-shadow">{info?.con || t('Llamada')}</h3>
+                <h3 className="truncate text-2xl font-black text-white drop-shadow">{info?.grupo ? <span className="flex items-center gap-2"><Users size={22} /> {info?.con || t('Llamada grupal')}</span> : (info?.con || t('Llamada'))}</h3>
                 <p className="mt-0.5 flex items-center gap-1.5 text-sm text-white/70">
                   <span className={`h-2 w-2 rounded-full ${fase === 'activa' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'}`} />
-                  {duracion()}{compartiendo ? ` · ${t('compartiendo pantalla')}` : ''}
+                  {duracion()}{info?.grupo ? ` · ${totalGrupo} ${totalGrupo === 1 ? t('participante') : t('participantes')}` : ''}{compartiendo ? ` · ${t('compartiendo pantalla')}` : ''}
                 </p>
               </div>
               <button onClick={() => setMin(true)} title={t('Minimizar')} className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 backdrop-blur transition hover:bg-white/20"><Minimize2 size={18} /></button>
@@ -669,15 +980,16 @@ export default function LlamadaProvider({ children }) {
             {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
             {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
             {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
-            <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>
+            {info?.grupo && candidatosAgregar.length > 0 && <Ctrl onClick={() => setAgregarAbierto((v) => !v)} label={t('Agregar')} activo={agregarAbierto}><UserPlus size={22} /></Ctrl>}
+            {!info?.grupo && <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>}
             <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
               <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>
             </Ctrl>
             <Ctrl onClick={toggleMano} label={t('Mano')} activo={manoMia}><Hand size={22} /></Ctrl>
-            <Ctrl onClick={toggleSubs} label={t('Subtítulos')} activo={subsOn}><Captions size={22} /></Ctrl>
-            <Ctrl onClick={toggleGrabar} label={grabando ? t('Detener') : t('Grabar')} activo={grabando}>{grabando ? <StopCircle size={22} /> : <Disc size={22} />}</Ctrl>
+            {!info?.grupo && <Ctrl onClick={toggleSubs} label={t('Subtítulos')} activo={subsOn}><Captions size={22} /></Ctrl>}
+            {!info?.grupo && <Ctrl onClick={toggleGrabar} label={grabando ? t('Detener') : t('Grabar')} activo={grabando}>{grabando ? <StopCircle size={22} /> : <Disc size={22} />}</Ctrl>}
             <Ctrl onClick={() => { setAjustes((v) => !v); cargarDispositivos() }} label={t('Ajustes')} activo={ajustes}><Settings size={22} /></Ctrl>
-            <Ctrl onClick={() => limpiar(false)} label={t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
+            <Ctrl onClick={colgar} label={info?.grupo ? t('Salir') : t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
           </div>
         </div>
       )}
@@ -689,7 +1001,11 @@ export default function LlamadaProvider({ children }) {
           style={pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 }}
         >
           <div onPointerDown={onArrastrarInicio} className="relative h-32 cursor-grab touch-none bg-slate-950 active:cursor-grabbing">
-            {esVideo ? medios(true) : (
+            {info?.grupo ? (
+              <div className="flex h-full w-full items-center justify-center gap-2">
+                <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-slate-900"><Users size={30} /></div>
+              </div>
+            ) : esVideo ? medios(true) : (
               <div className="flex h-full w-full items-center justify-center">
                 {medios(true)}
                 <div className="grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-2xl font-black text-slate-900">{inicialCon}</div>
@@ -699,11 +1015,11 @@ export default function LlamadaProvider({ children }) {
           <div className="flex items-center gap-1.5 px-3 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-bold text-white">{info?.con || t('Llamada')}</div>
-              <div className="flex items-center gap-1 text-[11px] text-white/60"><span className={`h-1.5 w-1.5 rounded-full ${fase === 'activa' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'}`} />{duracion()}</div>
+              <div className="flex items-center gap-1 text-[11px] text-white/60"><span className={`h-1.5 w-1.5 rounded-full ${fase === 'activa' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'}`} />{duracion()}{info?.grupo ? ` · ${totalGrupo}` : ''}</div>
             </div>
             <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-9 w-9 place-items-center rounded-full transition active:scale-90 ${micOff ? 'bg-white text-slate-900' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'}`}>{micOff ? <MicOff size={15} /> : <Mic size={15} />}</button>
             <button onClick={() => setMin(false)} title={t('Ampliar')} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/20 active:scale-90"><Maximize2 size={15} /></button>
-            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-9 w-9 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600 active:scale-90"><PhoneOff size={16} /></button>
+            <button onClick={colgar} title={info?.grupo ? t('Salir de la llamada') : t('Finalizar llamada')} className="grid h-9 w-9 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600 active:scale-90"><PhoneOff size={16} /></button>
           </div>
         </div>
       )}

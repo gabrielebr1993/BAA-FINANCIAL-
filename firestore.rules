@@ -402,6 +402,38 @@ service cloud.firestore {
           && (request.auth.uid == llamada().get('para', '') || request.auth.uid == llamada().get('de', {}).get('uid', ''));
       }
     }
+    // Llamadas GRUPALES (WebRTC en malla). La sala (bulk_salas) lista quién está DENTRO
+    // (participantes) y a quién le suena (invitados). Solo esas personas (o el admin)
+    // leen/escriben la señalización; el audio/video va P2P entre cada pareja. Las señales
+    // (oferta/respuesta/ICE) viven en la subcolección `senales` y heredan el control.
+    match /bulk_salas/{id} {
+      // .get(...) defensivo: si a un doc le falta un campo, no rompe la consulta LIST.
+      function esMiembroSala() {
+        return bSame(resource.data.tenantId) && (
+          request.auth.uid in resource.data.get('participantes', {})
+          || request.auth.uid in resource.data.get('invitados', [])
+        );
+      }
+      allow read: if esMiembroSala() || bAdmin(resource.data.tenantId);
+      allow create: if bSame(request.resource.data.tenantId) && request.resource.data.creadaPor == request.auth.uid;
+      // Unirse/rechazar/invitar/salir: cualquier miembro o invitado (o admin), sin cambiar de empresa.
+      allow update: if bSame(resource.data.tenantId)
+        && request.resource.data.tenantId == resource.data.tenantId
+        && (esMiembroSala() || bAdmin(resource.data.tenantId));
+      allow delete: if esMiembroSala() || bAdmin(resource.data.tenantId);
+      // Señalización por parejas: permitida a los participantes/invitados de la sala padre.
+      match /senales/{sid} {
+        function salaDoc() { return get(/databases/$(database)/documents/bulk_salas/$(id)).data; }
+        function participaSala() {
+          return request.auth != null && (
+            request.auth.uid in salaDoc().get('participantes', {})
+            || request.auth.uid in salaDoc().get('invitados', [])
+            || bAdmin(salaDoc().tenantId)
+          );
+        }
+        allow read, create, delete: if participaSala();
+      }
+    }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.

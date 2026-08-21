@@ -2,7 +2,7 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import PerfilRapido from './PerfilRapido'
@@ -20,7 +20,7 @@ const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.len
 export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
-  const { iniciar } = useLlamada()
+  const { iniciar, iniciarGrupo } = useLlamada()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   // Borra un mensaje de forma permanente. Solo el autor o el admin (las reglas lo refuerzan).
   const borrarMensaje = async (m) => {
@@ -78,8 +78,15 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   // La "otra persona" del chat = autor más reciente distinto a mí (para poder llamarla).
   let otro = null
   for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otro = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
+  // Todos los OTROS participantes distintos (por autor de mensaje) → para llamada GRUPAL.
+  const otrosChat = []
+  const vistosChat = new Set()
+  for (const m of msgs) { if (m.autorId && m.autorId !== usuario?.id && !vistosChat.has(m.autorId)) { vistosChat.add(m.autorId); otrosChat.push({ uid: m.autorId, nombre: m.autorNombre, rol: m.autorRol }) } }
   // Contexto del chat para dejar historial de la llamada (perdida/duración) aquí mismo.
   const ctxLlamada = { chatId: orden?.id, participantes: partProp != null ? partProp.filter(Boolean) : [orden?.choferId, orden?.transportistaId, orden?.clienteId].filter(Boolean) }
+  // Contexto para llamada grupal (incluye candidatos para "agregar personas" en curso).
+  const ctxGrupo = { ...ctxLlamada, candidatos: otrosChat }
+  const llamarGrupo = (tipo) => iniciarGrupo(otrosChat, tipo, ctxGrupo, orden?.numero ? `${t('Operación')} ${orden.numero}` : t('Llamada grupal'))
 
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
@@ -89,6 +96,13 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           <div className="ml-auto flex items-center gap-1.5">
             <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
             <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
+            {otrosChat.length >= 2 && (
+              <>
+                <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+                <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={15} /></button>
+                <button type="button" onClick={() => llamarGrupo('video')} title={t('Videollamada grupal')} className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={13} /><Video size={9} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-brand-navy p-[1px] text-white" /></button>
+              </>
+            )}
           </div>
         </div>
       )}

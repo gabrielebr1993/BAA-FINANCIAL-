@@ -414,6 +414,19 @@ exports.bulkPushLlamada = onDocumentCreated('bulk_calls/{id}', async (event) => 
 })
 
 // ============================================================================
+// bulkPushSala — PUSH al crearse una LLAMADA GRUPAL (bulk_salas). Avisa a TODOS
+// los invitados aunque tengan la app en segundo plano.
+// ============================================================================
+exports.bulkPushSala = onDocumentCreated('bulk_salas/{id}', async (event) => {
+  const s = (event.data && event.data.data()) || {}
+  const invitados = Array.isArray(s.invitados) ? s.invitados : []
+  if (!s.tenantId || !invitados.length) return
+  const dest = await tokensDe(s.tenantId, (x) => invitados.includes(x.uid))
+  const tipo = s.tipo === 'video' ? 'Videollamada grupal' : 'Llamada grupal'
+  await enviarAPI(dest, `📞 ${tipo}`, `${s.creadaPorNombre || 'Alguien'} te invitó a ${s.nombre || 'una llamada grupal'}`, 'https://www.milepay.io/bulk/mensajes')
+})
+
+// ============================================================================
 // recomendarAsignacionIA — hook opcional de IA. Si no hay modelo configurado,
 // responde que se use el motor de reglas del front (domain/asignacion.js).
 // data: { orden, candidatos }  →  { usarReglas } | { ranking }
