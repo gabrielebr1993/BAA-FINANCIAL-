@@ -238,29 +238,44 @@ export default function BulkUsuarios() {
     setObjetivoCierre('')
   }
 
-  // ── Generar IDs faltantes A PEDIDO (con resultado visible) ─────────────────
-  // Asigna #ID a los perfiles ya creados que aún no lo tienen (usuarios, transportistas
-  // y clientes). Usa el mismo contador global; muestra cuántos se asignaron y errores.
+  // ── Reparar IDs A PEDIDO (faltantes + DUPLICADOS heredados) ────────────────
+  // 1) Asigna #ID a los perfiles que aún no lo tienen.
+  // 2) Corrige duplicados: si dos perfiles comparten un ID, MANTIENE uno (el de mayor
+  //    prioridad usuario>transportista>cliente y, a igualdad, el más antiguo) y reasigna
+  //    un ID nuevo (del contador global) al resto. Usuarios, transportistas y clientes
+  //    comparten la misma secuencia → tras reparar, ningún #ID se repite.
   const [generandoIds, setGenerandoIds] = useState(false)
-  const generarIdsFaltantes = async () => {
-    const faltanU = usuarios.filter((u) => !Number.isFinite(codigoNum(u)))
-    const faltanC = carriers.filter((c) => !Number.isFinite(codigoNum(c)))
-    const faltanK = clientes.filter((c) => !Number.isFinite(codigoNum(c)))
-    const total = faltanU.length + faltanC.length + faltanK.length
-    if (!total) { setMsg({ tipo: 'ok', txt: t('Todos los perfiles ya tienen su ID.') }); return }
+  const perfilesTodos = () => [
+    ...usuarios.map((u) => ({ col: 'users', id: u.id, codigo: u.codigo, ts: (u.creadoEn?.seconds || 0), pri: 3, etq: t('usuario'), nombre: u.nombre || u.email })),
+    ...carriers.map((c) => ({ col: 'carriers', id: c.id, codigo: c.codigo, ts: (c.creadoEn?.seconds || 0), pri: 2, etq: t('transportista'), nombre: c.nombre })),
+    ...clientes.map((c) => ({ col: 'clients', id: c.id, codigo: c.codigo, ts: (c.creadoEn?.seconds || 0), pri: 1, etq: t('cliente'), nombre: c.nombre })),
+  ]
+  const repararIds = async () => {
+    const perfiles = perfilesTodos()
+    const sinCodigo = perfiles.filter((p) => !Number.isFinite(parseInt(p.codigo, 10)))
+    // Agrupar por codigo para detectar duplicados.
+    const grupos = {}
+    for (const p of perfiles) { if (Number.isFinite(parseInt(p.codigo, 10))) (grupos[p.codigo] = grupos[p.codigo] || []).push(p) }
+    const duplicados = []
+    for (const arr of Object.values(grupos)) {
+      if (arr.length <= 1) continue
+      // Keeper = mayor prioridad y, a igualdad, el más antiguo; el resto se reasigna.
+      arr.sort((a, b) => b.pri - a.pri || (a.ts || 0) - (b.ts || 0))
+      duplicados.push(...arr.slice(1))
+    }
+    const objetivos = [...sinCodigo, ...duplicados]
+    if (!objetivos.length) { setMsg({ tipo: 'ok', txt: t('Todos los perfiles ya tienen un ID único. No hay nada que reparar.') }); return }
     setMsg(null); setGenerandoIds(true)
     try {
       const piso = Math.max(maxCodigo(usuarios), maxCodigo(carriers), maxCodigo(clientes))
-      const codigos = await reservarCodigos(tenantId, total, piso)
-      if (codigos.length < total) throw new Error(t('No se pudieron reservar los IDs.'))
+      const codigos = await reservarCodigos(tenantId, objetivos.length, piso)
+      if (codigos.length < objetivos.length) throw new Error(t('No se pudieron reservar los IDs.'))
       let i = 0, ok = 0; const errs = []
-      const asignar = async (col, lista, etq) => { for (const x of lista) { try { await guardarCampos(col, x.id, { codigo: codigos[i] }); ok++ } catch { errs.push(`${etq} ${x.nombre || x.email || x.id}`) } i++ } }
-      await asignar('users', faltanU, t('usuario'))
-      await asignar('carriers', faltanC, t('transportista'))
-      await asignar('clients', faltanK, t('cliente'))
-      if (errs.length) setMsg({ tipo: 'warn', txt: `${t('IDs asignados')}: ${ok}. ${t('No se pudo con')}: ${errs.slice(0, 4).join(', ')}${errs.length > 4 ? '…' : ''} (${t('revisa reglas/permisos')})` })
-      else setMsg({ tipo: 'ok', txt: `${t('Se asignaron')} ${ok} ${t('IDs correctamente.')}` })
-    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudieron generar los IDs.') }) }
+      for (const p of objetivos) { try { await guardarCampos(p.col, p.id, { codigo: codigos[i] }); ok++ } catch { errs.push(`${p.etq} ${p.nombre || p.id}`) } i++ }
+      const dupTxt = duplicados.length ? ` (${duplicados.length} ${t('duplicados corregidos')})` : ''
+      if (errs.length) setMsg({ tipo: 'warn', txt: `${t('IDs reparados')}: ${ok}${dupTxt}. ${t('No se pudo con')}: ${errs.slice(0, 4).join(', ')}${errs.length > 4 ? '…' : ''}` })
+      else setMsg({ tipo: 'ok', txt: `${t('Se repararon')} ${ok} ${t('IDs correctamente.')}${dupTxt}` })
+    } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudieron reparar los IDs.') }) }
     finally { setGenerandoIds(false) }
   }
   // Cierra la sesión de UNA persona concreta elegida en el desplegable.
@@ -288,6 +303,10 @@ export default function BulkUsuarios() {
   const faltanId = usuarios.filter((u) => !Number.isFinite(codigoNum(u))).length
     + carriers.filter((c) => !Number.isFinite(codigoNum(c))).length
     + clientes.filter((c) => !Number.isFinite(codigoNum(c))).length
+  // IDs DUPLICADOS heredados (mismo #ID en dos o más perfiles).
+  const frecCodigo = {}
+  for (const p of [...usuarios, ...carriers, ...clientes]) { if (Number.isFinite(codigoNum(p))) frecCodigo[p.codigo] = (frecCodigo[p.codigo] || 0) + 1 }
+  const dupId = Object.values(frecCodigo).reduce((s, n) => s + (n > 1 ? n - 1 : 0), 0)
 
   if (cargando) return <Cargando />
   return (
@@ -295,13 +314,18 @@ export default function BulkUsuarios() {
       <PageTitle>{t('Usuarios y roles')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
-      {/* Perfiles existentes sin ID: botón para asignarlos a todos de una vez. */}
-      {faltanId > 0 && (
+      {/* Perfiles sin ID o con ID DUPLICADO: botón para repararlos de una vez. */}
+      {(faltanId > 0 || dupId > 0) && (
         <Aviso tipo="warn" className="mb-3">
           <div className="flex flex-wrap items-center gap-3">
-            <span>{faltanId} {faltanId === 1 ? t('perfil no tiene su número de ID todavía.') : t('perfiles no tienen su número de ID todavía.')}</span>
-            <Boton variant="gold" onClick={generarIdsFaltantes} disabled={generandoIds} className="px-3 py-1.5 text-xs">
-              {generandoIds ? t('Asignando…') : `${t('Generar IDs faltantes')} (${faltanId})`}
+            <span>
+              {faltanId > 0 && `${faltanId} ${faltanId === 1 ? t('perfil sin número de ID') : t('perfiles sin número de ID')}`}
+              {faltanId > 0 && dupId > 0 && ' · '}
+              {dupId > 0 && `${dupId} ${dupId === 1 ? t('ID duplicado') : t('IDs duplicados')}`}
+              {'. '}{t('Cada perfil debe tener un ID único.')}
+            </span>
+            <Boton variant="gold" onClick={repararIds} disabled={generandoIds} className="px-3 py-1.5 text-xs">
+              {generandoIds ? t('Reparando…') : `${t('Reparar IDs')} (${faltanId + dupId})`}
             </Boton>
           </div>
         </Aviso>
