@@ -84,9 +84,10 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
       })
       continue
     }
-    // Cualquier otra conversación (interna / de oficina, sin conductor/cliente/transporte)
-    // → sección OPERACIONES: solo chats del equipo del staff.
-    out.operaciones.push({ ...base, icon: 'operacion', titulo: r.lastAutor || 'Equipo', rolLabel: 'Staff', rolColor: 'slate' })
+    // Cualquier otra clave (grupos grp_, u otras) NO se muestra aquí: los GRUPOS solo
+    // viven en su propia pestaña (se manejan aparte), para que quien no sea del staff no
+    // pueda leer esas conversaciones desde Operaciones. Operaciones = solo chats st_.
+    continue
   }
   return out
 }
