@@ -42,7 +42,36 @@ export default function LlamadaProvider({ children }) {
   const tipoRef = useRef('audio')
   const inicioRef = useRef(null)  // ms en que se contestó (para la duración)
   const logRef = useRef(() => {})
+  const tonoRef = useRef(null)
   useEffect(() => { faseRef.current = fase }, [fase])
+
+  // Tono de repique (repetido) para saliente (ringback) y entrante (ringtone).
+  const pararTono = () => { const tr = tonoRef.current; if (!tr) return; try { clearInterval(tr.intervalo); tr.ctx.close() } catch { /* noop */ } tonoRef.current = null }
+  const iniciarTono = (esEntrante) => {
+    pararTono()
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (!AC) return
+      const ctx = new AC()
+      const beep = () => {
+        try {
+          const o = ctx.createOscillator(); const g = ctx.createGain()
+          o.frequency.value = esEntrante ? 540 : 440
+          o.connect(g); g.connect(ctx.destination)
+          const now = ctx.currentTime
+          g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.25, now + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.5)
+          o.start(now); o.stop(now + 0.55)
+        } catch { /* noop */ }
+      }
+      beep()
+      tonoRef.current = { ctx, intervalo: setInterval(beep, esEntrante ? 1600 : 3200) }
+    } catch { /* noop */ }
+  }
+  useEffect(() => {
+    if (fase === 'saliente') iniciarTono(false)
+    else if (fase === 'entrante') iniciarTono(true)
+    else pararTono()
+  }, [fase])
 
   // Registra la llamada en el chat de origen (para dejar HISTORIAL: perdida o duración).
   // Solo lo hace quien LLAMÓ (tiene el contexto del chat); el mensaje lo ven ambos.
@@ -96,10 +125,20 @@ export default function LlamadaProvider({ children }) {
   }
 
   const conMedios = async (tipo) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('SIN_MEDIOS') // iOS PWA instalada suele bloquear cámara/micrófono
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: tipo === 'video' })
     localRef.current = stream
     if (localVid.current) localVid.current.srcObject = stream
     return stream
+  }
+  const avisoMedios = (e) => {
+    const n = e && (e.name || e.message)
+    if (n === 'SIN_MEDIOS') return alert(t('Tu dispositivo bloquea el micrófono/cámara en la app instalada. Abre MilePay en el navegador Safari/Chrome (no el ícono de la pantalla de inicio) para llamar.'))
+    if (n === 'NotAllowedError') return alert(t('Diste “No permitir” al micrófono/cámara. Habilítalo en los ajustes del navegador para este sitio y vuelve a intentar.'))
+    if (n === 'NotFoundError') return alert(t('No se encontró micrófono/cámara en este dispositivo.'))
+    return alert(t('No se pudo iniciar la llamada. Revisa los permisos de micrófono/cámara.'))
   }
 
   // ── Iniciar llamada saliente ───────────────────────────────────────────────
@@ -128,7 +167,7 @@ export default function LlamadaProvider({ children }) {
       })
     } catch (e) {
       limpiar(false)
-      alert(t('No se pudo iniciar la llamada. Revisa los permisos de micrófono/cámara.'))
+      avisoMedios(e)
     }
   }, [usuario, tenantId, rol, limpiar, t])
 
@@ -152,7 +191,7 @@ export default function LlamadaProvider({ children }) {
       })
     } catch (e) {
       limpiar(false)
-      alert(t('No se pudo aceptar la llamada. Revisa los permisos de micrófono/cámara.'))
+      avisoMedios(e)
     }
   }, [entrante, limpiar, t])
 
@@ -176,7 +215,7 @@ export default function LlamadaProvider({ children }) {
   }, [usuario?.id, tenantId])
 
   // Limpieza al desmontar / cerrar sesión.
-  useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } }, [])
+  useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
   const esVideo = info?.tipo === 'video' || entrante?.tipo === 'video'
 

@@ -401,6 +401,19 @@ exports.bulkPushMensajes = onDocumentCreated('bulk_messages/{id}', async (event)
 })
 
 // ============================================================================
+// bulkPushLlamada — PUSH al crearse una LLAMADA entrante (bulk_calls). Avisa al
+// destinatario aunque tenga la app en segundo plano; al tocar la notificación se
+// abre Mensajes y (si sigue vigente) entra la llamada.
+// ============================================================================
+exports.bulkPushLlamada = onDocumentCreated('bulk_calls/{id}', async (event) => {
+  const c = (event.data && event.data.data()) || {}
+  if (!c.tenantId || !c.para) return
+  const dest = await tokensDe(c.tenantId, (x) => x.uid === c.para)
+  const tipo = c.tipo === 'video' ? 'Videollamada' : 'Llamada'
+  await enviarAPI(dest, `📞 ${tipo} entrante`, `${(c.de && c.de.nombre) || 'Alguien'} te está llamando`, 'https://www.milepay.io/bulk/mensajes')
+})
+
+// ============================================================================
 // recomendarAsignacionIA — hook opcional de IA. Si no hay modelo configurado,
 // responde que se use el motor de reglas del front (domain/asignacion.js).
 // data: { orden, candidatos }  →  { usarReglas } | { ranking }

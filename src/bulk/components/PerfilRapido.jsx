@@ -5,7 +5,7 @@
 //   teléfono (si existe). No inventa datos: solo muestra lo que hay en la base.
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, User, Phone, ExternalLink, Video } from 'lucide-react'
+import { X, Phone, ExternalLink, Video } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useLlamada } from './LlamadaProvider'
@@ -62,9 +62,7 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
         </div>
 
         <div className="mt-4 space-y-2">
-          {telefono
-            ? <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><Phone size={14} className="text-amber-500" /> {telefono}</div>
-            : <div className="text-xs text-slate-400"><User size={12} className="mr-1 inline" /> {t('Sin teléfono registrado.')}</div>}
+          {telefono && <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><Phone size={14} className="text-amber-500" /> {telefono}</div>}
 
           {/* Llamada 1-a-1 dentro de la app (voz / video). */}
           {puedeLlamar && (
