@@ -32,6 +32,8 @@ export default function LlamadaProvider({ children }) {
   const [tick, setTick] = useState(0)      // refresca el cronómetro cada segundo
   const [compartiendo, setCompartiendo] = useState(false)
   const pantallaRef = useRef(null)
+  const [pos, setPos] = useState(null)     // posición del widget minimizado {x,y}; null = esquina
+  const dragRef = useRef(null)
 
   const pcRef = useRef(null)
   const localRef = useRef(null)
@@ -49,7 +51,8 @@ export default function LlamadaProvider({ children }) {
   const tonoRef = useRef(null)
   useEffect(() => { faseRef.current = fase }, [fase])
 
-  // Tono de repique (repetido) para saliente (ringback) y entrante (ringtone).
+  // Tono de repique CONTINUO. saliente = "ringback" (tono doble largo repetido);
+  // entrante = melodía tri-tono más marcada. Se agenda por ciclos con Web Audio.
   const pararTono = () => { const tr = tonoRef.current; if (!tr) return; try { clearInterval(tr.intervalo); tr.ctx.close() } catch { /* noop */ } tonoRef.current = null }
   const iniciarTono = (esEntrante) => {
     pararTono()
@@ -57,18 +60,29 @@ export default function LlamadaProvider({ children }) {
       const AC = window.AudioContext || window.webkitAudioContext
       if (!AC) return
       const ctx = new AC()
-      const beep = () => {
-        try {
-          const o = ctx.createOscillator(); const g = ctx.createGain()
-          o.frequency.value = esEntrante ? 540 : 440
-          o.connect(g); g.connect(ctx.destination)
-          const now = ctx.currentTime
-          g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.25, now + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.5)
-          o.start(now); o.stop(now + 0.55)
-        } catch { /* noop */ }
+      const nota = (freq, ini, dur, vol = 0.2) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain()
+        o.type = 'sine'; o.frequency.value = freq
+        o.connect(g); g.connect(ctx.destination)
+        g.gain.setValueAtTime(0.0001, ini)
+        g.gain.exponentialRampToValueAtTime(vol, ini + 0.04)
+        g.gain.setValueAtTime(vol, ini + Math.max(0.06, dur - 0.06))
+        g.gain.exponentialRampToValueAtTime(0.0001, ini + dur)
+        o.start(ini); o.stop(ini + dur + 0.02)
       }
-      beep()
-      tonoRef.current = { ctx, intervalo: setInterval(beep, esEntrante ? 1600 : 3200) }
+      const ciclo = () => {
+        const t0 = ctx.currentTime + 0.02
+        if (esEntrante) {
+          // "di-di-diií" — más urgente y melódico
+          nota(659, t0, 0.16); nota(784, t0 + 0.2, 0.16); nota(659, t0 + 0.4, 0.16); nota(880, t0 + 0.6, 0.28)
+        } else {
+          // ringback clásico: dos tonos largos "riiing — riiing"
+          nota(440, t0, 0.7, 0.16); nota(480, t0, 0.7, 0.12)
+          nota(440, t0 + 0.9, 0.7, 0.16); nota(480, t0 + 0.9, 0.7, 0.12)
+        }
+      }
+      ciclo()
+      tonoRef.current = { ctx, intervalo: setInterval(ciclo, esEntrante ? 1300 : 3200) }
     } catch { /* noop */ }
   }
   useEffect(() => {
@@ -256,7 +270,23 @@ export default function LlamadaProvider({ children }) {
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
   // Al colgar/entrar/salir, restablece minimizado.
-  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false) } }, [fase])
+  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0); setCompartiendo(false); setPos(null) } }, [fase])
+
+  // Arrastrar el widget minimizado (pointer events; se mueve por toda la pantalla).
+  const W = 256, H = 190
+  const onArrastrarInicio = (e) => {
+    const inicioX = pos ? pos.x : window.innerWidth - W - 16
+    const inicioY = pos ? pos.y : window.innerHeight - H - 16
+    dragRef.current = { sx: e.clientX, sy: e.clientY, ox: inicioX, oy: inicioY }
+    const mover = (ev) => {
+      if (!dragRef.current) return
+      const nx = Math.min(window.innerWidth - W, Math.max(0, dragRef.current.ox + (ev.clientX - dragRef.current.sx)))
+      const ny = Math.min(window.innerHeight - H, Math.max(0, dragRef.current.oy + (ev.clientY - dragRef.current.sy)))
+      setPos({ x: nx, y: ny })
+    }
+    const fin = () => { dragRef.current = null; window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', fin) }
+    window.addEventListener('pointermove', mover); window.addEventListener('pointerup', fin)
+  }
   // Cronómetro de la llamada activa.
   useEffect(() => {
     if (fase !== 'activa') return
@@ -359,10 +389,13 @@ export default function LlamadaProvider({ children }) {
         </div>
       )}
 
-      {/* Llamada MINIMIZADA — widget flotante moderno */}
+      {/* Llamada MINIMIZADA — widget flotante moderno y ARRASTRABLE */}
       {(fase === 'saliente' || fase === 'activa') && min && (
-        <div className="fixed bottom-4 right-4 z-[80] w-64 overflow-hidden rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 shadow-2xl ring-1 ring-white/10">
-          <div className="relative h-32 bg-slate-950">
+        <div
+          className="fixed z-[80] w-64 overflow-hidden rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 shadow-2xl ring-1 ring-white/10"
+          style={pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 }}
+        >
+          <div onPointerDown={onArrastrarInicio} className="relative h-32 cursor-grab touch-none bg-slate-950 active:cursor-grabbing">
             {esVideo ? medios(true) : (
               <div className="flex h-full w-full items-center justify-center">
                 {medios(true)}
