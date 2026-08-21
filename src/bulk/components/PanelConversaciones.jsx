@@ -24,7 +24,7 @@ const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: S
 function Avatar({ foto, icon, nombre, size = 40, resalte = false }) {
   const Icono = ICONO[icon] || MessageSquare
   const px = { width: size, height: size }
-  if (foto) return <img src={foto} alt={nombre || ''} style={px} className="flex-shrink-0 rounded-xl border border-slate-200 object-cover dark:border-slate-700" />
+  if (foto) return <img src={foto} alt={nombre || ''} style={px} className="chat-img flex-shrink-0 rounded-xl border border-slate-200 object-cover dark:border-slate-700" />
   return (
     <div style={px} className={`grid flex-shrink-0 place-items-center rounded-xl ${resalte ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
       <Icono size={Math.round(size * 0.42)} />
@@ -44,7 +44,7 @@ function horaCorta(ts) {
     : d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' })
 }
 
-export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, alturaClass = 'h-[calc(100vh-6.5rem)]' }) {
+export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, alturaClass = 'h-mensajes' }) {
   const { t } = useLang()
   const [tab, setTab] = useState(secciones[0]?.k || '')
   const [sel, setSel] = useState('')

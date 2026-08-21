@@ -9,6 +9,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
+import { enviarMensaje } from '../data/chat'
 import {
   nuevaConexion, callRef, candCol, crearLlamada, actualizarLlamada,
   agregarCandidato, escucharEntrantes, limpiarLlamada, onSnapshot,
@@ -37,11 +38,34 @@ export default function LlamadaProvider({ children }) {
   const faseRef = useRef('idle')
   const localVid = useRef(null)
   const remoteVid = useRef(null)
+  const ctxRef = useRef(null)     // { chatId, participantes } del chat desde donde se llamó
+  const tipoRef = useRef('audio')
+  const inicioRef = useRef(null)  // ms en que se contestó (para la duración)
+  const logRef = useRef(() => {})
   useEffect(() => { faseRef.current = fase }, [fase])
+
+  // Registra la llamada en el chat de origen (para dejar HISTORIAL: perdida o duración).
+  // Solo lo hace quien LLAMÓ (tiene el contexto del chat); el mensaje lo ven ambos.
+  logRef.current = (contestada, durMs) => {
+    const ctx = ctxRef.current
+    if (!ctx?.chatId || !usuario?.id) return
+    const etq = tipoRef.current === 'video' ? t('Videollamada') : t('Llamada')
+    let texto
+    if (contestada) {
+      const s = Math.max(0, Math.round(durMs / 1000)); const mm = Math.floor(s / 60); const ss = String(s % 60).padStart(2, '0')
+      texto = `📞 ${etq} · ${mm}:${ss}`
+    } else {
+      texto = `📞 ${t('Llamada perdida')}`
+    }
+    enviarMensaje(tenantId, ctx.chatId, { id: usuario.id, nombre: usuario.nombre || usuario.email, rol }, { tipo: 'llamada', texto }, ctx.participantes || []).catch(() => {})
+  }
 
   const limpiar = useCallback((remoto = false) => {
     const id = callIdRef.current
     if (id && !remoto) { actualizarLlamada(id, { estado: 'terminada' }).catch(() => {}) }
+    // Deja constancia en el chat (perdida / con duración) antes de resetear.
+    if (ctxRef.current?.chatId) { try { logRef.current(!!inicioRef.current, inicioRef.current ? Date.now() - inicioRef.current : 0) } catch { /* noop */ } }
+    ctxRef.current = null; inicioRef.current = null
     try { unsubDoc.current && unsubDoc.current() } catch { /* noop */ }
     try { unsubCand.current && unsubCand.current() } catch { /* noop */ }
     unsubDoc.current = null; unsubCand.current = null
@@ -79,8 +103,9 @@ export default function LlamadaProvider({ children }) {
   }
 
   // ── Iniciar llamada saliente ───────────────────────────────────────────────
-  const iniciar = useCallback(async (paraUid, nombre, tipo = 'audio') => {
+  const iniciar = useCallback(async (paraUid, nombre, tipo = 'audio', ctx = null) => {
     if (faseRef.current !== 'idle' || !paraUid || paraUid === usuario?.id) return
+    ctxRef.current = ctx || null; tipoRef.current = tipo; inicioRef.current = null
     try {
       const stream = await conMedios(tipo)
       const callId = await crearLlamada({ tenantId, de: { uid: usuario.id, nombre: usuario.nombre || usuario.email || '', rol }, para: paraUid, tipo })
@@ -94,7 +119,7 @@ export default function LlamadaProvider({ children }) {
       unsubDoc.current = onSnapshot(callRef(callId), async (d) => {
         const data = d.data(); if (!data) return
         if (data.answer && pcRef.current && !pcRef.current.currentRemoteDescription) {
-          try { await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer)); setFase('activa') } catch { /* noop */ }
+          try { await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.answer)); inicioRef.current = Date.now(); setFase('activa') } catch { /* noop */ }
         }
         if (data.estado === 'terminada' || data.estado === 'rechazada') limpiar(true)
       })

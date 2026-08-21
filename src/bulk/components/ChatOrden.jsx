@@ -69,6 +69,8 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   // La "otra persona" del chat = autor más reciente distinto a mí (para poder llamarla).
   let otro = null
   for (let i = msgs.length - 1; i >= 0; i--) { const m = msgs[i]; if (m.autorId && m.autorId !== usuario?.id) { otro = { id: m.autorId, nombre: m.autorNombre, rol: m.autorRol }; break } }
+  // Contexto del chat para dejar historial de la llamada (perdida/duración) aquí mismo.
+  const ctxLlamada = { chatId: orden?.id, participantes: partProp != null ? partProp.filter(Boolean) : [orden?.choferId, orden?.transportistaId, orden?.clienteId].filter(Boolean) }
 
   return (
     <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
@@ -76,8 +78,8 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
           <button type="button" onClick={() => setPerfilRapido(otro)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{otro.nombre}</button>
           <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio')} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
-            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video')} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
+            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
+            <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
           </div>
         </div>
       )}
@@ -100,7 +102,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                   </button>
                 )}
                 {m.urgente && <div className="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-rose-600"><AlertTriangle size={11} /> {t('URGENTE')}</div>}
-                {m.tipo === 'foto' && m.foto && <img src={m.foto} alt="foto" className="mb-1 max-h-40 rounded-lg" />}
+                {m.tipo === 'foto' && m.foto && <img src={m.foto} alt="foto" loading="lazy" className="chat-img mb-1 max-h-40 rounded-lg" />}
                 {m.tipo === 'ubicacion' && m.ubicacion && (
                   <a href={`https://maps.google.com/?q=${m.ubicacion.lat},${m.ubicacion.lng}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline"><MapPin size={13} /> {t('Ver ubicación')}</a>
                 )}
@@ -134,7 +136,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <Input className="flex-1" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
         <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
       </div>
-      {perfilRapido && <PerfilRapido autor={perfilRapido} onClose={() => setPerfilRapido(null)} />}
+      {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}
     </div>
   )
 }

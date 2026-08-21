@@ -34,6 +34,10 @@
   .head-safe { padding-top: max(0.75rem, env(safe-area-inset-top)); }
   /* Alto real de pantalla en iOS (evita el hueco por la barra dinámica). */
   .min-h-dvh { min-height: 100vh; min-height: 100dvh; }
+  /* Contenedores de mensajería: alto DINÁMICO (dvh) para que en iPhone no se
+     desborde ni salte con la barra de Safari. */
+  .h-mensajes { height: calc(100vh - 6.5rem); height: calc(100dvh - 6.5rem); }
+  .h-mensajes-portal { height: calc(100vh - 11rem); height: calc(100dvh - 11rem); }
 
   /* Spinner giratorio (por si se usa fuera de animate-spin) */
   @keyframes milepayfloat {
@@ -46,4 +50,9 @@
   /* Scrollbar sutil para contenedores con overflow */
   .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
   .scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-600 rounded-full; }
+  /* iOS: scroll con inercia suave y sin que se “pierda” el contenido al mover. */
+  .scroll-thin { -webkit-overflow-scrolling: touch; }
+  /* iOS: fija las imágenes del chat a su propia capa GPU (bug conocido: las
+     imágenes desaparecen durante el scroll con inercia). */
+  .chat-img { transform: translateZ(0); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 }

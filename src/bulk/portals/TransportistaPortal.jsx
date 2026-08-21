@@ -222,7 +222,7 @@ export default function TransportistaPortal() {
       {activo === 'mensajes' && (
         usuario?.carrierId
           ? <>
-              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-[calc(100vh-11rem)]"
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal"
                 accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
               {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
             </>

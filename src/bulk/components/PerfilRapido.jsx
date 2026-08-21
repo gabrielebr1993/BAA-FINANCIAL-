@@ -17,7 +17,7 @@ const clave = (s) => (s || '').trim().toLowerCase()
 const STAFF = ['super_admin', 'admin', 'dispatcher']
 const COLOR_ROL = { cliente: 'green', transportista: 'gold', chofer: 'navy', supervisor_planta: 'blue' }
 
-export default function PerfilRapido({ autor, onClose }) {
+export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const { rol, usuario } = useBulkAuth()
@@ -27,7 +27,7 @@ export default function PerfilRapido({ autor, onClose }) {
   const esChofer = autor?.rol === 'chofer'
   // Se puede llamar por la app si el autor tiene uid y no soy yo.
   const puedeLlamar = !!autor?.id && autor.id !== usuario?.id
-  const llamar = (tipo) => { onClose(); iniciar(autor.id, autor.nombre, tipo) }
+  const llamar = (tipo) => { onClose(); iniciar(autor.id, autor.nombre, tipo, ctxLlamada) }
 
   // Datos del chofer desde el roster (única fuente con foto/teléfono real).
   const infoChofer = useMemo(() => {
