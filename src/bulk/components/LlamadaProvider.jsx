@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2 } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -28,6 +28,8 @@ export default function LlamadaProvider({ children }) {
   const [entrante, setEntrante] = useState(null) // doc de llamada entrante
   const [micOff, setMicOff] = useState(false)
   const [camOff, setCamOff] = useState(false)
+  const [min, setMin] = useState(false)   // llamada minimizada (seguir usando la web)
+  const [tick, setTick] = useState(0)      // refresca el cronómetro cada segundo
 
   const pcRef = useRef(null)
   const localRef = useRef(null)
@@ -222,7 +224,35 @@ export default function LlamadaProvider({ children }) {
   // Limpieza al desmontar / cerrar sesión.
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
 
+  // Al colgar/entrar/salir, restablece minimizado.
+  useEffect(() => { if (fase === 'idle') { setMin(false); setTick(0) } }, [fase])
+  // Cronómetro de la llamada activa.
+  useEffect(() => {
+    if (fase !== 'activa') return
+    const id = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [fase])
+  const duracion = () => {
+    if (!inicioRef.current) return fase === 'saliente' ? t('Llamando…') : ''
+    const s = Math.max(0, Math.floor((Date.now() - inicioRef.current) / 1000))
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  }
+
   const esVideo = info?.tipo === 'video' || entrante?.tipo === 'video'
+
+  // Medios (video remoto/local o audio) — se reutiliza en pantalla completa y minimizado.
+  const medios = (mini) => esVideo ? (
+    <>
+      <video ref={remoteVid} autoPlay playsInline className={mini ? 'h-full w-full bg-slate-900 object-cover' : 'h-full w-full bg-slate-900 object-cover'} />
+      {/* El que llama TAMBIÉN se ve (su propia cámara). */}
+      <video ref={localVid} autoPlay playsInline muted className={mini ? 'absolute bottom-1 right-1 h-14 w-10 rounded-md border border-white/30 object-cover' : 'absolute bottom-24 right-4 h-36 w-24 rounded-xl border-2 border-white/30 object-cover shadow-lg'} />
+    </>
+  ) : (
+    <div className="flex h-full w-full flex-col items-center justify-center">
+      {!mini && <div className="grid h-28 w-28 place-items-center rounded-full bg-amber-500/20 text-amber-400"><Phone size={44} /></div>}
+      <audio ref={remoteVid} autoPlay />
+    </div>
+  )
 
   return (
     <LlamadaContext.Provider value={{ iniciar, enLlamada: fase !== 'idle' }}>
@@ -243,32 +273,40 @@ export default function LlamadaProvider({ children }) {
         </div>
       )}
 
-      {/* Llamada SALIENTE o ACTIVA */}
-      {(fase === 'saliente' || fase === 'activa') && (
+      {/* Llamada SALIENTE o ACTIVA — PANTALLA COMPLETA */}
+      {(fase === 'saliente' || fase === 'activa') && !min && (
         <div className="fixed inset-0 z-[80] flex flex-col bg-slate-950">
           <div className="relative flex-1">
-            {/* Video remoto (o avatar si es solo audio) */}
-            {esVideo
-              ? <video ref={remoteVid} autoPlay playsInline className="h-full w-full bg-slate-900 object-cover" />
-              : (
-                <div className="flex h-full w-full flex-col items-center justify-center">
-                  <div className="grid h-28 w-28 place-items-center rounded-full bg-amber-500/20 text-amber-400"><Phone size={44} /></div>
-                  <audio ref={remoteVid} autoPlay />
-                </div>
-              )}
-            {/* Estado + nombre */}
-            <div className="absolute inset-x-0 top-0 flex flex-col items-center gap-1 p-6 text-center">
+            {medios(false)}
+            {/* Botón MINIMIZAR (seguir usando la web) */}
+            <button onClick={() => setMin(true)} title={t('Minimizar')} className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25"><Minimize2 size={18} /></button>
+            {/* Estado + nombre + cronómetro */}
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center gap-1 p-6 text-center">
               <h3 className="text-xl font-black text-white">{info?.con || t('Llamada')}</h3>
-              <p className="text-sm text-white/70">{fase === 'saliente' ? t('Llamando…') : t('En llamada')}</p>
+              <p className="text-sm text-white/70">{duracion()}</p>
             </div>
-            {/* Video local (mini) */}
-            {esVideo && <video ref={localVid} autoPlay playsInline muted className="absolute bottom-24 right-4 h-36 w-24 rounded-xl border-2 border-white/30 object-cover shadow-lg" />}
           </div>
           {/* Controles */}
           <div className="flex items-center justify-center gap-5 bg-slate-900/80 p-5">
-            <button onClick={toggleMic} className={`grid h-13 w-13 place-items-center rounded-full p-3 ${micOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</button>
-            <button onClick={() => limpiar(false)} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg transition hover:bg-rose-600"><PhoneOff size={26} /></button>
-            {esVideo && <button onClick={toggleCam} className={`grid h-13 w-13 place-items-center rounded-full p-3 ${camOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</button>}
+            <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-14 w-14 place-items-center rounded-full ${micOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</button>
+            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg transition hover:bg-rose-600"><PhoneOff size={26} /></button>
+            {esVideo && <button onClick={toggleCam} title={camOff ? t('Activar cámara') : t('Apagar cámara')} className={`grid h-14 w-14 place-items-center rounded-full ${camOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</button>}
+          </div>
+        </div>
+      )}
+
+      {/* Llamada MINIMIZADA — widget flotante; la web sigue usándose por debajo */}
+      {(fase === 'saliente' || fase === 'activa') && min && (
+        <div className="fixed bottom-4 right-4 z-[80] w-60 overflow-hidden rounded-2xl bg-slate-900 shadow-2xl ring-1 ring-white/10">
+          <div className="relative h-32 bg-slate-950">{medios(true)}</div>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-bold text-white">{info?.con || t('Llamada')}</div>
+              <div className="text-[11px] text-white/60">{duracion()}</div>
+            </div>
+            <button onClick={toggleMic} title={micOff ? t('Activar micrófono') : t('Silenciar')} className={`grid h-8 w-8 place-items-center rounded-full ${micOff ? 'bg-white text-slate-900' : 'bg-white/15 text-white'}`}>{micOff ? <MicOff size={15} /> : <Mic size={15} />}</button>
+            <button onClick={() => setMin(false)} title={t('Ampliar')} className="grid h-8 w-8 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25"><Maximize2 size={15} /></button>
+            <button onClick={() => limpiar(false)} title={t('Finalizar llamada')} className="grid h-8 w-8 place-items-center rounded-full bg-rose-500 text-white hover:bg-rose-600"><PhoneOff size={16} /></button>
           </div>
         </div>
       )}
