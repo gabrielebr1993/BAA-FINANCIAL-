@@ -75,6 +75,14 @@
         { "fieldPath": "clienteId", "order": "ASCENDING" },
         { "fieldPath": "ts", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "bulk_salas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "invitados", "arrayConfig": "CONTAINS" }
+      ]
     }
   ],
   "fieldOverrides": []

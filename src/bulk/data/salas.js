@@ -112,14 +112,18 @@ export function escucharSenales(salaId, uid, cb) {
 }
 
 // Escucha las salas ENTRANTES para `uid` (donde está invitado y sigue 'activa').
-// Un solo array-contains → sin índice compuesto. Las reglas restringen la lectura a
-// invitados/participantes, así que no aparecerán salas de otras empresas.
-export function escucharSalasEntrantes(uid, cb) {
-  const q = query(salasCol(), where('invitados', 'array-contains', uid))
+// Acota a MI empresa (tenantId) + donde estoy invitado, IGUAL que el listener 1-a-1:
+// sin el filtro de tenantId, un solo doc de sala mal formado o de otra empresa que
+// coincidiera hacía fallar TODA la consulta con permission-denied → el invitado no
+// recibía NINGUNA llamada (timbre mudo). Requiere el índice compuesto
+// (tenantId ASC, invitados CONTAINS) en firestore.indexes.json.
+export function escucharSalasEntrantes(tenantId, uid, cb) {
+  const q = query(salasCol(), where('tenantId', '==', tenantId), where('invitados', 'array-contains', uid))
   return onSnapshot(q, (snap) => {
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => s.estado === 'activa')
+    console.log('[sala] entrantes:', snap.size, '→ activas para mí:', docs.length)
     cb(docs)
-  }, () => cb([]))
+  }, (err) => { console.warn('[sala] error listener entrantes:', err && err.code, err && err.message); cb([]) })
 }
 
 export { onSnapshot }

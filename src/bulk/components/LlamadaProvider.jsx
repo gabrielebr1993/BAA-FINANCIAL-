@@ -723,7 +723,7 @@ export default function LlamadaProvider({ children }) {
   // ── Escuchar salas GRUPALES entrantes ──────────────────────────────────────
   useEffect(() => {
     if (!usuario?.id || !tenantId) return
-    const off = escucharSalasEntrantes(usuario.id, (salas) => {
+    const off = escucharSalasEntrantes(tenantId, usuario.id, (salas) => {
       if (faseRef.current !== 'idle') return
       const s = salas.find((x) => x.tenantId === tenantId && x.creadaPor !== usuario.id && (x.invitados || []).includes(usuario.id))
       if (s) { setEntrante({ grupo: true, id: s.id, tipo: s.tipo, nombre: s.nombre, de: { nombre: s.creadaPorNombre || t('Grupo') }, sala: s }); setFase('entrante') }
