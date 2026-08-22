@@ -3,10 +3,10 @@
 // dispositivo (localStorage con `claveLS` distinta por rol para no mezclarlos).
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, AlertTriangle, Timer, FileWarning, Receipt, MessageSquare, CheckCheck, X } from 'lucide-react'
+import { Bell, AlertTriangle, Timer, FileWarning, Receipt, MessageSquare, CheckCheck, X, MapPin } from 'lucide-react'
 import { useLang } from '../../i18n'
 
-const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning, mensaje: MessageSquare, pago: Receipt }
+const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning, mensaje: MessageSquare, pago: Receipt, geocerca: MapPin }
 const COLOR = { critico: 'text-rose-500', warn: 'text-amber-500', info: 'text-sky-500' }
 
 export default function CampanaNotificaciones({ notifs = [], claveLS = 'bulk_notif_leidas', invertido = false }) {

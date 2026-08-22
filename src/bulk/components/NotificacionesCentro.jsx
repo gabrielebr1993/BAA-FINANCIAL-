@@ -5,6 +5,7 @@ import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
 import { noLeidosPorConv } from '../data/chat'
 import { construirNotificaciones } from '../domain/notificaciones'
+import { useNotifsGeocerca } from '../data/geoeventos'
 import CampanaNotificaciones from './CampanaNotificaciones'
 
 export default function NotificacionesCentro() {
@@ -16,9 +17,10 @@ export default function NotificacionesCentro() {
   const { datos: mensajes } = useColeccion('messages')
   const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
 
+  const geo = useNotifsGeocerca(null) // staff: entradas/salidas de geocerca de todo el tenant
   const notifs = useMemo(
-    () => construirNotificaciones({ ordenes, facturas, incidencias, documentos, mensajesNuevos, ahoraMs: Date.now() }),
-    [ordenes, facturas, incidencias, documentos, mensajesNuevos],
+    () => [...geo, ...construirNotificaciones({ ordenes, facturas, incidencias, documentos, mensajesNuevos, ahoraMs: Date.now() })],
+    [geo, ordenes, facturas, incidencias, documentos, mensajesNuevos],
   )
   return <CampanaNotificaciones notifs={notifs} claveLS="bulk_notif_leidas" />
 }

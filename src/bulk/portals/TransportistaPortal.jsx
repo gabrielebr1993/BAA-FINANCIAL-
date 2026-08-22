@@ -28,6 +28,7 @@ import { asignarOrdenManual } from '../data/asignacionManual'
 import { auditar } from '../data/auditoria'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesTransportista } from '../domain/notificaciones'
+import { useNotifsGeocerca } from '../data/geoeventos'
 import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
@@ -128,7 +129,8 @@ export default function TransportistaPortal() {
       { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('Aún no perteneces a ningún grupo.') },
     ]
   }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, avatares, seccionPriv, t])
-  const notifsT = useMemo(() => notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() }), [ordenes, statements, mensajesNuevos])
+  const geoNotifs = useNotifsGeocerca(carrierId) // entradas/salidas de geocerca de SU carrier
+  const notifsT = useMemo(() => [...geoNotifs, ...notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() })], [geoNotifs, ordenes, statements, mensajesNuevos])
 
   // Presencia viva (en línea) por uid de chofer.
   const now = Date.now()
