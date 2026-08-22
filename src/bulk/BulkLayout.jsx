@@ -12,6 +12,7 @@ import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocal
 import CambiarClave from './components/CambiarClave'
 import { UserId } from './components/UserId'
 import Avatar from './components/Avatar'
+import AvisosGeocerca from './components/AvisosGeocerca'
 import { guardarAvatar } from './data/repo'
 import { useFotoUsuario } from './data/useCodigoUsuario'
 import IndicadorConexion from './components/IndicadorConexion'
@@ -62,6 +63,8 @@ export default function BulkLayout({ children }) {
 
   return (
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+      {/* Avisos en-app de entrada/salida de geocercas (staff). */}
+      <AvisosGeocerca />
       {/* Fondo oscuro en móvil cuando el menú está abierto (para cerrarlo al tocar). */}
       {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
       <aside className={`${menuAbierto ? 'flex' : 'hidden'} pt-safe fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>

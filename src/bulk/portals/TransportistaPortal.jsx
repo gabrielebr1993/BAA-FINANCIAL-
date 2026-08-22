@@ -11,6 +11,7 @@ import {
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
 } from 'lucide-react'
 import RepararAcceso from '../components/RepararAcceso'
+import AvisosGeocerca from '../components/AvisosGeocerca'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
@@ -229,6 +230,8 @@ export default function TransportistaPortal() {
         </Aviso>
       )}
     >
+      {/* Avisos en-app de entrada/salida de geocercas (de SU carrier). */}
+      <AvisosGeocerca carrierId={carrierId} />
       {/* KPIs (mismas tarjetas del admin), persistentes arriba del contenido */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
