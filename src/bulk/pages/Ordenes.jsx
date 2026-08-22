@@ -3,6 +3,7 @@ import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock
 import { Link, useNavigate } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
+import ImprimirTicket from '../components/ImprimirTicket'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { puedeCancelar } from '../data/ordenAcciones'
 import { noLeidosPorConv } from '../data/chat'
@@ -69,6 +70,14 @@ export default function Ordenes() {
   const { datos: presencias } = useColeccion('presence')
   const { datos: mensajes } = useColeccion('messages')
   const { datos: signals } = useColeccion('signals')
+  const { datos: jobsTk } = useColeccion('jobs')
+  const { datos: plantasTk } = useColeccion('plants')
+  const { datos: materialesTk } = useColeccion('materials')
+  const jobsMap = useMemo(() => { const m = {}; for (const j of jobsTk || []) m[j.id] = j; return m }, [jobsTk])
+  const plantasMap = useMemo(() => { const m = {}; for (const p of plantasTk || []) m[p.id] = p; return m }, [plantasTk])
+  const carriersMap = useMemo(() => { const m = {}; for (const c of carriers || []) m[c.id] = c; return m }, [carriers])
+  const materialesMap = useMemo(() => { const m = {}; for (const x of materialesTk || []) m[(x.nombre || '').trim().toLowerCase()] = x; return m }, [materialesTk])
+  const ticketProps = (o) => ({ orden: o, empresa: usuario?.empresa || 'Freight', jobsMap, plantasMap, carriersMap, materialesMap, canGenerar: esStaff, tenantId, usuario, rol })
   // Si el matching corre en el SERVIDOR (Cloud Function), el motor del navegador se
   // apaga. Si esa función NO está desplegada, nada asigna → es la causa #1 de "en
   // línea pero no llega ninguna orden". Lo advertimos en el diagnóstico.
@@ -350,7 +359,8 @@ export default function Ordenes() {
                   <span className={`h-2 w-2 flex-shrink-0 rounded-full ${o.estado === E.EN_RUTA ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'}`} />
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                   <Badge color="navy">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
-                  <div className="ml-auto flex items-center gap-0.5">
+                  <div className="ml-auto flex items-center gap-0.5" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
+                    <ImprimirTicket {...ticketProps(o)} compacto />
                     {esStaff && puedeCancelar(o) && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCancelar(o) }} title={t('Cancelar orden')} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"><Ban size={15} /></button>}
                     <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setChatOrden(o) }} className="relative rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-500 dark:hover:bg-slate-800">
                       <MessageSquare size={15} />
@@ -378,6 +388,7 @@ export default function Ordenes() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                     <Badge color="green">{t(ORDEN_ESTADO_LABEL[o.estado])}</Badge>
+                    <span className="ml-auto" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}><ImprimirTicket {...ticketProps(o)} compacto /></span>
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12} className="text-emerald-500" /> {o.choferNombre || nombreCarrier(o.transportistaId)} · {t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
                 </Link>
