@@ -11,6 +11,16 @@ const TIPOS = ['Seguro', 'Licencia', 'Registro', 'DOT', 'MC', 'Inspección', 'Pe
 const COLOR = { vencido: 'red', proximo: 'gold', ok: 'green', sin_fecha: 'slate' }
 const LABEL = { vencido: 'Vencido', proximo: 'Por vencer', ok: 'Vigente', sin_fecha: 'Sin fecha' }
 
+// Campo con etiqueta uniforme (recuadros del mismo tamaño).
+function Campo({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 export default function Documentos() {
   const { t } = useLang()
   const { tenantId } = useBulkAuth()
@@ -38,10 +48,18 @@ export default function Documentos() {
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo documento')}</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Select value={f.carrierId} onChange={set('carrierId')}><option value="">{t('— Transportista —')}</option>{carriers.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</Select>
-          <Select value={f.tipo} onChange={set('tipo')}>{TIPOS.map((tp) => <option key={tp} value={tp}>{t(tp)}</option>)}</Select>
-          <Input placeholder={t('Número / folio')} value={f.numero} onChange={set('numero')} />
-          <div><div className="mb-1 text-[11px] uppercase text-slate-400">{t('Vence')}</div><Input type="date" value={f.vence} onChange={set('vence')} /></div>
+          <Campo label={t('Transportista')}>
+            <Select value={f.carrierId} onChange={set('carrierId')} className="h-11 w-full"><option value="">{t('— Transportista —')}</option>{carriers.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</Select>
+          </Campo>
+          <Campo label={t('Tipo')}>
+            <Select value={f.tipo} onChange={set('tipo')} className="h-11 w-full">{TIPOS.map((tp) => <option key={tp} value={tp}>{t(tp)}</option>)}</Select>
+          </Campo>
+          <Campo label={t('Número / folio')}>
+            <Input placeholder={t('Número / folio')} value={f.numero} onChange={set('numero')} className="h-11 w-full" />
+          </Campo>
+          <Campo label={t('Vence')}>
+            <Input type="date" value={f.vence} onChange={set('vence')} className="h-11 w-full" />
+          </Campo>
         </div>
         <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.carrierId || !f.vence}><Plus size={16} /> {t('Agregar')}</Boton></div>
       </Card>
