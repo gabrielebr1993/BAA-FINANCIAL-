@@ -17,23 +17,32 @@ import { Badge } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 const clave = (s) => (s || '').trim().toLowerCase()
-const STAFF = ['super_admin', 'admin', 'dispatcher']
 const COLOR_ROL = { cliente: 'green', transportista: 'gold', chofer: 'navy', supervisor_planta: 'blue' }
 
 export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
   const { t } = useLang()
   const navigate = useNavigate()
-  const { rol, usuario } = useBulkAuth()
+  const { usuario, puede } = useBulkAuth()
   const { iniciar } = useLlamada()
   const { datos: carriers } = useColeccion('carriers')
   const directorio = useDirectorio()
-  const esStaff = STAFF.includes(rol)
   const esChofer = autor?.rol === 'chofer'
   // Ficha del directorio (legible por toda la empresa): da el ID/código y el transporte
   // aunque quien mira no pueda leer bulk_users (p. ej. un chofer viendo a otro chofer).
   const dir = useMemo(() => (directorio || []).find((d) => (d.uid || d.id) === autor?.id) || null, [directorio, autor])
   const codigoDir = dir?.codigo || null
   const carrierNombreDir = useMemo(() => (dir?.carrierId ? (carriers || []).find((c) => c.id === dir.carrierId)?.nombre : '') || '', [dir, carriers])
+  // Destino del PERFIL COMPLETO según el rol del autor (solo si tengo permiso para
+  // esa sección). El transportista se enruta por su carrierId y el cliente por su
+  // clienteId, ambos tomados del directorio de la empresa.
+  const destinoPerfil = useMemo(() => {
+    const r = autor?.rol
+    if (r === 'chofer' && autor?.nombre && puede('choferes.ver')) return '/bulk/chofer/' + encodeURIComponent(autor.nombre)
+    if (r === 'transportista' && dir?.carrierId && puede('transportistas.ver')) return '/bulk/transportistas/' + encodeURIComponent(dir.carrierId)
+    if (r === 'cliente' && dir?.clienteId && puede('clientes.ver')) return '/bulk/cliente/' + encodeURIComponent(dir.clienteId)
+    return null
+  }, [autor, dir, puede])
+
   // Se puede llamar por la app si el autor tiene uid y no soy yo.
   const puedeLlamar = !!autor?.id && autor.id !== usuario?.id
   const llamar = (tipo) => { onClose(); iniciar(autor.id, autor.nombre, tipo, ctxLlamada) }
@@ -89,10 +98,10 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
             </div>
           )}
 
-          {esStaff && esChofer && (
+          {destinoPerfil && (
             <button
               type="button"
-              onClick={() => { onClose(); navigate('/bulk/chofer/' + encodeURIComponent(autor.nombre)) }}
+              onClick={() => { onClose(); navigate(destinoPerfil) }}
               className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-navy px-3 py-2 text-sm font-bold text-white transition hover:opacity-90 dark:bg-amber-500 dark:text-slate-900"
             >
               <ExternalLink size={14} /> {t('Ver perfil completo')}

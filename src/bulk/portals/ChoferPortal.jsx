@@ -6,6 +6,7 @@ import ChatOrden from '../components/ChatOrden'
 import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
+import AvisosMensajes from '../components/AvisosMensajes'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
@@ -274,7 +275,7 @@ export default function ChoferPortal() {
   const prevOficina = useRef(null)
   useEffect(() => {
     if (prevOficina.current != null && noLeidosOficina > prevOficina.current) {
-      if (sonidoActivo()) beep()
+      // El sonido + tarjeta visual lo da <AvisosMensajes/>; aquí solo la notificación del sistema.
       notificar(t('Mensajes con la oficina'), t('Tienes un mensaje nuevo de la oficina.'))
     }
     prevOficina.current = noLeidosOficina
@@ -285,6 +286,8 @@ export default function ChoferPortal() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
       <IndicadorConexion />
+      {/* Aviso VISUAL rápido de mensajes nuevos. */}
+      <AvisosMensajes />
       <header className="head-safe bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 text-white">
         <div className="flex items-center gap-2.5">
           <div className="grid h-11 w-11 flex-shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} className="animate-truck" /></div>

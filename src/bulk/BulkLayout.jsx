@@ -8,8 +8,9 @@ import { etiquetaRol } from './domain/permisos'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useColeccion } from './data/useColeccion'
 import { noLeidosVisibles } from './data/chat'
-import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
+import { notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import CambiarClave from './components/CambiarClave'
+import AvisosMensajes from './components/AvisosMensajes'
 import { UserId } from './components/UserId'
 import Avatar from './components/Avatar'
 import AvisosGeocerca from './components/AvisosGeocerca'
@@ -58,8 +59,10 @@ export default function BulkLayout({ children }) {
   const prevNoLeidos = useRef(null)
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {
+    // El aviso VISUAL + sonido lo da <AvisosMensajes/>; aquí solo la notificación del
+    // sistema (útil cuando la pestaña está en segundo plano).
     if (prevNoLeidos.current != null && noLeidos > prevNoLeidos.current) {
-      beep(); notificar(t('Nuevo mensaje'), t('Tienes un mensaje nuevo.'))
+      notificar(t('Nuevo mensaje'), t('Tienes un mensaje nuevo.'))
     }
     prevNoLeidos.current = noLeidos
   }, [noLeidos]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -68,6 +71,8 @@ export default function BulkLayout({ children }) {
     <div className="flex min-h-screen bg-slate-100 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
       {/* Avisos en-app de entrada/salida de geocercas (staff). */}
       <AvisosGeocerca />
+      {/* Aviso VISUAL rápido de mensajes nuevos (tarjeta que aparece y se va sola). */}
+      <AvisosMensajes />
       {/* Fondo oscuro en móvil cuando el menú está abierto (para cerrarlo al tocar). */}
       {menuAbierto && <div onClick={alternarMenu} className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" />}
       <aside className={`${menuAbierto ? 'flex' : 'hidden'} pt-safe fixed inset-y-0 left-0 z-40 h-screen w-64 flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:sticky md:top-0`}>

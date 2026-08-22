@@ -6,6 +6,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
+import AvisosMensajes from '../components/AvisosMensajes'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -166,6 +167,8 @@ export default function ClientePortal() {
         onSelect={setTab}
         campana={<CampanaNotificaciones notifs={notifsC} claveLS="bulk_notif_cliente" />}
       >
+        {/* Aviso VISUAL rápido de mensajes nuevos. */}
+        <AvisosMensajes />
         {!usuario?.clienteId ? (
           <div className="text-center">
             <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.')} mostrarBoton={false} />
