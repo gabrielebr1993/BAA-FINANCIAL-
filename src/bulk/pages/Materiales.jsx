@@ -48,19 +48,19 @@ export default function Materiales() {
             para que nunca se encimen. */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Campo label={t('Nombre')}>
-            <Input placeholder={t('Nombre (ej. Grava)')} value={f.nombre} onChange={set('nombre')} />
+            <Input placeholder={t('Nombre (ej. Grava)')} value={f.nombre} onChange={set('nombre')} className="h-11 w-full" />
           </Campo>
           <Campo label={t('Unidad')}>
-            <Select value={f.unidad} onChange={set('unidad')}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</Select>
+            <Select value={f.unidad} onChange={set('unidad')} className="h-11 w-full">{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</Select>
           </Campo>
           <Campo label={t('Equipo requerido')}>
-            <Select value={f.equipo} onChange={set('equipo')}>
+            <Select value={f.equipo} onChange={set('equipo')} className="h-11 w-full">
               <option value="">{t('— cualquiera —')}</option>
               {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
             </Select>
           </Campo>
           <Campo label={`${t('Precio por')} ${f.unidad}`}>
-            <Input type="number" step="0.01" placeholder="0.00" value={f.precio} onChange={set('precio')} />
+            <Input type="number" step="0.01" placeholder="0.00" value={f.precio} onChange={set('precio')} className="h-11 w-full" />
           </Campo>
         </div>
         <div className="mt-3">
@@ -79,19 +79,21 @@ export default function Materiales() {
                 <button onClick={() => toggle(m)}><Badge color={m.activo === false ? 'slate' : 'green'}>{m.activo === false ? t('Inactivo') : t('Activo')}</Badge></button>
                 <button onClick={() => window.confirm(`${t('¿Eliminar')} "${t(m.nombre)}"?`) && eliminar('materials', m.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button>
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-slate-400">{t('Precio por')} {m.unidad || 'ton'}:</span>
-                <Input type="number" step="0.01" defaultValue={m.precio ?? 0} onBlur={(e) => editarPrecio(m, e.target.value)} className="w-28 py-1 text-sm" />
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{money(m.precio || 0)}</span>
+              {/* Precio y Equipo: mismos recuadros (mismo ancho y alto) para una vista uniforme. */}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] uppercase tracking-wide text-slate-400">{t('Precio por')} {m.unidad || 'ton'}</span>
+                  <Input type="number" step="0.01" defaultValue={m.precio ?? 0} onBlur={(e) => editarPrecio(m, e.target.value)} className="h-10 w-full text-sm" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-slate-400"><Truck size={12} /> {t('Equipo')}</span>
+                  <Select value={m.equipo || ''} onChange={(e) => editarEquipo(m, e.target.value)} className="h-10 w-full text-sm">
+                    <option value="">{t('— cualquiera —')}</option>
+                    {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+                  </Select>
+                </label>
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <Truck size={13} className="text-slate-400" />
-                <span className="text-xs text-slate-400">{t('Equipo')}:</span>
-                <Select value={m.equipo || ''} onChange={(e) => editarEquipo(m, e.target.value)} className="flex-1 py-1 text-sm">
-                  <option value="">{t('— cualquiera —')}</option>
-                  {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
-                </Select>
-              </div>
+              <div className="mt-1.5 text-right text-xs font-semibold text-emerald-600 dark:text-emerald-400">{money(m.precio || 0)} / {m.unidad || 'ton'}</div>
             </Card>
           ))}
         </div>
