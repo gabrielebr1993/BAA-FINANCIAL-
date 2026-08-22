@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings, UserPlus, Wifi, Search, History } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, User, Building2, Package, DollarSign, FileText, AlertTriangle, MessageSquare, CheckCircle2, Circle, Ban, Trash2, MoreVertical, ShieldAlert, Navigation, Camera, Settings, UserPlus, Wifi, Search, History, Printer } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { suscribirTrack } from '../data/tracking'
-import { guardar } from '../data/repo'
+import { guardar, siguienteSecuencia } from '../data/repo'
+import { datosTicket } from '../domain/documentos'
+import TicketOrden from '../components/TicketOrden'
 import { auditar } from '../data/auditoria'
 import { leerFotoReducida } from '../components/foto'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -40,6 +42,8 @@ export default function OrdenDetalle() {
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: plantas } = useColeccion('plants')
+  const { datos: jobs } = useColeccion('jobs')
+  const { datos: materiales } = useColeccion('materials')
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: facturas } = useColeccion('invoices')
   const { datos: presencias } = useColeccion('presence')
@@ -49,10 +53,34 @@ export default function OrdenDetalle() {
   const [menu, setMenu] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [transporteSel, setTransporteSel] = useState('')
+  const [ticketEvt, setTicketEvt] = useState(null) // 'Loaded' | 'Received'
+  const [ticketMenu, setTicketMenu] = useState(false)
 
   const esStaff = ['super_admin', 'admin', 'dispatcher'].includes(rol)
   const esAdmin = ['super_admin', 'admin'].includes(rol)
   const orden = useMemo(() => ordenes.find((o) => o.id === id) || null, [ordenes, id])
+  const jobsMap = useMemo(() => { const m = {}; for (const j of jobs || []) m[j.id] = j; return m }, [jobs])
+  const plantasMap = useMemo(() => { const m = {}; for (const p of plantas || []) m[p.id] = p; return m }, [plantas])
+  const carriersMap = useMemo(() => { const m = {}; for (const c of carriers || []) m[c.id] = c; return m }, [carriers])
+  const materialesMap = useMemo(() => { const m = {}; for (const x of materiales || []) m[(x.nombre || '').trim().toLowerCase()] = x; return m }, [materiales])
+
+  // Genera (si falta) el número correlativo del ticket y abre la vista imprimible.
+  const abrirTicket = async (evt) => {
+    setTicketMenu(false)
+    const campo = evt === 'Loaded' ? 'ticketCarga' : 'ticketEntrega'
+    if (orden && !orden[campo]) {
+      try {
+        const seq = await siguienteSecuencia(tenantId, campo)
+        const num = `${evt === 'Loaded' ? 'TC' : 'TE'}-${String(seq).padStart(6, '0')}`
+        await guardar('orders', orden.id, { [campo]: num })
+        auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_ticket', entidad: 'orden', detalle: `${num} · ${orden.numero} · ${evt}` })
+      } catch { /* si falla la secuencia, se usa el número de orden como respaldo */ }
+    } else {
+      auditar(tenantId, { usuario: usuario?.email, rol, accion: 'imprimir_ticket', entidad: 'orden', detalle: `${orden?.[campo] || orden?.numero} · ${evt}` })
+    }
+    setTicketEvt(evt)
+  }
+  const guardarCampoOrden = (campo) => (e) => { const v = e.target.value; if (orden && (orden[campo] || '') !== v) guardar('orders', orden.id, { [campo]: v }) }
 
   useEffect(() => {
     if (!orden?.id) { setTrack([]); return }
@@ -114,6 +142,13 @@ export default function OrdenDetalle() {
 
   return (
     <div className="w-full">
+      {ticketEvt && (
+        <TicketOrden
+          datos={datosTicket(orden, ticketEvt, { jobsMap, plantasMap, carriersMap, materialesMap })}
+          empresa={usuario?.empresa || 'Freight'}
+          onClose={() => setTicketEvt(null)}
+        />
+      )}
       <Link to="/bulk/ordenes" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"><ArrowLeft size={15} /> {t('Volver a Órdenes')}</Link>
 
       {atrasada && (
@@ -165,6 +200,19 @@ export default function OrdenDetalle() {
                 )}
               </div>
             )}
+            {/* Imprimir ticket de material (carga / entrega) */}
+            <div className="relative">
+              <Boton variant="ghost" onClick={() => setTicketMenu((v) => !v)} className="px-3 py-1.5 text-xs"><Printer size={14} /> {t('Imprimir ticket')}</Boton>
+              {ticketMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setTicketMenu(false)} />
+                  <div className="absolute left-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                    <button onClick={() => abrirTicket('Loaded')} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-brand-navy hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><Package size={15} className="text-emerald-500" /> {t('Ticket de carga')} <span className="ml-auto font-mono text-[11px] text-slate-400">{orden.ticketCarga || 'TC'}</span></button>
+                    <button onClick={() => abrirTicket('Received')} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-brand-navy hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-800"><CheckCircle2 size={15} className="text-brand-navy dark:text-amber-400" /> {t('Ticket de entrega')} <span className="ml-auto font-mono text-[11px] text-slate-400">{orden.ticketEntrega || 'TE'}</span></button>
+                  </div>
+                </>
+              )}
+            </div>
             {orden.estado === E.CANCELADA ? (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400"><Ban size={14} /> {t('Orden cancelada')}{orden.cancelacion?.motivo ? ` · ${orden.cancelacion.motivo}` : ''}</span>
             ) : puedeCancelar(orden) ? (
@@ -296,6 +344,19 @@ export default function OrdenDetalle() {
             {'pagoChofer' in fin && fin.pagoChofer != null && <Dato icon={DollarSign} label={t('Pago chofer')} val={money(fin.pagoChofer)} />}
             {orden.ticket?.numero && <Dato icon={FileText} label={t('Ticket de carga')} val={`#${orden.ticket.numero}${orden.ticket.peso ? ` · ${orden.ticket.peso} ton` : ''}`} />}
           </div>
+
+          {/* Datos del ticket (editables por staff): completan el material ticket. Si se
+              dejan vacíos, el ticket los deriva de la planta/equipo automáticamente. */}
+          {esStaff && (
+            <div className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 dark:border-slate-800 sm:grid-cols-3">
+              {[{ k: 'supplier', l: t('Supplier (proveedor)') }, { k: 'camion', l: t('Truck # (camión)') }, { k: 'origen', l: t('Origin (origen)') }].map((c) => (
+                <label key={c.k} className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{c.l}</span>
+                  <input defaultValue={orden[c.k] || ''} onBlur={guardarCampoOrden(c.k)} placeholder={t('(auto)')} className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                </label>
+              ))}
+            </div>
+          )}
           {(orden.ticket?.foto || orden.pod?.foto) && (
             <div className="mt-3 flex flex-wrap gap-3">
               {orden.ticket?.foto && (
