@@ -9,6 +9,16 @@ import { useLang } from '../../i18n'
 
 const UNIDADES = ['ton', 'yd³', 'm³', 'viaje']
 
+// Campo con etiqueta uniforme arriba (mantiene todas las alturas alineadas).
+function Campo({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 export default function Materiales() {
   const { t } = useLang()
   const { tenantId } = useBulkAuth()
@@ -34,18 +44,27 @@ export default function Materiales() {
 
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo material')}</h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Input placeholder={t('Nombre (ej. Grava)')} value={f.nombre} onChange={set('nombre')} />
-          <Select value={f.unidad} onChange={set('unidad')}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</Select>
-          <Select value={f.equipo} onChange={set('equipo')}>
-            <option value="">{t('— Equipo requerido —')}</option>
-            {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
-          </Select>
-          <div>
-            <div className="mb-1 text-[11px] uppercase text-slate-400">{t('Precio por')} {f.unidad}</div>
+        {/* Campos con etiqueta uniforme (alturas alineadas) y el botón en su propia fila
+            para que nunca se encimen. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Campo label={t('Nombre')}>
+            <Input placeholder={t('Nombre (ej. Grava)')} value={f.nombre} onChange={set('nombre')} />
+          </Campo>
+          <Campo label={t('Unidad')}>
+            <Select value={f.unidad} onChange={set('unidad')}>{UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}</Select>
+          </Campo>
+          <Campo label={t('Equipo requerido')}>
+            <Select value={f.equipo} onChange={set('equipo')}>
+              <option value="">{t('— cualquiera —')}</option>
+              {equiposAct.map((e) => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+            </Select>
+          </Campo>
+          <Campo label={`${t('Precio por')} ${f.unidad}`}>
             <Input type="number" step="0.01" placeholder="0.00" value={f.precio} onChange={set('precio')} />
-          </div>
-          <div className="flex items-end"><Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim()} className="w-full justify-center"><Plus size={16} /> {t('Agregar')}</Boton></div>
+          </Campo>
+        </div>
+        <div className="mt-3">
+          <Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim()} className="w-full justify-center sm:w-auto"><Plus size={16} /> {t('Agregar material')}</Boton>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">{t('El “equipo requerido” hace que las órdenes de este material solo se ofrezcan a choferes con ese camión. El precio es la referencia; el final puede ajustarse en tarifas y en el trabajo.')}</p>
       </Card>
