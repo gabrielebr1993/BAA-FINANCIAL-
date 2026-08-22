@@ -23,6 +23,11 @@ export const ICE_SERVERS = [
 
 export const nuevaConexion = () => new RTCPeerConnection({ iceServers: ICE_SERVERS })
 
+// ¿La marca de tiempo (ISO) es RECIENTE (menos de `ms`)? Sirve para ignorar llamadas/
+// salas viejas que quedaron sin limpiar y no repicar indefinidamente. Sin fecha válida
+// se considera VIEJA (no repica), para no arrastrar documentos heredados.
+export const _fresco = (iso, ms) => { const t = Date.parse(iso); return Number.isFinite(t) && (Date.now() - t) < ms }
+
 export const callsCol = () => collection(db, 'bulk_calls')
 export const callRef = (id) => doc(db, 'bulk_calls', id)
 export const candCol = (id, lado) => collection(db, 'bulk_calls', id, lado) // 'caller' | 'callee'
@@ -51,7 +56,10 @@ export function escucharEntrantes(tenantId, uid, cb) {
     // Timbra en cuanto la llamada está 'llamando' (la oferta puede llegar 1 instante
     // después; se re-lee al aceptar). No exige `offer` para no perder el timbre.
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((c) => c.tenantId === tenantId && c.estado === 'llamando')
+      // Solo llamadas RECIENTES: si una quedó sin limpiar (se cerró la app a media
+      // llamada), NO debe repicar para siempre cada vez que entras. Se ignora si tiene
+      // más de 60 s desde que se creó (una llamada real se contesta antes).
+      .filter((c) => c.tenantId === tenantId && c.estado === 'llamando' && _fresco(c.creadoEn, 60000))
     console.log('[llamada] entrantes:', snap.size, '→ para mí:', docs.length)
     cb(docs)
   }, (err) => { console.warn('[llamada] error listener entrantes:', err && err.code, err && err.message); cb([]) })

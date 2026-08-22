@@ -50,6 +50,23 @@ export const tsMillis = (v) => {
   return 0
 }
 
+// Total de NO leídos VISIBLES para el badge del menú: excluye las conversaciones
+// PERSONALES (privadas pv_, staff st_, grupos grp_) en las que el usuario NO participa.
+// Sin esto, el staff (que puede LEER todos los mensajes del tenant) sumaba los no
+// leídos de chats privados ajenos entre choferes y el contador nunca bajaba.
+export const noLeidosVisibles = (mensajes, uid) => {
+  let n = 0
+  for (const m of mensajes || []) {
+    if (!m || m.autorId === uid) continue
+    if ((m.leidoPor || []).includes(uid)) continue
+    const k = m.orderId || ''
+    const personal = k.startsWith('pv_') || k.startsWith('st_') || k.startsWith('grp_')
+    if (personal && !((m.participantes || []).includes(uid))) continue
+    n += 1
+  }
+  return n
+}
+
 // Cuenta mensajes NO leídos por `uid` (no los propios) agrupados por conversación.
 export const noLeidosPorConv = (mensajes, uid) => {
   const m = {}

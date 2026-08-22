@@ -7,7 +7,7 @@ import { BULK_ROLES_LABEL } from './domain/constants'
 import { etiquetaRol } from './domain/permisos'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
 import { useColeccion } from './data/useColeccion'
-import { noLeidosPorConv } from './data/chat'
+import { noLeidosVisibles } from './data/chat'
 import { beep, notificar, pedirPermisoNotif } from './integraciones/alertasLocales'
 import CambiarClave from './components/CambiarClave'
 import { UserId } from './components/UserId'
@@ -50,7 +50,7 @@ export default function BulkLayout({ children }) {
 
   // Contador global de mensajes sin leer (para el badge del menú) + aviso in-app.
   const { datos: mensajes } = useColeccion('messages')
-  const noLeidos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
+  const noLeidos = useMemo(() => noLeidosVisibles(mensajes, usuario?.id), [mensajes, usuario])
   const prevNoLeidos = useRef(null)
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {

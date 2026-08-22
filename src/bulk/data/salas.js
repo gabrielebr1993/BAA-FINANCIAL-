@@ -120,7 +120,11 @@ export function escucharSenales(salaId, uid, cb) {
 export function escucharSalasEntrantes(tenantId, uid, cb) {
   const q = query(salasCol(), where('tenantId', '==', tenantId), where('invitados', 'array-contains', uid))
   return onSnapshot(q, (snap) => {
-    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => s.estado === 'activa')
+    // Solo salas RECIENTES: si una quedó 'activa' sin limpiar (el creador cerró la app
+    // a media llamada), NO debe repicar para siempre. Se ignora si tiene más de 90 s.
+    const ahora = Date.now()
+    const fresca = (iso) => { const ts = Date.parse(iso); return Number.isFinite(ts) && (ahora - ts) < 90000 }
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((s) => s.estado === 'activa' && fresca(s.creadoEn))
     console.log('[sala] entrantes:', snap.size, '→ activas para mí:', docs.length)
     cb(docs)
   }, (err) => { console.warn('[sala] error listener entrantes:', err && err.code, err && err.message); cb([]) })
