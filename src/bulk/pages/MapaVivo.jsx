@@ -25,6 +25,8 @@ export default function MapaVivo() {
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: presencias } = useColeccion('presence')
+  // Entradas/salidas de geocerca en vivo (solo staff/transportista las leen por reglas).
+  const { datos: geoeventos } = useColeccion('geoeventos', [], { orden: 'ts', dir: 'desc', limite: 25 })
   const [sel, setSel] = useState('')
   const [track, setTrack] = useState([])
   const [verChat, setVerChat] = useState(false)
@@ -114,6 +116,34 @@ export default function MapaVivo() {
         <span className="text-xs text-slate-400">{filtradas.length} {t('en movimiento')}</span>
         {choferesVivos.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-slate-400"><span className="h-2 w-2 rounded-full bg-slate-500" /> {choferesVivos.length} {t('en línea (sin orden)')}</span>}
       </div>
+
+      {/* Entradas / salidas de geocerca EN VIVO (admin, transportista, staff). */}
+      {geoeventos.length > 0 && (
+        <Card className="mb-4 p-3">
+          <div className="mb-2 flex items-center gap-2 px-1 text-sm font-bold text-brand-navy dark:text-slate-100">
+            <MapPin size={15} className="text-amber-500" /> {t('Entradas y salidas de geocercas')}
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{t('En vivo')}</span>
+          </div>
+          <div className="scroll-thin max-h-60 space-y-1 overflow-y-auto">
+            {geoeventos.map((e) => {
+              const entrada = e.evento === 'entrada'
+              const cuando = tsMillis(e.ts) ? new Date(tsMillis(e.ts)).toLocaleString('es', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+              return (
+                <div key={e.id} className="flex items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 dark:border-slate-800">
+                  <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-full ${entrada ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>{entrada ? '🚨' : '🔔'}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-brand-navy dark:text-slate-100">
+                      <b>{e.choferNombre || t('Chofer')}</b>{e.choferCodigo ? <span className="text-slate-400"> (ID: {e.choferCodigo})</span> : ''} — {entrada ? t('entró a') : t('salió de')} <b>{e.geocerca || t('geocerca')}</b>
+                    </div>
+                    <div className="truncate text-[11px] text-slate-400">{e.unidad ? `${t('Unidad')} ${e.unidad} · ` : ''}{cuando}</div>
+                  </div>
+                  <Badge color={entrada ? 'green' : 'gold'}>{entrada ? t('Entrada') : t('Salida')}</Badge>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       {!hayAlgo ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">

@@ -21,7 +21,7 @@ const truckHtml = (color) => `<div style="width:38px;height:38px;display:flex;al
 
 // puntos: track de UNA orden (polilínea + posición). marcadores: varios choferes a
 // la vez [{lat,lng,label,color}]. geocercas: círculos de planta/destino.
-export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null, onMarcador = null }) {
+export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null, onMarcador = null, editable = null, onEditable = null }) {
   const cont = useRef(null)
   const map = useRef(null)
   const capas = useRef([])
@@ -29,6 +29,8 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
   onPickRef.current = onPick
   const onMarcadorRef = useRef(onMarcador)
   onMarcadorRef.current = onMarcador
+  const onEditableRef = useRef(onEditable)
+  onEditableRef.current = onEditable
 
   useEffect(() => {
     if (!cont.current) return
@@ -44,13 +46,29 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
     // boundsFoco = SOLO choferes/ruta (para acercar el mapa a donde están los choferes).
     // boundsGeo = geocercas (se dibujan siempre, pero solo encuadran si no hay choferes).
     const boundsFoco = []; const boundsGeo = []
-    // Geocercas SIEMPRE visibles (relleno + etiqueta fija con el nombre).
+    // Geocercas SIEMPRE visibles (relleno + etiqueta fija con el nombre). La que se
+    // está EDITando se omite aquí (se dibuja aparte, resaltada y con centro arrastrable).
     for (const g of geocercas) {
+      if (editable && g.id && g.id === editable.id) continue
       const xy = coord(g.lat, g.lng)
       if (!xy) continue
       const c = L.circle(xy, { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.15, weight: 2 }).addTo(m)
       c.bindTooltip(g.nombre || '', { permanent: false, direction: 'center', className: 'bulk-geo-lbl' })
       capas.current.push(c); boundsGeo.push(xy)
+    }
+    // Geocerca en EDICIÓN: círculo resaltado (área actual visible) + centro arrastrable.
+    if (editable) {
+      const xy = coord(editable.lat, editable.lng)
+      if (xy) {
+        const col = editable.color || '#2563eb'
+        const c = L.circle(xy, { radius: Number(editable.radio) || 200, color: col, fillColor: col, fillOpacity: 0.22, weight: 3, dashArray: '6 5' }).addTo(m)
+        capas.current.push(c); boundsGeo.push(xy)
+        // Marcador central arrastrable → al soltar, informa la nueva ubicación.
+        const mk = L.marker(xy, { draggable: true, title: editable.nombre || '' }).addTo(m)
+        mk.on('dragend', () => { const ll = mk.getLatLng(); if (onEditableRef.current) onEditableRef.current({ lat: ll.lat, lng: ll.lng }) })
+        mk.bindTooltip(editable.nombre || '', { permanent: false, direction: 'top' })
+        capas.current.push(mk)
+      }
     }
     const ll = puntos.map((p) => p && coord(p.lat, p.lng)).filter(Boolean)
     if (ll.length > 1) { const pl = L.polyline(ll, { color: '#13233f', weight: 4 }).addTo(m); capas.current.push(pl) }
@@ -77,7 +95,7 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
     const fit = boundsFoco.length ? boundsFoco : boundsGeo
     if (fit.length) { try { m.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }) } catch { /* noop */ } }
     setTimeout(() => m.invalidateSize(), 50)
-  }, [puntos, geocercas, marcadores])
+  }, [puntos, geocercas, marcadores, editable])
 
   useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null } }, [])
 

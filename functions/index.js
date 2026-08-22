@@ -661,6 +661,30 @@ exports.bulkPushSala = onDocumentCreated('bulk_salas/{id}', async (event) => {
 })
 
 // ============================================================================
+// bulkPushGeocerca — PUSH al ENTRAR/SALIR un chofer de una geocerca (bulk_geoeventos).
+// Destinatarios: ADMIN + TRANSPORTISTA (el del carrier del evento) + STAFF. El CHOFER y
+// el CLIENTE quedan EXCLUIDOS por completo. Incluye nombre e ID del chofer, unidad,
+// geocerca, tipo de evento y fecha/hora.
+// ============================================================================
+exports.bulkPushGeocerca = onDocumentCreated('bulk_geoeventos/{id}', async (event) => {
+  const e = (event.data && event.data.data()) || {}
+  if (!e.tenantId || !e.evento) return
+  const esEntrada = e.evento === 'entrada'
+  const titulo = esEntrada ? '🚨 Entrada a geocerca' : '🔔 Salida de geocerca'
+  const idTxt = e.choferCodigo ? ` (ID: ${e.choferCodigo})` : ''
+  const unidadTxt = e.unidad ? ` · Unidad ${e.unidad}` : ''
+  const cuerpo = `${e.choferNombre || 'Chofer'}${idTxt} ${esEntrada ? 'entró a' : 'salió de'} ${e.geocerca || 'la geocerca'}${unidadTxt}`
+  // Admin + Staff (cualquier rol que no sea de la cadena) + el transportista del carrier.
+  // NUNCA chofer ni cliente.
+  const dest = await tokensDe(e.tenantId, (x) => {
+    if (x.rol === 'chofer' || x.rol === 'cliente') return false
+    if (x.rol === 'transportista') return !!e.carrierId && x.carrierId === e.carrierId
+    return true // super_admin, admin, dispatcher, supervisor y roles personalizados de staff
+  })
+  await enviarAPI(dest, titulo, cuerpo, 'https://www.milepay.io/bulk/mapa')
+})
+
+// ============================================================================
 // recomendarAsignacionIA — hook opcional de IA. Si no hay modelo configurado,
 // responde que se use el motor de reglas del front (domain/asignacion.js).
 // data: { orden, candidatos }  →  { usarReglas } | { ranking }

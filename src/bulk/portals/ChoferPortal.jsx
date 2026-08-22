@@ -10,6 +10,7 @@ import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
 import { useSolicitudesContacto } from '../data/contactos'
+import { useCodigoUsuario } from '../data/useCodigoUsuario'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
 import { menuGrupoConv } from '../data/grupos'
@@ -208,7 +209,10 @@ export default function ChoferPortal() {
   const esMia = (o) => misIds.includes(o.choferId) || (o.choferNombre && claveN(o.choferNombre) === claveN(usuario?.nombre))
   const misOrdenes = useMemo(() => ordenes.filter(esMia), [ordenes, usuario, miChofer])
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
-  useGpsTracker(activa, geocercas, tenantId) // envía GPS y eventos de geocerca en vivo
+  // Datos del chofer para las notificaciones de geocerca (nombre, ID, unidad).
+  const miCodigoCho = useCodigoUsuario(usuario?.id)
+  const unidadCho = miChofer?.unidad || miChofer?.placa || miChofer?.equipo || activa?.unidad || activa?.placa || activa?.tipoEquipo || ''
+  useGpsTracker(activa, geocercas, tenantId, { nombre: usuario?.nombre, codigo: miCodigoCho, unidad: unidadCho, uid: usuario?.id, carrierId }) // GPS + eventos/notificaciones de geocerca
   // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
   // no respondo → pantalla superpuesta con contador de 2:00.
   // Oferta entrante = cualquier orden NOTIFICANDO que sea MÍA (por uid, por id del

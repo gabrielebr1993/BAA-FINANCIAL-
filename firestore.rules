@@ -505,6 +505,18 @@ service cloud.firestore {
     }
     match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 
+    // Eventos de GEOCERCA (entrada/salida de un chofer). Los CREA el chofer (su app),
+    // pero él NO los lee: la NOTIFICACIÓN es solo para staff/admin y el transportista
+    // del carrier (el push lo envía la Cloud Function bulkPushGeocerca; el cliente y el
+    // chofer quedan excluidos). En-app los leen el staff y el transportista dueño.
+    match /bulk_geoeventos/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
+      allow create: if bSame(request.resource.data.tenantId);
+      allow update: if false;
+      allow delete: if bAdmin(resource.data.tenantId);
+    }
+
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.
     match /bulk_notificaciones/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
 

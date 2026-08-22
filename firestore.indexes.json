@@ -83,6 +83,14 @@
         { "fieldPath": "tenantId", "order": "ASCENDING" },
         { "fieldPath": "invitados", "arrayConfig": "CONTAINS" }
       ]
+    },
+    {
+      "collectionGroup": "bulk_geoeventos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "ts", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
