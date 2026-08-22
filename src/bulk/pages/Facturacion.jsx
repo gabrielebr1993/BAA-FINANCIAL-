@@ -91,17 +91,21 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
   const preview = useMemo(() => f.clienteId ? armarFactura(ordenes.filter((o) => o.clienteId === f.clienteId), { desde: f.desde, hasta: f.hasta }) : null, [ordenes, f])
   const facturasFiltradas = useMemo(() => filtrarFacturas(facturas, busq, { nombreKey: 'clienteNombre' }), [facturas, busq])
 
-  // Resumen (KPIs): facturado, cobrado, por cobrar y vencido.
+  // Resumen (KPIs) sobre el CONJUNTO FILTRADO (por fecha de emisión y demás criterios
+  // del buscador de abajo). Así "Facturado / Cobrado / Por cobrar / Vencido" responden
+  // al rango de tiempo elegido; sin filtro = histórico total.
+  const filtroActivo = hayFiltroActivo(busq)
   const kpis = useMemo(() => {
     let total = 0, cobrado = 0, vencido = 0
-    for (const r of facturas || []) {
+    for (const r of facturasFiltradas || []) {
       const v = Number(r.total) || 0
       total += v
       if (r.estado === 'pagada') cobrado += v
       else if (estadoDocumento(r.vence).estado === 'vencido') vencido += v
     }
-    return { total, cobrado, porCobrar: total - cobrado, vencido }
-  }, [facturas])
+    return { total, cobrado, porCobrar: total - cobrado, vencido, n: facturasFiltradas.length }
+  }, [facturasFiltradas])
+  const periodoTxt = (busq.desde || busq.hasta) ? `${busq.desde || '…'} → ${busq.hasta || t('hoy')}` : (filtroActivo ? t('resultados del filtro') : t('histórico total'))
 
   const marcarPagada = async (r) => {
     const pagar = r.estado !== 'pagada'
@@ -127,9 +131,13 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
 
   return (
     <>
-      {/* Resumen */}
+      {/* Resumen — responde al filtro de fecha del buscador (más abajo). */}
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Resumen')}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${filtroActivo ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{periodoTxt}</span>
+      </div>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={FileText} label={t('Facturado')} value={money(kpis.total)} sub={`${facturas.length} ${t('facturas')}`} color="navy" />
+        <Stat icon={FileText} label={t('Facturado')} value={money(kpis.total)} sub={`${kpis.n} ${t('facturas')}`} color="navy" />
         <Stat icon={CheckCircle2} label={t('Cobrado')} value={money(kpis.cobrado)} color="green" />
         <Stat icon={Clock} label={t('Por cobrar')} value={money(kpis.porCobrar)} color="gold" />
         <Stat icon={AlertTriangle} label={t('Vencido')} value={money(kpis.vencido)} color="red" />
@@ -213,11 +221,13 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
   const preview = useMemo(() => f.carrierId ? armarAvisoPago(ordenes.filter((o) => o.transportistaId === f.carrierId), { desde: f.desde, hasta: f.hasta }) : null, [ordenes, f])
   const avisosFiltrados = useMemo(() => filtrarFacturas(avisos, busq, { nombreKey: 'carrierNombre' }), [avisos, busq])
 
+  const filtroActivo = hayFiltroActivo(busq)
   const kpis = useMemo(() => {
     let total = 0, pagado = 0
-    for (const r of avisos || []) { const v = Number(r.total) || 0; total += v; if (r.estado === 'pagado') pagado += v }
-    return { total, pagado, pendiente: total - pagado }
-  }, [avisos])
+    for (const r of avisosFiltrados || []) { const v = Number(r.total) || 0; total += v; if (r.estado === 'pagado') pagado += v }
+    return { total, pagado, pendiente: total - pagado, n: avisosFiltrados.length }
+  }, [avisosFiltrados])
+  const periodoTxt = (busq.desde || busq.hasta) ? `${busq.desde || '…'} → ${busq.hasta || t('hoy')}` : (filtroActivo ? t('resultados del filtro') : t('histórico total'))
 
   const generar = async () => {
     if (!f.carrierId || !preview || preview.n === 0) { setMsg({ tipo: 'warn', txt: t('Selecciona un transportista con cargas entregadas en el periodo.') }); return }
@@ -240,8 +250,12 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
 
   return (
     <>
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Resumen')}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${filtroActivo ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{periodoTxt}</span>
+      </div>
       <div className="mb-5 grid grid-cols-3 gap-3">
-        <Stat icon={Wallet} label={t('A pagar')} value={money(kpis.total)} sub={`${avisos.length} ${t('avisos')}`} color="navy" />
+        <Stat icon={Wallet} label={t('A pagar')} value={money(kpis.total)} sub={`${kpis.n} ${t('avisos')}`} color="navy" />
         <Stat icon={CheckCircle2} label={t('Pagado')} value={money(kpis.pagado)} color="green" />
         <Stat icon={Clock} label={t('Pendiente')} value={money(kpis.pendiente)} color="gold" />
       </div>
