@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
@@ -12,6 +13,13 @@ import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
+
+// Enriquece las líneas con el código+nombre del job (para que viajen en la factura y se
+// vean en el documento sin depender de permisos de lectura de jobs de cada rol).
+const enriquecerLineas = (lineas, jobsMap = {}) => (lineas || []).map((l) => {
+  const j = l.jobId ? jobsMap[l.jobId] : null
+  return j ? { ...l, jobCodigo: j.codigo || '', jobNombre: j.nombre || '' } : l
+})
 
 // Campo con etiqueta uniforme (todos los recuadros del mismo tamaño).
 function Campo({ label, children }) {
@@ -70,6 +78,8 @@ export default function Facturacion() {
   const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: facturas } = useColeccion('invoices')
   const { datos: avisos } = useColeccion('carrierStatements')
+  const { datos: jobs } = useColeccion('jobs')
+  const jobsMap = useMemo(() => { const m = {}; for (const j of jobs || []) m[j.id] = j; return m }, [jobs])
   const [tab, setTab] = useState('clientes')
   const [msg, setMsg] = useState(null)
 
@@ -92,19 +102,20 @@ export default function Facturacion() {
       </div>
 
       {tab === 'clientes'
-        ? <FacturasClientes clientes={clientes} ordenes={ordenes} facturas={facturas} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />
-        : <PagosTransportistas carriers={carriers} ordenes={ordenes} avisos={avisos} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />}
+        ? <FacturasClientes clientes={clientes} ordenes={ordenes} facturas={facturas} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />
+        : <PagosTransportistas carriers={carriers} ordenes={ordenes} avisos={avisos} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />}
     </div>
   )
 }
 
 // ── Facturas a CLIENTES (para que me paguen) ────────────────────────────────
-function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usuario, rol, setMsg, t }) {
+function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenantId, usuario, rol, setMsg, t }) {
   const [f, setF] = useState({ clienteId: '', desde: '', hasta: '' })
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const [chip, setChip] = useState('todas')
   const [detalle, setDetalle] = useState(null)
   const [porAnular, setPorAnular] = useState(null)
+  const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const cliente = (id) => clientes.find((c) => c.id === id)
   const nombreCliente = (id) => cliente(id)?.nombre || '—'
@@ -178,7 +189,7 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
     await crear('invoices', tenantId, {
       numero, clienteId: f.clienteId, clienteNombre: nombreCliente(f.clienteId),
       desde: f.desde || null, hasta: f.hasta || null, vence,
-      lineas: preview.lineas, subtotal: preview.subtotal, total: preview.total, toneladas: preview.toneladas,
+      lineas: enriquecerLineas(preview.lineas, jobsMap), subtotal: preview.subtotal, total: preview.total, toneladas: preview.toneladas,
       estado: 'enviada', ts: new Date().toISOString(),
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_factura', entidad: 'factura', detalle: `${numero} · ${nombreCliente(f.clienteId)} · ${money(preview.total)}` })
@@ -275,6 +286,7 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
       {detalle && (
         <DocDrawer r={detalle} tipo="cliente" empresa={empresa} persona={cliente(detalle.clienteId)} t={t} onClose={() => setDetalle(null)} setMsg={setMsg}
           pie={<>
+            <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=cliente`)}>{t('Ver documento')}</BotonDoc>
             {detalle.estado !== 'anulada' && <BotonDoc icon={CheckCircle2} onClick={() => marcarPagada(detalle)}>{detalle.estado === 'pagada' ? t('Marcar pendiente') : t('Registrar pago')}</BotonDoc>}
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
             {detalle.estado !== 'anulada' && detalle.estado !== 'pagada' && <BotonDoc icon={Ban} danger onClick={() => setPorAnular(detalle)}>{t('Anular')}</BotonDoc>}
@@ -289,11 +301,12 @@ function FacturasClientes({ clientes, ordenes, facturas, empresa, tenantId, usua
 }
 
 // ── Avisos de PAGO a TRANSPORTISTAS ─────────────────────────────────────────
-function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usuario, rol, setMsg, t }) {
+function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tenantId, usuario, rol, setMsg, t }) {
   const [f, setF] = useState({ carrierId: '', desde: '', hasta: '', fechaPago: '' })
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const [chip, setChip] = useState('todas')
   const [detalle, setDetalle] = useState(null)
+  const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const carrier = (id) => carriers.find((c) => c.id === id)
   const nombreCarrier = (id) => carrier(id)?.nombre || '—'
@@ -321,7 +334,7 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
     await crear('carrierStatements', tenantId, {
       numero, carrierId: f.carrierId, carrierNombre: nombreCarrier(f.carrierId),
       desde: f.desde || null, hasta: f.hasta || null, fechaPago: f.fechaPago || null,
-      lineas: preview.lineas, subtotal: preview.subtotal, total: preview.total, toneladas: preview.toneladas,
+      lineas: enriquecerLineas(preview.lineas, jobsMap), subtotal: preview.subtotal, total: preview.total, toneladas: preview.toneladas,
       estado: 'enviado', ts: new Date().toISOString(),
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'aviso_pago_transportista', entidad: 'pago', detalle: `${numero} · ${nombreCarrier(f.carrierId)} · ${money(preview.total)}` })
@@ -419,6 +432,7 @@ function PagosTransportistas({ carriers, ordenes, avisos, empresa, tenantId, usu
       {detalle && (
         <DocDrawer r={detalle} tipo="carrier" empresa={empresa} persona={carrier(detalle.carrierId)} t={t} onClose={() => setDetalle(null)} setMsg={setMsg}
           pie={<>
+            <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=carrier`)}>{t('Ver documento')}</BotonDoc>
             <BotonDoc icon={CheckCircle2} onClick={() => marcarPagado(detalle)}>{detalle.estado === 'pagado' ? t('Marcar pendiente') : t('Marcar pagado')}</BotonDoc>
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
           </>} />

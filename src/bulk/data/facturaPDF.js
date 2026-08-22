@@ -21,15 +21,23 @@ export async function generarFacturaPDF(factura, { clienteNombre, empresa, titul
   let y = 38
   doc.text(`${paraLabel}: ${para || clienteNombre || '—'}`, 14, y); y += 6
   doc.text(`Periodo: ${factura.desde || '—'} a ${factura.hasta || '—'}`, 14, y); y += 6
+  if (factura.vence) { doc.text(`Vence: ${factura.vence}`, 14, y); y += 6 }
   doc.text(`Estado: ${factura.estado || 'enviada'}`, 14, y)
 
+  const jobDe = (l) => l.jobNombre ? `${l.jobCodigo ? l.jobCodigo + ' · ' : ''}${l.jobNombre}` : (l.jobCodigo || '')
+  const conJob = (factura.lineas || []).some((l) => jobDe(l))
+  const head = conJob ? [['Job', 'Ticket', 'Material', 'Ton', 'Importe']] : [['Ticket', 'Material', 'Ton', 'Importe']]
+  const body = (factura.lineas || []).map((l) => {
+    const base = [l.numero, l.material, String(l.ton), money(l.precio)]
+    return conJob ? [jobDe(l), ...base] : base
+  })
   autoTable(doc, {
     startY: y + 6,
-    head: [['Orden', 'Material', 'Toneladas', 'Precio']],
-    body: (factura.lineas || []).map((l) => [l.numero, l.material, String(l.ton), money(l.precio)]),
+    head,
+    body,
     styles: { fontSize: 9 },
     headStyles: { fillColor: NAVY },
-    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+    columnStyles: conJob ? { 3: { halign: 'right' }, 4: { halign: 'right' } } : { 2: { halign: 'right' }, 3: { halign: 'right' } },
   })
 
   let fy = doc.lastAutoTable.finalY + 8

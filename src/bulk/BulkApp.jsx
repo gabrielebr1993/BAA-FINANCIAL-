@@ -21,6 +21,7 @@ const MapaVivo = lazy(() => import('./pages/MapaVivo'))
 const Mensajes = lazy(() => import('./pages/Mensajes'))
 const Geocercas = lazy(() => import('./pages/Geocercas'))
 const Facturacion = lazy(() => import('./pages/Facturacion'))
+const FacturaPagina = lazy(() => import('./pages/FacturaPagina'))
 const Incidencias = lazy(() => import('./pages/Incidencias'))
 const Documentos = lazy(() => import('./pages/Documentos'))
 const Jobs = lazy(() => import('./pages/Jobs'))
@@ -106,6 +107,7 @@ function Interno() {
       {/* Motor de tarifas retirado: ahora vive en el perfil de cada cliente. */}
       <Route path="/bulk/tarifas" element={<Navigate to="/bulk/clientes" replace />} />
       <Route path="/bulk/facturacion" element={<P perm="facturacion.ver"><Facturacion /></P>} />
+      <Route path="/bulk/facturas/:id" element={<P perm="facturacion.ver"><FacturaPagina /></P>} />
       <Route path="/bulk/incidencias" element={<P perm="incidencias.ver"><Incidencias /></P>} />
       <Route path="/bulk/documentos" element={<P perm="documentos.ver"><Documentos /></P>} />
       <Route path="/bulk/jobs" element={<P perm="jobs.ver"><Jobs /></P>} />

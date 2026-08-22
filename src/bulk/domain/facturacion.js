@@ -18,6 +18,7 @@ export function armarFactura(ordenes, { desde, hasta } = {}) {
       orderId: o.id, numero: o.numero, material: o.material || '',
       ton: r2(o.pesoReal ?? o.pesoEstimado), precio: r2(o.precioCliente),
       fecha: fEntrega(o) ? fEntrega(o).toISOString() : null,
+      jobId: o.jobId || null, plantaId: o.plantaId || null, tipoEquipo: o.tipoEquipo || '',
     }))
     .sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
   const subtotal = r2(lineas.reduce((a, l) => a + l.precio, 0))
@@ -37,6 +38,7 @@ export function armarAvisoPago(ordenes, { desde, hasta } = {}) {
       orderId: o.id, numero: o.numero, material: o.material || '',
       ton: r2(o.pesoReal ?? o.pesoEstimado), precio: r2(o.precioTransportista),
       fecha: fEntrega(o) ? fEntrega(o).toISOString() : null,
+      jobId: o.jobId || null, plantaId: o.plantaId || null, tipoEquipo: o.tipoEquipo || '',
     }))
     .sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
   const subtotal = r2(lineas.reduce((a, l) => a + l.precio, 0))

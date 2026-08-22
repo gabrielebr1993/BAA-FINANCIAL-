@@ -14,7 +14,8 @@ import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
-import { DocCard, DocDrawer } from '../components/FacturaDoc'
+import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
+import { DocumentoFactura } from '../pages/FacturaPagina'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
@@ -576,6 +577,7 @@ function TabFacturacion({ t, statements, cuenta }) {
   // Buscador: solo reduce el listado de SUS avisos (ya aislados por carrierId).
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const [detalle, setDetalle] = useState(null)
+  const [verDoc, setVerDoc] = useState(null)
   const filtrados = filtrarFacturas(statements, busq)
   // Resumen sobre el conjunto FILTRADO (por fecha de emisión y demás criterios).
   let kTotal = 0, kPag = 0
@@ -604,7 +606,11 @@ function TabFacturacion({ t, statements, cuenta }) {
               {ordenados.map((s) => <DocCard key={s.id} r={s} tipo="carrier" t={t} onVer={() => setDetalle(s)} />)}
             </div>
           )}
-      {detalle && <DocDrawer r={detalle} tipo="carrier" empresa="Freight" persona={null} t={t} onClose={() => setDetalle(null)} />}
+      {detalle && (
+        <DocDrawer r={detalle} tipo="carrier" empresa="Freight" persona={null} t={t} onClose={() => setDetalle(null)}
+          pie={<BotonDoc icon={FileText} primary onClick={() => { setVerDoc(detalle); setDetalle(null) }}>{t('Ver documento')}</BotonDoc>} />
+      )}
+      {verDoc && <DocumentoFactura doc={verDoc} tipo="carrier" empresa="Freight" jobsMap={{}} overlay onBack={() => setVerDoc(null)} />}
     </>
   )
 }

@@ -73,3 +73,17 @@
      imágenes desaparecen durante el scroll con inercia). */
   .chat-img { transform: translateZ(0); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 }
+
+/* ── Impresión de documentos (facturas / tickets) ─────────────────────────────
+   El botón "Imprimir" llama a window.print(); estas reglas ocultan el chrome de
+   la app y dejan SOLO el documento (.doc-print), con saltos de página correctos. */
+@media print {
+  body * { visibility: hidden !important; }
+  .doc-print, .doc-print * { visibility: visible !important; }
+  .doc-print { position: absolute !important; left: 0; top: 0; width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; }
+  .no-print { display: none !important; }
+  .doc-page { page-break-after: always; }
+  @page { margin: 12mm; }
+}
+/* Formato angosto de ticket (comprobante) para pantalla e impresión. */
+.ticket-narrow { width: 80mm; max-width: 100%; }

@@ -9,6 +9,7 @@ import PanelConversaciones from '../components/PanelConversaciones'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
+import { DocumentoFactura } from '../pages/FacturaPagina'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -50,6 +51,7 @@ export default function ClientePortal() {
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [detalleFac, setDetalleFac] = useState(null) // factura abierta en el drawer de detalle
+  const [verDocFac, setVerDocFac] = useState(null) // factura abierta como documento imprimible
   const [firma, setFirma] = useState(null)
   // Buscador: solo reduce el listado de SUS facturas (ya aisladas por la consulta).
   const [busqFac, setBusqFac] = useState(FILTRO_FACTURAS_VACIO)
@@ -289,11 +291,16 @@ export default function ClientePortal() {
 
       {detalleFac && (
         <DocDrawer r={detalleFac} tipo="cliente" empresa="Freight" persona={null} t={t} onClose={() => setDetalleFac(null)}
-          pie={detalleFac.estado === 'enviada' ? <>
-            <BotonDoc icon={PenLine} primary onClick={() => { setFirmando(detalleFac); setFirma(null); setDetalleFac(null) }}>{t('Revisar y firmar')}</BotonDoc>
-            <BotonDoc onClick={() => { rechazarFactura(detalleFac); setDetalleFac(null) }}>{t('Disputar')}</BotonDoc>
-          </> : null} />
+          pie={<>
+            <BotonDoc icon={FileText} primary onClick={() => { setVerDocFac(detalleFac); setDetalleFac(null) }}>{t('Ver documento')}</BotonDoc>
+            {detalleFac.estado === 'enviada' && <>
+              <BotonDoc icon={PenLine} onClick={() => { setFirmando(detalleFac); setFirma(null); setDetalleFac(null) }}>{t('Revisar y firmar')}</BotonDoc>
+              <BotonDoc onClick={() => { rechazarFactura(detalleFac); setDetalleFac(null) }}>{t('Disputar')}</BotonDoc>
+            </>}
+          </>} />
       )}
+
+      {verDocFac && <DocumentoFactura doc={verDocFac} tipo="cliente" empresa="Freight" jobsMap={{}} overlay onBack={() => setVerDocFac(null)} />}
 
       {firmando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setFirmando(null)}>
