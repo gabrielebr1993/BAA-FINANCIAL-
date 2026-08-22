@@ -72,10 +72,11 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
   // 1) Catálogos base ---------------------------------------------------------
   log('Materiales y tipos de equipo…')
   const materiales = [
-    { nombre: 'Arena', unidad: 'ton', equipo: 'End Dump' }, { nombre: 'Piedra', unidad: 'ton', equipo: 'Belly Dump' }, { nombre: 'Grava', unidad: 'ton', equipo: 'End Dump' },
-    { nombre: 'Tierra', unidad: 'ton', equipo: 'Dump Truck' }, { nombre: 'Concreto', unidad: 'ton', equipo: 'Concrete Mixer' }, { nombre: 'Asfalto', unidad: 'ton', equipo: 'End Dump' },
-    { nombre: 'Material reciclado', unidad: 'ton', equipo: 'Walking Floor' },
-  ].map((m) => ({ ...m, precio: RATE[m.nombre] || 20, activo: true, demo: true }))
+    { nombre: 'Arena', unidad: 'ton', equipos: ['End Dump', 'Side Dump'] }, { nombre: 'Piedra', unidad: 'ton', equipos: ['Belly Dump'] }, { nombre: 'Grava', unidad: 'ton', equipos: ['End Dump', 'Dump Truck'] },
+    { nombre: 'Tierra', unidad: 'ton', equipos: ['Dump Truck'] }, { nombre: 'Concreto', unidad: 'ton', equipos: ['Concrete Mixer'] }, { nombre: 'Asfalto', unidad: 'ton', equipos: ['End Dump'] },
+    { nombre: 'Material reciclado', unidad: 'ton', equipos: ['Dump Truck', 'End Dump'] },
+    // El equipo (espejo `equipo`) queda con el primero para compatibilidad con lectores antiguos.
+  ].map((m) => ({ ...m, equipo: m.equipos[0], precio: RATE[m.nombre] || 20, activo: true, demo: true }))
   await crearLote('materials', tenantId, materiales)
   const equipos = ['End Dump', 'Belly Dump', 'Dump Truck', 'Concrete Mixer', 'Flatbed', 'Lowboy', 'Side Dump']
     .map((nombre) => ({ nombre, activo: true, demo: true }))

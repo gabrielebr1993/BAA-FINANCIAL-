@@ -158,8 +158,13 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
     setOcupado(true); setRes(null)
     // Continúa la numeración desde las órdenes existentes del job.
     const existentes = await listar('orders', tenantId, [where('jobId', '==', job.id)])
-    // El equipo requerido sale del MATERIAL elegido (si lo tiene); si no, del trabajo.
-    const equipoReq = materiales.find((m) => m.nombre === material)?.equipo || job.tipoEquipo || ''
+    // El equipo requerido sale del MATERIAL elegido. Un material puede tener VARIOS
+    // equipos compatibles: si tiene exactamente uno, la orden se restringe a ese; si
+    // tiene varios (o ninguno), no se sobre-restringe y se usa el equipo del trabajo.
+    // Compat: material viejo con `equipo` (string) se lee como arreglo de un elemento.
+    const matSel = materiales.find((m) => m.nombre === material)
+    const eqMat = matSel ? ((matSel.equipos && matSel.equipos.length) ? matSel.equipos : (matSel.equipo ? [matSel.equipo] : [])) : []
+    const equipoReq = eqMat.length === 1 ? eqMat[0] : (job.tipoEquipo || '')
     const nuevas = generarOrdenesDeJob(job, total, { material, tipoEquipo: equipoReq, seqInicial: existentes.length + 1 })
     // Precio: manual (override) o AUTOMÁTICO con el motor de tarifas, por cada orden.
     const manual = precioCliente ? Number(precioCliente) : null
