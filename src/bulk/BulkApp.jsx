@@ -79,7 +79,7 @@ function ForceLogoutWatcher() {
 function PushSetup() {
   const { usuario, tenantId, rol } = useBulkAuth()
   useEffect(() => {
-    if (usuario?.id) activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, nombre: usuario.nombre })
+    if (usuario?.id) activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
   }, [usuario?.id, tenantId, rol])
   return null
 }

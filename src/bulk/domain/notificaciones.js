@@ -8,6 +8,9 @@ import { alertaOrden, LIMITE_ALERTA_MS, LIMITE_RIESGO_MS } from './alertas'
 import { estadoDocumento } from './facturacion'
 
 const PESO_SEV = { critico: 0, warn: 1, info: 2 }
+// Texto humano del vencimiento a partir de los días que faltan (negativo = vencido).
+const txtVence = (dias) => dias == null ? '' : dias < 0 ? `Venció hace ${Math.abs(dias)} día(s)` : dias === 0 ? 'Vence hoy' : `Vence en ${dias} día(s)`
+const montoTxt = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
 
 // Cada notificación incluye una ACCIÓN recomendada (§14): contexto + qué hacer.
 export function construirNotificaciones({ ordenes = [], facturas = [], incidencias = [], documentos = [], mensajesNuevos = 0, ahoraMs }) {
@@ -25,7 +28,13 @@ export function construirNotificaciones({ ordenes = [], facturas = [], incidenci
     if (r) out.push({ id: `riesgo:${o.id}`, sev: 'warn', tipo: 'riesgo', titulo: `Orden ${o.numero} en riesgo`, detalle: r.tipo === 'recogida' ? 'Sin recoger (2–3 h)' : 'Sin entregar (2–3 h)', accion: 'Confirma avance con el chofer antes de las 3 h', link: `/bulk/ordenes/${o.id}` })
   }
   for (const f of facturas) {
-    if (f.estado === 'rechazada') out.push({ id: `disputa:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} disputada`, detalle: f.motivoRechazo || '', accion: 'Revisa la disputa y corrige o responde', link: '/bulk/facturacion' })
+    if (f.estado === 'rechazada') { out.push({ id: `disputa:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} disputada`, detalle: f.motivoRechazo || '', accion: 'Revisa la disputa y corrige o responde', link: '/bulk/facturacion' }); continue }
+    // Cobro: recordatorio de vencimiento de las facturas por cobrar (no pagadas ni anuladas).
+    if (['pagada', 'anulada'].includes(f.estado)) continue
+    const e = estadoDocumento(f.vence)
+    const quien = `${f.clienteNombre || 'Cliente'} · ${montoTxt(f.total)}`
+    if (e.estado === 'vencido') out.push({ id: `factvencida:${f.id}`, sev: 'critico', tipo: 'factura', titulo: `Factura ${f.numero} vencida`, detalle: `${quien} · ${txtVence(e.dias)}`, accion: 'Gestiona el cobro con el cliente', link: '/bulk/facturacion' })
+    else if (e.estado === 'proximo') out.push({ id: `factvence:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} por vencer`, detalle: `${quien} · ${txtVence(e.dias)}`, accion: 'Recuérdale el pago al cliente', link: '/bulk/facturacion' })
   }
   for (const i of incidencias) {
     if (i.estado !== 'resuelta') out.push({ id: `inc:${i.id}`, sev: 'warn', tipo: 'incidencia', titulo: i.titulo || 'Incidencia abierta', detalle: i.descripcion || '', accion: 'Atiende y marca como resuelta', link: '/bulk/incidencias' })
@@ -62,8 +71,14 @@ export function notificacionesCliente({ facturas = [], mensajesNuevos = 0 }) {
   const out = []
   if (mensajesNuevos > 0) out.push({ id: 'mensajes', sev: 'info', tipo: 'mensaje', titulo: `${mensajesNuevos} mensaje(s) sin leer`, accion: 'Abre el chat y responde', link: '/bulk' })
   for (const f of facturas) {
-    if (f.estado === 'enviada') out.push({ id: `firmar:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} por revisar`, detalle: '', accion: 'Revísala y fírmala o disputa', link: '/bulk' })
-    else if (f.estado === 'rechazada') out.push({ id: `disputa:${f.id}`, sev: 'info', tipo: 'factura', titulo: `Factura ${f.numero} en disputa`, detalle: f.motivoRechazo || '', accion: 'En revisión por la oficina', link: '/bulk' })
+    if (f.estado === 'enviada') { out.push({ id: `firmar:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} por revisar`, detalle: '', accion: 'Revísala y fírmala o disputa', link: '/bulk' }); continue }
+    if (f.estado === 'rechazada') { out.push({ id: `disputa:${f.id}`, sev: 'info', tipo: 'factura', titulo: `Factura ${f.numero} en disputa`, detalle: f.motivoRechazo || '', accion: 'En revisión por la oficina', link: '/bulk' }); continue }
+    // Recordatorio de PAGO al cliente: facturas aprobadas (firmadas) que están por vencer o vencidas.
+    if (f.estado === 'firmada') {
+      const e = estadoDocumento(f.vence)
+      if (e.estado === 'vencido') out.push({ id: `pagovencido:${f.id}`, sev: 'warn', tipo: 'factura', titulo: `Factura ${f.numero} vencida`, detalle: `${montoTxt(f.total)} · ${txtVence(e.dias)}`, accion: 'Realiza el pago', link: '/bulk' })
+      else if (e.estado === 'proximo') out.push({ id: `pagoprox:${f.id}`, sev: 'info', tipo: 'factura', titulo: `Factura ${f.numero} por vencer`, detalle: `${montoTxt(f.total)} · ${txtVence(e.dias)}`, accion: 'Prepara el pago', link: '/bulk' })
+    }
   }
   return out.sort((a, b) => (PESO_SEV[a.sev] - PESO_SEV[b.sev]))
 }

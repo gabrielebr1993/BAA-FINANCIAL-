@@ -25,7 +25,7 @@ export const pushConfigurado = () => !!VAPID
 let _reg, _msg
 // Pide permiso, registra el SW, obtiene el token FCM y lo guarda (con su audiencia:
 // tenant, rol, carrier) para que el backend sepa a quién enviar. Idempotente.
-export async function activarPush({ tenantId, uid, rol, carrierId, nombre } = {}) {
+export async function activarPush({ tenantId, uid, rol, carrierId, clienteId, nombre } = {}) {
   try {
     if (!VAPID) return null
     if (!('serviceWorker' in navigator) || !('Notification' in window)) return null
@@ -46,6 +46,7 @@ export async function activarPush({ tenantId, uid, rol, carrierId, nombre } = {}
       uid: uid || null,
       rol: rol || null,
       carrierId: carrierId || null,
+      clienteId: clienteId || null,
       nombre: nombre || null,
       actualizadoEn: serverTimestamp(),
     }, { merge: true })

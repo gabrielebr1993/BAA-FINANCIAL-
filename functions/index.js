@@ -685,6 +685,58 @@ exports.bulkPushGeocerca = onDocumentCreated('bulk_geoeventos/{id}', async (even
 })
 
 // ============================================================================
+// bulkRecordatoriosFacturas — PUSH programado de COBRO. Una vez al día revisa las
+// facturas POR COBRAR (estado enviada/firmada) y avisa cuando están POR VENCER
+// (≤3 días) o VENCIDAS. Empuja al STAFF (para gestionar el cobro) y al CLIENTE dueño
+// de la factura (recordatorio de pago). No repite: marca la ETAPA ya avisada en la
+// propia factura (`recordatorioEtapa`), así solo notifica al ENTRAR a cada etapa.
+// ============================================================================
+const _dias = (venceISO) => {
+  if (!venceISO) return null
+  const ms = Date.parse(String(venceISO).slice(0, 10) + 'T00:00:00Z')
+  if (Number.isNaN(ms)) return null
+  return Math.ceil((ms - Date.now()) / 86400000)
+}
+const _montoTxt = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
+const _venceTxt = (d) => d < 0 ? `venció hace ${Math.abs(d)} día(s)` : d === 0 ? 'vence hoy' : `vence en ${d} día(s)`
+
+exports.bulkRecordatoriosFacturas = onSchedule({ schedule: 'every day 09:00', timeZone: 'America/Mexico_City' }, async () => {
+  const snap = await db.collection('bulk_invoices').where('estado', 'in', ['enviada', 'firmada']).get()
+  for (const doc of snap.docs) {
+    const f = doc.data() || {}
+    if (!f.tenantId) continue
+    const d = _dias(f.vence)
+    if (d == null) continue
+    const etapa = d < 0 ? 'vencido' : (d <= 3 ? 'proximo' : null)
+    if (!etapa) continue
+    if (f.recordatorioEtapa === etapa) continue // ya se avisó esta etapa; no repetir
+    const numero = f.numero || ''
+    const monto = _montoTxt(f.total)
+    const urlStaff = 'https://www.milepay.io/bulk/facturacion'
+    const urlCliente = 'https://www.milepay.io/bulk'
+    // Staff (gestión de cobro)
+    const staff = await tokensDe(f.tenantId, (x) => STAFF.includes(x.rol))
+    await enviarAPI(
+      staff,
+      etapa === 'vencido' ? '🔴 Factura vencida' : '🟠 Factura por vencer',
+      `${numero} · ${f.clienteNombre || 'Cliente'} · ${monto} · ${_venceTxt(d)}`,
+      urlStaff,
+    )
+    // Cliente dueño de la factura (recordatorio de pago)
+    if (f.clienteId) {
+      const cli = await tokensDe(f.tenantId, (x) => x.rol === 'cliente' && x.clienteId === f.clienteId)
+      await enviarAPI(
+        cli,
+        etapa === 'vencido' ? 'Factura vencida' : 'Recordatorio de pago',
+        `${numero} · ${monto} · ${_venceTxt(d)}`,
+        urlCliente,
+      )
+    }
+    await doc.ref.set({ recordatorioEtapa: etapa, recordatorioEn: new Date().toISOString() }, { merge: true }).catch(() => {})
+  }
+})
+
+// ============================================================================
 // recomendarAsignacionIA — hook opcional de IA. Si no hay modelo configurado,
 // responde que se use el motor de reglas del front (domain/asignacion.js).
 // data: { orden, candidatos }  →  { usarReglas } | { ranking }
