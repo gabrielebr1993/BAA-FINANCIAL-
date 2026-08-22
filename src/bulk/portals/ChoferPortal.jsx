@@ -140,6 +140,12 @@ export default function ChoferPortal() {
     || carriers.find((c) => (c.choferes || []).some((d) => claveN(d.nombre) === claveN(usuario?.nombre)))
     || carriers.find((c) => c.id === carrierId)
   const rosterCho = miCarrier?.choferes || []
+  // Candidatos para GRUPOS del chofer: solo OTROS choferes de SU mismo transporte
+  // (con cuenta/uid). El backend refuerza esta misma restricción (chofer↔chofer).
+  const candidatosGrupoChofer = useMemo(
+    () => rosterCho.filter((d) => d.uid && d.uid !== usuario?.id).map((d) => ({ uid: d.uid, nombre: d.nombre || 'Chofer', rol: 'chofer', foto: d.foto || null })),
+    [rosterCho, usuario],
+  )
   const miChofer = rosterCho.find((d) => d.uid && d.uid === usuario?.id)
     || rosterCho.find((d) => claveN(d.nombre) === claveN(usuario?.nombre))
     || (miCarrier?.id === carrierId && rosterCho.length === 1 ? rosterCho[0] : null)
@@ -426,7 +432,7 @@ export default function ChoferPortal() {
             <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirPriv}
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
-            {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+            {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupoChofer} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
             {modalPriv}
           </>
         )}

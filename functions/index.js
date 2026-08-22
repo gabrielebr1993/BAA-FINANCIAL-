@@ -209,11 +209,25 @@ exports.bulkGrupoOp = onCall(async (req) => {
   }
   const esGestor = (g) => esAdmin || g.creadorId === uid
 
+  // Un CHOFER puede crear/gestionar grupos, pero SOLO con choferes de SU mismo
+  // transporte (aislamiento por empresa). Valida cada invitado contra bulk_users.
+  const validarInvitadosChofer = async (lista) => {
+    if (t.bulkRole !== 'chofer') return
+    if (!t.bulkCarrierId) throw new HttpsError('failed-precondition', 'Tu cuenta no está ligada a un transporte.')
+    for (const iu of lista) {
+      const p = await _perfilBulk(iu)
+      if (!p || p.tenantId !== tenant) throw new HttpsError('invalid-argument', 'Invitado no válido.')
+      if (p.rol !== 'chofer' || (p.carrierId || null) !== t.bulkCarrierId) {
+        throw new HttpsError('permission-denied', 'Un chofer solo puede agrupar a choferes de su mismo transporte.')
+      }
+    }
+  }
+
   if (accion === 'crear') {
-    if (t.bulkRole === 'chofer') throw new HttpsError('permission-denied', 'El chofer no puede crear grupos.')
     const nombre = String((req.data.nombre || '')).trim().slice(0, 80)
     if (!nombre) throw new HttpsError('invalid-argument', 'El grupo necesita un nombre.')
     const invitados = [...new Set((req.data.invitados || []).filter((x) => x && x !== uid))].slice(0, 100)
+    await validarInvitadosChofer(invitados)
     const g = { tenantId: tenant, nombre, creadorId: uid, miembros: [uid], invitados, roles: {}, nombres: {}, fotos: {}, activo: true, creadoEn: now, actualizadoEn: now }
     await _enriquecer(g, uid, tenant)
     for (const iu of invitados) await _enriquecer(g, iu, tenant)
@@ -224,6 +238,7 @@ exports.bulkGrupoOp = onCall(async (req) => {
     const g = await cargar()
     if (!esGestor(g)) throw new HttpsError('permission-denied', 'Solo el creador o un admin invitan.')
     const nuevos = [...new Set((req.data.invitados || []).filter(Boolean))].filter((x) => !(g.miembros || []).includes(x) && !(g.invitados || []).includes(x))
+    await validarInvitadosChofer(nuevos)
     for (const iu of nuevos) await _enriquecer(g, iu, tenant)
     await col.doc(grupoId).update({ invitados: [...(g.invitados || []), ...nuevos], roles: g.roles, nombres: g.nombres, fotos: g.fotos, actualizadoEn: now })
     return { ok: true, invitados: nuevos.length }
