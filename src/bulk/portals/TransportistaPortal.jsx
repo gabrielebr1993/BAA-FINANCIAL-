@@ -568,6 +568,10 @@ function TabFacturacion({ t, statements, cuenta }) {
   // Buscador: solo reduce el listado de SUS avisos (ya aislados por carrierId).
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const filtrados = filtrarFacturas(statements, busq)
+  // Resumen sobre el conjunto FILTRADO (por fecha de emisión y demás criterios).
+  let kTotal = 0, kPag = 0
+  for (const s of filtrados) { const v = Number(s.total) || 0; kTotal += v; if (s.estado === 'pagado') kPag += v }
+  const periodoTxt = (busq.desde || busq.hasta) ? `${busq.desde || '…'} → ${busq.hasta || t('hoy')}` : (hayFiltroActivo(busq) ? t('resultados del filtro') : t('histórico total'))
   const rows = filtrados.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => ({ ...s, _key: s.id }))
   const cols = [
     { key: 'numero', label: t('Aviso') }, { key: 'periodo', label: t('Periodo') },
@@ -585,10 +589,14 @@ function TabFacturacion({ t, statements, cuenta }) {
   }
   return (
     <>
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Resumen')}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${hayFiltroActivo(busq) ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{periodoTxt}</span>
+      </div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KPI label={t('Total facturado (periodo)')} value={money(cuenta.ganado)} icon={FileText} accent="navy" />
-        <KPI label={t('Pagado')} value={money(cuenta.pagado)} icon={DollarSign} accent="green" />
-        <KPI label={t('Pendiente de cobro')} value={money(cuenta.pendiente)} icon={Wallet} accent="gold" />
+        <KPI label={t('A recibir')} value={money(kTotal)} icon={FileText} accent="navy" sub={`${filtrados.length} ${t('avisos')}`} />
+        <KPI label={t('Pagado')} value={money(kPag)} icon={DollarSign} accent="green" />
+        <KPI label={t('Pendiente de cobro')} value={money(kTotal - kPag)} icon={Wallet} accent="gold" />
       </div>
       <div className="mb-2 flex items-center gap-2"><FileText size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago')}</h3></div>
       {(statements || []).length > 0 && <BuscadorFacturas f={busq} setF={setBusq} montoLabel={t('Monto de pago…')} />}

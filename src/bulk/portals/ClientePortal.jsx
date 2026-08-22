@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare } from 'lucide-react'
+import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -18,6 +18,7 @@ import { generarFacturaPDF } from '../data/facturaPDF'
 import FirmaPad from '../components/FirmaPad'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
+import { estadoDocumento } from '../domain/facturacion'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
@@ -49,6 +50,13 @@ export default function ClientePortal() {
   // Buscador: solo reduce el listado de SUS facturas (ya aisladas por la consulta).
   const [busqFac, setBusqFac] = useState(FILTRO_FACTURAS_VACIO)
   const facturasFiltradas = useMemo(() => filtrarFacturas(facturas, busqFac), [facturas, busqFac])
+  // Resumen de facturas (responde al filtro de fecha del buscador).
+  const kpisFac = useMemo(() => {
+    let total = 0, pagado = 0, vencido = 0
+    for (const r of facturasFiltradas) { const v = Number(r.total) || 0; total += v; if (r.estado === 'pagada') pagado += v; else if (estadoDocumento(r.vence).estado === 'vencido') vencido += v }
+    return { total, pagado, porPagar: total - pagado, vencido, n: facturasFiltradas.length }
+  }, [facturasFiltradas])
+  const periodoFacTxt = (busqFac.desde || busqFac.hasta) ? `${busqFac.desde || '…'} → ${busqFac.hasta || t('hoy')}` : (hayFiltroActivo(busqFac) ? t('resultados del filtro') : t('histórico total'))
 
   const stats = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
@@ -222,7 +230,22 @@ export default function ClientePortal() {
             )}
 
             {tab === 'facturas' && (
-              <Card className="p-4">
+              <>
+                {facturas.length > 0 && (
+                  <>
+                    <div className="mb-2 flex items-center gap-2 px-1">
+                      <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Resumen')}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${hayFiltroActivo(busqFac) ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{periodoFacTxt}</span>
+                    </div>
+                    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <KPI label={t('Facturado')} value={money(kpisFac.total)} icon={FileText} accent="navy" sub={`${kpisFac.n} ${t('facturas')}`} />
+                      <KPI label={t('Pagado')} value={money(kpisFac.pagado)} icon={CheckCircle2} accent="green" />
+                      <KPI label={t('Por pagar')} value={money(kpisFac.porPagar)} icon={Clock} accent="gold" />
+                      <KPI label={t('Vencido')} value={money(kpisFac.vencido)} icon={AlertTriangle} accent="red" />
+                    </div>
+                  </>
+                )}
+                <Card className="p-4">
                 <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas')}</h3></div>
                 {facturas.length > 0 && <BuscadorFacturas f={busqFac} setF={setBusqFac} montoLabel={t('Monto de cobro…')} />}
                 {facturas.length === 0 ? <EstadoVacio titulo={t('Aún no tienes facturas')} texto={t('Cuando el administrador emita una factura, aparecerá aquí para revisar y firmar.')} mostrarBoton={false} />
@@ -243,7 +266,8 @@ export default function ClientePortal() {
                       return r[k]
                     }} />
                 )}
-              </Card>
+                </Card>
+              </>
             )}
 
             {tab === 'mensajes' && (
