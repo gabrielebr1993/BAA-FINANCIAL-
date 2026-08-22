@@ -278,6 +278,26 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Red de CONTACTOS entre choferes. La lista de contactos/bloqueados/ajustes de cada
+    // chofer (doc id = su uid) solo la LEE él mismo; TODA escritura pasa por la Cloud
+    // Function `bulkContacto` (valida consentimiento, bloqueo, restricción). No expone
+    // datos de otros: para pintar a un contacto se usa el directorio (ya legible).
+    match /bulk_contacts/{id} {
+      allow read: if bSigned() && request.auth.uid == id;
+      allow create, update, delete: if false;
+    }
+    // Solicitudes de contacto: solo las ven el emisor y el receptor. Se crean/gestionan
+    // desde el backend (consentimiento obligatorio).
+    match /bulk_contactRequests/{id} {
+      allow read: if bSame(resource.data.tenantId) && (request.auth.uid == resource.data.deUid || request.auth.uid == resource.data.paraUid);
+      allow create, update, delete: if false;
+    }
+    // Reportes de usuarios: solo el admin los lee; se crean por el backend.
+    match /bulk_reports/{id} {
+      allow read: if bAdmin(resource.data.tenantId);
+      allow create, update, delete: if false;
+    }
+
     // Catálogos y entidades gestionadas por staff del tenant.
     match /bulk_clients/{id}   { allow read: if bStaff(resource.data.tenantId); allow create: if bStaff(request.resource.data.tenantId); allow update, delete: if bStaff(resource.data.tenantId); }
     // Plantas = puntos de RECOGIDA. Cualquier usuario del tenant (chofer, transportista,
@@ -504,7 +524,9 @@ service cloud.firestore {
     match /bulk_presence/{id} {
       allow read: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && (request.auth.uid == id || resource.data.uid == request.auth.uid))
-        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier())
+        // Un chofer puede ver el estado (en línea/ocupado) de sus CONTACTOS agregados.
+        || (bSame(resource.data.tenantId) && exists(/databases/$(database)/documents/bulk_contacts/$(request.auth.uid)) && resource.data.uid in get(/databases/$(database)/documents/bulk_contacts/$(request.auth.uid)).data.get('contactos', []));
       // El propio chofer escribe la suya; staff, transportista y supervisor la
       // ajustan al asignar/reservar/liberar. Un chofer NO puede tocar la de otro.
       allow create, update: if bSame(request.resource.data.tenantId)

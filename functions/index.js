@@ -209,16 +209,19 @@ exports.bulkGrupoOp = onCall(async (req) => {
   }
   const esGestor = (g) => esAdmin || g.creadorId === uid
 
-  // Un CHOFER puede crear/gestionar grupos, pero SOLO con choferes de SU mismo
-  // transporte (aislamiento por empresa). Valida cada invitado contra bulk_users.
+  // Un CHOFER puede crear/gestionar grupos con choferes de SU mismo transporte O con
+  // sus CONTACTOS (agregados por ID con consentimiento). Valida contra bulk_users.
   const validarInvitadosChofer = async (lista) => {
     if (t.bulkRole !== 'chofer') return
-    if (!t.bulkCarrierId) throw new HttpsError('failed-precondition', 'Tu cuenta no está ligada a un transporte.')
+    const mis = await _getContactos(uid)
+    const contactos = new Set((mis && mis.contactos) || [])
     for (const iu of lista) {
       const p = await _perfilBulk(iu)
       if (!p || p.tenantId !== tenant) throw new HttpsError('invalid-argument', 'Invitado no válido.')
-      if (p.rol !== 'chofer' || (p.carrierId || null) !== t.bulkCarrierId) {
-        throw new HttpsError('permission-denied', 'Un chofer solo puede agrupar a choferes de su mismo transporte.')
+      const mismoCarrier = p.rol === 'chofer' && t.bulkCarrierId && (p.carrierId || null) === t.bulkCarrierId
+      const esContacto = p.rol === 'chofer' && contactos.has(iu)
+      if (!mismoCarrier && !esContacto) {
+        throw new HttpsError('permission-denied', 'Un chofer solo puede agrupar a choferes de su transporte o a sus contactos.')
       }
     }
   }
@@ -354,6 +357,147 @@ exports.bulkChatPrivado = onCall(async (req) => {
     creadoPor: uid, creadoEn: now, actualizadoEn: now,
   }, { merge: true })
   return { key, participantes, otro: { uid: paraUid, nombre: otroP.nombre || otroP.email || 'Usuario', rol: otro.rol } }
+})
+
+// ============================================================================
+// bulkContacto — red de CONTACTOS entre CHOFERES (agregar por ID con consentimiento,
+// solicitudes, bloquear, reportar, restringir). Todo validado en el backend. Alcance:
+// cualquier chofer del MISMO tenant (empresa); el consentimiento (solicitud aceptada)
+// es la autorización, y crea el registro de conversación privada (bulk_conversaciones)
+// que habilita el chat pv_. El receptor puede activar "no recibir solicitudes".
+// data: { accion, codigo?, paraUid?, requestId?, aceptar?, valor?, motivo? }
+// ============================================================================
+const _contactosRef = (uid) => db.collection('bulk_contacts').doc(uid)
+async function _getContactos(uid) { const s = await _contactosRef(uid).get(); return s.exists ? s.data() : null }
+const _pvKey = (a, b) => 'pv_' + [a, b].sort().join('__')
+async function _choferPorCodigo(tenant, codigo) {
+  const q = await db.collection('bulk_users').where('tenantId', '==', tenant).where('codigo', '==', String(codigo)).limit(3).get()
+  const docs = q.docs.map((d) => ({ uid: d.id, ...d.data() })).filter((u) => u.rol === 'chofer')
+  return docs[0] || null
+}
+async function _agregarContactoMutuo(tenant, a, b, aP, bP) {
+  const AU = admin.firestore.FieldValue.arrayUnion
+  await _contactosRef(a).set({ tenantId: tenant, uid: a, contactos: AU(b) }, { merge: true })
+  await _contactosRef(b).set({ tenantId: tenant, uid: b, contactos: AU(a) }, { merge: true })
+  const now = admin.firestore.FieldValue.serverTimestamp()
+  const key = _pvKey(a, b)
+  // Autoriza el chat privado pv_ (registro que exigen las reglas de bulk_messages).
+  await db.collection('bulk_conversaciones').doc(key).set({
+    tenantId: tenant, tipo: 'privado', key, participantes: [a, b].sort(),
+    roles: { [a]: 'chofer', [b]: 'chofer' },
+    nombres: { [a]: (aP && aP.nombre) || 'Chofer', [b]: (bP && bP.nombre) || 'Chofer' },
+    creadoPor: a, creadoEn: now, actualizadoEn: now,
+  }, { merge: true })
+}
+async function _quitarContactoMutuo(a, b) {
+  const AR = admin.firestore.FieldValue.arrayRemove
+  await _contactosRef(a).set({ contactos: AR(b) }, { merge: true }).catch(() => {})
+  await _contactosRef(b).set({ contactos: AR(a) }, { merge: true }).catch(() => {})
+}
+
+exports.bulkContacto = onCall(async (req) => {
+  const t = req.auth && req.auth.token
+  const uid = req.auth && req.auth.uid
+  if (!t || !t.bulkTenant || !uid) throw new HttpsError('permission-denied', 'No autorizado.')
+  if (t.bulkRole !== 'chofer') throw new HttpsError('permission-denied', 'La red de contactos es solo para choferes.')
+  const tenant = t.bulkTenant
+  const { accion } = req.data || {}
+  const now = admin.firestore.FieldValue.serverTimestamp()
+  const yo = await _perfilBulk(uid)
+  if (!yo) throw new HttpsError('failed-precondition', 'Tu perfil no está disponible.')
+  const reqs = db.collection('bulk_contactRequests')
+
+  if (accion === 'buscar') {
+    const codigo = String(req.data.codigo || '').trim()
+    if (!codigo) throw new HttpsError('invalid-argument', 'Ingresa un ID de chofer.')
+    const c = await _choferPorCodigo(tenant, codigo)
+    if (!c) return { encontrado: false }
+    if (c.uid === uid) return { encontrado: false, esYo: true }
+    return { encontrado: true, chofer: { uid: c.uid, nombre: c.nombre || 'Chofer', codigo: c.codigo || null } }
+  }
+
+  const resolverTarget = async () => {
+    if (req.data.paraUid) { const p = await _perfilBulk(req.data.paraUid); return p ? { uid: req.data.paraUid, ...p } : null }
+    if (req.data.codigo) return await _choferPorCodigo(tenant, String(req.data.codigo).trim())
+    return null
+  }
+
+  if (accion === 'solicitar') {
+    const target = await resolverTarget()
+    if (!target) throw new HttpsError('not-found', 'No se encontró ese chofer.')
+    const paraUid = target.uid
+    if (paraUid === uid) throw new HttpsError('invalid-argument', 'No puedes agregarte a ti mismo.')
+    if (target.tenantId !== tenant || target.rol !== 'chofer') throw new HttpsError('permission-denied', 'Solo puedes agregar choferes de tu empresa.')
+    const misC = await _getContactos(uid)
+    if (misC && (misC.contactos || []).includes(paraUid)) throw new HttpsError('failed-precondition', 'Ya es tu contacto.')
+    if (misC && (misC.bloqueados || []).includes(paraUid)) throw new HttpsError('failed-precondition', 'Tienes bloqueado a este chofer. Desbloquéalo primero.')
+    const suC = await _getContactos(paraUid)
+    if (suC && (suC.bloqueados || []).includes(uid)) throw new HttpsError('permission-denied', 'No se pudo enviar la solicitud.')
+    if (suC && suC.noSolicitudes === true) throw new HttpsError('permission-denied', 'Este chofer no está aceptando solicitudes por ahora.')
+    // Si el OTRO ya me envió una solicitud pendiente → se agregan mutuamente (match).
+    const inversa = await reqs.where('deUid', '==', paraUid).where('paraUid', '==', uid).where('estado', '==', 'pendiente').limit(1).get()
+    if (!inversa.empty) {
+      await _agregarContactoMutuo(tenant, uid, paraUid, yo, target)
+      await inversa.docs[0].ref.set({ estado: 'aceptada', resueltoEn: now }, { merge: true })
+      return { ok: true, aceptadaMutua: true }
+    }
+    const dup = await reqs.where('deUid', '==', uid).where('paraUid', '==', paraUid).where('estado', '==', 'pendiente').limit(1).get()
+    if (!dup.empty) throw new HttpsError('failed-precondition', 'Ya enviaste una solicitud a este chofer.')
+    await reqs.add({
+      tenantId: tenant, deUid: uid, deNombre: yo.nombre || 'Chofer', deCodigo: yo.codigo || null,
+      paraUid, paraNombre: target.nombre || 'Chofer', paraCodigo: target.codigo || null,
+      estado: 'pendiente', creadoEn: now,
+    })
+    return { ok: true }
+  }
+
+  if (accion === 'responder') {
+    const { requestId, aceptar } = req.data
+    if (!requestId) throw new HttpsError('invalid-argument', 'Falta la solicitud.')
+    const ref = reqs.doc(requestId)
+    const s = await ref.get()
+    if (!s.exists) throw new HttpsError('not-found', 'Solicitud no encontrada.')
+    const r = s.data()
+    if (r.paraUid !== uid || r.tenantId !== tenant) throw new HttpsError('permission-denied', 'No autorizado.')
+    if (r.estado !== 'pendiente') return { ok: true }
+    if (aceptar) {
+      const other = await _perfilBulk(r.deUid)
+      await _agregarContactoMutuo(tenant, uid, r.deUid, yo, other || { nombre: r.deNombre })
+      await ref.set({ estado: 'aceptada', resueltoEn: now }, { merge: true })
+      return { ok: true, aceptada: true }
+    }
+    await ref.set({ estado: 'rechazada', resueltoEn: now }, { merge: true })
+    return { ok: true, aceptada: false }
+  }
+
+  if (accion === 'eliminar') {
+    const otro = req.data.paraUid
+    if (!otro) throw new HttpsError('invalid-argument', 'Falta el contacto.')
+    await _quitarContactoMutuo(uid, otro)
+    await db.collection('bulk_conversaciones').doc(_pvKey(uid, otro)).delete().catch(() => {})
+    return { ok: true }
+  }
+  if (accion === 'bloquear') {
+    const otro = req.data.paraUid
+    if (!otro) throw new HttpsError('invalid-argument', 'Falta el contacto.')
+    await _quitarContactoMutuo(uid, otro)
+    await _contactosRef(uid).set({ tenantId: tenant, uid, bloqueados: admin.firestore.FieldValue.arrayUnion(otro) }, { merge: true })
+    await db.collection('bulk_conversaciones').doc(_pvKey(uid, otro)).delete().catch(() => {})
+    return { ok: true }
+  }
+  if (accion === 'desbloquear') {
+    await _contactosRef(uid).set({ tenantId: tenant, uid, bloqueados: admin.firestore.FieldValue.arrayRemove(req.data.paraUid) }, { merge: true })
+    return { ok: true }
+  }
+  if (accion === 'restringir') {
+    await _contactosRef(uid).set({ tenantId: tenant, uid, noSolicitudes: !!req.data.valor }, { merge: true })
+    return { ok: true }
+  }
+  if (accion === 'reportar') {
+    await db.collection('bulk_reports').add({ tenantId: tenant, deUid: uid, contraUid: req.data.paraUid || null, motivo: String(req.data.motivo || '').slice(0, 500), creadoEn: now })
+    return { ok: true }
+  }
+  throw new HttpsError('invalid-argument', 'Acción no reconocida.')
 })
 
 // ============================================================================
