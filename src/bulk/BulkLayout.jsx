@@ -13,7 +13,7 @@ import CambiarClave from './components/CambiarClave'
 import { UserId } from './components/UserId'
 import Avatar from './components/Avatar'
 import AvisosGeocerca from './components/AvisosGeocerca'
-import { guardarAvatar } from './data/repo'
+import { guardarAvatar, where } from './data/repo'
 import { useFotoUsuario } from './data/useCodigoUsuario'
 import IndicadorConexion from './components/IndicadorConexion'
 import NotificacionesCentro from './components/NotificacionesCentro'
@@ -51,7 +51,10 @@ export default function BulkLayout({ children }) {
 
   // Contador global de mensajes sin leer (para el badge del menú) + aviso in-app.
   const { datos: mensajes } = useColeccion('messages')
-  const noLeidos = useMemo(() => noLeidosVisibles(mensajes, usuario?.id), [mensajes, usuario])
+  // Grupos de los que SIGO siendo miembro (para no contar mensajes de grupos que dejé).
+  const { datos: misGrupos } = useColeccion('groups', [where('miembros', 'array-contains', usuario?.id || '__none__')])
+  const gruposActivos = useMemo(() => new Set((misGrupos || []).map((g) => 'grp_' + g.id)), [misGrupos])
+  const noLeidos = useMemo(() => noLeidosVisibles(mensajes, usuario?.id, gruposActivos), [mensajes, usuario, gruposActivos])
   const prevNoLeidos = useRef(null)
   useEffect(() => { pedirPermisoNotif() }, [])
   useEffect(() => {

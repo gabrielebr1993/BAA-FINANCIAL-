@@ -54,14 +54,23 @@ export const tsMillis = (v) => {
 // PERSONALES (privadas pv_, staff st_, grupos grp_) en las que el usuario NO participa.
 // Sin esto, el staff (que puede LEER todos los mensajes del tenant) sumaba los no
 // leídos de chats privados ajenos entre choferes y el contador nunca bajaba.
-export const noLeidosVisibles = (mensajes, uid) => {
+// `gruposActivos` (opcional): Set de claves grp_<id> de las que el usuario es MIEMBRO
+// AHORA. Si se pasa, los mensajes de grupos de los que ya salió (o fue removido) NO se
+// cuentan — antes quedaban "pegados" porque el grupo ya no aparecía en ninguna pestaña.
+export const noLeidosVisibles = (mensajes, uid, gruposActivos = null) => {
   let n = 0
   for (const m of mensajes || []) {
     if (!m || m.autorId === uid) continue
     if ((m.leidoPor || []).includes(uid)) continue
+    // Los registros de LLAMADA (perdida/duración) no son un mensaje por leer → no
+    // deben inflar el badge "Mensajes" (causaban el aviso sin nada pendiente).
+    if (m.tipo === 'llamada') continue
     const k = m.orderId || ''
     const personal = k.startsWith('pv_') || k.startsWith('st_') || k.startsWith('grp_')
     if (personal && !((m.participantes || []).includes(uid))) continue
+    // Grupo: solo cuenta si sigues siendo miembro actual (evita conteos "pegados"
+    // de grupos que ya abandonaste).
+    if (k.startsWith('grp_') && gruposActivos && !gruposActivos.has(k)) continue
     n += 1
   }
   return n
