@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar'
 import ChatOrden from './ChatOrden'
+import PerfilRapido from './PerfilRapido'
 import GruposModal from './GruposModal'
 import { useLlamada } from './LlamadaProvider'
 import { useGrupos } from '../data/useGrupos'
@@ -42,6 +43,7 @@ export default function ContactosChofer() {
 
   const [sub, setSub] = useState('contactos') // contactos | solicitudes | agregar | id
   const [chatCon, setChatCon] = useState(null) // contacto con chat abierto
+  const [verPerfil, setVerPerfil] = useState(null) // {id,nombre,rol} para ver perfil
   const [verGrupos, setVerGrupos] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -75,23 +77,13 @@ export default function ContactosChofer() {
   // Si hay un chat abierto, se muestra a pantalla (con volver).
   if (chatCon) {
     return (
-      <Card className="flex h-mensajes-portal flex-col p-3">
-        <div className="mb-2 flex items-center gap-2 border-b border-slate-100 pb-2 dark:border-slate-800">
-          <button onClick={() => setChatCon(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronLeft size={20} /></button>
-          <Avatar foto={chatCon.foto} nombre={chatCon.nombre} size={34} />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{chatCon.nombre}</div>
-            {chatCon.codigo && <div className="text-[11px] text-slate-400">ID #{chatCon.codigo}</div>}
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            <button onClick={() => llamar(chatCon, 'audio')} title={t('Llamar')} className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white hover:bg-emerald-600"><Phone size={16} /></button>
-            <button onClick={() => llamar(chatCon, 'video')} title={t('Videollamada')} className="grid h-9 w-9 place-items-center rounded-full bg-brand-navy text-white hover:opacity-90 dark:bg-slate-700"><Video size={16} /></button>
-          </div>
-        </div>
+      <div className="flex h-mensajes-portal flex-col">
+        <button onClick={() => setChatCon(null)} className="mb-2 inline-flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronLeft size={18} /> {t('Contactos')}</button>
+        {/* ChatOrden trae su propia cabecera: nombre (toca → ver perfil) + llamar/video/grupo. */}
         <div className="min-h-0 flex-1">
           <ChatOrden orden={{ id: convPrivada(uid, chatCon.uid), numero: chatCon.nombre }} participantes={[uid, chatCon.uid]} contacto={{ uid: chatCon.uid, nombre: chatCon.nombre, rol: 'chofer' }} fill />
         </div>
-      </Card>
+      </div>
     )
   }
 
@@ -123,14 +115,15 @@ export default function ContactosChofer() {
             return (
               <Card key={c.uid} className="p-3">
                 <div className="flex items-center gap-3">
-                  <div className="relative">
+                  {/* Toca la foto o el nombre para ver el PERFIL del chofer. */}
+                  <button onClick={() => setVerPerfil({ id: c.uid, nombre: c.nombre, rol: 'chofer' })} className="relative flex-shrink-0">
                     <Avatar foto={c.foto} nombre={c.nombre} size={48} />
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${est.color === 'green' ? 'bg-emerald-500' : est.color === 'gold' ? 'bg-amber-500' : 'bg-slate-400'}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-bold text-brand-navy dark:text-slate-100">{c.nombre}</div>
+                  </button>
+                  <button onClick={() => setVerPerfil({ id: c.uid, nombre: c.nombre, rol: 'chofer' })} className="min-w-0 flex-1 text-left">
+                    <div className="truncate text-base font-bold text-brand-navy hover:underline dark:text-slate-100">{c.nombre}</div>
                     <div className="flex items-center gap-2 text-xs text-slate-400">{c.codigo ? `ID #${c.codigo}` : ''} <Badge color={est.color}>{t(est.label)}</Badge></div>
-                  </div>
+                  </button>
                   <ContactoMenu c={c} onAviso={aviso} />
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
@@ -192,6 +185,7 @@ export default function ContactosChofer() {
       )}
 
       {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={uid} onClose={() => setVerGrupos(false)} />}
+      {verPerfil && <PerfilRapido autor={verPerfil} ctxLlamada={{ chatId: convPrivada(uid, verPerfil.id), participantes: [uid, verPerfil.id] }} onClose={() => setVerPerfil(null)} />}
     </div>
   )
 }

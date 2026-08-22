@@ -10,6 +10,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useLlamada } from './LlamadaProvider'
 import { UserIdDeUid } from './UserId'
+import { useDirectorio } from '../data/useComunicacion'
 import { useFotoUsuario } from '../data/useCodigoUsuario'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Badge } from '../../components/ui'
@@ -25,8 +26,14 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
   const { rol, usuario } = useBulkAuth()
   const { iniciar } = useLlamada()
   const { datos: carriers } = useColeccion('carriers')
+  const directorio = useDirectorio()
   const esStaff = STAFF.includes(rol)
   const esChofer = autor?.rol === 'chofer'
+  // Ficha del directorio (legible por toda la empresa): da el ID/código y el transporte
+  // aunque quien mira no pueda leer bulk_users (p. ej. un chofer viendo a otro chofer).
+  const dir = useMemo(() => (directorio || []).find((d) => (d.uid || d.id) === autor?.id) || null, [directorio, autor])
+  const codigoDir = dir?.codigo || null
+  const carrierNombreDir = useMemo(() => (dir?.carrierId ? (carriers || []).find((c) => c.id === dir.carrierId)?.nombre : '') || '', [dir, carriers])
   // Se puede llamar por la app si el autor tiene uid y no soy yo.
   const puedeLlamar = !!autor?.id && autor.id !== usuario?.id
   const llamar = (tipo) => { onClose(); iniciar(autor.id, autor.nombre, tipo, ctxLlamada) }
@@ -61,9 +68,13 @@ export default function PerfilRapido({ autor, onClose, ctxLlamada = null }) {
               <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X size={18} /></button>
             </div>
             {autor?.rol && <div className="mt-1"><Badge color={COLOR_ROL[autor.rol] || 'slate'}>{t(BULK_ROLES_LABEL[autor.rol]) || autor.rol}</Badge></div>}
-            {infoChofer?.carrierNombre && <div className="mt-1 text-xs text-slate-400">{infoChofer.carrierNombre}</div>}
-            {/* ID único del usuario — solo visible para admin o el propio usuario (reglas). */}
-            <div className="mt-1"><UserIdDeUid uid={autor?.id} /></div>
+            {(infoChofer?.carrierNombre || carrierNombreDir) && <div className="mt-1 text-xs text-slate-400">{infoChofer?.carrierNombre || carrierNombreDir}</div>}
+            {/* ID único: del directorio (visible en la empresa) o, si no, el chip con reglas. */}
+            <div className="mt-1">
+              {codigoDir
+                ? <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wide text-brand-navy dark:bg-slate-800 dark:text-slate-200">{t('ID')}: #{codigoDir}</span>
+                : <UserIdDeUid uid={autor?.id} />}
+            </div>
           </div>
         </div>
 
