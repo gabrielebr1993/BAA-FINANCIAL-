@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MapPin, Navigation, Gauge, Route as RouteIcon, Clock, MessageSquare, FlaskConical, Search, Users, Layers, X, Truck } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
@@ -27,6 +27,15 @@ export default function MapaVivo() {
   const { datos: presencias } = useColeccion('presence')
   // Entradas/salidas de geocerca en vivo (solo staff/transportista las leen por reglas).
   const { datos: geoeventos } = useColeccion('geoeventos', [], { orden: 'ts', dir: 'desc', limite: 25 })
+  // Salto directo desde un aviso: ?geo=<id>&lat=&lng= → centra el mapa en esa geocerca.
+  const [params] = useSearchParams()
+  const centroFoco = useMemo(() => {
+    const gid = params.get('geo')
+    if (gid) { const g = (geocercas || []).find((x) => x.id === gid); if (g && g.lat != null) return { lat: Number(g.lat), lng: Number(g.lng), zoom: 15 } }
+    const la = Number(params.get('lat')), ln = Number(params.get('lng'))
+    if (Number.isFinite(la) && Number.isFinite(ln) && params.get('lat') && params.get('lng')) return { lat: la, lng: ln, zoom: 15 }
+    return null
+  }, [params, geocercas])
   const [sel, setSel] = useState('')
   const [track, setTrack] = useState([])
   const [verChat, setVerChat] = useState(false)
@@ -91,7 +100,7 @@ export default function MapaVivo() {
   // Sin órdenes activas pero con choferes en línea: forzamos la vista "todos" para
   // que el mapa aparezca con los choferes disponibles.
   const soloChoferes = activas.length === 0 && choferesVivos.length > 0
-  const verTodosEf = verTodos || soloChoferes
+  const verTodosEf = verTodos || soloChoferes || !!centroFoco
 
   if (cargando) return <Cargando />
 
@@ -145,7 +154,7 @@ export default function MapaVivo() {
         </Card>
       )}
 
-      {!hayAlgo ? (
+      {!hayAlgo && !centroFoco ? (
         <Card className="flex flex-col items-center gap-3 p-10 text-center">
           <div className="grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-500"><Navigation size={24} /></div>
           <div>
@@ -180,7 +189,7 @@ export default function MapaVivo() {
             </div>
             {!verTodosEf && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
             <div className="relative">
-              <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} alto="62vh" onMarcador={setSelMarca} />
+              <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} centro={centroFoco} alto="62vh" onMarcador={setSelMarca} />
               {marcaSel && <PanelMarca sel={marcaSel} onClose={() => setSelMarca(null)} t={t} />}
             </div>
             {!verTodosEf && orden && (

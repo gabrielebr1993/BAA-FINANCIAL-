@@ -21,7 +21,7 @@ const truckHtml = (color) => `<div style="width:38px;height:38px;display:flex;al
 
 // puntos: track de UNA orden (polilínea + posición). marcadores: varios choferes a
 // la vez [{lat,lng,label,color}]. geocercas: círculos de planta/destino.
-export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null, onMarcador = null, editable = null, onEditable = null }) {
+export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = [], alto = 320, onPick = null, onMarcador = null, editable = null, onEditable = null, centro = null }) {
   const cont = useRef(null)
   const map = useRef(null)
   const capas = useRef([])
@@ -31,6 +31,7 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
   onMarcadorRef.current = onMarcador
   const onEditableRef = useRef(onEditable)
   onEditableRef.current = onEditable
+  const centroAplicado = useRef(null)
 
   useEffect(() => {
     if (!cont.current) return
@@ -91,11 +92,23 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
       else if (mk.popupHtml) capa.bindPopup(mk.popupHtml, { closeButton: true, minWidth: 200 })
       capas.current.push(capa); boundsFoco.push(xy)
     }
-    // Encuadre: prioriza a los CHOFERES (más cerca). Solo si no hay, usa las geocercas.
-    const fit = boundsFoco.length ? boundsFoco : boundsGeo
-    if (fit.length) { try { m.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }) } catch { /* noop */ } }
+    // Si se pide CENTRAR en un punto (p. ej. al saltar desde un aviso de geocerca), se
+    // centra ahí y se resalta; si no, encuadre normal (choferes o, si no hay, geocercas).
+    const c = centro && coord(centro.lat, centro.lng)
+    if (c) {
+      // Centra SOLO cuando el objetivo cambia (no en cada redibujo) → el usuario puede
+      // moverse libremente por el mapa sin que se vuelva a centrar.
+      const key = c.join(',')
+      if (centroAplicado.current !== key) { try { m.setView(c, centro.zoom || 15) } catch { /* noop */ } centroAplicado.current = key }
+      const pulso = L.circleMarker(c, { radius: 12, color: '#ef4444', weight: 3, fillColor: '#ef4444', fillOpacity: 0.25 }).addTo(m)
+      capas.current.push(pulso)
+    } else {
+      centroAplicado.current = null
+      const fit = boundsFoco.length ? boundsFoco : boundsGeo
+      if (fit.length) { try { m.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }) } catch { /* noop */ } }
+    }
     setTimeout(() => m.invalidateSize(), 50)
-  }, [puntos, geocercas, marcadores, editable])
+  }, [puntos, geocercas, marcadores, editable, centro])
 
   useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null } }, [])
 

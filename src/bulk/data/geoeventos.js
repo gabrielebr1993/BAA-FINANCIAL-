@@ -21,9 +21,11 @@ export function useNotifsGeocerca(carrierId = null) {
         sev: entrada ? 'info' : 'warn',
         titulo: `${entrada ? '🚨 Entrada' : '🔔 Salida'}: ${e.choferNombre || 'Chofer'}${idTxt}`,
         detalle: `${e.geocerca || 'Geocerca'}${e.unidad ? ` · Unidad ${e.unidad}` : ''} · ${cuando}`,
-        // El staff puede saltar al Mapa en vivo; el transportista no tiene esa ruta.
-        accion: carrierId ? null : 'Ver en Mapa en vivo',
-        link: carrierId ? null : '/bulk/mapa',
+        // El staff puede saltar directo a la UBICACIÓN de la geocerca en el Mapa en vivo
+        // (por geofenceId y, de respaldo, la posición del evento). El transportista no
+        // tiene esa ruta.
+        accion: carrierId ? null : 'Ver ubicación en el mapa',
+        link: carrierId ? null : `/bulk/mapa?geo=${encodeURIComponent(e.geofenceId || '')}&lat=${e.lat != null ? e.lat : ''}&lng=${e.lng != null ? e.lng : ''}`,
         ts: e.ts,
       }
     })
