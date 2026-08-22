@@ -31,9 +31,29 @@ export const useLlamada = () => useContext(LlamadaContext)
 // proveedor para que no se re-monte en cada render (evita parpadeo del video).
 function TileRemoto({ stream, nombre, rol, hablando, mano, esVideo, t }) {
   const ref = useRef(null)
-  useEffect(() => { if (ref.current && stream && ref.current.srcObject !== stream) ref.current.srcObject = stream })
+  const [tick, setTick] = useState(0) // fuerza re-render cuando cambian las pistas del stream
+  // Adjunta el stream y lo REPRODUCE (algunos navegadores no lo hacen solos → tile negro).
+  useEffect(() => {
+    const el = ref.current
+    if (el && stream && el.srcObject !== stream) { el.srcObject = stream; el.play && el.play().catch(() => {}) }
+  })
+  // Reacciona cuando el remoto AGREGA su video más tarde o lo silencia/reactiva, para
+  // no quedarse en negro ni mostrar el avatar de más.
+  useEffect(() => {
+    if (!stream) return
+    const bump = () => setTick((n) => n + 1)
+    stream.addEventListener && stream.addEventListener('addtrack', bump)
+    stream.addEventListener && stream.addEventListener('removetrack', bump)
+    const vids = stream.getVideoTracks()
+    vids.forEach((tr) => { tr.addEventListener && tr.addEventListener('mute', bump); tr.addEventListener && tr.addEventListener('unmute', bump); tr.addEventListener && tr.addEventListener('ended', bump) })
+    return () => {
+      stream.removeEventListener && stream.removeEventListener('addtrack', bump)
+      stream.removeEventListener && stream.removeEventListener('removetrack', bump)
+      vids.forEach((tr) => { tr.removeEventListener && tr.removeEventListener('mute', bump); tr.removeEventListener && tr.removeEventListener('unmute', bump); tr.removeEventListener && tr.removeEventListener('ended', bump) })
+    }
+  }, [stream, tick])
   const inicial = ((nombre || '?').trim().charAt(0) || '?').toUpperCase()
-  const tieneVideo = esVideo && stream && stream.getVideoTracks().some((tr) => tr.enabled)
+  const tieneVideo = esVideo && stream && stream.getVideoTracks().some((tr) => tr.enabled && tr.readyState === 'live' && !tr.muted)
   return (
     <div className={`relative flex items-center justify-center overflow-hidden rounded-2xl bg-slate-800 ring-1 transition ${hablando ? 'ring-2 ring-emerald-400' : 'ring-white/10'}`}>
       {esVideo && <video ref={ref} autoPlay playsInline className={`h-full w-full object-cover ${tieneVideo ? '' : 'hidden'}`} />}
@@ -969,7 +989,7 @@ export default function LlamadaProvider({ children }) {
 
             {/* CHAT lateral en llamada */}
             {chatAbierto && (
-              <div className="absolute bottom-0 right-0 top-0 flex w-full max-w-xs flex-col bg-slate-900/95 backdrop-blur sm:w-80">
+              <div className="absolute bottom-0 right-0 top-0 z-20 flex w-full max-w-xs flex-col bg-slate-900/95 backdrop-blur sm:w-80">
                 <div className="flex items-center gap-2 border-b border-white/10 p-3">
                   <MessageSquare size={16} className="text-amber-400" /><span className="text-sm font-bold text-white">{t('Chat de la llamada')}</span>
                   <button onClick={() => setChatAbierto(false)} className="ml-auto text-white/60 hover:text-white"><X size={18} /></button>
@@ -990,8 +1010,10 @@ export default function LlamadaProvider({ children }) {
               </div>
             )}
 
-            {/* Barra superior: nombre, estado, minimizar */}
-            <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/50 to-transparent p-5">
+            {/* Barra superior: nombre, estado, minimizar. Cuando el chat está abierto se
+                reserva espacio a la derecha para que el botón de minimizar NO quede
+                tapado por la "X" del chat. */}
+            <div className={`absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 bg-gradient-to-b from-black/50 to-transparent p-5 ${chatAbierto ? 'pr-4 sm:pr-[22rem]' : ''}`}>
               <div className="min-w-0">
                 <h3 className="truncate text-2xl font-black text-white drop-shadow">{info?.grupo ? <span className="flex items-center gap-2"><Users size={22} /> {info?.con || t('Llamada grupal')}</span> : (info?.con || t('Llamada'))}</h3>
                 <p className="mt-0.5 flex items-center gap-1.5 text-sm text-white/70">
