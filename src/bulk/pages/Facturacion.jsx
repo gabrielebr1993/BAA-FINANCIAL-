@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter } from 'lucide-react'
+import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter, LayoutDashboard } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, guardar, siguienteSecuencia } from '../data/repo'
@@ -9,6 +9,7 @@ import { auditar } from '../data/auditoria'
 import { armarFactura, armarAvisoPago } from '../domain/facturacion'
 import { PageTitle, Card, Boton, Input, Select, Cargando, Aviso } from '../../components/ui'
 import { DocCard, DocDrawer, BotonDoc, esVencidaDoc } from '../components/FacturaDoc'
+import DashboardFacturacion from '../components/DashboardFacturacion'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
@@ -71,6 +72,7 @@ function Pildora({ label, n, color }) {
 
 export default function Facturacion() {
   const { t } = useLang()
+  const navigate = useNavigate()
   const { tenantId, usuario, rol } = useBulkAuth()
   const empresa = usuario?.empresa || 'Freight'
   const { datos: clientes } = useColeccion('clients')
@@ -80,7 +82,7 @@ export default function Facturacion() {
   const { datos: avisos } = useColeccion('carrierStatements')
   const { datos: jobs } = useColeccion('jobs')
   const jobsMap = useMemo(() => { const m = {}; for (const j of jobs || []) m[j.id] = j; return m }, [jobs])
-  const [tab, setTab] = useState('clientes')
+  const [tab, setTab] = useState('panel')
   const [msg, setMsg] = useState(null)
 
   if (cargando) return <Cargando />
@@ -93,17 +95,19 @@ export default function Facturacion() {
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       {/* Pestañas segmentadas */}
-      <div className="mb-5 grid grid-cols-2 gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 p-1.5 dark:border-slate-800 dark:bg-slate-800/60 sm:inline-grid sm:auto-cols-max sm:grid-flow-col">
-        {[{ k: 'clientes', l: t('Facturas a clientes'), icon: Building2 }, { k: 'transportistas', l: t('Pagos a transportistas'), icon: Truck }].map((it) => (
+      <div className="mb-5 grid grid-cols-3 gap-1.5 rounded-2xl border border-slate-200 bg-slate-100 p-1.5 dark:border-slate-800 dark:bg-slate-800/60 sm:inline-grid sm:auto-cols-max sm:grid-flow-col">
+        {[{ k: 'panel', l: t('Panel'), icon: LayoutDashboard }, { k: 'clientes', l: t('Facturas a clientes'), icon: Building2 }, { k: 'transportistas', l: t('Pagos a transportistas'), icon: Truck }].map((it) => (
           <button key={it.k} onClick={() => setTab(it.k)} className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition ${tab === it.k ? 'bg-brand-navy text-white shadow dark:bg-amber-500 dark:text-slate-900' : 'text-slate-500 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700/50'}`}>
             <it.icon size={16} /> {it.l}
           </button>
         ))}
       </div>
 
-      {tab === 'clientes'
-        ? <FacturasClientes clientes={clientes} ordenes={ordenes} facturas={facturas} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />
-        : <PagosTransportistas carriers={carriers} ordenes={ordenes} avisos={avisos} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />}
+      {tab === 'panel' && (
+        <DashboardFacturacion rol="admin" facturas={facturas} avisos={avisos} jobsMap={jobsMap} onVer={(fid, tp) => navigate(`/bulk/facturas/${fid}?tipo=${tp}`)} t={t} />
+      )}
+      {tab === 'clientes' && <FacturasClientes clientes={clientes} ordenes={ordenes} facturas={facturas} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />}
+      {tab === 'transportistas' && <PagosTransportistas carriers={carriers} ordenes={ordenes} avisos={avisos} jobsMap={jobsMap} empresa={empresa} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />}
     </div>
   )
 }

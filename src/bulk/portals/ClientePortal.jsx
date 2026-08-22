@@ -10,6 +10,7 @@ import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
 import { DocumentoFactura } from '../pages/FacturaPagina'
+import DashboardFacturacion from '../components/DashboardFacturacion'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -248,18 +249,7 @@ export default function ClientePortal() {
             {tab === 'facturas' && (
               <>
                 {facturas.length > 0 && (
-                  <>
-                    <div className="mb-2 flex items-center gap-2 px-1">
-                      <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Resumen')}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${hayFiltroActivo(busqFac) ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>{periodoFacTxt}</span>
-                    </div>
-                    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                      <KPI label={t('Facturado')} value={money(kpisFac.total)} icon={FileText} accent="navy" sub={`${kpisFac.n} ${t('facturas')}`} />
-                      <KPI label={t('Pagado')} value={money(kpisFac.pagado)} icon={CheckCircle2} accent="green" />
-                      <KPI label={t('Por pagar')} value={money(kpisFac.porPagar)} icon={Clock} accent="gold" />
-                      <KPI label={t('Vencido')} value={money(kpisFac.vencido)} icon={AlertTriangle} accent="red" />
-                    </div>
-                  </>
+                  <div className="mb-4"><DashboardFacturacion rol="cliente" facturas={facturas} soloResumen jobsMap={{}} t={t} /></div>
                 )}
                 <Card className="p-4">
                 <div className="mb-3 flex items-center gap-2"><FileText size={17} className="text-amber-500" /><h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Facturas')}</h3></div>
