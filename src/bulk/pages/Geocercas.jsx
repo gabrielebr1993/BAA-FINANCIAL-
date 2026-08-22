@@ -13,6 +13,16 @@ const TIPOS = [
 ]
 const COLOR = { planta: '#c9a24b', destino: '#2563eb', patio: '#64748b', proyecto: '#10b981' }
 
+// Campo con etiqueta uniforme (mantiene todos los recuadros del mismo tamaño).
+function Campo({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 export default function Geocercas() {
   const { t } = useLang()
   const { tenantId, rol } = useBulkAuth()
@@ -100,11 +110,11 @@ export default function Geocercas() {
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nueva geocerca')}</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} />
-          <Select value={f.tipo} onChange={set('tipo')}>{TIPOS.map((ti) => <option key={ti.v} value={ti.v}>{t(ti.l)}</option>)}</Select>
-          <Input placeholder={t('Lat (o toca el mapa)')} value={f.lat} onChange={set('lat')} />
-          <Input placeholder={t('Lng (o toca el mapa)')} value={f.lng} onChange={set('lng')} />
-          <Input placeholder={t('Radio (m)')} value={f.radio} onChange={set('radio')} />
+          <Campo label={t('Nombre')}><Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} className="h-11 w-full" /></Campo>
+          <Campo label={t('Tipo')}><Select value={f.tipo} onChange={set('tipo')} className="h-11 w-full">{TIPOS.map((ti) => <option key={ti.v} value={ti.v}>{t(ti.l)}</option>)}</Select></Campo>
+          <Campo label={t('Latitud')}><Input placeholder={t('Toca el mapa')} value={f.lat} onChange={set('lat')} className="h-11 w-full" /></Campo>
+          <Campo label={t('Longitud')}><Input placeholder={t('Toca el mapa')} value={f.lng} onChange={set('lng')} className="h-11 w-full" /></Campo>
+          <Campo label={t('Radio (m)')}><Input placeholder="200" value={f.radio} onChange={set('radio')} className="h-11 w-full" /></Campo>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Boton variant="gold" onClick={agregar} disabled={!f.nombre.trim() || !f.lat || !f.lng}><Plus size={16} /> {t('Agregar')}</Boton>
