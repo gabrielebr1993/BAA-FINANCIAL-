@@ -54,7 +54,12 @@ export default function ClientePortal() {
   // Resumen de facturas (responde al filtro de fecha del buscador).
   const kpisFac = useMemo(() => {
     let total = 0, pagado = 0, vencido = 0
-    for (const r of facturasFiltradas) { const v = Number(r.total) || 0; total += v; if (r.estado === 'pagada') pagado += v; else if (estadoDocumento(r.vence).estado === 'vencido') vencido += v }
+    for (const r of facturasFiltradas) {
+      if (r.estado === 'anulada') continue // las facturas anuladas no cuentan
+      const v = Number(r.total) || 0; total += v
+      if (r.estado === 'pagada') pagado += v
+      else if (estadoDocumento(r.vence).estado === 'vencido') vencido += v
+    }
     return { total, pagado, porPagar: total - pagado, vencido, n: facturasFiltradas.length }
   }, [facturasFiltradas])
   const periodoFacTxt = (busqFac.desde || busqFac.hasta) ? `${busqFac.desde || '…'} → ${busqFac.hasta || t('hoy')}` : (hayFiltroActivo(busqFac) ? t('resultados del filtro') : t('histórico total'))
@@ -258,7 +263,7 @@ export default function ClientePortal() {
                     renderCell={(r, k) => {
                       if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
                       if (k === 'total') return money(r.total)
-                      if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : 'gold'}>{r.estado}</Badge>
+                      if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : r.estado === 'anulada' ? 'slate' : 'gold'}>{r.estado}</Badge>
                       if (k === 'acciones') return (
                         <div className="flex justify-end gap-1.5">
                           {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> {t('Revisar y firmar')}</Boton>}
