@@ -8,6 +8,7 @@ import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
+import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -48,6 +49,7 @@ export default function ClientePortal() {
   }, [_ordenesRaw, pagosCliente])
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
   const [firmando, setFirmando] = useState(null) // factura en firma
+  const [detalleFac, setDetalleFac] = useState(null) // factura abierta en el drawer de detalle
   const [firma, setFirma] = useState(null)
   // Buscador: solo reduce el listado de SUS facturas (ya aisladas por la consulta).
   const [busqFac, setBusqFac] = useState(FILTRO_FACTURAS_VACIO)
@@ -262,21 +264,11 @@ export default function ClientePortal() {
                 {facturas.length > 0 && <BuscadorFacturas f={busqFac} setF={setBusqFac} montoLabel={t('Monto de cobro…')} />}
                 {facturas.length === 0 ? <EstadoVacio titulo={t('Aún no tienes facturas')} texto={t('Cuando el administrador emita una factura, aparecerá aquí para revisar y firmar.')} mostrarBoton={false} />
                   : facturasFiltradas.length === 0 ? <p className="text-sm text-slate-400">{t('No hay facturas que coincidan con los criterios de búsqueda.')}</p> : (
-                  <Tabla columns={[{ key: 'numero', label: t('Factura') }, { key: 'periodo', label: t('Periodo') }, { key: 'total', label: t('Total'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
-                    rows={facturasFiltradas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((x) => ({ ...x, _key: x.id }))}
-                    renderCell={(r, k) => {
-                      if (k === 'periodo') return <span className="text-xs text-slate-400">{r.desde || '—'} → {r.hasta || '—'}</span>
-                      if (k === 'total') return money(r.total)
-                      if (k === 'estado') return <Badge color={r.estado === 'firmada' ? 'green' : r.estado === 'pagada' ? 'navy' : r.estado === 'rechazada' ? 'slate' : r.estado === 'anulada' ? 'slate' : 'gold'}>{r.estado}</Badge>
-                      if (k === 'acciones') return (
-                        <div className="flex justify-end gap-1.5">
-                          {r.estado === 'enviada' && <Boton variant="gold" onClick={() => { setFirmando(r); setFirma(null) }} className="px-2.5 py-1 text-xs"><PenLine size={13} /> {t('Revisar y firmar')}</Boton>}
-                          {r.estado === 'enviada' && <Boton variant="ghost" onClick={() => rechazarFactura(r)} className="px-2.5 py-1 text-xs">{t('Disputar')}</Boton>}
-                          <Boton variant="ghost" onClick={() => generarFacturaPDF(r, { clienteNombre: r.clienteNombre, empresa: 'Freight' })} className="px-2.5 py-1 text-xs"><Download size={13} /> PDF</Boton>
-                        </div>
-                      )
-                      return r[k]
-                    }} />
+                  <div className="space-y-2.5">
+                    {facturasFiltradas.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((r) => (
+                      <DocCard key={r.id} r={r} tipo="cliente" t={t} onVer={() => setDetalleFac(r)} />
+                    ))}
+                  </div>
                 )}
                 </Card>
               </>
@@ -294,6 +286,14 @@ export default function ClientePortal() {
           </>
         )}
       </PortalLayout>
+
+      {detalleFac && (
+        <DocDrawer r={detalleFac} tipo="cliente" empresa="Freight" persona={null} t={t} onClose={() => setDetalleFac(null)}
+          pie={detalleFac.estado === 'enviada' ? <>
+            <BotonDoc icon={PenLine} primary onClick={() => { setFirmando(detalleFac); setFirma(null); setDetalleFac(null) }}>{t('Revisar y firmar')}</BotonDoc>
+            <BotonDoc onClick={() => { rechazarFactura(detalleFac); setDetalleFac(null) }}>{t('Disputar')}</BotonDoc>
+          </> : null} />
+      )}
 
       {firmando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setFirmando(null)}>

@@ -14,6 +14,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
+import { DocCard, DocDrawer } from '../components/FacturaDoc'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
@@ -574,26 +575,13 @@ function AltaEquipoForm({ t, tipos, onCrear }) {
 function TabFacturacion({ t, statements, cuenta }) {
   // Buscador: solo reduce el listado de SUS avisos (ya aislados por carrierId).
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
+  const [detalle, setDetalle] = useState(null)
   const filtrados = filtrarFacturas(statements, busq)
   // Resumen sobre el conjunto FILTRADO (por fecha de emisión y demás criterios).
   let kTotal = 0, kPag = 0
   for (const s of filtrados) { const v = Number(s.total) || 0; kTotal += v; if (s.estado === 'pagado') kPag += v }
   const periodoTxt = (busq.desde || busq.hasta) ? `${busq.desde || '…'} → ${busq.hasta || t('hoy')}` : (hayFiltroActivo(busq) ? t('resultados del filtro') : t('histórico total'))
-  const rows = filtrados.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((s) => ({ ...s, _key: s.id }))
-  const cols = [
-    { key: 'numero', label: t('Aviso') }, { key: 'periodo', label: t('Periodo') },
-    { key: 'toneladas', label: t('Ton'), align: 'right' }, { key: 'total', label: t('Total'), align: 'right' },
-    { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'fechaPago', label: t('Fecha de pago') },
-  ]
-  const render = (s, k) => {
-    if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{s.numero}</span>
-    if (k === 'periodo') return <span className="text-xs text-slate-400">{s.desde || '—'} → {s.hasta || '—'}</span>
-    if (k === 'toneladas') return s.toneladas != null ? Math.round(s.toneladas) : '—'
-    if (k === 'total') return <span className="font-semibold text-brand-navy dark:text-slate-100">{money(s.total)}</span>
-    if (k === 'estado') return <Badge color={s.estado === 'pagado' ? 'green' : 'gold'}>{t(s.estado === 'pagado' ? 'Pagado' : 'Pendiente')}</Badge>
-    if (k === 'fechaPago') return <span className="text-xs text-slate-500">{s.fechaPago ? fecha(s.fechaPago) : '—'}</span>
-    return null
-  }
+  const ordenados = filtrados.slice().sort((a, b) => (b.ts || b.numero || '').localeCompare(a.ts || a.numero || ''))
   return (
     <>
       <div className="mb-2 flex items-center gap-2 px-1">
@@ -609,9 +597,14 @@ function TabFacturacion({ t, statements, cuenta }) {
       {(statements || []).length > 0 && <BuscadorFacturas f={busq} setF={setBusq} montoLabel={t('Monto de pago…')} />}
       {(statements || []).length === 0
         ? <EstadoVacio titulo={t('Aún no tienes avisos de pago')} texto={t('Cuando el administrador emita tu facturación/aviso de pago, aparecerá aquí con su detalle.')} mostrarBoton={false} />
-        : rows.length === 0
+        : ordenados.length === 0
           ? <p className="text-sm text-slate-400">{t('No hay avisos de pago que coincidan con los criterios de búsqueda.')}</p>
-          : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[640px]" />}
+          : (
+            <div className="space-y-2.5">
+              {ordenados.map((s) => <DocCard key={s.id} r={s} tipo="carrier" t={t} onVer={() => setDetalle(s)} />)}
+            </div>
+          )}
+      {detalle && <DocDrawer r={detalle} tipo="carrier" empresa="Freight" persona={null} t={t} onClose={() => setDetalle(null)} />}
     </>
   )
 }
