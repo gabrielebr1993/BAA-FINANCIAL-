@@ -108,9 +108,15 @@ export function conversacionesAdmin({ mensajes = [], ordenes = [], carriers = []
       })
       continue
     }
-    // Cualquier otra clave (grupos grp_, u otras) NO se muestra aquí: los GRUPOS solo
-    // viven en su propia pestaña (se manejan aparte), para que quien no sea del staff no
-    // pueda leer esas conversaciones desde Operaciones. Operaciones = solo chats st_.
+    // Los GRUPOS viven en su propia pestaña (no aquí). Las conversaciones privadas
+    // ajenas (pv_) ya se filtraron arriba (solo se muestran si el admin participa).
+    if (key.startsWith('grp_') || key.startsWith('pv_')) continue
+    // CUALQUIER otra conversación con historial que no se pudo resolver (p. ej. el chat
+    // de una orden ya eliminada) se muestra IGUALMENTE en Operaciones como fila genérica,
+    // para que el admin pueda abrirla, leerla y/o eliminarla. Sin esto, sus mensajes no
+    // leídos contaban en el badge del menú pero no aparecían en ninguna parte → el
+    // contador quedaba "pegado" sin poder limpiarse.
+    out.operaciones.push({ ...base, icon: 'operacion', foto: null, titulo: r.lastAutor || 'Conversación', rolLabel: 'Otros', rolColor: 'slate', participantes: null })
     continue
   }
   return out
