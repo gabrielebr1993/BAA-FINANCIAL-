@@ -127,12 +127,17 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
               <div className="px-2 py-8 text-center text-xs text-slate-400">{seccion.vacio || t('Sin conversaciones.')}</div>
             ) : items.map((c) => {
               const menu = menuDe(c)
+              const esActiva = activa?.key === c.key
+              const noLeido = c.noLeidos > 0 && !esActiva // el chat abierto ya se marca leído
               return (
-                <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${activa?.key === c.key ? 'border-amber-500 bg-amber-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${esActiva ? 'border-amber-500 bg-amber-500/10' : noLeido ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                  {/* Barra de acento a la izquierda cuando hay mensajes nuevos. */}
+                  {noLeido && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-rose-500" aria-hidden="true" />}
                   <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={40} resalte={c.noLeidos > 0} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
+                      {noLeido && <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-rose-500" title={t('Mensajes nuevos')} />}
+                      <span className={`truncate text-sm text-brand-navy dark:text-slate-100 ${noLeido ? 'font-black' : 'font-bold'}`}>{c.titulo}</span>
                       {c.rolLabel && <Badge color={c.rolColor || 'slate'}>{c.rolLabel}</Badge>}
                       <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400">{horaCorta(c.lastTs)}</span>
                       {/* Menú ⋮ para actuar sin abrir el chat (eliminar / salir). */}

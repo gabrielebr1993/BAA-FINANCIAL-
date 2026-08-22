@@ -80,6 +80,7 @@ export const noLeidosVisibles = (mensajes, uid, gruposActivos = null) => {
 export const noLeidosPorConv = (mensajes, uid) => {
   const m = {}
   for (const msg of mensajes || []) {
+    if (msg.tipo === 'llamada') continue // los registros de llamada no cuentan como "no leído"
     if (msg.autorId !== uid && !(msg.leidoPor || []).includes(uid)) m[msg.orderId] = (m[msg.orderId] || 0) + 1
   }
   return m
@@ -101,7 +102,7 @@ export const resumenPorConversacion = (mensajes, uid) => {
       cur.lastRol = m.autorRol || ''
       cur.lastText = m.tipo === 'foto' ? '📷' : m.tipo === 'ubicacion' ? '📍' : m.tipo === 'archivo' ? ('📎 ' + (m.nombreArchivo || '')) : m.tipo === 'llamada' ? (m.texto || '📞') : (m.texto || '')
     }
-    if (m.autorId !== uid && !(m.leidoPor || []).includes(uid)) cur.noLeidos += 1
+    if (m.tipo !== 'llamada' && m.autorId !== uid && !(m.leidoPor || []).includes(uid)) cur.noLeidos += 1
     r[k] = cur
   }
   return r
