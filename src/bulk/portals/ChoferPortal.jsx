@@ -7,6 +7,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import AvisosMensajes from '../components/AvisosMensajes'
+import { onAbrirConversacion } from '../data/notifsMensajes'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
@@ -113,6 +114,9 @@ export default function ChoferPortal() {
   const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'chofer', carrierId: carrierId || null }), [usuario?.id, carrierId])
   const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesOrdenes, uid: usuario?.id, tenantId, yo: yoPriv })
   const noLeidosMsgTotal = noLeidosOficina + noLeidosOrdenes + noLeidosGrupos + noLeidosPriv
+  // Abrir una conversación al tocar su aviso flotante: salta a la pestaña Mensajes.
+  const [abrirExterno, setAbrirExterno] = useState(null)
+  useEffect(() => onAbrirConversacion((k) => { setTab('mensajes'); if (k && k !== '__mensajes__') { setAbrirExterno(k); setTimeout(() => setAbrirExterno(null), 0) } }), [])
   const solicitudesCount = useSolicitudesContacto().length
   // Secciones del panel de mensajes: ÓRDENES (por viaje/material, con transporte+oficina)
   // y ADMINISTRADOR/OFICINA (canal general). Solo mis órdenes; nada de otros choferes.
@@ -439,7 +443,7 @@ export default function ChoferPortal() {
         })()}
         {tab === 'mensajes' && (
           <>
-            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirPriv}
+            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupoChofer} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}

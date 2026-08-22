@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
@@ -7,6 +7,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import AvisosMensajes from '../components/AvisosMensajes'
+import { onAbrirConversacion } from '../data/notifsMensajes'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -133,6 +134,9 @@ export default function ClientePortal() {
   const [verGrupos, setVerGrupos] = useState(false)
   const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'cliente', clienteId: usuario?.clienteId || null }), [usuario?.id, usuario?.clienteId])
   const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesPriv, uid: usuario?.id, tenantId, yo: yoPriv })
+  // Abrir una conversación al tocar su aviso flotante: salta a la pestaña Mensajes.
+  const [abrirExterno, setAbrirExterno] = useState(null)
+  useEffect(() => onAbrirConversacion((k) => { setTab('mensajes'); if (k && k !== '__mensajes__') { setAbrirExterno(k); setTimeout(() => setAbrirExterno(null), 0) } }), [])
   const seccionesCliente = useMemo(() => [
     { k: 'admin', label: t('Administrador'), icon: 'admin', items: seccionesMsg[0]?.items || [], vacio: seccionesMsg[0]?.vacio },
     seccionPriv,
@@ -280,7 +284,7 @@ export default function ClientePortal() {
 
             {tab === 'mensajes' && (
               <>
-                <PanelConversaciones secciones={seccionesCliente} alturaClass="h-mensajes-portal" abrir={abrirPriv}
+                <PanelConversaciones secciones={seccionesCliente} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
                   menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
                   accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
                 {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}

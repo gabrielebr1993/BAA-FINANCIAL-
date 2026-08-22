@@ -5,7 +5,7 @@
 // (== bulkCarrierId del claim); las reglas de Firestore refuerzan el aislamiento.
 //   Pestañas: Órdenes · Mis choferes · Equipos · Estado de cuenta · Mensajes.
 // ============================================================================
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
@@ -13,6 +13,7 @@ import {
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import AvisosMensajes from '../components/AvisosMensajes'
+import { onAbrirConversacion } from '../data/notifsMensajes'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
@@ -108,6 +109,9 @@ export default function TransportistaPortal() {
   // Chat interno PRIVADO 1-a-1 (transportista↔chofer de su flota, transportista↔oficina…).
   const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'transportista', carrierId: carrierId || null }), [usuario?.id, carrierId])
   const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesPriv, uid: usuario?.id, tenantId, yo: yoPriv })
+  // Abrir una conversación al tocar su aviso flotante: salta a la pestaña Mensajes.
+  const [abrirExterno, setAbrirExterno] = useState(null)
+  useEffect(() => onAbrirConversacion((k) => { setTab('mensajes'); if (k && k !== '__mensajes__') { setAbrirExterno(k); setTimeout(() => setAbrirExterno(null), 0) } }), [])
   const mensajesNuevos = noLeidosOficina + noLeidosChoferes + noLeidosPriv
   // Secciones del panel de mensajes: CHOFERES (chats por viaje) · ADMINISTRADOR (oficina).
   const seccionesMsg = useMemo(() => {
@@ -254,7 +258,7 @@ export default function TransportistaPortal() {
       {activo === 'mensajes' && (
         usuario?.carrierId
           ? <>
-              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirPriv}
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
                 menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
                 accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
               {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}

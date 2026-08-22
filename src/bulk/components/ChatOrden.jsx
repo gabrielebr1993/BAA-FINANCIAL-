@@ -6,6 +6,7 @@ import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, 
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import { esConvGrupo } from '../data/grupos'
+import { setConversacionActiva, limpiarConversacionActiva } from '../data/notifsMensajes'
 import PerfilRapido from './PerfilRapido'
 import Avatar from './Avatar'
 import { useAvatares } from '../data/useCodigoUsuario'
@@ -44,6 +45,14 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     const off = suscribirChat(tenantId, orden.id, setMsgs)
     return off
   }, [tenantId, orden?.id])
+
+  // Marca ESTA conversación como "activa" mientras el chat está montado, para que el
+  // aviso flotante (AvisosMensajes) no notifique un chat que ya estoy viendo.
+  useEffect(() => {
+    if (!orden?.id) return
+    setConversacionActiva(orden.id)
+    return () => limpiarConversacionActiva(orden.id)
+  }, [orden?.id])
 
   useEffect(() => {
     if (usuario?.id && msgs.length) marcarLeidos(msgs.filter((m) => m.autorId !== usuario.id), usuario.id)

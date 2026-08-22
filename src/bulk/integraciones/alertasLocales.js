@@ -53,6 +53,27 @@ export function beep(veces = 2) {
   } catch { /* noop */ }
 }
 
+// Tono CORTO y DISCRETO para un mensaje nuevo (estilo SaaS): dos notas suaves
+// ascendentes tipo "pop". `volumen` 0..1 escala el nivel (0 = silencio). Respeta el
+// desbloqueo de audio del navegador (usa el mismo AudioContext reanudado).
+export function tonoMensaje(volumen = 0.5) {
+  const vol = Math.max(0, Math.min(1, Number(volumen)))
+  if (!vol) return
+  try {
+    const c = ac()
+    const t0 = c.currentTime
+    ;[[660, 0.0], [880, 0.09]].forEach(([f, off]) => {
+      const t = t0 + off
+      const o = c.createOscillator(); const g = c.createGain()
+      o.connect(g); g.connect(c.destination); o.type = 'sine'; o.frequency.value = f
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(0.32 * vol, t + 0.012)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14)
+      o.start(t); o.stop(t + 0.16)
+    })
+  } catch { /* noop */ }
+}
+
 // Un "ding" brillante tipo campana (dos osciladores afinados) en un instante dado.
 function campana(c, t, f, vol = 0.55, dur = 0.5) {
   ;[f, f * 2.01].forEach((freq, k) => {

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, Truck, User, Building2, X, Users, Shield } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { convChofer, convCarrier, convClienteOrden, convStaff, resumenPorConversacion, eliminarConversacion } from '../data/chat'
 import { esConvGrupo, grupoIdDeConv, convGrupo, disolverGrupo, salirGrupo } from '../data/grupos'
 import { useGrupos } from '../data/useGrupos'
 import { conversacionesAdmin } from '../domain/conversaciones'
+import { onAbrirConversacion, consumirConversacionPendiente } from '../data/notifsMensajes'
 import { useAvatares } from '../data/useCodigoUsuario'
 import { useBulkAuth } from '../BulkAuthContext'
 import { ORDEN_ESTADO as E, BULK_ROLES_LABEL } from '../domain/constants'
@@ -34,6 +35,14 @@ export default function Mensajes() {
   // Conversaciones iniciadas en esta sesión (aún sin mensajes): filas listas para el panel.
   const [directos, setDirectos] = useState([])
   const [abrir, setAbrir] = useState(null)
+
+  // Abrir una conversación al tocar su aviso flotante (AvisosMensajes). Al montar,
+  // consume la conversación pendiente (si el usuario venía de otra pantalla).
+  useEffect(() => {
+    const abrirConv = (k) => { if (k && k !== '__mensajes__') { setAbrir(k); setTimeout(() => setAbrir(null), 0) } }
+    abrirConv(consumirConversacionPendiente())
+    return onAbrirConversacion(abrirConv)
+  }, [])
 
   // Candidatos a grupos: el admin/staff puede enumerar a todos los usuarios del tenant.
   const candidatos = useMemo(
