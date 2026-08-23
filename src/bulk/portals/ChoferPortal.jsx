@@ -8,6 +8,7 @@ import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
+import { authBulk } from '../firebaseBulk'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
@@ -386,13 +387,13 @@ export default function ChoferPortal() {
                 <div className="mt-1 text-5xl font-black tracking-tight">{money(total)}</div>
                 <div className="mt-1 text-sm font-semibold opacity-90">{viajes.length} {t('viaje(s)')}</div>
               </div>
-              {/* Fast Pay: retira las ganancias YA PAGADAS a la cuenta bancaria del chofer. */}
+              {/* Fast Pay REAL: retira el saldo disponible (backend Stripe Connect). El
+                  modal consulta el saldo real y guía el registro de la cuenta si falta. */}
               <button
-                onClick={() => setFastPay(ganancias > 0 ? 'confirmar' : 'sinsaldo')}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.98] disabled:opacity-50"
-                disabled={ganancias <= 0}
+                onClick={() => setFastPay('abrir')}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.98]"
               >
-                <DollarSign size={18} /> {t('Fast Pay')} · {t('Cobrar')} {money(ganancias)}
+                <DollarSign size={18} /> {t('Fast Pay')} · {t('Cobrar')}
               </button>
               <div className="mt-1.5 text-center text-[11px] text-slate-400">{t('Retiro instantáneo a tu cuenta · comisión 3%')}</div>
               <div className="mt-3 grid grid-cols-2 gap-3">
@@ -428,15 +429,7 @@ export default function ChoferPortal() {
                 </div>
               )}
               {fastPay && (
-                <FastPayModal
-                  estado={fastPay}
-                  setEstado={setFastPay}
-                  monto={ganancias}
-                  banco={miPerfil?.banco}
-                  nombre={usuario?.nombre}
-                  onIrPerfil={() => { setFastPay(null); setTab('perfil') }}
-                  t={t}
-                />
+                <FastPayModal estado={fastPay} setEstado={setFastPay} nombre={usuario?.nombre} t={t} />
               )}
             </div>
           )
@@ -1230,64 +1223,90 @@ function Modal({ titulo, children, onClose }) {
   )
 }
 
-// Fast Pay: retiro instantáneo de las ganancias a la cuenta del chofer.
-// MODO TEST: no mueve dinero real (no hay backend de payout para bulk). Simula el
-// flujo para ver cómo se ve. Comisión del 3% sobre el monto retirado.
-const FASTPAY_COMISION = 0.03
-function FastPayModal({ estado, setEstado, monto, banco, nombre, onIrPerfil, t }) {
-  const comision = monto * FASTPAY_COMISION
-  const neto = monto - comision
-  const cuentaOk = banco && (banco.cuenta || '').trim() && (banco.titular || '').trim()
+// Fast Pay: retiro instantáneo REAL de las ganancias del chofer vía Stripe Connect
+// (backend /api/bulk-fastpay; con clave de TEST no mueve dinero real). Comisión 3%.
+// Flujo: abrir → consulta estado/saldo → configurar cuenta (onboarding) si falta →
+// confirmar (disponible/comisión/neto) → procesando → listo (con referencia).
+function FastPayModal({ estado, setEstado, nombre, t }) {
+  const [info, setInfo] = useState(null) // { estado, ganado, retirado, disponible, comisionPct, test }
+  const [resultado, setResultado] = useState(null)
+  const [err, setErr] = useState('')
   const cierra = () => setEstado(null)
 
-  // Al confirmar, "procesa" ~1.8 s (simulado) y muestra el mensaje de éxito.
-  useEffect(() => {
-    if (estado !== 'procesando') return
-    const id = setTimeout(() => setEstado('listo'), 1800)
-    return () => clearTimeout(id)
-  }, [estado, setEstado])
-
-  const enmascarar = (n) => {
-    const s = (n || '').replace(/\s/g, '')
-    return s.length > 4 ? `···· ${s.slice(-4)}` : s
+  const api = async (accion) => {
+    const tok = await authBulk.currentUser.getIdToken()
+    const r = await fetch('/api/bulk-fastpay', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ accion }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || d.ok === false) throw new Error(d.error || t('Error de conexión.'))
+    return d
   }
+
+  // Al abrir: consulta el estado de la cuenta de cobro y el saldo REAL en el backend.
+  useEffect(() => {
+    if (estado !== 'abrir') return
+    api('estado')
+      .then((d) => { setInfo(d); setEstado(d.estado !== 'verificado' ? 'config' : (d.disponible > 0 ? 'confirmar' : 'sinsaldo')) })
+      .catch((e) => { setErr(e.message); setEstado('error') })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado])
+
+  const configurar = async () => {
+    try { const d = await api('onboarding'); window.open(d.url, '_blank', 'noopener') } catch (e) { setErr(e.message); setEstado('error') }
+  }
+  const retirar = async () => {
+    setEstado('procesando')
+    try { const d = await api('retirar'); setResultado(d); setEstado('listo') } catch (e) { setErr(e.message); setEstado('error') }
+  }
+
+  const comision = info ? info.disponible * (info.comisionPct || 0.03) : 0
+  const neto = info ? info.disponible - comision : 0
 
   return (
     <Modal titulo={estado === 'listo' ? '' : t('Fast Pay')} onClose={estado === 'procesando' ? () => {} : cierra}>
+      {estado === 'abrir' && (
+        <div className="flex flex-col items-center py-6"><Spinner /><p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-300">{t('Consultando tu saldo…')}</p></div>
+      )}
+
+      {estado === 'config' && (
+        <div className="text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Landmark size={26} /></div>
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-300">
+            {info?.estado === 'en_revision'
+              ? t('Tu cuenta de cobro está en revisión. En cuanto Stripe la apruebe podrás retirar tu dinero.')
+              : t('Para recibir tu dinero, primero configura tu cuenta de cobro (se hace una sola vez, con Stripe).')}
+          </p>
+          {info && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b></div>}
+          {info?.estado !== 'en_revision' && <Boton className="mt-4 w-full" onClick={configurar}><Landmark size={16} /> {t('Configurar mi cuenta de cobro')}</Boton>}
+          <button onClick={cierra} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
+        </div>
+      )}
+
       {estado === 'sinsaldo' && (
         <div className="text-center">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800"><DollarSign size={28} /></div>
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-300">{t('Aún no tienes ganancias pagadas disponibles para retirar. Cuando cierres una entrega, tu pago aparecerá aquí.')}</p>
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-300">{t('No tienes saldo disponible para retirar. Cuando cierres una entrega, tu pago aparecerá aquí.')}</p>
+          {info && info.retirado > 0 && <div className="mt-2 text-xs text-slate-400">{t('Ya retirado')}: {money(info.retirado)} · {t('Ganado')}: {money(info.ganado)}</div>}
           <Boton className="mt-4 w-full" onClick={cierra}>{t('Entendido')}</Boton>
         </div>
       )}
 
-      {estado === 'confirmar' && !cuentaOk && (
-        <div className="text-center">
-          <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Landmark size={26} /></div>
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-300">{t('Primero registra tu cuenta bancaria en tu Perfil para poder recibir el dinero.')}</p>
-          <Boton className="mt-4 w-full" onClick={onIrPerfil}>{t('Ir a mi Perfil')}</Boton>
-          <button onClick={cierra} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cancelar')}</button>
-        </div>
-      )}
-
-      {estado === 'confirmar' && cuentaOk && (
+      {estado === 'confirmar' && info && (
         <div>
-          <div className="rounded-2xl bg-amber-50 px-3 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{t('Modo prueba · no se mueve dinero real')}</div>
+          {info.test && <div className="rounded-2xl bg-amber-50 px-3 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{t('Modo prueba · no se mueve dinero real')}</div>}
           <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-            <div className="flex items-center justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">{t('Monto disponible')}</span><span className="font-semibold text-brand-navy dark:text-slate-100">{money(monto)}</span></div>
+            <div className="flex items-center justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">{t('Saldo disponible')}</span><span className="font-semibold text-brand-navy dark:text-slate-100">{money(info.disponible)}</span></div>
             <div className="flex items-center justify-between text-sm"><span className="text-slate-500 dark:text-slate-400">{t('Comisión')} (3%)</span><span className="font-semibold text-rose-500">− {money(comision)}</span></div>
             <div className="my-1 border-t border-dashed border-slate-200 dark:border-slate-700" />
             <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700 dark:text-slate-200">{t('Recibes')}</span><span className="text-xl font-black text-[#15b66b]">{money(neto)}</span></div>
           </div>
           <div className="mt-3 flex items-center gap-2.5 rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-brand-navy/5 text-brand-navy dark:bg-slate-800 dark:text-slate-200"><Landmark size={18} /></span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-[#15b66b]/10 text-[#15b66b]"><Landmark size={18} /></span>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{banco.banco || t('Cuenta registrada')}</div>
-              <div className="truncate text-[11px] text-slate-400">{banco.titular} · {enmascarar(banco.cuenta)}</div>
+              <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cuenta verificada')}</div>
+              <div className="truncate text-[11px] text-slate-400">{t('El depósito llega directo a tu cuenta vía Stripe.')}</div>
             </div>
           </div>
-          <Boton className="mt-4 w-full" onClick={() => setEstado('procesando')}>{t('Confirmar retiro')} · {money(neto)}</Boton>
+          <Boton className="mt-4 w-full" onClick={retirar}>{t('Confirmar retiro')} · {money(neto)}</Boton>
           <button onClick={cierra} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cancelar')}</button>
         </div>
       )}
@@ -1302,10 +1321,20 @@ function FastPayModal({ estado, setEstado, monto, banco, nombre, onIrPerfil, t }
       {estado === 'listo' && (
         <div className="py-2 text-center">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[#15b66b]/10 text-[#15b66b]"><CheckCircle2 size={40} /></div>
-          <p className="mt-4 text-lg font-black text-brand-navy dark:text-slate-100">{t('¡En hora buena!')} 🎉</p>
+          <p className="mt-4 text-lg font-black text-brand-navy dark:text-slate-100">{t('¡En hora buena!')}</p>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Tu dinero está en camino')}, {nombre || t('chofer')}.</p>
-          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#15b66b]/10 px-3 py-1 text-sm font-bold text-[#15b66b]">{money(neto)}</div>
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#15b66b]/10 px-3 py-1 text-sm font-bold text-[#15b66b]">{money(resultado?.neto || 0)}</div>
+          {resultado?.transferId && <div className="mt-2 text-[11px] text-slate-400">{t('Referencia')}: <span className="font-mono">{resultado.transferId}</span></div>}
           <Boton className="mt-4 w-full" onClick={cierra}>{t('Listo')}</Boton>
+        </div>
+      )}
+
+      {estado === 'error' && (
+        <div className="text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-rose-100 text-rose-500 dark:bg-rose-500/15"><AlertTriangle size={26} /></div>
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{err || t('Algo salió mal. Intenta de nuevo.')}</p>
+          <Boton className="mt-4 w-full" onClick={() => setEstado('abrir')}>{t('Reintentar')}</Boton>
+          <button onClick={cierra} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
         </div>
       )}
     </Modal>
