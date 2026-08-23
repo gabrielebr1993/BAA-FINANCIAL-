@@ -528,7 +528,7 @@ async function _auditMail(tenant, actor, accion, detalle) {
   try { await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion, entidad: 'correo', detalle, ts: new Date().toISOString() }) } catch { /* noop */ }
 }
 
-exports.bulkMailboxOp = onCall(async (req) => {
+exports.bulkMailboxOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64', 'GOOGLE_ADMIN_SUBJECT'] }, async (req) => {
   const tk = req.auth && req.auth.token
   if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede gestionar los correos del dominio.')
   const tenant = tk.bulkTenant
