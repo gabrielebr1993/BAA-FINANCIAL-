@@ -647,7 +647,7 @@ function _cuerpoDe(payload) {
   const walk = (p) => {
     if (!p) return
     const mime = p.mimeType || ''
-    if (p.filename) out.adjuntos.push({ nombre: p.filename, tipo: mime, bytes: (p.body && p.body.size) || 0 })
+    if (p.filename) out.adjuntos.push({ nombre: p.filename, tipo: mime, bytes: (p.body && p.body.size) || 0, adjId: (p.body && p.body.attachmentId) || null })
     else if (mime === 'text/plain' && p.body && p.body.data && !out.text) out.text = _b64urlDec(p.body.data)
     else if (mime === 'text/html' && p.body && p.body.data && !out.html) out.html = _b64urlDec(p.body.data)
     ;(p.parts || []).forEach(walk)
@@ -656,9 +656,10 @@ function _cuerpoDe(payload) {
   return out
 }
 const _subjEnc = (s) => `=?UTF-8?B?${Buffer.from(String(s || ''), 'utf8').toString('base64')}?=`
-// Arma el correo MIME. Si viene `cuerpoHtml` (p. ej. con la firma corporativa), se
-// envía multipart/alternative (texto plano + HTML) — el estándar de un correo real.
-function _mimeRaw({ de, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo }) {
+// Arma el correo MIME. Con `cuerpoHtml` (firma corporativa) va multipart/alternative
+// (texto + HTML); con `adjuntos` [{nombre,tipo,datab64}] todo se envuelve en
+// multipart/mixed — el formato estándar de un correo real con archivos.
+function _mimeRaw({ de, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo, adjuntos = [] }) {
   const head = [
     `From: ${de}`,
     `To: ${para}`,
@@ -667,35 +668,53 @@ function _mimeRaw({ de, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo }) {
     ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
     'MIME-Version: 1.0',
   ]
-  let L
+  const textB64 = Buffer.from(String(cuerpo || ''), 'utf8').toString('base64')
+  let contenido
   if (cuerpoHtml) {
     const b = 'bnd_milepay_alt'
-    L = [
-      ...head,
-      `Content-Type: multipart/alternative; boundary="${b}"`,
-      '',
-      `--${b}`,
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(String(cuerpo || ''), 'utf8').toString('base64'),
-      `--${b}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(String(cuerpoHtml), 'utf8').toString('base64'),
+    contenido = [
+      `Content-Type: multipart/alternative; boundary="${b}"`, '',
+      `--${b}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', textB64,
+      `--${b}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', Buffer.from(String(cuerpoHtml), 'utf8').toString('base64'),
       `--${b}--`,
     ]
   } else {
-    L = [...head, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', Buffer.from(String(cuerpo || ''), 'utf8').toString('base64')]
+    contenido = ['Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', textB64]
+  }
+  let L
+  if (adjuntos.length) {
+    const m = 'bnd_milepay_mix'
+    L = [...head, `Content-Type: multipart/mixed; boundary="${m}"`, '', `--${m}`, ...contenido]
+    for (const a of adjuntos) {
+      const nombre = String(a.nombre || 'archivo').replace(/"/g, '')
+      const fn = /[^\x20-\x7E]/.test(nombre) ? _subjEnc(nombre) : nombre
+      L.push(
+        `--${m}`,
+        `Content-Type: ${a.tipo || 'application/octet-stream'}; name="${fn}"`,
+        `Content-Disposition: attachment; filename="${fn}"`,
+        'Content-Transfer-Encoding: base64', '',
+        String(a.datab64 || ''),
+      )
+    }
+    L.push(`--${m}--`)
+  } else {
+    L = [...head, ...contenido]
   }
   return Buffer.from(L.join('\r\n'), 'utf8').toString('base64url')
+}
+// Valida los adjuntos que llegan del frontend (máx. 5 archivos, ~7MB en total).
+function _validarAdjuntos(adjuntos) {
+  const lista = Array.isArray(adjuntos) ? adjuntos : []
+  if (lista.length > 5) throw new HttpsError('invalid-argument', 'Máximo 5 archivos adjuntos por correo.')
+  const total = lista.reduce((a, x) => a + (String(x.datab64 || '').length * 0.75), 0)
+  if (total > 7 * 1024 * 1024) throw new HttpsError('invalid-argument', 'Los adjuntos superan el límite de 7 MB en total.')
+  return lista
 }
 
 exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds: 60 }, async (req) => {
   const tk = req.auth && req.auth.token
   if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede usar la bandeja de correo.')
-  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, cuerpoHtml, de, accion, threadId, inReplyTo, q } = req.data || {}
+  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, cuerpoHtml, de, accion, threadId, inReplyTo, q, adjuntos, adjId } = req.data || {}
   if (!buzon) throw new HttpsError('invalid-argument', 'Falta el buzón.')
   // Solo se pueden abrir buzones ADMINISTRADOS por el panel (espejo bulk_mailboxes).
   const qq = await db.collection('bulk_mailboxes').where('direccion', '==', buzon).where('tipo', '==', 'buzon').limit(1).get()
@@ -748,16 +767,24 @@ exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds:
 
   if (op === 'enviar') {
     if (!para || !asunto) throw new HttpsError('invalid-argument', 'Faltan destinatario o asunto.')
-    const raw = _mimeRaw({ de: de || buzon, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo })
+    const raw = _mimeRaw({ de: de || buzon, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo, adjuntos: _validarAdjuntos(adjuntos) })
     const r = await gmail.users.messages.send({ userId: 'me', requestBody: { raw, ...(threadId ? { threadId } : {}) } })
     await _auditMail(tk.bulkTenant, (req.auth.token.email) || 'admin', 'correo_enviado', `${de || buzon} → ${para} · ${asunto}`)
     return { ok: true, id: r.data.id, mensaje: 'Correo enviado.' }
   }
 
   if (op === 'borrador') {
-    const raw = _mimeRaw({ de: de || buzon, para: para || '', cc, asunto: asunto || '', cuerpo, cuerpoHtml })
+    const raw = _mimeRaw({ de: de || buzon, para: para || '', cc, asunto: asunto || '', cuerpo, cuerpoHtml, adjuntos: _validarAdjuntos(adjuntos) })
     await gmail.users.drafts.create({ userId: 'me', requestBody: { message: { raw } } })
     return { ok: true, mensaje: 'Borrador guardado.' }
+  }
+
+  // Descargar UN adjunto de un mensaje (devuelve el contenido en base64url).
+  if (op === 'adjunto') {
+    if (!id || !adjId) throw new HttpsError('invalid-argument', 'Faltan el mensaje o el adjunto.')
+    const r = await gmail.users.messages.attachments.get({ userId: 'me', messageId: id, id: adjId })
+    if ((r.data.size || 0) > 9 * 1024 * 1024) throw new HttpsError('resource-exhausted', 'El adjunto supera los 9 MB; descárgalo desde Gmail.')
+    return { ok: true, datab64: r.data.data || '' }
   }
 
   if (op === 'marcar') {

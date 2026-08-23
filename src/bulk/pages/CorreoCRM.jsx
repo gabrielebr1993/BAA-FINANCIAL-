@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Inbox, Send, FileText, ShieldAlert, Trash2, RefreshCw, PenSquare, X, ArrowLeft,
-  Reply, Paperclip, ChevronDown, Mail, Search, MailOpen, Minus, PenLine,
+  Reply, Paperclip, ChevronDown, Mail, Search, MailOpen, Minus, PenLine, BookOpen, Download,
 } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
@@ -43,6 +43,15 @@ const fFecha = (s) => {
     : d.toLocaleDateString('es', { day: '2-digit', month: 'short' })
 }
 const fFechaLarga = (s) => { const d = new Date(s); return isNaN(d) ? String(s || '') : d.toLocaleString('es', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
+
+// ── Plantillas de correo (base del negocio; el usuario puede guardar las suyas) ──
+const PLANTILLAS_BASE = [
+  { id: 'factura', nombre: 'Envío de factura', asunto: 'Factura {numero} · MilePay', cuerpo: 'Estimado {cliente}:\n\nAdjuntamos la factura {numero} por {monto}, correspondiente al periodo {periodo}.\nFecha de vencimiento: {vence}.\n\nQuedamos atentos a cualquier duda o aclaración.\n\nSaludos cordiales,' },
+  { id: 'recordatorio', nombre: 'Recordatorio de pago', asunto: 'Recordatorio de pago · Factura {numero}', cuerpo: 'Estimado {cliente}:\n\nLe recordamos que la factura {numero} por {monto} vence el {vence}.\nSi ya realizó el pago, por favor ignore este mensaje.\n\nGracias por su preferencia.' },
+  { id: 'reclamo', nombre: 'Respuesta a reclamo', asunto: 'Seguimiento a su reclamo · {referencia}', cuerpo: 'Estimado {cliente}:\n\nRecibimos su reclamo con referencia {referencia} y ya está en revisión por nuestro equipo.\nLe daremos respuesta a más tardar el {fecha}.\n\nGracias por informarnos.' },
+  { id: 'avisopago', nombre: 'Aviso de pago a transportista', asunto: 'Aviso de pago {numero} · MilePay', cuerpo: 'Estimado {transportista}:\n\nTe informamos el pago de {monto} por las cargas del periodo {periodo}.\nFecha de pago: {fecha}.\n\nAdjuntamos el estado de cuenta. Cualquier aclaración, con gusto.' },
+]
+const fBytes = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
 
 // ── Firma corporativa ────────────────────────────────────────────────────────
 const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -94,7 +103,61 @@ export default function CorreoCRM() {
   const [enviando, setEnviando] = useState(false)
   const [incluirFirma, setIncluirFirma] = useState(true)
   const [editFirma, setEditFirma] = useState(null) // borrador del editor de firma
+  const [adjuntos, setAdjuntos] = useState([])     // [{nombre,tipo,bytes,datab64}] al redactar
+  const [verPlantillas, setVerPlantillas] = useState(false)
+  const [bajandoAdj, setBajandoAdj] = useState(null)
+  const fileRef = useRef(null)
   const pedidoRef = useRef(0)
+
+  // ── Adjuntar archivos al redactar (máx. 5, 7MB en total) ────────────────────
+  const agregarArchivos = async (e) => {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    let lista = [...adjuntos]
+    for (const f of files) {
+      if (lista.length >= 5) { setErr(t('Máximo 5 archivos por correo.')); break }
+      const total = lista.reduce((a, x) => a + x.bytes, 0) + f.size
+      if (total > 7 * 1024 * 1024) { setErr(t('Los adjuntos superan el límite de 7 MB en total.')); break }
+      const datab64 = await new Promise((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result).split(',')[1] || '')
+        r.onerror = rej
+        r.readAsDataURL(f)
+      })
+      lista.push({ nombre: f.name, tipo: f.type || 'application/octet-stream', bytes: f.size, datab64 })
+    }
+    setAdjuntos(lista)
+  }
+
+  // ── Descargar un adjunto del mensaje abierto ────────────────────────────────
+  const bajarAdjunto = async (a) => {
+    if (!abierto || !a.adjId) return
+    setBajandoAdj(a.adjId)
+    try {
+      const r = await llamar({ op: 'adjunto', id: abierto.id, adjId: a.adjId })
+      const bin = atob(String(r.datab64 || '').replace(/-/g, '+').replace(/_/g, '/'))
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      const url = URL.createObjectURL(new Blob([bytes], { type: a.tipo || 'application/octet-stream' }))
+      const el = document.createElement('a'); el.href = url; el.download = a.nombre || 'archivo'; el.click()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch (e) { setErr(e?.message || t('No se pudo descargar el adjunto.')) }
+    finally { setBajandoAdj(null) }
+  }
+
+  // ── Plantillas: base + personalizadas (guardadas en la configuración) ───────
+  const plantillas = useMemo(() => [...PLANTILLAS_BASE, ...((settings?.plantillasCorreo || []).map((p) => ({ ...p, propia: true })))], [settings])
+  const aplicarPlantilla = (p) => { setComponer((s) => ({ ...s, asunto: p.asunto, cuerpo: p.cuerpo })); setVerPlantillas(false) }
+  const guardarPlantilla = async () => {
+    const nombre = window.prompt(t('Nombre de la plantilla:'))
+    if (!nombre || !componer) return
+    const propias = [...(settings?.plantillasCorreo || []), { id: 'p' + Date.now().toString(36), nombre: nombre.trim(), asunto: componer.asunto || '', cuerpo: componer.cuerpo || '' }]
+    try { await crearConId('settings', tenantId, tenantId, { plantillasCorreo: propias }); setOk(t('Plantilla guardada.')); setTimeout(() => setOk(null), 3000) } catch { setErr(t('No se pudo guardar la plantilla.')) }
+  }
+  const eliminarPlantilla = async (p) => {
+    const propias = (settings?.plantillasCorreo || []).filter((x) => x.id !== p.id)
+    try { await crearConId('settings', tenantId, tenantId, { plantillasCorreo: propias }) } catch { /* noop */ }
+  }
 
   const abrirEditorFirma = () => setEditFirma({
     nombre: firma?.nombre ?? (usuario?.nombre || ''), cargo: firma?.cargo ?? '', empresa: firma?.empresa ?? 'MilePay',
@@ -177,6 +240,7 @@ export default function CorreoCRM() {
     const de = parseDe(abierto.de)
     setMinimizado(false)
     setIncluirFirma(firma ? firma.activa !== false : true)
+    setAdjuntos([])
     setComponer({
       de: buzon, para: de.email, cc: '', threadId: abierto.threadId, inReplyTo: abierto.messageId,
       asunto: /^re:/i.test(abierto.asunto || '') ? abierto.asunto : `Re: ${abierto.asunto || ''}`,
@@ -193,9 +257,13 @@ export default function CorreoCRM() {
       const htmlFinal = conFirma
         ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e293b;white-space:pre-wrap;line-height:1.5">${esc(componer.cuerpo || '')}</div>${firmaHtmlDe(firma, componer.de)}`
         : undefined
-      const r = await llamar({ op: comoBorrador ? 'borrador' : 'enviar', ...componer, cuerpo: cuerpoFinal, ...(htmlFinal ? { cuerpoHtml: htmlFinal } : {}) })
+      const r = await llamar({
+        op: comoBorrador ? 'borrador' : 'enviar', ...componer, cuerpo: cuerpoFinal,
+        ...(htmlFinal ? { cuerpoHtml: htmlFinal } : {}),
+        ...(adjuntos.length ? { adjuntos: adjuntos.map((a) => ({ nombre: a.nombre, tipo: a.tipo, datab64: a.datab64 })) } : {}),
+      })
       setOk(r.mensaje || t('Listo.')); setTimeout(() => setOk(null), 4000)
-      setComponer(null)
+      setComponer(null); setAdjuntos([])
       cargarResumen()
       if ((comoBorrador && carpeta === 'borradores') || (!comoBorrador && carpeta === 'enviados')) cargar(true)
     } catch (e) { setErr(e?.message || t('No se pudo enviar.')) }
@@ -224,7 +292,7 @@ export default function CorreoCRM() {
             </select>
             <ChevronDown size={15} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
-          <Boton variant="gold" onClick={() => { setMinimizado(false); setIncluirFirma(firma ? firma.activa !== false : true); setComponer({ de: buzon, para: '', cc: '', asunto: '', cuerpo: '' }) }} className="px-4 py-2"><PenSquare size={16} /> {t('Redactar')}</Boton>
+          <Boton variant="gold" onClick={() => { setMinimizado(false); setIncluirFirma(firma ? firma.activa !== false : true); setAdjuntos([]); setComponer({ de: buzon, para: '', cc: '', asunto: '', cuerpo: '' }) }} className="px-4 py-2"><PenSquare size={16} /> {t('Redactar')}</Boton>
         </div>
       }>{t('Correo')}</PageTitle>
 
@@ -363,7 +431,9 @@ export default function CorreoCRM() {
                   {(abierto.adjuntos || []).length > 0 && (
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {abierto.adjuntos.map((a, i) => (
-                        <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"><Paperclip size={12} /> {a.nombre}</span>
+                        <button key={i} onClick={() => bajarAdjunto(a)} disabled={!a.adjId || bajandoAdj === a.adjId} title={t('Descargar')} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 transition hover:border-brand-gold hover:text-brand-navy disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {bajandoAdj === a.adjId ? <Spinner /> : <Paperclip size={12} />} {a.nombre} {a.bytes ? <span className="text-slate-400">({fBytes(a.bytes)})</span> : null} {a.adjId && <Download size={11} className="text-slate-400" />}
+                        </button>
                       ))}
                     </div>
                   )}
@@ -427,10 +497,54 @@ export default function CorreoCRM() {
                       <div className="rounded-lg bg-white p-2 dark:bg-white" dangerouslySetInnerHTML={{ __html: firmaHtmlDe(firma, componer.de).replace(/^<br><br>/, '') }} />
                     </div>
                   )}
+                  {/* Archivos adjuntos elegidos */}
+                  {adjuntos.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {adjuntos.map((a, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          <Paperclip size={12} /> {a.nombre} <span className="text-slate-400">({fBytes(a.bytes)})</span>
+                          <button onClick={() => setAdjuntos((s) => s.filter((_, j) => j !== i))} className="text-slate-400 hover:text-rose-500"><X size={12} /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
                   <Boton variant="gold" onClick={() => enviar(false)} disabled={enviando || !componer.para.trim() || !componer.asunto.trim()} className="px-5">{enviando ? <Spinner /> : <Send size={15} />} {t('Enviar')}</Boton>
                   <Boton variant="ghost" onClick={() => enviar(true)} disabled={enviando} className="px-3 py-2 text-sm"><FileText size={15} /> {t('Borrador')}</Boton>
+                  {/* Adjuntar archivos */}
+                  <input ref={fileRef} type="file" multiple onChange={agregarArchivos} className="hidden" />
+                  <button onClick={() => fileRef.current?.click()} title={t('Adjuntar archivos (máx. 5 · 7MB)')} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800">
+                    <Paperclip size={16} />
+                  </button>
+                  {/* Plantillas */}
+                  <div className="relative">
+                    <button onClick={() => setVerPlantillas((v) => !v)} title={t('Plantillas')} className={`grid h-8 w-8 place-items-center rounded-lg transition ${verPlantillas ? 'bg-amber-500/15 text-amber-600' : 'text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800'}`}>
+                      <BookOpen size={16} />
+                    </button>
+                    {verPlantillas && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setVerPlantillas(false)} />
+                        <div className="absolute bottom-10 left-0 z-20 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+                          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Plantillas de correo')}</div>
+                          <div className="scroll-thin max-h-64 overflow-y-auto">
+                            {plantillas.map((p) => (
+                              <div key={p.id} className="group flex items-center">
+                                <button onClick={() => aplicarPlantilla(p)} className="min-w-0 flex-1 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800">
+                                  <div className="truncate text-sm font-semibold text-brand-navy dark:text-slate-100">{p.nombre}{p.propia && <span className="ml-1.5 rounded bg-amber-500/15 px-1 text-[9px] font-bold uppercase text-amber-600">{t('mía')}</span>}</div>
+                                  <div className="truncate text-[11px] text-slate-400">{p.asunto}</div>
+                                </button>
+                                {p.propia && <button onClick={() => eliminarPlantilla(p)} title={t('Eliminar plantilla')} className="mr-2 hidden rounded p-1 text-slate-300 hover:text-rose-500 group-hover:block"><Trash2 size={13} /></button>}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="border-t border-slate-100 dark:border-slate-800">
+                            <button onClick={() => { setVerPlantillas(false); guardarPlantilla() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"><PenSquare size={13} /> {t('Guardar el correo actual como plantilla')}</button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   {/* Firma: alternar inclusión + editar */}
                   {firmaLista ? (
                     <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
