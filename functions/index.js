@@ -656,26 +656,46 @@ function _cuerpoDe(payload) {
   return out
 }
 const _subjEnc = (s) => `=?UTF-8?B?${Buffer.from(String(s || ''), 'utf8').toString('base64')}?=`
-function _mimeRaw({ de, para, cc, asunto, cuerpo, inReplyTo }) {
-  const L = [
+// Arma el correo MIME. Si viene `cuerpoHtml` (p. ej. con la firma corporativa), se
+// envía multipart/alternative (texto plano + HTML) — el estándar de un correo real.
+function _mimeRaw({ de, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo }) {
+  const head = [
     `From: ${de}`,
     `To: ${para}`,
     ...(cc ? [`Cc: ${cc}`] : []),
     `Subject: ${_subjEnc(asunto)}`,
     ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    Buffer.from(String(cuerpo || ''), 'utf8').toString('base64'),
   ]
+  let L
+  if (cuerpoHtml) {
+    const b = 'bnd_milepay_alt'
+    L = [
+      ...head,
+      `Content-Type: multipart/alternative; boundary="${b}"`,
+      '',
+      `--${b}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(String(cuerpo || ''), 'utf8').toString('base64'),
+      `--${b}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(String(cuerpoHtml), 'utf8').toString('base64'),
+      `--${b}--`,
+    ]
+  } else {
+    L = [...head, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', Buffer.from(String(cuerpo || ''), 'utf8').toString('base64')]
+  }
   return Buffer.from(L.join('\r\n'), 'utf8').toString('base64url')
 }
 
 exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds: 60 }, async (req) => {
   const tk = req.auth && req.auth.token
   if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede usar la bandeja de correo.')
-  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, de, accion, threadId, inReplyTo, q } = req.data || {}
+  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, cuerpoHtml, de, accion, threadId, inReplyTo, q } = req.data || {}
   if (!buzon) throw new HttpsError('invalid-argument', 'Falta el buzón.')
   // Solo se pueden abrir buzones ADMINISTRADOS por el panel (espejo bulk_mailboxes).
   const qq = await db.collection('bulk_mailboxes').where('direccion', '==', buzon).where('tipo', '==', 'buzon').limit(1).get()
@@ -728,14 +748,14 @@ exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds:
 
   if (op === 'enviar') {
     if (!para || !asunto) throw new HttpsError('invalid-argument', 'Faltan destinatario o asunto.')
-    const raw = _mimeRaw({ de: de || buzon, para, cc, asunto, cuerpo, inReplyTo })
+    const raw = _mimeRaw({ de: de || buzon, para, cc, asunto, cuerpo, cuerpoHtml, inReplyTo })
     const r = await gmail.users.messages.send({ userId: 'me', requestBody: { raw, ...(threadId ? { threadId } : {}) } })
     await _auditMail(tk.bulkTenant, (req.auth.token.email) || 'admin', 'correo_enviado', `${de || buzon} → ${para} · ${asunto}`)
     return { ok: true, id: r.data.id, mensaje: 'Correo enviado.' }
   }
 
   if (op === 'borrador') {
-    const raw = _mimeRaw({ de: de || buzon, para: para || '', cc, asunto: asunto || '', cuerpo })
+    const raw = _mimeRaw({ de: de || buzon, para: para || '', cc, asunto: asunto || '', cuerpo, cuerpoHtml })
     await gmail.users.drafts.create({ userId: 'me', requestBody: { message: { raw } } })
     return { ok: true, mensaje: 'Borrador guardado.' }
   }

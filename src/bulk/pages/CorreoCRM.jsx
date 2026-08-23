@@ -8,11 +8,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Inbox, Send, FileText, ShieldAlert, Trash2, RefreshCw, PenSquare, X, ArrowLeft,
-  Reply, Paperclip, ChevronDown, Mail, Search, MailOpen, Minus,
+  Reply, Paperclip, ChevronDown, Mail, Search, MailOpen, Minus, PenLine,
 } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
-import { useColeccion } from '../data/useColeccion'
+import { useColeccion, useDoc } from '../data/useColeccion'
+import { crearConId } from '../data/repo'
+import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, KPI, Cargando, Aviso, EstadoVacio, Spinner } from '../../components/ui'
 import { num } from '../../utils/format'
 import { useLang } from '../../i18n'
@@ -42,8 +44,36 @@ const fFecha = (s) => {
 }
 const fFechaLarga = (s) => { const d = new Date(s); return isNaN(d) ? String(s || '') : d.toLocaleString('es', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 
+// ── Firma corporativa ────────────────────────────────────────────────────────
+const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+// Versión HTML (identidad navy/dorado, estilos en línea = seguro para clientes de correo).
+function firmaHtmlDe(f, de) {
+  if (!f) return ''
+  const linea2 = [f.cargo, f.empresa].filter(Boolean).join(' · ')
+  const contacto = [
+    f.telefono ? esc(f.telefono) : null,
+    de ? `<a href="mailto:${esc(de)}" style="color:#c9a24b;text-decoration:none">${esc(de)}</a>` : null,
+    f.web ? `<a href="https://${esc(String(f.web).replace(/^https?:\/\//, ''))}" style="color:#c9a24b;text-decoration:none">${esc(f.web)}</a>` : null,
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ')
+  return `<br><br><table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif;border-collapse:collapse"><tr><td style="border-left:3px solid #c9a24b;padding:2px 0 2px 14px">` +
+    `<div style="font-size:15px;font-weight:bold;color:#13233f">${esc(f.nombre || '')}</div>` +
+    (linea2 ? `<div style="font-size:12px;color:#5b6b82;margin-top:2px">${esc(linea2)}</div>` : '') +
+    (contacto ? `<div style="font-size:12px;color:#5b6b82;margin-top:5px">${contacto}</div>` : '') +
+    (f.eslogan ? `<div style="font-size:11px;color:#94a3b8;margin-top:7px;font-style:italic">${esc(f.eslogan)}</div>` : '') +
+    `</td></tr></table>`
+}
+// Versión texto plano (para la parte alternativa del correo).
+function firmaTextoDe(f, de) {
+  if (!f) return ''
+  return ['--', f.nombre, [f.cargo, f.empresa].filter(Boolean).join(' · '), [f.telefono, de, f.web].filter(Boolean).join(' · '), f.eslogan]
+    .filter(Boolean).join('\n')
+}
+
 export default function CorreoCRM() {
   const { t } = useLang()
+  const { tenantId, usuario } = useBulkAuth()
+  const { dato: settings } = useDoc('settings', tenantId)
+  const firma = settings?.firmaCorreo || null
   const { datos: mailboxes } = useColeccion('mailboxes')
   const buzones = useMemo(() => (mailboxes || []).filter((m) => m.tipo === 'buzon' && m.estado !== 'suspendida').sort((a, b) => (a.direccion || '').localeCompare(b.direccion || '')), [mailboxes])
   const [buzon, setBuzon] = useState('')
@@ -62,7 +92,22 @@ export default function CorreoCRM() {
   const [componer, setComponer] = useState(null)
   const [minimizado, setMinimizado] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const [incluirFirma, setIncluirFirma] = useState(true)
+  const [editFirma, setEditFirma] = useState(null) // borrador del editor de firma
   const pedidoRef = useRef(0)
+
+  const abrirEditorFirma = () => setEditFirma({
+    nombre: firma?.nombre ?? (usuario?.nombre || ''), cargo: firma?.cargo ?? '', empresa: firma?.empresa ?? 'MilePay',
+    telefono: firma?.telefono ?? '', web: firma?.web ?? 'www.milepay.io', eslogan: firma?.eslogan ?? '', activa: firma ? firma.activa !== false : true,
+  })
+  const guardarFirma = async () => {
+    try {
+      await crearConId('settings', tenantId, tenantId, { firmaCorreo: { ...editFirma } })
+      setEditFirma(null); setOk(t('Firma guardada.')); setTimeout(() => setOk(null), 3000)
+    } catch { setErr(t('No se pudo guardar la firma.')) }
+  }
+  const firmaLista = !!(firma && (firma.nombre || firma.empresa))
+  const conFirma = firmaLista && incluirFirma
 
   useEffect(() => { if (!buzon && buzones.length) setBuzon(buzones[0].direccion) }, [buzones, buzon])
 
@@ -131,6 +176,7 @@ export default function CorreoCRM() {
     if (!abierto) return
     const de = parseDe(abierto.de)
     setMinimizado(false)
+    setIncluirFirma(firma ? firma.activa !== false : true)
     setComponer({
       de: buzon, para: de.email, cc: '', threadId: abierto.threadId, inReplyTo: abierto.messageId,
       asunto: /^re:/i.test(abierto.asunto || '') ? abierto.asunto : `Re: ${abierto.asunto || ''}`,
@@ -142,7 +188,12 @@ export default function CorreoCRM() {
     if (!componer) return
     setEnviando(true); setErr(null)
     try {
-      const r = await llamar({ op: comoBorrador ? 'borrador' : 'enviar', ...componer })
+      // Firma corporativa: se añade al ENVIAR (texto + HTML profesional).
+      const cuerpoFinal = conFirma ? `${componer.cuerpo || ''}\n\n${firmaTextoDe(firma, componer.de)}` : componer.cuerpo
+      const htmlFinal = conFirma
+        ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e293b;white-space:pre-wrap;line-height:1.5">${esc(componer.cuerpo || '')}</div>${firmaHtmlDe(firma, componer.de)}`
+        : undefined
+      const r = await llamar({ op: comoBorrador ? 'borrador' : 'enviar', ...componer, cuerpo: cuerpoFinal, ...(htmlFinal ? { cuerpoHtml: htmlFinal } : {}) })
       setOk(r.mensaje || t('Listo.')); setTimeout(() => setOk(null), 4000)
       setComponer(null)
       cargarResumen()
@@ -173,7 +224,7 @@ export default function CorreoCRM() {
             </select>
             <ChevronDown size={15} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
-          <Boton variant="gold" onClick={() => { setMinimizado(false); setComponer({ de: buzon, para: '', cc: '', asunto: '', cuerpo: '' }) }} className="px-4 py-2"><PenSquare size={16} /> {t('Redactar')}</Boton>
+          <Boton variant="gold" onClick={() => { setMinimizado(false); setIncluirFirma(firma ? firma.activa !== false : true); setComponer({ de: buzon, para: '', cc: '', asunto: '', cuerpo: '' }) }} className="px-4 py-2"><PenSquare size={16} /> {t('Redactar')}</Boton>
         </div>
       }>{t('Correo')}</PageTitle>
 
@@ -369,15 +420,71 @@ export default function CorreoCRM() {
                     placeholder={t('Escribe tu mensaje…')}
                     className="mt-2 w-full resize-y bg-transparent text-sm text-slate-800 outline-none dark:text-slate-100"
                   />
+                  {/* Vista previa de la FIRMA CORPORATIVA (se añade sola al enviar). */}
+                  {conFirma && (
+                    <div className="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400"><PenLine size={11} /> {t('Firma corporativa (se añade al enviar)')}</div>
+                      <div className="rounded-lg bg-white p-2 dark:bg-white" dangerouslySetInnerHTML={{ __html: firmaHtmlDe(firma, componer.de).replace(/^<br><br>/, '') }} />
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
                   <Boton variant="gold" onClick={() => enviar(false)} disabled={enviando || !componer.para.trim() || !componer.asunto.trim()} className="px-5">{enviando ? <Spinner /> : <Send size={15} />} {t('Enviar')}</Boton>
                   <Boton variant="ghost" onClick={() => enviar(true)} disabled={enviando} className="px-3 py-2 text-sm"><FileText size={15} /> {t('Borrador')}</Boton>
+                  {/* Firma: alternar inclusión + editar */}
+                  {firmaLista ? (
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                      <input type="checkbox" checked={incluirFirma} onChange={(e) => setIncluirFirma(e.target.checked)} className="accent-amber-500" /> {t('Firma')}
+                    </label>
+                  ) : (
+                    <button onClick={abrirEditorFirma} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"><PenLine size={13} /> {t('Crear firma')}</button>
+                  )}
+                  {firmaLista && <button onClick={abrirEditorFirma} title={t('Editar firma')} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800"><PenLine size={15} /></button>}
                   <button onClick={() => setComponer(null)} disabled={enviando} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title={t('Descartar')}><Trash2 size={16} /></button>
                 </div>
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Editor de firma corporativa */}
+      {editFirma && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={() => setEditFirma(null)}>
+          <Card className="flex max-h-[90vh] w-full max-w-lg flex-col p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400"><PenLine size={17} /></span>
+              <h3 className="m-0 text-lg font-bold text-brand-navy dark:text-slate-100">{t('Firma corporativa')}</h3>
+              <button onClick={() => setEditFirma(null)} className="ml-auto text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="scroll-thin min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[['nombre', t('Nombre')], ['cargo', t('Cargo')], ['empresa', t('Empresa')], ['telefono', t('Teléfono')], ['web', t('Sitio web')]].map(([k, l]) => (
+                  <label key={k} className="flex flex-col gap-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{l}</span>
+                    <Input value={editFirma[k]} onChange={(e) => setEditFirma((s) => ({ ...s, [k]: e.target.value }))} className="h-10 w-full" />
+                  </label>
+                ))}
+                <label className="flex flex-col gap-1 sm:col-span-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('Eslogan / nota (opcional)')}</span>
+                  <Input value={editFirma.eslogan} onChange={(e) => setEditFirma((s) => ({ ...s, eslogan: e.target.value }))} placeholder={t('Ej. Transporte de materiales a granel')} className="h-10 w-full" />
+                </label>
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={editFirma.activa} onChange={(e) => setEditFirma((s) => ({ ...s, activa: e.target.checked }))} className="accent-amber-500" />
+                {t('Incluir automáticamente en cada correo')}
+              </label>
+              {/* Vista previa en vivo */}
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">{t('Vista previa')}</div>
+                <div className="rounded-lg bg-white p-3 dark:bg-white" dangerouslySetInnerHTML={{ __html: firmaHtmlDe(editFirma, buzon).replace(/^<br><br>/, '') }} />
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <Boton variant="ghost" onClick={() => setEditFirma(null)}>{t('Cancelar')}</Boton>
+              <Boton variant="gold" onClick={guardarFirma} disabled={!editFirma.nombre.trim() && !editFirma.empresa.trim()}><PenLine size={15} /> {t('Guardar firma')}</Boton>
+            </div>
+          </Card>
         </div>
       )}
     </div>
