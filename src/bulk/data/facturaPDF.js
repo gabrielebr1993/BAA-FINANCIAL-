@@ -37,7 +37,12 @@ export async function generarFacturaPDF(factura, { clienteNombre, empresa, titul
     body,
     styles: { fontSize: 9 },
     headStyles: { fillColor: NAVY },
-    columnStyles: conJob ? { 3: { halign: 'right' }, 4: { halign: 'right' } } : { 2: { halign: 'right' }, 3: { halign: 'right' } },
+    // Las DOS últimas columnas (Ton, Importe) van alineadas a la derecha TANTO en el
+    // encabezado como en el cuerpo, para que los números queden a la par de su título.
+    didParseCell: (data) => {
+      const cols = data.table.columns.length
+      if (data.column.index >= cols - 2) data.cell.styles.halign = 'right'
+    },
   })
 
   let fy = doc.lastAutoTable.finalY + 8
