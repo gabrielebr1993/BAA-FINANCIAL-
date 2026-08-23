@@ -814,6 +814,100 @@ exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds:
 })
 
 // ============================================================================
+// bulkMeetingOp — REUNIONES (videollamadas/voz con link de invitación) vía Daily.co.
+// MilePay orquesta salas y links; Daily maneja el audio/video (Prebuilt embebido).
+// Secreto: DAILY_API_KEY. Los invitados EXTERNOS entran SIN cuenta con op 'invitado':
+// única puerta pública — valida el código y entrega un token SOLO para esa sala.
+// ============================================================================
+const PUEDE_REUNION = ['super_admin', 'admin', 'dispatcher']
+async function dailyAPI(metodo, ruta, body) {
+  const key = process.env.DAILY_API_KEY
+  if (!key) throw new HttpsError('failed-precondition', 'Reuniones no configuradas (falta DAILY_API_KEY en el backend).')
+  const r = await fetch('https://api.daily.co/v1' + ruta, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new HttpsError('internal', 'Proveedor de video: ' + (data.info || data.error || r.status))
+  return data
+}
+const _codigoReunion = () => Array.from({ length: 10 }, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('')
+
+exports.bulkMeetingOp = onCall({ secrets: ['DAILY_API_KEY'], timeoutSeconds: 30 }, async (req) => {
+  const tk = req.auth && req.auth.token
+  const { op, id, codigo, nombre, titulo, tipo, programadaPara } = req.data || {}
+  const col = db.collection('bulk_meetings')
+
+  // ── PÚBLICO (sin cuenta): entrar como INVITADO con el código del link ──────
+  if (op === 'invitado') {
+    const nom = String(nombre || '').trim().slice(0, 60)
+    if (!codigo || !nom) throw new HttpsError('invalid-argument', 'Faltan el código de la reunión o tu nombre.')
+    const q = await col.where('codigo', '==', String(codigo)).limit(1).get()
+    if (q.empty) throw new HttpsError('not-found', 'Esta reunión no existe o el link es inválido.')
+    const m = q.docs[0].data()
+    if (m.estado === 'finalizada') throw new HttpsError('failed-precondition', 'Esta reunión ya no está disponible.')
+    const t = await dailyAPI('POST', '/meeting-tokens', { properties: { room_name: m.salaNombre, user_name: nom, is_owner: false, exp: Math.floor(Date.now() / 1000) + 6 * 3600 } })
+    await q.docs[0].ref.set({ participantes: admin.firestore.FieldValue.arrayUnion({ nombre: nom, externo: true, entro: new Date().toISOString() }) }, { merge: true }).catch(() => {})
+    return { ok: true, url: m.salaUrl, token: t.token, titulo: m.titulo || 'Reunión', tipo: m.tipo || 'video' }
+  }
+
+  // ── Resto: usuarios de MilePay con permiso ──────────────────────────────────
+  if (!tk || !PUEDE_REUNION.includes(tk.bulkRole)) throw new HttpsError('permission-denied', 'No tienes permiso para gestionar reuniones.')
+  const tenant = tk.bulkTenant
+  const actor = (req.auth.token.email) || 'staff'
+
+  if (op === 'crear') {
+    const cod = _codigoReunion()
+    const esVoz = tipo === 'voz'
+    const sala = await dailyAPI('POST', '/rooms', {
+      name: 'mp-' + cod,
+      privacy: 'private',
+      properties: {
+        enable_knocking: true, enable_prejoin_ui: true, enable_screenshare: true, enable_chat: true,
+        start_video_off: esVoz, start_audio_off: false,
+        exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
+      },
+    })
+    const doc = await col.add({
+      tenantId: tenant, titulo: String(titulo || (esVoz ? 'Llamada de voz' : 'Videollamada')).slice(0, 120), tipo: esVoz ? 'voz' : 'video',
+      codigo: cod, salaNombre: sala.name, salaUrl: sala.url,
+      estado: programadaPara ? 'programada' : 'en_vivo',
+      programadaPara: programadaPara || null, inicio: programadaPara ? null : new Date().toISOString(), fin: null, duracionMin: 0,
+      creadorId: req.auth.uid, creadorNombre: actor, creadaEn: new Date().toISOString(), participantes: [],
+    })
+    await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion: 'crear_reunion', entidad: 'reunion', detalle: `${titulo || ''} · ${cod}`, ts: new Date().toISOString() }).catch(() => {})
+    return { ok: true, id: doc.id, codigo: cod }
+  }
+
+  const snap = id ? await col.doc(id).get() : null
+  const m = snap && snap.exists ? snap.data() : null
+  if (!m || m.tenantId !== tenant) throw new HttpsError('not-found', 'Reunión no encontrada.')
+
+  // Entrar como ANFITRIÓN/miembro de MilePay (owner: entra directo y admite del lobby).
+  if (op === 'token') {
+    if (m.estado === 'finalizada') throw new HttpsError('failed-precondition', 'Esta reunión ya finalizó.')
+    const t = await dailyAPI('POST', '/meeting-tokens', { properties: { room_name: m.salaNombre, user_name: String(nombre || actor).slice(0, 60), is_owner: true, exp: Math.floor(Date.now() / 1000) + 12 * 3600 } })
+    if (m.estado === 'programada') {
+      await snap.ref.set({ estado: 'en_vivo', inicio: new Date().toISOString() }, { merge: true })
+      await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion: 'iniciar_reunion', entidad: 'reunion', detalle: m.titulo || '', ts: new Date().toISOString() }).catch(() => {})
+    }
+    return { ok: true, url: m.salaUrl, token: t.token, titulo: m.titulo, tipo: m.tipo }
+  }
+
+  if (op === 'finalizar') {
+    try { await dailyAPI('DELETE', '/rooms/' + m.salaNombre) } catch { /* la sala pudo expirar ya */ }
+    const fin = new Date().toISOString()
+    const durMin = m.inicio ? Math.max(1, Math.round((Date.parse(fin) - Date.parse(m.inicio)) / 60000)) : 0
+    await snap.ref.set({ estado: 'finalizada', fin, duracionMin: durMin }, { merge: true })
+    await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion: 'finalizar_reunion', entidad: 'reunion', detalle: `${m.titulo || ''} · ${durMin} min`, ts: new Date().toISOString() }).catch(() => {})
+    return { ok: true, mensaje: 'Reunión finalizada.' }
+  }
+
+  throw new HttpsError('invalid-argument', 'Operación no reconocida.')
+})
+
+// ============================================================================
 // procesarNotificacion — dispara al crearse un doc en bulk_notificaciones.
 // Envía SMS (Twilio) o Push (FCM) y marca `enviado`.
 // ============================================================================

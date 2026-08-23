@@ -41,6 +41,7 @@ export const MODULOS = [
   { key: 'ordenes', label: 'Órdenes / Cola', path: 'ordenes', acciones: ['ver', 'crear', 'editar', 'eliminar', 'asignar'] },
   { key: 'mapa', label: 'Mapa en vivo', path: 'mapa', acciones: ['ver'] },
   { key: 'mensajes', label: 'Mensajes', path: 'mensajes', acciones: ['ver'] },
+  { key: 'reuniones', label: 'Reuniones', path: 'reuniones', acciones: ['ver', 'crear'] },
   { key: 'jobs', label: 'Trabajos (Jobs)', path: 'jobs', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'clientes', label: 'Clientes y Plantas', path: 'clientes', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'transportistas', label: 'Transportistas', path: 'transportistas', acciones: ['ver', 'crear', 'editar', 'eliminar'] },

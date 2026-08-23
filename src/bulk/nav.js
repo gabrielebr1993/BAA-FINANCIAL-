@@ -5,7 +5,7 @@
 // permiso — así un rol nuevo o personalizado ve exactamente lo que se le autorizó.
 import {
   LayoutDashboard, Package, Boxes, Truck, Building2, Users, ClipboardList,
-  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail, Inbox,
+  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail, Inbox, Video,
 } from 'lucide-react'
 import { BULK_ROLES as R } from './domain/constants'
 import { permKey, MODULO_POR_KEY } from './domain/permisos'
@@ -16,6 +16,7 @@ export const NAV = [
   { modulo: 'ordenes', path: 'ordenes', label: 'Órdenes / Cola', icon: ClipboardList, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'mapa', path: 'mapa', label: 'Mapa en vivo', icon: Navigation, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'mensajes', path: 'mensajes', label: 'Mensajes', icon: MessageSquare, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'reuniones', path: 'reuniones', label: 'Reuniones', icon: Video, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'jobs', path: 'jobs', label: 'Trabajos (Jobs)', icon: Layers, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'clientes', path: 'clientes', label: 'Clientes y Plantas', icon: Building2, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'transportistas', path: 'transportistas', label: 'Transportistas', icon: Truck, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },

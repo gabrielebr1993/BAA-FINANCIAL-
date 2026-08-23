@@ -582,6 +582,14 @@ service cloud.firestore {
       allow create, update: if bAdmin(request.resource.data.tenantId);
     }
 
+    // Reuniones (videollamadas con link de invitación). El staff del tenant LEE la
+    // lista; TODAS las escrituras van por el backend (bulkMeetingOp). Los invitados
+    // externos nunca tocan Firestore (entran vía la función con su código).
+    match /bulk_meetings/{id} {
+      allow read: if bStaff(resource.data.tenantId);
+      allow create, update, delete: if false;
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

@@ -49,6 +49,7 @@ const Jarvis = lazy(() => import('./pages/Jarvis'))
 const PanelControl = lazy(() => import('./pages/PanelControl'))
 const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 const RegistroPublico = lazy(() => import('./pages/RegistroPublico'))
+const MeetPublico = lazy(() => import('./pages/MeetPublico'))
 
 // Envuelve una página con verificación de permiso + layout de sidebar.
 function Page({ filtro, soloSuperAdmin, roles, children }) {
@@ -134,6 +135,10 @@ function TopBranch() {
   const { pathname } = useLocation()
   if (pathname === '/bulk' || pathname.startsWith('/bulk/')) {
     return <Suspense fallback={<Cargando texto="Cargando Freight…" />}><BulkApp /></Suspense>
+  }
+  // Reuniones: página PÚBLICA del invitado externo (sin cuenta), /meet/{codigo}.
+  if (pathname.startsWith('/meet/')) {
+    return <Suspense fallback={<Cargando texto="Cargando reunión…" />}><MeetPublico /></Suspense>
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />
