@@ -522,7 +522,7 @@ async function directorioGoogle() {
   const cred = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
   const auth = new google.auth.JWT({ email: cred.client_email, key: cred.private_key, scopes: GWS_SCOPES, subject })
   await auth.authorize()
-  return { dir: google.admin({ version: 'directory_v1', auth }), dominio: process.env.GOOGLE_DOMAIN || 'milepay.com' }
+  return { dir: google.admin({ version: 'directory_v1', auth }), dominio: process.env.GOOGLE_DOMAIN || 'milepay.io' }
 }
 async function _auditMail(tenant, actor, accion, detalle) {
   try { await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion, entidad: 'correo', detalle, ts: new Date().toISOString() }) } catch { /* noop */ }

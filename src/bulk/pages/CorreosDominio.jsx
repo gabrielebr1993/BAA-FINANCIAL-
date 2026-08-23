@@ -15,7 +15,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, Aviso, EstadoVacio } from '../../components/ui'
 import { useLang } from '../../i18n'
 
-const DOMINIO = 'milepay.com'
+const DOMINIO = 'milepay.io'
 const USOS = [
   { k: '', l: '— Sin uso específico —' },
   { k: 'facturacion', l: 'Facturación (invoice@)' },
