@@ -46,12 +46,21 @@ export default function EnviarFacturaEmail({ r, tipo = 'cliente', persona, empre
   useEffect(() => { setPara(partesContacto(persona?.contacto).email || '') }, [persona])
   useEffect(() => {
     setIncluirFirma(firma ? firma.activa !== false : true)
+    // Desglose de viajes de la factura (máx. 12 líneas; el resto queda en el PDF).
+    const lineas = r.lineas || []
+    const desglose = lineas.slice(0, 12)
+      .map((l) => `  • ${l.numero || '—'} · ${l.material || '—'} · ${l.ton || 0} ton · ${money(l.precio)}`)
+      .join('\n')
+    const masLineas = lineas.length > 12 ? `\n  … ${t('y')} ${lineas.length - 12} ${t('viajes más (ver PDF adjunto)')}` : ''
+    const bloqueDetalle = lineas.length
+      ? `\n\n${t('Detalle')} (${lineas.length} ${t('viajes')} · ${r.toneladas || 0} ton):\n${desglose}${masLineas}\n\n${t('TOTAL')}: ${money(r.total)}`
+      : ''
     if (esCliente) {
       setAsunto(`${t('Factura')} ${r.numero} · ${empresa}`)
-      setCuerpo(`${t('Estimado')} ${nombre}:\n\n${t('Adjuntamos la factura')} ${r.numero} ${t('por')} ${money(r.total)} (${r.toneladas || 0} ton), ${t('correspondiente al periodo')} ${r.desde || '—'} → ${r.hasta || '—'}.\n${t('Fecha de vencimiento')}: ${r.vence || '—'}.\n\n${t('Quedamos atentos a cualquier duda o aclaración.')}\n\n${t('Saludos cordiales,')}`)
+      setCuerpo(`${t('Estimado')} ${nombre}:\n\n${t('Adjuntamos la factura')} ${r.numero} ${t('por')} ${money(r.total)}, ${t('correspondiente al periodo')} ${r.desde || '—'} → ${r.hasta || '—'}.\n${t('Fecha de vencimiento')}: ${r.vence || '—'}.${bloqueDetalle}\n\n${t('Quedamos atentos a cualquier duda o aclaración.')}\n\n${t('Saludos cordiales,')}`)
     } else {
       setAsunto(`${t('Aviso de pago')} ${r.numero} · ${empresa}`)
-      setCuerpo(`${t('Estimado')} ${nombre}:\n\n${t('Te informamos el pago de')} ${money(r.total)} ${t('por las cargas del periodo')} ${r.desde || '—'} → ${r.hasta || '—'}.\n${r.fechaPago ? `${t('Fecha de pago')}: ${r.fechaPago}.\n` : ''}\n${t('Adjuntamos el estado de cuenta. Cualquier aclaración, con gusto.')}`)
+      setCuerpo(`${t('Estimado')} ${nombre}:\n\n${t('Te informamos el pago de')} ${money(r.total)} ${t('por las cargas del periodo')} ${r.desde || '—'} → ${r.hasta || '—'}.\n${r.fechaPago ? `${t('Fecha de pago')}: ${r.fechaPago}.` : ''}${bloqueDetalle}\n\n${t('Adjuntamos el estado de cuenta. Cualquier aclaración, con gusto.')}`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r.id])

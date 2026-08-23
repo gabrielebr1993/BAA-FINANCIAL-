@@ -721,31 +721,37 @@ exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds:
   if (qq.empty) throw new HttpsError('permission-denied', 'Ese buzón no está administrado por el panel (usa Sincronizar primero).')
   const gmail = await gmailDe(buzon)
 
-  // Resumen para el dashboard: totales y no leídos por carpeta (labels de Gmail).
+  // Resumen para el dashboard: totales y no leídos por carpeta (labels de Gmail),
+  // pedidos en paralelo para responder rápido.
   if (op === 'resumen') {
+    const entradas = Object.entries(CARPETA_LABEL)
+    const rs = await Promise.all(entradas.map(([, label]) => gmail.users.labels.get({ userId: 'me', id: label }).catch(() => null)))
     const out = {}
-    for (const [k, label] of Object.entries(CARPETA_LABEL)) {
-      try {
-        const r = await gmail.users.labels.get({ userId: 'me', id: label })
-        out[k] = { total: r.data.messagesTotal || 0, noLeidos: r.data.messagesUnread || 0 }
-      } catch { out[k] = { total: 0, noLeidos: 0 } }
-    }
+    entradas.forEach(([k], i) => {
+      out[k] = rs[i] ? { total: rs[i].data.messagesTotal || 0, noLeidos: rs[i].data.messagesUnread || 0 } : { total: 0, noLeidos: 0 }
+    })
     return { ok: true, resumen: out }
   }
 
   if (op === 'listar') {
     const label = CARPETA_LABEL[carpeta] || 'INBOX'
     const lst = await gmail.users.messages.list({ userId: 'me', labelIds: [label], maxResults: 25, pageToken: pageToken || undefined, q: q || undefined })
+    const ids = lst.data.messages || []
+    // Los metadatos se piden EN PARALELO (antes era uno por uno y la bandeja se
+    // sentía colgada en "Cargando…" con el arranque en frío).
+    const gets = await Promise.all(ids.map((m) =>
+      gmail.users.messages.get({ userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['From', 'To', 'Subject', 'Date'] }).catch(() => null)
+    ))
     const mensajes = []
-    for (const m of (lst.data.messages || [])) {
-      const g = await gmail.users.messages.get({ userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['From', 'To', 'Subject', 'Date'] })
+    gets.forEach((g, i) => {
+      if (!g) return
       const h = (g.data.payload && g.data.payload.headers) || []
       mensajes.push({
-        id: m.id, threadId: g.data.threadId,
+        id: ids[i].id, threadId: g.data.threadId,
         de: _hdr(h, 'From'), para: _hdr(h, 'To'), asunto: _hdr(h, 'Subject'), fecha: _hdr(h, 'Date'),
         resumen: g.data.snippet || '', noLeido: (g.data.labelIds || []).includes('UNREAD'),
       })
-    }
+    })
     return { ok: true, mensajes, siguiente: lst.data.nextPageToken || null }
   }
 

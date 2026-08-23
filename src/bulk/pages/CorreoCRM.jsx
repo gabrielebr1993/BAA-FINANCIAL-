@@ -153,10 +153,19 @@ export default function CorreoCRM() {
 
   useEffect(() => { if (!buzon && buzones.length) setBuzon(buzones[0].direccion) }, [buzones, buzon])
 
+  // Con timeout de 45 s: si el servidor tarda (arranque en frío) o falla, se muestra
+  // un error claro en vez de quedarse en "Cargando…" para siempre.
   const llamar = async (payload) => {
-    const fn = httpsCallable(funcsBulk, 'bulkGmailOp')
-    const r = await fn({ buzon, ...payload })
-    return r?.data || {}
+    const fn = httpsCallable(funcsBulk, 'bulkGmailOp', { timeout: 45000 })
+    try {
+      const r = await fn({ buzon, ...payload })
+      return r?.data || {}
+    } catch (e) {
+      const code = e?.code || ''
+      if (/deadline/i.test(code) || /deadline/i.test(e?.message || '')) throw new Error(t('El servidor tardó demasiado en responder. Pulsa Actualizar para reintentar.'))
+      if (code === 'functions/internal' || e?.message === 'internal') throw new Error(t('Error interno del servidor de correo. Verifica que la Gmail API esté habilitada y la función desplegada, y reintenta.'))
+      throw e
+    }
   }
 
   const cargarResumen = async () => {
