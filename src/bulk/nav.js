@@ -5,7 +5,7 @@
 // permiso — así un rol nuevo o personalizado ve exactamente lo que se le autorizó.
 import {
   LayoutDashboard, Package, Boxes, Truck, Building2, Users, ClipboardList,
-  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail,
+  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail, Inbox,
 } from 'lucide-react'
 import { BULK_ROLES as R } from './domain/constants'
 import { permKey, MODULO_POR_KEY } from './domain/permisos'
@@ -28,6 +28,7 @@ export const NAV = [
   { modulo: 'materiales', path: 'materiales', label: 'Materiales', icon: Boxes, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'equipos', path: 'equipos', label: 'Tipos de equipo', icon: Package, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'usuarios', path: 'usuarios', label: 'Usuarios', icon: Users, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'correo', path: 'correo', label: 'Correo (CRM)', icon: Inbox, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'correos', path: 'correos', label: 'Correos del dominio', icon: Mail, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'roles', path: 'roles', label: 'Roles y permisos', icon: ShieldCheck, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'diagnostico', path: 'diagnostico', label: 'Diagnóstico', icon: Stethoscope, roles: [R.SUPER_ADMIN, R.ADMIN] },

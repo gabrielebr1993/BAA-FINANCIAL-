@@ -52,6 +52,7 @@ export const MODULOS = [
   { key: 'materiales', label: 'Materiales', path: 'materiales', acciones: ['ver', 'gestionar'] },
   { key: 'equipos', label: 'Tipos de equipo', path: 'equipos', acciones: ['ver', 'gestionar'] },
   { key: 'usuarios', label: 'Usuarios', path: 'usuarios', acciones: ['ver', 'gestionar'] },
+  { key: 'correo', label: 'Correo (CRM)', path: 'correo', acciones: ['ver'] },
   { key: 'correos', label: 'Correos del dominio', path: 'correos', acciones: ['ver', 'gestionar'] },
   { key: 'roles', label: 'Roles y permisos', path: 'roles', acciones: ['gestionar'] },
   { key: 'diagnostico', label: 'Diagnóstico', path: 'diagnostico', acciones: ['ver'] },

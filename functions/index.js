@@ -618,6 +618,137 @@ exports.bulkMailboxOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64', 'GOOGLE_ADMIN_
 })
 
 // ============================================================================
+// bulkGmailOp — bandeja de correo (CRM) de los buzones del dominio vía Gmail API.
+// SOLO super_admin/admin. Impersona el BUZÓN elegido (delegación domain-wide) y
+// permite listar/leer/enviar/borradores y marcar (leído, spam, papelera).
+// Requiere añadir a la delegación del robot los scopes gmail.modify y gmail.send.
+// ============================================================================
+const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/gmail.send']
+const CARPETA_LABEL = { recibidos: 'INBOX', enviados: 'SENT', borradores: 'DRAFT', spam: 'SPAM', papelera: 'TRASH' }
+
+async function gmailDe(buzon) {
+  const b64 = process.env.GOOGLE_ADMIN_SA_B64
+  if (!b64) throw new HttpsError('failed-precondition', 'Correo no configurado (falta la cuenta de servicio en el backend).')
+  let google
+  try { ({ google } = require('googleapis')) } catch { throw new HttpsError('failed-precondition', 'Falta instalar googleapis en las Cloud Functions.') }
+  const cred = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
+  const auth = new google.auth.JWT({ email: cred.client_email, key: cred.private_key, scopes: GMAIL_SCOPES, subject: buzon })
+  try { await auth.authorize() } catch (e) {
+    throw new HttpsError('failed-precondition', 'Google rechazó el acceso al buzón. Revisa que la delegación tenga los scopes de Gmail (gmail.modify y gmail.send). Detalle: ' + (e.message || ''))
+  }
+  return google.gmail({ version: 'v1', auth })
+}
+
+const _hdr = (headers, name) => { const h = (headers || []).find((x) => (x.name || '').toLowerCase() === name.toLowerCase()); return h ? h.value : '' }
+const _b64urlDec = (s) => Buffer.from(String(s || '').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+// Recorre las partes MIME del mensaje y extrae texto, html y adjuntos (solo metadatos).
+function _cuerpoDe(payload) {
+  const out = { text: '', html: '', adjuntos: [] }
+  const walk = (p) => {
+    if (!p) return
+    const mime = p.mimeType || ''
+    if (p.filename) out.adjuntos.push({ nombre: p.filename, tipo: mime, bytes: (p.body && p.body.size) || 0 })
+    else if (mime === 'text/plain' && p.body && p.body.data && !out.text) out.text = _b64urlDec(p.body.data)
+    else if (mime === 'text/html' && p.body && p.body.data && !out.html) out.html = _b64urlDec(p.body.data)
+    ;(p.parts || []).forEach(walk)
+  }
+  walk(payload)
+  return out
+}
+const _subjEnc = (s) => `=?UTF-8?B?${Buffer.from(String(s || ''), 'utf8').toString('base64')}?=`
+function _mimeRaw({ de, para, cc, asunto, cuerpo, inReplyTo }) {
+  const L = [
+    `From: ${de}`,
+    `To: ${para}`,
+    ...(cc ? [`Cc: ${cc}`] : []),
+    `Subject: ${_subjEnc(asunto)}`,
+    ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(String(cuerpo || ''), 'utf8').toString('base64'),
+  ]
+  return Buffer.from(L.join('\r\n'), 'utf8').toString('base64url')
+}
+
+exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds: 60 }, async (req) => {
+  const tk = req.auth && req.auth.token
+  if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede usar la bandeja de correo.')
+  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, de, accion, threadId, inReplyTo } = req.data || {}
+  if (!buzon) throw new HttpsError('invalid-argument', 'Falta el buzón.')
+  // Solo se pueden abrir buzones ADMINISTRADOS por el panel (espejo bulk_mailboxes).
+  const q = await db.collection('bulk_mailboxes').where('direccion', '==', buzon).where('tipo', '==', 'buzon').limit(1).get()
+  if (q.empty) throw new HttpsError('permission-denied', 'Ese buzón no está administrado por el panel (usa Sincronizar primero).')
+  const gmail = await gmailDe(buzon)
+
+  if (op === 'listar') {
+    const label = CARPETA_LABEL[carpeta] || 'INBOX'
+    const lst = await gmail.users.messages.list({ userId: 'me', labelIds: [label], maxResults: 25, pageToken: pageToken || undefined })
+    const mensajes = []
+    for (const m of (lst.data.messages || [])) {
+      const g = await gmail.users.messages.get({ userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['From', 'To', 'Subject', 'Date'] })
+      const h = (g.data.payload && g.data.payload.headers) || []
+      mensajes.push({
+        id: m.id, threadId: g.data.threadId,
+        de: _hdr(h, 'From'), para: _hdr(h, 'To'), asunto: _hdr(h, 'Subject'), fecha: _hdr(h, 'Date'),
+        resumen: g.data.snippet || '', noLeido: (g.data.labelIds || []).includes('UNREAD'),
+      })
+    }
+    return { ok: true, mensajes, siguiente: lst.data.nextPageToken || null }
+  }
+
+  if (op === 'leer') {
+    if (!id) throw new HttpsError('invalid-argument', 'Falta el id del mensaje.')
+    const g = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
+    const h = (g.data.payload && g.data.payload.headers) || []
+    const c = _cuerpoDe(g.data.payload)
+    try { await gmail.users.messages.modify({ userId: 'me', id, requestBody: { removeLabelIds: ['UNREAD'] } }) } catch { /* noop */ }
+    return {
+      ok: true,
+      mensaje: {
+        id, threadId: g.data.threadId, de: _hdr(h, 'From'), para: _hdr(h, 'To'), cc: _hdr(h, 'Cc'),
+        asunto: _hdr(h, 'Subject'), fecha: _hdr(h, 'Date'), messageId: _hdr(h, 'Message-ID'),
+        texto: c.text, html: c.html, adjuntos: c.adjuntos,
+      },
+    }
+  }
+
+  if (op === 'enviar') {
+    if (!para || !asunto) throw new HttpsError('invalid-argument', 'Faltan destinatario o asunto.')
+    const raw = _mimeRaw({ de: de || buzon, para, cc, asunto, cuerpo, inReplyTo })
+    const r = await gmail.users.messages.send({ userId: 'me', requestBody: { raw, ...(threadId ? { threadId } : {}) } })
+    await _auditMail(tk.bulkTenant, (req.auth.token.email) || 'admin', 'correo_enviado', `${de || buzon} → ${para} · ${asunto}`)
+    return { ok: true, id: r.data.id, mensaje: 'Correo enviado.' }
+  }
+
+  if (op === 'borrador') {
+    const raw = _mimeRaw({ de: de || buzon, para: para || '', cc, asunto: asunto || '', cuerpo })
+    await gmail.users.drafts.create({ userId: 'me', requestBody: { message: { raw } } })
+    return { ok: true, mensaje: 'Borrador guardado.' }
+  }
+
+  if (op === 'marcar') {
+    if (!id) throw new HttpsError('invalid-argument', 'Falta el id del mensaje.')
+    if (accion === 'papelera') await gmail.users.messages.trash({ userId: 'me', id })
+    else if (accion === 'restaurar') await gmail.users.messages.untrash({ userId: 'me', id })
+    else {
+      const map = {
+        leido: { removeLabelIds: ['UNREAD'] },
+        noleido: { addLabelIds: ['UNREAD'] },
+        spam: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+        nospam: { removeLabelIds: ['SPAM'], addLabelIds: ['INBOX'] },
+      }
+      if (!map[accion]) throw new HttpsError('invalid-argument', 'Acción no reconocida.')
+      await gmail.users.messages.modify({ userId: 'me', id, requestBody: map[accion] })
+    }
+    return { ok: true }
+  }
+
+  throw new HttpsError('invalid-argument', 'Operación no reconocida.')
+})
+
+// ============================================================================
 // procesarNotificacion — dispara al crearse un doc en bulk_notificaciones.
 // Envía SMS (Twilio) o Push (FCM) y marca `enviado`.
 // ============================================================================
