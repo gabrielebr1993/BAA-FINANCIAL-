@@ -501,6 +501,123 @@ exports.bulkContacto = onCall(async (req) => {
 })
 
 // ============================================================================
+// bulkMailboxOp — administra las direcciones del dominio (buzones y alias) en
+// Google Workspace vía Admin SDK (Directory API). SOLO super_admin/admin.
+// Credenciales SOLO en el backend (variables de entorno / Secret Manager):
+//   GOOGLE_ADMIN_SA_B64  → JSON de la cuenta de servicio (con delegación domain-wide), en base64
+//   GOOGLE_ADMIN_SUBJECT → email del admin del dominio a impersonar (ej. admin@milepay.com)
+//   GOOGLE_DOMAIN        → dominio (por defecto milepay.com)
+// Espeja el resultado en Firestore `bulk_mailboxes` y audita en `bulk_audit`.
+// ============================================================================
+const GWS_SCOPES = [
+  'https://www.googleapis.com/auth/admin.directory.user',
+  'https://www.googleapis.com/auth/admin.directory.user.alias',
+]
+async function directorioGoogle() {
+  const b64 = process.env.GOOGLE_ADMIN_SA_B64
+  const subject = process.env.GOOGLE_ADMIN_SUBJECT
+  if (!b64 || !subject) throw new HttpsError('failed-precondition', 'Correo del dominio no configurado (falta la cuenta de servicio de Google en el backend).')
+  let google
+  try { ({ google } = require('googleapis')) } catch { throw new HttpsError('failed-precondition', 'Falta instalar la dependencia googleapis en las Cloud Functions.') }
+  const cred = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'))
+  const auth = new google.auth.JWT({ email: cred.client_email, key: cred.private_key, scopes: GWS_SCOPES, subject })
+  await auth.authorize()
+  return { dir: google.admin({ version: 'directory_v1', auth }), dominio: process.env.GOOGLE_DOMAIN || 'milepay.com' }
+}
+async function _auditMail(tenant, actor, accion, detalle) {
+  try { await db.collection('bulk_audit').add({ tenantId: tenant, usuario: actor, accion, entidad: 'correo', detalle, ts: new Date().toISOString() }) } catch { /* noop */ }
+}
+
+exports.bulkMailboxOp = onCall(async (req) => {
+  const tk = req.auth && req.auth.token
+  if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede gestionar los correos del dominio.')
+  const tenant = tk.bulkTenant
+  const actor = (req.auth.token.email) || tk.bulkUid || 'admin'
+  const { op, id, direccion, destino, nombreVisible, password, uso } = req.data || {}
+  const col = db.collection('bulk_mailboxes')
+
+  // Listar/sincronizar: NO requiere argumentos; refleja Google → Firestore.
+  if (op === 'listar') {
+    const { dir, dominio } = await directorioGoogle()
+    const r = await dir.users.list({ domain: dominio, maxResults: 200, projection: 'full' })
+    const usuarios = r.data.users || []
+    const batch = db.batch()
+    for (const u of usuarios) {
+      const primary = u.primaryEmail
+      batch.set(col.doc(primary.replace(/[^a-z0-9]/gi, '_')), {
+        tenantId: tenant, direccion: primary, tipo: 'buzon', nombreVisible: u.name?.fullName || '',
+        estado: u.suspended ? 'suspendida' : 'activa', googleUserId: u.id, creadoEn: u.creationTime || null, sincronizadoEn: new Date().toISOString(),
+      }, { merge: true })
+      for (const al of (u.aliases || [])) {
+        batch.set(col.doc(al.replace(/[^a-z0-9]/gi, '_')), {
+          tenantId: tenant, direccion: al, tipo: 'alias', destino: primary, estado: 'activa', sincronizadoEn: new Date().toISOString(),
+        }, { merge: true })
+      }
+    }
+    await batch.commit()
+    return { ok: true, mensaje: `Sincronizadas ${usuarios.length} cuentas del dominio.` }
+  }
+
+  if (op === 'crear_buzon') {
+    if (!direccion || !password) throw new HttpsError('invalid-argument', 'Dirección y contraseña son obligatorias.')
+    const { dir } = await directorioGoogle()
+    const partes = (nombreVisible || direccion.split('@')[0]).split(' ')
+    const u = await dir.users.insert({ requestBody: { primaryEmail: direccion, password, name: { givenName: partes[0] || direccion, familyName: partes.slice(1).join(' ') || '·' }, changePasswordAtNextLogin: true } })
+    await col.doc(direccion.replace(/[^a-z0-9]/gi, '_')).set({ tenantId: tenant, direccion, tipo: 'buzon', nombreVisible: nombreVisible || '', uso: uso || '', estado: 'activa', googleUserId: u.data.id, creadoEn: new Date().toISOString(), creadoPor: actor }, { merge: true })
+    await _auditMail(tenant, actor, 'crear_buzon', direccion)
+    return { ok: true, mensaje: `Buzón ${direccion} creado.` }
+  }
+
+  if (op === 'crear_alias') {
+    if (!direccion || !destino) throw new HttpsError('invalid-argument', 'Dirección y buzón destino son obligatorios.')
+    const { dir } = await directorioGoogle()
+    await dir.users.aliases.insert({ userKey: destino, requestBody: { alias: direccion } })
+    await col.doc(direccion.replace(/[^a-z0-9]/gi, '_')).set({ tenantId: tenant, direccion, tipo: 'alias', destino, uso: uso || '', estado: 'activa', creadoEn: new Date().toISOString(), creadoPor: actor }, { merge: true })
+    await _auditMail(tenant, actor, 'crear_alias', `${direccion} → ${destino}`)
+    return { ok: true, mensaje: `Alias ${direccion} creado.` }
+  }
+
+  // Las demás operaciones parten del doc espejo.
+  const snap = id ? await col.doc(id).get() : null
+  const m = snap && snap.exists ? snap.data() : null
+  if (!m) throw new HttpsError('not-found', 'Dirección no encontrada.')
+
+  if (op === 'editar') {
+    const { dir } = await directorioGoogle()
+    if (m.tipo === 'buzon' && nombreVisible) {
+      const partes = nombreVisible.split(' ')
+      await dir.users.update({ userKey: m.direccion, requestBody: { name: { givenName: partes[0], familyName: partes.slice(1).join(' ') || '·' } } })
+    }
+    if (m.tipo === 'alias' && destino && destino !== m.destino) {
+      await dir.users.aliases.delete({ userKey: m.destino, alias: m.direccion })
+      await dir.users.aliases.insert({ userKey: destino, requestBody: { alias: m.direccion } })
+    }
+    await col.doc(id).set({ nombreVisible: nombreVisible ?? m.nombreVisible, destino: destino ?? m.destino, uso: uso ?? m.uso, actualizadoEn: new Date().toISOString() }, { merge: true })
+    await _auditMail(tenant, actor, 'editar_correo', m.direccion)
+    return { ok: true, mensaje: 'Dirección actualizada.' }
+  }
+
+  if (op === 'suspender' || op === 'reactivar') {
+    const suspender = op === 'suspender'
+    if (m.tipo === 'buzon') { const { dir } = await directorioGoogle(); await dir.users.update({ userKey: m.direccion, requestBody: { suspended: suspender } }) }
+    await col.doc(id).set({ estado: suspender ? 'suspendida' : 'activa', actualizadoEn: new Date().toISOString() }, { merge: true })
+    await _auditMail(tenant, actor, op, m.direccion)
+    return { ok: true, mensaje: suspender ? 'Dirección suspendida.' : 'Dirección reactivada.' }
+  }
+
+  if (op === 'eliminar') {
+    const { dir } = await directorioGoogle()
+    if (m.tipo === 'buzon') await dir.users.delete({ userKey: m.direccion })
+    else await dir.users.aliases.delete({ userKey: m.destino, alias: m.direccion })
+    await col.doc(id).delete()
+    await _auditMail(tenant, actor, 'eliminar_correo', m.direccion)
+    return { ok: true, mensaje: 'Dirección eliminada.' }
+  }
+
+  throw new HttpsError('invalid-argument', 'Operación no reconocida.')
+})
+
+// ============================================================================
 // procesarNotificacion — dispara al crearse un doc en bulk_notificaciones.
 // Envía SMS (Twilio) o Push (FCM) y marca `enviado`.
 // ============================================================================

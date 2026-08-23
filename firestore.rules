@@ -567,6 +567,21 @@ service cloud.firestore {
       allow create, update: if bStaff(id);
     }
 
+    // Correos del dominio (espejo de Google Workspace). SOLO admin. Las operaciones
+    // reales contra Google las hace el backend (Admin SDK, bypassa reglas); el frontend
+    // solo LEE. Se permite escritura a admin por si se edita el espejo desde el panel.
+    match /bulk_mailboxes/{id} {
+      allow read: if bAdmin(resource.data.tenantId);
+      allow create, update, delete: if bAdmin(request.resource.data.tenantId) || bAdmin(resource.data.tenantId);
+    }
+
+    // Ajustes del sistema por tenant (id == tenantId). Incluye el mapeo de qué
+    // dirección de correo usa cada función. Lee el staff; escribe solo admin.
+    match /bulk_settings/{id} {
+      allow read: if bStaff(resource.data.tenantId);
+      allow create, update: if bAdmin(request.resource.data.tenantId);
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }
