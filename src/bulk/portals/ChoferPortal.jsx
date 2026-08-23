@@ -660,6 +660,33 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
     finally { setGuardando(false) }
   }
 
+  // ── Cuenta de cobro (Stripe / Fast Pay): estado + link de registro ─────────
+  const [stripeInfo, setStripeInfo] = useState(null)
+  const [stripeErr, setStripeErr] = useState('')
+  const [stripeCargando, setStripeCargando] = useState(false)
+  const fastpayApi = async (accion) => {
+    const tok = await authBulk.currentUser.getIdToken()
+    const r = await fetch('/api/bulk-fastpay', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ accion }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || d.ok === false) throw new Error(d.error || t('Error de conexión.'))
+    return d
+  }
+  const consultarStripe = async () => {
+    setStripeCargando(true); setStripeErr('')
+    try { setStripeInfo(await fastpayApi('estado')) } catch (e) { setStripeErr(e.message) } finally { setStripeCargando(false) }
+  }
+  useEffect(() => { consultarStripe() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const abrirRegistroStripe = async () => {
+    setStripeCargando(true); setStripeErr('')
+    try { const d = await fastpayApi('onboarding'); window.open(d.url, '_blank', 'noopener') } catch (e) { setStripeErr(e.message) } finally { setStripeCargando(false) }
+  }
+  const ST_BADGE = {
+    verificado: { l: t('Verificada'), c: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+    en_revision: { l: t('En revisión'), c: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+    pendiente: { l: t('Registro pendiente'), c: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+    sin_registrar: { l: t('Sin registrar'), c: 'bg-slate-400/15 text-slate-500 dark:text-slate-300' },
+  }
+
   return (
     <div className="space-y-3">
       {/* Portada + foto tipo red social */}
@@ -758,6 +785,43 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
           ) : <span className="text-xs text-slate-400">{t('Todos los trabajos (sin restricción)')}</span>}
         </div>
         <p className="mt-1 text-[11px] text-slate-400">{t('Tu camión y tus trabajos los asigna la oficina. Determinan qué órdenes recibes.')}</p>
+      </Card>
+
+      {/* Cuenta de cobro (Stripe / Fast Pay): estado + link de registro del chofer */}
+      <Card className="p-4">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100">
+          <DollarSign size={16} className="text-amber-500" /> {t('Cuenta de cobro (Fast Pay)')}
+          {stripeInfo && <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${(ST_BADGE[stripeInfo.estado] || ST_BADGE.sin_registrar).c}`}>{(ST_BADGE[stripeInfo.estado] || ST_BADGE.sin_registrar).l}</span>}
+        </div>
+        <p className="mb-3 text-[11px] text-slate-400">{t('Con esta cuenta recibes tus retiros de Fast Pay al instante. Los datos bancarios los maneja Stripe de forma segura; MilePay nunca los ve.')}</p>
+        {stripeErr && <div className="mb-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">{stripeErr}</div>}
+        {stripeCargando && !stripeInfo ? (
+          <div className="flex items-center gap-2 py-2 text-xs text-slate-400"><Spinner /> {t('Consultando tu cuenta…')}</div>
+        ) : (
+          <>
+            {stripeInfo && (
+              <div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-200 px-3 py-2.5 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-400">{t('Saldo disponible para retirar')}</span>
+                <span className="text-base font-black text-[#15b66b]">{money(stripeInfo.disponible || 0)}</span>
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {(!stripeInfo || stripeInfo.estado === 'sin_registrar') && (
+                <Boton className="w-full justify-center" onClick={abrirRegistroStripe} disabled={stripeCargando}><Landmark size={16} /> {t('Registrarme para cobrar (una sola vez)')}</Boton>
+              )}
+              {stripeInfo?.estado === 'pendiente' && (
+                <Boton className="w-full justify-center" onClick={abrirRegistroStripe} disabled={stripeCargando}><Landmark size={16} /> {t('Completar mi registro')}</Boton>
+              )}
+              {stripeInfo?.estado === 'en_revision' && (
+                <p className="text-xs text-slate-400">{t('Stripe está revisando tu información. Suele tardar poco; vuelve a consultar en un rato.')}</p>
+              )}
+              {stripeInfo?.estado === 'verificado' && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('Todo listo: puedes retirar tus ganancias con Fast Pay desde la pestaña Ganancias.')}</p>
+              )}
+              <button onClick={consultarStripe} disabled={stripeCargando} className="w-full py-1 text-center text-xs font-semibold text-slate-400 hover:text-brand-navy dark:hover:text-slate-200">{stripeCargando ? t('Consultando…') : t('Actualizar estado')}</button>
+            </div>
+          </>
+        )}
       </Card>
 
       {/* Datos bancarios (MilePay) */}
