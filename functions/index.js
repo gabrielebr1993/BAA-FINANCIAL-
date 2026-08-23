@@ -675,16 +675,28 @@ function _mimeRaw({ de, para, cc, asunto, cuerpo, inReplyTo }) {
 exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds: 60 }, async (req) => {
   const tk = req.auth && req.auth.token
   if (!esAdminClaim(tk)) throw new HttpsError('permission-denied', 'Solo el administrador puede usar la bandeja de correo.')
-  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, de, accion, threadId, inReplyTo } = req.data || {}
+  const { op, buzon, carpeta, pageToken, id, para, cc, asunto, cuerpo, de, accion, threadId, inReplyTo, q } = req.data || {}
   if (!buzon) throw new HttpsError('invalid-argument', 'Falta el buzón.')
   // Solo se pueden abrir buzones ADMINISTRADOS por el panel (espejo bulk_mailboxes).
-  const q = await db.collection('bulk_mailboxes').where('direccion', '==', buzon).where('tipo', '==', 'buzon').limit(1).get()
-  if (q.empty) throw new HttpsError('permission-denied', 'Ese buzón no está administrado por el panel (usa Sincronizar primero).')
+  const qq = await db.collection('bulk_mailboxes').where('direccion', '==', buzon).where('tipo', '==', 'buzon').limit(1).get()
+  if (qq.empty) throw new HttpsError('permission-denied', 'Ese buzón no está administrado por el panel (usa Sincronizar primero).')
   const gmail = await gmailDe(buzon)
+
+  // Resumen para el dashboard: totales y no leídos por carpeta (labels de Gmail).
+  if (op === 'resumen') {
+    const out = {}
+    for (const [k, label] of Object.entries(CARPETA_LABEL)) {
+      try {
+        const r = await gmail.users.labels.get({ userId: 'me', id: label })
+        out[k] = { total: r.data.messagesTotal || 0, noLeidos: r.data.messagesUnread || 0 }
+      } catch { out[k] = { total: 0, noLeidos: 0 } }
+    }
+    return { ok: true, resumen: out }
+  }
 
   if (op === 'listar') {
     const label = CARPETA_LABEL[carpeta] || 'INBOX'
-    const lst = await gmail.users.messages.list({ userId: 'me', labelIds: [label], maxResults: 25, pageToken: pageToken || undefined })
+    const lst = await gmail.users.messages.list({ userId: 'me', labelIds: [label], maxResults: 25, pageToken: pageToken || undefined, q: q || undefined })
     const mensajes = []
     for (const m of (lst.data.messages || [])) {
       const g = await gmail.users.messages.get({ userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['From', 'To', 'Subject', 'Date'] })
