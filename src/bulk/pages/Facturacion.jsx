@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter, LayoutDashboard } from 'lucide-react'
+import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter, LayoutDashboard, Mail } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, guardar, siguienteSecuencia } from '../data/repo'
@@ -10,6 +10,7 @@ import { armarFactura, armarAvisoPago } from '../domain/facturacion'
 import { PageTitle, Card, Boton, Input, Select, Cargando, Aviso } from '../../components/ui'
 import { DocCard, DocDrawer, BotonDoc, esVencidaDoc } from '../components/FacturaDoc'
 import DashboardFacturacion from '../components/DashboardFacturacion'
+import EnviarFacturaEmail from '../components/EnviarFacturaEmail'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
@@ -119,6 +120,7 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
   const [chip, setChip] = useState('todas')
   const [detalle, setDetalle] = useState(null)
   const [porAnular, setPorAnular] = useState(null)
+  const [porCorreo, setPorCorreo] = useState(null)
   const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const cliente = (id) => clientes.find((c) => c.id === id)
@@ -291,10 +293,16 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
         <DocDrawer r={detalle} tipo="cliente" empresa={empresa} persona={cliente(detalle.clienteId)} t={t} onClose={() => setDetalle(null)} setMsg={setMsg}
           pie={<>
             <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=cliente`)}>{t('Ver documento')}</BotonDoc>
+            {detalle.estado !== 'anulada' && <BotonDoc icon={Mail} onClick={() => { setPorCorreo(detalle); setDetalle(null) }}>{t('Enviar por correo')}</BotonDoc>}
             {detalle.estado !== 'anulada' && <BotonDoc icon={CheckCircle2} onClick={() => marcarPagada(detalle)}>{detalle.estado === 'pagada' ? t('Marcar pendiente') : t('Registrar pago')}</BotonDoc>}
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
             {detalle.estado !== 'anulada' && detalle.estado !== 'pagada' && <BotonDoc icon={Ban} danger onClick={() => setPorAnular(detalle)}>{t('Anular')}</BotonDoc>}
           </>} />
+      )}
+
+      {porCorreo && (
+        <EnviarFacturaEmail r={porCorreo} tipo="cliente" persona={cliente(porCorreo.clienteId)} empresa={empresa}
+          onClose={() => setPorCorreo(null)} onEnviado={(txt) => setMsg({ tipo: 'ok', txt })} />
       )}
 
       {porAnular && (
@@ -310,6 +318,7 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
   const [busq, setBusq] = useState(FILTRO_FACTURAS_VACIO)
   const [chip, setChip] = useState('todas')
   const [detalle, setDetalle] = useState(null)
+  const [porCorreo, setPorCorreo] = useState(null)
   const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const carrier = (id) => carriers.find((c) => c.id === id)
@@ -437,9 +446,15 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
         <DocDrawer r={detalle} tipo="carrier" empresa={empresa} persona={carrier(detalle.carrierId)} t={t} onClose={() => setDetalle(null)} setMsg={setMsg}
           pie={<>
             <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=carrier`)}>{t('Ver documento')}</BotonDoc>
+            <BotonDoc icon={Mail} onClick={() => { setPorCorreo(detalle); setDetalle(null) }}>{t('Enviar por correo')}</BotonDoc>
             <BotonDoc icon={CheckCircle2} onClick={() => marcarPagado(detalle)}>{detalle.estado === 'pagado' ? t('Marcar pendiente') : t('Marcar pagado')}</BotonDoc>
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
           </>} />
+      )}
+
+      {porCorreo && (
+        <EnviarFacturaEmail r={porCorreo} tipo="carrier" persona={carrier(porCorreo.carrierId)} empresa={empresa}
+          onClose={() => setPorCorreo(null)} onEnviado={(txt) => setMsg({ tipo: 'ok', txt })} />
       )}
     </>
   )

@@ -3,7 +3,7 @@ const NAVY = [19, 35, 63]
 const GOLD = [201, 162, 75]
 const money = (n) => `$${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export async function generarFacturaPDF(factura, { clienteNombre, empresa, titulo = 'FACTURA', paraLabel = 'Cliente', para } = {}) {
+async function construirFacturaDoc(factura, { clienteNombre, empresa, titulo = 'FACTURA', paraLabel = 'Cliente', para } = {}) {
   const { default: jsPDF } = await import('jspdf')
   const autoTable = (await import('jspdf-autotable')).default
   const doc = new jsPDF()
@@ -58,5 +58,21 @@ export async function generarFacturaPDF(factura, { clienteNombre, empresa, titul
     doc.text(`Firmado por ${factura.firmante || 'cliente'} · ${factura.firmadaEn ? new Date(factura.firmadaEn).toLocaleString('es') : ''}`, 14, fy + 26)
   }
 
+  return doc
+}
+
+// Descarga el PDF (comportamiento de siempre).
+export async function generarFacturaPDF(factura, opts = {}) {
+  const doc = await construirFacturaDoc(factura, opts)
   doc.save(`${factura.numero || 'factura'}.pdf`)
+}
+
+// Devuelve el PDF como base64 + nombre, para ADJUNTARLO a un correo.
+export async function generarFacturaPDFBase64(factura, opts = {}) {
+  const doc = await construirFacturaDoc(factura, opts)
+  const buf = new Uint8Array(doc.output('arraybuffer'))
+  let bin = ''
+  const paso = 0x8000
+  for (let i = 0; i < buf.length; i += paso) bin += String.fromCharCode.apply(null, buf.subarray(i, i + paso))
+  return { datab64: btoa(bin), nombre: `${factura.numero || 'factura'}.pdf`, bytes: buf.length }
 }
