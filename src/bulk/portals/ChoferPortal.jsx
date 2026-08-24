@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX, AlertTriangle, Users } from 'lucide-react'
 import { sonidoActivo, setSonido } from '../integraciones/sonido'
 import ChatOrden from '../components/ChatOrden'
+import ImprimirTicket from '../components/ImprimirTicket'
 import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
@@ -366,7 +367,11 @@ export default function ChoferPortal() {
                   <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                   <Badge color="green">{t('Entregada')}</Badge>
-                  <span className="ml-auto text-base font-black text-emerald-600 dark:text-emerald-400">{money(o.pagoChofer)}</span>
+                  <span className="ml-auto flex items-center gap-1">
+                    {/* Ticket solo-impresión: el chofer NO genera folios ni edita la orden. */}
+                    <ImprimirTicket orden={o} empresa={usuario?.empresa || 'Freight'} canGenerar={false} tenantId={tenantId} usuario={usuario} rol={rol} compacto />
+                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{money(o.pagoChofer)}</span>
+                  </span>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
                   <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</span>

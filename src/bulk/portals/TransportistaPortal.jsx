@@ -15,6 +15,7 @@ import AvisosGeocerca from '../components/AvisosGeocerca'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
+import ImprimirTicket from '../components/ImprimirTicket'
 import { DocumentoFactura } from '../pages/FacturaPagina'
 import DashboardFacturacion from '../components/DashboardFacturacion'
 import PortalLayout from '../components/PortalLayout'
@@ -322,6 +323,7 @@ function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () =
 
 // ── Tab Órdenes: tabla filtrada a MIS órdenes, con estados de color ───────────
 function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '' }) {
+  const { usuario, tenantId, rol } = useBulkAuth()
   const [q, setQ] = useState('')
   const [fEstado, setFEstado] = useState('')
   const [fTrabajo, setFTrabajo] = useState('')
@@ -344,6 +346,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
     { key: 'chofer', label: t('Chofer') }, { key: 'ruta', label: t('Ruta'), wrap: true },
     { key: 'estado', label: t('Estado') }, { key: 'fecha', label: t('Fecha') },
     { key: 'pago', label: t('Pago del viaje'), align: 'right' },
+    { key: 'ticket', label: t('Ticket'), align: 'center' },
   ]
   const render = (o, k) => {
     if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{o.numero}</span>
@@ -365,6 +368,11 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
     if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
     if (k === 'fecha') return <span className="text-xs text-slate-500">{fecha(o.creadoEn)}</span>
     if (k === 'pago') return <span className="font-semibold text-brand-navy dark:text-slate-100">{money(o.precioTransportista)}</span>
+    // Ticket solo-impresión (el transportista NO genera folios ni escribe la orden):
+    // disponible cuando la carga ya salió o el staff ya emitió el ticket.
+    if (k === 'ticket') return (o.ticketCarga || o.ticketEntrega || ['entregada', 'liberada', 'cerrada'].includes(o.estado) || o.hitos?.carga)
+      ? <span onClick={(e) => e.stopPropagation()}><ImprimirTicket orden={o} empresa={usuario?.empresa || 'Freight'} canGenerar={false} tenantId={tenantId} usuario={usuario} rol={rol} compacto /></span>
+      : <span className="text-slate-300 dark:text-slate-600">—</span>
     return null
   }
 

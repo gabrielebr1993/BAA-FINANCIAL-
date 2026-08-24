@@ -9,6 +9,7 @@ import PanelConversaciones from '../components/PanelConversaciones'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
+import ImprimirTicket from '../components/ImprimirTicket'
 import { DocumentoFactura } from '../pages/FacturaPagina'
 import DashboardFacturacion from '../components/DashboardFacturacion'
 import GruposModal from '../components/GruposModal'
@@ -234,12 +235,17 @@ export default function ClientePortal() {
               <Card className="p-4">
                 <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis órdenes')}</h3>
                 {ordenes.length === 0 ? <EstadoVacio titulo={t('Aún no hay órdenes')} texto={t('Aquí verás tus órdenes con su estado en tiempo real.')} mostrarBoton={false} /> : (
-                  <Tabla columns={[{ key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') }, { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'precioCliente', label: t('Precio'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }]}
+                  <Tabla columns={[{ key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') }, { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'precioCliente', label: t('Precio'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'ticket', label: t('Ticket'), align: 'center' }]}
                     rows={ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).slice(0, 100).map((o) => ({ ...o, _key: o.id }))}
                     renderCell={(o, k) => {
                       if (k === 'ton') return o.pesoReal ?? o.pesoEstimado
                       if (k === 'precioCliente') return o.precioCliente != null ? money(o.precioCliente) : '—'
                       if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                      // Ticket solo-impresión (el cliente NO genera folios ni escribe la orden):
+                      // disponible cuando la carga ya salió o el staff ya emitió el ticket.
+                      if (k === 'ticket') return (o.ticketCarga || o.ticketEntrega || ENTREGADAS.includes(o.estado) || o.hitos?.carga)
+                        ? <span onClick={(e) => e.stopPropagation()}><ImprimirTicket orden={o} empresa="Freight" canGenerar={false} tenantId={tenantId} usuario={usuario} rol="cliente" compacto /></span>
+                        : <span className="text-slate-300 dark:text-slate-600">—</span>
                       return o[k]
                     }} />
                 )}
