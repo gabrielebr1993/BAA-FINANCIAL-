@@ -11,6 +11,11 @@
 
 const n = (v) => (v == null || isNaN(Number(v)) ? null : Number(v))
 
+// Código de liberación de 4 dígitos (ÚNICA fuente: lo usan el chofer al entregar,
+// el staff al marcar 'entregada' a mano y el portal del supervisor al sanear
+// órdenes entregadas que llegaron sin código).
+export const nuevoCodigoLiberacion = () => String(Math.floor(1000 + Math.random() * 9000))
+
 // Evalúa una orden ENTREGADA y decide el nivel de confianza para liberar.
 // orden: { ticket?, pod?, pesoEstimado?, pesoReal?, gps_entrega? , ... }
 // ctx: { dentroGeocercaEntrega?: boolean|null, tolerancia?: número (def 0.1) }

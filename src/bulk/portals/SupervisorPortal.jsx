@@ -6,7 +6,7 @@
 // plantaId del modelo viejo) sigue viendo su planta hasta que le asignen jobs.
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ShieldCheck, QrCode, CheckCircle2, ClipboardList, Package, Truck, PackageCheck } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import PortalLayout from '../components/PortalLayout'
@@ -16,7 +16,7 @@ import { liberar as liberarPresencia } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { ahora } from '../domain/flujo'
-import { NIVEL_LABEL } from '../domain/liberacion'
+import { NIVEL_LABEL, nuevoCodigoLiberacion } from '../domain/liberacion'
 import { Card, KPI, Boton, Input, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -44,6 +44,23 @@ export default function SupervisorPortal() {
   const [tab, setTab] = useState('liberar')
 
   const pendientes = useMemo(() => ordenes.filter((o) => o.estado === E.ENTREGADA), [ordenes])
+
+  // AUTO-SANACIÓN del código de liberación: el código solo lo generaba el flujo
+  // del chofer (POD). Una orden puede llegar a 'entregada' SIN código por otras
+  // vías (cambio manual de estado del staff, datos de demo, entregas viejas) y
+  // el supervisor la veía sin código, con el chofer atascado esperándolo. Aquí,
+  // en cuanto una orden entregada sin código entra a su alcance, se le genera y
+  // guarda uno (el supervisor tiene permiso de actualizar sus órdenes). El ref
+  // evita escribirle dos veces a la misma orden mientras llega el snapshot.
+  const sanando = useRef(new Set())
+  useEffect(() => {
+    for (const o of pendientes) {
+      if (o.codigoLiberacion || sanando.current.has(o.id)) continue
+      sanando.current.add(o.id)
+      guardar('orders', o.id, { codigoLiberacion: nuevoCodigoLiberacion() })
+        .catch(() => sanando.current.delete(o.id))
+    }
+  }, [pendientes])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
   const stats = useMemo(() => ({
     haciaPlanta: ordenes.filter((o) => HACIA_PLANTA.includes(o.estado)).length,

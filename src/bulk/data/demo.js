@@ -208,6 +208,9 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
       ...precioDe(ton, material),
     }
     if (activo || terminado) o.geoEventos = geoEventosDe(hitos, plantasDef[jd.pi].nombre, dest.nombre)
+    // Una orden ENTREGADA espera liberación: debe traer su código (el supervisor
+    // lo muestra y el chofer lo teclea). Sin él, la demo quedaba atascada.
+    if (estado === E.ENTREGADA) o.codigoLiberacion = String(randInt(1000, 9999))
     if (activo) {
       const t = estado === E.EN_RUTA ? 0.6 : estado === E.EN_DESTINO ? 0.95 : 0.05
       o.ultimaPos = { lat: lerp(plantGps.lat, dest.lat, t), lng: lerp(plantGps.lng, dest.lng, t), speed: estado === E.EN_RUTA ? 58 : 0, ts: iso(new Date()) }

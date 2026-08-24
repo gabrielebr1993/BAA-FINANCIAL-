@@ -20,6 +20,7 @@ import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
+import { nuevoCodigoLiberacion } from '../domain/liberacion'
 import MapaLeaflet from '../components/MapaLeaflet'
 import ChatOrden from '../components/ChatOrden'
 import { Card, Badge, Boton, Cargando, EstadoVacio } from '../../components/ui'
@@ -116,7 +117,15 @@ export default function OrdenDetalle() {
   const cambiarEstado = async (nuevo) => {
     if (!nuevo || nuevo === orden.estado) return
     if (!window.confirm(`${t('¿Cambiar el estado a')} "${t(ORDEN_ESTADO_LABEL[nuevo])}"?`)) return
-    await guardar('orders', orden.id, { estado: nuevo })
+    const patch = { estado: nuevo }
+    // Al marcar 'entregada' a mano, la orden necesita lo que el flujo del chofer
+    // habría puesto: el CÓDIGO de liberación (para el supervisor) y el hito de
+    // entrega. Sin esto, el supervisor veía la carga sin código para liberar.
+    if (nuevo === E.ENTREGADA) {
+      if (!orden.codigoLiberacion) patch.codigoLiberacion = nuevoCodigoLiberacion()
+      if (!orden.hitos?.entrega) patch.hitos = { ...(orden.hitos || {}), entrega: new Date().toISOString() }
+    }
+    await guardar('orders', orden.id, patch)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'estado_manual', entidad: 'orden', entidadId: orden.id, detalle: `${t(ORDEN_ESTADO_LABEL[orden.estado])} → ${t(ORDEN_ESTADO_LABEL[nuevo])}` })
   }
   // Liberación REMOTA por el admin (§8): cuando el supervisor no está disponible.

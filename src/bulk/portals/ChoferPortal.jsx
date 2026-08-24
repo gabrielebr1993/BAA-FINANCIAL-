@@ -29,7 +29,7 @@ import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { puedeMarcarLlegada, geocercaObjetivo, distanciaM, dentroGeocerca } from '../domain/geo'
-import { evaluarLiberacion, liberacionAutomatica } from '../domain/liberacion'
+import { evaluarLiberacion, liberacionAutomatica, nuevoCodigoLiberacion } from '../domain/liberacion'
 import { cerrarOferta } from '../domain/historialAsignacion'
 import { tsMillis } from '../data/chatKeys'
 import { conectar, desconectar, latir, ocupar, liberar, reportarUbicacion } from '../data/presencia'
@@ -1016,7 +1016,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
       } else {
         // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
-        const codigoLiberacion = String(Math.floor(1000 + Math.random() * 9000))
+        const codigoLiberacion = nuevoCodigoLiberacion()
         await guardar('orders', orden.id, {
           estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
           pod: podData, gps_entrega: g,
