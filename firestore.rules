@@ -172,8 +172,17 @@ service cloud.firestore {
     function bAdmin(cid) { return bSame(cid) && (bRole() in ['super_admin', 'admin']); }
     function bCliente() { return request.auth != null ? request.auth.token.bulkClienteId : null; }
     function bCarrier() { return request.auth != null ? request.auth.token.bulkCarrierId : null; }
-    // Planta asignada al supervisor (en su doc de usuario). Para acotar sus lecturas.
+    // Planta asignada al supervisor (LEGADO; en su doc de usuario). Se conserva como
+    // respaldo para supervisores aún no migrados a trabajos.
     function bMyPlanta() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.plantaId : null; }
+    // TRABAJOS (jobs) asignados al supervisor: el alcance actual de sus lecturas.
+    function bMyJobs() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.get('jobIds', []) : []; }
+    // ¿La orden cae dentro del alcance del supervisor? Por JOB (modelo nuevo) o,
+    // como respaldo, por planta (supervisores legado sin jobs asignados).
+    function bSupervisorVe(d) {
+      return (d.get('jobId', '') != '' && d.get('jobId', '') in bMyJobs())
+        || (bMyPlanta() != null && d.get('plantaId', '') == bMyPlanta());
+    }
     // Nombre del chofer (de su doc de usuario). Sirve para que pueda avanzar/aceptar
     // una orden que se le ofreció por NOMBRE o por id del roster (no solo por uid).
     function bMyName() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.nombre : null; }
@@ -212,7 +221,7 @@ service cloud.firestore {
                     || (bCarrier() != null && resource.data.get('transportistaId', '') == bCarrier())
                     || resource.data.get('choferNombre', '') == bMyName()))
           || (bRole() == 'supervisor_planta'
-                && resource.data.get('plantaId', '') == bMyPlanta()
+                && bSupervisorVe(resource.data)
                 && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagoChofer']))));
     }
 
@@ -222,7 +231,7 @@ service cloud.firestore {
       // Alta/edición general: backend (Admin SDK). Excepción: el admin del tenant
       // puede asignar SOLO la planta de un supervisor (plantaId) y el ID legible de
       // 8 dígitos (codigo). La foto de perfil vive en bulk_avatars (ver abajo).
-      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId', 'codigo']);
+      allow update: if bAdmin(resource.data.tenantId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['plantaId', 'codigo', 'jobIds', 'jobsNombres']);
       allow create, delete: if false;
     }
 
@@ -346,7 +355,7 @@ service cloud.firestore {
              (bRole() == 'chofer' && (resource.data.choferId == request.auth.uid || resource.data.transportistaId == bCarrier()))
           || (bRole() == 'transportista' && resource.data.transportistaId == bCarrier())
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
-          || (bRole() == 'supervisor_planta' && bMyPlanta() != null && resource.data.plantaId == bMyPlanta())));
+          || (bRole() == 'supervisor_planta' && bSupervisorVe(resource.data))));
       // La orden se crea SIEMPRE sin precios (viven en bulk_orderPay_*). El staff crea.
       allow create: if bStaff(request.resource.data.tenantId) && bSinValorPrecio(request.resource.data);
       // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
@@ -552,7 +561,15 @@ service cloud.firestore {
     match /bulk_driverProfiles/{id} {
       allow read: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && (request.auth.uid == id || resource.data.uid == request.auth.uid));
-      allow create, update: if bSame(request.resource.data.tenantId) && (request.auth.uid == id || bStaff(request.resource.data.tenantId));
+      // El chofer edita SU perfil y sube SUS documentos, pero NUNCA el campo
+      // `verificaciones` (estado de verificación): eso es exclusivo del staff.
+      allow create: if bSame(request.resource.data.tenantId)
+        && (bStaff(request.resource.data.tenantId)
+            || (request.auth.uid == id && !('verificaciones' in request.resource.data)));
+      allow update: if bSame(request.resource.data.tenantId)
+        && (bStaff(request.resource.data.tenantId)
+            || (request.auth.uid == id
+                && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificaciones'])));
       allow delete: if bStaff(resource.data.tenantId);
     }
 

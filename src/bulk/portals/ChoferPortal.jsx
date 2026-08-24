@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX, AlertTriangle, Users } from 'lucide-react'
 import { sonidoActivo, setSonido } from '../integraciones/sonido'
 import ChatOrden from '../components/ChatOrden'
+import DocumentosChofer from '../components/DocumentosChofer'
 import FastPayModal from '../components/FastPayModal'
 import ImprimirTicket from '../components/ImprimirTicket'
 import RepararAcceso from '../components/RepararAcceso'
@@ -677,9 +678,6 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
     espejadoRef.current = true
     guardarAvatar(tenantId, usuario.id, f).catch(() => {})
   }, [miPerfil?.foto, usuario?.id, tenantId])
-  // Sube un documento (licencia/social) — se guarda al instante y queda bloqueado
-  // para el chofer; solo el admin puede cambiarlo después.
-  const subirDoc = async (campo, e) => { const f = await leerFotoReducida(e.target.files?.[0]); if (!f) return; await guardarCampo({ [campo]: f }) }
   const setB = (k) => (e) => { tocado.current = true; setBanco((s) => ({ ...s, [k]: e.target.value })) }
   const guardarPerfil = async () => {
     setGuardando(true)
@@ -774,31 +772,14 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         </div>
       </Card>
 
-      {/* Documentos: licencia y seguro social. Una vez subidos, solo el admin los cambia. */}
+      {/* Documentos: MISMO componente que ve el administrador (licencia, medical
+          card, seguro, seguro social) con estado de verificación y vencimiento.
+          El chofer sube, previsualiza y descarga; la VERIFICACIÓN solo la hace la
+          oficina (la UI no la ofrece aquí y las reglas de Firestore lo impiden). */}
       <Card className="p-4">
         <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileText size={16} className="text-amber-500" /> {t('Mis documentos')}</div>
-        <p className="mb-3 text-[11px] text-slate-400">{t('Sube una foto de tu licencia y de tu seguro social. Al subirlas quedan bloqueadas: solo la oficina puede cambiarlas.')}</p>
-        <div className="grid grid-cols-2 gap-3">
-          {[{ campo: 'licenciaFoto', l: t('Licencia') }, { campo: 'socialFoto', l: t('Seguro social') }].map((d) => {
-            const val = miPerfil?.[d.campo]
-            return (
-              <div key={d.campo} className="rounded-xl border border-slate-200 p-2 text-center dark:border-slate-700">
-                <div className="mb-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{d.l}</div>
-                {val ? (
-                  <>
-                    <button type="button" onClick={() => setLightboxP(val)} className="block w-full"><img src={val} alt={d.l} className="h-24 w-full rounded-lg object-cover" /></button>
-                    <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"><Check size={11} /> {t('Enviado')}</div>
-                  </>
-                ) : (
-                  <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-400 dark:border-slate-600">
-                    <Camera size={20} /> {t('Subir')}
-                    <input type="file" accept="image/*" capture="environment" onChange={(e) => subirDoc(d.campo, e)} className="hidden" />
-                  </label>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <p className="mb-3 text-[11px] text-slate-400">{t('Sube la foto de cada documento y su fecha de vencimiento. La oficina los revisa y aquí ves si están verificados.')}</p>
+        <DocumentosChofer perfil={miPerfil} puedeSubir nombre={usuario?.nombre || ''} onMerge={(patch) => guardarCampo(patch)} />
       </Card>
 
       {/* Asignación (solo lectura): la define el administrador */}

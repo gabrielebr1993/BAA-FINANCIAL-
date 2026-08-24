@@ -1,8 +1,10 @@
 // ============================================================================
-// BULK · Portal del SUPERVISOR DE PLANTA — mismo lenguaje visual del admin
-// (KPIs, tabla, badges de estado), enfocado en SU planta. AISLAMIENTO: solo ve las
-// órdenes cuyo plantaId == su planta asignada (bMyPlanta, vía bulk_users.plantaId).
-// Acción principal: confirmar/LIBERAR cargas entregadas (por código o desde la lista).
+// BULK · Portal del SUPERVISOR — mismo lenguaje visual del admin (KPIs, tabla,
+// badges), enfocado en SUS TRABAJOS (jobs). AISLAMIENTO: solo ve las órdenes
+// cuyo jobId está en sus trabajos asignados (bulk_users.jobIds, reforzado por
+// las reglas con bMyJobs). COMPAT: un supervisor aún no migrado (solo con
+// plantaId del modelo viejo) sigue viendo su planta hasta que le asignen jobs.
+// Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useMemo, useState } from 'react'
 import { ShieldCheck, QrCode, CheckCircle2, ClipboardList, Package, Truck, PackageCheck } from 'lucide-react'
@@ -27,8 +29,16 @@ const COLOR_NIVEL = { alta: 'green', media: 'gold', baja: 'slate', critico: 'red
 export default function SupervisorPortal() {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
+  // Alcance NUEVO: por trabajos (jobIds). Respaldo legado: por planta.
+  const jobIds = usuario?.jobIds || []
+  const jobsNombres = usuario?.jobsNombres || []
   const plantaId = usuario?.plantaId || null
-  const { datos: ordenes } = useColeccion('orders', [where('plantaId', '==', plantaId || '__none__')])
+  const sinAsignacion = jobIds.length === 0 && !plantaId
+  const { datos: ordenes } = useColeccion('orders', [
+    jobIds.length
+      ? where('jobId', 'in', jobIds.slice(0, 10)) // Firestore admite hasta 10 valores en 'in'
+      : where('plantaId', '==', plantaId || '__none__'),
+  ])
   const [codigo, setCodigo] = useState('')
   const [msg, setMsg] = useState(null)
   const [tab, setTab] = useState('liberar')
@@ -86,13 +96,20 @@ export default function SupervisorPortal() {
     <PortalLayout
       icon={ShieldCheck}
       titulo={usuario?.nombre}
-      subtitulo={t('Supervisor de planta')}
+      subtitulo={t('Supervisor de trabajos')}
       items={items}
       activo={tab}
       onSelect={setTab}
       aviso={<>
         {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
-        {!plantaId && <Aviso tipo="warn" className="mb-3">{t('Aún no tienes una planta asignada. Pídele al administrador que te asigne una en Usuarios y roles para ver las cargas de tu planta.')}</Aviso>}
+        {sinAsignacion && <Aviso tipo="warn" className="mb-3">{t('Aún no tienes trabajos asignados. Pídele al administrador que te asigne tus trabajos en Usuarios para ver sus cargas.')}</Aviso>}
+        {jobsNombres.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Mis trabajos')}:</span>
+            {jobsNombres.map((n, i) => <Badge key={i} color="navy">{n}</Badge>)}
+          </div>
+        )}
+        {jobIds.length === 0 && plantaId && <Aviso tipo="info" className="mb-3">{t('Estás viendo las cargas de tu planta (modelo anterior). El administrador puede asignarte trabajos para el nuevo alcance por trabajo.')}</Aviso>}
       </>}
     >
       {/* KPIs (mismas tarjetas del admin), persistentes arriba del contenido */}

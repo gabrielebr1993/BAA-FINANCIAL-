@@ -25,7 +25,9 @@ export const BULK_ROLES_LABEL = {
   cliente: 'Cliente',
   transportista: 'Transportista',
   chofer: 'Chofer',
-  supervisor_planta: 'Supervisor de Planta',
+  // La CLAVE se conserva (renombrarla invalidaría los claims ya emitidos); el
+  // supervisor ahora se asocia a TRABAJOS (jobs), no a una planta.
+  supervisor_planta: 'Supervisor de Trabajos',
 }
 
 // ---- Estados de una orden (ciclo de vida completo) ------------------------

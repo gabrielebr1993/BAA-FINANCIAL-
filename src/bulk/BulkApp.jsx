@@ -27,6 +27,7 @@ const FacturaPagina = lazy(() => import('./pages/FacturaPagina'))
 const Incidencias = lazy(() => import('./pages/Incidencias'))
 const Documentos = lazy(() => import('./pages/Documentos'))
 const Jobs = lazy(() => import('./pages/Jobs'))
+const JobPerfil = lazy(() => import('./pages/JobPerfil'))
 const Clientes = lazy(() => import('./pages/Clientes'))
 const ClientePerfil = lazy(() => import('./pages/ClientePerfil'))
 const Transportistas = lazy(() => import('./pages/Transportistas'))
@@ -118,6 +119,7 @@ function Interno() {
       <Route path="/bulk/incidencias" element={<P perm="incidencias.ver"><Incidencias /></P>} />
       <Route path="/bulk/documentos" element={<P perm="documentos.ver"><Documentos /></P>} />
       <Route path="/bulk/jobs" element={<P perm="jobs.ver"><Jobs /></P>} />
+      <Route path="/bulk/jobs/:id" element={<P perm="jobs.ver"><JobPerfil /></P>} />
       <Route path="/bulk/clientes" element={<P perm="clientes.ver"><Clientes /></P>} />
       <Route path="/bulk/cliente/:id" element={<P perm="clientes.ver"><ClientePerfil /></P>} />
       <Route path="/bulk/transportistas" element={<P perm="transportistas.ver"><Transportistas /></P>} />

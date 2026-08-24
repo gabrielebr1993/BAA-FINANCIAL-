@@ -4,7 +4,9 @@ import { ArrowLeft, User, Truck, Package, Weight, DollarSign, Award, Star, Camer
 import { exportarExcel, exportarPDF } from '../../utils/exportar'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
-import { guardar } from '../data/repo'
+import { guardar, crearConId } from '../data/repo'
+import { useBulkAuth } from '../BulkAuthContext'
+import DocumentosChofer, { TIPOS_DOC, docDe } from '../components/DocumentosChofer'
 import { tsMillis } from '../data/chatKeys'
 import { perfilDeChofer, fechaOrden } from '../domain/perfilChofer'
 import { leerFotoReducida } from '../components/foto'
@@ -21,6 +23,7 @@ const fechaCorta = (ms) => (ms > 0 ? new Date(ms).toLocaleDateString('es', { day
 
 export default function ChoferPerfil() {
   const { t } = useLang()
+  const { tenantId, usuario } = useBulkAuth()
   const { nombre: nombreRaw } = useParams()
   const nombre = decodeURIComponent(nombreRaw || '')
   const { datos: ordenes, cargando } = useOrdenesConPagos()
@@ -235,22 +238,23 @@ export default function ChoferPerfil() {
         </div>
       </Card>
 
-      {/* Documentos del chofer (licencia y social) — el chofer los sube; el admin los ve/borra */}
-      {perfilDriver && (perfilDriver.licenciaFoto || perfilDriver.socialFoto) && (
+      {/* Documentos del chofer — MISMO componente que ve el chofer en su app.
+          Aquí (staff) además se VERIFICA/RECHAZA, se ajusta vencimiento y se borra. */}
+      {perfilDriver && (
         <Card className="mb-4 p-4">
-          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileText size={16} className="text-amber-500" /> {t('Documentos del chofer')}</div>
-          <div className="flex flex-wrap gap-4">
-            {[{ campo: 'licenciaFoto', l: t('Licencia') }, { campo: 'socialFoto', l: t('Seguro social') }].map((d) => perfilDriver[d.campo] && (
-              <div key={d.campo} className="relative">
-                <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{d.l}</div>
-                <img src={perfilDriver[d.campo]} alt={d.l} onClick={() => setZoomFoto(perfilDriver[d.campo])} title={t('Ver en grande')} className="h-32 cursor-zoom-in rounded-lg border border-slate-200 object-cover transition hover:brightness-95 dark:border-slate-700" />
-                <div className="absolute right-1 top-6 flex flex-col gap-1">
-                  <button onClick={() => descargarImagen(perfilDriver[d.campo], `${nombre}_${d.campo}`)} title={t('Descargar')} className="grid h-6 w-6 place-items-center rounded-full bg-brand-navy text-white shadow dark:bg-slate-700"><Download size={13} /></button>
-                  <button onClick={() => { if (window.confirm(`${t('¿Borrar')} ${d.l}? ${t('El chofer podrá subirla de nuevo.')}`)) guardar('driverProfiles', perfilDriver.id, { [d.campo]: null }) }} title={t('Borrar')} className="grid h-6 w-6 place-items-center rounded-full bg-rose-500 text-white shadow"><Trash2 size={13} /></button>
-                </div>
-              </div>
-            ))}
+          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><FileText size={16} className="text-amber-500" /> {t('Documentos del chofer')}
+            {TIPOS_DOC.every(({ k }) => !docDe(perfilDriver, k)) && <span className="ml-2 text-xs font-normal text-slate-400">({t('aún no sube ninguno')})</span>}
           </div>
+          <DocumentosChofer
+            perfil={perfilDriver}
+            puedeVerificar
+            nombre={usuario?.nombre || usuario?.email || ''}
+            onMerge={(patch) => crearConId('driverProfiles', perfilDriver.id, tenantId, patch)}
+            onBorrar={(k) => guardar('driverProfiles', perfilDriver.id, {
+              [`documentos.${k}`]: null, [`verificaciones.${k}`]: null,
+              ...(k === 'licencia' ? { licenciaFoto: null } : {}), ...(k === 'social' ? { socialFoto: null } : {}),
+            })}
+          />
         </Card>
       )}
 

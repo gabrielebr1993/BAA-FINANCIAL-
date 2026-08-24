@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Layers, Trash2, Wand2, Truck, Check, AlertTriangle, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Layers, Trash2, Wand2, Truck, Check, AlertTriangle, Search, UserSearch } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, crearLote, listar, guardar, where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -7,6 +8,7 @@ import { auditar } from '../data/auditoria'
 import { escribirPreciosBase } from '../data/ordenPagos'
 import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
 import { calcularTarifa } from '../domain/tarifas'
+import { precioViajeMaterial } from '../domain/materialesPrecios'
 import { MAX_TON_POR_VIAJE, ORDEN_ESTADO as E } from '../domain/constants'
 
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
@@ -166,13 +168,19 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
     const eqMat = matSel ? ((matSel.equipos && matSel.equipos.length) ? matSel.equipos : (matSel.equipo ? [matSel.equipo] : [])) : []
     const equipoReq = eqMat.length === 1 ? eqMat[0] : (job.tipoEquipo || '')
     const nuevas = generarOrdenesDeJob(job, total, { material, tipoEquipo: equipoReq, seqInicial: existentes.length + 1 })
-    // Precio: manual (override) o AUTOMÁTICO con el motor de tarifas, por cada orden.
+    // Precio por orden, en este orden de prioridad:
+    //   1) MANUAL (override del formulario)
+    //   2) Motor de TARIFAS del cliente
+    //   3) PRECIO DEL MATERIAL EN LA PLANTA del trabajo (Materiales → Precios por
+    //      planta): así el precio sale automático de la planta correspondiente.
     const manual = precioCliente ? Number(precioCliente) : null
-    let conTarifa = 0
+    let conTarifa = 0, conMatPlanta = 0
     const conPrecio = nuevas.map((o) => {
       if (manual != null) return { ...o, precioCliente: manual, precioTransportista: r2(manual * 0.72), pagoChofer: r2(manual * 0.72 * 0.8) }
       const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: equipoReq, clienteId: job.clienteId, plantaId: job.plantaId, ton: o.pesoEstimado })
       if (t) { conTarifa++; return { ...o, precioCliente: t.precioCliente, precioTransportista: t.precioTransportista, pagoChofer: t.pagoChofer } }
+      const pvm = precioViajeMaterial(materiales, o.material, job.plantaId, o.pesoEstimado)
+      if (pvm != null) { conMatPlanta++; return { ...o, precioCliente: pvm, precioTransportista: r2(pvm * 0.72), pagoChofer: r2(pvm * 0.72 * 0.8) } }
       return o
     })
     // Inc.2 Fase 3b: la orden se crea SIN precios (operacional); los importes van
@@ -183,19 +191,21 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
       ...o, precioCliente: conPrecio[i].precioCliente, precioTransportista: conPrecio[i].precioTransportista, pagoChofer: conPrecio[i].pagoChofer,
     })))
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_ordenes', entidad: 'job', entidadId: job.id, detalle: `${nuevas.length} órdenes (${total} ton) para ${job.codigo}` })
-    setRes({ n: nuevas.length, total, tarifa: manual != null ? 'manual' : (conTarifa ? 'auto' : 'sin_tarifa') }); setCant(''); setOcupado(false)
+    setRes({ n: nuevas.length, total, tarifa: manual != null ? 'manual' : (conTarifa ? 'auto' : conMatPlanta ? 'material' : 'sin_tarifa') }); setCant(''); setOcupado(false)
   }
 
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center gap-2">
         <Layers size={17} className="text-amber-500" />
-        <span className="font-bold text-brand-navy dark:text-slate-100">{job.nombre}</span>
+        {/* El nombre lleva al PERFIL del trabajo (toda su información consolidada). */}
+        <Link to={`/bulk/jobs/${job.id}`} className="font-bold text-brand-navy hover:underline dark:text-slate-100">{job.nombre}</Link>
         <Badge color="slate">{job.codigo}</Badge>
         <span className="text-xs text-slate-400">{t('Cliente')}: {nombreCliente(job.clienteId)}</span>
         {job.tipoEquipo && <Badge color="navy">{t('Equipo:')} {job.tipoEquipo}</Badge>}
         <span className="text-xs text-slate-400">· {conteo.cola} {t('en cola')} · {conteo.proceso} {t('en proceso')}</span>
-        <Gate perm="jobs.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
+        <Link to={`/bulk/jobs/${job.id}`} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-brand-navy transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"><UserSearch size={13} /> {t('Ver perfil')}</Link>
+        <Gate perm="jobs.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
       </div>
       {(job.materiales || []).length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{job.materiales.map((m) => <Badge key={m} color="green">{t(m)}</Badge>)}</div>}
 
@@ -277,7 +287,7 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
         </Boton>
         {cant > 0 && <span className="text-xs text-slate-500 dark:text-slate-400">→ {viajes} {t('viaje(s) de máx')} {MAX_TON_POR_VIAJE} ton</span>}
       </div>
-      {res && <Aviso tipo="ok" className="mt-2">{t('Se generaron')} <b>{res.n} {t('órdenes')}</b> ({res.total} ton){res.tarifa === 'auto' ? ` ${t('con precios del motor de tarifas')}` : res.tarifa === 'manual' ? ` ${t('con precio manual')}` : ` ${t('(sin tarifa configurada aún)')}`} {t('— visibles en')} {t('Órdenes / Cola')}.</Aviso>}
+      {res && <Aviso tipo="ok" className="mt-2">{t('Se generaron')} <b>{res.n} {t('órdenes')}</b> ({res.total} ton){res.tarifa === 'auto' ? ` ${t('con precios del motor de tarifas')}` : res.tarifa === 'manual' ? ` ${t('con precio manual')}` : res.tarifa === 'material' ? ` ${t('con el precio del material en la planta')}` : ` ${t('(sin tarifa configurada aún)')}`} {t('— visibles en')} {t('Órdenes / Cola')}.</Aviso>}
     </Card>
   )
 }

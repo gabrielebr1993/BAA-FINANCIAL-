@@ -29,7 +29,10 @@ export default function BulkUsuarios() {
   const avatares = useAvatares()
   const { datos: clientes } = useColeccion('clients')
   const { datos: carriers } = useColeccion('carriers')
-  const { datos: plantas } = useColeccion('plants')
+  // Trabajos (jobs): el SUPERVISOR ahora se asigna a trabajos, no a una planta.
+  const { datos: jobsCat } = useColeccion('jobs')
+  const jobsActivos = jobsCat.filter((j) => j.activo !== false)
+  const nombreJobU = (id) => { const j = jobsCat.find((x) => x.id === id); return j ? (j.codigo ? `${j.codigo} · ${j.nombre || ''}` : (j.nombre || id)) : id }
   const directorio = useDirectorio()
   const matrizCom = useMatrizComunicacion(tenantId)
   const [verMatriz, setVerMatriz] = useState(false)
@@ -116,14 +119,6 @@ export default function BulkUsuarios() {
     })()
   }, [cargando, usuarios, carriers, clientes, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Asigna (o quita) la PLANTA de un supervisor. Así solo verá las cargas de su
-  // planta. Requiere tener desplegada la regla que permite al admin editar plantaId.
-  const asignarPlanta = async (u, plantaId) => {
-    try {
-      await guardarCampos('users', u.id, { plantaId: plantaId || null })
-      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'asignar_planta', entidad: 'usuario', detalle: `${u.email} → ${plantas.find((p) => p.id === plantaId)?.nombre || 'sin planta'}` })
-    } catch { setMsg({ tipo: 'error', txt: t('No se pudo asignar la planta. Puede que falte desplegar las reglas nuevas.') }) }
-  }
   const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
   const [msg, setMsg] = useState(null)
   const [buscar, setBuscar] = useState('')
@@ -207,7 +202,7 @@ export default function BulkUsuarios() {
   const abrirEditar = (u) => {
     setMsg(null)
     setEditar(u)
-    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '', foto: avatares[u.id] || null })
+    setEdicion({ nombre: u.nombre || '', email: u.email || '', password: '', plantaId: u.plantaId || '', jobIds: u.jobIds || [], rol: u.rol || '', vinculo: u.clienteId || u.carrierId || '', foto: avatares[u.id] || null })
   }
   // El admin cambia la foto de perfil del usuario en edición (regla lo permite).
   const guardarFotoEditar = async (dataUrl) => {
@@ -247,7 +242,11 @@ export default function BulkUsuarios() {
         body: JSON.stringify({
           uid: editar.id, nombre, email, rol: nuevoRol,
           password: edicion.password || undefined,
-          plantaId: esSupervisor ? (edicion.plantaId || null) : undefined,
+          // Supervisor por TRABAJOS (jobs). plantaId queda como legado (se limpia
+          // al asignar trabajos para completar la migración de ese usuario).
+          jobIds: esSupervisor ? (edicion.jobIds || []) : undefined,
+          jobsNombres: esSupervisor ? (edicion.jobIds || []).map(nombreJobU) : undefined,
+          plantaId: esSupervisor ? ((edicion.jobIds || []).length ? null : (edicion.plantaId || null)) : undefined,
           clienteId: edicionNecesitaCliente ? edicion.vinculo : null,
           carrierId: edicionNecesitaCarrier ? edicion.vinculo : null,
         }),
@@ -487,7 +486,7 @@ export default function BulkUsuarios() {
 
       <Card className="p-4">
         <Tabla
-          columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'planta', label: t('Planta') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
+          columns={[{ key: 'nombre', label: t('Nombre') }, { key: 'email', label: t('Correo') }, { key: 'rol', label: t('Rol') }, { key: 'planta', label: t('Trabajos') }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'acciones', label: '', align: 'right' }]}
           rows={usuariosFiltrados.map((u) => ({ ...u, _key: u.id }))}
           emptyText={hayFiltro ? t('Ningún usuario coincide con el filtro.') : t('Sin usuarios.')}
           renderCell={(row, key) => {
@@ -503,11 +502,17 @@ export default function BulkUsuarios() {
             if (key === 'rol') return <Badge color={row.rol === BULK_ROLES.SUPER_ADMIN ? 'gold' : 'navy'}>{label(row.rol) || row.rol}</Badge>
             if (key === 'planta') {
               if (row.rol !== BULK_ROLES.SUPERVISOR_PLANTA) return <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+              // Supervisor por TRABAJOS: se asignan en el modal de edición (lápiz).
+              const jids = row.jobIds || []
               return (
-                <Select value={row.plantaId || ''} onChange={(e) => asignarPlanta(row, e.target.value)} className="py-1 text-xs">
-                  <option value="">{t('Sin planta')}</option>
-                  {plantas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </Select>
+                <button type="button" onClick={() => abrirEditar(row)} className="inline-flex max-w-[220px] flex-wrap items-center gap-1 text-left" title={t('Editar trabajos asignados')}>
+                  {jids.length === 0
+                    ? (row.plantaId
+                        ? <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">{t('planta (migrar a trabajos)')}</span>
+                        : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-400 dark:bg-slate-800">{t('Sin trabajos')}</span>)
+                    : jids.slice(0, 2).map((id) => <span key={id} className="truncate rounded-full bg-brand-navy/10 px-2 py-0.5 text-[11px] font-semibold text-brand-navy dark:bg-white/10 dark:text-slate-200">{nombreJobU(id)}</span>)}
+                  {jids.length > 2 && <span className="text-[11px] text-slate-400">+{jids.length - 2}</span>}
+                </button>
               )
             }
             if (key === 'estado') return <button onClick={() => toggle(row)}><Badge color={row.activo === false ? 'slate' : 'green'}>{row.activo === false ? t('Inactivo') : t('Activo')}</Badge></button>
@@ -574,11 +579,27 @@ export default function BulkUsuarios() {
               )}
               {edicion.rol === BULK_ROLES.SUPERVISOR_PLANTA && (
                 <div>
-                  <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Planta')}</div>
-                  <Select value={edicion.plantaId} onChange={setEd('plantaId')} className="h-11 w-full text-sm">
-                    <option value="">{t('Sin planta')}</option>
-                    {plantas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </Select>
+                  <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Trabajos asignados')}</div>
+                  {jobsActivos.length === 0 ? (
+                    <p className="text-xs text-slate-400">{t('Aún no hay trabajos. Créalos en “Trabajos (Jobs)” y vuelve aquí para asignarlos.')}</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {jobsActivos.map((j) => {
+                        const on = (edicion.jobIds || []).includes(j.id)
+                        return (
+                          <button key={j.id} type="button"
+                            onClick={() => setEdicion((s) => ({ ...s, jobIds: on ? (s.jobIds || []).filter((x) => x !== j.id) : [...(s.jobIds || []), j.id] }))}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            {j.codigo ? `${j.codigo} · ` : ''}{j.nombre}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <p className="mt-1 text-[11px] text-slate-400">{t('El supervisor solo verá las órdenes de estos trabajos. Puedes asignarle uno o varios.')}</p>
+                  {edicion.plantaId && (edicion.jobIds || []).length === 0 && (
+                    <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">{t('Este supervisor aún usa el modelo viejo por planta; al asignarle trabajos se migra automáticamente.')}</p>
+                  )}
                 </div>
               )}
             </div>

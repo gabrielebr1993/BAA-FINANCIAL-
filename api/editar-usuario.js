@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const { getAuth, getFirestore } = a
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}
-    const { uid, nombre, email, password, plantaId, rol, clienteId, carrierId } = body
+    const { uid, nombre, email, password, plantaId, jobIds, jobsNombres, rol, clienteId, carrierId } = body
     if (!uid) return res.status(400).json({ ok: false, error: 'Falta el identificador del usuario.' })
     if (email != null && !esEmail(email)) return res.status(400).json({ ok: false, error: 'El correo no tiene un formato válido.' })
     if (password != null && password !== '' && String(password).length < 6) return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 6 caracteres.' })
@@ -132,6 +132,10 @@ export default async function handler(req, res) {
     if (nombre != null) docUpdate.nombre = String(nombre)
     if (nuevoEmail) docUpdate.email = nuevoEmail
     if (plantaId !== undefined) docUpdate.plantaId = plantaId || null
+    // Supervisor por TRABAJOS (jobs): arreglo de ids + nombres denormalizados
+    // (el supervisor no puede leer bulk_jobs; los nombres viajan en su doc).
+    if (jobIds !== undefined) docUpdate.jobIds = Array.isArray(jobIds) ? jobIds.filter(Boolean).slice(0, 30) : []
+    if (jobsNombres !== undefined) docUpdate.jobsNombres = Array.isArray(jobsNombres) ? jobsNombres.filter(Boolean).slice(0, 30) : []
     if (rolCambiado) docUpdate.rol = finalRol
     if (cId !== (target.clienteId || null)) docUpdate.clienteId = cId
     if (caId !== (target.carrierId || null)) docUpdate.carrierId = caId

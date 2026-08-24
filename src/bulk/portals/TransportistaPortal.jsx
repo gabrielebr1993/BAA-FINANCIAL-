@@ -40,7 +40,7 @@ import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR }
 import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
-import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla } from '../../components/ui'
+import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla, Spinner } from '../../components/ui'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
@@ -67,6 +67,13 @@ export default function TransportistaPortal() {
   const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
   const { datos: presencias } = useColeccion('presence', [where('carrierId', '==', carrierId)])
   const { datos: plantas } = useColeccion('plants')
+  // Catálogo de TIPOS DE CAMIÓN del sistema (bulk_equipment; legible por todo el
+  // tenant). Antes el alta de chofer usaba texto libre y parecía "select vacío".
+  const { datos: equiposCat, cargando: cargandoEquipos } = useColeccion('equipment')
+  const tiposCamion = useMemo(() => {
+    const nombres = new Set((equiposCat || []).filter((e) => e.activo !== false).map((e) => (e.nombre || '').trim()).filter(Boolean))
+    return [...nombres].sort((a, b) => a.localeCompare(b))
+  }, [equiposCat])
   const { datos: mensajes } = useColeccion('messages', [where('orderId', '==', convCarrier(carrierId))])
   // Chats de ORDEN en los que participa este transporte (para hablar con sus choferes,
   // organizados por viaje). El aislamiento lo garantizan las reglas (carrierId ∈ participantes).
@@ -256,7 +263,7 @@ export default function TransportistaPortal() {
 
       {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
       {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo }} />}
-      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares }} />}
+      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
@@ -391,7 +398,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
 }
 
 // ── Tab Mis choferes: tabla con estado en línea, viaje actual y forma de pago ──
-function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {}, avatares = {} }) {
+function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {}, avatares = {}, tiposCamion = [], cargandoEquipos = false }) {
   const [alta, setAlta] = useState(false)
   const [pagoEdit, setPagoEdit] = useState(null) // chofer.id en edición de pago
   const toggleTrabajo = (c, cod) => {
@@ -407,7 +414,7 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
         <Boton variant="gold" onClick={() => setAlta((v) => !v)}>{alta ? <><X size={16} /> {t('Cerrar')}</> : <><UserPlus size={16} /> {t('Agregar chofer')}</>}</Boton>
       </div>
 
-      {alta && <AltaChoferForm t={t} onCrear={async (d) => { await agregarChofer(d); setAlta(false) }} />}
+      {alta && <AltaChoferForm t={t} tiposCamion={tiposCamion} cargandoEquipos={cargandoEquipos} onCrear={async (d) => { await agregarChofer(d); setAlta(false) }} />}
 
       {choferes.length === 0 ? (
         <EstadoVacio titulo={t('Agrega tu primer chofer')} texto={t('Da de alta a tus choferes para asignarles cargas y definir su pago.')} mostrarBoton={false} />
@@ -467,7 +474,7 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
   )
 }
 
-function AltaChoferForm({ t, onCrear }) {
+function AltaChoferForm({ t, onCrear, tiposCamion = [], cargandoEquipos = false }) {
   const [f, setF] = useState({ nombre: '', email: '', password: '', telefono: '', licencia: '', equipo: '' })
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const [msg, setMsg] = useState(null)
@@ -485,7 +492,20 @@ function AltaChoferForm({ t, onCrear }) {
         <Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} />
         <Input placeholder={t('Teléfono')} value={f.telefono} onChange={set('telefono')} />
         <Input placeholder={t('Licencia')} value={f.licencia} onChange={set('licencia')} />
-        <Input placeholder={t('Tipo de camión (ej. Dump Truck)')} value={f.equipo} onChange={set('equipo')} />
+        {/* Tipo de camión: del CATÁLOGO del sistema (bulk_equipment), con estados de
+            carga y de catálogo vacío — nunca un select mudo sin opciones. */}
+        {cargandoEquipos ? (
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm text-slate-400 dark:border-slate-700"><Spinner /> {t('Cargando tipos de camión…')}</div>
+        ) : tiposCamion.length > 0 ? (
+          <Select value={f.equipo} onChange={set('equipo')}>
+            <option value="">{t('— Tipo de camión —')}</option>
+            {tiposCamion.map((x) => <option key={x} value={x}>{x}</option>)}
+          </Select>
+        ) : (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+            {t('No hay tipos de camión registrados en el sistema. Pídele al administrador que los cree en “Tipos de equipo”.')}
+          </div>
+        )}
         <Input type="email" placeholder={t('Correo (para su acceso a la app)')} value={f.email} onChange={set('email')} />
         <Input type="password" placeholder={t('Contraseña (opcional)')} value={f.password} onChange={set('password')} />
       </div>
