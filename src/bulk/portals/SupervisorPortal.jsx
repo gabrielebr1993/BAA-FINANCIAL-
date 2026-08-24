@@ -14,7 +14,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import PortalLayout from '../components/PortalLayout'
 import MapaLeaflet from '../components/MapaLeaflet'
 import { useColeccion } from '../data/useColeccion'
-import { guardar, where } from '../data/repo'
+import { guardar, suscribir, where } from '../data/repo'
 import { liberar as liberarPresencia } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
@@ -38,11 +38,29 @@ export default function SupervisorPortal() {
   const jobsNombres = usuario?.jobsNombres || []
   const plantaId = usuario?.plantaId || null
   const sinAsignacion = jobIds.length === 0 && !plantaId
-  const { datos: ordenes } = useColeccion('orders', [
-    jobIds.length
-      ? where('jobId', 'in', jobIds.slice(0, 10)) // Firestore admite hasta 10 valores en 'in'
-      : where('plantaId', '==', plantaId || '__none__'),
-  ])
+  // Órdenes de SUS trabajos: UNA suscripción de IGUALDAD por trabajo, fusionadas.
+  // (Con el filtro `jobId in [...]` el motor de reglas no podía probar la consulta
+  // y la denegaba completa en silencio: el portal se veía vacío.)
+  const [ordenes, setOrdenes] = useState([])
+  const jobsClave = jobIds.slice(0, 10).join('|')
+  useEffect(() => {
+    if (!tenantId) { setOrdenes([]); return }
+    const porFuente = {}
+    const emitir = () => {
+      const m = new Map()
+      for (const lista of Object.values(porFuente)) for (const o of lista) m.set(o.id, o)
+      setOrdenes([...m.values()])
+    }
+    const offs = []
+    if (jobsClave) {
+      for (const j of jobsClave.split('|')) {
+        offs.push(suscribir('orders', tenantId, (d) => { porFuente[j] = d; emitir() }, [where('jobId', '==', j)]))
+      }
+    } else {
+      offs.push(suscribir('orders', tenantId, (d) => { porFuente.planta = d; emitir() }, [where('plantaId', '==', plantaId || '__none__')]))
+    }
+    return () => offs.forEach((f) => f())
+  }, [tenantId, jobsClave, plantaId])
   const { datos: geocercas } = useColeccion('geofences')
   const [msg, setMsg] = useState(null)
   const [tab, setTab] = useState('token')

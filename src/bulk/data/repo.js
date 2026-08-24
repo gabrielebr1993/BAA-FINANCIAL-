@@ -39,7 +39,13 @@ export async function listar(nombre, tenantId, filtros = [], opts = {}) {
 export function suscribir(nombre, tenantId, cb, filtros = [], opts = {}) {
   return onSnapshot(query(col(nombre), ...clausulasDe(tenantId, filtros, opts)), (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  }, () => cb([]))
+  }, (err) => {
+    // Una consulta DENEGADA por reglas fallaba en silencio y la pantalla se veía
+    // "vacía" sin pista alguna. Se registra en consola para poder diagnosticarlo.
+    // eslint-disable-next-line no-console
+    console.error(`[bulk] consulta denegada o fallida en bulk_${nombre}:`, err?.code || err?.message || err)
+    cb([])
+  })
 }
 
 export async function obtener(nombre, id) {

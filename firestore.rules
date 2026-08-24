@@ -179,9 +179,13 @@ service cloud.firestore {
     function bMyJobs() { return request.auth != null && exists(/databases/$(database)/documents/bulk_users/$(request.auth.uid)) ? get(/databases/$(database)/documents/bulk_users/$(request.auth.uid)).data.get('jobIds', []) : []; }
     // ¿La orden cae dentro del alcance del supervisor? Por JOB (modelo nuevo) o,
     // como respaldo, por planta (supervisores legado sin jobs asignados).
+    // OJO: acceso DIRECTO a los campos ('x' in d && d.x …), sin d.get(...,default):
+    // el motor de reglas solo puede PROBAR las consultas de lista (where jobId==…)
+    // con condiciones simples sobre los campos; con .get() la consulta entera se
+    // deniega y el portal del supervisor se queda vacío en silencio.
     function bSupervisorVe(d) {
-      return (d.get('jobId', '') != '' && d.get('jobId', '') in bMyJobs())
-        || (bMyPlanta() != null && d.get('plantaId', '') == bMyPlanta());
+      return ('jobId' in d && d.jobId in bMyJobs())
+        || ('plantaId' in d && bMyPlanta() != null && d.plantaId == bMyPlanta());
     }
     // Nombre del chofer (de su doc de usuario). Sirve para que pueda avanzar/aceptar
     // una orden que se le ofreció por NOMBRE o por id del roster (no solo por uid).
