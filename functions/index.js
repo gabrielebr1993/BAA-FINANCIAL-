@@ -1623,17 +1623,37 @@ exports.bulkEntregarOrden = onCall({ timeoutSeconds: 30 }, async (req) => {
   //    válido no sirve para liberar cualquier orden del sistema.)
   const periodo = await _periodoLiberacion(t.bulkTenant)
   const candidatos = []
-  const usnap = await db.collection('bulk_users').where('tenantId', '==', t.bulkTenant).where('rol', 'in', ['supervisor_planta', 'admin', 'super_admin']).get()
-  usnap.forEach((d) => { const u = { id: d.id, ...d.data() }; if (u.activo !== false && _alcanzaOrden(u, orden)) candidatos.push(u) })
-  let autorizador = null, pasoTotp = null
+  let docsAut = []
+  try {
+    const usnap = await db.collection('bulk_users').where('tenantId', '==', t.bulkTenant).where('rol', 'in', ['supervisor_planta', 'admin', 'super_admin']).get()
+    docsAut = usnap.docs
+  } catch (e) {
+    // Respaldo por si la consulta 'in' exigiera índice: una consulta por rol.
+    for (const r of ['supervisor_planta', 'admin', 'super_admin']) {
+      const s = await db.collection('bulk_users').where('tenantId', '==', t.bulkTenant).where('rol', '==', r).get()
+      docsAut = docsAut.concat(s.docs)
+    }
+  }
+  docsAut.forEach((d) => { const u = { id: d.id, ...d.data() }; if (u.activo !== false && _alcanzaOrden(u, orden)) candidatos.push(u) })
+
+  // Diagnóstico claro ANTES de comparar tokens: si nadie puede autorizar esta
+  // orden (o nadie generó su código aún), el problema NO es el código tecleado.
+  if (candidatos.length === 0) {
+    throw new HttpsError('failed-precondition', `Ningún supervisor tiene asignado el trabajo de la orden ${orden.numero || orderId}. Pide al administrador asignárselo en Usuarios (o usa el código de un administrador).`)
+  }
+  let autorizador = null, pasoTotp = null, conSecreto = 0
   if (String(token || '').trim()) {
     for (const u of candidatos) {
       const s = await db.collection('bulk_supervisorTotp').doc(u.id).get()
       const secreto = s.exists ? s.data().secreto : null
       if (!secreto) continue
+      conSecreto++
       const r = totp.validarTotp(secreto, token, { periodo })
       if (r.ok) { autorizador = u; pasoTotp = r.timestep; break }
     }
+  }
+  if (!autorizador && conSecreto === 0) {
+    throw new HttpsError('failed-precondition', 'El supervisor de este trabajo aún no ha generado su código: debe abrir la pestaña «Mi código» en su portal una vez.')
   }
 
   if (!autorizador) {

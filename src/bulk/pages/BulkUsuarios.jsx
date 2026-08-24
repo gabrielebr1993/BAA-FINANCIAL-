@@ -651,6 +651,54 @@ function ConfigCodigoLiberacion({ t, tenantId, usuario, rol, setMsg }) {
           ))}
         </div>
       </div>
+      {/* Código PROPIO del administrador: su alcance cubre TODAS las órdenes del
+          tenant (respaldo cuando un trabajo no tiene supervisor asignado). */}
+      <MiCodigoAdmin t={t} />
     </Card>
+  )
+}
+
+// Código de autorización del PROPIO admin (bulkTotpOp), en formato compacto:
+// código + cuenta regresiva + regenerar. Sirve para autorizar cualquier orden.
+function MiCodigoAdmin({ t }) {
+  const [info, setInfo] = useState(null)
+  const [seg, setSeg] = useState(0)
+  const [ver, setVer] = useState(false)
+  const [err, setErr] = useState('')
+  const ocupadoRef = useRef(false)
+  const pedir = async (op = 'codigo') => {
+    if (ocupadoRef.current) return
+    ocupadoRef.current = true
+    setErr('')
+    try {
+      const { httpsCallable } = await import('firebase/functions')
+      const { funcsBulk } = await import('../firebaseBulk')
+      const fn = httpsCallable(funcsBulk, 'bulkTotpOp', { timeout: 15000 })
+      const r = await fn({ op, ...(op === 'rotar' ? { motivo: 'rotación manual (admin)' } : {}) })
+      setInfo(r?.data || null); setSeg(r?.data?.segundos || 0)
+    } catch (e) { setErr(e?.message || t('No se pudo obtener el código.')) }
+    finally { ocupadoRef.current = false }
+  }
+  useEffect(() => { if (ver && !info) pedir('codigo') }, [ver]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ver || !info) return
+    const id = setInterval(() => setSeg((x) => { if (x <= 1) { pedir('codigo'); return 0 } return x - 1 }), 1000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ver, info])
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+      {!ver ? (
+        <button type="button" onClick={() => setVer(true)} className="text-xs font-semibold text-amber-600 hover:underline dark:text-amber-400">{t('Ver mi código de autorización (admin) — sirve para cualquier orden')}</button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-xl border-2 border-amber-400 bg-amber-500/5 px-4 py-2 font-mono text-2xl font-black tracking-[0.3em] text-brand-navy dark:text-slate-100">{info?.codigo || '· · ·'}</span>
+          {info && <span className={`text-xs font-bold ${seg <= 10 ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}`}>{t('válido')} {seg} s</span>}
+          <button type="button" onClick={() => pedir('rotar')} className="text-xs font-semibold text-slate-400 hover:text-slate-600">{t('Regenerar')}</button>
+          <button type="button" onClick={() => setVer(false)} className="text-xs font-semibold text-slate-400 hover:text-slate-600">{t('Ocultar')}</button>
+          {err && <span className="text-xs font-semibold text-rose-500">{err}</span>}
+        </div>
+      )}
+    </div>
   )
 }
