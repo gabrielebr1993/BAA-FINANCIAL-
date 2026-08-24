@@ -5,7 +5,7 @@
 // permiso — así un rol nuevo o personalizado ve exactamente lo que se le autorizó.
 import {
   LayoutDashboard, Package, Boxes, Truck, Building2, Users, ClipboardList,
-  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail, Inbox, Video,
+  Layers, Navigation, MapPin, FileText, AlertTriangle, FileWarning, FlaskConical, MessageSquare, Contact, ShieldCheck, Stethoscope, Mail, Inbox, Video, Zap,
 } from 'lucide-react'
 import { BULK_ROLES as R } from './domain/constants'
 import { permKey, MODULO_POR_KEY } from './domain/permisos'
@@ -22,6 +22,7 @@ export const NAV = [
   { modulo: 'transportistas', path: 'transportistas', label: 'Transportistas', icon: Truck, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'choferes', path: 'choferes', label: 'Choferes', icon: Contact, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'facturacion', path: 'facturacion', label: 'Facturación', icon: FileText, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'fastpay', path: 'fastpay', label: 'Fast Pay', icon: Zap, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'incidencias', path: 'incidencias', label: 'Incidencias', icon: AlertTriangle, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
   { modulo: 'documentos', path: 'documentos', label: 'Documentos', icon: FileWarning, roles: [R.SUPER_ADMIN, R.ADMIN] },
   { modulo: 'geocercas', path: 'geocercas', label: 'Geocercas', icon: MapPin, roles: [R.SUPER_ADMIN, R.ADMIN] },

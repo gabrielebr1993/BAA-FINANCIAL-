@@ -51,6 +51,16 @@ async function construirFacturaDoc(factura, { clienteNombre, empresa, titulo = '
   doc.setTextColor(...NAVY); doc.setFontSize(13)
   doc.text(`TOTAL: ${money(factura.total)}`, W - 14, fy, { align: 'right' })
 
+  // Fast Pay aplicado al documento: Total − Fast Pay = Balance restante.
+  if (Number(factura.fastPayAplicado) > 0) {
+    fy += 7
+    doc.setFontSize(11); doc.setTextColor(201, 162, 75)
+    doc.text(`Fast Pay: − ${money(factura.fastPayAplicado)}`, W - 14, fy, { align: 'right' })
+    fy += 7
+    doc.setTextColor(...NAVY); doc.setFontSize(12)
+    doc.text(`BALANCE RESTANTE: ${money(Math.max(0, (Number(factura.total) || 0) - (Number(factura.fastPayAplicado) || 0)))}`, W - 14, fy, { align: 'right' })
+  }
+
   if (factura.firma) {
     fy += 14
     try { doc.addImage(factura.firma, 'PNG', 14, fy, 50, 20) } catch { /* noop */ }

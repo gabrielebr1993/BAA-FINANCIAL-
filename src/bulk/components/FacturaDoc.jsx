@@ -193,8 +193,44 @@ export function DocDrawer({ r, tipo, empresa, persona, t, onClose, setMsg, pie =
                 <span className="flex-1 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Total')}</span>
                 <span className="text-base font-black tabular-nums text-emerald-600 dark:text-emerald-400">{money(r.total)}</span>
               </div>
+              {/* Fast Pay aplicado a este documento: Total − Fast Pay = Balance restante. */}
+              {Number(r.fastPayAplicado) > 0 && (
+                <>
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-amber-50/60 px-3 py-2 dark:border-slate-800 dark:bg-amber-500/10">
+                    <span className="flex-1 text-sm font-semibold text-amber-700 dark:text-amber-400">Fast Pay</span>
+                    <span className="text-sm font-black tabular-nums text-amber-700 dark:text-amber-400">− {money(r.fastPayAplicado)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900">
+                    <span className="flex-1 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Balance restante')}</span>
+                    <span className="text-base font-black tabular-nums text-brand-navy dark:text-slate-100">{money(Math.max(0, (Number(r.total) || 0) - (Number(r.fastPayAplicado) || 0)))}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
+
+          {/* Detalle de los retiros Fast Pay aplicados (consulta desde la factura). */}
+          {(r.fastPayMovs || []).length > 0 && (
+            <div>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('Retiros Fast Pay aplicados')}</h3>
+              <div className="space-y-1.5">
+                {(r.fastPayMovs || []).map((m, i) => (
+                  <div key={m.retiroId || i} className="rounded-xl border border-amber-200/70 bg-amber-50/50 p-2.5 text-xs dark:border-amber-500/30 dark:bg-amber-500/10">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{m.numero || 'FP'}</span>
+                      <span className="text-slate-500 dark:text-slate-400">{String(m.ts || '').slice(0, 16).replace('T', ' ')}</span>
+                      <span className="ml-auto font-black tabular-nums text-amber-700 dark:text-amber-400">− {money(m.monto)}</span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-slate-500 dark:text-slate-400">
+                      {m.usuario && <span>{m.usuario}</span>}
+                      <span>{t('Balance antes')}: {money(m.balanceAntes)}</span>
+                      <span>{t('después')}: {money(m.balanceDespues)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {historial.length > 0 && (
             <div>

@@ -15,6 +15,7 @@ import AvisosGeocerca from '../components/AvisosGeocerca'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
+import FastPayModal from '../components/FastPayModal'
 import ImprimirTicket from '../components/ImprimirTicket'
 import { DocumentoFactura } from '../pages/FacturaPagina'
 import DashboardFacturacion from '../components/DashboardFacturacion'
@@ -618,6 +619,12 @@ function TabFacturacion({ t, statements, cuenta }) {
 
 // ── Tab Estado de cuenta: resumen + detalle por viaje (usa el cálculo existente) ─
 function TabCuenta({ t, cuenta, stats, statements }) {
+  const { usuario } = useBulkAuth()
+  const carrierId = usuario?.carrierId || '__none__'
+  const [fastPay, setFastPay] = useState(false)
+  // Historial PERMANENTE de retiros Fast Pay del carrier (solo lee los suyos).
+  const { datos: retirosFP } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
+  const retiradoFP = (retirosFP || []).reduce((a, r) => a + (['pagado', 'procesando'].includes(r.estado || 'pagado') ? Number(r.montoBase) || 0 : 0), 0)
   const rows = stats.entregadas
     .slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
     .map((o) => ({ ...o, _key: o.id }))
@@ -644,6 +651,33 @@ function TabCuenta({ t, cuenta, stats, statements }) {
         <KPI label={t('Pagado')} value={money(cuenta.pagado)} icon={DollarSign} accent="green" />
         <KPI label={t('Pendiente')} value={money(cuenta.pendiente)} icon={ClipboardList} accent="gold" />
       </div>
+
+      {/* Fast Pay del CARRIER: adelanto instantáneo del balance elegible. */}
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400"><DollarSign size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-brand-navy dark:text-slate-100">Fast Pay</div>
+            <div className="text-xs text-slate-400">{t('Adelanta tu balance disponible al instante (con comisión). El saldo exacto y tu límite se calculan al abrir.')}{retiradoFP > 0 ? ` · ${t('Ya adelantado')}: ${money(retiradoFP)}` : ''}</div>
+          </div>
+          <Boton variant="gold" onClick={() => setFastPay(true)} className="px-4">{t('Fast Pay · Cobrar')}</Boton>
+        </div>
+        {(retirosFP || []).length > 0 && (
+          <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{t('Historial de retiros')}</div>
+            {(retirosFP || []).slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((r) => (
+              <div key={r.id} className="flex items-center gap-2 text-sm">
+                <span className="font-mono text-xs font-bold text-brand-navy dark:text-slate-100">{r.numero || 'FP'}</span>
+                <span className="text-xs text-slate-400">{String(r.ts || '').slice(0, 16).replace('T', ' ')}</span>
+                <Badge color={r.estado === 'pagado' ? 'green' : r.estado === 'revertido' ? 'slate' : r.estado === 'error' ? 'red' : 'gold'}>{t(r.estado || 'pagado')}</Badge>
+                <span className={`ml-auto font-bold tabular-nums ${r.estado === 'revertido' ? 'text-slate-400 line-through' : 'text-brand-navy dark:text-slate-100'}`}>−{money(r.montoBase)}</span>
+                {r.balanceDespues != null && <span className="text-[11px] tabular-nums text-slate-400">{t('saldo')}: {money(r.balanceDespues)}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      <FastPayModal abierto={fastPay} onClose={() => setFastPay(false)} nombre={usuario?.nombre} />
       {statements && statements.length > 0 && (
         <Card className="mb-4 p-4">
           <h3 className="m-0 mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Avisos de pago')}</h3>

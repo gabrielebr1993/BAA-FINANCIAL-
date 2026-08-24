@@ -590,11 +590,20 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Retiros Fast Pay del chofer. El chofer LEE los suyos; el staff los del tenant.
-    // TODAS las escrituras van por el backend (/api/bulk-fastpay con Admin SDK).
+    // Retiros Fast Pay (choferes Y carriers). Cada quien LEE los suyos; el staff
+    // los del tenant. TODAS las escrituras van por el backend (/api/bulk-fastpay
+    // con Admin SDK): el historial es permanente, nunca se edita ni borra.
     match /bulk_retiros/{id} {
       allow read: if bStaff(resource.data.tenantId)
-        || (bSame(resource.data.tenantId) && resource.data.choferId == request.auth.uid);
+        || (bSame(resource.data.tenantId) && resource.data.choferId == request.auth.uid)
+        || (bRole() == 'transportista' && bSame(resource.data.tenantId) && resource.data.carrierId == bCarrier());
+      allow create, update, delete: if false;
+    }
+
+    // Ledger transaccional de Fast Pay (autoridad del total retirado por persona).
+    // Solo lo escribe el backend; el staff puede leerlo para auditoría.
+    match /bulk_fpLedger/{id} {
+      allow read: if bStaff(resource.data.tenantId);
       allow create, update, delete: if false;
     }
 

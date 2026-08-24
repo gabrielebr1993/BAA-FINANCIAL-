@@ -47,6 +47,7 @@ export const MODULOS = [
   { key: 'transportistas', label: 'Transportistas', path: 'transportistas', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'choferes', label: 'Choferes', path: 'choferes', acciones: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'facturacion', label: 'Facturación', path: 'facturacion', acciones: ['ver', 'crear', 'editar', 'exportar'] },
+  { key: 'fastpay', label: 'Fast Pay', path: 'fastpay', acciones: ['ver', 'gestionar'] },
   { key: 'incidencias', label: 'Incidencias', path: 'incidencias', acciones: ['ver', 'crear', 'editar'] },
   { key: 'documentos', label: 'Documentos', path: 'documentos', acciones: ['ver', 'gestionar'] },
   { key: 'geocercas', label: 'Geocercas', path: 'geocercas', acciones: ['ver', 'gestionar'] },

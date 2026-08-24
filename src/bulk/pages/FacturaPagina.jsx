@@ -114,7 +114,14 @@ export function DocumentoFactura({ doc, tipo = 'cliente', empresa = 'Freight', j
                 <div className="flex justify-between text-slate-500"><span>{t('Subtotal')}</span><span className="tabular-nums">{money(subtotal)}</span></div>
                 <div className="flex justify-between text-slate-500"><span>{t('Toneladas')}</span><span className="tabular-nums">{doc.toneladas || 0}</span></div>
                 <div className="mt-1 flex justify-between border-t border-slate-200 pt-2 text-base font-black" style={{ color: '#13233f' }}><span>{t('TOTAL')}</span><span className="tabular-nums">{money(totalDoc)}</span></div>
-                {!esCliente && (
+                {/* Fast Pay aplicado: el documento muestra Total − Fast Pay = Balance. */}
+                {Number(doc.fastPayAplicado) > 0 && (
+                  <>
+                    <div className="flex justify-between font-bold" style={{ color: '#c9a24b' }}><span>Fast Pay</span><span className="tabular-nums">− {money(doc.fastPayAplicado)}</span></div>
+                    <div className="flex justify-between border-t border-slate-200 pt-1.5 font-black" style={{ color: '#13233f' }}><span>{t('Balance restante')}</span><span className="tabular-nums">{money(Math.max(0, totalDoc - (Number(doc.fastPayAplicado) || 0)))}</span></div>
+                  </>
+                )}
+                {!esCliente && !(Number(doc.fastPayAplicado) > 0) && (
                   <>
                     <div className="flex justify-between text-emerald-600"><span>{t('Pagado')}</span><span className="tabular-nums">{money(pagado ? totalDoc : 0)}</span></div>
                     <div className="flex justify-between font-bold" style={{ color: '#c9a24b' }}><span>{t('Pendiente')}</span><span className="tabular-nums">{money(pagado ? 0 : totalDoc)}</span></div>
