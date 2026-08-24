@@ -19,6 +19,7 @@ import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { ahora } from '../domain/flujo'
 import { NIVEL_LABEL } from '../domain/liberacion'
+import { beep, notificar } from '../integraciones/alertasLocales'
 import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -47,10 +48,29 @@ export default function SupervisorPortal() {
   // Órdenes 'entregada' = SOLO legado (el sistema nuevo entrega y libera en un
   // paso con el token; ninguna orden nueva se queda en este estado).
   const pendientes = useMemo(() => ordenes.filter((o) => o.estado === E.ENTREGADA), [ordenes])
-  // POR AUTORIZAR: el chofer YA está en el destino y necesita el código del
-  // supervisor para poder entregar. EN CAMINO: le falta poco para llegar.
-  const porAutorizar = useMemo(() => ordenes.filter((o) => o.estado === E.EN_DESTINO), [ordenes])
-  const enCamino = useMemo(() => ordenes.filter((o) => o.estado === E.EN_RUTA), [ordenes])
+  // ¿La orden ya está DENTRO de la zona de entrega según la GEOCERCA? El GPS del
+  // chofer registra entrada/salida en o.geoEventos automáticamente (aunque él no
+  // haya tocado «Llegué»): si el último evento de una geocerca de destino/proyecto
+  // es 'entrada', el camión está en la zona.
+  const enZonaEntrega = (o) => {
+    const evs = (o.geoEventos || []).filter((e) => ['destino', 'proyecto'].includes(e.tipo))
+    return evs.length > 0 && evs[evs.length - 1].evento === 'entrada'
+  }
+  // POR AUTORIZAR: el chofer marcó llegada (en_destino) O su camión YA cruzó la
+  // geocerca de entrega (en_ruta + dentro de la zona). EN CAMINO: el resto en ruta.
+  const porAutorizar = useMemo(() => ordenes.filter((o) => o.estado === E.EN_DESTINO || (o.estado === E.EN_RUTA && enZonaEntrega(o))), [ordenes])
+  const enCamino = useMemo(() => ordenes.filter((o) => o.estado === E.EN_RUTA && !enZonaEntrega(o)), [ordenes])
+
+  // Aviso al supervisor cuando ENTRA una carga nueva a la zona (sonido + notificación).
+  const prevAutorizar = useRef(0)
+  useEffect(() => {
+    if (porAutorizar.length > prevAutorizar.current) {
+      try { beep() } catch { /* sin audio */ }
+      notificar(t('Camión en zona de entrega'), `${porAutorizar.length} ${t('carga(s) esperando tu código de autorización.')}`)
+    }
+    prevAutorizar.current = porAutorizar.length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [porAutorizar.length])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
   const stats = useMemo(() => ({
     haciaPlanta: ordenes.filter((o) => HACIA_PLANTA.includes(o.estado)).length,
@@ -142,7 +162,9 @@ export default function SupervisorPortal() {
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                   <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
-                  <Badge color="blue">{t('En destino')}</Badge>
+                  {o.estado === E.EN_DESTINO
+                    ? <Badge color="blue">{t('En destino')}</Badge>
+                    : <Badge color="gold"><MapPin size={10} className="mr-0.5 inline" />{t('Cruzó la geocerca de entrega')}</Badge>}
                   <button onClick={() => setTab('token')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm transition hover:bg-amber-400"><KeyRound size={13} /> {t('Ver mi código')}</button>
                 </div>
                 <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
