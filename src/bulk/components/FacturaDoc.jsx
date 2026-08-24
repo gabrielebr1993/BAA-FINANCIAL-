@@ -74,6 +74,8 @@ export function DocCard({ r, tipo, t, onVer, onPagar }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge color={info.color}>{info.label}{r.firma ? ' ✓' : ''}</Badge>
         {tipo === 'cliente' && esVencidaDoc(r) && <Badge color="red">{t('vencida')}</Badge>}
+        {Number(r.version) > 1 && <Badge color="slate">v{r.version}</Badge>}
+        {r.recurrenteId && <Badge color="blue">{t('Recurrente')}</Badge>}
       </div>
       <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
         <div className="text-right text-base font-black tabular-nums text-emerald-600 dark:text-emerald-400">{money(r.total)}</div>
@@ -113,7 +115,12 @@ export function DocDrawer({ r, tipo, empresa, persona, t, onClose, setMsg, pie =
     catch { setMsg && setMsg({ tipo: 'warn', txt: t('No se pudo copiar.') }) }
   }
   const historial = useMemo(() => [
-    r.ts && { label: t('Emitida'), fecha: r.ts },
+    r.ts && { label: r.recurrenteId ? t('Emitida automáticamente (recurrente)') : t('Emitida'), fecha: r.ts },
+    // Ediciones posteriores a la emisión: cada versión queda registrada (quién y qué).
+    ...(Array.isArray(r.historialCambios) ? r.historialCambios.map((h) => ({
+      label: `${t('Editada')}${h.version ? ` (v${h.version})` : ''}${h.detalle ? ` · ${h.detalle}` : ''}${h.usuario ? ` · ${h.usuario}` : ''}`,
+      fecha: h.ts,
+    })) : []),
     r.firmadaEn && { label: t('Firmada por el cliente'), fecha: r.firmadaEn },
     r.rechazadaEn && { label: `${t('Disputada')}${r.motivoRechazo ? ` · ${r.motivoRechazo}` : ''}`, fecha: r.rechazadaEn },
     r.pagadaEn && { label: t('Pagada'), fecha: r.pagadaEn },
@@ -133,6 +140,8 @@ export function DocDrawer({ r, tipo, empresa, persona, t, onClose, setMsg, pie =
                 <span className="font-mono text-lg font-black text-brand-navy dark:text-slate-100">{r.numero}</span>
                 <Badge color={info.color}>{info.label}{r.firma ? ' ✓' : ''}</Badge>
                 {tipo === 'cliente' && esVencidaDoc(r) && <Badge color="red">{t('vencida')}</Badge>}
+                {Number(r.version) > 1 && <Badge color="slate">v{r.version}</Badge>}
+                {r.recurrenteId && <Badge color="blue">{t('Recurrente')}</Badge>}
               </div>
               <div className="mt-0.5 truncate text-sm font-semibold text-slate-600 dark:text-slate-300">{nombre}</div>
             </div>

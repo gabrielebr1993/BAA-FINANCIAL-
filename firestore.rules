@@ -598,6 +598,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Reglas de FACTURAS RECURRENTES (programación por cliente/periodo). El staff
+    // las gestiona (crear/pausar/borrar); cada factura la GENERA el backend
+    // (bulkFacturasRecurrentes con Admin SDK), no el cliente.
+    match /bulk_recurrentes/{id} {
+      allow read: if bStaff(resource.data.tenantId);
+      allow create: if bStaff(request.resource.data.tenantId);
+      allow update, delete: if bStaff(resource.data.tenantId);
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

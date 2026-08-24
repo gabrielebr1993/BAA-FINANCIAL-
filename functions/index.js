@@ -1324,3 +1324,116 @@ exports.bulkExpirarOfertas = onSchedule('every 1 minutes', async () => {
   for (const d of pend.docs) { const tid = d.data().tenantId; if (tid) tenants.add(tid) }
   for (const tid of tenants) { await matchTenant(tid) }
 })
+
+// ============================================================================
+// bulkFacturasRecurrentes — genera SOLAS las facturas periódicas a clientes.
+// Una vez al día revisa las reglas en `bulk_recurrentes` (activa=true) cuya
+// `proximaEmision` ya llegó y, para cada una:
+//   1. Toma las órdenes ENTREGADAS del cliente cuyo hito de entrega cae en el
+//      periodo [cubreDesde, proximaEmision] (opcionalmente filtradas por job).
+//   2. Arma las líneas con EL MISMO cálculo que el panel (precioCliente desde
+//      bulk_orderPay_cliente; órdenes viejas lo llevan inline) — los montos
+//      cuadran con lo que ve el staff en Facturación.
+//   3. Reserva el folio con LA MISMA transacción del front (bulk_counters/
+//      {tenantId}.factura) → numeración FAC- correlativa sin huecos ni choques.
+//   4. Crea la factura (estado 'enviada', vence = emisión + venceDias) con
+//      `recurrenteId`, avanza la ventana de la regla y avisa al staff por push.
+// Si el periodo no tuvo órdenes, NO emite factura vacía: solo avanza la ventana
+// y lo deja anotado en la regla (`ultimoResultado: 'sin_ordenes'`).
+// ============================================================================
+const REC_ENTREGADAS = ['entregada', 'liberada', 'cerrada']
+const _rec2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+const _recMasDias = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+// Avanza una fecha según la frecuencia (mensual conserva el día, recortado al fin de mes).
+function _recAvanzar(iso, frecuencia) {
+  if (frecuencia === 'semanal') return _recMasDias(iso, 7)
+  if (frecuencia === 'quincenal') return _recMasDias(iso, 14)
+  const d = new Date(iso + 'T12:00:00Z')
+  const dia = d.getUTCDate()
+  d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + 1)
+  const max = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+  d.setUTCDate(Math.min(dia, max))
+  return d.toISOString().slice(0, 10)
+}
+
+exports.bulkFacturasRecurrentes = onSchedule({ schedule: 'every day 07:00', timeZone: 'America/Mexico_City' }, async () => {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const reglas = await db.collection('bulk_recurrentes').where('activa', '==', true).get()
+  for (const rdoc of reglas.docs) {
+    const r = rdoc.data() || {}
+    if (!r.tenantId || !r.clienteId || !r.proximaEmision || r.proximaEmision > hoy) continue
+    try {
+      const desde = r.cubreDesde || r.proximaEmision
+      const hasta = r.proximaEmision
+      // Órdenes entregadas del cliente en el periodo (estado y fechas se filtran en
+      // memoria para no exigir índices compuestos).
+      const ords = await db.collection('bulk_orders')
+        .where('tenantId', '==', r.tenantId).where('clienteId', '==', r.clienteId).get()
+      const dd = Date.parse(desde + 'T00:00:00'), hh = Date.parse(hasta + 'T23:59:59')
+      const candidatas = ords.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .filter((o) => REC_ENTREGADAS.includes(o.estado))
+        .filter((o) => { const f = o.hitos && o.hitos.entrega ? Date.parse(o.hitos.entrega) : NaN; return Number.isFinite(f) && f >= dd && f <= hh })
+        .filter((o) => !r.jobId || o.jobId === r.jobId)
+
+      let lineas = []
+      if (candidatas.length) {
+        const pagos = await db.getAll(...candidatas.map((o) => db.collection('bulk_orderPay_cliente').doc(o.id)))
+        lineas = candidatas.map((o, i) => {
+          const pago = pagos[i].exists ? (pagos[i].data() || {}) : {}
+          return {
+            orderId: o.id, numero: o.numero || '', material: o.material || '',
+            ton: _rec2(o.pesoReal != null ? o.pesoReal : o.pesoEstimado),
+            precio: _rec2(pago.precioCliente != null ? pago.precioCliente : o.precioCliente),
+            fecha: o.hitos && o.hitos.entrega ? new Date(o.hitos.entrega).toISOString() : null,
+            jobId: o.jobId || null, plantaId: o.plantaId || null, tipoEquipo: o.tipoEquipo || '',
+          }
+        }).sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
+        // Código + nombre del job en cada línea (igual que el panel), para que el
+        // documento se vea completo sin depender de permisos de lectura de jobs.
+        const jobIds = [...new Set(lineas.map((l) => l.jobId).filter(Boolean))]
+        if (jobIds.length) {
+          const jdocs = await db.getAll(...jobIds.map((j) => db.collection('bulk_jobs').doc(j)))
+          const jm = {}
+          jdocs.forEach((j) => { if (j.exists) jm[j.id] = j.data() || {} })
+          lineas = lineas.map((l) => (l.jobId && jm[l.jobId]) ? { ...l, jobCodigo: jm[l.jobId].codigo || '', jobNombre: jm[l.jobId].nombre || '' } : l)
+        }
+      }
+
+      const avance = { cubreDesde: _recMasDias(hasta, 1), proximaEmision: _recAvanzar(r.proximaEmision, r.frecuencia), ultimaEmision: hoy }
+      if (!lineas.length) {
+        await rdoc.ref.set(Object.assign({}, avance, { ultimoResultado: 'sin_ordenes' }), { merge: true })
+        continue
+      }
+      const subtotal = _rec2(lineas.reduce((a, l) => a + l.precio, 0))
+      const toneladas = _rec2(lineas.reduce((a, l) => a + l.ton, 0))
+      // Folio: réplica exacta de siguienteSecuencia(tenantId,'factura') del front.
+      const seq = await db.runTransaction(async (tx) => {
+        const cref = db.collection('bulk_counters').doc(r.tenantId)
+        const s = await tx.get(cref)
+        const data = s.exists ? (s.data() || {}) : {}
+        const next = (Number(data.factura) || 0) + 1
+        tx.set(cref, { tenantId: r.tenantId, factura: next, actualizadoEn: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+        return next
+      })
+      const numero = 'FAC-' + String(seq).padStart(5, '0')
+      const ts = new Date().toISOString()
+      const inv = await db.collection('bulk_invoices').add({
+        tenantId: r.tenantId, numero, clienteId: r.clienteId, clienteNombre: r.clienteNombre || '',
+        desde, hasta, vence: _recMasDias(hoy, Number(r.venceDias) || 30),
+        lineas, subtotal, total: subtotal, toneladas,
+        estado: 'enviada', ts, recurrenteId: rdoc.id,
+        creadoEn: admin.firestore.FieldValue.serverTimestamp(), actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      await rdoc.ref.set(Object.assign({}, avance, { ultimoResultado: numero, ultimaFacturaId: inv.id }), { merge: true })
+      await db.collection('bulk_audit').add({
+        tenantId: r.tenantId, usuario: 'sistema (recurrente)', accion: 'factura_recurrente', entidad: 'factura',
+        detalle: `${numero} · ${r.clienteNombre || r.clienteId} · ${_montoTxt(subtotal)} · ${lineas.length} órdenes (${desde} → ${hasta})`, ts,
+      }).catch(() => {})
+      const staff = await tokensDe(r.tenantId, (x) => STAFF.includes(x.rol))
+      await enviarAPI(staff, 'Factura recurrente emitida', `${numero} · ${r.clienteNombre || 'Cliente'} · ${_montoTxt(subtotal)}`, 'https://www.milepay.io/bulk/facturacion')
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[bulkFacturasRecurrentes]', rdoc.id, (e && e.message) || e)
+    }
+  }
+})

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter, LayoutDashboard, Mail } from 'lucide-react'
+import { Plus, Truck, Building2, Wallet, Clock, AlertTriangle, CheckCircle2, FileText, Files, Ban, Filter, LayoutDashboard, Mail, Pencil, Repeat, Power, Trash2, X } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
-import { crear, guardar, siguienteSecuencia } from '../data/repo'
+import { crear, guardar, eliminar, siguienteSecuencia } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { armarFactura, armarAvisoPago } from '../domain/facturacion'
@@ -121,6 +121,7 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
   const [detalle, setDetalle] = useState(null)
   const [porAnular, setPorAnular] = useState(null)
   const [porCorreo, setPorCorreo] = useState(null)
+  const [porEditar, setPorEditar] = useState(null)
   const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const cliente = (id) => clientes.find((c) => c.id === id)
@@ -174,6 +175,22 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
     setPorAnular(null); setDetalle((d) => (d && d.id === r.id ? { ...d, estado: 'anulada' } : d))
     setMsg({ tipo: 'ok', txt: `${t('Factura')} ${r.numero} ${t('anulada.')}` })
   }
+  // Edición de una factura EMITIDA: nunca pisa el historial — cada guardado sube la
+  // versión y registra quién cambió qué. Si ya estaba FIRMADA, vuelve a 'enviada'
+  // (la firma era sobre otro contenido: el cliente debe firmar de nuevo).
+  const editarGuardar = async (r, c) => {
+    const version = (Number(r.version) || 1) + 1
+    const reFirmar = r.estado === 'firmada'
+    await guardar('invoices', r.id, {
+      vence: c.vence || r.vence || null, lineas: c.lineas, subtotal: c.subtotal, total: c.total, toneladas: c.toneladas,
+      version, historialCambios: [...(r.historialCambios || []), { ts: new Date().toISOString(), usuario: usuario?.email || '', version, detalle: c.detalle }],
+      ...(reFirmar ? { estado: 'enviada', firma: null, firmante: null, firmadaEn: null } : {}),
+    })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_factura', entidad: 'factura', detalle: `${r.numero} v${version} · ${c.detalle}` })
+    setPorEditar(null); setDetalle(null)
+    setMsg({ tipo: 'ok', txt: `${t('Factura')} ${r.numero} ${t('actualizada como versión')} ${version}.${reFirmar ? ' ' + t('El cliente deberá firmarla de nuevo.') : ''}` })
+  }
+
   const duplicar = async (r) => {
     const seq = await siguienteSecuencia(tenantId, 'factura')
     const numero = `FAC-${String(seq).padStart(5, '0')}`
@@ -260,6 +277,9 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
         </div>
       </Card>
 
+      {/* Facturas recurrentes (se emiten solas por periodo) */}
+      <RecurrentesCard clientes={clientes} jobsMap={jobsMap} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} t={t} />
+
       {/* Facturas emitidas */}
       <Card className="p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -295,6 +315,7 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
             <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=cliente`)}>{t('Ver documento')}</BotonDoc>
             {detalle.estado !== 'anulada' && <BotonDoc icon={Mail} onClick={() => { setPorCorreo(detalle); setDetalle(null) }}>{t('Enviar por correo')}</BotonDoc>}
             {detalle.estado !== 'anulada' && <BotonDoc icon={CheckCircle2} onClick={() => marcarPagada(detalle)}>{detalle.estado === 'pagada' ? t('Marcar pendiente') : t('Registrar pago')}</BotonDoc>}
+            {!['anulada', 'pagada'].includes(detalle.estado) && <BotonDoc icon={Pencil} onClick={() => { setPorEditar(detalle); setDetalle(null) }}>{t('Editar')}</BotonDoc>}
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
             {detalle.estado !== 'anulada' && detalle.estado !== 'pagada' && <BotonDoc icon={Ban} danger onClick={() => setPorAnular(detalle)}>{t('Anular')}</BotonDoc>}
           </>} />
@@ -303,6 +324,10 @@ function FacturasClientes({ clientes, ordenes, facturas, jobsMap, empresa, tenan
       {porCorreo && (
         <EnviarFacturaEmail r={porCorreo} tipo="cliente" persona={cliente(porCorreo.clienteId)} empresa={empresa}
           onClose={() => setPorCorreo(null)} onEnviado={(txt) => setMsg({ tipo: 'ok', txt })} />
+      )}
+
+      {porEditar && (
+        <ModalEditarDoc r={porEditar} tipo="cliente" t={t} onClose={() => setPorEditar(null)} onGuardar={(c) => editarGuardar(porEditar, c)} />
       )}
 
       {porAnular && (
@@ -319,6 +344,7 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
   const [chip, setChip] = useState('todas')
   const [detalle, setDetalle] = useState(null)
   const [porCorreo, setPorCorreo] = useState(null)
+  const [porEditar, setPorEditar] = useState(null)
   const navigate = useNavigate()
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   const carrier = (id) => carriers.find((c) => c.id === id)
@@ -358,6 +384,17 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
     const pagar = r.estado !== 'pagado'
     await guardar('carrierStatements', r.id, { estado: pagar ? 'pagado' : 'enviado', pagadoEn: pagar ? new Date().toISOString() : null })
     setDetalle((d) => (d && d.id === r.id ? { ...d, estado: pagar ? 'pagado' : 'enviado' } : d))
+  }
+  // Edición de un aviso emitido, con versión + historial (igual que las facturas).
+  const editarGuardar = async (r, c) => {
+    const version = (Number(r.version) || 1) + 1
+    await guardar('carrierStatements', r.id, {
+      fechaPago: c.fechaPago || r.fechaPago || null, lineas: c.lineas, subtotal: c.subtotal, total: c.total, toneladas: c.toneladas,
+      version, historialCambios: [...(r.historialCambios || []), { ts: new Date().toISOString(), usuario: usuario?.email || '', version, detalle: c.detalle }],
+    })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_aviso_pago', entidad: 'pago', detalle: `${r.numero} v${version} · ${c.detalle}` })
+    setPorEditar(null); setDetalle(null)
+    setMsg({ tipo: 'ok', txt: `${t('Aviso de pago')} ${r.numero} ${t('actualizado como versión')} ${version}.` })
   }
   const duplicar = async (r) => {
     const seq = await siguienteSecuencia(tenantId, 'pago')
@@ -448,6 +485,7 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
             <BotonDoc icon={FileText} primary onClick={() => navigate(`/bulk/facturas/${detalle.id}?tipo=carrier`)}>{t('Ver documento')}</BotonDoc>
             <BotonDoc icon={Mail} onClick={() => { setPorCorreo(detalle); setDetalle(null) }}>{t('Enviar por correo')}</BotonDoc>
             <BotonDoc icon={CheckCircle2} onClick={() => marcarPagado(detalle)}>{detalle.estado === 'pagado' ? t('Marcar pendiente') : t('Marcar pagado')}</BotonDoc>
+            {detalle.estado !== 'pagado' && <BotonDoc icon={Pencil} onClick={() => { setPorEditar(detalle); setDetalle(null) }}>{t('Editar')}</BotonDoc>}
             <BotonDoc icon={Files} onClick={() => duplicar(detalle)}>{t('Duplicar')}</BotonDoc>
           </>} />
       )}
@@ -456,7 +494,224 @@ function PagosTransportistas({ carriers, ordenes, avisos, jobsMap, empresa, tena
         <EnviarFacturaEmail r={porCorreo} tipo="carrier" persona={carrier(porCorreo.carrierId)} empresa={empresa}
           onClose={() => setPorCorreo(null)} onEnviado={(txt) => setMsg({ tipo: 'ok', txt })} />
       )}
+
+      {porEditar && (
+        <ModalEditarDoc r={porEditar} tipo="carrier" t={t} onClose={() => setPorEditar(null)} onGuardar={(c) => editarGuardar(porEditar, c)} />
+      )}
     </>
+  )
+}
+
+// ── Edición de un documento EMITIDO (factura o aviso de pago) ───────────────
+// Permite ajustar la fecha (vence / fecha de pago), corregir el importe de cada
+// línea y quitar líneas. Los totales se recalculan solos y el guardado registra
+// versión + detalle en el historial (nunca se pierde lo que decía antes).
+const r2doc = (n) => Math.round((Number(n) || 0) * 100) / 100
+function ModalEditarDoc({ r, tipo, t, onClose, onGuardar }) {
+  const [fecha, setFecha] = useState((tipo === 'cliente' ? r.vence : r.fechaPago) || '')
+  const [lineas, setLineas] = useState(() => (r.lineas || []).map((l) => ({ ...l })))
+  const [motivo, setMotivo] = useState('')
+  const setPrecio = (i) => (e) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, precio: e.target.value } : l)))
+  const quitar = (i) => setLineas((ls) => ls.filter((_, j) => j !== i))
+  const subtotal = r2doc(lineas.reduce((a, l) => a + (Number(l.precio) || 0), 0))
+  const toneladas = r2doc(lineas.reduce((a, l) => a + (Number(l.ton) || 0), 0))
+  const fechaOriginal = (tipo === 'cliente' ? r.vence : r.fechaPago) || ''
+
+  const guardarCambios = () => {
+    if (!lineas.length) return
+    // Resumen legible de QUÉ cambió (queda en el historial y la auditoría).
+    const originales = new Map((r.lineas || []).map((l) => [l.orderId || l.numero, l]))
+    const conPrecioNuevo = lineas.filter((l) => { const o = originales.get(l.orderId || l.numero); return o && r2doc(o.precio) !== r2doc(l.precio) }).length
+    const quitadas = (r.lineas || []).length - lineas.length
+    const partes = []
+    if (quitadas > 0) partes.push(`${quitadas} ${t('línea(s) quitada(s)')}`)
+    if (conPrecioNuevo > 0) partes.push(`${t('importe de')} ${conPrecioNuevo} ${t('línea(s)')}`)
+    if (fecha !== fechaOriginal) partes.push(`${tipo === 'cliente' ? t('vence') : t('fecha de pago')} ${fechaOriginal || '—'} → ${fecha || '—'}`)
+    if (r2doc(r.total) !== subtotal) partes.push(`${t('total')} ${money(r.total)} → ${money(subtotal)}`)
+    if (motivo.trim()) partes.push(motivo.trim())
+    onGuardar({
+      vence: tipo === 'cliente' ? fecha : undefined, fechaPago: tipo === 'carrier' ? fecha : undefined,
+      lineas: lineas.map((l) => ({ ...l, precio: r2doc(l.precio), ton: r2doc(l.ton) })),
+      subtotal, total: subtotal, toneladas,
+      detalle: partes.length ? partes.join(' · ') : t('sin cambios de fondo'),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <Card className="flex max-h-[90vh] w-full max-w-2xl flex-col p-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 border-b border-slate-200 p-4 dark:border-slate-800">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400"><Pencil size={17} /></span>
+          <div className="min-w-0 flex-1">
+            <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{tipo === 'cliente' ? t('Editar factura') : t('Editar aviso de pago')} <span className="font-mono">{r.numero}</span></h3>
+            <p className="m-0 text-xs text-slate-400">{t('Se guardará como versión')} {(Number(r.version) || 1) + 1} {t('y el cambio quedará en el historial.')}</p>
+          </div>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+        </div>
+
+        <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
+          {r.estado === 'firmada' && (
+            <Aviso tipo="warn">{t('Esta factura ya está FIRMADA por el cliente. Si guardas cambios volverá a estado «Enviada» y el cliente deberá firmarla de nuevo.')}</Aviso>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo label={tipo === 'cliente' ? t('Vence') : t('Te pago el')}>
+              <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="h-11 w-full" />
+            </Campo>
+            <Campo label={t('Motivo del cambio (opcional)')}>
+              <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder={t('Ej. corrección de tarifa acordada')} className="h-11 w-full" />
+            </Campo>
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{t('Líneas')} ({lineas.length})</h4>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+              {lineas.length === 0 ? (
+                <div className="px-3 py-5 text-center text-sm text-rose-500">{t('No puedes dejar el documento sin líneas. Si quieres cancelarlo, usa «Anular».')}</div>
+              ) : lineas.map((l, i) => (
+                <div key={l.orderId || i} className={`flex items-center gap-2 px-3 py-2 text-sm ${i % 2 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800/30'}`}>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono text-xs font-semibold text-brand-navy dark:text-slate-200">{l.numero || '—'}</span>
+                    {l.material ? <span className="ml-1 text-slate-500 dark:text-slate-400">· {l.material}</span> : ''}
+                    <span className="ml-1 text-xs text-slate-400">· {l.ton || 0} {t('ton')}</span>
+                  </span>
+                  <Input type="number" step="0.01" min="0" value={l.precio} onChange={setPrecio(i)} className="h-9 w-28 text-right" />
+                  <button onClick={() => quitar(i)} title={t('Quitar línea')} className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 size={15} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-sm dark:border-slate-700 dark:bg-slate-800/50">
+            <span className="text-slate-500 dark:text-slate-300"><b className="text-brand-navy dark:text-slate-100">{lineas.length}</b> {t('líneas')}</span>
+            <span className="text-slate-500 dark:text-slate-300"><b className="text-brand-navy dark:text-slate-100">{toneladas}</b> {t('ton')}</span>
+            <span className="ml-auto text-slate-500 dark:text-slate-300">{t('Nuevo total')} <b className={`text-lg ${subtotal !== r2doc(r.total) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{money(subtotal)}</b>{subtotal !== r2doc(r.total) && <span className="ml-1.5 text-xs text-slate-400 line-through">{money(r.total)}</span>}</span>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 p-3.5 dark:border-slate-800">
+          <Boton variant="ghost" onClick={onClose}>{t('Cancelar')}</Boton>
+          <Boton variant="gold" onClick={guardarCambios} disabled={!lineas.length}><Pencil size={15} /> {t('Guardar versión')} {(Number(r.version) || 1) + 1}</Boton>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ── Facturas RECURRENTES (se emiten solas) ──────────────────────────────────
+// El staff programa la regla (cliente + frecuencia + primera emisión) y el backend
+// (bulkFacturasRecurrentes, diario 07:00 hora centro) emite la factura con las
+// órdenes entregadas del periodo, con la MISMA numeración FAC- y el MISMO cálculo
+// que las manuales. Si un periodo no tuvo órdenes, no genera factura vacía.
+const FRECUENCIAS = [
+  { k: 'semanal', l: 'Cada semana' },
+  { k: 'quincenal', l: 'Cada 14 días' },
+  { k: 'mensual', l: 'Cada mes' },
+]
+function RecurrentesCard({ clientes, jobsMap, tenantId, usuario, rol, setMsg, t }) {
+  const { datos: reglas } = useColeccion('recurrentes')
+  const hoy = new Date().toISOString().slice(0, 10)
+  const [abrir, setAbrir] = useState(false)
+  const [g, setG] = useState({ clienteId: '', jobId: '', frecuencia: 'mensual', cubreDesde: hoy, proximaEmision: '', venceDias: '30' })
+  const [porBorrar, setPorBorrar] = useState(null)
+  const set = (k) => (e) => setG((s) => ({ ...s, [k]: e.target.value }))
+  const jobs = Object.values(jobsMap || {})
+  const frecTxt = (k) => t((FRECUENCIAS.find((f) => f.k === k) || {}).l || k)
+
+  const crearRegla = async () => {
+    const cli = clientes.find((c) => c.id === g.clienteId)
+    if (!cli || !g.proximaEmision) { setMsg({ tipo: 'warn', txt: t('Elige el cliente y la fecha de la primera emisión.') }); return }
+    const job = jobs.find((j) => j.id === g.jobId)
+    await crear('recurrentes', tenantId, {
+      clienteId: cli.id, clienteNombre: cli.nombre || '',
+      jobId: job?.id || null, jobNombre: job ? `${job.codigo ? job.codigo + ' · ' : ''}${job.nombre || ''}` : null,
+      frecuencia: g.frecuencia, cubreDesde: g.cubreDesde || hoy, proximaEmision: g.proximaEmision,
+      venceDias: Math.max(1, Number(g.venceDias) || 30), activa: true, creadaPor: usuario?.email || '',
+    })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_recurrente', entidad: 'factura', detalle: `${cli.nombre} · ${g.frecuencia} · 1ª emisión ${g.proximaEmision}` })
+    setG({ clienteId: '', jobId: '', frecuencia: 'mensual', cubreDesde: hoy, proximaEmision: '', venceDias: '30' })
+    setAbrir(false)
+    setMsg({ tipo: 'ok', txt: `${t('Factura recurrente programada para')} ${cli.nombre}. ${t('La primera se emitirá el')} ${g.proximaEmision}.` })
+  }
+  const alternar = async (r) => {
+    await guardar('recurrentes', r.id, { activa: !r.activa })
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: r.activa ? 'pausar_recurrente' : 'reanudar_recurrente', entidad: 'factura', detalle: r.clienteNombre })
+  }
+  const borrar = async (r) => {
+    await eliminar('recurrentes', r.id)
+    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'eliminar_recurrente', entidad: 'factura', detalle: r.clienteNombre })
+    setPorBorrar(null)
+    setMsg({ tipo: 'ok', txt: t('Programación recurrente eliminada.') })
+  }
+
+  return (
+    <Card className="mb-5 p-5">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h3 className="m-0 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><Repeat size={16} className="text-amber-500" /> {t('Facturas recurrentes')}</h3>
+        {reglas.length > 0 && <span className="text-sm text-slate-400">({reglas.length})</span>}
+        <Boton variant={abrir ? 'ghost' : 'primary'} onClick={() => setAbrir((v) => !v)} className="ml-auto !px-3 !py-1.5 text-xs">{abrir ? t('Cerrar') : <><Plus size={14} /> {t('Programar')}</>}</Boton>
+      </div>
+      <p className="m-0 mb-3 text-xs text-slate-400">{t('Se generan solas cada periodo con las órdenes entregadas del cliente, misma numeración y mismo cálculo que las manuales (emisión diaria a las 7:00 a. m., hora centro).')}</p>
+
+      {abrir && (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Campo label={t('Cliente')}>
+              <Select value={g.clienteId} onChange={set('clienteId')} className="h-11 w-full"><option value="">{t('— Cliente —')}</option>{clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</Select>
+            </Campo>
+            <Campo label={`${t('Job')} (${t('opcional')})`}>
+              <Select value={g.jobId} onChange={set('jobId')} className="h-11 w-full"><option value="">{t('— Todos los jobs —')}</option>{jobs.map((j) => <option key={j.id} value={j.id}>{j.codigo ? `${j.codigo} · ` : ''}{j.nombre}</option>)}</Select>
+            </Campo>
+            <Campo label={t('Frecuencia')}>
+              <Select value={g.frecuencia} onChange={set('frecuencia')} className="h-11 w-full">{FRECUENCIAS.map((fr) => <option key={fr.k} value={fr.k}>{t(fr.l)}</option>)}</Select>
+            </Campo>
+            <Campo label={t('Cubre órdenes desde')}><Input type="date" value={g.cubreDesde} onChange={set('cubreDesde')} className="h-11 w-full" /></Campo>
+            <Campo label={t('Primera emisión')}><Input type="date" value={g.proximaEmision} min={hoy} onChange={set('proximaEmision')} className="h-11 w-full" /></Campo>
+            <Campo label={t('Días para vencer')}><Input type="number" min="1" value={g.venceDias} onChange={set('venceDias')} className="h-11 w-full" /></Campo>
+          </div>
+          <div className="mt-3">
+            <Boton variant="gold" onClick={crearRegla} className="w-full justify-center px-6 sm:w-auto"><Repeat size={15} /> {t('Programar factura recurrente')}</Boton>
+          </div>
+        </div>
+      )}
+
+      {reglas.length === 0 ? (
+        !abrir && <p className="m-0 py-2 text-center text-sm text-slate-400">{t('Aún no hay facturas recurrentes. Prográmalas y se emitirán solas.')}</p>
+      ) : (
+        <div className="space-y-2">
+          {reglas.slice().sort((a, b) => (a.proximaEmision || '').localeCompare(b.proximaEmision || '')).map((r) => (
+            <div key={r.id} className={`flex flex-col gap-2 rounded-2xl border p-3 sm:flex-row sm:items-center ${r.activa ? 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900' : 'border-slate-200 bg-slate-50 opacity-70 dark:border-slate-800 dark:bg-slate-800/40'}`}>
+              <span className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl ${r.activa ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 text-slate-400 dark:bg-slate-700'}`}><Repeat size={16} /></span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{r.clienteNombre}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{frecTxt(r.frecuencia)}</span>
+                  {r.jobNombre && <span className="rounded-full bg-brand-navy/5 px-2 py-0.5 text-[11px] font-semibold text-brand-navy dark:bg-white/10 dark:text-slate-200">{r.jobNombre}</span>}
+                  {!r.activa && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">{t('Pausada')}</span>}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="inline-flex items-center gap-1"><Clock size={12} /> {t('Próxima emisión')}: <b className="text-slate-600 dark:text-slate-300">{r.proximaEmision || '—'}</b></span>
+                  <span>{t('Cubre desde')} {r.cubreDesde || '—'}</span>
+                  {r.ultimaEmision && <span>{t('Última')}: {r.ultimaEmision}{r.ultimoResultado ? ` (${r.ultimoResultado === 'sin_ordenes' ? t('sin órdenes') : r.ultimoResultado})` : ''}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                {porBorrar === r.id ? (
+                  <>
+                    <Boton variant="danger" onClick={() => borrar(r)} className="!px-3 !py-1.5 text-xs"><Trash2 size={13} /> {t('Sí, eliminar')}</Boton>
+                    <Boton variant="ghost" onClick={() => setPorBorrar(null)} className="!px-3 !py-1.5 text-xs">{t('Cancelar')}</Boton>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => alternar(r)} title={r.activa ? t('Pausar') : t('Reanudar')} className={`grid h-8 w-8 place-items-center rounded-lg transition ${r.activa ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' : 'text-slate-400 hover:bg-slate-100 hover:text-emerald-600 dark:hover:bg-slate-700'}`}><Power size={16} /></button>
+                    <button onClick={() => setPorBorrar(r.id)} title={t('Eliminar')} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 size={16} /></button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
 
