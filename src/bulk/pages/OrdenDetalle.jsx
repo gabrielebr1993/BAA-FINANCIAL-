@@ -20,7 +20,8 @@ import { calcularPagoChofer, configDeChofer } from '../domain/pagoChofer'
 import { alertaOrden } from '../domain/alertas'
 import ModalCancelarOrden from '../components/ModalCancelarOrden'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
-import { nuevoCodigoLiberacion } from '../domain/liberacion'
+import { httpsCallable } from 'firebase/functions'
+import { funcsBulk } from '../firebaseBulk'
 import MapaLeaflet from '../components/MapaLeaflet'
 import ChatOrden from '../components/ChatOrden'
 import { Card, Badge, Boton, Cargando, EstadoVacio } from '../../components/ui'
@@ -116,16 +117,16 @@ export default function OrdenDetalle() {
   // Cambio MANUAL de estado (staff) — con registro en auditoría de quién lo hizo.
   const cambiarEstado = async (nuevo) => {
     if (!nuevo || nuevo === orden.estado) return
-    if (!window.confirm(`${t('¿Cambiar el estado a')} "${t(ORDEN_ESTADO_LABEL[nuevo])}"?`)) return
-    const patch = { estado: nuevo }
-    // Al marcar 'entregada' a mano, la orden necesita lo que el flujo del chofer
-    // habría puesto: el CÓDIGO de liberación (para el supervisor) y el hito de
-    // entrega. Sin esto, el supervisor veía la carga sin código para liberar.
-    if (nuevo === E.ENTREGADA) {
-      if (!orden.codigoLiberacion) patch.codigoLiberacion = nuevoCodigoLiberacion()
-      if (!orden.hitos?.entrega) patch.hitos = { ...(orden.hitos || {}), entrega: new Date().toISOString() }
+    // REGLA CRÍTICA: 'entregada' NUNCA se escribe directo — ni siquiera el staff.
+    // Requiere el token del supervisor y pasa por el backend (bulkEntregarOrden);
+    // las reglas de Firestore bloquean cualquier otro camino.
+    if (nuevo === E.ENTREGADA) { setAccion('entregar'); return }
+    if (nuevo === E.LIBERADA && orden.estado !== E.ENTREGADA) {
+      window.alert(t('Una orden no puede pasar a Liberada sin ser entregada con autorización del supervisor. Usa «Marcar entregada» (pide el código del supervisor).'))
+      return
     }
-    await guardar('orders', orden.id, patch)
+    if (!window.confirm(`${t('¿Cambiar el estado a')} "${t(ORDEN_ESTADO_LABEL[nuevo])}"?`)) return
+    await guardar('orders', orden.id, { estado: nuevo })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'estado_manual', entidad: 'orden', entidadId: orden.id, detalle: `${t(ORDEN_ESTADO_LABEL[orden.estado])} → ${t(ORDEN_ESTADO_LABEL[nuevo])}` })
   }
   // Liberación REMOTA por el admin (§8): cuando el supervisor no está disponible.
@@ -276,6 +277,7 @@ export default function OrdenDetalle() {
         )
       })()}
 
+      {accion === 'entregar' && <ModalEntregarConToken orden={orden} onClose={() => setAccion(null)} t={t} />}
       {accion === 'asignar' && <ModalAsignar orden={orden} carriers={carriers} presencias={presencias} carrierConfigs={carrierConfigs} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} t={t} />}
       {accion === 'cancelar' && <ModalCancelarOrden orden={orden} onClose={() => setAccion(null)} onDone={() => setAccion(null)} ctx={{ tenantId, usuario, rol }} />}
       {accion === 'eliminar' && <ModalEliminar orden={orden} facturada={ordenFacturada(orden, facturas)} onClose={() => setAccion(null)} onDone={() => navigate('/bulk/ordenes')} ctx={{ tenantId, usuario, rol, facturas }} t={t} />}
@@ -589,5 +591,65 @@ function ModalEliminar({ orden, facturada, onClose, onDone, ctx, t }) {
         </>
       )}
     </Overlay>
+  )
+}
+
+// ── Entrega manual del STAFF con token de supervisor ────────────────────────
+// "Autorización de supervisor requerida": el staff tampoco puede marcar
+// 'entregada' sin un código válido. Llama al MISMO backend que el chofer
+// (bulkEntregarOrden), que valida token, alcance, unicidad y concurrencia.
+function ModalEntregarConToken({ orden, onClose, t }) {
+  const [token, setToken] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const [err, setErr] = useState('')
+  const [ok, setOk] = useState(false)
+  const entregar = async () => {
+    if (!token.trim() || ocupado) return
+    setOcupado(true); setErr('')
+    try {
+      const fn = httpsCallable(funcsBulk, 'bulkEntregarOrden', { timeout: 30000 })
+      await fn({ orderId: orden.id, token: token.trim() })
+      setOk(true)
+    } catch (e) {
+      const m = e?.message || ''
+      setErr(/inválido|invalido|expirado|permission/i.test(m)
+        ? t('Código inválido o expirado. La orden no puede ser entregada.')
+        : /Demasiados/i.test(m) ? t('Demasiados intentos fallidos. Espera unos minutos.')
+          : /ya fue entregada/i.test(m) ? t('Esta orden ya fue entregada.') : (m || t('No se pudo completar la entrega.')))
+    } finally { setOcupado(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={ocupado ? undefined : onClose}>
+      <Card className="w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        {ok ? (
+          <div className="text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={28} /></div>
+            <h3 className="mt-3 text-base font-black text-brand-navy dark:text-slate-100">{t('Orden liberada por supervisor')}</h3>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{orden.numero} {t('quedó entregada y liberada. Todo quedó auditado.')}</p>
+            <Boton variant="gold" className="mt-4 w-full justify-center" onClick={onClose}>{t('Listo')}</Boton>
+          </div>
+        ) : (
+          <>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400"><ShieldAlert size={18} /></span>
+              <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Autorización de supervisor requerida')}</h3>
+            </div>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              {t('Para marcar')} <b className="font-mono">{orden.numero}</b> {t('como entregada, escribe el código vigente del supervisor de este trabajo (cambia cada pocos segundos; lo ve en su pantalla «Mi código»).')}
+            </p>
+            <input inputMode="numeric" maxLength={6} autoFocus value={token}
+              onChange={(e) => { setToken(e.target.value.replace(/\D/g, '')); setErr('') }}
+              onKeyDown={(e) => e.key === 'Enter' && entregar()}
+              placeholder="000000"
+              className="w-full rounded-xl border border-slate-300 px-3 py-3 text-center font-mono text-2xl font-black tracking-[0.35em] outline-none focus:border-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+            {err && <p className="mt-2 text-xs font-semibold text-rose-500">{err}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <Boton variant="ghost" onClick={onClose} disabled={ocupado}>{t('Cancelar')}</Boton>
+              <Boton variant="gold" onClick={entregar} disabled={ocupado || token.length !== 6}>{ocupado ? t('Validando…') : t('Validar y entregar')}</Boton>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save } from 'lucide-react'
-import { useColeccion } from '../data/useColeccion'
-import { guardar, guardarCampos, reservarCodigo, reservarCodigos, guardarAvatar, guardarDirectorio } from '../data/repo'
+import { UserPlus, Trash2, ShieldCheck, Search, X, Pencil, LogOut, Power, Save, KeyRound } from 'lucide-react'
+import { useColeccion, useDoc } from '../data/useColeccion'
+import { guardar, guardarCampos, reservarCodigo, reservarCodigos, guardarAvatar, guardarDirectorio, crearConId } from '../data/repo'
 import { useAvatares } from '../data/useCodigoUsuario'
 import { useDirectorio, useMatrizComunicacion } from '../data/useComunicacion'
 import MatrizComunicacion from '../components/MatrizComunicacion'
@@ -367,6 +367,10 @@ export default function BulkUsuarios() {
       <PageTitle>{t('Usuarios y roles')}</PageTitle>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
+      {/* Seguridad de entregas: cada cuánto rota el código de autorización (TOTP)
+          de los supervisores. Lo lee el backend en cada validación. */}
+      {esAdmin && <ConfigCodigoLiberacion t={t} tenantId={tenantId} usuario={usuario} rol={rol} setMsg={setMsg} />}
+
       {/* Perfiles sin ID o con ID DUPLICADO: botón para repararlos de una vez. */}
       {(faltanId > 0 || dupId > 0) && (
         <Aviso tipo="warn" className="mb-3">
@@ -611,5 +615,42 @@ export default function BulkUsuarios() {
         </div>
       )}
     </div>
+  )
+}
+
+
+// ── Configuración del CÓDIGO DE LIBERACIÓN (token de supervisores) ──────────
+// El código rota automáticamente cada `periodo` segundos (30/60/120). El valor
+// vive en bulk_settings.liberacion.periodo y el backend lo aplica al generar y
+// validar cada token. Solo el administrador lo cambia.
+function ConfigCodigoLiberacion({ t, tenantId, usuario, rol, setMsg }) {
+  const { dato: settings } = useDoc('settings', tenantId)
+  const actual = [30, 60, 120].includes(Number(settings?.liberacion?.periodo)) ? Number(settings.liberacion.periodo) : 60
+  const fijar = async (v) => {
+    if (v === actual) return
+    try {
+      await crearConId('settings', tenantId, tenantId, { liberacion: { periodo: v } })
+      await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_periodo', entidad: 'liberacion', detalle: `Código de autorización rota cada ${v} s` })
+      setMsg({ tipo: 'ok', txt: `${t('Listo: el código de los supervisores ahora rota cada')} ${v} s.` })
+    } catch { setMsg({ tipo: 'error', txt: t('No se pudo guardar la configuración.') }) }
+  }
+  return (
+    <Card className="mb-4 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400"><KeyRound size={19} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Código de autorización de entregas')}</div>
+          <div className="text-xs text-slate-400">{t('Ninguna orden puede entregarse sin el código vigente de un supervisor. Elige cada cuánto rota el código (tipo token bancario).')}</div>
+        </div>
+        <div className="inline-flex rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+          {[30, 60, 120].map((v) => (
+            <button key={v} type="button" onClick={() => fijar(v)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${actual === v ? 'bg-white text-brand-navy shadow-sm dark:bg-slate-900 dark:text-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
+              {v} s
+            </button>
+          ))}
+        </div>
+      </div>
+    </Card>
   )
 }

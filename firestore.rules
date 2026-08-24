@@ -209,6 +209,19 @@ service cloud.firestore {
     // POD, GPS) pero NUNCA cambiar precioCliente/precioTransportista; el chofer y el
     // supervisor tampoco pagoChofer (ese lo fija el transportista al asignar). Todas
     // las lecturas de identidad usan .get(…) para no romper si falta un campo.
+    // REGLA CRÍTICA DE SEGURIDAD (entregas): NINGÚN cliente —ni siquiera staff—
+    // puede escribir el estado 'entregada', ni saltar a 'liberada' sin venir de
+    // 'entregada'. La ÚNICA vía de entrega es la Cloud Function bulkEntregarOrden
+    // (Admin SDK), que exige un token de supervisor válido. Así, aunque alguien
+    // modifique la app o llame a la API de Firestore directamente, no puede
+    // poner una orden en entregada/liberada sin autorización.
+    //   · estado → 'entregada': prohibido para clientes (solo backend).
+    //   · estado → 'liberada' : solo desde 'entregada' (liberación de órdenes
+    //     LEGADO que quedaron entregadas antes de este candado).
+    function bTransicionEntregaOk() {
+      return (request.resource.data.get('estado', '') != 'entregada' || resource.data.get('estado', '') == 'entregada')
+          && (request.resource.data.get('estado', '') != 'liberada' || resource.data.get('estado', '') in ['entregada', 'liberada']);
+    }
     function bPuedeActualizarOrden() {
       return bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId)
@@ -357,7 +370,11 @@ service cloud.firestore {
           || (bRole() == 'cliente' && resource.data.clienteId == bCliente())
           || (bRole() == 'supervisor_planta' && bSupervisorVe(resource.data))));
       // La orden se crea SIEMPRE sin precios (viven en bulk_orderPay_*). El staff crea.
-      allow create: if bStaff(request.resource.data.tenantId) && bSinValorPrecio(request.resource.data);
+      // Y NUNCA nace ya entregada/liberada/cerrada — única excepción: datos de
+      // DEMO sembrados por un admin (docs marcados demo:true, entorno de prueba).
+      allow create: if bStaff(request.resource.data.tenantId) && bSinValorPrecio(request.resource.data)
+        && (!(request.resource.data.get('estado', '') in ['entregada', 'liberada', 'cerrada'])
+            || (bAdmin(request.resource.data.tenantId) && request.resource.data.get('demo', false) == true));
       // Los roles NO-staff pueden avanzar la operación (estado, hitos, ticket,
       // POD, GPS…) pero NUNCA modificar los precios. Guardas por campo con .get(…,0)
       // para NO fallar si a la orden le falta algún campo de precio (antes eso
@@ -371,8 +388,26 @@ service cloud.firestore {
       // (a diferencia de comparar resource.data.precioX, que rompía la regla y daba
       // "Missing permissions"). Todas las lecturas de identidad usan .get(…) por si
       // a la orden le falta algún campo.
-      allow update: if bOrdenPrecioOk() && bPuedeActualizarOrden();
+      allow update: if bOrdenPrecioOk() && bTransicionEntregaOk() && bPuedeActualizarOrden();
       allow delete: if bAdmin(resource.data.tenantId);
+    }
+
+    // ── Liberación de entregas con token de supervisor (solo backend escribe) ──
+    // Secreto TOTP de cada supervisor: NADIE lo lee ni escribe desde el cliente.
+    match /bulk_supervisorTotp/{id} {
+      allow read, write: if false;
+    }
+    // Autorizaciones consumidas (1 por orden): historial/auditoría. Lee el staff,
+    // el supervisor las SUYAS y el empleado las suyas. Inmutables desde clientes.
+    match /bulk_liberaciones/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (resource.data.supervisorId == request.auth.uid || resource.data.empleadoId == request.auth.uid));
+      allow create, update, delete: if false;
+    }
+    // Intentos fallidos / bloqueo anti fuerza bruta. Solo backend escribe.
+    match /bulk_authAttempts/{id} {
+      allow read: if bStaff(resource.data.tenantId);
+      allow create, update, delete: if false;
     }
 
     // ── Inc.2 · Pagos por audiencia (separación de márgenes) ─────────────────

@@ -1,13 +1,16 @@
 {
   "name": "bulk-functions",
-  "description": "Backend de Cloud Functions para el módulo Bulk (usuarios, notificaciones, IA)",
+  "description": "Backend de Cloud Functions para el m\u00f3dulo Bulk (usuarios, notificaciones, IA)",
   "private": true,
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test": "node --test test/"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

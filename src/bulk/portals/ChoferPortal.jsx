@@ -11,7 +11,8 @@ import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
-import { authBulk } from '../firebaseBulk'
+import { authBulk, funcsBulk } from '../firebaseBulk'
+import { httpsCallable } from 'firebase/functions'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
@@ -29,7 +30,6 @@ import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
 import { siguientePasoChofer, faseChofer, ESTADOS_ACTIVOS_CHOFER, ESTADOS_HISTORIAL, ahora } from '../domain/flujo'
 import { puedeMarcarLlegada, geocercaObjetivo, distanciaM, dentroGeocerca } from '../domain/geo'
-import { evaluarLiberacion, liberacionAutomatica, nuevoCodigoLiberacion } from '../domain/liberacion'
 import { cerrarOferta } from '../domain/historialAsignacion'
 import { tsMillis } from '../data/chatKeys'
 import { conectar, desconectar, latir, ocupar, liberar, reportarUbicacion } from '../data/presencia'
@@ -898,6 +898,9 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const [navOpen, setNavOpen] = useState(false)
   const [codigo, setCodigo] = useState('')
   const [errCod, setErrCod] = useState(false)
+  // Código de AUTORIZACIÓN del supervisor (token dinámico) para poder entregar.
+  const [codigoSup, setCodigoSup] = useState('')
+  const [errSup, setErrSup] = useState('')
   const [lightbox, setLightbox] = useState(null) // src de la foto ampliada
 
   // Destino de la fase actual: recogida = planta; entrega = dirección de entrega.
@@ -990,43 +993,31 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     finally { setOcupado(false) }
   }
 
+  // REGLA CRÍTICA: la entrega SOLO la ejecuta el backend (bulkEntregarOrden) con
+  // un código de supervisor VÁLIDO. Aquí ya no se escribe la orden directamente
+  // (las reglas de Firestore además lo bloquean); la app solo reúne POD + código.
   const guardarPOD = async () => {
     if (!foto) { window.alert(t('Toma la foto de la entrega.')); return }
     if (!firma) { window.alert(t('Falta la firma.')); return }
-    setOcupado(true)
+    if (!String(codigoSup).trim()) { setErrSup(t('Pide al supervisor su código de autorización y escríbelo.')); return }
+    setOcupado(true); setErrSup('')
     try {
       const g = await capturarGPS()
-      const ordenPOD = { ...orden, pod: { firma, foto: foto || null }, gps_entrega: g }
-      // Motor de liberación por confianza: ¿la entrega está dentro de la zona de destino?
-      const objEnt = geocercaObjetivo(orden, 'entrega', geocercas, plantas)
-      const objEntL = objEnt ? (Array.isArray(objEnt) ? objEnt : [objEnt]) : []
-      const dentroGeocercaEntrega = objEntL.length ? (g ? objEntL.some((gf) => dentroGeocerca(g, gf)) : false) : null
-      const evalLib = evaluarLiberacion(ordenPOD, { dentroGeocercaEntrega })
-      const auto = liberacionAuto && liberacionAutomatica(evalLib)
-      const podData = { firma, foto: foto || null, comentarios: coment || '', gps: g, ts: ahora() }
-      if (auto) {
-        // Confianza alta + liberación automática activa: se libera sin código de supervisor.
-        // Usa la clave de hito 'liberacion' (la misma que muestra la línea de tiempo).
-        await guardar('orders', orden.id, {
-          estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), entrega: ahora(), liberacion: ahora() },
-          pod: podData, gps_entrega: g,
-          liberacion: { modo: 'auto', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
-        })
-        await liberar(usuario.id) // liberación automática: vuelvo a la cola de disponibles
-        await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberacion_auto', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
-      } else {
-        // Código de 4 dígitos que el supervisor verá y le dará al chofer para liberar.
-        const codigoLiberacion = nuevoCodigoLiberacion()
-        await guardar('orders', orden.id, {
-          estado: E.ENTREGADA, hitos: { ...(orden.hitos || {}), entrega: ahora() }, codigoLiberacion,
-          pod: podData, gps_entrega: g,
-          liberacion: { modo: 'manual', nivel: evalLib.nivel, razones: evalLib.razones, ts: ahora() },
-        })
-        await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'pod_entrega', entidad: 'orden', entidadId: orden.id, detalle: `confianza ${evalLib.nivel}` })
-      }
-      setModal(null); setFoto(null); setFirma(null); setComent('')
-    } catch (e) { window.alert(t('No se pudo guardar la entrega. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
-    finally { setOcupado(false) }
+      const fn = httpsCallable(funcsBulk, 'bulkEntregarOrden', { timeout: 30000 })
+      await fn({ orderId: orden.id, token: String(codigoSup).trim(), pod: { firma, foto: foto || null, comentarios: coment || '' }, gps: g })
+      // Entregada Y liberada por el supervisor: el chofer queda libre de una vez.
+      try { await liberar(usuario.id) } catch { /* la presencia también la libera el backend */ }
+      setModal(null); setFoto(null); setFirma(null); setComent(''); setCodigoSup('')
+      window.alert(t('Orden liberada por el supervisor. Entrega completada.'))
+    } catch (e) {
+      const m = e?.message || ''
+      setErrSup(
+        /inválido|invalido|expirado|permission/i.test(m) ? t('Código inválido o expirado. La orden no puede ser entregada.')
+          : /Demasiados intentos|resource/i.test(m) ? t('Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.')
+            : /ya fue entregada/i.test(m) ? t('Esta orden ya fue entregada.')
+              : (m || t('No se pudo completar la entrega. Revisa tu conexión.')),
+      )
+    } finally { setOcupado(false) }
   }
 
   const liberarConCodigo = async () => {
@@ -1255,7 +1246,15 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           <FirmaPad onChange={setFirma} />
           <Input placeholder={t('Comentarios (opcional)')} value={coment} onChange={(e) => setComent(e.target.value)} className="my-2" />
           <div className="mb-2 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={12} /> {t('Se guardará tu GPS, fecha y hora automáticamente.')}</div>
-          <Boton variant="gold" onClick={guardarPOD} disabled={ocupado} className="w-full justify-center">{ocupado ? <Spinner /> : t('Confirmar entrega')}</Boton>
+          {/* AUTORIZACIÓN DE SUPERVISOR REQUERIDA: sin código válido no hay entrega. */}
+          <div className="mb-2 rounded-xl border-2 border-dashed border-amber-400 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-brand-navy dark:text-slate-100"><KeyRound size={14} className="text-amber-500" /> {t('Autorización de supervisor requerida')}</div>
+            <div className="mt-0.5 text-[11px] text-slate-400">{t('Pide al supervisor el código de su pantalla (cambia cada pocos segundos).')}</div>
+            <Input inputMode="numeric" maxLength={6} placeholder={t('Código de autorización (6 dígitos)')} value={codigoSup}
+              onChange={(e) => { setCodigoSup(e.target.value.replace(/\D/g, '')); setErrSup('') }} className="mt-2 text-center text-lg font-black tracking-[0.3em]" />
+            {errSup && <div className="mt-1.5 text-xs font-semibold text-rose-500">{errSup}</div>}
+          </div>
+          <Boton variant="gold" onClick={guardarPOD} disabled={ocupado || !codigoSup.trim()} className="w-full justify-center">{ocupado ? <Spinner /> : t('Validar y entregar')}</Boton>
         </Modal>
       )}
 

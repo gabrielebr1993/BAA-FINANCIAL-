@@ -1494,3 +1494,204 @@ exports.bulkFacturasRecurrentes = onSchedule({ schedule: 'every day 07:00', time
     }
   }
 })
+
+// ============================================================================
+// LIBERACIÓN DE ENTREGAS CON TOKEN DE SUPERVISOR (regla crítica de seguridad)
+// ----------------------------------------------------------------------------
+// REGLA: ninguna orden puede pasar a 'entregada' sin una autorización VÁLIDA de
+// un supervisor. La única vía de entrega es bulkEntregarOrden (este backend);
+// las reglas de Firestore BLOQUEAN a cualquier cliente (app, API directa,
+// petición manipulada) que intente escribir ese estado.
+//
+//   bulkTotpOp       → token tipo banco del supervisor (TOTP RFC 6238, secreto
+//                      propio por supervisor, rotación automática cada
+//                      30/60/120 s configurables + rotación manual).
+//   bulkEntregarOrden→ deliverOrder(orderId, userId, releaseToken): valida
+//                      permiso, estado, token, alcance del supervisor sobre la
+//                      orden, un-solo-uso por orden, rate limiting y ejecuta el
+//                      cambio de estado de forma ATÓMICA. Audita todo.
+//
+// Colecciones (solo backend escribe; ver firestore.rules):
+//   bulk_supervisorTotp/{uid}   secreto TOTP (NUNCA legible por clientes)
+//   bulk_liberaciones/{orderId} autorización consumida (1 por orden)
+//   bulk_authAttempts/{orderId} intentos fallidos + bloqueo por fuerza bruta
+// ============================================================================
+const totp = require('./totp')
+
+const LIB_MAX_FALLOS = 5           // intentos fallidos permitidos…
+const LIB_VENTANA_MS = 10 * 60000  // …en esta ventana → bloqueo
+const LIB_BLOQUEO_MS = 10 * 60000  // duración del bloqueo
+
+async function _periodoLiberacion(tenantId) {
+  try {
+    const s = await db.collection('bulk_settings').doc(tenantId).get()
+    return totp.periodoValido(s.exists && s.data().liberacion && s.data().liberacion.periodo)
+  } catch { return 60 }
+}
+
+// ¿Este usuario puede AUTORIZAR entregas? (supervisor, admin o super_admin)
+const _puedeAutorizar = (rol) => ['supervisor_planta', 'admin', 'super_admin'].includes(rol)
+// ¿El alcance del autorizador cubre la orden? (jobs asignados; respaldo: planta;
+// admin/super_admin cubren todo el tenant)
+function _alcanzaOrden(u, orden) {
+  if (['admin', 'super_admin'].includes(u.rol)) return true
+  const jobs = Array.isArray(u.jobIds) ? u.jobIds : []
+  if (jobs.length) return !!orden.jobId && jobs.includes(orden.jobId)
+  return !!u.plantaId && orden.plantaId === u.plantaId
+}
+
+// ── bulkTotpOp — el "token bancario" del autorizador ─────────────────────────
+// op 'codigo': código vigente + segundos restantes (genera el secreto si falta).
+// op 'rotar' : regenera el secreto (el código anterior deja de valer YA).
+exports.bulkTotpOp = onCall(async (req) => {
+  const t = req.auth && req.auth.token
+  if (!t || !t.bulkTenant) throw new HttpsError('permission-denied', 'No autorizado.')
+  if (!_puedeAutorizar(t.bulkRole)) throw new HttpsError('permission-denied', 'Solo un supervisor o administrador tiene código de liberación.')
+  const uid = req.auth.uid
+  const op = req.data && req.data.op
+  const periodo = await _periodoLiberacion(t.bulkTenant)
+  const ref = db.collection('bulk_supervisorTotp').doc(uid)
+
+  if (op === 'codigo' || op === 'rotar') {
+    let secreto = null
+    if (op === 'rotar') {
+      secreto = totp.generarSecreto()
+      await ref.set({ tenantId: t.bulkTenant, uid, secreto, rotadoEn: new Date().toISOString(), rotadoPor: t.email || uid }, { merge: true })
+      await db.collection('bulk_audit').add({ tenantId: t.bulkTenant, usuario: t.email || uid, accion: 'totp_rotado', entidad: 'liberacion', detalle: `Nuevo código de liberación generado manualmente (revoca el anterior)${req.data && req.data.motivo ? ` · motivo: ${String(req.data.motivo).slice(0, 200)}` : ''}`, ts: new Date().toISOString() }).catch(() => {})
+    } else {
+      const s = await ref.get()
+      secreto = s.exists ? s.data().secreto : null
+      if (!secreto) { // primera vez: se genera el secreto
+        secreto = totp.generarSecreto()
+        await ref.set({ tenantId: t.bulkTenant, uid, secreto, creadoEn: new Date().toISOString() }, { merge: true })
+      }
+    }
+    // El SECRETO nunca sale del servidor: solo el código vigente y su vida útil.
+    return { codigo: totp.codigoTotp(secreto, periodo), segundos: totp.segundosRestantes(periodo), periodo }
+  }
+
+  throw new HttpsError('invalid-argument', 'Operación no reconocida.')
+})
+
+// ── bulkEntregarOrden — LA ÚNICA vía para marcar una orden como entregada ───
+// data: { orderId, token, pod?: {firma, foto, comentarios}, gps?: {lat,lng} }
+exports.bulkEntregarOrden = onCall({ timeoutSeconds: 30 }, async (req) => {
+  const t = req.auth && req.auth.token
+  if (!t || !t.bulkTenant) throw new HttpsError('permission-denied', 'No autorizado.')
+  const uid = req.auth.uid
+  const { orderId, token } = req.data || {}
+  if (!orderId) throw new HttpsError('invalid-argument', 'Falta la orden.')
+  const ahora = new Date().toISOString()
+  const ip = (req.rawRequest && (req.rawRequest.ip || (req.rawRequest.headers && req.rawRequest.headers['x-forwarded-for']))) || ''
+  const dispositivo = (req.rawRequest && req.rawRequest.headers && String(req.rawRequest.headers['user-agent'] || '').slice(0, 180)) || ''
+
+  // 1) La orden existe y es del tenant del que llama.
+  const oref = db.collection('bulk_orders').doc(String(orderId))
+  const osnap = await oref.get()
+  if (!osnap.exists) throw new HttpsError('not-found', 'La orden no existe.')
+  const orden = osnap.data() || {}
+  if (orden.tenantId !== t.bulkTenant) throw new HttpsError('permission-denied', 'Esa orden no es de tu empresa.')
+
+  // 2) El usuario tiene permiso de ENTREGAR esta orden.
+  const perfilSnap = await db.collection('bulk_users').doc(uid).get()
+  const perfil = perfilSnap.exists ? perfilSnap.data() : {}
+  const esStaff = ['super_admin', 'admin', 'dispatcher'].includes(t.bulkRole)
+  const esSuChofer = t.bulkRole === 'chofer' && (
+    orden.choferId === uid
+    || (t.bulkCarrierId && orden.transportistaId === t.bulkCarrierId)
+    || (perfil.nombre && orden.choferNombre === perfil.nombre)
+  )
+  if (!esStaff && !esSuChofer) throw new HttpsError('permission-denied', 'No puedes entregar esta orden.')
+
+  // 3) Estado válido para entregar (y anti doble-entrega, re-validado en la tx).
+  const ENTREGABLES = esStaff
+    ? ['aceptada', 'en_planta', 'cargando', 'en_ruta', 'en_destino']
+    : ['en_destino']
+  if (['entregada', 'liberada', 'cerrada'].includes(orden.estado)) throw new HttpsError('failed-precondition', 'Esta orden ya fue entregada.')
+  if (!ENTREGABLES.includes(orden.estado)) throw new HttpsError('failed-precondition', `La orden no está en un estado entregable (está «${orden.estado}»).`)
+
+  // 4) Rate limiting por orden (fuerza bruta): bloqueo tras varios fallos.
+  const aref = db.collection('bulk_authAttempts').doc(String(orderId))
+  const asnap = await aref.get()
+  const intentos = asnap.exists ? asnap.data() : {}
+  if (intentos.bloqueadoHasta && Date.parse(intentos.bloqueadoHasta) > Date.now()) {
+    throw new HttpsError('resource-exhausted', 'Demasiados intentos fallidos. Espera unos minutos y vuelve a pedir el código al supervisor.')
+  }
+
+  // 5) Validar el token contra los autorizadores CON ALCANCE sobre ESTA orden.
+  //    (El código de un supervisor solo libera órdenes de SUS trabajos: un código
+  //    válido no sirve para liberar cualquier orden del sistema.)
+  const periodo = await _periodoLiberacion(t.bulkTenant)
+  const candidatos = []
+  const usnap = await db.collection('bulk_users').where('tenantId', '==', t.bulkTenant).where('rol', 'in', ['supervisor_planta', 'admin', 'super_admin']).get()
+  usnap.forEach((d) => { const u = { id: d.id, ...d.data() }; if (u.activo !== false && _alcanzaOrden(u, orden)) candidatos.push(u) })
+  let autorizador = null, pasoTotp = null
+  if (String(token || '').trim()) {
+    for (const u of candidatos) {
+      const s = await db.collection('bulk_supervisorTotp').doc(u.id).get()
+      const secreto = s.exists ? s.data().secreto : null
+      if (!secreto) continue
+      const r = totp.validarTotp(secreto, token, { periodo })
+      if (r.ok) { autorizador = u; pasoTotp = r.timestep; break }
+    }
+  }
+
+  if (!autorizador) {
+    // Registrar el intento fallido + bloqueo por fuerza bruta + auditoría.
+    const previos = (Array.isArray(intentos.recientes) ? intentos.recientes : []).filter((x) => Date.parse(x.ts) > Date.now() - LIB_VENTANA_MS)
+    previos.push({ ts: ahora, uid, usuario: t.email || uid, ip, dispositivo })
+    const bloquear = previos.length >= LIB_MAX_FALLOS
+    await aref.set({
+      tenantId: t.bulkTenant, orderId: String(orderId), fallidos: (Number(intentos.fallidos) || 0) + 1,
+      recientes: previos.slice(-LIB_MAX_FALLOS), ultimoEn: ahora,
+      ...(bloquear ? { bloqueadoHasta: new Date(Date.now() + LIB_BLOQUEO_MS).toISOString() } : {}),
+    }, { merge: true })
+    await db.collection('bulk_audit').add({ tenantId: t.bulkTenant, usuario: t.email || uid, accion: 'liberacion_fallida', entidad: 'orden', entidadId: String(orderId), detalle: `Código de liberación INVÁLIDO para ${orden.numero || orderId}${bloquear ? ' · BLOQUEADA por intentos' : ''} · ${ip}`, ts: ahora }).catch(() => {})
+    throw new HttpsError('permission-denied', 'Código inválido o expirado. La orden no puede ser entregada.')
+  }
+
+  // 6) ATÓMICO: autorización de UN SOLO USO por orden (doc id = orderId) + cambio
+  //    de estado. Dos entregas simultáneas: la segunda falla en tx.create.
+  const lref = db.collection('bulk_liberaciones').doc(String(orderId))
+  const pod = (req.data && req.data.pod) || null
+  const gps = (req.data && req.data.gps) || null
+  await db.runTransaction(async (tx) => {
+    const o2 = await tx.get(oref)
+    const od = o2.exists ? o2.data() : null
+    if (!od || ['entregada', 'liberada', 'cerrada'].includes(od.estado)) {
+      throw new HttpsError('failed-precondition', 'Esta orden ya fue entregada (posible doble intento).')
+    }
+    // Autorización única por orden (anti-reutilización / anti-replay).
+    tx.create(lref, {
+      tenantId: t.bulkTenant, orderId: String(orderId), orderNumero: od.numero || '',
+      supervisorId: autorizador.id, supervisorNombre: autorizador.nombre || autorizador.email || '',
+      empleadoId: uid, empleadoNombre: perfil.nombre || t.email || uid, empleadoRol: t.bulkRole,
+      autorizadaEn: ahora, entregadaEn: ahora, resultado: 'valida',
+      periodo, timestep: pasoTotp, ip, dispositivo,
+      intentosFallidosPrevios: Number(intentos.fallidos) || 0,
+    })
+    // Entregada Y liberada en el mismo paso: el supervisor YA autorizó la
+    // entrega con su token, no hay una segunda liberación pendiente.
+    tx.update(oref, {
+      estado: 'liberada',
+      hitos: Object.assign({}, od.hitos || {}, { entrega: ahora, liberacion: ahora }),
+      liberadaPor: autorizador.nombre || autorizador.email || autorizador.id,
+      liberacion: { modo: 'token_supervisor', por: autorizador.nombre || '', supervisorId: autorizador.id, ts: ahora },
+      ...(pod ? { pod: { firma: pod.firma || null, foto: pod.foto || null, comentarios: pod.comentarios || '', gps: gps || null, ts: ahora } } : {}),
+      ...(gps ? { gps_entrega: gps } : {}),
+      ...(pod && pod.pesoReal != null ? { pesoReal: Number(pod.pesoReal) || null } : {}),
+    })
+  })
+
+  // Liberar la presencia del chofer (vuelve a la cola de disponibles).
+  const choferUid = orden.choferId || (esSuChofer ? uid : null)
+  if (choferUid) {
+    try { await db.collection('bulk_presence').doc(choferUid).set({ ordenId: null, estado: 'libre', actualizadoEn: new Date().toISOString() }, { merge: true }) } catch { /* noop */ }
+  }
+  await db.collection('bulk_audit').add({
+    tenantId: t.bulkTenant, usuario: t.email || uid, accion: 'entrega_autorizada', entidad: 'orden', entidadId: String(orderId),
+    detalle: `${orden.numero || orderId} entregada y liberada · autorizó ${autorizador.nombre || autorizador.id} (token) · entregó ${perfil.nombre || t.email || uid} (${t.bulkRole}) · ${ip}`, ts: ahora,
+  }).catch(() => {})
+
+  return { ok: true, orderId: String(orderId), numero: orden.numero || '', supervisor: autorizador.nombre || '', entregadaEn: ahora }
+})

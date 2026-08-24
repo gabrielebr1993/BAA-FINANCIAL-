@@ -7,7 +7,9 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, QrCode, CheckCircle2, ClipboardList, Package, Truck, PackageCheck } from 'lucide-react'
+import { ShieldCheck, QrCode, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy } from 'lucide-react'
+import { httpsCallable } from 'firebase/functions'
+import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import PortalLayout from '../components/PortalLayout'
 import { useColeccion } from '../data/useColeccion'
@@ -104,8 +106,13 @@ export default function SupervisorPortal() {
     await liberarOrden(o); setCodigo('')
   }
 
+  // Historial de MIS liberaciones (autorizaciones con mi token, escritas por el backend).
+  const { datos: misLiberaciones } = useColeccion('liberaciones', [where('supervisorId', '==', usuario?.id || '__none__')])
+
   const items = [
+    { k: 'token', label: t('Mi código'), icon: KeyRound },
     { k: 'liberar', label: t('Liberar cargas'), icon: PackageCheck, badge: pendientes.length },
+    { k: 'liberaciones', label: t('Liberaciones'), icon: History },
     { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
   ]
 
@@ -136,6 +143,32 @@ export default function SupervisorPortal() {
         <KPI label={t('En ruta / salidas')} value={stats.enRuta} icon={Truck} accent="blue" />
         <KPI label={t('Esperando liberación')} value={stats.esperando} icon={PackageCheck} accent="green" />
       </div>
+
+      {tab === 'token' && <TokenSupervisor t={t} />}
+
+      {tab === 'liberaciones' && (<>
+        <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
+        {misLiberaciones.length === 0 ? (
+          <EstadoVacio titulo={t('Aún no has liberado entregas')} texto={t('Cuando un chofer entregue con tu código, cada autorización quedará registrada aquí.')} mostrarBoton={false} />
+        ) : (
+          <div className="space-y-2">
+            {misLiberaciones.slice().sort((a, b) => (b.autorizadaEn || '').localeCompare(a.autorizadaEn || '')).map((l) => (
+              <Card key={l.id} className="p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
+                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{l.orderNumero || l.orderId}</span>
+                  <Badge color="green">{t('Liberada')}</Badge>
+                  <span className="ml-auto text-xs text-slate-400">{String(l.autorizadaEn || '').slice(0, 16).replace('T', ' ')}</span>
+                </div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {t('Entregó')}: <b>{l.empleadoNombre || '—'}</b> ({t(l.empleadoRol || '')})
+                  {l.intentosFallidosPrevios > 0 && <span className="ml-2 text-amber-600 dark:text-amber-400">· {l.intentosFallidosPrevios} {t('intento(s) fallido(s) previos')}</span>}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </>)}
 
       {tab === 'liberar' && (<>
         {/* Liberar por código */}
@@ -202,5 +235,81 @@ export default function SupervisorPortal() {
         )}
       </>)}
     </PortalLayout>
+  )
+}
+
+// ── "Token bancario" del supervisor ─────────────────────────────────────────
+// Muestra el código TOTP vigente (el SECRETO nunca sale del servidor), cuánto
+// falta para que cambie, y permite generar uno nuevo a mano (rotar = revoca el
+// anterior al instante). El backend lo recalcula al vencer cada periodo.
+function TokenSupervisor({ t }) {
+  const [info, setInfo] = useState(null) // { codigo, segundos, periodo }
+  const [seg, setSeg] = useState(0)
+  const [cargando, setCargando] = useState(false)
+  const [err, setErr] = useState('')
+  const [copiado, setCopiado] = useState(false)
+  const pidiendo = useRef(false)
+
+  const pedir = async (op = 'codigo') => {
+    if (pidiendo.current) return
+    pidiendo.current = true
+    setCargando(true); setErr('')
+    try {
+      const fn = httpsCallable(funcsBulk, 'bulkTotpOp', { timeout: 15000 })
+      const r = await fn({ op, ...(op === 'rotar' ? { motivo: 'rotación manual desde el portal' } : {}) })
+      setInfo(r?.data || null); setSeg(r?.data?.segundos || 0)
+    } catch (e) { setErr(e?.message || t('No se pudo obtener el código.')) }
+    finally { setCargando(false); pidiendo.current = false }
+  }
+  useEffect(() => { pedir('codigo') }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cuenta regresiva local; al llegar a 0 se pide el código nuevo al backend.
+  useEffect(() => {
+    if (!info) return
+    const id = setInterval(() => {
+      setSeg((s) => {
+        if (s <= 1) { pedir('codigo'); return 0 }
+        return s - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info])
+
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(info?.codigo || ''); setCopiado(true); setTimeout(() => setCopiado(false), 1200) } catch { /* noop */ }
+  }
+  const pct = info ? Math.max(0, Math.min(100, (seg / info.periodo) * 100)) : 0
+
+  return (
+    <Card className="mx-auto max-w-md p-6 text-center">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400"><KeyRound size={26} /></div>
+      <h3 className="mt-3 text-base font-black text-brand-navy dark:text-slate-100">{t('Mi código de autorización')}</h3>
+      <p className="mt-1 text-xs text-slate-400">{t('El chofer lo escribe para poder entregar. Solo sirve para las órdenes de TUS trabajos, cambia solo y cada uso queda registrado.')}</p>
+      {err && <Aviso tipo="error" className="mt-3">{err}</Aviso>}
+      {info ? (
+        <>
+          <button type="button" onClick={copiar} title={t('Copiar')} className="mt-4 inline-flex items-center gap-3 rounded-2xl border-2 border-amber-400 bg-amber-500/5 px-6 py-4">
+            <span className="font-mono text-4xl font-black tracking-[0.35em] text-brand-navy dark:text-slate-100">{cargando ? '· · ·' : info.codigo}</span>
+            <Copy size={16} className="text-slate-400" />
+          </button>
+          {copiado && <div className="mt-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{t('Copiado')}</div>}
+          <div className="mx-auto mt-4 max-w-xs">
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className={`h-full rounded-full transition-all duration-1000 ${seg <= 10 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+            </div>
+            <div className={`mt-1 text-xs font-bold ${seg <= 10 ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400'}`}>
+              {t('Código válido durante')}: {seg} s <span className="font-normal text-slate-400">({t('rota cada')} {info.periodo} s)</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="py-6 text-sm text-slate-400">{cargando ? t('Generando tu código…') : ''}</div>
+      )}
+      <button type="button" onClick={() => window.confirm(t('¿Generar un código nuevo? El actual dejará de valer de inmediato (útil si crees que alguien lo vio).')) && pedir('rotar')} disabled={cargando}
+        className="mt-5 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+        <RefreshCw size={15} /> {t('Generar nuevo código (revoca el actual)')}
+      </button>
+    </Card>
   )
 }
