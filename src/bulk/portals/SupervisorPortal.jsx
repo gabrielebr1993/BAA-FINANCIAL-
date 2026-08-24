@@ -7,11 +7,12 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import PortalLayout from '../components/PortalLayout'
+import MapaLeaflet from '../components/MapaLeaflet'
 import { useColeccion } from '../data/useColeccion'
 import { guardar, where } from '../data/repo'
 import { liberar as liberarPresencia } from '../data/presencia'
@@ -42,6 +43,7 @@ export default function SupervisorPortal() {
       ? where('jobId', 'in', jobIds.slice(0, 10)) // Firestore admite hasta 10 valores en 'in'
       : where('plantaId', '==', plantaId || '__none__'),
   ])
+  const { datos: geocercas } = useColeccion('geofences')
   const [msg, setMsg] = useState(null)
   const [tab, setTab] = useState('token')
 
@@ -114,6 +116,7 @@ export default function SupervisorPortal() {
   const items = [
     { k: 'token', label: t('Mi código'), icon: KeyRound },
     { k: 'espera', label: t('Por autorizar'), icon: Clock, badge: porAutorizar.length },
+    { k: 'mapa', label: t('Mapa'), icon: MapIcon },
     ...(pendientes.length > 0 ? [{ k: 'liberar', label: t('Cargas antiguas'), icon: PackageCheck, badge: pendientes.length }] : []),
     { k: 'liberaciones', label: t('Liberaciones'), icon: History },
     { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
@@ -169,6 +172,8 @@ export default function SupervisorPortal() {
                 </div>
                 <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
                 {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
+                <ProgresoViaje o={o} t={t} />
+                {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
               </Card>
             ))}
           </div>
@@ -183,11 +188,38 @@ export default function SupervisorPortal() {
                   <Badge color="blue">{t('En ruta')}</Badge>
                   <span className="ml-auto text-xs text-slate-400">{o.choferNombre || '—'}</span>
                 </div>
+                <ProgresoViaje o={o} t={t} />
               </Card>
             ))}
           </div>
         </>)}
       </>)}
+
+      {activo === 'mapa' && (() => {
+        // Camiones ACTIVOS de sus trabajos con posición conocida, coloreados por
+        // etapa, sobre las geocercas (planta y zona de entrega).
+        const colorPunto = { aceptada: '#64748b', en_planta: '#13233f', cargando: '#13233f', en_ruta: '#2563eb', en_destino: '#f59e0b' }
+        const activos = ordenes.filter((o) => !FINAL.includes(o.estado) && o.ultimaPos?.lat != null)
+        const marcadores = activos.map((o) => ({ id: `o_${o.id}`, lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto[o.estado] || '#64748b', label: `${o.numero} · ${o.choferNombre || t('sin chofer')} · ${t(PASO_LABEL[o.estado] || o.estado)}` }))
+        return (
+          <Card className="p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+              <MapIcon size={14} className="text-amber-500" />
+              <span className="font-bold text-brand-navy dark:text-slate-100">{t('Mis camiones en vivo')}</span>
+              <Badge color="navy">{activos.length}</Badge>
+              <span className="ml-auto flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#2563eb' }} /> {t('En ruta')}</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#f59e0b' }} /> {t('En destino')}</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#13233f' }} /> {t('En planta / cargando')}</span>
+              </span>
+            </div>
+            {activos.length === 0
+              ? <div className="flex flex-col items-center gap-2 py-10 text-center text-slate-400"><MapIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ningún camión activo con GPS ahora mismo. Cuando un chofer esté en viaje, lo verás aquí con las geocercas.')}</p></div>
+              : <MapaLeaflet geocercas={geocercas} marcadores={marcadores} alto="58vh" />}
+            <p className="mt-2 px-1 text-[11px] text-slate-400">{t('La posición se actualiza con el GPS del chofer (cada ~20 s en viaje). Los círculos son las geocercas de planta y de entrega.')}</p>
+          </Card>
+        )
+      })()}
 
       {activo === 'liberaciones' && (<>
         <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
@@ -340,5 +372,33 @@ function TokenSupervisor({ t }) {
         <RefreshCw size={15} /> {t('Generar nuevo código (revoca el actual)')}
       </button>
     </Card>
+  )
+}
+
+
+// ── Progreso del viaje (mini barra por tarjeta) ─────────────────────────────
+// Etapas del viaje hacia la entrega y el % que representa cada estado.
+const PASOS_VIAJE = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
+const PASO_LABEL = { aceptada: 'Aceptada', en_planta: 'En planta', cargando: 'Cargando', en_ruta: 'En ruta', en_destino: 'En destino' }
+const haceTxt = (ts) => {
+  const ms = Date.parse(ts || '')
+  if (!Number.isFinite(ms)) return null
+  const min = Math.max(0, Math.round((Date.now() - ms) / 60000))
+  return min < 1 ? 'ahora' : min < 60 ? `hace ${min} min` : `hace ${Math.round(min / 60)} h`
+}
+function ProgresoViaje({ o, t }) {
+  const idx = PASOS_VIAJE.indexOf(o.estado)
+  const pct = idx < 0 ? 0 : Math.round(((idx + 1) / PASOS_VIAJE.length) * 100)
+  const gps = o.ultimaPos?.ts ? haceTxt(o.ultimaPos.ts) : null
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        <span>{t(PASO_LABEL[o.estado] || o.estado)}</span>
+        <span>{pct}%{gps ? ` · GPS ${t(gps)}` : ''}</span>
+      </div>
+      <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div className={`h-full rounded-full transition-all ${o.estado === E.EN_DESTINO ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.max(6, pct)}%` }} />
+      </div>
+    </div>
   )
 }
