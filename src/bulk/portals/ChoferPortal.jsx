@@ -896,8 +896,6 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const [motivoPeso, setMotivoPeso] = useState('')
   const [copiado, setCopiado] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
-  const [codigo, setCodigo] = useState('')
-  const [errCod, setErrCod] = useState(false)
   // Código de AUTORIZACIÓN del supervisor (token dinámico) para poder entregar.
   const [codigoSup, setCodigoSup] = useState('')
   const [errSup, setErrSup] = useState('')
@@ -1018,16 +1016,6 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
               : (m || t('No se pudo completar la entrega. Revisa tu conexión.')),
       )
     } finally { setOcupado(false) }
-  }
-
-  const liberarConCodigo = async () => {
-    setErrCod(false)
-    if (codigo.trim() !== String(orden.codigoLiberacion || '')) { setErrCod(true); return }
-    setOcupado(true)
-    await guardar('orders', orden.id, { estado: E.LIBERADA, hitos: { ...(orden.hitos || {}), liberacion: ahora() }, liberadaPor: usuario?.nombre || usuario?.email })
-    await liberar(usuario.id) // terminé: vuelvo a la cola de en línea (disponible)
-    await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'liberar_carga', entidad: 'orden', entidadId: orden.id })
-    setOcupado(false); setCodigo('')
   }
 
   const onFoto = async (e) => setFoto(await leerFotoReducida(e.target.files?.[0]))
@@ -1170,15 +1158,12 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           )}
         </>
       ) : orden.estado === E.ENTREGADA ? (
+        // SOLO órdenes ANTIGUAS (entregadas antes del sistema de token). El
+        // supervisor las libera desde su portal; el chofer solo espera.
         <div className="mt-4 rounded-xl border-2 border-dashed border-amber-400 p-4 text-center">
           <KeyRound size={36} className="mx-auto text-amber-500" />
-          <div className="mt-1 text-sm font-semibold text-brand-navy dark:text-slate-100">{t('Pide el código de liberación al supervisor')}</div>
-          <div className="mt-0.5 text-xs text-slate-400">{t('Al ingresarlo, la orden se libera y puedes tomar otra.')}</div>
-          <div className="mt-3 flex gap-2">
-            <Input inputMode="numeric" placeholder={t('Código (4 dígitos)')} value={codigo} onChange={(e) => { setCodigo(e.target.value); setErrCod(false) }} className="flex-1 text-center tracking-widest" />
-            <Boton variant="gold" onClick={liberarConCodigo} disabled={ocupado || !codigo.trim()}>{ocupado ? <Spinner /> : t('Liberar')}</Boton>
-          </div>
-          {errCod && <div className="mt-1.5 text-xs font-semibold text-rose-500">{t('Código incorrecto. Verifícalo con el supervisor.')}</div>}
+          <div className="mt-1 text-sm font-semibold text-brand-navy dark:text-slate-100">{t('Esperando liberación del supervisor')}</div>
+          <div className="mt-0.5 text-xs text-slate-400">{t('El supervisor libera esta carga desde su portal. En cuanto lo haga, podrás tomar otra.')}</div>
         </div>
       ) : null}
 

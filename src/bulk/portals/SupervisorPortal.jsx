@@ -7,7 +7,7 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, QrCode, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -18,8 +18,8 @@ import { liberar as liberarPresencia } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { ahora } from '../domain/flujo'
-import { NIVEL_LABEL, nuevoCodigoLiberacion } from '../domain/liberacion'
-import { Card, KPI, Boton, Input, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
+import { NIVEL_LABEL } from '../domain/liberacion'
+import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 const HACIA_PLANTA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO, E.ACEPTADA]
@@ -41,28 +41,12 @@ export default function SupervisorPortal() {
       ? where('jobId', 'in', jobIds.slice(0, 10)) // Firestore admite hasta 10 valores en 'in'
       : where('plantaId', '==', plantaId || '__none__'),
   ])
-  const [codigo, setCodigo] = useState('')
   const [msg, setMsg] = useState(null)
-  const [tab, setTab] = useState('liberar')
+  const [tab, setTab] = useState('token')
 
+  // Órdenes 'entregada' = SOLO legado (el sistema nuevo entrega y libera en un
+  // paso con el token; ninguna orden nueva se queda en este estado).
   const pendientes = useMemo(() => ordenes.filter((o) => o.estado === E.ENTREGADA), [ordenes])
-
-  // AUTO-SANACIÓN del código de liberación: el código solo lo generaba el flujo
-  // del chofer (POD). Una orden puede llegar a 'entregada' SIN código por otras
-  // vías (cambio manual de estado del staff, datos de demo, entregas viejas) y
-  // el supervisor la veía sin código, con el chofer atascado esperándolo. Aquí,
-  // en cuanto una orden entregada sin código entra a su alcance, se le genera y
-  // guarda uno (el supervisor tiene permiso de actualizar sus órdenes). El ref
-  // evita escribirle dos veces a la misma orden mientras llega el snapshot.
-  const sanando = useRef(new Set())
-  useEffect(() => {
-    for (const o of pendientes) {
-      if (o.codigoLiberacion || sanando.current.has(o.id)) continue
-      sanando.current.add(o.id)
-      guardar('orders', o.id, { codigoLiberacion: nuevoCodigoLiberacion() })
-        .catch(() => sanando.current.delete(o.id))
-    }
-  }, [pendientes])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
   const stats = useMemo(() => ({
     haciaPlanta: ordenes.filter((o) => HACIA_PLANTA.includes(o.estado)).length,
@@ -98,23 +82,18 @@ export default function SupervisorPortal() {
     setMsg({ tipo: 'ok', txt: `${t('Orden')} ${orden.numero} ${t('liberada. El chofer ya puede tomar otra carga.')}` })
   }
 
-  const liberarPorCodigo = async () => {
-    setMsg(null)
-    const c = codigo.trim().toLowerCase()
-    const o = pendientes.find((x) => String(x.codigoLiberacion || '').toLowerCase() === c || (x.numero || '').toLowerCase() === c)
-    if (!o) { setMsg({ tipo: 'error', txt: t('No hay una orden entregada con ese código esperando liberación.') }); return }
-    await liberarOrden(o); setCodigo('')
-  }
-
   // Historial de MIS liberaciones (autorizaciones con mi token, escritas por el backend).
   const { datos: misLiberaciones } = useColeccion('liberaciones', [where('supervisorId', '==', usuario?.id || '__none__')])
 
+  // "Cargas antiguas" SOLO aparece si quedan órdenes del sistema anterior: así
+  // no conviven dos formas de liberar y el token es el único camino visible.
   const items = [
     { k: 'token', label: t('Mi código'), icon: KeyRound },
-    { k: 'liberar', label: t('Liberar cargas'), icon: PackageCheck, badge: pendientes.length },
+    ...(pendientes.length > 0 ? [{ k: 'liberar', label: t('Cargas antiguas'), icon: PackageCheck, badge: pendientes.length }] : []),
     { k: 'liberaciones', label: t('Liberaciones'), icon: History },
     { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
   ]
+  const activo = items.some((i) => i.k === tab) ? tab : 'token'
 
   return (
     <PortalLayout
@@ -122,7 +101,7 @@ export default function SupervisorPortal() {
       titulo={usuario?.nombre}
       subtitulo={t('Supervisor de trabajos')}
       items={items}
-      activo={tab}
+      activo={activo}
       onSelect={setTab}
       aviso={<>
         {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
@@ -144,9 +123,9 @@ export default function SupervisorPortal() {
         <KPI label={t('Esperando liberación')} value={stats.esperando} icon={PackageCheck} accent="green" />
       </div>
 
-      {tab === 'token' && <TokenSupervisor t={t} />}
+      {activo === 'token' && <TokenSupervisor t={t} />}
 
-      {tab === 'liberaciones' && (<>
+      {activo === 'liberaciones' && (<>
         <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
         {misLiberaciones.length === 0 ? (
           <EstadoVacio titulo={t('Aún no has liberado entregas')} texto={t('Cuando un chofer entregue con tu código, cada autorización quedará registrada aquí.')} mostrarBoton={false} />
@@ -170,22 +149,14 @@ export default function SupervisorPortal() {
         )}
       </>)}
 
-      {tab === 'liberar' && (<>
-        {/* Liberar por código */}
-        <Card className="mb-4 p-5 text-center">
-          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-amber-500/10 text-amber-500"><QrCode size={28} /></div>
-          <div className="text-base font-black text-brand-navy dark:text-slate-100">{t('Liberar una carga')}</div>
-          <div className="mt-0.5 text-xs text-slate-400">{t('Escribe el código que te muestra el chofer.')}</div>
-          <div className="mx-auto mt-4 flex max-w-sm gap-2">
-            <Input placeholder={t('Código (4 dígitos)')} inputMode="numeric" value={codigo} onChange={(e) => setCodigo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && liberarPorCodigo()} className="flex-1 text-center text-lg font-bold tracking-widest" />
-            <button onClick={liberarPorCodigo} disabled={!codigo.trim()} className="rounded-lg bg-emerald-500 px-5 text-sm font-black text-white shadow transition hover:bg-emerald-600 disabled:opacity-50">{t('Liberar')}</button>
-          </div>
-        </Card>
-
-        {/* Esperando liberación (acción) */}
-        <div className="mb-2 flex items-center gap-2"><PackageCheck size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Esperando liberación')}</h3><Badge color="gold">{pendientes.length}</Badge></div>
+      {activo === 'liberar' && (<>
+        {/* SOLO órdenes ANTIGUAS: entregadas antes del sistema de token. Las
+            entregas nuevas se autorizan con «Mi código» y no pasan por aquí.
+            Estas se liberan directo con el botón (sin códigos de 4 dígitos). */}
+        <Aviso tipo="info" className="mb-3">{t('Estas cargas quedaron entregadas con el sistema anterior. Libéralas con el botón. Las entregas nuevas se autorizan con tu código de la pestaña «Mi código» y no aparecen aquí.')}</Aviso>
+        <div className="mb-2 flex items-center gap-2"><PackageCheck size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cargas antiguas por liberar')}</h3><Badge color="gold">{pendientes.length}</Badge></div>
         {pendientes.length === 0 ? (
-          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('Ninguna orden esperando. Cuando un chofer entregue, aparecerá aquí.')}</p></Card>
+          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('No queda ninguna carga del sistema anterior. Todo lo nuevo se autoriza con tu código.')}</p></Card>
         ) : (
           <div className="mb-4 grid gap-2 sm:grid-cols-2">
             {pendientes.map((o) => (
@@ -197,19 +168,13 @@ export default function SupervisorPortal() {
                   <button onClick={() => liberarOrden(o)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"><CheckCircle2 size={14} /> {t('Liberar')}</button>
                 </div>
                 <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
-                {o.codigoLiberacion && (
-                  <div className="mt-2 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 dark:bg-amber-500/10">
-                    <span className="text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-400">{t('Código para el chofer')}</span>
-                    <span className="font-mono text-xl font-black tracking-[0.3em] text-brand-navy dark:text-slate-100">{o.codigoLiberacion}</span>
-                  </div>
-                )}
               </Card>
             ))}
           </div>
         )}
       </>)}
 
-      {tab === 'actividad' && (<>
+      {activo === 'actividad' && (<>
         <div className="mb-2 flex items-center gap-2"><ClipboardList size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Actividad de la planta')}</h3></div>
         {activas.length === 0 ? (
           <EstadoVacio titulo={t('Sin actividad en tu planta')} texto={t('Cuando haya cargas asignadas a tu planta, verás aquí su avance.')} mostrarBoton={false} />
