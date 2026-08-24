@@ -7,7 +7,7 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -47,12 +47,16 @@ export default function SupervisorPortal() {
   // Órdenes 'entregada' = SOLO legado (el sistema nuevo entrega y libera en un
   // paso con el token; ninguna orden nueva se queda en este estado).
   const pendientes = useMemo(() => ordenes.filter((o) => o.estado === E.ENTREGADA), [ordenes])
+  // POR AUTORIZAR: el chofer YA está en el destino y necesita el código del
+  // supervisor para poder entregar. EN CAMINO: le falta poco para llegar.
+  const porAutorizar = useMemo(() => ordenes.filter((o) => o.estado === E.EN_DESTINO), [ordenes])
+  const enCamino = useMemo(() => ordenes.filter((o) => o.estado === E.EN_RUTA), [ordenes])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
   const stats = useMemo(() => ({
     haciaPlanta: ordenes.filter((o) => HACIA_PLANTA.includes(o.estado)).length,
     enPlanta: ordenes.filter((o) => EN_PLANTA.includes(o.estado)).length,
     enRuta: ordenes.filter((o) => EN_RUTA.includes(o.estado)).length,
-    esperando: pendientes.length,
+    esperando: porAutorizar.length,
   }), [ordenes, pendientes])
 
   const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
@@ -89,6 +93,7 @@ export default function SupervisorPortal() {
   // no conviven dos formas de liberar y el token es el único camino visible.
   const items = [
     { k: 'token', label: t('Mi código'), icon: KeyRound },
+    { k: 'espera', label: t('Por autorizar'), icon: Clock, badge: porAutorizar.length },
     ...(pendientes.length > 0 ? [{ k: 'liberar', label: t('Cargas antiguas'), icon: PackageCheck, badge: pendientes.length }] : []),
     { k: 'liberaciones', label: t('Liberaciones'), icon: History },
     { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
@@ -120,10 +125,47 @@ export default function SupervisorPortal() {
         <KPI label={t('En cola hacia planta')} value={stats.haciaPlanta} icon={ClipboardList} accent="navy" />
         <KPI label={t('En planta / cargando')} value={stats.enPlanta} icon={Package} accent="gold" />
         <KPI label={t('En ruta / salidas')} value={stats.enRuta} icon={Truck} accent="blue" />
-        <KPI label={t('Esperando liberación')} value={stats.esperando} icon={PackageCheck} accent="green" />
+        <KPI label={t('Por autorizar')} value={stats.esperando} icon={KeyRound} accent="green" />
       </div>
 
       {activo === 'token' && <TokenSupervisor t={t} />}
+
+      {activo === 'espera' && (<>
+        <Aviso tipo="info" className="mb-3">{t('Estas cargas están EN EL DESTINO: el chofer necesita tu código de 6 dígitos (pestaña «Mi código») para poder entregar. Al validar el código, la orden queda entregada y liberada de una vez.')}</Aviso>
+        <div className="mb-2 flex items-center gap-2"><Clock size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En destino, esperando tu autorización')}</h3><Badge color="gold">{porAutorizar.length}</Badge></div>
+        {porAutorizar.length === 0 ? (
+          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('Nadie está esperando tu código ahora mismo. Cuando un chofer llegue al destino, aparecerá aquí.')}</p></Card>
+        ) : (
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            {porAutorizar.map((o) => (
+              <Card key={o.id} className="border-l-4 border-l-amber-500 p-3.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                  <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                  <Badge color="blue">{t('En destino')}</Badge>
+                  <button onClick={() => setTab('token')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm transition hover:bg-amber-400"><KeyRound size={13} /> {t('Ver mi código')}</button>
+                </div>
+                <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
+                {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
+              </Card>
+            ))}
+          </div>
+        )}
+        {enCamino.length > 0 && (<>
+          <div className="mb-2 flex items-center gap-2"><Truck size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En camino (pronto pedirán tu código)')}</h3><Badge color="blue">{enCamino.length}</Badge></div>
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            {enCamino.map((o) => (
+              <Card key={o.id} className="p-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                  <Badge color="blue">{t('En ruta')}</Badge>
+                  <span className="ml-auto text-xs text-slate-400">{o.choferNombre || '—'}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>)}
+      </>)}
 
       {activo === 'liberaciones' && (<>
         <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
