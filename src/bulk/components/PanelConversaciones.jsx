@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus, MoreVertical, LogOut } from 'lucide-react'
 import ChatOrden from './ChatOrden'
+import { useVisualViewport } from './useVisualViewport'
 import { tsMillis } from '../data/chatKeys'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Card, Badge, Input, EstadoVacio } from '../../components/ui'
@@ -81,6 +82,10 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   const activa = items.find((c) => c.key === sel) || items[0] || null
 
   const elegir = (k) => { setSel(k); setVerChatMovil(true) }
+
+  // Con el teclado abierto (móvil), la capa del chat se ciñe al viewport VISIBLE
+  // (visualViewport): el campo de mensaje queda a la vista y el layout no salta.
+  const vv = useVisualViewport(verChatMovil)
 
   return (
     <div className={`flex flex-col ${alturaClass}`}>
@@ -187,7 +192,10 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         {/* Conversación activa. En MÓVIL el chat abierto se muestra a PANTALLA COMPLETA
             (capa fija propia, como WhatsApp): así no comparte scroll con la página del
             portal ni salta cuando se abre el teclado. En escritorio sigue en la grilla. */}
-        <div className={`min-h-0 lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}>
+        <div
+          className={`min-h-0 lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}
+          style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}
+        >
           {activa ? (
             <Card className="flex h-full min-h-0 flex-1 flex-col p-3 sm:p-4">
               <div className="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">

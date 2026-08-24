@@ -8,6 +8,7 @@ import { activarPush } from './integraciones/fcm'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import LlamadaProvider from './components/LlamadaProvider'
+import ReunionProvider from './components/ReunionProvider'
 import { puedeVer } from './nav'
 import { Cargando } from '../components/ui'
 const BulkRoles = lazy(() => import('./pages/BulkRoles'))
@@ -143,7 +144,10 @@ export default function BulkApp() {
   return (
     <BulkAuthProvider>
       <LlamadaProvider>
-        <Interno />
+        {/* Capa global de reuniones: la videollamada sigue viva al navegar (PiP). */}
+        <ReunionProvider>
+          <Interno />
+        </ReunionProvider>
       </LlamadaProvider>
     </BulkAuthProvider>
   )

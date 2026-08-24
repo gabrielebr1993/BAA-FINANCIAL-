@@ -108,13 +108,12 @@ export default function Materiales() {
 
   if (cargando) return <Cargando />
 
-  // Orden: por planta y luego por nombre, para agrupar visualmente el mismo material de distintas plantas.
-  const ordenados = materiales.slice().sort((a, b) => {
-    const pa = nombrePlanta[a.plantaId] || ''
-    const pb = nombrePlanta[b.plantaId] || ''
-    if (pa !== pb) return pa.localeCompare(pb)
-    return (a.nombre || '').localeCompare(b.nombre || '')
-  })
+  // Orden ESTABLE: por nombre y, en empate, por id. Nunca por planta: la planta
+  // se edita desde la propia tarjeta y, si ordenara, la tarjeta "saltaría" a otra
+  // posición del grid al cambiarla (parecía que la interfaz se daba vuelta).
+  // Cambiar de planta ahora solo actualiza los datos; el layout no se mueve.
+  const ordenados = materiales.slice().sort((a, b) =>
+    (a.nombre || '').localeCompare(b.nombre || '') || (a.id || '').localeCompare(b.id || ''))
 
   return (
     <div>

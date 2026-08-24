@@ -1,10 +1,12 @@
-import { useState } from 'react'
-import { Plus, Trash2, MapPin, MousePointerClick, Pencil, Save, X, Move } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, Trash2, MapPin, MousePointerClick, Pencil, Save, X, Move, Search, CheckCircle2 } from 'lucide-react'
+import { httpsCallable } from 'firebase/functions'
+import { funcsBulk } from '../firebaseBulk'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import MapaLeaflet from '../components/MapaLeaflet'
-import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio } from '../../components/ui'
+import { PageTitle, Card, Boton, Input, Select, Badge, Cargando, EstadoVacio, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 const TIPOS = [
@@ -23,14 +25,97 @@ function Campo({ label, children }) {
   )
 }
 
+// ── Buscador de DIRECCIÓN con Google Places (autocompletado) ─────────────────
+// Escribe → sugerencias del backend (bulkPlacesOp; la API key nunca toca el
+// navegador) → al elegir, rellena dirección/ciudad/estado/ZIP y las coordenadas
+// GPS del lugar (así la dirección SIEMPRE corresponde al punto de la geocerca).
+function BuscadorDireccion({ t, onElegir, seleccion, onLimpiar }) {
+  const [q, setQ] = useState('')
+  const [sugerencias, setSugerencias] = useState([])
+  const [buscando, setBuscando] = useState(false)
+  const [errApi, setErrApi] = useState('')
+  const timer = useRef(null)
+  const pedido = useRef(0)
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current)
+    const texto = q.trim()
+    if (texto.length < 3) { setSugerencias([]); setBuscando(false); return }
+    setBuscando(true)
+    timer.current = setTimeout(async () => {
+      const n = ++pedido.current
+      try {
+        const fn = httpsCallable(funcsBulk, 'bulkPlacesOp', { timeout: 15000 })
+        const r = await fn({ op: 'autocomplete', q: texto })
+        if (n === pedido.current) { setSugerencias(r?.data?.sugerencias || []); setErrApi('') }
+      } catch (e) {
+        if (n === pedido.current) { setSugerencias([]); setErrApi(e?.message || t('No se pudo buscar la dirección.')) }
+      } finally { if (n === pedido.current) setBuscando(false) }
+    }, 350)
+    return () => timer.current && clearTimeout(timer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q])
+
+  const elegir = async (s) => {
+    setSugerencias([]); setQ(''); setBuscando(true)
+    try {
+      const fn = httpsCallable(funcsBulk, 'bulkPlacesOp', { timeout: 15000 })
+      const r = await fn({ op: 'detalles', placeId: s.placeId })
+      const d = r?.data || {}
+      if (d.lat == null || d.lng == null) { setErrApi(t('Esa dirección no tiene coordenadas; elige otra.')); return }
+      setErrApi('')
+      onElegir(d)
+    } catch (e) { setErrApi(e?.message || t('No se pudo obtener la dirección.')) }
+    finally { setBuscando(false) }
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Busca la dirección (Google Maps)…')} className="h-11 w-full pl-9" />
+        {buscando && <span className="absolute right-3 top-1/2 -translate-y-1/2"><Spinner /></span>}
+      </div>
+      {sugerencias.length > 0 && (
+        <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          {sugerencias.map((s) => (
+            <button key={s.placeId} type="button" onClick={() => elegir(s)} className="flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm text-slate-700 transition hover:bg-amber-50 dark:text-slate-200 dark:hover:bg-slate-800">
+              <MapPin size={14} className="mt-0.5 flex-shrink-0 text-amber-500" /> <span>{s.texto}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {errApi && <p className="mt-1 text-xs font-medium text-rose-500">{errApi}</p>}
+      {seleccion && (
+        <div className="mt-2 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-2.5 text-xs dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0 text-emerald-500" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-slate-700 dark:text-slate-200">{seleccion.direccion}</div>
+            <div className="text-slate-500 dark:text-slate-400">
+              {[seleccion.ciudad, seleccion.estado, seleccion.zip].filter(Boolean).join(', ')} · GPS {Number(seleccion.lat).toFixed(5)}, {Number(seleccion.lng).toFixed(5)}
+            </div>
+          </div>
+          <button type="button" onClick={onLimpiar} className="text-slate-400 hover:text-rose-500"><X size={14} /></button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Geocercas() {
   const { t } = useLang()
   const { tenantId, rol } = useBulkAuth()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   const { datos: geocercas, cargando } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
-  const [f, setF] = useState({ nombre: '', tipo: 'destino', lat: '', lng: '', radio: '200' })
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  const [f, setF] = useState({ nombre: '', tipo: 'destino', lat: '', lng: '', radio: '200', dir: null })
+  // Editar lat/lng a mano (o tocar el mapa) invalida la dirección elegida: la
+  // dirección guardada SIEMPRE debe corresponder a las coordenadas de la geocerca.
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value, ...(k === 'lat' || k === 'lng' ? { dir: null } : {}) }))
+  const elegirDireccion = (d) => setF((s) => ({
+    ...s, dir: d, lat: String(d.lat), lng: String(d.lng),
+    nombre: s.nombre || String(d.direccion || '').split(',')[0] || '',
+  }))
   // Geocerca en EDICIÓN (mover centro / ajustar radio) o null. Solo admins.
   const [editando, setEditando] = useState(null) // { id, nombre, tipo, lat, lng, radio, color }
   const [guardando, setGuardando] = useState(false)
@@ -44,15 +129,22 @@ export default function Geocercas() {
   }
 
   const agregar = async () => {
-    if (!f.nombre.trim() || !f.lat || !f.lng) return
-    await crear('geofences', tenantId, { nombre: f.nombre.trim(), tipo: f.tipo, lat: Number(f.lat), lng: Number(f.lng), radio: Number(f.radio) || 200 })
-    setF({ nombre: '', tipo: 'destino', lat: '', lng: '', radio: '200' })
+    const lat = Number(f.lat), lng = Number(f.lng)
+    // Validación: nunca se guarda una geocerca sin ubicación válida.
+    if (!f.nombre.trim() || !Number.isFinite(lat) || !Number.isFinite(lng) || f.lat === '' || f.lng === '') return
+    await crear('geofences', tenantId, {
+      nombre: f.nombre.trim(), tipo: f.tipo, lat, lng, radio: Number(f.radio) || 200,
+      // Datos de la dirección (Google Places) cuando se eligió del buscador —
+      // corresponden exactamente a las coordenadas guardadas.
+      ...(f.dir ? { direccion: f.dir.direccion || '', ciudad: f.dir.ciudad || '', estadoRegion: f.dir.estado || '', zip: f.dir.zip || '', placeId: f.dir.placeId || '' } : {}),
+    })
+    setF({ nombre: '', tipo: 'destino', lat: '', lng: '', radio: '200', dir: null })
   }
   const desdePlanta = async (p) => {
     if (!p.gps) return
     await crear('geofences', tenantId, { nombre: p.nombre, tipo: 'planta', lat: p.gps.lat, lng: p.gps.lng, radio: 200, plantaId: p.id })
   }
-  const elegirDelMapa = ({ lat, lng }) => setF((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6) }))
+  const elegirDelMapa = ({ lat, lng }) => setF((s) => ({ ...s, lat: lat.toFixed(6), lng: lng.toFixed(6), dir: null }))
 
   if (cargando) return <Cargando />
   const plantasSinGeocerca = plantas.filter((p) => p.gps && !geocercas.some((g) => g.plantaId === p.id))
@@ -109,6 +201,12 @@ export default function Geocercas() {
       {/* Formulario */}
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nueva geocerca')}</h3>
+        {/* Búsqueda por DIRECCIÓN (Google Places): autocompleta y trae el GPS. */}
+        <div className="mb-3">
+          <Campo label={t('Dirección')}>
+            <BuscadorDireccion t={t} seleccion={f.dir} onElegir={elegirDireccion} onLimpiar={() => setF((s) => ({ ...s, dir: null }))} />
+          </Campo>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Campo label={t('Nombre')}><Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} className="h-11 w-full" /></Campo>
           <Campo label={t('Tipo')}><Select value={f.tipo} onChange={set('tipo')} className="h-11 w-full">{TIPOS.map((ti) => <option key={ti.v} value={ti.v}>{t(ti.l)}</option>)}</Select></Campo>
@@ -143,6 +241,7 @@ export default function Geocercas() {
                 )}
                 {esAdmin && <button onClick={() => window.confirm(`${t('¿Eliminar geocerca')} "${g.nombre}"?`) && eliminar('geofences', g.id)} className={`${esAdmin ? '' : 'ml-auto'} text-rose-400 hover:text-rose-600`}><Trash2 size={14} /></button>}
               </div>
+              {g.direccion && <div className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400" title={g.direccion}>{g.direccion}</div>}
               <div className="mt-1 text-xs text-slate-400">{coordTxt(g.lat)}, {coordTxt(g.lng)} · {t('radio')} {g.radio} m</div>
               {esAdmin && <button onClick={() => iniciarEdicion(g)} className="mt-2 inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"><Move size={13} /> {t('Ajustar en el mapa')}</button>}
             </Card>

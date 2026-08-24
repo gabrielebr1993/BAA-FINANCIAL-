@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar'
 import ChatOrden from './ChatOrden'
+import { useVisualViewport } from './useVisualViewport'
 import PerfilRapido from './PerfilRapido'
 import GruposModal from './GruposModal'
 import { useLlamada } from './LlamadaProvider'
@@ -43,6 +44,8 @@ export default function ContactosChofer() {
 
   const [sub, setSub] = useState('contactos') // contactos | solicitudes | agregar | id
   const [chatCon, setChatCon] = useState(null) // contacto con chat abierto
+  // Con teclado abierto, la capa del chat se ciñe al viewport visible (no salta).
+  const vvChat = useVisualViewport(!!chatCon)
   const [verPerfil, setVerPerfil] = useState(null) // {id,nombre,rol} para ver perfil
   const [verGrupos, setVerGrupos] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -78,7 +81,8 @@ export default function ContactosChofer() {
   // página del portal, así no salta con el teclado ni con mensajes nuevos).
   if (chatCon) {
     return (
-      <div className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950">
+      <div className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950"
+        style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}>
         <button onClick={() => setChatCon(null)} className="mb-2 inline-flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronLeft size={18} /> {t('Contactos')}</button>
         {/* ChatOrden trae su propia cabecera: nombre (toca → ver perfil) + llamar/video/grupo. */}
         <div className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white dark:bg-slate-900">

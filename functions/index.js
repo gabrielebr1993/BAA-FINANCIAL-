@@ -1326,6 +1326,63 @@ exports.bulkExpirarOfertas = onSchedule('every 1 minutes', async () => {
 })
 
 // ============================================================================
+// bulkPlacesOp — búsqueda/autocompletado de direcciones con Google Places para
+// las GEOCERCAS. La API key vive en Secret Manager (GOOGLE_MAPS_API_KEY): el
+// frontend NUNCA la ve; llama a esta función y recibe solo los resultados.
+//   op 'autocomplete' { q }        → { sugerencias: [{ placeId, texto }] }
+//   op 'detalles'     { placeId }  → { placeId, direccion, ciudad, estado, zip, lat, lng }
+// ============================================================================
+exports.bulkPlacesOp = onCall({ secrets: ['GOOGLE_MAPS_API_KEY'], timeoutSeconds: 15 }, async (req) => {
+  const tk = req.auth && req.auth.token
+  if (!tk || !tk.bulkTenant) throw new HttpsError('permission-denied', 'No autorizado.')
+  const key = process.env.GOOGLE_MAPS_API_KEY
+  if (!key) throw new HttpsError('failed-precondition', 'Falta configurar el secreto GOOGLE_MAPS_API_KEY (Places API).')
+  const op = req.data && req.data.op
+
+  if (op === 'autocomplete') {
+    const q = String(req.data.q || '').trim().slice(0, 120)
+    if (q.length < 3) return { sugerencias: [] }
+    const r = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key },
+      body: JSON.stringify({ input: q }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new HttpsError('internal', 'Google Places: ' + ((d.error && d.error.message) || r.status))
+    const sugerencias = (d.suggestions || [])
+      .filter((s) => s.placePrediction)
+      .slice(0, 6)
+      .map((s) => ({ placeId: s.placePrediction.placeId, texto: (s.placePrediction.text && s.placePrediction.text.text) || '' }))
+    return { sugerencias }
+  }
+
+  if (op === 'detalles') {
+    const pid = String(req.data.placeId || '')
+    if (!pid) throw new HttpsError('invalid-argument', 'Falta placeId.')
+    const r = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(pid)}`, {
+      headers: { 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'id,formattedAddress,location,addressComponents' },
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new HttpsError('internal', 'Google Places: ' + ((d.error && d.error.message) || r.status))
+    const comp = (tipos) => {
+      const c = (d.addressComponents || []).find((x) => (x.types || []).some((t) => tipos.includes(t)))
+      return c ? (c.longText || c.shortText || '') : ''
+    }
+    return {
+      placeId: d.id || pid,
+      direccion: d.formattedAddress || '',
+      lat: d.location && Number.isFinite(d.location.latitude) ? d.location.latitude : null,
+      lng: d.location && Number.isFinite(d.location.longitude) ? d.location.longitude : null,
+      ciudad: comp(['locality', 'sublocality', 'postal_town']),
+      estado: comp(['administrative_area_level_1']),
+      zip: comp(['postal_code']),
+    }
+  }
+
+  throw new HttpsError('invalid-argument', 'Operación no reconocida.')
+})
+
+// ============================================================================
 // bulkFacturasRecurrentes — genera SOLAS las facturas periódicas a clientes.
 // Una vez al día revisa las reglas en `bulk_recurrentes` (activa=true) cuya
 // `proximaEmision` ya llegó y, para cada una:
