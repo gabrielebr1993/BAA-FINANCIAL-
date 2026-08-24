@@ -290,7 +290,7 @@ export default function ChoferPortal() {
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
+    <div className="min-h-dvh mx-auto flex max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
       <IndicadorConexion />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />
@@ -310,7 +310,10 @@ export default function ChoferPortal() {
         </div>
       </header>
 
-      <main className="relative -mt-5 flex-1 overflow-y-auto rounded-t-[1.75rem] bg-[#f2f3f7] p-3 pb-24 dark:bg-slate-950">
+      {/* En la pestaña Mensajes la página NO desplaza (overflow-hidden): el panel de
+          chats mide exacto y desplaza por dentro. Antes convivían el scroll de la
+          página y el del chat y la pantalla se movía para todos lados. */}
+      <main className={`relative -mt-5 flex-1 rounded-t-[1.75rem] bg-[#f2f3f7] p-3 dark:bg-slate-950 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-24'}`}>
         {tab === 'ordenes' && (
           <>
             {!carrierId && (
@@ -441,7 +444,7 @@ export default function ChoferPortal() {
         })()}
         {tab === 'mensajes' && (
           <>
-            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
+            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-chofer" abrir={abrirExterno || abrirPriv}
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupoChofer} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
@@ -1185,10 +1188,11 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </div>
       ) : null}
 
-      {/* Chat de la orden */}
+      {/* Chat de la orden: alto proporcional a la pantalla (dvh) y scroll SOLO
+          interno, para que no salte con el teclado ni mueva la página de atrás. */}
       {modal === 'chat' && (
         <Modal onClose={() => setModal(null)} titulo={`${t('Chat')} · ${orden.numero}`}>
-          <ChatOrden orden={orden} alto={360} />
+          <div className="h-[62dvh] min-h-[300px]"><ChatOrden orden={orden} fill /></div>
         </Modal>
       )}
 

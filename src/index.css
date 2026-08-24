@@ -37,7 +37,10 @@
   /* Contenedores de mensajería: alto DINÁMICO (dvh) para que en iPhone no se
      desborde ni salte con la barra de Safari. */
   .h-mensajes { height: calc(100vh - 6.5rem); height: calc(100dvh - 6.5rem); }
-  .h-mensajes-portal { height: calc(100vh - 11rem); height: calc(100dvh - 11rem); }
+  .h-mensajes-portal { height: calc(100vh - 11rem); height: calc(100dvh - 11rem - env(safe-area-inset-bottom)); }
+  /* App del chofer: alto EXACTO entre su cabecera y su barra inferior, para que la
+     lista de chats no provoque scroll de página (era la causa de que "saltara"). */
+  .h-mensajes-chofer { height: calc(100vh - 10rem); height: calc(100dvh - 10rem - env(safe-area-inset-bottom)); }
 
   /* Spinner giratorio (por si se usa fuera de animate-spin) */
   @keyframes milepayfloat {

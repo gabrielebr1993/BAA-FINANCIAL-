@@ -91,16 +91,18 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         </div>
       )}
 
-      {/* Pestañas por sección — ocupan todo el ancho, equilibradas (solo si hay más de una). */}
+      {/* Pestañas por sección (solo si hay más de una). En MÓVIL: una sola fila de
+          píldoras deslizable a los lados (antes se partían en filas cuadradas y el
+          panel cambiaba de alto). En escritorio: equilibradas a lo ancho. */}
       {secciones.length > 1 && (
-        <div className="mb-3 flex flex-wrap gap-1.5 sm:gap-2">
+        <div className="scroll-thin mb-3 flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0">
           {secciones.map((s) => {
             const noLeidos = (s.items || []).reduce((a, c) => a + (c.noLeidos || 0), 0)
             const Icono = ICONO[s.icon] || MessageSquare
             const on = s.k === tab
             return (
               <button key={s.k} type="button" onClick={() => { setTab(s.k); setSel(''); setVerChatMovil(false) }}
-                className={`inline-flex flex-1 basis-[45%] items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold transition sm:basis-0 ${on ? 'bg-brand-navy text-white shadow-sm dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
+                className={`inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition sm:flex-1 sm:flex-shrink sm:basis-0 sm:rounded-xl sm:px-3 sm:py-2.5 ${on ? 'bg-brand-navy text-white shadow-sm dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>
                 <Icono size={16} /> <span className="truncate">{s.label}</span>
                 {noLeidos > 0 && <span className={`grid h-5 min-w-[20px] place-items-center rounded-full px-1.5 text-[11px] font-bold ${on ? 'bg-white/25 text-white dark:bg-slate-900/25 dark:text-slate-900' : 'bg-rose-500 text-white'}`}>{noLeidos}</span>}
               </button>
@@ -182,10 +184,12 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
           </div>
         </Card>
 
-        {/* Conversación activa */}
-        <div className={`min-h-0 lg:col-span-2 lg:block ${verChatMovil ? 'block' : 'hidden'}`}>
+        {/* Conversación activa. En MÓVIL el chat abierto se muestra a PANTALLA COMPLETA
+            (capa fija propia, como WhatsApp): así no comparte scroll con la página del
+            portal ni salta cuando se abre el teclado. En escritorio sigue en la grilla. */}
+        <div className={`min-h-0 lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}>
           {activa ? (
-            <Card className="flex h-full flex-col p-4">
+            <Card className="flex h-full min-h-0 flex-1 flex-col p-3 sm:p-4">
               <div className="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
                 <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
                 <Avatar foto={activa.foto} icon={activa.icon} nombre={activa.titulo} size={42} />

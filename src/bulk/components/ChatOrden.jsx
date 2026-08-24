@@ -38,7 +38,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const [enviando, setEnviando] = useState(false)
   const [verEmojis, setVerEmojis] = useState(false)
   const [perfilRapido, setPerfilRapido] = useState(null) // {id,nombre,rol} del autor al que se le hizo clic
-  const finRef = useRef(null)
+  const listRef = useRef(null)
 
   useEffect(() => {
     if (!orden?.id) return
@@ -56,7 +56,11 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
 
   useEffect(() => {
     if (usuario?.id && msgs.length) marcarLeidos(msgs.filter((m) => m.autorId !== usuario.id), usuario.id)
-    finRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Baja al último mensaje moviendo SOLO el contenedor de mensajes. Antes se usaba
+    // scrollIntoView, que también desplazaba a los contenedores padres (la página del
+    // portal) y hacía que TODA la pantalla saltara con cada mensaje en el móvil.
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [msgs, usuario])
 
   const enviar = async (extra = {}) => {
@@ -158,7 +162,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           </div>
         </div>
       )}
-      <div className={`scroll-thin space-y-2 overflow-y-auto p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
+      <div ref={listRef} className={`scroll-thin space-y-2 overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
         {msgs.length === 0 && <div className="py-6 text-center text-xs text-slate-400">{t('Sin mensajes. Escribe el primero.')}</div>}
         {msgs.map((m) => {
           const mio = m.autorId === usuario?.id
@@ -201,7 +205,6 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
             </div>
           )
         })}
-        <div ref={finRef} />
       </div>
       {/* Panel de emojis (tipo WhatsApp) */}
       {verEmojis && (
