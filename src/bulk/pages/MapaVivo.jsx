@@ -43,7 +43,9 @@ export default function MapaVivo() {
   const [buscar, setBuscar] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
 
-  const activas = useMemo(() => ordenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado)), [ordenes])
+  // En el mapa EN VIVO una orden ya entregada desaparece (su historial queda en
+  // Órdenes); así con muchos choferes solo se ven los camiones trabajando.
+  const activas = useMemo(() => ordenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado) && o.estado !== E.ENTREGADA), [ordenes])
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     return activas.filter((o) =>
@@ -258,6 +260,7 @@ function PanelMarca({ sel, onClose, t }) {
         <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-300">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full rounded-full bg-[#15b66b]" style={{ width: `${pct}%` }} /></div>
         <div className="mt-1 text-[11px] text-slate-400">{pct}% {t('completado')}</div>
+        <Link to={`/bulk/ordenes/${o.id}`} className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-brand-navy px-2 py-1.5 text-xs font-bold text-white hover:brightness-110 dark:bg-amber-500 dark:text-slate-900">{t('Ver historial de la orden')} →</Link>
       </div>
     )
   }

@@ -89,15 +89,24 @@ export default function SupervisorPortal() {
   const enCamino = useMemo(() => ordenes.filter((o) => o.estado === E.EN_RUTA && !enZonaEntrega(o)), [ordenes])
 
   // Aviso al supervisor cuando ENTRA una carga nueva a la zona (sonido + notificación).
-  const prevAutorizar = useRef(0)
+  // Aviso ÚNICO por orden (persistido): recargar la página no vuelve a sonar.
+  const avisadasRef = useRef(null)
+  if (avisadasRef.current === null) {
+    try { avisadasRef.current = new Set(JSON.parse(localStorage.getItem('mp-sup-avisadas') || '[]')) }
+    catch { avisadasRef.current = new Set() }
+  }
   useEffect(() => {
-    if (porAutorizar.length > prevAutorizar.current) {
+    // Solo las órdenes que NUNCA se han avisado disparan sonido/notificación.
+    const nuevas = porAutorizar.filter((o) => !avisadasRef.current.has(o.id))
+    if (nuevas.length > 0) {
       try { beep() } catch { /* sin audio */ }
-      notificar(t('Camión en zona de entrega'), `${porAutorizar.length} ${t('carga(s) esperando tu código de autorización.')}`)
+      const quien = nuevas.map((o) => `${o.numero}${o.choferNombre ? ` (${o.choferNombre})` : ''}`).join(', ')
+      notificar(t('Camión en zona de entrega'), `${quien} — ${t('esperando tu código de autorización.')}`)
+      for (const o of nuevas) avisadasRef.current.add(o.id)
+      try { localStorage.setItem('mp-sup-avisadas', JSON.stringify([...avisadasRef.current].slice(-300))) } catch { /* lleno */ }
     }
-    prevAutorizar.current = porAutorizar.length
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [porAutorizar.length])
+  }, [porAutorizar])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
   const stats = useMemo(() => {
     const n = {}
