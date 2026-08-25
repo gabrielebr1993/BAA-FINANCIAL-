@@ -9,7 +9,8 @@ import { Card, Boton, Input, Select, Badge, Aviso } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
-const nuevoVacio = { nombre: '', tipo: TIPO_BASE.POR_TONELADA, valorCliente: '', valorTransportista: '', materiales: [], equipos: [], recargoUrgencia: '', prioridad: '0' }
+const nuevoVacio = { nombre: '', tipo: TIPO_BASE.POR_TONELADA, costoMaterial: '', valorCliente: '', valorTransportista: '', materiales: [], equipos: [], recargoUrgencia: '', prioridad: '0' }
+const CANT_NUM = { por_tonelada: 25, por_yarda: 10, por_pie: 100, por_milla: 50, por_viaje: 1 }
 const CANT_EJEMPLO = { por_tonelada: { ton: 25 }, por_yarda: { yardas: 10 }, por_pie: { pies: 100 }, por_milla: { millas: 50 }, por_viaje: {} }
 const CANT_TXT = { por_tonelada: '25 ton', por_yarda: '10 yd³', por_pie: '100 ft', por_milla: '50 mi', por_viaje: '1 viaje' }
 const idRegla = () => `tf_${Math.random().toString(36).slice(2, 9)}`
@@ -36,6 +37,7 @@ export default function TarifasCliente({ cliente, materiales = [], equipos = [] 
     const regla = {
       id: idRegla(), nombre: f.nombre.trim() || (f.materiales[0] || t('Tarifa')),
       tipo: f.tipo, valorCliente: Number(f.valorCliente),
+      costoMaterial: f.costoMaterial ? Number(f.costoMaterial) : null,
       valorTransportista: f.valorTransportista ? Number(f.valorTransportista) : null,
       materiales: f.materiales, equipos: f.equipos,
       recargoUrgencia: f.recargoUrgencia ? Number(f.recargoUrgencia) : null,
@@ -56,17 +58,20 @@ export default function TarifasCliente({ cliente, materiales = [], equipos = [] 
         <h3 className="m-0 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Calculator size={15} className="text-amber-500" /> {t('Tarifas de este cliente')} <span className="text-xs font-normal text-slate-400">({reglas.length})</span></h3>
         <Boton variant={abierto ? 'ghost' : 'gold'} onClick={() => { setAbierto((v) => !v); setMsg(null) }} className="ml-auto px-3 py-1.5 text-xs">{abierto ? t('Cerrar') : <><Plus size={14} /> {t('Agregar tarifa')}</>}</Boton>
       </div>
-      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Cada material/equipo que este cliente requiere, con lo que le COBRAS y lo que PAGAS al transportista. La diferencia es tu utilidad.')}</p>
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Por cada material: tu COSTO del material, el precio de VENTA al cliente y el pago del TRANSPORTE. Utilidad = Venta − Material − Transporte.')}</p>
       {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
 
       {/* Formulario de alta */}
       {abierto && (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Lbl t={t('Nombre (opcional)')}><Input placeholder={t('Ej. Grava 3/4')} value={f.nombre} onChange={set('nombre')} /></Lbl>
             <Lbl t={t('Cómo se cobra')}><Select value={f.tipo} onChange={set('tipo')}>{Object.values(TIPO_BASE).map((tb) => <option key={tb} value={tb}>{t(TIPO_BASE_LABEL[tb])}</option>)}</Select></Lbl>
-            <Lbl t={esViaje ? t('Cobro ($/viaje)') : `${t('Cobro')} ($/${uni})`} c="emerald"><Input type="number" inputMode="decimal" placeholder={t('Ej. 18')} value={f.valorCliente} onChange={set('valorCliente')} /></Lbl>
-            <Lbl t={esViaje ? t('Pago transp. ($/viaje)') : `${t('Pago transp.')} ($/${uni})`} c="amber"><Input type="number" inputMode="decimal" placeholder={t('Ej. 13')} value={f.valorTransportista} onChange={set('valorTransportista')} /></Lbl>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Lbl t={esViaje ? t('1) Mi costo del material ($/viaje)') : `${t('1) Mi costo del material')} ($/${uni})`} c="rose"><Input type="number" inputMode="decimal" placeholder={t('Ej. 8')} value={f.costoMaterial} onChange={set('costoMaterial')} /></Lbl>
+            <Lbl t={esViaje ? t('2) Precio de venta ($/viaje)') : `${t('2) Precio de venta')} ($/${uni})`} c="emerald"><Input type="number" inputMode="decimal" placeholder={t('Ej. 18')} value={f.valorCliente} onChange={set('valorCliente')} /></Lbl>
+            <Lbl t={esViaje ? t('3) Transporte ($/viaje)') : `${t('3) Transporte')} ($/${uni})`} c="amber"><Input type="number" inputMode="decimal" placeholder={t('Ej. 6')} value={f.valorTransportista} onChange={set('valorTransportista')} /></Lbl>
           </div>
 
           <ChipGroup titulo={t('Materiales')} icon={Layers} opciones={matsActivos.map((m) => ({ val: m.nombre, label: m.nombre }))} sel={f.materiales} onToggle={(v) => toggle('materiales', v)} vacio={t('No hay materiales.')} />
@@ -77,14 +82,20 @@ export default function TarifasCliente({ cliente, materiales = [], equipos = [] 
             <Lbl t={t('Prioridad')}><Input type="number" placeholder="0" value={f.prioridad} onChange={set('prioridad')} /></Lbl>
           </div>
 
-          {prev && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-white p-3 text-xs shadow-sm dark:bg-slate-900">
-              <span className="inline-flex items-center gap-1 font-semibold text-brand-navy dark:text-slate-100"><Calculator size={13} className="text-amber-500" /> {CANT_TXT[f.tipo]}</span>
-              <span>{t('Cobras')} <b className="text-emerald-600 dark:text-emerald-400">{money(prev.precioCliente)}</b></span>
-              <span>{t('Pagas')} <b className="text-amber-600 dark:text-amber-400">{money(prev.precioTransportista)}</b></span>
-              <span>{t('Utilidad')} <b>{money(prev.utilidad)}</b></span>
-            </div>
-          )}
+          {prev && (() => {
+            const costoMat = (Number(f.costoMaterial) || 0) * (CANT_NUM[f.tipo] || 1)
+            const utilNeta = prev.precioCliente - costoMat - (prev.precioTransportista || 0)
+            return (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-white p-3 text-xs shadow-sm dark:bg-slate-900">
+                <span className="inline-flex items-center gap-1 font-semibold text-brand-navy dark:text-slate-100"><Calculator size={13} className="text-amber-500" /> {CANT_TXT[f.tipo]}</span>
+                <span>{t('Vendes')} <b className="text-emerald-600 dark:text-emerald-400">{money(prev.precioCliente)}</b></span>
+                <span>{t('Material')} <b className="text-rose-500">−{money(costoMat)}</b></span>
+                <span>{t('Transporte')} <b className="text-amber-600 dark:text-amber-400">−{money(prev.precioTransportista || 0)}</b></span>
+                <span>{t('Tu utilidad')} <b className={utilNeta < 0 ? 'text-rose-600' : 'text-emerald-700 dark:text-emerald-300'}>{money(utilNeta)}</b></span>
+                {utilNeta < 0 && <span className="w-full text-[11px] font-semibold text-rose-500">{t('⚠ Con estos números pierdes dinero en cada viaje. Revisa el precio de venta.')}</span>}
+              </div>
+            )
+          })()}
           <div className="mt-3 flex justify-end"><Boton variant="gold" onClick={agregar}><Plus size={15} /> {t('Guardar tarifa')}</Boton></div>
         </div>
       )}
@@ -97,19 +108,23 @@ export default function TarifasCliente({ cliente, materiales = [], equipos = [] 
           {reglas.slice().sort((a, b) => (b.prioridad || 0) - (a.prioridad || 0)).map((r) => {
             const mats = matsDe(r); const eqs = eqsDe(r)
             const uc = UNIDAD_CORTA[r.tipo] || ''
-            const util = r.valorTransportista != null ? Number(r.valorCliente) - Number(r.valorTransportista) : null
+            const util = Number(r.valorCliente) - (Number(r.costoMaterial) || 0) - (Number(r.valorTransportista) || 0)
             return (
               <div key={r.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1 text-sm font-semibold text-brand-navy dark:text-slate-100">{r.nombre}</span>
                   <button onClick={() => window.confirm(`${t('¿Eliminar tarifa')} "${r.nombre}"?`) && borrar(r.id)} className="text-slate-300 hover:text-rose-500"><Trash2 size={13} /></button>
                 </div>
-                <div className="mt-1 flex items-center gap-1.5 text-sm">
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{money(r.valorCliente)}</span>
-                  {r.valorTransportista != null && <><ArrowRight size={12} className="text-slate-300" /><span className="font-bold text-amber-600 dark:text-amber-400">{money(r.valorTransportista)}</span></>}
+                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+                  {r.costoMaterial != null && <><span className="font-bold text-rose-500" title={t('Costo material')}>{money(r.costoMaterial)}</span><ArrowRight size={12} className="text-slate-300" /></>}
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400" title={t('Precio de venta')}>{money(r.valorCliente)}</span>
+                  {r.valorTransportista != null && <><ArrowRight size={12} className="text-slate-300" /><span className="font-bold text-amber-600 dark:text-amber-400" title={t('Transporte')}>{money(r.valorTransportista)}</span></>}
                   <span className="text-[11px] text-slate-400">/{uc}</span>
-                  {util != null && <span className="ml-auto rounded bg-brand-navy/5 px-1.5 py-0.5 text-[11px] font-bold text-brand-navy dark:bg-slate-700 dark:text-slate-200">+{money(util)}</span>}
+                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[11px] font-bold ${util < 0 ? 'bg-rose-500/10 text-rose-600' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`} title={t('Tu utilidad (venta − material − transporte)')}>{util < 0 ? '' : '+'}{money(util)}</span>
                 </div>
+                {r.costoMaterial != null && (
+                  <div className="mt-0.5 text-[10px] text-slate-400">{t('material')} {money(r.costoMaterial)} · {t('venta')} {money(r.valorCliente)} · {t('transporte')} {money(r.valorTransportista || 0)} → {t('utilidad')} {money(util)}/{uc}</div>
+                )}
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {mats.map((m) => <Badge key={`m${m}`} color="navy">{t(m)}</Badge>)}
                   {eqs.map((e) => <Badge key={`e${e}`} color="slate">{e}</Badge>)}
@@ -126,7 +141,7 @@ export default function TarifasCliente({ cliente, materiales = [], equipos = [] 
 }
 
 function Lbl({ t: label, c, children }) {
-  const col = c === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : c === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
+  const col = c === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : c === 'amber' ? 'text-amber-600 dark:text-amber-400' : c === 'rose' ? 'text-rose-500' : 'text-slate-400'
   return <label className="block"><span className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${col}`}>{label}</span>{children}</label>
 }
 
