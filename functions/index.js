@@ -1191,9 +1191,15 @@ function equipoCompatible(equipos, req) {
   const lista = Array.isArray(equipos) ? equipos : (equipos ? [equipos] : [])
   return lista.map(NORM).includes(NORM(req))
 }
-function trabajoCompatible(jobs, jobId) {
-  if (!jobs || !jobs.length) return true
-  return !!jobId && jobs.includes(jobId)
+function trabajoCompatible(jobs, orden) {
+  // ESTRICTO: chofer sin trabajos asignados no recibe órdenes. El trabajo del
+  // chofer se guarda por CÓDIGO (prefijo del número) o por jobId — ambos valen.
+  const lista = (Array.isArray(jobs) ? jobs : []).filter(Boolean)
+  if (!lista.length) return false
+  const o = orden && typeof orden === 'object' ? orden : { jobId: orden }
+  const codigo = String(o.numero || '').split('-').slice(0, -1).join('-')
+  if (!o.jobId && !codigo) return true
+  return (o.jobId && lista.includes(o.jobId)) || (codigo && lista.includes(codigo))
 }
 function presenciaViva(p, now) {
   return !!p && p.enLinea === true && !p.ordenId && (!p.estado || p.estado === 'libre')
@@ -1253,7 +1259,7 @@ async function matchTenant(tenantId) {
     const cand = libres
       .filter((p) => !usados.has(p.id) && !rech.includes(p.uid || p.id))
       .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
-      .filter((p) => trabajoCompatible(p.jobs, orden.jobId))
+      .filter((p) => trabajoCompatible(p.jobs, orden))
       .sort((a, b) => tsMs(a.desde) - tsMs(b.desde))
     if (!cand.length) continue
     const res = await ofrecerTx(orden.id, cand[0].id)

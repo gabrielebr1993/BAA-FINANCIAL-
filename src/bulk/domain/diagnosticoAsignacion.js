@@ -36,11 +36,11 @@ export function diagnosticarOrden(orden, presencias, ahoraMs) {
   const noRech = libres.filter((p) => !rechazadoPor.includes(p.uid || p.id))
   // Compatibilidad por EQUIPO (obligatorio) y afiliación al Trabajo (preferencia).
   const compat = noRech.filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
-  const afiliados = compat.filter((p) => trabajoCompatible(p.jobs, orden.jobId))
+  const afiliados = compat.filter((p) => trabajoCompatible(p.jobs, orden))
 
   let razon
   if (afiliados.length) razon = { tipo: 'ok', texto: `${afiliados.length} chofer(es) afiliado(s) al trabajo en línea` }
-  else if (compat.length) razon = { tipo: 'ok', texto: `${compat.length} chofer(es) con el equipo en línea (sin afiliados libres: se usa el disponible)` }
+  else if (compat.length) razon = { tipo: 'trabajo', texto: 'Hay choferes con el equipo, pero NINGUNO tiene asignado este trabajo (el transportista los asigna en "Mis choferes")' }
   else if (libres.length === 0) razon = { tipo: 'sin_online', texto: 'No hay choferes en línea, libres y con la app activa' }
   else if (noRech.length === 0) razon = { tipo: 'rechazada', texto: 'Todos los choferes en línea ya la rechazaron o se les venció el tiempo' }
   else razon = { tipo: 'equipo', texto: `Ningún chofer en línea tiene el equipo que pide la orden (${orden.tipoEquipo || 'sin especificar'})` }

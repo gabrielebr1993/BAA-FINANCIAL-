@@ -19,16 +19,21 @@ export function equipoCompatible(equipoChofer, tipoEquipoReq) {
   return transportistaCompatible(lista, tipoEquipoReq)
 }
 
-// ¿El chofer está habilitado para el trabajo de la orden?
-//  - Chofer sin trabajos configurados → recibe de cualquiera (sin restricción).
-//  - Orden SIN trabajo (orden directa por cliente) → la puede recibir cualquiera,
-//    aunque el chofer tenga trabajos: los trabajos del chofer solo LIMITAN las
-//    órdenes que SÍ pertenecen a un trabajo, no las órdenes directas.
-//  - Orden CON trabajo → el chofer debe estar afiliado a ese trabajo.
-export function trabajoCompatible(jobsChofer, jobId) {
-  if (!jobsChofer || jobsChofer.length === 0) return true
-  if (!jobId) return true
-  return jobsChofer.includes(jobId)
+// ¿El chofer está habilitado para el trabajo de la orden? (regla ESTRICTA)
+//  - Chofer SIN trabajos asignados → NO recibe ninguna orden: el transportista
+//    dirige a cada chofer a sus trabajos desde "Mis choferes".
+//  - Orden SIN trabajo (directa) → la recibe cualquier chofer habilitado (con
+//    al menos un trabajo asignado).
+//  - Orden CON trabajo → el chofer debe tenerlo asignado. El trabajo del chofer
+//    se guarda por CÓDIGO (prefijo del número, ej. "OBRA1") — el transportista
+//    no puede leer bulk_jobs — así que se acepta por código O por jobId.
+export function trabajoCompatible(jobsChofer, orden) {
+  const jobs = (Array.isArray(jobsChofer) ? jobsChofer : []).filter(Boolean)
+  if (jobs.length === 0) return false
+  const o = orden && typeof orden === 'object' ? orden : { jobId: orden }
+  const codigo = String(o.numero || '').split('-').slice(0, -1).join('-')
+  if (!o.jobId && !codigo) return true
+  return (o.jobId && jobs.includes(o.jobId)) || (codigo && jobs.includes(codigo))
 }
 
 // Enriquece cada presencia con los Trabajos/equipos ACTUALES del roster del
@@ -95,9 +100,9 @@ export function emparejar(ordenesCola, presencias, ahoraMs) {
       .filter((p) => !usados.has(p.id))
       .filter((p) => !rechazadoPor.includes(p.uid || p.id))
       .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
-    // Preferencia por afiliación al Trabajo; si no hay afiliados libres, cualquiera con el equipo.
-    const afiliados = disponibles.filter((p) => trabajoCompatible(p.jobs, orden.jobId))
-    const cand = (afiliados.length ? afiliados : disponibles)
+    // Afiliación al Trabajo OBLIGATORIA: sin trabajo asignado no llegan órdenes.
+    const afiliados = disponibles.filter((p) => trabajoCompatible(p.jobs, orden))
+    const cand = afiliados
       .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde))
     if (cand.length) { pares.push({ orden, chofer: cand[0] }); usados.add(cand[0].id) }
   }

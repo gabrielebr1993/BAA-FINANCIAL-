@@ -38,6 +38,7 @@ import { useGpsTracker } from './useGpsTracker'
 import { useGeoPos } from './useGeoPos'
 import { beep, tonoOrden, notificar, pedirPermisoNotif, desbloquearAudio, engancharDesbloqueoAudio } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
+import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
@@ -99,6 +100,7 @@ export default function ChoferPortal() {
   const [tab, setTab] = useState('ordenes')
   // Fast Pay: retiro instantáneo de las ganancias PAGADAS a la cuenta del chofer.
   // Flujo: null → 'confirmar' (revisar monto/comisión/cuenta) → 'listo' (dinero en camino).
+  const [rangoGan, setRangoGan] = useState(RANGO_VACIO) // filtro de fechas de Ganancias
   const [fastPay, setFastPay] = useState(null)
   // Historial de retiros Fast Pay del chofer (las reglas solo le dejan leer los suyos).
   const { datos: misRetiros } = useColeccion('retiros', [where('choferId', '==', usuario?.id || '__none__')])
@@ -390,8 +392,12 @@ export default function ChoferPortal() {
         {tab === 'ganancias' && (() => {
           const enCurso = misOrdenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
           const pendiente = enCurso.reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
-          const total = ganancias + pendiente
-          const viajes = [...enCurso, ...historial]
+          // Rango de fechas: aplica a lo PAGADO (por fecha de entrega) y a los retiros.
+          const historialF = historial.filter((o) => enRangoFechas(o.hitos?.entrega || o.hitos?.liberacion, rangoGan))
+          const gananciasF = historialF.reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
+          const retirosF = misRetiros.filter((r) => enRangoFechas(r.ts, rangoGan))
+          const total = gananciasF + pendiente
+          const viajes = [...enCurso, ...historialF]
           return (
             <div>
               <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#15b66b] to-emerald-600 p-6 text-center text-white shadow-lg">
@@ -408,11 +414,12 @@ export default function ChoferPortal() {
                 <DollarSign size={18} /> {t('Fast Pay')} · {t('Cobrar')}
               </button>
               <div className="mt-1.5 text-center text-[11px] text-slate-400">{t('Retiro instantáneo a tu cuenta · comisión 3%')}</div>
+              <FiltroFechas rango={rangoGan} onChange={setRangoGan} className="mt-3" />
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><CheckCircle2 size={13} className="text-[#15b66b]" /> {t('Pagado')}</div>
-                  <div className="mt-1 text-2xl font-black text-[#15b66b]">{money(ganancias)}</div>
-                  <div className="text-[11px] text-slate-400">{historial.length} {t('entrega(s)')}</div>
+                  <div className="mt-1 text-2xl font-black text-[#15b66b]">{money(gananciasF)}</div>
+                  <div className="text-[11px] text-slate-400">{historialF.length} {t('entrega(s)')}</div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Clock size={13} className="text-amber-500" /> {t('Pendiente')}</div>
@@ -441,11 +448,11 @@ export default function ChoferPortal() {
                 </div>
               )}
               {/* Historial PERMANENTE de retiros Fast Pay del chofer. */}
-              {misRetiros.length > 0 && (
+              {retirosF.length > 0 && (
                 <>
                   <div className="mt-4 mb-1 px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t('Retiros Fast Pay')}</div>
                   <div className="space-y-2">
-                    {misRetiros.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((r) => (
+                    {retirosF.slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).map((r) => (
                       <div key={r.id} className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-900">
                         <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-full ${r.estado === 'revertido' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800' : r.estado === 'error' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-500'}`}><DollarSign size={16} /></span>
                         <div className="min-w-0 flex-1">

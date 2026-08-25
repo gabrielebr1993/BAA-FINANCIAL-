@@ -18,6 +18,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { authBulk } from '../firebaseBulk'
 import { PageTitle, Card, Boton, Input, Badge, Aviso, Cargando, EstadoVacio, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
+import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import { useLang } from '../../i18n'
 
 const DEFAULTS = { activo: true, porcentaje: 100, comisionPct: 3, chofer: true, carrier: true, modoReal: false }
@@ -62,6 +63,7 @@ export default function FastPay() {
   const [porRevertir, setPorRevertir] = useState(null)
   const [revirtiendo, setRevirtiendo] = useState(false)
   const [fTipo, setFTipo] = useState('todos')
+  const [rango, setRango] = useState(RANGO_VACIO) // filtro por fechas del historial
 
   // Carga la config guardada (con defaults para lo no configurado).
   useEffect(() => {
@@ -119,7 +121,8 @@ export default function FastPay() {
 
   const lista = useMemo(() => (retiros || [])
     .filter((r) => fTipo === 'todos' || (r.tipo || 'chofer') === fTipo)
-    .slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')), [retiros, fTipo])
+    .filter((r) => enRangoFechas(r.ts, rango))
+    .slice().sort((a, b) => (b.ts || '').localeCompare(a.ts || '')), [retiros, fTipo, rango])
 
   const kpis = useMemo(() => {
     let pagado = 0, nPag = 0, nProc = 0, nRev = 0
@@ -205,6 +208,7 @@ export default function FastPay() {
             ))}
           </div>
         </div>
+        <FiltroFechas rango={rango} onChange={setRango} className="mb-3" />
         {lista.length === 0 ? (
           <EstadoVacio titulo={t('Sin retiros todavía')} texto={t('Cuando un chofer o transportista use Fast Pay, cada operación quedará registrada aquí de forma permanente.')} mostrarBoton={false} />
         ) : (

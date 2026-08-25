@@ -13,6 +13,7 @@ import {
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import BotonReunion from '../components/BotonReunion'
+import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
@@ -484,7 +485,7 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
                       const on = (c.jobs || []).includes(cod)
                       return <button key={cod} type="button" onClick={() => toggleTrabajo(c, cod)} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{cod}</button>
                     })}
-                    {(c.jobs || []).length === 0 && <span className="text-[11px] text-slate-400">{t('todos (sin restringir)')}</span>}
+                    {(c.jobs || []).length === 0 && <span className="text-[11px] font-semibold text-rose-500">{t('⚠ sin trabajos: NO recibirá órdenes — asígnale al menos uno')}</span>}
                   </div>
                 )}
                 {pagoEdit === c.id && (
@@ -667,10 +668,17 @@ function TabCuenta({ t, cuenta, stats, statements }) {
   const { usuario } = useBulkAuth()
   const carrierId = usuario?.carrierId || '__none__'
   const [fastPay, setFastPay] = useState(false)
+  const [rango, setRango] = useState(RANGO_VACIO) // filtro por fechas (finanzas)
   // Historial PERMANENTE de retiros Fast Pay del carrier (solo lee los suyos).
   const { datos: retirosFP } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
   const retiradoFP = (retirosFP || []).reduce((a, r) => a + (['pagado', 'procesando'].includes(r.estado || 'pagado') ? Number(r.montoBase) || 0 : 0), 0)
-  const rows = stats.entregadas
+  const entregadasF = stats.entregadas.filter((o) => enRangoFechas(o.hitos?.entrega || o.creadoEn, rango))
+  const resumenRango = {
+    viajes: entregadasF.length,
+    ganado: entregadasF.reduce((a, o) => a + (Number(o.precioTransportista) || 0), 0),
+    util: entregadasF.reduce((a, o) => a + ((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0)), 0),
+  }
+  const rows = entregadasF
     .slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
     .map((o) => ({ ...o, _key: o.id }))
   const cols = [
@@ -696,6 +704,12 @@ function TabCuenta({ t, cuenta, stats, statements }) {
         <KPI label={t('Pagado')} value={money(cuenta.pagado)} icon={DollarSign} accent="green" />
         <KPI label={t('Pendiente')} value={money(cuenta.pendiente)} icon={ClipboardList} accent="gold" />
       </div>
+      <FiltroFechas rango={rango} onChange={setRango} className="mb-3" />
+      {(rango.desde || rango.hasta) && (
+        <p className="mb-3 text-xs font-semibold text-slate-500 dark:text-slate-300">
+          {t('En el rango')}: {resumenRango.viajes} {t('viaje(s)')} · {t('tarifa')} {money(resumenRango.ganado)} · {t('tu utilidad')} {money(resumenRango.util)}
+        </p>
+      )}
 
       {/* Fast Pay del CARRIER: adelanto instantáneo del balance elegible. */}
       <Card className="mb-4 p-4">
@@ -750,17 +764,18 @@ function TabCuenta({ t, cuenta, stats, statements }) {
 // doble. El pago del viaje ya viene ajustado al peso real del ticket (OCR).
 function TabPagoChoferes({ t, choferes = [], ordenes = [], retiros = [], avatares = {} }) {
   const [abierto, setAbierto] = useState(null) // uid del chofer expandido
+  const [rango, setRango] = useState(RANGO_VACIO) // filtro por fechas (pagos)
   const FINALES_PAGO = ['entregada', 'liberada', 'cerrada']
   const RETIRO_ACTIVO = ['procesando', 'pagado']
   const n = (v) => Number(v) || 0
 
   const filas = (choferes || []).filter((c) => c.uid).map((c) => {
     const viajes = (ordenes || [])
-      .filter((o) => o.choferId === c.uid && FINALES_PAGO.includes(o.estado))
+      .filter((o) => o.choferId === c.uid && FINALES_PAGO.includes(o.estado) && enRangoFechas(o.hitos?.entrega || o.creadoEn, rango))
       .sort((a, b) => String(b.hitos?.entrega || '').localeCompare(String(a.hitos?.entrega || '')))
     const ganado = viajes.reduce((a, o) => a + n(o.pagoChofer), 0)
     const fastPay = (retiros || [])
-      .filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado'))
+      .filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado') && enRangoFechas(r.ts, rango))
       .reduce((a, r) => a + n(r.montoBase), 0)
     return { chofer: c, viajes, ganado, fastPay, neto: Math.round((ganado - fastPay) * 100) / 100 }
   }).sort((a, b) => b.neto - a.neto)
@@ -772,6 +787,7 @@ function TabPagoChoferes({ t, choferes = [], ordenes = [], retiros = [], avatare
       <Aviso tipo="info" className="mb-3">
         {t('Cuánto debes pagarle a cada chofer: sus viajes finalizados (con el peso real del ticket) menos lo que ya retiró por Fast Pay. Paga solo el NETO.')}
       </Aviso>
+      <FiltroFechas rango={rango} onChange={setRango} className="mb-3" />
       <Card className="mb-3 flex items-center justify-between p-4">
         <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Total neto por pagar (todos los choferes)')}</span>
         <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{money(Math.max(0, totNeto))}</span>
@@ -820,7 +836,7 @@ function TabPagoChoferes({ t, choferes = [], ordenes = [], retiros = [], avatare
               {fastPay > 0 && (
                 <div className="mt-2 rounded-xl bg-amber-500/5 p-2">
                   <div className="mb-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">{t('Retiros Fast Pay descontados')}</div>
-                  {(retiros || []).filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado')).map((r) => (
+                  {(retiros || []).filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado') && enRangoFechas(r.ts, rango)).map((r) => (
                     <div key={r.numero || r.opId} className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                       <span>{r.numero || 'FP'} · {String(r.ts || '').slice(0, 10)}</span>
                       <span className="font-bold">− {money(r.montoBase)}</span>
