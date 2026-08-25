@@ -53,8 +53,18 @@ export default function MapaLeaflet({ puntos = [], geocercas = [], marcadores = 
       if (editable && g.id && g.id === editable.id) continue
       const xy = coord(g.lat, g.lng)
       if (!xy) continue
-      const c = L.circle(xy, { radius: Number(g.radio) || 200, color: '#c9a24b', fillColor: '#c9a24b', fillOpacity: 0.15, weight: 2 }).addTo(m)
-      c.bindTooltip(g.nombre || '', { permanent: false, direction: 'center', className: 'bulk-geo-lbl' })
+      // Estilo por TIPO de zona: planta = dorado sólido, destino = azul,
+      // proyecto = verde, patio = gris punteado (solo informativo).
+      const ESTILO = {
+        planta: { color: '#c9a24b', fillOpacity: 0.15, weight: 2 },
+        destino: { color: '#2563eb', fillOpacity: 0.14, weight: 2, dashArray: '10 6' },
+        proyecto: { color: '#10b981', fillOpacity: 0.14, weight: 3 },
+        patio: { color: '#64748b', fillOpacity: 0.08, weight: 2, dashArray: '3 5' },
+      }
+      const st = ESTILO[g.tipo] || { color: g.color || '#c9a24b', fillOpacity: 0.15, weight: 2 }
+      const c = L.circle(xy, { radius: Number(g.radio) || 200, ...st, fillColor: st.color }).addTo(m)
+      const TIPO_LBL = { planta: 'Planta', destino: 'Entrega', proyecto: 'Proyecto', patio: 'Patio' }
+      c.bindTooltip(`${g.nombre || ''}${TIPO_LBL[g.tipo] ? ` · ${TIPO_LBL[g.tipo]}` : ''}`, { permanent: false, direction: 'center', className: 'bulk-geo-lbl' })
       capas.current.push(c); boundsGeo.push(xy)
     }
     // Geocerca en EDICIÓN: círculo resaltado (área actual visible) + centro arrastrable.
