@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.milepay.app",
+      "sha256_cert_fingerprints": [
+        "58:79:21:AA:59:0A:22:2A:53:56:B9:86:CB:92:DE:AE:D0:A2:2B:95:37:16:19:E2:81:5B:03:A1:73:92:CB:CC"
+      ]
+    }
+  }
+]
