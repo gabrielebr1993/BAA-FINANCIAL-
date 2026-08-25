@@ -39,6 +39,8 @@ import { useGeoPos } from './useGeoPos'
 import { beep, tonoOrden, notificar, pedirPermisoNotif, desbloquearAudio, engancharDesbloqueoAudio } from '../integraciones/alertasLocales'
 import { leerTicket } from '../integraciones/ocr'
 import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
+import { useLlamada } from '../components/LlamadaProvider'
+import { useDirectorio } from '../data/useComunicacion'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
@@ -887,6 +889,22 @@ const GUIA_CHOFER = {
 }
 
 function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, liberacionAuto = false, noLeidosChat = 0 }) {
+  // ── Llamar al SUPERVISOR de esta orden (por trabajo; si no, por planta) ──
+  const { iniciar: iniciarLlamada } = useLlamada()
+  const directorioSup = useDirectorio()
+  const supervisoresOrden = useMemo(() => {
+    const sup = (directorioSup || []).filter((d) => d.rol === 'supervisor_planta' && d.uid)
+    const delTrabajo = sup.filter((d) => orden.jobId && Array.isArray(d.jobIds) && d.jobIds.includes(orden.jobId))
+    const dePlanta = sup.filter((d) => orden.plantaId && d.plantaId === orden.plantaId)
+    return delTrabajo.length ? delTrabajo : (dePlanta.length ? dePlanta : sup)
+  }, [directorioSup, orden.jobId, orden.plantaId])
+  const [elegirSup, setElegirSup] = useState(false)
+  const llamarSupervisor = () => {
+    if (!supervisoresOrden.length) { window.alert('No hay ningún supervisor registrado. Avisa a la oficina.'); return }
+    if (supervisoresOrden.length === 1) { iniciarLlamada(supervisoresOrden[0].uid, supervisoresOrden[0].nombre, 'audio'); return }
+    setElegirSup(true)
+  }
+
   const { t } = useLang()
   const paso = siguientePasoChofer(orden.estado)
   const fase = faseChofer(orden.estado)
@@ -1078,6 +1096,24 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </div>
         <p className="mt-0.5 text-[10px] leading-snug text-emerald-700/60 dark:text-emerald-400/60">{t('El pago real se calcula al terminar, con las toneladas del ticket de báscula.')}</p>
       </div>
+
+      <button onClick={llamarSupervisor}
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-brand-navy/15 bg-white py-2.5 text-sm font-black text-brand-navy transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <Phone size={16} className="text-emerald-500" /> {t('Llamar al supervisor')}
+      </button>
+      {elegirSup && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/70 sm:items-center" onClick={() => setElegirSup(false)}>
+          <div className="pb-safe w-full max-w-sm rounded-t-3xl bg-white p-4 dark:bg-slate-900 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">{t('¿A qué supervisor llamamos?')}</div>
+            {supervisoresOrden.map((d) => (
+              <button key={d.uid} onClick={() => { setElegirSup(false); iniciarLlamada(d.uid, d.nombre, 'audio') }}
+                className="mb-1.5 flex w-full items-center gap-2 rounded-2xl border border-slate-200 p-3 text-left text-sm font-semibold text-brand-navy hover:border-emerald-400 dark:border-slate-700 dark:text-slate-100">
+                <Phone size={15} className="text-emerald-500" /> {d.nombre || t('Supervisor')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tarjeta de recogida / entrega según la fase */}
       {fase && (

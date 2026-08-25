@@ -52,6 +52,9 @@ export default function ClientePortal() {
     return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, precioCliente: m[o.id] } : o))
   }, [_ordenesRaw, pagosCliente])
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
+  // ¿El admin permite al cliente ver los chats por viaje? (señal bulk_signals/chat)
+  const { datos: signalsChat } = useColeccion('signals')
+  const veChatsViaje = ((signalsChat || []).find((x) => x.id === 'chat') || {}).clienteVeOrdenes !== false
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [detalleFac, setDetalleFac] = useState(null) // factura abierta en el drawer de detalle
   const [verDocFac, setVerDocFac] = useState(null) // factura abierta como documento imprimible
@@ -145,10 +148,11 @@ export default function ClientePortal() {
   const [abrirExterno, setAbrirExterno] = useState(null)
   useEffect(() => onAbrirConversacion((k) => { setTab('mensajes'); if (k && k !== '__mensajes__') { setAbrirExterno(k); setTimeout(() => setAbrirExterno(null), 0) } }), [])
   const seccionesCliente = useMemo(() => [
-    { k: 'admin', label: t('Administrador'), icon: 'admin', items: seccionesMsg[0]?.items || [], vacio: seccionesMsg[0]?.vacio },
+    // Chats POR VIAJE con la oficina: el admin puede apagarlos para el cliente.
+    ...(veChatsViaje ? [{ k: 'admin', label: t('Administrador'), icon: 'admin', items: seccionesMsg[0]?.items || [], vacio: seccionesMsg[0]?.vacio }] : []),
     seccionPriv,
     { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
-  ], [seccionesMsg, gruposItems, seccionPriv, t])
+  ], [seccionesMsg, gruposItems, seccionPriv, veChatsViaje, t])
 
   const rechazarFactura = async (r) => {
     const motivo = window.prompt(t('¿Por qué disputas esta factura?'))

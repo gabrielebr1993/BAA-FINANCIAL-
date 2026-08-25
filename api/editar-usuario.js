@@ -145,6 +145,10 @@ export default async function handler(req, res) {
     // Ficha no sensible para el descubrimiento de contactos del chat interno.
     try {
       const dir = { tenantId: target.tenantId, uid, nombre: (nombre != null ? String(nombre) : (target.nombre || '')), rol: finalRol, carrierId: caId, clienteId: cId }
+      // Alcance del SUPERVISOR: sus trabajos/planta en el directorio, para que el
+      // chofer pueda ubicar y LLAMAR al supervisor de su orden desde su app.
+      if (jobIds !== undefined) dir.jobIds = Array.isArray(jobIds) ? jobIds.filter(Boolean).slice(0, 30) : []
+      if (plantaId !== undefined) dir.plantaId = plantaId || null
       await db.collection('bulk_directorio').doc(uid).set(dir, { merge: true })
     } catch (e) { /* no bloquea la edición */ }
 

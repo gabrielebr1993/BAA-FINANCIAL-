@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Truck, User, Building2, X, Users, Shield } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
+import { crearConId } from '../data/repo'
 import { convChofer, convCarrier, convClienteOrden, convStaff, resumenPorConversacion, eliminarConversacion } from '../data/chat'
 import { esConvGrupo, grupoIdDeConv, convGrupo, disolverGrupo, salirGrupo } from '../data/grupos'
 import { useGrupos } from '../data/useGrupos'
@@ -22,6 +23,13 @@ export default function Mensajes() {
   const { usuario, tenantId, rol } = useBulkAuth()
   const esAdmin = rol === 'admin' || rol === 'super_admin'
   const { datos: ordenes, cargando } = useColeccion('orders')
+  // Señal de chat del tenant: ¿el CLIENTE ve los chats por viaje? (admin la apaga/enciende)
+  const { datos: signalsChat } = useColeccion('signals')
+  const clienteVeOrdenes = ((signalsChat || []).find((x) => x.id === 'chat') || {}).clienteVeOrdenes !== false
+  const esAdminMsg = rol === 'admin' || rol === 'super_admin'
+  const toggleChatCliente = async () => {
+    try { await crearConId('signals', 'chat', tenantId, { clienteVeOrdenes: !clienteVeOrdenes }) } catch { /* permisos */ }
+  }
   const { datos: carriers } = useColeccion('carriers')
   const { datos: clientes } = useColeccion('clients')
   const { datos: jobs } = useColeccion('jobs')
@@ -205,7 +213,15 @@ export default function Mensajes() {
         abrir={abrir}
         titulo={t('Mensajes')}
         menuConversacion={menuConversacion}
-        accion={invitaciones.length > 0 ? <Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Invitaciones')}<span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span></Boton> : null}
+        accion={<span className="flex items-center gap-1.5">
+          {esAdminMsg && (
+            <button onClick={toggleChatCliente} title={t('¿El cliente ve los chats por viaje en su portal?')}
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${clienteVeOrdenes ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>
+              {t('Chat de viajes al cliente')}: {clienteVeOrdenes ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {invitaciones.length > 0 && <Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Invitaciones')}<span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span></Boton>}
+        </span>}
       />
 
       {/* Selector de nueva conversación FILTRADO por la pestaña activa. */}
