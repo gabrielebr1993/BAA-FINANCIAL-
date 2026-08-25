@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { Building2, DollarSign, ClipboardList, FileText, Download, PenLine, LayoutDashboard, Layers, MessageSquare, CheckCircle2, Clock, AlertTriangle, Navigation } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -7,6 +7,9 @@ import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
 import BotonReunion from '../components/BotonReunion'
+import MapaLeaflet from '../components/MapaLeaflet'
+import { suscribirTrack } from '../data/tracking'
+import { etaOrden, etaTexto } from '../domain/eta'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
@@ -55,6 +58,15 @@ export default function ClientePortal() {
   // ¿El admin permite al cliente ver los chats por viaje? (señal bulk_signals/chat)
   const { datos: signalsChat } = useColeccion('signals')
   const veChatsViaje = ((signalsChat || []).find((x) => x.id === 'chat') || {}).clienteVeOrdenes !== false
+  // Mapa en vivo del cliente: geocercas + trayectoria de la orden elegida.
+  const { datos: geocercasCli } = useColeccion('geofences')
+  const { datos: plantasCli } = useColeccion('plants')
+  const [ordenMapa, setOrdenMapa] = useState('')
+  const [trackCli, setTrackCli] = useState([])
+  useEffect(() => {
+    if (!ordenMapa || !tenantId) { setTrackCli([]); return }
+    return suscribirTrack(tenantId, ordenMapa, setTrackCli)
+  }, [tenantId, ordenMapa])
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [detalleFac, setDetalleFac] = useState(null) // factura abierta en el drawer de detalle
   const [verDocFac, setVerDocFac] = useState(null) // factura abierta como documento imprimible
@@ -166,6 +178,7 @@ export default function ClientePortal() {
   const items = [
     { k: 'resumen', label: t('Resumen'), icon: LayoutDashboard },
     { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
+    { k: 'mapa', label: t('Mapa en vivo'), icon: Navigation },
     { k: 'proyectos', label: t('Proyectos'), icon: Layers },
     { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
     { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosMsg + noLeidosGrupos + noLeidosPriv },
@@ -235,6 +248,49 @@ export default function ClientePortal() {
                 )}
               </Card>
             )}
+
+            {tab === 'mapa' && (() => {
+              const enViaje = ordenes.filter((o) => !FINAL.includes(o.estado))
+              const conGps = enViaje.filter((o) => o.ultimaPos?.lat != null)
+              const sel = conGps.find((o) => o.id === ordenMapa) || null
+              const colorEst = { aceptada: '#64748b', en_planta: '#13233f', cargando: '#13233f', en_ruta: '#2563eb', en_destino: '#f59e0b' }
+              const marcadores = conGps.map((o) => ({ id: o.id, lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorEst[o.estado] || '#64748b', label: `${o.numero} · ${t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}` }))
+              return (
+                <Card className="p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+                    <Navigation size={14} className="text-amber-500" />
+                    <span className="font-bold text-brand-navy dark:text-slate-100">{t('Tus entregas en vivo')}</span>
+                    <Badge color="navy">{conGps.length}</Badge>
+                    {sel && <span className="ml-auto font-mono font-bold text-brand-navy dark:text-slate-100">{sel.numero}</span>}
+                  </div>
+                  {conGps.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-10 text-center text-slate-400"><Navigation size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ningún camión con GPS en este momento. Cuando un chofer esté en camino con tu carga, lo verás aquí en tiempo real.')}</p></div>
+                  ) : (
+                    <MapaLeaflet geocercas={geocercasCli} marcadores={marcadores} puntos={sel ? trackCli : []} alto="52vh" onMarcador={(id) => setOrdenMapa(id === ordenMapa ? '' : id)} />
+                  )}
+                  {enViaje.length > 0 && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {enViaje.map((o) => {
+                        const e = etaOrden(o, geocercasCli, plantasCli)
+                        const activoSel = ordenMapa === o.id
+                        return (
+                          <button key={o.id} onClick={() => setOrdenMapa(activoSel ? '' : o.id)}
+                            className={`rounded-xl border p-3 text-left transition ${activoSel ? 'border-amber-400 bg-amber-500/5' : 'border-slate-200 hover:border-amber-300 dark:border-slate-700'}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                              <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                              {e && <span className={`ml-auto text-[11px] font-bold ${e.viejo ? 'text-slate-400' : 'text-blue-600 dark:text-blue-300'}`}>ETA {etaTexto(e)}</span>}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-400">{t(o.material || '—')} · {o.pesoReal ?? o.pesoEstimado} ton{o.ultimaPos?.lat != null ? ` · ${activoSel ? t('trayectoria visible') : t('toca para ver su trayectoria')}` : ` · ${t('sin GPS todavía')}`}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <p className="mt-2 px-1 text-[11px] text-slate-400">{t('La posición se actualiza con el GPS del chofer (~20 s). El ETA es un estimado según distancia y velocidad promedio; puede variar por tráfico.')}</p>
+                </Card>
+              )
+            })()}
 
             {tab === 'ordenes' && (
               <Card className="p-4">

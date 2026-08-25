@@ -24,6 +24,7 @@ export default function MapaVivo() {
   const { tenantId } = useBulkAuth()
   const { datos: ordenes, cargando } = useColeccion('orders')
   const { datos: geocercas } = useColeccion('geofences')
+  const { datos: plantasEta } = useColeccion('plants')
   const { datos: presencias } = useColeccion('presence')
   // Entradas/salidas de geocerca en vivo (solo staff/transportista las leen por reglas).
   const { datos: geoeventos } = useColeccion('geoeventos', [], { orden: 'ts', dir: 'desc', limite: 25 })
@@ -192,7 +193,7 @@ export default function MapaVivo() {
             {!verTodosEf && verChat && orden && <div className="mb-2"><ChatOrden orden={orden} alto={260} /></div>}
             <div className="relative">
               <MapaLeaflet marcadores={verTodosEf ? [...marcadores, ...marcadoresChoferes] : []} puntos={verTodosEf ? [] : track} geocercas={geocercas} centro={centroFoco} alto="62vh" onMarcador={setSelMarca} />
-              {marcaSel && <PanelMarca sel={marcaSel} onClose={() => setSelMarca(null)} t={t} />}
+              {marcaSel && <PanelMarca sel={marcaSel} onClose={() => setSelMarca(null)} t={t} geocercas={geocercas} plantas={plantasEta} />}
             </div>
             {!verTodosEf && orden && (
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -243,7 +244,7 @@ function Metrica({ icon: Icon, label, val }) {
 }
 
 // Panel (mini pestaña) al hacer clic en un camión. El NOMBRE del chofer abre su perfil.
-function PanelMarca({ sel, onClose, t }) {
+function PanelMarca({ sel, onClose, t, geocercas = [], plantas = [] }) {
   const cerrar = (
     <button onClick={onClose} className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800"><X size={14} /></button>
   )
@@ -258,6 +259,7 @@ function PanelMarca({ sel, onClose, t }) {
         <Link to={`/bulk/chofer/${encodeURIComponent(o.choferNombre || '')}`} className="pr-6 text-sm font-black text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{o.choferNombre || t('Chofer')}</Link>
         <div className="mt-0.5 text-xs text-slate-400"><Link to={`/bulk/ordenes/${o.id}`} className="font-mono font-bold text-slate-500 hover:text-amber-600 hover:underline dark:text-slate-300">{o.numero}</Link> · {t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</div>
         <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-300">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</div>
+        {(() => { const e = etaOrden(o, geocercas, plantas); return e ? <div className={`mt-1 text-xs font-bold ${e.viejo ? 'text-slate-400' : 'text-blue-600 dark:text-blue-300'}`}>ETA {etaTexto(e)} · {e.distKm} km {e.fase === 'recogida' ? t('a la planta') : t('a la entrega')}{e.viejo ? ` (${t('GPS viejo')})` : ''}</div> : null })()}
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"><div className="h-full rounded-full bg-[#15b66b]" style={{ width: `${pct}%` }} /></div>
         <div className="mt-1 text-[11px] text-slate-400">{pct}% {t('completado')}</div>
         <Link to={`/bulk/ordenes/${o.id}`} className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-brand-navy px-2 py-1.5 text-xs font-bold text-white hover:brightness-110 dark:bg-amber-500 dark:text-slate-900">{t('Ver historial de la orden')} →</Link>

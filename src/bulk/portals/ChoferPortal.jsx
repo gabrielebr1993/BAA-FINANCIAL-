@@ -41,6 +41,7 @@ import { leerTicket } from '../integraciones/ocr'
 import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import { useLlamada } from '../components/LlamadaProvider'
 import { useDirectorio } from '../data/useComunicacion'
+import { etaOrden, etaTexto } from '../domain/eta'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
@@ -1084,7 +1085,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/15 text-xs font-black">{guia.paso}/5</span>
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-bold uppercase tracking-widest text-amber-300">{t('Qué hacer ahora')}</div>
-            <div className="text-sm font-bold leading-tight">{t(guia.txt)}{distTxt ? ` · ${distTxt}` : ''}</div>
+            <div className="text-sm font-bold leading-tight">{t(guia.txt)}{distTxt ? ` · ${distTxt}` : ''}{(() => { const e = etaOrden({ ...orden, ultimaPos: pos ? { lat: pos.lat, lng: pos.lng, speed: pos.speed, ts: new Date().toISOString() } : orden.ultimaPos }, geocercas, plantas); return e ? ` · ${etaTexto(e)}` : '' })()}</div>
           </div>
         </div>
       )}

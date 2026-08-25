@@ -14,6 +14,7 @@ import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import BotonReunion from '../components/BotonReunion'
 import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
+import { etaOrden, etaTexto } from '../domain/eta'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
@@ -70,6 +71,7 @@ export default function TransportistaPortal() {
   // Retiros Fast Pay de MI carrier (los míos y los de mis choferes): para
   // descontarlos al pagar a cada chofer y no pagar doble.
   const { datos: retiros } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
+  const { datos: geocercasEta } = useColeccion('geofences')
   const { datos: presencias } = useColeccion('presence', [where('carrierId', '==', carrierId)])
   const { datos: plantas } = useColeccion('plants')
   // Catálogo de TIPOS DE CAMIÓN del sistema (bulk_equipment; legible por todo el
@@ -287,7 +289,7 @@ export default function TransportistaPortal() {
       </div>
 
       {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
-      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo }} />}
+      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo, geocercas: geocercasEta }} />}
       {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
@@ -356,7 +358,7 @@ function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () =
 }
 
 // ── Tab Órdenes: tabla filtrada a MIS órdenes, con estados de color ───────────
-function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '' }) {
+function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '', geocercas = [] }) {
   const { usuario, tenantId, rol } = useBulkAuth()
   const [q, setQ] = useState('')
   const [fEstado, setFEstado] = useState('')
@@ -399,7 +401,7 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
       return o.choferNombre || <span className="text-slate-400">{t('Sin asignar')}</span>
     }
     if (k === 'ruta') return <span className="text-xs text-slate-500 dark:text-slate-400">{nombrePlanta(o.plantaId) || t('Planta')} → {o.direccionEntrega || '—'}</span>
-    if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+    if (k === 'estado') { const e = etaOrden(o, geocercas); return <span className="inline-flex flex-col items-center gap-0.5"><Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>{e && <span className={`text-[10px] font-bold ${e.viejo ? 'text-slate-400' : 'text-blue-600 dark:text-blue-300'}`}>{etaTexto(e)}</span>}</span> }
     if (k === 'fecha') return <span className="text-xs text-slate-500">{fecha(o.creadoEn)}</span>
     if (k === 'pago') return <span className="font-semibold text-brand-navy dark:text-slate-100">{money(o.precioTransportista)}</span>
     // Ticket solo-impresión (el transportista NO genera folios ni escribe la orden):

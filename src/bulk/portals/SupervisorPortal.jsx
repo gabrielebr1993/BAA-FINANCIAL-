@@ -19,6 +19,7 @@ import { liberar as liberarPresencia } from '../data/presencia'
 import { auditar } from '../data/auditoria'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { ahora } from '../domain/flujo'
+import { etaOrden, etaTexto } from '../domain/eta'
 import { NIVEL_LABEL } from '../domain/liberacion'
 import { beep, notificar } from '../integraciones/alertasLocales'
 import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
@@ -238,6 +239,7 @@ export default function SupervisorPortal() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                       <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                      {(() => { const e = etaOrden(o, geocercas); return e ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${e.viejo ? 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-blue-500/10 text-blue-600 dark:text-blue-300'}`} title={`${e.distKm} km ${e.fase === 'recogida' ? t('a la planta') : t('a la entrega')}`}>{etaTexto(e)}{e.viejo ? ` (${t('GPS viejo')})` : ''}</span> : null })()}
                       <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
                       {o.urgente && <Badge color="red">{t('Urgente')}</Badge>}
                     </div>
