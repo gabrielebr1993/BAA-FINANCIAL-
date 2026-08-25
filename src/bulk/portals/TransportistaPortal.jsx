@@ -178,7 +178,26 @@ export default function TransportistaPortal() {
 
   // ── Acciones ────────────────────────────────────────────────────────────────
   const guardarPago = async (driverId, tipo, valor) => {
-    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: { ...pagoChoferes, [driverId]: { tipo, valor: Number(valor) || 0 } } })
+    const nuevaCfg = { tipo, valor: Number(valor) || 0 }
+    await crearConId('carrierConfig', carrierId, tenantId, { pagoChoferes: { ...pagoChoferes, [driverId]: nuevaCfg } })
+    // El cambio NO es solo para el futuro: recalcula el pago del chofer en sus
+    // viajes EN CURSO (los liberados/cerrados/cancelados son históricos y no se
+    // tocan). La utilidad del transporte se recalcula sola (tarifa − pago).
+    const FINALES = ['liberada', 'cerrada', 'cancelada']
+    const uid = choferes.find((c) => c.id === driverId)?.uid || null
+    const activas = (ordenes || []).filter((o) =>
+      (o.choferId === uid || o.choferId === driverId) && !FINALES.includes(o.estado) && o.precioTransportista != null)
+    let n = 0
+    for (const o of activas) {
+      const nuevo = calcularPagoChofer(o.precioTransportista, nuevaCfg)
+      if (nuevo == null || Number(nuevo) === Number(o.pagoChofer)) continue
+      try {
+        await crearConId('orderPay_chofer', o.id, tenantId, { pagoChofer: nuevo })
+        try { await guardar('orders', o.id, { pagoChofer: nuevo }) } catch { /* precios ya viven en el doc de pago */ }
+        n++
+      } catch { /* sin permiso sobre esa orden: se omite */ }
+    }
+    if (n > 0) window.alert(`${t('Pago actualizado. Se recalculó el pago de')} ${n} ${t('viaje(s) en curso; tu utilidad se actualizó igual.')}`)
   }
   const quitarPago = async (driverId) => {
     const next = { ...pagoChoferes }; delete next[driverId]
