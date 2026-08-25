@@ -12,6 +12,7 @@ import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 import { KPI, PageTitle, Card, Cargando, Badge } from '../../components/ui'
 import { BarCard, DonutCard } from '../../components/charts'
+import { precioViajeMaterial } from '../domain/materialesPrecios'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -30,12 +31,23 @@ export default function BulkDashboard() {
   const { datos: documentos } = useColeccion('documents')
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: presencias } = useColeccion('presence')
+  const { datos: materiales } = useColeccion('materials')
 
   const s = useMemo(() => {
     const entregadas = ordenes.filter((o) => ENTREGADAS.includes(o.estado))
     const enCola = ordenes.filter((o) => [E.CREADA, E.EN_COLA, E.NOTIFICANDO].includes(o.estado))
     const ton = entregadas.reduce((a, o) => a + n(o.pesoReal ?? o.pesoEstimado), 0)
     const ingresos = entregadas.reduce((a, o) => a + n(o.precioCliente), 0)
+    // UTILIDAD del sistema por viaje = venta al cliente − pago al transportista −
+    // costo del material (precio del material en la planta de carga, si existe).
+    // Los "ingresos" son lo FACTURADO; la utilidad es lo que queda para ti.
+    const utilDe = (o) => {
+      const venta = n(o.precioCliente)
+      if (venta <= 0) return 0
+      const mat = precioViajeMaterial(materiales, o.material, o.plantaId, o.pesoReal ?? o.pesoEstimado) || 0
+      return venta - n(o.precioTransportista) - mat
+    }
+    const utilidad = entregadas.reduce((a, o) => a + utilDe(o), 0)
     const porEstado = {}; for (const o of ordenes) porEstado[o.estado] = (porEstado[o.estado] || 0) + 1
     const porMaterial = {}; for (const o of entregadas) { const m = o.material || '—'; porMaterial[m] = (porMaterial[m] || 0) + n(o.pesoReal ?? o.pesoEstimado) }
     const porChofer = {}; for (const o of entregadas) { const c = o.choferNombre || '—'; porChofer[c] = (porChofer[c] || 0) + 1 }
@@ -65,9 +77,10 @@ export default function BulkDashboard() {
     const suma = (arr, k) => arr.reduce((x, o) => x + n(k(o)), 0)
     const tend = (c, p) => (p > 0 ? (c - p) / p : null)
     const trIngresos = tend(suma(cur, (o) => o.precioCliente), suma(prev, (o) => o.precioCliente))
+    const trUtilidad = tend(cur.reduce((a, o) => a + utilDe(o), 0), prev.reduce((a, o) => a + utilDe(o), 0))
     const trTon = tend(suma(cur, (o) => o.pesoReal ?? o.pesoEstimado), suma(prev, (o) => o.pesoReal ?? o.pesoEstimado))
     return {
-      trIngresos, trTon,
+      trIngresos, trUtilidad, trTon, utilidad,
       abiertas: ordenes.filter((o) => ![E.CERRADA, E.CANCELADA].includes(o.estado)).length,
       enCola: enCola.length, entregadas: entregadas.length, ton, ingresos,
       tPromEntrega: tiempoPromedioEntregaMin(entregadas),
@@ -79,7 +92,7 @@ export default function BulkDashboard() {
       scT: scorecardsTransportistas(ordenes, carriers).slice(0, 5),
       scC: scorecardsChoferes(ordenes).slice(0, 5),
     }
-  }, [ordenes, documentos, incidencias, presencias, carriers, t])
+  }, [ordenes, documentos, incidencias, presencias, carriers, materiales, t])
 
   if (cargando) return <Cargando texto={t('Cargando panel…')} />
 
@@ -135,12 +148,17 @@ export default function BulkDashboard() {
 
       <Grupo titulo={t('Negocio')} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {verIngresos
-          ? <KPI label={t('Ingresos')} value={money(s.ingresos)} icon={DollarSign} accent="blue" trend={s.trIngresos} sub={s.trIngresos != null ? t('vs. 7 días previos') : undefined} />
-          : <KPI label={t('Entregadas')} value={s.entregadas} icon={ClipboardList} accent="green" />}
-        <KPI label={t('Toneladas entregadas')} value={Math.round(s.ton)} icon={Weight} accent="green" trend={s.trTon} sub={s.trTon != null ? t('vs. 7 días previos') : undefined} />
-        <KPI label={t('Clientes')} value={clientes.length} icon={Building2} accent="slate" />
-        <KPI label={t('Transportistas')} value={carriers.length} icon={Truck} accent="slate" />
+        {verIngresos ? (<>
+          <KPI label={t('Ingresos (facturado)')} value={money(s.ingresos)} icon={DollarSign} accent="blue" trend={s.trIngresos} sub={s.trIngresos != null ? t('vs. 7 días previos') : undefined} />
+          <KPI label={t('Utilidad (tu ganancia)')} value={money(s.utilidad)} icon={DollarSign} accent="green" trend={s.trUtilidad} sub={t('venta − transporte − material')} />
+          <KPI label={t('Toneladas entregadas')} value={Math.round(s.ton)} icon={Weight} accent="gold" trend={s.trTon} sub={s.trTon != null ? t('vs. 7 días previos') : undefined} />
+          <KPI label={t('Clientes')} value={clientes.length} icon={Building2} accent="slate" />
+        </>) : (<>
+          <KPI label={t('Entregadas')} value={s.entregadas} icon={ClipboardList} accent="green" />
+          <KPI label={t('Toneladas entregadas')} value={Math.round(s.ton)} icon={Weight} accent="gold" trend={s.trTon} sub={s.trTon != null ? t('vs. 7 días previos') : undefined} />
+          <KPI label={t('Clientes')} value={clientes.length} icon={Building2} accent="slate" />
+          <KPI label={t('Transportistas')} value={carriers.length} icon={Truck} accent="slate" />
+        </>)}
       </div>
 
       {(s.docsAlerta > 0 || s.incAbiertas > 0) && (
