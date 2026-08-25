@@ -215,12 +215,34 @@ export default function ModoTest() {
             {fase === 'sembrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Cargando…')}</> : <><FlaskConical size={18} /> {t('Activar modo test')}</>}
           </Boton>
         </div>
-        {demoOrdenes > 0 && (
-          <button onClick={borrar} disabled={ocupado} className="mx-auto mt-4 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 disabled:opacity-50">
-            <Trash2 size={13} /> {t('Borrar datos de prueba')} ({demoOrdenes} {t('órdenes')})
-          </button>
-        )}
         {msg && <Aviso tipo={msg.tipo} className="mt-4 text-left">{msg.txt}</Aviso>}
+      </Card>
+
+      {/* Salir del modo test: borra SOLO los registros demo y el sistema queda 100% real */}
+      <Card className="mb-4 p-6 text-center">
+        <div className={`mx-auto grid h-14 w-14 place-items-center rounded-2xl ${demoOrdenes > 0 ? 'bg-rose-500/15 text-rose-500' : 'bg-emerald-500/15 text-emerald-500'}`}>
+          {demoOrdenes > 0 ? <Trash2 size={26} /> : <ShieldCheck size={26} />}
+        </div>
+        <h3 className="mx-auto mt-3 max-w-md text-lg font-bold text-brand-navy dark:text-slate-100">{t('Salir del modo test · pasar a real')}</h3>
+        {demoOrdenes > 0 ? (
+          <>
+            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+              {t('Hay')} <b>{demoOrdenes}</b> {t('órdenes de prueba cargadas. Este botón borra SOLO los datos de ejemplo (órdenes, clientes, plantas, facturas… marcados como demo). Tus datos reales no se tocan. Después de borrar, todo lo que crees es real.')}
+            </p>
+            <div className="mt-5">
+              <Boton variant="danger" onClick={borrar} disabled={ocupado} className="px-6 py-2.5 text-base">
+                {fase === 'borrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Borrando…')}</> : <><Trash2 size={18} /> {t('Borrar datos de prueba y pasar a real')}</>}
+              </Boton>
+            </div>
+          </>
+        ) : (
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+            {t('✓ No hay datos de prueba: ya estás operando en real. Todo lo que crees (clientes, trabajos, órdenes, facturas) es real desde ahora.')}
+          </p>
+        )}
+        <p className="mx-auto mt-3 max-w-md text-[11px] text-slate-400">
+          {t('Nota: los pagos con tarjeta (Fast Pay/Stripe) tienen su propio interruptor de modo REAL en Fast Pay → Configuración; lo demás del sistema no tiene “modo”, siempre es real.')}
+        </p>
       </Card>
 
       {/* Mantenimiento: backfill de pagos por audiencia (Inc.2 Fase 3) */}
