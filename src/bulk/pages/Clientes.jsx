@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Building2, MapPin, Trash2 } from 'lucide-react'
+import { Plus, Building2, MapPin, Trash2, Clock } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { crear, eliminar, reservarCodigo } from '../data/repo'
 import { where } from '../data/repo'
@@ -14,12 +14,21 @@ import { useAvatares } from '../data/useCodigoUsuario'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
+// "07:30" → "7:30 am" (para guardar un horario legible junto a las horas exactas)
+function hora12(hhmm) {
+  const [h, m] = String(hhmm || '').split(':').map(Number)
+  if (!Number.isFinite(h)) return ''
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m || 0).padStart(2, '0')} ${ampm}`
+}
+
 function Plantas({ cliente }) {
   const { t } = useLang()
   const { tenantId } = useBulkAuth()
   const { datos: plantas } = useColeccion('plants', [where('clienteId', '==', cliente.id)])
   const { datos: materiales } = useColeccion('materials')
-  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [], dir: null })
+  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horaAbre: '', horaCierra: '', ofertas: [], dir: null })
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Al elegir una sugerencia de Google: rellena dirección + GPS y sugiere el nombre.
   const elegirDireccion = (d) => setF((s) => ({
@@ -40,9 +49,11 @@ function Plantas({ cliente }) {
     await crear('plants', tenantId, {
       clienteId: cliente.id, nombre: f.nombre.trim(), direccion: f.direccion.trim(),
       gps: (f.lat && f.lng) ? { lat: Number(f.lat), lng: Number(f.lng) } : null,
-      horario: f.horario.trim(), ofertas, materiales: ofertas.map((o) => o.material), activo: true,
+      horaAbre: f.horaAbre || null, horaCierra: f.horaCierra || null,
+      horario: f.horaAbre && f.horaCierra ? `${hora12(f.horaAbre)} – ${hora12(f.horaCierra)}` : '',
+      ofertas, materiales: ofertas.map((o) => o.material), activo: true,
     })
-    setF({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [], dir: null })
+    setF({ nombre: '', direccion: '', lat: '', lng: '', horaAbre: '', horaCierra: '', ofertas: [], dir: null })
   }
   const matsActivos = materiales.filter((m) => m.activo !== false)
 
@@ -55,6 +66,11 @@ function Plantas({ cliente }) {
             <MapPin size={14} className="text-amber-500" />
             <span className="font-medium">{p.nombre}</span>
             <span className="text-slate-400">{p.direccion}{p.gps ? ` · ${p.gps.lat}, ${p.gps.lng}` : ''}</span>
+            {(p.horario || (p.horaAbre && p.horaCierra)) && (
+              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                <Clock size={11} /> {p.horario || `${hora12(p.horaAbre)} – ${hora12(p.horaCierra)}`}
+              </span>
+            )}
             <button onClick={() => eliminar('plants', p.id)} className="ml-auto text-rose-400 hover:text-rose-600"><Trash2 size={13} /></button>
           </div>
           {((p.ofertas && p.ofertas.length) || (p.materiales || []).length) > 0 && (
@@ -79,7 +95,22 @@ function Plantas({ cliente }) {
         <Input placeholder={t('Dirección (o elígela arriba)')} value={f.direccion} onChange={set('direccion')} />
         <Input placeholder={t('Lat (GPS)')} value={f.lat} onChange={set('lat')} />
         <Input placeholder={t('Lng (GPS)')} value={f.lng} onChange={set('lng')} />
-        <Input placeholder={t('Horario (ej. 6am–4pm)')} value={f.horario} onChange={set('horario')} />
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <Clock size={15} className="flex-shrink-0 text-amber-500" />
+          <label className="flex flex-1 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            {t('Abre')}
+            <Input type="time" value={f.horaAbre} onChange={set('horaAbre')} className="flex-1" />
+          </label>
+          <label className="flex flex-1 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            {t('Cierra')}
+            <Input type="time" value={f.horaCierra} onChange={set('horaCierra')} className="flex-1" />
+          </label>
+          {f.horaAbre && f.horaCierra && (
+            <span className="hidden whitespace-nowrap text-xs font-semibold text-emerald-600 dark:text-emerald-400 sm:inline">
+              {hora12(f.horaAbre)} – {hora12(f.horaCierra)}
+            </span>
+          )}
+        </div>
       </div>
       {matsActivos.length > 0 && (
         <div className="mt-2">
