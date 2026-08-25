@@ -76,7 +76,9 @@ export function generarOrdenesDeJob(job, cantidadTon, opts = {}) {
     numero: `${job.codigo || 'JOB'}-${String(inicio + i).padStart(4, '0')}`,
     jobId: job.id,
     clienteId: job.clienteId,
-    plantaId: job.plantaId,
+    // Planta de CARGA: puede elegirse por tanda (un material se vende en varias
+    // plantas a precios distintos); si no se indica, la del trabajo.
+    plantaId: opts.plantaId || job.plantaId,
     // Dirección de entrega (lo que ve el chofer) y PO, heredados del trabajo.
     direccionEntrega: job.destino || '',
     po: job.po || '',

@@ -8,7 +8,7 @@ import { auditar } from '../data/auditoria'
 import { escribirPreciosBase } from '../data/ordenPagos'
 import { generarOrdenesDeJob, contarViajes } from '../domain/ordenes'
 import { calcularTarifa } from '../domain/tarifas'
-import { precioViajeMaterial } from '../domain/materialesPrecios'
+import { precioViajeMaterial, precioMaterialEnPlanta } from '../domain/materialesPrecios'
 import { MAX_TON_POR_VIAJE, ORDEN_ESTADO as E } from '../domain/constants'
 
 const EN_COLA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO]
@@ -35,7 +35,16 @@ export default function Jobs() {
   const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
   const [msg, setMsg] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
-  const plantasCliente = plantas.filter((p) => p.clienteId === f.clienteId)
+  // Plantas de CARGA: TODAS las activas (un material lo venden varias plantas a
+  // precios distintos; según la negociación con el cliente se elige de dónde
+  // carga el driver). Se anota el precio del primer material elegido.
+  const plantasCarga = plantas.filter((p) => p.activo !== false).slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  const pistaPrecio = (plantaId) => {
+    const mat = f.materiales[0]
+    if (!mat) return ''
+    const pr = precioMaterialEnPlanta(materiales, mat, plantaId)
+    return pr && pr.plantaId === plantaId ? ` — $${pr.precio}/${pr.unidad}` : ''
+  }
   const toggleArr = (k, v) => setF((s) => ({ ...s, [k]: s[k].includes(v) ? s[k].filter((x) => x !== v) : [...s[k], v] }))
 
   const crearJob = async () => {
@@ -70,9 +79,9 @@ export default function Jobs() {
             <option value="">{t('— Cliente —')}</option>
             {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </Select>
-          <Select value={f.plantaId} onChange={set('plantaId')} disabled={!f.clienteId}>
-            <option value="">{t('— Planta —')}</option>
-            {plantasCliente.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          <Select value={f.plantaId} onChange={set('plantaId')}>
+            <option value="">{t('— Planta de carga (de dónde carga el driver) —')}</option>
+            {plantasCarga.map((p) => <option key={p.id} value={p.id}>{p.nombre}{pistaPrecio(p.id)}</option>)}
           </Select>
           <Select value={f.tipoEquipo} onChange={set('tipoEquipo')}>
             <option value="">{t('— Tipo de equipo requerido —')}</option>
@@ -122,20 +131,23 @@ export default function Jobs() {
 
       {jobs.length === 0 ? <EstadoVacio titulo={t('Sin trabajos')} texto={t('Crea el primero arriba.')} mostrarBoton={false} /> : (
         <div className="space-y-3">
-          {jobs.map((j) => <JobCard key={j.id} job={j} carriers={carriers} materiales={materiales} conteo={conteoJob(j.id)} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
+          {jobs.map((j) => <JobCard key={j.id} job={j} carriers={carriers} materiales={materiales} plantas={plantasCarga} conteo={conteoJob(j.id)} nombreCliente={nombreCliente} tenantId={tenantId} usuario={usuario} rol={rol} />)}
         </div>
       )}
     </div>
   )
 }
 
-function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
+function JobCard({ job, carriers = [], materiales = [], plantas = [], conteo = { cola: 0, proceso: 0 }, nombreCliente, tenantId, usuario, rol }) {
   const { t } = useLang()
   // Tarifas PROPIAS del cliente de este trabajo (ya no una colección global).
   const { datos: clientes } = useColeccion('clients')
   const reglas = (clientes.find((c) => c.id === job.clienteId)?.tarifas) || []
   const [cant, setCant] = useState('')
   const [material, setMaterial] = useState((job.materiales || [])[0] || '')
+  // Planta de CARGA de esta tanda (por defecto la del trabajo). El precio del
+  // material sale de la planta elegida.
+  const [plantaSel, setPlantaSel] = useState(job.plantaId || '')
   const [precioCliente, setPrecioCliente] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [res, setRes] = useState(null)
@@ -167,7 +179,8 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
     const matSel = materiales.find((m) => m.nombre === material)
     const eqMat = matSel ? ((matSel.equipos && matSel.equipos.length) ? matSel.equipos : (matSel.equipo ? [matSel.equipo] : [])) : []
     const equipoReq = eqMat.length === 1 ? eqMat[0] : (job.tipoEquipo || '')
-    const nuevas = generarOrdenesDeJob(job, total, { material, tipoEquipo: equipoReq, seqInicial: existentes.length + 1 })
+    const plantaCarga = plantaSel || job.plantaId
+    const nuevas = generarOrdenesDeJob(job, total, { material, tipoEquipo: equipoReq, seqInicial: existentes.length + 1, plantaId: plantaCarga })
     // Precio por orden, en este orden de prioridad:
     //   1) MANUAL (override del formulario)
     //   2) Motor de TARIFAS del cliente
@@ -177,9 +190,9 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
     let conTarifa = 0, conMatPlanta = 0
     const conPrecio = nuevas.map((o) => {
       if (manual != null) return { ...o, precioCliente: manual, precioTransportista: r2(manual * 0.72), pagoChofer: r2(manual * 0.72 * 0.8) }
-      const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: equipoReq, clienteId: job.clienteId, plantaId: job.plantaId, ton: o.pesoEstimado })
+      const t = calcularTarifa(reglas, { material: o.material, tipoEquipo: equipoReq, clienteId: job.clienteId, plantaId: plantaCarga, ton: o.pesoEstimado })
       if (t) { conTarifa++; return { ...o, precioCliente: t.precioCliente, precioTransportista: t.precioTransportista, pagoChofer: t.pagoChofer } }
-      const pvm = precioViajeMaterial(materiales, o.material, job.plantaId, o.pesoEstimado)
+      const pvm = precioViajeMaterial(materiales, o.material, plantaCarga, o.pesoEstimado)
       if (pvm != null) { conMatPlanta++; return { ...o, precioCliente: pvm, precioTransportista: r2(pvm * 0.72), pagoChofer: r2(pvm * 0.72 * 0.8) } }
       return o
     })
@@ -203,6 +216,7 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
         <Badge color="slate">{job.codigo}</Badge>
         <span className="text-xs text-slate-400">{t('Cliente')}: {nombreCliente(job.clienteId)}</span>
         {job.tipoEquipo && <Badge color="navy">{t('Equipo:')} {job.tipoEquipo}</Badge>}
+        {job.plantaId && <Badge color="blue">{t('Planta:')} {plantas.find((p) => p.id === job.plantaId)?.nombre || '—'}</Badge>}
         <span className="text-xs text-slate-400">· {conteo.cola} {t('en cola')} · {conteo.proceso} {t('en proceso')}</span>
         <Link to={`/bulk/jobs/${job.id}`} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-brand-navy transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"><UserSearch size={13} /> {t('Ver perfil')}</Link>
         <Gate perm="jobs.eliminar"><button onClick={() => window.confirm(`${t('¿Eliminar trabajo')} "${job.nombre}"${t('? (no borra órdenes ya generadas)')}`) && eliminar('jobs', job.id)} className="text-rose-400 hover:text-rose-600"><Trash2 size={15} /></button></Gate>
@@ -278,6 +292,17 @@ function JobCard({ job, carriers = [], materiales = [], conteo = { cola: 0, proc
             <Select value={material} onChange={(e) => setMaterial(e.target.value)}>{job.materiales.map((m) => <option key={m} value={m}>{t(m)}</option>)}</Select>
           </div>
         )}
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{t('Planta de carga')}</div>
+          <Select value={plantaSel} onChange={(e) => setPlantaSel(e.target.value)} className="max-w-[240px]">
+            <option value="">{t('— Elegir planta —')}</option>
+            {plantas.map((p) => {
+              const pr = precioMaterialEnPlanta(materiales, material, p.id)
+              const pista = pr && pr.plantaId === p.id ? ` — $${pr.precio}/${pr.unidad}` : ''
+              return <option key={p.id} value={p.id}>{p.nombre}{pista}</option>
+            })}
+          </Select>
+        </div>
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase text-slate-400">{t('Precio cliente / viaje (opc. — auto si vacío)')}</div>
           <Input type="number" className="w-32" placeholder={t('auto')} value={precioCliente} onChange={(e) => setPrecioCliente(e.target.value)} />
