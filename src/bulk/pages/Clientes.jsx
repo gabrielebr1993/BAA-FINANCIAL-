@@ -7,6 +7,7 @@ import { where } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { PageTitle, Card, Boton, Input, Cargando, EstadoVacio, Badge } from '../../components/ui'
 import { Gate } from '../components/Gate'
+import BuscadorDireccion from '../components/BuscadorDireccion'
 import { UserId } from '../components/UserId'
 import Avatar from '../components/Avatar'
 import { useAvatares } from '../data/useCodigoUsuario'
@@ -18,8 +19,15 @@ function Plantas({ cliente }) {
   const { tenantId } = useBulkAuth()
   const { datos: plantas } = useColeccion('plants', [where('clienteId', '==', cliente.id)])
   const { datos: materiales } = useColeccion('materials')
-  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [] })
+  const [f, setF] = useState({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [], dir: null })
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  // Al elegir una sugerencia de Google: rellena dirección + GPS y sugiere el nombre.
+  const elegirDireccion = (d) => setF((s) => ({
+    ...s, dir: d,
+    direccion: [d.direccion, d.ciudad, d.estado, d.zip].filter(Boolean).join(', '),
+    lat: String(d.lat), lng: String(d.lng),
+    nombre: s.nombre || String(d.direccion || '').split(',')[0] || '',
+  }))
   const tieneMat = (m) => f.ofertas.some((o) => o.material === m)
   const toggleMat = (m) => setF((s) => tieneMat(m)
     ? ({ ...s, ofertas: s.ofertas.filter((o) => o.material !== m) })
@@ -34,7 +42,7 @@ function Plantas({ cliente }) {
       gps: (f.lat && f.lng) ? { lat: Number(f.lat), lng: Number(f.lng) } : null,
       horario: f.horario.trim(), ofertas, materiales: ofertas.map((o) => o.material), activo: true,
     })
-    setF({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [] })
+    setF({ nombre: '', direccion: '', lat: '', lng: '', horario: '', ofertas: [], dir: null })
   }
   const matsActivos = materiales.filter((m) => m.activo !== false)
 
@@ -58,9 +66,17 @@ function Plantas({ cliente }) {
           )}
         </div>
       ))}
+      <div className="mt-2">
+        <BuscadorDireccion
+          seleccion={f.dir}
+          onElegir={elegirDireccion}
+          onLimpiar={() => setF((s) => ({ ...s, dir: null, direccion: '', lat: '', lng: '' }))}
+          placeholder={t('Busca la dirección de la planta (Google Maps)…')}
+        />
+      </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Input placeholder={t('Nombre de la planta')} value={f.nombre} onChange={set('nombre')} />
-        <Input placeholder={t('Dirección')} value={f.direccion} onChange={set('direccion')} />
+        <Input placeholder={t('Dirección (o elígela arriba)')} value={f.direccion} onChange={set('direccion')} />
         <Input placeholder={t('Lat (GPS)')} value={f.lat} onChange={set('lat')} />
         <Input placeholder={t('Lng (GPS)')} value={f.lng} onChange={set('lng')} />
         <Input placeholder={t('Horario (ej. 6am–4pm)')} value={f.horario} onChange={set('horario')} />
