@@ -30,6 +30,13 @@ window.addEventListener('vite:preloadError', () => {
 
 registerSW({ immediate: true })
 
+// Si la app arrancó bien, se limpian las banderas de auto-recarga: así un
+// despliegue FUTURO (días después, con la PWA aún abierta) puede volver a
+// auto-repararse en lugar de quedarse en la pantalla de error.
+setTimeout(() => {
+  try { sessionStorage.removeItem('mp-reload-chunk'); sessionStorage.removeItem('mp-auto-fix') } catch { /* noop */ }
+}, 8000)
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>

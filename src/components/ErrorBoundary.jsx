@@ -4,10 +4,14 @@
 // Usa estilos en línea a propósito: funciona aunque el CSS no haya cargado.
 import React from 'react'
 
+// ¿El error es de VERSIÓN VIEJA en caché? (tras un deploy, el index cacheado pide
+// un chunk JS que ya no existe y llega HTML en su lugar). Estos se auto-reparan.
+const esErrorDeVersion = (e) => /MIME type|dynamically imported module|ChunkLoadError|Loading chunk|Importing a module script|Failed to fetch/i.test(String(e?.message || e))
+
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { error: null }
+    this.state = { error: null, autoFix: false }
   }
 
   static getDerivedStateFromError(error) {
@@ -17,6 +21,14 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info)
+    // Error de versión vieja → AUTO-REPARACIÓN (una vez por sesión): limpia el
+    // service worker y las cachés y recarga, sin pedirle nada al usuario. Si aun
+    // así vuelve a fallar, se muestra la pantalla con el botón manual.
+    if (esErrorDeVersion(error) && !sessionStorage.getItem('mp-auto-fix')) {
+      try { sessionStorage.setItem('mp-auto-fix', '1') } catch { /* modo privado */ }
+      this.setState({ autoFix: true })
+      this.actualizar()
+    }
   }
 
   async actualizar() {
@@ -35,6 +47,16 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (!this.state.error) return this.props.children
+    if (this.state.autoFix) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
+          <div>
+            <div style={{ width: 56, height: 56, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 16, background: '#13233f', color: '#c9a24b', fontWeight: 800, fontSize: 26 }}>M</div>
+            <p style={{ color: '#9aa4b2', fontSize: 14 }}>Actualizando a la versión nueva…</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
         <div style={{ maxWidth: 380 }}>
