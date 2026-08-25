@@ -13,7 +13,7 @@ import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import PortalLayout from '../components/PortalLayout'
 import MapaLeaflet from '../components/MapaLeaflet'
-import { useColeccion } from '../data/useColeccion'
+import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, suscribir, where } from '../data/repo'
 import { liberar as liberarPresencia } from '../data/presencia'
 import { auditar } from '../data/auditoria'
@@ -33,10 +33,13 @@ const COLOR_NIVEL = { alta: 'green', media: 'gold', baja: 'slate', critico: 'red
 export default function SupervisorPortal() {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
-  // Alcance NUEVO: por trabajos (jobIds). Respaldo legado: por planta.
-  const jobIds = usuario?.jobIds || []
-  const jobsNombres = usuario?.jobsNombres || []
-  const plantaId = usuario?.plantaId || null
+  // Alcance por TRABAJOS, leído EN VIVO de su propio doc de usuario (get por id,
+  // permitido por reglas). Así, cuando el admin le asigna trabajos, el portal se
+  // actualiza al instante — sin depender de la sesión ni de volver a entrar.
+  const { dato: miDoc } = useDoc('users', usuario?.id)
+  const jobIds = (miDoc?.jobIds?.length ? miDoc.jobIds : usuario?.jobIds) || []
+  const jobsNombres = (miDoc?.jobsNombres?.length ? miDoc.jobsNombres : usuario?.jobsNombres) || []
+  const plantaId = (miDoc ? miDoc.plantaId : usuario?.plantaId) || null
   const sinAsignacion = jobIds.length === 0 && !plantaId
   // Órdenes de SUS trabajos: UNA suscripción de IGUALDAD por trabajo, fusionadas.
   // (Con el filtro `jobId in [...]` el motor de reglas no podía probar la consulta

@@ -253,6 +253,12 @@ export default function BulkUsuarios() {
       })
       const data = await r.json()
       if (!data.ok) throw new Error(data.error || 'Error')
+      // Refuerzo: los TRABAJOS del supervisor se escriben también directo al doc
+      // (la regla lo permite al admin). Así la asignación nunca se pierde aunque
+      // el backend de Vercel esté desactualizado o falle en silencio.
+      if (esSupervisor) {
+        try { await guardarCampos('users', editar.id, { jobIds: edicion.jobIds || [], jobsNombres: (edicion.jobIds || []).map(nombreJobU), plantaId: (edicion.jobIds || []).length ? null : (edicion.plantaId || null) }) } catch { /* el api ya lo escribió */ }
+      }
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'editar_usuario', entidad: 'usuario', detalle: `${email}${data.rolCambiado ? ` · rol→${label(nuevoRol)}` : ''}${edicion.password ? ' · contraseña' : ''}` })
       const debeReiniciar = data.rolCambiado || data.claimsCambiados
       setMsg({ tipo: 'ok', txt: data.rolCambiado
