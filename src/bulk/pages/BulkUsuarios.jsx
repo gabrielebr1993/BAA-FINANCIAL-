@@ -31,6 +31,7 @@ export default function BulkUsuarios() {
   const { datos: carriers } = useColeccion('carriers')
   // Trabajos (jobs): el SUPERVISOR ahora se asigna a trabajos, no a una planta.
   const { datos: jobsCat } = useColeccion('jobs')
+  const { datos: equiposCat } = useColeccion('equipment')
   const jobsActivos = jobsCat.filter((j) => j.activo !== false)
   const nombreJobU = (id) => { const j = jobsCat.find((x) => x.id === id); return j ? (j.codigo ? `${j.codigo} · ${j.nombre || ''}` : (j.nombre || id)) : id }
   const directorio = useDirectorio()
@@ -119,7 +120,7 @@ export default function BulkUsuarios() {
     })()
   }, [cargando, usuarios, carriers, clientes, esAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
+  const [f, setF] = useState({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '', equipos: [] })
   const [msg, setMsg] = useState(null)
   const [buscar, setBuscar] = useState('')
   const [rolFiltro, setRolFiltro] = useState('') // '' = todos los roles
@@ -134,13 +135,14 @@ export default function BulkUsuarios() {
   const necesitaCarrier = f.rol === BULK_ROLES.TRANSPORTISTA
   const necesitaChofer = f.rol === BULK_ROLES.CHOFER
   // Choferes ya registrados en el roster (para afiliar la cuenta a su ficha).
-  const rosterDrivers = carriers.flatMap((c) => (c.choferes || []).map((d) => ({ carrierId: c.id, carrierNombre: c.nombre, rosterId: d.id, nombre: d.nombre, uid: d.uid })))
-  // Al elegir un chofer registrado: prellena el nombre y fija su transportista.
+  const rosterDrivers = carriers.flatMap((c) => (c.choferes || []).map((d) => ({ carrierId: c.id, carrierNombre: c.nombre, rosterId: d.id, nombre: d.nombre, uid: d.uid, equipos: Array.isArray(d.equipos) ? d.equipos : [] })))
+  // Al elegir un chofer registrado: prellena nombre, transportista y sus camiones.
   const elegirChofer = (e) => {
     const v = e.target.value
     const rd = rosterDrivers.find((x) => `${x.carrierId}::${x.rosterId}` === v)
-    setF((s) => ({ ...s, chofer: v, nombre: rd?.nombre || s.nombre, vinculo: rd?.carrierId || '' }))
+    setF((s) => ({ ...s, chofer: v, nombre: rd?.nombre || s.nombre, vinculo: rd?.carrierId || s.vinculo, equipos: rd?.equipos?.length ? rd.equipos : s.equipos }))
   }
+  const toggleEquipo = (nombreEq) => setF((s) => ({ ...s, equipos: s.equipos.includes(nombreEq) ? s.equipos.filter((x) => x !== nombreEq) : [...s.equipos, nombreEq] }))
 
   const agregar = async () => {
     setMsg(null)
@@ -175,18 +177,18 @@ export default function BulkUsuarios() {
       if (necesitaChofer && res?.uid) {
         if (rd) {
           const carrier = carriers.find((c) => c.id === rd.carrierId)
-          if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid } : d)) })
+          if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid, equipos: f.equipos.length ? f.equipos : (d.equipos || []) } : d)) })
         } else {
           // Sin ficha elegida: alta automática en el roster del carrier seleccionado.
           const carrier = carriers.find((c) => c.id === f.vinculo)
           if (carrier) {
-            const ficha = { id: `d_${Math.random().toString(36).slice(2, 9)}`, nombre: f.nombre.trim(), uid: res.uid, equipos: [] }
+            const ficha = { id: `d_${Math.random().toString(36).slice(2, 9)}`, nombre: f.nombre.trim(), uid: res.uid, equipos: f.equipos }
             await guardar('carriers', carrier.id, { choferes: [...(carrier.choferes || []), ficha] })
           }
         }
       }
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})${codigo ? ` · ID ${codigo}` : ''}${rd ? ` → ${rd.nombre}` : ''}` })
-      setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
+      setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '', equipos: [] })
       setMsg({ tipo: 'ok', txt: `${t('Usuario creado.')}${codigo ? ` ID: ${codigo}` : ''}` })
     } catch (e) { setMsg({ tipo: 'error', txt: e.message || t('No se pudo crear (¿backend desplegado?).') }) }
   }
@@ -436,7 +438,7 @@ export default function BulkUsuarios() {
           <Input placeholder={t('Nombre')} value={f.nombre} onChange={set('nombre')} />
           <Input type="email" placeholder={t('Correo')} value={f.email} onChange={set('email')} />
           <Input type="password" placeholder={t('Contraseña')} value={f.password} onChange={set('password')} />
-          <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '', chofer: '' }))}>
+          <Select value={f.rol} onChange={(e) => setF((s) => ({ ...s, rol: e.target.value, vinculo: '', chofer: '', equipos: [] }))}>
             {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
           </Select>
         </div>
@@ -457,6 +459,22 @@ export default function BulkUsuarios() {
               {rosterDrivers.filter((d) => d.carrierId === f.vinculo).map((d) => <option key={`${d.carrierId}::${d.rosterId}`} value={`${d.carrierId}::${d.rosterId}`} disabled={!!d.uid}>{d.nombre}{d.uid ? ` (${t('ya afiliado')})` : ''}</option>)}
             </Select>
             <p className="mt-1 text-[11px] text-slate-400">{t('Si el transportista ya lo tenía registrado, elígelo para enlazar su ficha (equipos, historial). Si no, se crea sola en el roster del transportista.')}</p>
+          </div>
+        )}
+        {necesitaChofer && f.vinculo && (
+          <div className="mt-3">
+            <div className="mb-1.5 text-xs font-semibold uppercase text-slate-400">{t('Camión / equipo que maneja')} {f.equipos.length > 0 && <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-bold text-emerald-600 dark:text-emerald-400">{f.equipos.length}</span>}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {equiposCat.filter((e) => e.activo !== false).length === 0
+                ? <span className="text-xs text-slate-400">{t('No hay tipos de equipo. Créalos en “Tipos de equipo”.')}</span>
+                : equiposCat.filter((e) => e.activo !== false).map((e) => {
+                  const on = f.equipos.includes(e.nombre)
+                  return (
+                    <button key={e.id} type="button" onClick={() => toggleEquipo(e.nombre)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${on ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{e.nombre}</button>
+                  )
+                })}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">{t('Solo recibirá órdenes compatibles con estos camiones. Se guarda en su ficha del roster del transportista.')}</p>
           </div>
         )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><UserPlus size={16} /> {t('Crear usuario')}</Boton></div>
