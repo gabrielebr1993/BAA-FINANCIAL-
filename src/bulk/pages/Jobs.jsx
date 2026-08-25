@@ -27,14 +27,24 @@ export default function Jobs() {
   const { datos: equipos } = useColeccion('equipment')
   const { datos: carriers } = useColeccion('carriers')
   const { datos: ordenes } = useColeccion('orders')
+  const { datos: geocercas } = useColeccion('geofences')
   const conteoJob = (id) => {
     const os = ordenes.filter((o) => o.jobId === id)
     return { cola: os.filter((o) => EN_COLA.includes(o.estado)).length, proceso: os.filter((o) => EN_PROCESO.includes(o.estado)).length }
   }
 
-  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
+  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '' })
   const [msg, setMsg] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
+  // Puntos de ENTREGA ya dibujados en Geocercas (tipo destino/proyecto): al
+  // elegir uno se rellena la dirección y el trabajo queda amarrado a esa zona.
+  const puntosEntrega = geocercas.filter((g) => ['destino', 'proyecto'].includes(g.tipo)).slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  const dirDeGeo = (g) => [g.direccion, g.ciudad, g.estadoRegion, g.zip].filter(Boolean).join(', ') || g.nombre || ''
+  const elegirPuntoEntrega = (e) => {
+    const id = e.target.value
+    const g = puntosEntrega.find((x) => x.id === id)
+    setF((s) => ({ ...s, destinoGeoId: id, destino: g ? dirDeGeo(g) : s.destino }))
+  }
   // Plantas de CARGA: TODAS las activas (un material lo venden varias plantas a
   // precios distintos; según la negociación con el cliente se elige de dónde
   // carga el driver). Se anota el precio del primer material elegido.
@@ -56,10 +66,10 @@ export default function Jobs() {
     await crear('jobs', tenantId, {
       codigo, nombre: f.nombre.trim(), clienteId: f.clienteId, plantaId: f.plantaId,
       tipoEquipo: f.tipoEquipo, materiales: f.materiales, transportistasAutorizados: f.transportistas,
-      destino: f.destino.trim(), po: f.po.trim() || oferta?.po || '', activo: true,
+      destino: f.destino.trim(), destinoGeofenceId: f.destinoGeoId || null, po: f.po.trim() || oferta?.po || '', activo: true,
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear', entidad: 'job', detalle: `Job ${codigo} · ${f.nombre}` })
-    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', po: '' })
+    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '' })
     setMsg({ tipo: 'ok', txt: `${t('Trabajo')} ${codigo} ${t('creado.')}` })
   }
 
@@ -91,7 +101,12 @@ export default function Jobs() {
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Dirección de entrega')} <span className="normal-case text-slate-400">{t('(lo que ve el driver en la app)')}</span></div>
-            <Input placeholder={t('Ej. 4500 Bayway Dr, Baytown, TX')} value={f.destino} onChange={set('destino')} />
+            <Select value={f.destinoGeoId} onChange={elegirPuntoEntrega} className="mb-2">
+              <option value="">{puntosEntrega.length ? t('— Elegir un punto de entrega guardado (Geocercas) —') : t('— No hay puntos de entrega en Geocercas (destino/proyecto) —')}</option>
+              {puntosEntrega.map((g) => <option key={g.id} value={g.id}>{g.nombre}{g.direccion ? ` — ${g.direccion}` : ''} ({t(g.tipo)})</option>)}
+            </Select>
+            <Input placeholder={t('…o escribe la dirección a mano')} value={f.destino} onChange={(e) => setF((s) => ({ ...s, destino: e.target.value, destinoGeoId: '' }))} />
+            {f.destinoGeoId && <p className="mt-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{t('✓ Amarrado a la geocerca: al llegar el camión, el supervisor recibe el aviso automático.')}</p>}
           </div>
           <div>
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('PO / orden de compra')}</div>
