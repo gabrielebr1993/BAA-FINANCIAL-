@@ -301,7 +301,9 @@ service cloud.firestore {
     // existe y el autor es participante (ver bulk_messages).
     match /bulk_conversaciones/{id} {
       allow read: if bSame(resource.data.tenantId) && (bAdmin(resource.data.tenantId) || request.auth.uid in resource.data.participantes);
-      allow create, update, delete: if false;
+      allow create, update: if false;
+      // El admin puede borrar conversaciones al limpiar datos (Modo test / empezar de cero).
+      allow delete: if bAdmin(resource.data.tenantId);
     }
 
     // Red de CONTACTOS entre choferes. La lista de contactos/bloqueados/ajustes de cada
@@ -551,7 +553,8 @@ service cloud.firestore {
         allow read, create, delete: if participaSala();
       }
     }
-    match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
+    // El admin puede borrar el historial GPS al limpiar datos (Modo test / empezar de cero).
+    match /bulk_trackpoints/{id} { allow read: if bSame(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update: if false; allow delete: if bAdmin(resource.data.tenantId); }
 
     // Eventos de GEOCERCA (entrada/salida de un chofer). Los CREA el chofer (su app),
     // pero él NO los lee: la NOTIFICACIÓN es solo para staff/admin y el transportista
@@ -566,7 +569,7 @@ service cloud.firestore {
     }
 
     // Intenciones de notificación: las registra el cliente; el backend las procesa/lee.
-    match /bulk_notificaciones/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
+    match /bulk_notificaciones/{id} { allow read: if bStaff(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update: if false; allow delete: if bAdmin(resource.data.tenantId); }
 
     // Tokens de push (FCM): los lee el backend (Admin SDK, ignora reglas) para
     // enviar. En cliente solo el staff los lee; cada usuario registra el suyo.

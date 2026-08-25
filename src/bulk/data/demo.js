@@ -359,16 +359,65 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
 
 // ============================================================================
 // Borra SOLO los documentos demo (demo === true) del tenant. No toca datos reales.
+// Borra los docs de una colección UNO POR UNO sin abortar el proceso completo:
+// si una colección está protegida por reglas (p.ej. historial técnico), se salta
+// y se sigue con las demás. Devuelve { borrados, fallidos }.
+async function _borrarLote(col, docs, onProgress) {
+  let borrados = 0
+  let fallidos = 0
+  for (const d of docs) {
+    try {
+      await eliminar(col, d.id)
+      borrados++
+    } catch {
+      fallidos++
+      // Si el PRIMER borrado de la colección falla por permisos, casi seguro
+      // fallan todos: no insistimos doc por doc (evita cientos de errores).
+      if (borrados === 0 && fallidos === 1) { fallidos = docs.length; break }
+    }
+  }
+  onProgress(`Borrados ${borrados} de ${col}${fallidos ? ` (${fallidos} protegidos)` : ''}`)
+  return { borrados, fallidos }
+}
+
 export async function borrarDemo(tenantId, onProgress = () => {}) {
   const cols = ['presence', 'trackpoints', 'orders', 'invoices', 'incidents', 'documents', 'jobs', 'geofences', 'tariffs', 'plants', 'clients', 'carriers', 'equipment', 'materials']
-  let total = 0
+  let borrados = 0
+  let fallidos = 0
   for (const c of cols) {
-    const docs = await listar(c, tenantId, [where('demo', '==', true)])
-    for (const d of docs) await eliminar(c, d.id)
-    total += docs.length
-    onProgress(`Borrados ${docs.length} de ${c}`)
+    let docs = []
+    try { docs = await listar(c, tenantId, [where('demo', '==', true)]) } catch { continue }
+    const r = await _borrarLote(c, docs, onProgress)
+    borrados += r.borrados
+    fallidos += r.fallidos
   }
-  return total
+  return { borrados, fallidos }
+}
+
+// BORRA TODO lo operativo del tenant (con y sin marca demo): órdenes, pagos,
+// facturas, trabajos, catálogo (plantas/clientes/transportistas/equipos/
+// materiales/tarifas/geocercas), chats, notificaciones e historial GPS.
+// CONSERVA: cuentas de usuario, configuración, códigos de supervisor y la
+// auditoría/registros financieros (esos son inmutables a propósito).
+export async function borrarTodo(tenantId, onProgress = () => {}) {
+  const cols = [
+    'presence', 'trackpoints', 'geoeventos',
+    'orders', 'orderPay_cliente', 'orderPay_carrier', 'orderPay_chofer',
+    'invoices', 'recurrentes', 'incidents', 'documents',
+    'jobs', 'geofences', 'tariffs', 'plants', 'clients',
+    'carriers', 'carrierConfig', 'carrierStatements', 'equipment', 'materials',
+    'messages', 'conversaciones', 'notificaciones',
+  ]
+  let borrados = 0
+  let fallidos = 0
+  for (const c of cols) {
+    let docs = []
+    try { docs = await listar(c, tenantId) } catch { continue }
+    const r = await _borrarLote(c, docs, onProgress)
+    borrados += r.borrados
+    fallidos += r.fallidos
+  }
+  return { borrados, fallidos }
 }
 
 // ¿Ya hay datos demo cargados? (mira las órdenes)

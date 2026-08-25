@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FlaskConical, Loader2, Trash2, Truck, Building2, PackageCheck, ShieldCheck, ArrowRight, RefreshCw } from 'lucide-react'
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
-import { sembrarDemo, borrarDemo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
+import { sembrarDemo, borrarDemo, borrarTodo, hayDemo, datosVinculoDemo, prepararChoferDemo } from '../data/demo'
 import { escribirPreciosBase, asignarPagos, quitarPreciosDeOrden } from '../data/ordenPagos'
 import { useOrdenesConPagos } from '../data/useOrdenesConPagos'
 import { crear, eliminar, crearConId } from '../data/repo'
@@ -85,13 +85,39 @@ export default function ModoTest() {
     } finally { setFase('idle') }
   }
 
+  const avisoBorrado = (r, extraOk = '') => {
+    if (r.borrados === 0 && r.fallidos > 0) {
+      setMsg({ tipo: 'error', txt: t('No se pudo borrar nada: tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') })
+    } else if (r.fallidos > 0) {
+      setMsg({ tipo: 'ok', txt: `${t('Listo. Se borraron ')}${r.borrados}${t(' registros.')} ${extraOk} ${t('Quedaron ')}${r.fallidos}${t(' registros técnicos protegidos (historial GPS/notificaciones); no afectan lo que ves y se limpian al publicar las reglas nuevas.')}` })
+    } else {
+      setMsg({ tipo: 'ok', txt: `${t('Listo. Se borraron ')}${r.borrados}${t(' registros.')} ${extraOk}` })
+    }
+  }
+
   const borrar = async () => {
     if (!window.confirm(t('Se borran solo los datos de prueba; tus datos reales no se tocan. ¿Continuar?'))) return
     setFase('borrando'); setMsg(null)
     await asegurarToken()
     try {
-      const n = await borrarDemo(tenantId)
-      setMsg({ tipo: 'ok', txt: `${t('Listo. Se borraron ')}${n}${t(' registros de prueba.')}` })
+      const r = await borrarDemo(tenantId)
+      avisoBorrado(r)
+    } catch (e) {
+      const m = e?.message || ''
+      setMsg({ tipo: 'error', txt: esPermiso(m) ? t('Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') : t('No se pudo borrar: ') + m })
+    } finally { setFase('idle') }
+  }
+
+  // Empezar de cero: borra TODO lo operativo (demo y no-demo). Conserva las
+  // cuentas de usuario, la configuración y la auditoría.
+  const borrarTodoYEmpezar = async () => {
+    const resp = window.prompt(t('Esto borra TODAS las órdenes, trabajos, facturas, clientes, plantas, transportistas, materiales, chats y el historial GPS (de prueba Y creados a mano). Las cuentas de usuario y la configuración se conservan. Escribe BORRAR para confirmar:'))
+    if ((resp || '').trim().toUpperCase() !== 'BORRAR') return
+    setFase('borrando'); setMsg(null)
+    await asegurarToken()
+    try {
+      const r = await borrarTodo(tenantId)
+      avisoBorrado(r, t('El sistema quedó limpio: todo lo que crees desde ahora es real.'))
     } catch (e) {
       const m = e?.message || ''
       setMsg({ tipo: 'error', txt: esPermiso(m) ? t('Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') : t('No se pudo borrar: ') + m })
@@ -225,21 +251,27 @@ export default function ModoTest() {
         </div>
         <h3 className="mx-auto mt-3 max-w-md text-lg font-bold text-brand-navy dark:text-slate-100">{t('Salir del modo test · pasar a real')}</h3>
         {demoOrdenes > 0 ? (
-          <>
-            <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-              {t('Hay')} <b>{demoOrdenes}</b> {t('órdenes de prueba cargadas. Este botón borra SOLO los datos de ejemplo (órdenes, clientes, plantas, facturas… marcados como demo). Tus datos reales no se tocan. Después de borrar, todo lo que crees es real.')}
-            </p>
-            <div className="mt-5">
-              <Boton variant="danger" onClick={borrar} disabled={ocupado} className="px-6 py-2.5 text-base">
-                {fase === 'borrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Borrando…')}</> : <><Trash2 size={18} /> {t('Borrar datos de prueba y pasar a real')}</>}
-              </Boton>
-            </div>
-          </>
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+            {t('Hay')} <b>{demoOrdenes}</b> {t('órdenes de prueba cargadas. Elige: borrar solo lo de ejemplo, o borrar TODO (incluye lo que creaste a mano probando) para arrancar limpio.')}
+          </p>
         ) : (
           <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-            {t('✓ No hay datos de prueba: ya estás operando en real. Todo lo que crees (clientes, trabajos, órdenes, facturas) es real desde ahora.')}
+            {t('No hay datos de ejemplo cargados. Si aún ves órdenes/clientes que creaste a mano probando, usa “Borrar TODO” para arrancar limpio.')}
           </p>
         )}
+        <div className="mt-5 flex flex-col items-center gap-3">
+          {demoOrdenes > 0 && (
+            <Boton variant="gold" onClick={borrar} disabled={ocupado} className="px-6 py-2.5">
+              {fase === 'borrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Borrando…')}</> : <><Trash2 size={18} /> {t('Borrar solo los datos de ejemplo')} ({demoOrdenes})</>}
+            </Boton>
+          )}
+          <Boton variant="danger" onClick={borrarTodoYEmpezar} disabled={ocupado} className="px-6 py-2.5 text-base">
+            {fase === 'borrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Borrando…')}</> : <><Trash2 size={18} /> {t('Borrar TODO y empezar de cero')}</>}
+          </Boton>
+          <p className="max-w-md text-[11px] text-slate-400">
+            {t('“Borrar TODO” elimina órdenes, trabajos, facturas, clientes, plantas, transportistas, materiales, chats e historial GPS. Conserva las cuentas de usuario, la configuración y la auditoría. Te pide escribir BORRAR para confirmar.')}
+          </p>
+        </div>
         <p className="mx-auto mt-3 max-w-md text-[11px] text-slate-400">
           {t('Nota: los pagos con tarjeta (Fast Pay/Stripe) tienen su propio interruptor de modo REAL en Fast Pay → Configuración; lo demás del sistema no tiene “modo”, siempre es real.')}
         </p>
