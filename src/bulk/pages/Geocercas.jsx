@@ -48,7 +48,12 @@ export default function Geocercas() {
   const guardarEdicion = async () => {
     if (!editando) return
     setGuardando(true)
-    try { await guardar('geofences', editando.id, { lat: Number(editando.lat), lng: Number(editando.lng), radio: Math.round(Number(editando.radio) || 200) }); setEditando(null) }
+    try {
+      const cambios = { lat: Number(editando.lat), lng: Number(editando.lng), radio: Math.round(Number(editando.radio) || 200) }
+      if (editando.nombre && editando.nombre.trim()) cambios.nombre = editando.nombre.trim()
+      await guardar('geofences', editando.id, cambios)
+      setEditando(null)
+    }
     catch { window.alert(t('No se pudo guardar. Solo un administrador puede editar geocercas.')) }
     finally { setGuardando(false) }
   }
@@ -106,7 +111,15 @@ export default function Geocercas() {
         {editando && (
           <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-500/40 dark:bg-blue-500/10">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Editando')}: {editando.nombre}</span>
+              <span className="flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100">
+                {t('Editando')}:
+                <input
+                  value={editando.nombre || ''}
+                  onChange={(e) => setEditando((s) => ({ ...s, nombre: e.target.value }))}
+                  placeholder={t('Nombre de la geocerca')}
+                  className="w-48 rounded-lg border border-slate-300 px-2 py-1 text-sm font-semibold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                />
+              </span>
               <span className="text-xs text-slate-500">{Number(editando.lat).toFixed(5)}, {Number(editando.lng).toFixed(5)}</span>
             </div>
             <div className="mt-2 flex items-center gap-3">
