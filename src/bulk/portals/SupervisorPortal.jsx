@@ -334,9 +334,9 @@ export default function SupervisorPortal() {
       </>)}
 
       {activo === 'actividad' && (<>
-        <div className="mb-2 flex items-center gap-2"><ClipboardList size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Actividad de la planta')}</h3></div>
+        <div className="mb-2 flex items-center gap-2"><ClipboardList size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Actividad de mis trabajos')}</h3><Badge color="navy">{activas.length} {t('en curso')}</Badge></div>
         {activas.length === 0 ? (
-          <EstadoVacio titulo={t('Sin actividad en tu planta')} texto={t('Cuando haya cargas asignadas a tu planta, verás aquí su avance.')} mostrarBoton={false} />
+          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><ClipboardList size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ahora mismo no hay viajes EN CURSO en tus trabajos. Abajo quedan los terminados recientes; cuando arranque un viaje nuevo, aparecerá aquí con su avance.')}</p></Card>
         ) : (
           <Tabla
             columns={[
@@ -357,6 +357,29 @@ export default function SupervisorPortal() {
             minWidth="min-w-[640px]"
           />
         )}
+        {(() => {
+          // Terminadas recientes (liberadas/cerradas/canceladas), las últimas 15.
+          const term = ordenes
+            .filter((o) => [E.LIBERADA, E.CERRADA, E.CANCELADA].includes(o.estado))
+            .sort((a, b) => String(b.hitos?.liberacion || b.hitos?.entrega || '').localeCompare(String(a.hitos?.liberacion || a.hitos?.entrega || '')))
+            .slice(0, 15)
+          if (!term.length) return null
+          return (<>
+            <div className="mb-2 mt-5 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Terminadas recientes')}</h3><Badge color="green">{term.length}</Badge></div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {term.map((o) => (
+                <Card key={o.id} className="p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Badge color={o.estado === E.CANCELADA ? 'red' : 'green'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                    <span className="ml-auto text-xs text-slate-400">{String(o.hitos?.liberacion || o.hitos?.entrega || '').slice(0, 16).replace('T', ' ')}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton · {o.choferNombre || '—'}</div>
+                </Card>
+              ))}
+            </div>
+          </>)
+        })()}
       </>)}
     </PortalLayout>
   )
