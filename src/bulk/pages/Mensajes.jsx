@@ -103,15 +103,35 @@ export default function Mensajes() {
         .map((u) => ({ id: convStaff(usuario?.id, u.id), nombre: u.nombre || u.email || t('Staff'), tipo: 'staff', sub: u.rol, seccion: 'operaciones', participantes: [u.id, usuario?.id].filter(Boolean) }))
         .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
     }
-    // clientes (por viaje): órdenes chateables del cliente.
-    return ordenes
-      .filter((o) => o.clienteId && CHATEABLES.includes(o.estado))
-      .filter((o) => { const n = (o.clienteNombre || clientes.find((c) => c.id === o.clienteId)?.nombre || ''); return !q || n.toLowerCase().includes(q) || (o.numero || '').toLowerCase().includes(q) })
-      .map((o) => {
-        const n = o.clienteNombre || clientes.find((c) => c.id === o.clienteId)?.nombre || t('Cliente')
-        return { id: convClienteOrden(o.id), nombre: n, tipo: 'cliente', sub: `${o.numero || ''} · ${o.material || ''}`, seccion: 'clientes', viaje: o.numero, material: o.material, participantes: [o.clienteId].filter(Boolean) }
-      })
-      .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+    // clientes: SIEMPRE aparece la lista de CLIENTES (antes solo salían viajes
+    // "chateables": si el cliente no tenía viajes activos, la lista quedaba VACÍA
+    // y no había a quién elegir). El canal cliente↔oficina es por viaje, así que
+    // cada cliente usa su viaje MÁS RECIENTE; además se listan sus viajes activos
+    // por si quieres hablar de uno específico. Cliente sin viajes → fila
+    // deshabilitada con el motivo (aún no hay canal por el cual el cliente reciba).
+    const items = []
+    const usados = new Set()
+    for (const c of clientes.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))) {
+      const suyas = ordenes.filter((o) => o.clienteId === c.id && o.estado !== 'cancelada')
+        .sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
+      const coincide = !q || (c.nombre || '').toLowerCase().includes(q) || suyas.some((o) => (o.numero || '').toLowerCase().includes(q))
+      if (!coincide) continue
+      const reciente = suyas[0]
+      if (reciente) {
+        usados.add(convClienteOrden(reciente.id))
+        items.push({ id: convClienteOrden(reciente.id), nombre: c.nombre || t('Cliente'), tipo: 'cliente', sub: `${reciente.numero || ''}${reciente.material ? ` · ${reciente.material}` : ''}`, seccion: 'clientes', viaje: reciente.numero, material: reciente.material, participantes: [c.id] })
+      } else {
+        items.push({ id: `sin_${c.id}`, nombre: c.nombre || t('Cliente'), tipo: 'cliente', sub: t('sin viajes aún — crea una orden para abrir su canal'), seccion: 'clientes', deshabilitado: true })
+      }
+      // Viajes ACTIVOS adicionales del mismo cliente (canal por viaje específico).
+      for (const o of suyas.filter((o) => CHATEABLES.includes(o.estado))) {
+        const id = convClienteOrden(o.id)
+        if (usados.has(id)) continue
+        usados.add(id)
+        items.push({ id, nombre: c.nombre || t('Cliente'), tipo: 'cliente', sub: `${o.numero || ''}${o.material ? ` · ${o.material}` : ''}`, seccion: 'clientes', viaje: o.numero, material: o.material, participantes: [c.id] })
+      }
+    }
+    return items
   }, [nuevoDe, carriers, choferes, staffUsers, ordenes, clientes, buscarNuevo, usuario, t])
 
   const abrirDirecto = (item) => {
@@ -204,7 +224,8 @@ export default function Mensajes() {
               {resultadosNuevo.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-400">{t('Sin resultados.')}</div>
               ) : resultadosNuevo.map((r) => (
-                <button key={r.id} onClick={() => abrirDirecto(r)} className="flex w-full items-center gap-2 rounded-xl border border-transparent p-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800">
+                <button key={r.id} onClick={() => !r.deshabilitado && abrirDirecto(r)} disabled={r.deshabilitado}
+                  className={`flex w-full items-center gap-2 rounded-xl border border-transparent p-2.5 text-left ${r.deshabilitado ? 'cursor-not-allowed opacity-50' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                   <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800">
                     {r.tipo === 'carrier' ? <Truck size={16} /> : r.tipo === 'cliente' ? <Building2 size={16} /> : r.tipo === 'staff' ? <Shield size={16} /> : <User size={16} />}
                   </div>
