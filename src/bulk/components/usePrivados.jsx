@@ -29,7 +29,7 @@ const COLOR_ROL = (rol) => {
 }
 
 // yo = { uid, rol, carrierId?, clienteId? } · mensajes = suscripción del portal.
-export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig }) {
+export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig, filtrarContacto = null }) {
   const { t } = useLang()
   const directorio = useDirectorio()
   const fotos = useAvatares()
@@ -75,7 +75,7 @@ export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig }) {
   }
 
   const modal = verContactos
-    ? <ContactosModal yo={yo} tenantId={tenantId} onAbrir={onAbrir} onClose={() => setVerContactos(false)} />
+    ? <ContactosModal yo={yo} tenantId={tenantId} onAbrir={onAbrir} onClose={() => setVerContactos(false)} filtrar={filtrarContacto} />
     : null
 
   const noLeidos = useMemo(() => items.reduce((a, c) => a + (c.noLeidos || 0), 0), [items])

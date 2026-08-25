@@ -819,7 +819,7 @@ exports.bulkGmailOp = onCall({ secrets: ['GOOGLE_ADMIN_SA_B64'], timeoutSeconds:
 // Secreto: DAILY_API_KEY. Los invitados EXTERNOS entran SIN cuenta con op 'invitado':
 // única puerta pública — valida el código y entrega un token SOLO para esa sala.
 // ============================================================================
-const PUEDE_REUNION = ['super_admin', 'admin', 'dispatcher']
+const PUEDE_REUNION = ['super_admin', 'admin', 'dispatcher', 'supervisor_planta', 'transportista', 'cliente']
 async function dailyAPI(metodo, ruta, body) {
   const key = process.env.DAILY_API_KEY
   if (!key) throw new HttpsError('failed-precondition', 'Reuniones no configuradas (falta DAILY_API_KEY en el backend).')
@@ -854,6 +854,12 @@ exports.bulkMeetingOp = onCall({ secrets: ['DAILY_API_KEY'], timeoutSeconds: 30 
 
   // ── Resto: usuarios de MilePay con permiso ──────────────────────────────────
   if (!tk || !PUEDE_REUNION.includes(tk.bulkRole)) throw new HttpsError('permission-denied', 'No tienes permiso para gestionar reuniones.')
+  // Los roles de la cadena (supervisor/transportista/cliente) solo pueden CREAR su
+  // reunión y compartir el link con quien su chat les permita; administrar (finalizar,
+  // invitar por correo, listar) sigue siendo del staff.
+  if (!['super_admin', 'admin', 'dispatcher'].includes(tk.bulkRole) && op !== 'crear') {
+    throw new HttpsError('permission-denied', 'Solo puedes crear reuniones; la gestión es del administrador.')
+  }
   const tenant = tk.bulkTenant
   const actor = (req.auth.token.email) || 'staff'
 

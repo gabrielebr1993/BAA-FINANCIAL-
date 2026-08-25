@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
+import BotonReunion from '../components/BotonReunion'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
@@ -296,7 +297,7 @@ export default function TransportistaPortal() {
           ? <>
               <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
                 menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
-                accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
+                accion={<span className="flex items-center gap-1.5"><BotonReunion /><Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton></span>} />
               {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
               {modalPriv}
             </>

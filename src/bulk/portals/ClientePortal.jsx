@@ -6,6 +6,7 @@ import { useBulkAuth } from '../BulkAuthContext'
 import RepararAcceso from '../components/RepararAcceso'
 import PortalLayout from '../components/PortalLayout'
 import PanelConversaciones from '../components/PanelConversaciones'
+import BotonReunion from '../components/BotonReunion'
 import AvisosMensajes from '../components/AvisosMensajes'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { DocCard, DocDrawer, BotonDoc } from '../components/FacturaDoc'
@@ -209,7 +210,7 @@ export default function ClientePortal() {
                   {stats.porMaterial.length === 0 ? <p className="text-sm text-slate-400">{t('Sin entregas todavía.')}</p> : (
                     <Tabla columns={[{ key: 'material', label: t('Material') }, { key: 'ton', label: t('Toneladas'), align: 'right' }, { key: 'gasto', label: t('Gasto'), align: 'right' }]}
                       rows={stats.porMaterial.map((m) => ({ ...m, _key: m.material }))}
-                      renderCell={(r, k) => k === 'gasto' ? money(r.gasto) : k === 'ton' ? Math.round(r.ton) : r[k]} />
+                      renderCell={(r, k) => k === 'gasto' ? money(r.gasto) : k === 'ton' ? Math.round(r.ton * 100) / 100 : r[k]} />
                   )}
                 </Card>
               </>
@@ -276,7 +277,7 @@ export default function ClientePortal() {
               <>
                 <PanelConversaciones secciones={seccionesCliente} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
                   menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
-                  accion={<Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton>} />
+                  accion={<span className="flex items-center gap-1.5"><BotonReunion /><Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton></span>} />
                 {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
                 {modalPriv}
               </>

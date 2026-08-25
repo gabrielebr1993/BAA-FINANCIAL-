@@ -7,7 +7,7 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft, MessageSquare } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -22,6 +22,13 @@ import { ahora } from '../domain/flujo'
 import { NIVEL_LABEL } from '../domain/liberacion'
 import { beep, notificar } from '../integraciones/alertasLocales'
 import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
+import PanelConversaciones from '../components/PanelConversaciones'
+import { usePrivados } from '../components/usePrivados'
+import { useGrupos } from '../data/useGrupos'
+import GruposModal from '../components/GruposModal'
+import { menuGrupoConv } from '../data/grupos'
+import BotonReunion from '../components/BotonReunion'
+import { esRolStaff } from '../domain/comunicacion'
 import { useLang } from '../../i18n'
 
 const FINAL = [E.ENTREGADA, E.LIBERADA, E.CERRADA, E.CANCELADA]
@@ -144,11 +151,34 @@ export default function SupervisorPortal() {
   // Historial de MIS liberaciones (autorizaciones con mi token, escritas por el backend).
   const { datos: misLiberaciones } = useColeccion('liberaciones', [where('supervisorId', '==', usuario?.id || '__none__')])
 
+  // ── MENSAJES del supervisor ────────────────────────────────────────────────
+  // Puede hablar con: el ADMIN/operaciones (staff), los TRANSPORTISTAS asociados
+  // a sus trabajos y los CHOFERES de esos transportistas. El alcance se filtra
+  // aquí con los carriers de las órdenes de SUS jobs (la matriz de roles del
+  // backend valida el resto).
+  const { datos: misMensajes } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
+  const carriersDeMisJobs = useMemo(() => new Set((ordenes || []).map((o) => o.transportistaId).filter(Boolean)), [ordenes])
+  const filtrarContactoSup = useMemo(() => (p) => {
+    if (esRolStaff(p.rol)) return true // admin / operaciones: siempre
+    if (p.rol === 'transportista' || p.rol === 'chofer') return p.carrierId && carriersDeMisJobs.has(p.carrierId)
+    return false // clientes u otros: no
+  }, [carriersDeMisJobs])
+  const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'supervisor_planta' }), [usuario])
+  const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: misMensajes, uid: usuario?.id, tenantId, yo: yoPriv, filtrarContacto: filtrarContactoSup })
+  const [verGrupos, setVerGrupos] = useState(false)
+  const { items: gruposItems, grupos, invitaciones } = useGrupos()
+  const noLeidosGrupos = useMemo(() => (gruposItems || []).reduce((a, g) => a + (g.noLeidos || 0), 0), [gruposItems])
+  const seccionesSup = useMemo(() => [
+    seccionPriv,
+    { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
+  ], [seccionPriv, gruposItems, t])
+
   // "Cargas antiguas" SOLO aparece si quedan órdenes del sistema anterior: así
   // no conviven dos formas de liberar y el token es el único camino visible.
   const items = [
     { k: 'token', label: t('Mi código'), icon: KeyRound },
     { k: 'espera', label: t('Por autorizar'), icon: Clock, badge: porAutorizar.length },
+    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosPriv + noLeidosGrupos },
     { k: 'mapa', label: t('Mapa'), icon: MapIcon },
     ...(pendientes.length > 0 ? [{ k: 'liberar', label: t('Cargas antiguas'), icon: PackageCheck, badge: pendientes.length }] : []),
     { k: 'liberaciones', label: t('Liberaciones'), icon: History },
@@ -222,6 +252,19 @@ export default function SupervisorPortal() {
           </>
         )
       })()}
+
+      {activo === 'mensajes' && (
+        <>
+          <PanelConversaciones secciones={seccionesSup} alturaClass="h-mensajes-portal" abrir={abrirPriv}
+            menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
+            accion={<span className="flex items-center gap-1.5">
+              <BotonReunion />
+              <button onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>
+            </span>} />
+          {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+          {modalPriv}
+        </>
+      )}
 
       {activo === 'token' && <TokenSupervisor t={t} />}
 

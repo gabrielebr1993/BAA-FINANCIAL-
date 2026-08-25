@@ -11,12 +11,21 @@ import { Card, Input } from '../../components/ui'
 import { BULK_ROLES_LABEL } from '../domain/constants'
 import { useLang } from '../../i18n'
 
-export default function ContactosModal({ yo, tenantId, onAbrir, onClose }) {
+export default function ContactosModal({ yo, tenantId, onAbrir, onClose, filtrar = null }) {
   const { t } = useLang()
-  const grupos = useContactos(yo, tenantId)
+  const gruposBase = useContactos(yo, tenantId)
   const [q, setQ] = useState('')
   const [cargando, setCargando] = useState(null) // uid en curso
   const [error, setError] = useState('')
+
+  // Filtro de ALCANCE opcional del portal (p. ej. el supervisor solo ve los
+  // transportistas/choferes de SUS trabajos) además de la matriz de roles.
+  const grupos = useMemo(() => {
+    if (typeof filtrar !== 'function') return gruposBase
+    return gruposBase
+      .map((g) => ({ ...g, personas: g.personas.filter((p) => filtrar(p)) }))
+      .filter((g) => g.personas.length)
+  }, [gruposBase, filtrar])
 
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase()
