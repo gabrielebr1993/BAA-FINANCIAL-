@@ -363,20 +363,23 @@ export async function sembrarDemo(tenantId, onProgress = () => {}) {
 // si una colección está protegida por reglas (p.ej. historial técnico), se salta
 // y se sigue con las demás. Devuelve { borrados, fallidos }.
 async function _borrarLote(col, docs, onProgress) {
+  if (!docs.length) return { borrados: 0, fallidos: 0 }
+  // Sonda: borra el PRIMER doc solo. Si falla, la colección está protegida por
+  // reglas y no insistimos doc por doc (evita cientos de errores).
   let borrados = 0
   let fallidos = 0
-  for (const d of docs) {
-    try {
-      await eliminar(col, d.id)
-      borrados++
-    } catch {
-      fallidos++
-      // Si el PRIMER borrado de la colección falla por permisos, casi seguro
-      // fallan todos: no insistimos doc por doc (evita cientos de errores).
-      if (borrados === 0 && fallidos === 1) { fallidos = docs.length; break }
-    }
+  try { await eliminar(col, docs[0].id); borrados = 1 } catch { return { borrados: 0, fallidos: docs.length } }
+  // El resto en tandas paralelas (25×) para que miles de puntos GPS no tarden
+  // una eternidad; cada doc con su propio catch para no abortar la tanda.
+  const resto = docs.slice(1)
+  const CHUNK = 25
+  for (let i = 0; i < resto.length; i += CHUNK) {
+    const trozo = resto.slice(i, i + CHUNK)
+    const rs = await Promise.all(trozo.map((d) => eliminar(col, d.id).then(() => true).catch(() => false)))
+    for (const ok of rs) { if (ok) borrados++; else fallidos++ }
+    onProgress(col, borrados, docs.length)
   }
-  onProgress(`Borrados ${borrados} de ${col}${fallidos ? ` (${fallidos} protegidos)` : ''}`)
+  onProgress(col, borrados, docs.length)
   return { borrados, fallidos }
 }
 

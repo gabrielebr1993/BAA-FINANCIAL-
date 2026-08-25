@@ -35,6 +35,7 @@ export default function ModoTest() {
   }
 
   const [fase, setFase] = useState('idle') // idle | sembrando | borrando
+  const [progreso, setProgreso] = useState(null) // texto de avance del borrado
   const [entrando, setEntrando] = useState(null) // rol en proceso
   const [refrescando, setRefrescando] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -95,17 +96,21 @@ export default function ModoTest() {
     }
   }
 
+  // Nombres bonitos para el avance del borrado.
+  const NOMBRE_COL = { presence: 'presencia', trackpoints: 'historial GPS', geoeventos: 'eventos de geocerca', orders: 'órdenes', orderPay_cliente: 'pagos (cliente)', orderPay_carrier: 'pagos (transportista)', orderPay_chofer: 'pagos (chofer)', invoices: 'facturas', recurrentes: 'facturas recurrentes', incidents: 'incidentes', documents: 'documentos', jobs: 'trabajos', geofences: 'geocercas', tariffs: 'tarifas', plants: 'plantas', clients: 'clientes', carriers: 'transportistas', carrierConfig: 'config. transportistas', carrierStatements: 'estados de cuenta', equipment: 'equipos', materials: 'materiales', messages: 'mensajes', conversaciones: 'conversaciones', notificaciones: 'notificaciones' }
+  const verAvance = (col, hechos, total) => setProgreso(`${NOMBRE_COL[col] || col}: ${hechos}/${total}`)
+
   const borrar = async () => {
     if (!window.confirm(t('Se borran solo los datos de prueba; tus datos reales no se tocan. ¿Continuar?'))) return
-    setFase('borrando'); setMsg(null)
+    setFase('borrando'); setMsg(null); setProgreso(null)
     await asegurarToken()
     try {
-      const r = await borrarDemo(tenantId)
+      const r = await borrarDemo(tenantId, verAvance)
       avisoBorrado(r)
     } catch (e) {
       const m = e?.message || ''
       setMsg({ tipo: 'error', txt: esPermiso(m) ? t('Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') : t('No se pudo borrar: ') + m })
-    } finally { setFase('idle') }
+    } finally { setFase('idle'); setProgreso(null) }
   }
 
   // Empezar de cero: borra TODO lo operativo (demo y no-demo). Conserva las
@@ -113,15 +118,15 @@ export default function ModoTest() {
   const borrarTodoYEmpezar = async () => {
     const resp = window.prompt(t('Esto borra TODAS las órdenes, trabajos, facturas, clientes, plantas, transportistas, materiales, chats y el historial GPS (de prueba Y creados a mano). Las cuentas de usuario y la configuración se conservan. Escribe BORRAR para confirmar:'))
     if ((resp || '').trim().toUpperCase() !== 'BORRAR') return
-    setFase('borrando'); setMsg(null)
+    setFase('borrando'); setMsg(null); setProgreso(null)
     await asegurarToken()
     try {
-      const r = await borrarTodo(tenantId)
+      const r = await borrarTodo(tenantId, verAvance)
       avisoBorrado(r, t('El sistema quedó limpio: todo lo que crees desde ahora es real.'))
     } catch (e) {
       const m = e?.message || ''
       setMsg({ tipo: 'error', txt: esPermiso(m) ? t('Tu sesión trae permisos viejos. Toca “Actualizar sesión” (abajo) y vuelve a intentarlo.') : t('No se pudo borrar: ') + m })
-    } finally { setFase('idle') }
+    } finally { setFase('idle'); setProgreso(null) }
   }
 
   // Inc.2 Fase 3 · Backfill: crea los docs de pago por audiencia de las órdenes
@@ -268,6 +273,11 @@ export default function ModoTest() {
           <Boton variant="danger" onClick={borrarTodoYEmpezar} disabled={ocupado} className="px-6 py-2.5 text-base">
             {fase === 'borrando' ? <><Loader2 size={18} className="animate-spin" /> {t('Borrando…')}</> : <><Trash2 size={18} /> {t('Borrar TODO y empezar de cero')}</>}
           </Boton>
+          {fase === 'borrando' && (
+            <p className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <Loader2 size={13} className="animate-spin" /> {progreso || t('Contando registros…')}
+            </p>
+          )}
           <p className="max-w-md text-[11px] text-slate-400">
             {t('“Borrar TODO” elimina órdenes, trabajos, facturas, clientes, plantas, transportistas, materiales, chats e historial GPS. Conserva las cuentas de usuario, la configuración y la auditoría. Te pide escribir BORRAR para confirmar.')}
           </p>
