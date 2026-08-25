@@ -1703,6 +1703,67 @@ exports.bulkEntregarOrden = onCall({ timeoutSeconds: 30 }, async (req) => {
     })
   })
 
+  // ── FACTURACIÓN POR PESO REAL (ticket/OCR) ────────────────────────────────
+  // Los precios se generan con el peso estándar de referencia (p. ej. 25 tn).
+  // Si el ticket de báscula dio otro peso, TODO se reescala a ese peso real:
+  // cobro al cliente, pago al transportista y pago al chofer (si su trato es
+  // porcentaje se recalcula exacto; si es monto fijo por carga, no se toca).
+  try {
+    const pesoRealFinal = Number(pod && pod.pesoReal != null ? pod.pesoReal : orden.pesoReal) || null
+    const pesoBase = Number(orden.pesoEstimado) || null
+    const factor = pesoRealFinal && pesoBase ? pesoRealFinal / pesoBase : null
+    if (factor && Math.abs(factor - 1) > 0.005 && factor > 0.2 && factor < 3) {
+      const esc = (v) => (v == null ? null : Math.round(Number(v) * factor * 100) / 100)
+      // Config de pago del chofer (porcentaje/fijo) del carrier de la orden.
+      let cfgChofer = null
+      if (orden.transportistaId) {
+        try {
+          const [cc, car] = await Promise.all([
+            db.collection('bulk_carrierConfig').doc(String(orden.transportistaId)).get(),
+            db.collection('bulk_carriers').doc(String(orden.transportistaId)).get(),
+          ])
+          const pagos = (cc.exists && cc.data().pagoChoferes) || {}
+          const roster = (car.exists && car.data().choferes) || []
+          const ficha = roster.find((d) => d.uid && d.uid === orden.choferId)
+          cfgChofer = (ficha && pagos[ficha.id]) || null
+        } catch { /* sin config */ }
+      }
+      // Precios: viven en la orden y/o en los docs de pago por audiencia.
+      const oPagoC = db.collection('bulk_orderPay_cliente').doc(String(orderId))
+      const oPagoT = db.collection('bulk_orderPay_carrier').doc(String(orderId))
+      const oPagoD = db.collection('bulk_orderPay_chofer').doc(String(orderId))
+      const [dC, dT, dD] = await Promise.all([oPagoC.get(), oPagoT.get(), oPagoD.get()])
+      const vC = dC.exists && dC.data().precioCliente != null ? dC.data().precioCliente : orden.precioCliente
+      const vT = dT.exists && dT.data().precioTransportista != null ? dT.data().precioTransportista : orden.precioTransportista
+      const vD = dD.exists && dD.data().pagoChofer != null ? dD.data().pagoChofer : orden.pagoChofer
+      const nC = esc(vC)
+      const nT = esc(vT)
+      let nD = null
+      if (vD != null) {
+        if (cfgChofer && cfgChofer.tipo === 'fijo') nD = Number(vD) || null       // trato fijo por carga: no cambia
+        else if (cfgChofer && cfgChofer.tipo === 'porcentaje' && nT != null) nD = Math.round(nT * (Number(cfgChofer.valor) || 0)) / 100
+        else nD = esc(vD)                                                          // sin config: proporcional
+      }
+      const meta = { pesoBase, pesoReal: pesoRealFinal, factor: Math.round(factor * 10000) / 10000, ts: ahora }
+      const tareas = []
+      const cambiosOrden = { recalculoPeso: meta }
+      if (nC != null && orden.precioCliente != null) cambiosOrden.precioCliente = nC
+      if (nT != null && orden.precioTransportista != null) cambiosOrden.precioTransportista = nT
+      if (nD != null && orden.pagoChofer != null) cambiosOrden.pagoChofer = nD
+      tareas.push(oref.set(cambiosOrden, { merge: true }))
+      if (dC.exists && nC != null) tareas.push(oPagoC.set({ precioCliente: nC, recalculoPeso: meta }, { merge: true }))
+      if (dT.exists && nT != null) tareas.push(oPagoT.set({ precioTransportista: nT, recalculoPeso: meta }, { merge: true }))
+      if (dD.exists && nD != null) tareas.push(oPagoD.set({ pagoChofer: nD, recalculoPeso: meta }, { merge: true }))
+      await Promise.all(tareas)
+      await db.collection('bulk_audit').add({
+        tenantId: t.bulkTenant, usuario: 'sistema', accion: 'recalculo_peso', entidad: 'orden', entidadId: String(orderId),
+        detalle: `${orden.numero || orderId}: precios reescalados al peso real del ticket (${pesoBase} tn → ${pesoRealFinal} tn, factor ${meta.factor})`, ts: ahora,
+      }).catch(() => {})
+    }
+  } catch (e) {
+    console.warn('recalculo por peso real fallo (la entrega ya quedo registrada)', e)
+  }
+
   // Liberar la presencia del chofer (vuelve a la cola de disponibles).
   const choferUid = orden.choferId || (esSuChofer ? uid : null)
   if (choferUid) {

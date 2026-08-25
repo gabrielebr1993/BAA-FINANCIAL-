@@ -18,16 +18,25 @@ export default function AvisosGeocerca({ carrierId = null }) {
   const opts = carrierId ? {} : { orden: 'ts', dir: 'desc', limite: 15 }
   const { datos: eventos } = useColeccion('geoeventos', filtros, opts)
 
-  const vistos = useRef(null) // Set de ids ya conocidos (null hasta la primera carga)
+  // Ids ya avisados PERSISTIDOS: recargar la página no vuelve a avisar. Además
+  // solo se avisa por eventos RECIENTES (< 5 min) — lo viejo es historial.
+  // (Antes la primera carga podía llegar vacía y el siguiente lote se trataba
+  // entero como "nuevo": sonaba y notificaba en cada refresh.)
+  const vistos = useRef(null)
+  if (vistos.current === null) {
+    try { vistos.current = new Set(JSON.parse(localStorage.getItem('mp-geo-avisados') || '[]')) }
+    catch { vistos.current = new Set() }
+  }
   const [toasts, setToasts] = useState([])
 
   useEffect(() => {
-    if (!eventos) return
-    // Primera carga: marca todo lo existente como visto (no avisar por lo viejo).
-    if (vistos.current === null) { vistos.current = new Set(eventos.map((e) => e.id)); return }
-    const nuevos = eventos.filter((e) => e.id && !vistos.current.has(e.id))
+    if (!eventos || !eventos.length) return
+    const ahora = Date.now()
+    const RECIENTE_MS = 5 * 60 * 1000
+    const nuevos = eventos.filter((e) => e.id && !vistos.current.has(e.id) && (ahora - tsMillis(e.ts)) < RECIENTE_MS)
     if (!nuevos.length) return
     nuevos.forEach((e) => vistos.current.add(e.id))
+    try { localStorage.setItem('mp-geo-avisados', JSON.stringify([...vistos.current].slice(-300))) } catch { /* lleno */ }
     // Ordena por tiempo y muestra (evita spam: máximo los 3 más recientes de golpe).
     const recientes = nuevos.sort((a, b) => tsMillis(b.ts) - tsMillis(a.ts)).slice(0, 3)
     try { beep() } catch { /* noop */ }
