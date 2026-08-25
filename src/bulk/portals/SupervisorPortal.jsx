@@ -7,7 +7,7 @@
 // Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -24,10 +24,14 @@ import { beep, notificar } from '../integraciones/alertasLocales'
 import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 import { useLang } from '../../i18n'
 
-const HACIA_PLANTA = [E.CREADA, E.EN_COLA, E.NOTIFICANDO, E.ACEPTADA]
-const EN_PLANTA = [E.EN_PLANTA, E.CARGANDO]
-const EN_RUTA = [E.EN_RUTA, E.EN_DESTINO]
 const FINAL = [E.ENTREGADA, E.LIBERADA, E.CERRADA, E.CANCELADA]
+// Grupos de estado del panel: cada tarjeta KPI abre la lista de SUS órdenes.
+const GRUPOS_ESTADO = {
+  cola: { label: 'En cola (por aceptar)', estados: [E.CREADA, E.EN_COLA, E.NOTIFICANDO], icon: ClipboardList },
+  hacia: { label: 'Hacia la planta', estados: [E.ACEPTADA], icon: Truck },
+  planta: { label: 'En planta / cargando', estados: [E.EN_PLANTA, E.CARGANDO], icon: Package },
+  ruta: { label: 'En ruta', estados: [E.EN_RUTA], icon: Truck },
+}
 const COLOR_NIVEL = { alta: 'green', media: 'gold', baja: 'slate', critico: 'red' }
 
 export default function SupervisorPortal() {
@@ -95,12 +99,11 @@ export default function SupervisorPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [porAutorizar.length])
   const activas = useMemo(() => ordenes.filter((o) => !FINAL.includes(o.estado) || o.estado === E.ENTREGADA), [ordenes])
-  const stats = useMemo(() => ({
-    haciaPlanta: ordenes.filter((o) => HACIA_PLANTA.includes(o.estado)).length,
-    enPlanta: ordenes.filter((o) => EN_PLANTA.includes(o.estado)).length,
-    enRuta: ordenes.filter((o) => EN_RUTA.includes(o.estado)).length,
-    esperando: porAutorizar.length,
-  }), [ordenes, pendientes])
+  const stats = useMemo(() => {
+    const n = {}
+    for (const [k, g] of Object.entries(GRUPOS_ESTADO)) n[k] = ordenes.filter((o) => g.estados.includes(o.estado)).length
+    return n
+  }, [ordenes])
 
   const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
 
@@ -142,7 +145,7 @@ export default function SupervisorPortal() {
     { k: 'liberaciones', label: t('Liberaciones'), icon: History },
     { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
   ]
-  const activo = items.some((i) => i.k === tab) ? tab : 'token'
+  const activo = (tab.startsWith('g:') || items.some((i) => i.k === tab)) ? tab : 'token'
 
   return (
     <PortalLayout
@@ -164,13 +167,52 @@ export default function SupervisorPortal() {
         {jobIds.length === 0 && plantaId && <Aviso tipo="info" className="mb-3">{t('Estás viendo las cargas de tu planta (modelo anterior). El administrador puede asignarte trabajos para el nuevo alcance por trabajo.')}</Aviso>}
       </>}
     >
-      {/* KPIs (mismas tarjetas del admin), persistentes arriba del contenido */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KPI label={t('En cola hacia planta')} value={stats.haciaPlanta} icon={ClipboardList} accent="navy" />
-        <KPI label={t('En planta / cargando')} value={stats.enPlanta} icon={Package} accent="gold" />
-        <KPI label={t('En ruta / salidas')} value={stats.enRuta} icon={Truck} accent="blue" />
-        <KPI label={t('Por autorizar')} value={stats.esperando} icon={KeyRound} accent="green" />
+      {/* KPIs clicables: cada tarjeta abre la LISTA de órdenes en ese estado. */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KPI label={t('En cola (por aceptar)')} value={stats.cola} icon={ClipboardList} accent="navy" onClick={() => setTab('g:cola')} />
+        <KPI label={t('Hacia la planta')} value={stats.hacia} icon={Truck} accent="gold" onClick={() => setTab('g:hacia')} />
+        <KPI label={t('En planta / cargando')} value={stats.planta} icon={Package} accent="gold" onClick={() => setTab('g:planta')} />
+        <KPI label={t('En ruta')} value={stats.ruta} icon={Truck} accent="blue" onClick={() => setTab('g:ruta')} />
+        <KPI label={t('Por autorizar')} value={porAutorizar.length} icon={KeyRound} accent="green" onClick={() => setTab('espera')} />
       </div>
+
+      {/* Página de un ESTADO: las órdenes de la tarjeta KPI seleccionada. */}
+      {activo.startsWith('g:') && (() => {
+        const g = GRUPOS_ESTADO[activo.slice(2)]
+        if (!g) return null
+        const lista = ordenes.filter((o) => g.estados.includes(o.estado)).sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
+        const GIcon = g.icon
+        return (
+          <>
+            <div className="mb-3 flex items-center gap-2">
+              <button onClick={() => setTab('token')} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ArrowLeft size={16} /> {t('Volver')}</button>
+              <GIcon size={16} className="text-amber-500" />
+              <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t(g.label)}</h3>
+              <Badge color="navy">{lista.length}</Badge>
+            </div>
+            {lista.length === 0 ? (
+              <Card className="flex flex-col items-center gap-2 p-8 text-center text-slate-400"><GIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('No hay órdenes en este estado ahora mismo.')}</p></Card>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {lista.map((o) => (
+                  <Card key={o.id} className="p-3.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                      <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                      <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                      {o.urgente && <Badge color="red">{t('Urgente')}</Badge>}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || t('sin asignar')}{o.tipoEquipo ? ` · ${o.tipoEquipo}` : ''}</div>
+                    {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
+                    <ProgresoViaje o={o} t={t} />
+                    {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
+        )
+      })()}
 
       {activo === 'token' && <TokenSupervisor t={t} />}
 
