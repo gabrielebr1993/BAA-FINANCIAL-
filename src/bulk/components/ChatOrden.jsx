@@ -46,6 +46,17 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     return off
   }, [tenantId, orden?.id])
 
+  // Al abrir/cerrar el teclado (cambia el viewport visible) los mensajes se
+  // re-anclan al FONDO: el último mensaje y el campo de escribir quedan a la
+  // vista, sin que el usuario tenga que re-scrollear.
+  useEffect(() => {
+    const v = window.visualViewport
+    if (!v) return
+    const alFondo = () => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }
+    v.addEventListener('resize', alFondo)
+    return () => v.removeEventListener('resize', alFondo)
+  }, [])
+
   // Marca ESTA conversación como "activa" mientras el chat está montado, para que el
   // aviso flotante (AvisosMensajes) no notifique un chat que ya estoy viendo.
   useEffect(() => {
@@ -220,7 +231,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
         <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
         <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
-        <Input className="flex-1" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
+        <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
         <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
       </div>
       {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}

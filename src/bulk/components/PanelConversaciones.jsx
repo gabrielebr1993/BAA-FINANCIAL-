@@ -86,6 +86,17 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   // Con el teclado abierto (móvil), la capa del chat se ciñe al viewport VISIBLE
   // (visualViewport): el campo de mensaje queda a la vista y el layout no salta.
   const vv = useVisualViewport(verChatMovil)
+  // Con el chat móvil abierto se CONGELA el scroll del fondo: al abrir el teclado
+  // el navegador ya no puede desplazar la página (era el "salto" del chat), y al
+  // cambiar el viewport visible se re-ancla arriba para que nada quede cortado.
+  useEffect(() => {
+    if (!verChatMovil) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.scrollTo(0, 0)
+    return () => { document.body.style.overflow = prev }
+  }, [verChatMovil])
+  useEffect(() => { if (verChatMovil) window.scrollTo(0, 0) }, [vv, verChatMovil])
 
   return (
     <div className={`flex flex-col ${alturaClass}`}>

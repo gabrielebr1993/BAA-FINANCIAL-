@@ -27,7 +27,7 @@ export default function MapaVivo() {
   const { datos: plantasEta } = useColeccion('plants')
   const { datos: presencias } = useColeccion('presence')
   // Entradas/salidas de geocerca en vivo (solo staff/transportista las leen por reglas).
-  const { datos: geoeventos } = useColeccion('geoeventos', [], { orden: 'ts', dir: 'desc', limite: 25 })
+  const { datos: _geoeventosRaw } = useColeccion('geoeventos', [], { orden: 'ts', dir: 'desc', limite: 25 })
   // Salto directo desde un aviso: ?geo=<id>&lat=&lng= → centra el mapa en esa geocerca.
   const [params] = useSearchParams()
   const centroFoco = useMemo(() => {
@@ -47,6 +47,14 @@ export default function MapaVivo() {
   // En el mapa EN VIVO una orden ya entregada desaparece (su historial queda en
   // Órdenes); así con muchos choferes solo se ven los camiones trabajando.
   const activas = useMemo(() => ordenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado) && o.estado !== E.ENTREGADA), [ordenes])
+  // El panel "Entradas y salidas" es EN VIVO, no un archivo: solo eventos de
+  // órdenes aún en curso (los de viajes terminados viven en el historial de la
+  // orden), y nunca de más de 12 horas.
+  const geoeventos = useMemo(() => {
+    const enCurso = new Set(activas.map((o) => o.id))
+    const limite = Date.now() - 12 * 3600 * 1000
+    return (_geoeventosRaw || []).filter((e) => (!e.orderId || enCurso.has(e.orderId)) && tsMillis(e.ts) >= limite)
+  }, [_geoeventosRaw, activas])
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     return activas.filter((o) =>

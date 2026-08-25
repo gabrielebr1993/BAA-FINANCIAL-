@@ -48,6 +48,9 @@ export function usePrivados({ mensajes = [], uid, tenantId, yo, rolesConfig, fil
     const merged = [...extra.filter((e) => !keys.has(e.key)), ...base]
     return merged.map((c) => ({
       ...c,
+      // La lista pinta `titulo`: sin esto solo se veía la etiqueta del rol
+      // ("Chofer") y no el NOMBRE de la persona.
+      titulo: c.nombre || label(c.rol),
       icon: ICONO_ROL(c.rol),
       rolLabel: label(c.rol),
       rolColor: COLOR_ROL(c.rol),
