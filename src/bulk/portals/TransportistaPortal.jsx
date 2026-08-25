@@ -65,6 +65,9 @@ export default function TransportistaPortal() {
   const { datos: carriers } = useColeccion('carriers', [where(documentId(), '==', carrierId)])
   const { datos: configs } = useColeccion('carrierConfig', [where(documentId(), '==', carrierId)])
   const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
+  // Retiros Fast Pay de MI carrier (los míos y los de mis choferes): para
+  // descontarlos al pagar a cada chofer y no pagar doble.
+  const { datos: retiros } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
   const { datos: presencias } = useColeccion('presence', [where('carrierId', '==', carrierId)])
   const { datos: plantas } = useColeccion('plants')
   // Catálogo de TIPOS DE CAMIÓN del sistema (bulk_equipment; legible por todo el
@@ -243,6 +246,7 @@ export default function TransportistaPortal() {
     { k: 'choferes', label: t('Mis choferes'), icon: Users },
     { k: 'equipos', label: t('Equipos'), icon: Truck },
     { k: 'cuenta', label: t('Estado de cuenta'), icon: Wallet },
+    { k: 'pagos', label: t('Pago a choferes'), icon: DollarSign },
     // "Facturación" (sus avisos de pago) aparece SOLO si el admin le activó el
     // permiso facturacion.ver en la pantalla de Roles.
     ...(puede('facturacion.ver') ? [{ k: 'facturacion', label: t('Facturación'), icon: FileText }] : []),
@@ -285,6 +289,7 @@ export default function TransportistaPortal() {
       {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
+      {activo === 'pagos' && <TabPagoChoferes {...{ t, choferes, ordenes, retiros, avatares }} />}
       {activo === 'facturacion' && puede('facturacion.ver') && <TabFacturacion {...{ t, statements, cuenta }} />}
       {activo === 'mensajes' && (
         usuario?.carrierId
@@ -734,6 +739,99 @@ function TabCuenta({ t, cuenta, stats, statements }) {
       {rows.length === 0
         ? <EstadoVacio titulo={t('Aún no hay viajes cerrados')} texto={t('Cuando completes viajes, su detalle y tu utilidad aparecerán aquí.')} mostrarBoton={false} />
         : <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[720px]" />}
+    </>
+  )
+}
+
+// ── Pago a choferes: herramienta del transportista ──────────────────────────
+// Desglose por chofer de sus viajes finalizados (peso, material, pago), lo que
+// retiró por Fast Pay, y el NETO a pagarle (ganado − Fast Pay) para no pagar
+// doble. El pago del viaje ya viene ajustado al peso real del ticket (OCR).
+function TabPagoChoferes({ t, choferes = [], ordenes = [], retiros = [], avatares = {} }) {
+  const [abierto, setAbierto] = useState(null) // uid del chofer expandido
+  const FINALES_PAGO = ['entregada', 'liberada', 'cerrada']
+  const RETIRO_ACTIVO = ['procesando', 'pagado']
+  const n = (v) => Number(v) || 0
+
+  const filas = (choferes || []).filter((c) => c.uid).map((c) => {
+    const viajes = (ordenes || [])
+      .filter((o) => o.choferId === c.uid && FINALES_PAGO.includes(o.estado))
+      .sort((a, b) => String(b.hitos?.entrega || '').localeCompare(String(a.hitos?.entrega || '')))
+    const ganado = viajes.reduce((a, o) => a + n(o.pagoChofer), 0)
+    const fastPay = (retiros || [])
+      .filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado'))
+      .reduce((a, r) => a + n(r.montoBase), 0)
+    return { chofer: c, viajes, ganado, fastPay, neto: Math.round((ganado - fastPay) * 100) / 100 }
+  }).sort((a, b) => b.neto - a.neto)
+
+  const totNeto = filas.reduce((a, f) => a + f.neto, 0)
+
+  return (
+    <>
+      <Aviso tipo="info" className="mb-3">
+        {t('Cuánto debes pagarle a cada chofer: sus viajes finalizados (con el peso real del ticket) menos lo que ya retiró por Fast Pay. Paga solo el NETO.')}
+      </Aviso>
+      <Card className="mb-3 flex items-center justify-between p-4">
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{t('Total neto por pagar (todos los choferes)')}</span>
+        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{money(Math.max(0, totNeto))}</span>
+      </Card>
+      {filas.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-slate-400">{t('Aún no hay choferes con cuenta activa.')}</Card>
+      ) : filas.map(({ chofer: c, viajes, ganado, fastPay, neto }) => (
+        <Card key={c.uid} className="mb-2 p-0">
+          <button onClick={() => setAbierto(abierto === c.uid ? null : c.uid)} className="flex w-full items-center gap-3 p-3.5 text-left">
+            <Avatar foto={c.foto || avatares[c.uid]} nombre={c.nombre} size={38} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-brand-navy dark:text-slate-100">{c.nombre}</span>
+              <span className="block text-[11px] text-slate-400">{viajes.length} {t('viaje(s) finalizados')}</span>
+            </span>
+            <span className="text-right">
+              <span className={`block text-base font-black ${neto < 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{money(neto)}</span>
+              <span className="block text-[10px] font-bold uppercase text-slate-400">{t('neto a pagar')}</span>
+            </span>
+          </button>
+          {abierto === c.uid && (
+            <div className="border-t border-slate-100 p-3.5 dark:border-slate-800">
+              <div className="mb-2 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800"><div className="font-black text-brand-navy dark:text-slate-100">{money(ganado)}</div><div className="text-[10px] uppercase text-slate-400">{t('Ganado')}</div></div>
+                <div className="rounded-xl bg-amber-500/10 p-2"><div className="font-black text-amber-600 dark:text-amber-400">− {money(fastPay)}</div><div className="text-[10px] uppercase text-slate-400">Fast Pay</div></div>
+                <div className="rounded-xl bg-emerald-500/10 p-2"><div className={`font-black ${neto < 0 ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{money(neto)}</div><div className="text-[10px] uppercase text-slate-400">{t('Neto')}</div></div>
+              </div>
+              {neto < 0 && <p className="mb-2 text-[11px] font-semibold text-rose-500">{t('Retiró por Fast Pay más de lo ganado hasta hoy: no le pagues; el excedente se descuenta de sus próximos viajes.')}</p>}
+              {viajes.length === 0 ? <p className="text-xs text-slate-400">{t('Sin viajes finalizados todavía.')}</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="text-left text-[10px] uppercase text-slate-400"><th className="py-1 pr-2">{t('Viaje')}</th><th className="py-1 pr-2">{t('Fecha')}</th><th className="py-1 pr-2">{t('Material')}</th><th className="py-1 pr-2 text-right">{t('Ton')}</th><th className="py-1 text-right">{t('Pago')}</th></tr></thead>
+                    <tbody>
+                      {viajes.map((o) => (
+                        <tr key={o.id} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="py-1.5 pr-2 font-mono font-bold text-brand-navy dark:text-slate-200">{o.numero}</td>
+                          <td className="py-1.5 pr-2 text-slate-500">{o.hitos?.entrega ? new Date(o.hitos.entrega).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—'}</td>
+                          <td className="py-1.5 pr-2 text-slate-500">{t(o.material || '—')}</td>
+                          <td className="py-1.5 pr-2 text-right tabular-nums text-slate-500">{o.pesoReal ?? o.pesoEstimado}</td>
+                          <td className="py-1.5 text-right font-bold tabular-nums text-brand-navy dark:text-slate-100">{money(o.pagoChofer)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {fastPay > 0 && (
+                <div className="mt-2 rounded-xl bg-amber-500/5 p-2">
+                  <div className="mb-1 text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">{t('Retiros Fast Pay descontados')}</div>
+                  {(retiros || []).filter((r) => r.choferId === c.uid && r.tipo !== 'carrier' && RETIRO_ACTIVO.includes(r.estado || 'pagado')).map((r) => (
+                    <div key={r.numero || r.opId} className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      <span>{r.numero || 'FP'} · {String(r.ts || '').slice(0, 10)}</span>
+                      <span className="font-bold">− {money(r.montoBase)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      ))}
+      <p className="mt-2 text-[11px] text-slate-400">{t('El pago de cada viaje ya está ajustado al peso real del ticket de báscula. Los retiros Fast Pay en proceso también se descuentan (ese dinero ya va en camino al chofer).')}</p>
     </>
   )
 }

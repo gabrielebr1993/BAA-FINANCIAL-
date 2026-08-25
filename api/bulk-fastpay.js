@@ -64,7 +64,7 @@ async function autorizarFP(req, a) {
   try { d = await a.getAuth().verifyIdToken(idToken) } catch { return { error: 'Token inválido o expirado. Vuelve a iniciar sesión.', code: 401 } }
   if (!d.bulkTenant) return { error: 'No autorizado.', code: 403 }
   const base = { uid: d.uid, tenant: d.bulkTenant, rol: d.bulkRole, email: d.email || '' }
-  if (d.bulkRole === 'chofer') return { ...base, tipo: 'chofer', quienId: d.uid }
+  if (d.bulkRole === 'chofer') return { ...base, tipo: 'chofer', quienId: d.uid, carrierId: d.bulkCarrierId || null }
   if (d.bulkRole === 'transportista') {
     if (!d.bulkCarrierId) return { error: 'Tu cuenta no está ligada a un transportista.', code: 403 }
     return { ...base, tipo: 'carrier', quienId: d.bulkCarrierId }
@@ -344,7 +344,9 @@ export default async function handler(req, res) {
           numero: 'FP-' + String(next).padStart(6, '0'), opId,
           tenantId: auth.tenant, tipo: auth.tipo,
           choferId: auth.tipo === 'chofer' ? auth.uid : null,
-          carrierId: auth.tipo === 'carrier' ? auth.quienId : null,
+          // El retiro del CHOFER también registra su carrier: así el transportista
+          // lo ve y se lo descuenta al pagarle (herramienta de pago del carrier).
+          carrierId: auth.tipo === 'carrier' ? auth.quienId : (auth.carrierId || null),
           nombre: nombreTitular, usuario: auth.email || auth.uid,
           ganadoTotal: ganado, disponibleAntes: dispTx, elegibleAntes: elegTx, porcentaje: cfg.porcentaje,
           montoBase: monto, comisionPct: cfg.comisionPct, comision, neto,

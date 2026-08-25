@@ -581,10 +581,13 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
             {mmss && <span className="inline-flex items-center gap-1 text-sm font-black tabular-nums text-slate-500 dark:text-slate-400"><Clock size={15} /> {mmss}</span>}
           </div>
 
-          {/* Pago protagonista */}
+          {/* Pago protagonista (APROXIMADO: el final depende del peso real del ticket) */}
           <div className="mt-3 text-center">
-            <div className="text-4xl font-black tracking-tight text-brand-navy dark:text-slate-100">{money(orden.pagoChofer)}</div>
-            <div className="mt-0.5 text-xs font-medium text-slate-400">{t('Tu pago por este viaje')} · <span className="font-mono">{orden.numero}</span></div>
+            <div className="text-4xl font-black tracking-tight text-brand-navy dark:text-slate-100">≈ {money(orden.pagoChofer)}</div>
+            <div className="mt-0.5 text-xs font-medium text-slate-400">{t('Tu pago aproximado por este viaje')} · <span className="font-mono">{orden.numero}</span></div>
+            <p className="mx-auto mt-2 max-w-xs rounded-xl bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium leading-snug text-amber-700 dark:text-amber-300">
+              {t('El precio puede variar según las toneladas que cargues en la planta. Tu pago real se calcula al finalizar la orden con el peso del ticket de báscula.')}
+            </p>
           </div>
 
           {/* Chips material / equipo / peso */}
@@ -1061,9 +1064,12 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
         </div>
       )}
 
-      <div className="mt-2 flex items-baseline gap-1.5 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
-        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{money(orden.pagoChofer)}</span>
-        <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago por este viaje')}</span>
+      <div className="mt-2 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">≈ {money(orden.pagoChofer)}</span>
+          <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago aproximado por este viaje')}</span>
+        </div>
+        <p className="mt-0.5 text-[10px] leading-snug text-emerald-700/60 dark:text-emerald-400/60">{t('El pago real se calcula al terminar, con las toneladas del ticket de báscula.')}</p>
       </div>
 
       {/* Tarjeta de recogida / entrega según la fase */}
