@@ -148,11 +148,11 @@ export default function BulkUsuarios() {
     if (!f.nombre.trim() || !email || !f.password) { setMsg({ tipo: 'warn', txt: t('Completa nombre, correo y contraseña.') }); return }
     if (usuarios.some((u) => (u.email || '').toLowerCase() === email)) { setMsg({ tipo: 'error', txt: t('Ese correo ya existe.') }); return }
     if (necesitaCliente && !f.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona el cliente al que pertenece.') }); return }
-    if (necesitaCarrier && !f.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona el transportista al que pertenece.') }); return }
-    // Chofer: debe afiliarse a una ficha del roster ya registrada.
+    if ((necesitaCarrier || necesitaChofer) && !f.vinculo) { setMsg({ tipo: 'warn', txt: t('Selecciona el transportista al que pertenece.') }); return }
+    // Chofer: se afilia al TRANSPORTISTA. La ficha del roster es opcional: si se
+    // elige una existente se enlaza; si no, se crea automáticamente en el roster.
     let rd = null
-    if (necesitaChofer) {
-      if (!f.chofer) { setMsg({ tipo: 'warn', txt: t('Selecciona el chofer registrado al que se afilia esta cuenta.') }); return }
+    if (necesitaChofer && f.chofer) {
       rd = rosterDrivers.find((x) => `${x.carrierId}::${x.rosterId}` === f.chofer)
       if (!rd) { setMsg({ tipo: 'error', txt: t('El chofer registrado ya no existe.') }); return }
       if (rd.uid) { setMsg({ tipo: 'error', txt: t('Ese chofer ya está afiliado a otra cuenta.') }); return }
@@ -161,7 +161,7 @@ export default function BulkUsuarios() {
       const res = await crearUsuario({
         nombre: f.nombre.trim(), email, password: f.password, rol: f.rol,
         clienteId: necesitaCliente ? f.vinculo : undefined,
-        carrierId: necesitaCarrier ? f.vinculo : (necesitaChofer ? rd.carrierId : undefined),
+        carrierId: necesitaCarrier ? f.vinculo : (necesitaChofer ? (rd?.carrierId || f.vinculo) : undefined),
       })
       // Asigna el ID único de 8 dígitos (del contador atómico) a la cuenta recién creada.
       let codigo = ''
@@ -171,10 +171,19 @@ export default function BulkUsuarios() {
           await guardarCampos('users', res.uid, { codigo })
         } catch { /* regla no desplegada aún */ }
       }
-      // Enlaza la ficha del roster con la cuenta recién creada (por uid).
-      if (necesitaChofer && rd && res?.uid) {
-        const carrier = carriers.find((c) => c.id === rd.carrierId)
-        if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid } : d)) })
+      // Enlaza (o crea) la ficha del roster del transportista con la cuenta nueva.
+      if (necesitaChofer && res?.uid) {
+        if (rd) {
+          const carrier = carriers.find((c) => c.id === rd.carrierId)
+          if (carrier) await guardar('carriers', carrier.id, { choferes: (carrier.choferes || []).map((d) => (d.id === rd.rosterId ? { ...d, uid: res.uid } : d)) })
+        } else {
+          // Sin ficha elegida: alta automática en el roster del carrier seleccionado.
+          const carrier = carriers.find((c) => c.id === f.vinculo)
+          if (carrier) {
+            const ficha = { id: `d_${Math.random().toString(36).slice(2, 9)}`, nombre: f.nombre.trim(), uid: res.uid, equipos: [] }
+            await guardar('carriers', carrier.id, { choferes: [...(carrier.choferes || []), ficha] })
+          }
+        }
       }
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear_usuario', entidad: 'usuario', detalle: `${email} (${f.rol})${codigo ? ` · ID ${codigo}` : ''}${rd ? ` → ${rd.nombre}` : ''}` })
       setF({ nombre: '', email: '', password: '', rol: BULK_ROLES.DISPATCHER, vinculo: '', chofer: '' })
@@ -431,23 +440,23 @@ export default function BulkUsuarios() {
             {asignables.map((r) => <option key={r} value={r}>{label(r)}</option>)}
           </Select>
         </div>
-        {(necesitaCliente || necesitaCarrier) && (
+        {(necesitaCliente || necesitaCarrier || necesitaChofer) && (
           <div className="mt-3 max-w-xs">
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{necesitaCliente ? t('Cliente al que pertenece') : t('Transportista al que pertenece')}</div>
-            <Select value={f.vinculo} onChange={set('vinculo')}>
+            <Select value={f.vinculo} onChange={(e) => setF((s) => ({ ...s, vinculo: e.target.value, chofer: '' }))}>
               <option value="">{t('— Seleccionar —')}</option>
               {(necesitaCliente ? clientes : carriers).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
             </Select>
           </div>
         )}
-        {necesitaChofer && (
+        {necesitaChofer && f.vinculo && (
           <div className="mt-3 max-w-md">
-            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Afiliar con chofer registrado')}</div>
+            <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('Ficha del roster (opcional)')}</div>
             <Select value={f.chofer} onChange={elegirChofer}>
-              <option value="">{t('— Seleccionar chofer registrado —')}</option>
-              {rosterDrivers.map((d) => <option key={`${d.carrierId}::${d.rosterId}`} value={`${d.carrierId}::${d.rosterId}`} disabled={!!d.uid}>{d.nombre} — {d.carrierNombre}{d.uid ? ` (${t('ya afiliado')})` : ''}</option>)}
+              <option value="">{t('— Ninguna: crear su ficha automáticamente —')}</option>
+              {rosterDrivers.filter((d) => d.carrierId === f.vinculo).map((d) => <option key={`${d.carrierId}::${d.rosterId}`} value={`${d.carrierId}::${d.rosterId}`} disabled={!!d.uid}>{d.nombre}{d.uid ? ` (${t('ya afiliado')})` : ''}</option>)}
             </Select>
-            <p className="mt-1 text-[11px] text-slate-400">{t('La cuenta se vincula a esa ficha (equipos, trabajos y transportista). Si no aparece, créalo primero en “Choferes”.')}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{t('Si el transportista ya lo tenía registrado, elígelo para enlazar su ficha (equipos, historial). Si no, se crea sola en el roster del transportista.')}</p>
           </div>
         )}
         <div className="mt-3"><Boton variant="gold" onClick={agregar}><UserPlus size={16} /> {t('Crear usuario')}</Boton></div>
