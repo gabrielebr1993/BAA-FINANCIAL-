@@ -61,6 +61,11 @@ export function BulkAuthProvider({ children }) {
             // El supervisor de planta se acota a su planta (la asigna el admin en su
             // doc de usuario). El claim manda; si no está, cae al perfil.
             plantaId: u.plantaId || p.plantaId || null,
+            // Supervisor por TRABAJOS: sus jobs asignados (y nombres denormalizados)
+            // viven en su doc de usuario. Sin copiarlos aquí, el portal veía
+            // usuario.jobIds vacío y su consulta de órdenes no traía NADA.
+            jobIds: Array.isArray(p.jobIds) ? p.jobIds : [],
+            jobsNombres: Array.isArray(p.jobsNombres) ? p.jobsNombres : [],
           } : u))
         }).catch(() => { /* reglas / offline: seguimos con los claims */ })
       } catch { setUsuario(null); setCargando(false) }
