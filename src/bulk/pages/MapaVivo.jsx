@@ -53,7 +53,8 @@ export default function MapaVivo() {
   const geoeventos = useMemo(() => {
     const enCurso = new Set(activas.map((o) => o.id))
     const limite = Date.now() - 12 * 3600 * 1000
-    return (_geoeventosRaw || []).filter((e) => (!e.orderId || enCurso.has(e.orderId)) && tsMillis(e.ts) >= limite)
+    // Estricto: SOLO eventos cuya orden sigue en curso (sin orden conocida → fuera).
+    return (_geoeventosRaw || []).filter((e) => e.orderId && enCurso.has(e.orderId) && tsMillis(e.ts) >= limite)
   }, [_geoeventosRaw, activas])
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase()
