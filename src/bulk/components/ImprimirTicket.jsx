@@ -15,7 +15,7 @@ import TicketOrden from './TicketOrden'
 import { useLang } from '../../i18n'
 
 export default function ImprimirTicket({
-  orden, empresa = 'Freight', jobsMap = {}, plantasMap = {}, carriersMap = {}, materialesMap = {},
+  orden, empresa = 'Freight', jobsMap = {}, plantasMap = {}, carriersMap = {}, materialesMap = {}, clientesMap = {}, ordenesJob = null,
   canGenerar = false, tenantId, usuario, rol, compacto = false, className = '',
 }) {
   const { t } = useLang()
@@ -31,7 +31,7 @@ export default function ImprimirTicket({
       try {
         const seq = await siguienteSecuencia(tenantId, campo)
         num = `${evt === 'Loaded' ? 'TC' : 'TE'}-${String(seq).padStart(6, '0')}`
-        const snap = { ...datosTicket(orden, evt, { jobsMap, plantasMap, carriersMap, materialesMap }), ticketNumber: num }
+        const snap = { ...datosTicket(orden, evt, { jobsMap, plantasMap, carriersMap, materialesMap, clientesMap, ordenesJob }), ticketNumber: num }
         await guardar('orders', orden.id, { [campo]: num, [snapCampo]: snap })
         auditar(tenantId, { usuario: usuario?.email, rol, accion: 'generar_ticket', entidad: 'orden', detalle: `${num} · ${orden.numero} · ${evt}` })
         setDatos(snap); return
@@ -40,7 +40,7 @@ export default function ImprimirTicket({
       auditar(tenantId, { usuario: usuario?.email, rol, accion: 'imprimir_ticket', entidad: 'orden', detalle: `${num || orden.numero} · ${evt}` })
     }
     // Snapshot guardado (reimpresión idéntica) o cálculo en vivo con lo que haya.
-    const base = orden[snapCampo] || datosTicket(orden, evt, { jobsMap, plantasMap, carriersMap, materialesMap })
+    const base = orden[snapCampo] || datosTicket(orden, evt, { jobsMap, plantasMap, carriersMap, materialesMap, clientesMap, ordenesJob })
     setDatos({ ...base, event: evt, ticketNumber: num || base.ticketNumber || orden.numero })
   }
 

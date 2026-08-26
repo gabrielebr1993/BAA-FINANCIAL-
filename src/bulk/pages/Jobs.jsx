@@ -33,7 +33,7 @@ export default function Jobs() {
     return { cola: os.filter((o) => EN_COLA.includes(o.estado)).length, proceso: os.filter((o) => EN_PROCESO.includes(o.estado)).length }
   }
 
-  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '' })
+  const [f, setF] = useState({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '', cantidadTon: '' })
   const [msg, setMsg] = useState(null)
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }))
   // Puntos de ENTREGA ya dibujados en Geocercas (tipo destino/proyecto): al
@@ -66,10 +66,11 @@ export default function Jobs() {
     await crear('jobs', tenantId, {
       codigo, nombre: f.nombre.trim(), clienteId: f.clienteId, plantaId: f.plantaId,
       tipoEquipo: f.tipoEquipo, materiales: f.materiales, transportistasAutorizados: f.transportistas,
-      destino: f.destino.trim(), destinoGeofenceId: f.destinoGeoId || null, po: f.po.trim() || oferta?.po || '', activo: true,
+      destino: f.destino.trim(), destinoGeofenceId: f.destinoGeoId || null, po: f.po.trim() || oferta?.po || '',
+      cantidadTon: Number(f.cantidadTon) > 0 ? Number(f.cantidadTon) : null, activo: true,
     })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'crear', entidad: 'job', detalle: `Job ${codigo} · ${f.nombre}` })
-    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '' })
+    setF({ nombre: '', clienteId: '', plantaId: '', tipoEquipo: '', materiales: [], transportistas: [], destino: '', destinoGeoId: '', po: '', cantidadTon: '' })
     setMsg({ tipo: 'ok', txt: `${t('Trabajo')} ${codigo} ${t('creado.')}` })
   }
 
@@ -111,6 +112,8 @@ export default function Jobs() {
           <div>
             <div className="mb-1 text-xs font-semibold uppercase text-slate-400">{t('PO / orden de compra')}</div>
             <Input placeholder={t('Auto de la planta si vacío')} value={f.po} onChange={set('po')} />
+            <div className="mb-1 mt-2 text-xs font-semibold uppercase text-slate-400">{t('Total del pedido (tn)')} <span className="normal-case">{t('(Ordered, para el control del BOL)')}</span></div>
+            <Input type="number" inputMode="decimal" placeholder={t('Ej. 50000')} value={f.cantidadTon} onChange={set('cantidadTon')} />
           </div>
         </div>
         {(() => {

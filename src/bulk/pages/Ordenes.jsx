@@ -77,7 +77,8 @@ export default function Ordenes() {
   const plantasMap = useMemo(() => { const m = {}; for (const p of plantasTk || []) m[p.id] = p; return m }, [plantasTk])
   const carriersMap = useMemo(() => { const m = {}; for (const c of carriers || []) m[c.id] = c; return m }, [carriers])
   const materialesMap = useMemo(() => { const m = {}; for (const x of materialesTk || []) m[(x.nombre || '').trim().toLowerCase()] = x; return m }, [materialesTk])
-  const ticketProps = (o) => ({ orden: o, empresa: usuario?.empresa || 'Freight', jobsMap, plantasMap, carriersMap, materialesMap, canGenerar: esStaff, tenantId, usuario, rol })
+  const clientesMapTk = useMemo(() => { const m = {}; for (const c of clientes || []) m[c.id] = c; return m }, [clientes])
+  const ticketProps = (o) => ({ orden: o, empresa: usuario?.empresa || 'Freight', jobsMap, plantasMap, carriersMap, materialesMap, clientesMap: clientesMapTk, ordenesJob: ordenes, canGenerar: esStaff, tenantId, usuario, rol })
   // Si el matching corre en el SERVIDOR (Cloud Function), el motor del navegador se
   // apaga. Si esa función NO está desplegada, nada asigna → es la causa #1 de "en
   // línea pero no llega ninguna orden". Lo advertimos en el diagnóstico.

@@ -941,6 +941,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   // Peso OFICIAL: el que lee el OCR del ticket es la fuente de verdad. El chofer no
   // lo edita libremente; para cambiarlo debe abrir una EXCEPCIÓN con motivo.
   const [pesoOcr, setPesoOcr] = useState(null) // valor leído del ticket (número)
+  const [pesosOcr, setPesosOcr] = useState(null) // { bruto, tara } del ticket (para el BOL)
   const [excepcionPeso, setExcepcionPeso] = useState(false)
   const [motivoPeso, setMotivoPeso] = useState('')
   const [copiado, setCopiado] = useState(false)
@@ -1032,10 +1033,13 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
       await guardar('orders', orden.id, {
         estado: paso.next, hitos: { ...(orden.hitos || {}), carga: ahora(), salidaPlanta: ahora() },
         pesoReal: oficial != null ? oficial : orden.pesoEstimado, pesoFuente: fuente, pesoRevisar: revisar,
+        // Gross/Tare del ticket de báscula (para el BOL con tabla de pesos).
+        ...(pesosOcr?.bruto != null ? { pesoBruto: pesosOcr.bruto } : {}),
+        ...(pesosOcr?.tara != null ? { tara: pesosOcr.tara } : {}),
         ticket, gps_carga: g,
       })
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: desdeOcr ? 'ticket_carga_ocr' : 'ticket_carga_manual_revisar', entidad: 'orden', entidadId: orden.id, detalle: `Peso ${oficial} ton (${fuente})${revisar ? ' · OCR no detectó, revisar' : ''}` })
-      setModal(null); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setExcepcionPeso(false); setMotivoPeso('')
+      setModal(null); setFoto(null); setPeso(''); setTicketNum(''); setOcr(null); setPesoOcr(null); setPesosOcr(null); setExcepcionPeso(false); setMotivoPeso('')
     } catch (e) { window.alert(t('No se pudo guardar la carga. Revisa tu conexión e inténtalo otra vez.') + (e?.message ? `\n(${e.message})` : '')) }
     finally { setOcupado(false) }
   }
@@ -1082,6 +1086,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
       const escaneada = await escanearParaOCR(img)
       const r = await leerTicket(escaneada, (p) => setOcr({ cargando: true, progreso: p }))
       if (r?.pesoNeto) { setPesoOcr(r.pesoNeto); setExcepcionPeso(false) }
+      setPesosOcr({ bruto: r?.pesoBruto ?? null, tara: r?.tara ?? null })
       if (r?.ticket) setTicketNum(r.ticket)
       setOcr({ cargando: false, msg: r?.pesoNeto ? null : t('No se pudo leer el peso. Escribe el peso del ticket a mano abajo.') })
     } catch { setOcr({ cargando: false, msg: t('No se pudo leer el ticket. Escribe el peso a mano abajo.') }) }

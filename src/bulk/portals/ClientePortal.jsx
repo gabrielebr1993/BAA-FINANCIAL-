@@ -305,7 +305,7 @@ export default function ClientePortal() {
                       // Ticket solo-impresión (el cliente NO genera folios ni escribe la orden):
                       // disponible cuando la carga ya salió o el staff ya emitió el ticket.
                       if (k === 'ticket') return (o.ticketCarga || o.ticketEntrega || ENTREGADAS.includes(o.estado) || o.hitos?.carga)
-                        ? <span onClick={(e) => e.stopPropagation()}><ImprimirTicket orden={o} empresa="Freight" canGenerar={false} tenantId={tenantId} usuario={usuario} rol="cliente" compacto /></span>
+                        ? <span onClick={(e) => e.stopPropagation()}><ImprimirTicket orden={o} empresa="Freight" canGenerar={false} tenantId={tenantId} usuario={usuario} rol="cliente" compacto clientesMap={usuario?.clienteId ? { [usuario.clienteId]: { nombre: empresaCliente } } : {}} ordenesJob={ordenes} /></span>
                         : <span className="text-slate-300 dark:text-slate-600">—</span>
                       return o[k]
                     }} />
