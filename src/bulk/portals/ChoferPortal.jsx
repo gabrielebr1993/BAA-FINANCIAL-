@@ -373,27 +373,61 @@ export default function ChoferPortal() {
               ) : null}
           </>
         )}
-        {tab === 'historial' && (
-          historial.length === 0 ? <VacioMsg icon={Clock} texto={t('Aún no tienes entregas cerradas.')} />
-            : historial.map((o) => (
-              <div key={o.id} className="mb-2 rounded-2xl border border-slate-200 bg-white p-3.5 dark:border-slate-700/60 dark:bg-slate-900">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
-                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                  <Badge color="green">{t('Entregada')}</Badge>
-                  <span className="ml-auto flex items-center gap-1">
-                    {/* Ticket solo-impresión: el chofer NO genera folios ni edita la orden. */}
-                    <ImprimirTicket orden={o} empresa={usuario?.empresa || 'Freight'} canGenerar={false} tenantId={tenantId} usuario={usuario} rol={rol} compacto />
-                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{money(o.pagoChofer)}</span>
-                  </span>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
-                  <span className="inline-flex items-center gap-1"><Package size={12} className="text-amber-500" /> {t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton</span>
-                  {o.hitos?.entrega && <span>{new Date(o.hitos.entrega).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>}
-                </div>
+        {tab === 'historial' && (historial.length === 0 ? <VacioMsg icon={Clock} texto={t('Aún no tienes entregas cerradas.')} /> : (() => {
+          // Resumen del MES + lista agrupada por día (maqueta "Historial").
+          const hoy = new Date(); const mes0 = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+          const fechaDe = (o) => o.hitos?.entrega || o.hitos?.liberacion || o.creadoEn
+          const delMes = historial.filter((o) => { const f = fechaDe(o); return f && new Date(f) >= mes0 })
+          const tonMes = delMes.reduce((a, o) => a + (Number(o.pesoReal ?? o.pesoEstimado) || 0), 0)
+          const ganMes = delMes.reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
+          const grupos = []
+          for (const o of historial) {
+            const f = fechaDe(o)
+            const clave = f ? new Date(f).toDateString() : '—'
+            const g = grupos.find((x) => x.clave === clave)
+            if (g) g.items.push(o)
+            else grupos.push({ clave, fecha: f ? new Date(f) : null, items: [o] })
+          }
+          const d0 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+          const etDia = (fe) => {
+            if (!fe) return '—'
+            const dd = new Date(fe.getFullYear(), fe.getMonth(), fe.getDate())
+            const dif = Math.round((d0 - dd) / 86400000)
+            const txt = fe.toLocaleDateString('es', { day: '2-digit', month: 'short' })
+            return dif === 0 ? `${t('Hoy')} · ${txt}` : dif === 1 ? `${t('Ayer')} · ${txt}` : txt
+          }
+          return (
+            <div>
+              <div className="grid grid-cols-3 gap-2">
+                {[[t('Viajes (mes)'), delMes.length, ''], [t('Toneladas'), Math.round(tonMes * 10) / 10, ''], [t('Ganado'), money(ganMes), 'text-[#a9863a]']].map(([l, v, c]) => (
+                  <div key={l} className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-900">
+                    <div className="font-mono text-[8px] font-bold uppercase tracking-wide text-slate-400">{l}</div>
+                    <div className={`mt-0.5 text-lg font-black text-brand-navy dark:text-slate-100 ${c}`}>{v}</div>
+                  </div>
+                ))}
               </div>
-            ))
-        )}
+              {grupos.map((g) => (
+                <div key={g.clave}>
+                  <div className="mb-2 mt-4 font-mono text-[9px] font-bold uppercase tracking-widest text-slate-400">{etDia(g.fecha)}</div>
+                  {g.items.map((o) => (
+                    <div key={o.id} className="mb-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-900">
+                      <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-[#3f9d6b]/12 text-[#3f9d6b]"><CheckCircle2 size={17} /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</div>
+                        <div className="truncate text-[11px] text-slate-400">{t(o.material || 'material s/e')}{o.plantaNombre ? ` · ${o.plantaNombre}` : ''}</div>
+                      </div>
+                      <ImprimirTicket orden={o} empresa={usuario?.empresa || 'Freight'} canGenerar={false} tenantId={tenantId} usuario={usuario} rol={rol} compacto />
+                      <div className="text-right">
+                        <div className="text-sm font-black text-[#2e7d52]">{money(o.pagoChofer)}</div>
+                        <div className="font-mono text-[9px] text-slate-400">{o.pesoReal ?? o.pesoEstimado} tn</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )
+        })())}
         {tab === 'ganancias' && (() => {
           const enCurso = misOrdenes.filter((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
           const pendiente = enCurso.reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
@@ -405,20 +439,46 @@ export default function ChoferPortal() {
           const viajes = [...enCurso, ...historialF]
           return (
             <div>
-              <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#15b66b] to-emerald-600 p-6 text-center text-white shadow-lg">
-                <div className="text-xs font-bold uppercase tracking-widest opacity-80">{t('Ganancias')}</div>
-                <div className="mt-1 text-5xl font-black tracking-tight">{money(total)}</div>
-                <div className="mt-1 text-sm font-semibold opacity-90">{viajes.length} {t('viaje(s)')}</div>
+              {/* HERO navy (maqueta): total del rango + botón Fast Pay dorado dentro. */}
+              <div className="overflow-hidden rounded-3xl bg-brand-navy p-5 text-white shadow-lg dark:bg-slate-800">
+                <div className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-[#c9a24b]">{t('Ganancias')}</div>
+                <div className="mt-1 text-4xl font-black tracking-tight">{money(total)}</div>
+                <div className="mt-0.5 text-xs text-white/70">{viajes.length} {t('viaje(s)')} · {historialF.length} {t('pagado(s)')}</div>
+                <button
+                  onClick={() => setFastPay('abrir')}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c9a24b] px-4 py-3 text-sm font-black text-[#0d1a30] transition active:scale-[0.98]"
+                >
+                  <DollarSign size={17} /> {t('Cobrar ahora · Fast Pay')}
+                </button>
               </div>
-              {/* Fast Pay REAL: retira el saldo disponible (backend Stripe Connect). El
-                  modal consulta el saldo real y guía el registro de la cuenta si falta. */}
-              <button
-                onClick={() => setFastPay('abrir')}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3.5 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-amber-500/30 transition active:scale-[0.98]"
-              >
-                <DollarSign size={18} /> {t('Fast Pay')} · {t('Cobrar')}
-              </button>
               <div className="mt-1.5 text-center text-[11px] text-slate-400">{t('Retiro instantáneo a tu cuenta · comisión 3%')}</div>
+              {/* Gráfico últimos 7 días (por fecha de entrega). */}
+              {(() => {
+                const hoyD = new Date(); const dias = []
+                for (let i = 6; i >= 0; i--) { const d = new Date(hoyD.getFullYear(), hoyD.getMonth(), hoyD.getDate() - i); dias.push({ d, total: 0 }) }
+                for (const o of historial) {
+                  const f = o.hitos?.entrega || o.hitos?.liberacion
+                  if (!f) continue
+                  const fd = new Date(f)
+                  const slot = dias.find((x) => x.d.getFullYear() === fd.getFullYear() && x.d.getMonth() === fd.getMonth() && x.d.getDate() === fd.getDate())
+                  if (slot) slot.total += Number(o.pagoChofer) || 0
+                }
+                const max = Math.max(...dias.map((x) => x.total), 1)
+                const INI = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
+                return (
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
+                    <div className="mb-3 font-mono text-[9px] font-bold uppercase tracking-widest text-slate-400">{t('Últimos 7 días')}</div>
+                    <div className="flex h-24 items-end gap-2">
+                      {dias.map((x, i) => (
+                        <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                          <div className={`w-full rounded-t-md ${x.total >= max * 0.6 ? 'bg-[#c9a24b]' : 'bg-[#e6d6ad]'}`} style={{ height: `${Math.max(4, Math.round((x.total / max) * 100))}%`, opacity: x.total > 0 ? 1 : 0.35 }} title={money(x.total)} />
+                          <span className="font-mono text-[9px] text-slate-400">{INI[x.d.getDay()]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
               <FiltroFechas rango={rangoGan} onChange={setRangoGan} className="mt-3" />
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900">
@@ -1102,34 +1162,47 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           {noLeidosChat > 0 && <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidosChat}</span>}
         </button>
       </div>
-      <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">{orden.material} · {orden.pesoReal ?? orden.pesoEstimado} ton · {orden.tipoEquipo}</div>
-
-      {/* Guía "qué hacer ahora" en lenguaje claro (paso X de 5) — estilo DoorDash */}
+      {/* ACCIÓN ÚNICA: barras de progreso (5) + un solo mensaje grande centrado
+          con ícono, chips de distancia/ETA y el pago — el chofer siempre sabe
+          exactamente qué hacer AHORA (maqueta milepaydriverappcompleta). */}
       {guia && (
-        <div className="mt-2.5 flex items-center gap-3 rounded-2xl bg-brand-navy p-3 text-white dark:bg-slate-800">
-          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/15 text-xs font-black">{guia.paso}/5</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-300">{t('Qué hacer ahora')}</div>
-            <div className="text-sm font-bold leading-tight">{t(guia.txt)}{distTxt ? ` · ${distTxt}` : ''}{(() => { const e = etaOrden({ ...orden, ultimaPos: pos ? { lat: pos.lat, lng: pos.lng, speed: pos.speed, ts: new Date().toISOString() } : orden.ultimaPos }, geocercas, plantas); return e ? ` · ${etaTexto(e)}` : '' })()}</div>
+        <>
+          <div className="mt-3 flex gap-1.5">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <span key={n} className={`h-1.5 flex-1 rounded-full ${n < guia.paso ? 'bg-[#3f9d6b]' : n === guia.paso ? 'bg-[#c9a24b]' : 'bg-slate-200 dark:bg-slate-700'}`} />
+            ))}
           </div>
-        </div>
+          <div className="mt-4 text-center">
+            <div className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#c9a24b]">{t('Qué hacer ahora')} · {guia.paso} {t('de')} 5</div>
+            <div className="mx-auto mt-2.5 grid h-14 w-14 place-items-center rounded-2xl bg-[#c9a24b]/15 text-[#c9a24b]">
+              {guia.paso <= 1 ? <Building2 size={28} /> : guia.paso === 2 ? <Package size={28} /> : guia.paso === 3 ? <Navigation size={28} /> : guia.paso === 4 ? <MapPin size={28} /> : <KeyRound size={28} />}
+            </div>
+            <div className="mx-auto mt-2.5 max-w-[17rem] text-xl font-black leading-snug text-brand-navy dark:text-slate-100">{t(guia.txt)}</div>
+            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+              {distTxt && <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{distTxt}</span>}
+              {(() => { const e = etaOrden({ ...orden, ultimaPos: pos ? { lat: pos.lat, lng: pos.lng, speed: pos.speed, ts: new Date().toISOString() } : orden.ultimaPos }, geocercas, plantas); return e ? (
+                <>
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">≈{e.minutos} min</span>
+                  <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{e.llegada.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>
+                </>
+              ) : null })()}
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{orden.material || '—'}</span>
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{orden.pesoReal ?? orden.pesoEstimado} ton{orden.pesoReal == null ? ` ${t('ref.')}` : ''}</span>
+            </div>
+          </div>
+        </>
       )}
 
-      <div className="mt-2 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
+      <div className="mt-4 text-center">
         {(() => { const pa = pagoAproxDe(orden); return pa ? (
           <>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">≈ {money(pa.monto)}</span>
-              <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago aproximado por este viaje')}</span>
+            <div className="text-xl font-black text-[#2e7d52]">{pa.ajustado ? '' : '≈'}{money(pa.monto)}</div>
+            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              {pa.ajustado ? `${t('actualizado')} · ${orden.pesoReal} ${t('tn reales')}` : t('pago aproximado · según báscula')}
             </div>
-            <p className="mt-0.5 text-[10px] leading-snug text-emerald-700/60 dark:text-emerald-400/60">
-              {pa.ajustado
-                ? `${t('Ajustado al ticket')}: ${orden.pesoReal} tn (${t('referencia')} ${orden.pesoEstimado} tn). ${t('El pago final se confirma al liberar la orden.')}`
-                : `${t('Calculado con')} ${orden.pesoEstimado} tn ${t('de referencia — puede subir o bajar según las toneladas reales del ticket de báscula.')}`}
-            </p>
           </>
         ) : (
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-300">{t('Pago por definir: tu transportista aún no configura tu pago para esta carga.')}</p>
+          <div className="text-xs font-semibold text-slate-400">{t('Pago por definir por tu transportista')}</div>
         ) })()}
       </div>
 
@@ -1153,9 +1226,9 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
 
       {/* Tarjeta de recogida / entrega según la fase */}
       {fase && (
-        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-            {enRecogida ? <Building2 size={13} /> : <MapPin size={13} />} {enRecogida ? t('Recoger en la planta') : t('Llevar a la entrega')}
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-[#c9a24b]">
+            {enRecogida ? <Building2 size={12} /> : <MapPin size={12} />} {enRecogida ? t('Recoger en la planta') : t('Entregar en obra')}
           </div>
           {enRecogida && plantaNombre && <div className="mt-1 text-sm font-bold text-brand-navy dark:text-slate-100">{plantaNombre}</div>}
           {dirTexto && <div className="mt-0.5 text-sm text-brand-navy dark:text-slate-100">{dirTexto}</div>}
@@ -1225,14 +1298,20 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
 
       {paso ? (
         <>
-          <button onClick={avanzar} disabled={ocupado || (paso.gate && !puedeLlegar)}
-            className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-black shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed ${paso.gate && !puedeLlegar ? 'bg-slate-200 text-slate-400 shadow-none dark:bg-slate-800' : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}>
-            {ocupado ? <><Spinner /> {t('Guardando…')}</> : <>{paso.gate && !puedeLlegar ? <MapPin size={18} /> : <CheckCircle2 size={18} />} {t(paso.label)}</>}
-          </button>
-          {paso.gate && !puedeLlegar && (
+          {(() => {
+            const bloqueado = paso.gate && !puedeLlegar
+            const esEntrega = fase === 'entrega' || paso.requiere === 'pod'
+            return (
+              <button onClick={avanzar} disabled={ocupado || bloqueado}
+                className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-black shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed ${bloqueado ? 'bg-slate-200 text-slate-400 shadow-none dark:bg-slate-800' : esEntrega ? 'bg-[#3f9d6b] text-white hover:brightness-105' : 'bg-[#c9a24b] text-[#0d1a30] hover:brightness-105'}`}>
+                {ocupado ? <><Spinner /> {t('Guardando…')}</> : <>{bloqueado ? <MapPin size={18} /> : <CheckCircle2 size={18} />} {t(paso.label)}</>}
+              </button>
+            )
+          })()}
+          {paso.gate && !puedeLlegar ? (
             <>
               <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
-                <MapPin size={12} /> {distTxt ? `${t('A')} ${distTxt} ${t('del punto — el botón se activa al llegar.')}` : (hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.'))}
+                <MapPin size={12} /> {distTxt ? `${t('A')} ${distTxt} — ${t('se activa al llegar · o toca abajo si el GPS falla')}` : (hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.'))}
               </p>
               {/* Override: si el GPS no fija (o falla), el chofer no queda atascado. */}
               <button onClick={avanzarManual} disabled={ocupado}
@@ -1240,6 +1319,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
                 <MapPin size={13} /> {t('No me detecta el GPS — ya estoy aquí')}
               </button>
             </>
+          ) : (
+            <p className="mt-1.5 text-center text-[11px] text-slate-400">
+              {fase === 'entrega' || paso.requiere === 'pod' ? t('Al entregar, el supervisor libera el viaje') : paso.requiere === 'ticket' ? t('Pide tu ticket de báscula — lo subes en el siguiente paso') : t('Marca cuando completes este paso')}
+            </p>
           )}
         </>
       ) : orden.estado === E.ENTREGADA ? (
@@ -1265,12 +1348,24 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
       {modal === 'ticket' && (() => {
         const escaneoFallido = !!foto && pesoOcr == null && ocr && !ocr.cargando // escaneó pero no leyó el peso
         return (
-        <Modal onClose={() => setModal(null)} titulo={t('Ticket de carga')}>
+        <Modal onClose={() => setModal(null)} titulo={t('Ticket de báscula')}>
+          {/* Encabezado tipo maqueta: qué es y por qué importa */}
+          <div className="mb-3 text-center">
+            <div className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-[#c9a24b]">{t('Paso')} 3 {t('de')} 5</div>
+            <div className="mt-1 text-lg font-black text-brand-navy dark:text-slate-100">{t('Sube tu ticket de báscula')}</div>
+            <p className="mt-1 text-[11.5px] leading-snug text-slate-500 dark:text-slate-400">{t('Toma una foto del ticket: el peso se lee solo y tu pago se calcula con ese dato.')}</p>
+          </div>
           <Input placeholder={t('N° de ticket (opcional)')} value={ticketNum} onChange={(e) => setTicketNum(e.target.value)} className="mb-3" />
 
-          {/* Botón grande: abre la cámara y escanea el ticket automáticamente */}
-          <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white shadow-lg ${ocr?.cargando ? 'bg-slate-400' : 'bg-brand-navy dark:bg-amber-500 dark:text-slate-900'}`}>
-            {ocr?.cargando ? <><Spinner /> {t('Escaneando…')} {ocr.progreso || 0}%</> : <><ScanLine size={18} /> {foto ? t('Volver a escanear ticket') : t('Escanear ticket con la cámara')}</>}
+          {/* Zona de captura punteada dorada (maqueta): abre la cámara y escanea */}
+          <label className={`block cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition ${ocr?.cargando ? 'border-slate-300 bg-slate-50 dark:bg-slate-800' : 'border-[#c9a24b] bg-[#c9a24b]/5'}`}>
+            <span className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand-navy text-[#c9a24b] dark:bg-slate-800">
+              {ocr?.cargando ? <Spinner /> : <Camera size={26} />}
+            </span>
+            <span className="block text-sm font-black text-brand-navy dark:text-slate-100">
+              {ocr?.cargando ? `${t('Escaneando…')} ${ocr.progreso || 0}%` : (foto ? t('Volver a escanear ticket') : t('Tomar foto del ticket'))}
+            </span>
+            <span className="mt-0.5 block text-[11px] text-slate-400">{ocr?.cargando ? t('leyendo el peso…') : t('o elegir de la galería')}</span>
             <input type="file" accept="image/*" capture="environment" onChange={onEscanearTicket} disabled={ocr?.cargando} className="hidden" />
           </label>
           {foto && <div className="mt-2"><FotoMini src={foto} etiqueta={t('Ampliar')} onAmpliar={setLightbox} /></div>}
@@ -1293,12 +1388,20 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
             </div>
           )}
 
-          {/* Antes de escanear: guía */}
-          {!foto && <p className="mt-3 text-center text-[11px] text-slate-400">{t('Toca el botón, fotografía el ticket de báscula y el peso se lee solo.')}</p>}
+          {/* Con el peso leído: aviso de cómo cambia el pago (maqueta hintbox) */}
+          {pesoOcr != null && (() => {
+            const pa = pagoAproxDe({ ...orden, pesoReal: pesoOcr, tipoPago: orden.tipoPago })
+            return pa ? (
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#3f9d6b]/10 p-3 text-[11.5px] font-medium text-[#2e7d52]">
+                <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0" />
+                <span>{t('Con')} {pesoOcr} {t('tn tu pago estimado se actualiza a')} <b>≈{money(pa.monto)}</b>. {t('El monto final lo confirma la oficina al liberar.')}</span>
+              </div>
+            ) : null
+          })()}
 
-          <Boton variant="gold" onClick={guardarTicket} className="mt-4 w-full justify-center"
+          <Boton variant="gold" onClick={guardarTicket} className="mt-4 w-full justify-center py-3.5 text-base font-black"
             disabled={ocupado || ocr?.cargando || !(pesoOcr != null || (escaneoFallido && peso))}>
-            {ocupado ? <Spinner /> : t('Confirmar carga')}
+            {ocupado ? <Spinner /> : t('Guardar y continuar')}
           </Boton>
         </Modal>
         )
