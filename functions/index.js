@@ -1238,6 +1238,31 @@ async function ofrecerTx(orderId, presenceId) {
   })
 }
 
+// Fija el PAGO DEL CHOFER de una oferta según la config de su transportista
+// (porcentaje de la tarifa o monto fijo). La tarifa se lee del doc de pago del
+// carrier (tras la migración ya no vive en la orden). Sin config → null y la
+// app del chofer muestra "pago por definir".
+async function _fijarPagoChoferOferta(orden, transportistaId, choferId) {
+  if (!orden || !transportistaId || !choferId) return
+  const [payC, car, cfg] = await Promise.all([
+    db.collection('bulk_orderPay_carrier').doc(orden.id).get(),
+    db.collection('bulk_carriers').doc(transportistaId).get(),
+    db.collection('bulk_carrierConfig').doc(transportistaId).get(),
+  ])
+  const tarifa = Number(payC.exists && payC.data().precioTransportista != null ? payC.data().precioTransportista : orden.precioTransportista) || 0
+  if (tarifa <= 0) return
+  const roster = (car.exists && (car.data().choferes || [])) || []
+  const ficha = roster.find((d) => d.uid === choferId)
+  const conf = ficha && cfg.exists ? ((cfg.data().pagoChoferes || {})[ficha.id] || null) : null
+  if (!conf || !conf.tipo || !(Number(conf.valor) > 0)) return
+  const pago = conf.tipo === 'fijo' ? Math.round(Number(conf.valor) * 100) / 100 : Math.round(tarifa * Number(conf.valor)) / 100
+  await db.collection('bulk_orderPay_chofer').doc(orden.id).set({
+    tenantId: orden.tenantId, orderId: orden.id, numero: orden.numero || '',
+    choferId, transportistaId, pagoChofer: pago, tipoPago: conf.tipo,
+  }, { merge: true })
+  await db.collection('bulk_orders').doc(orden.id).set({ pagoChofer: pago }, { merge: true })
+}
+
 // Empareja la cola de un tenant con sus choferes en línea (FIFO, 1 orden→1 chofer).
 async function matchTenant(tenantId) {
   if (!tenantId || !(await serverSideOn(tenantId))) return
@@ -1265,6 +1290,7 @@ async function matchTenant(tenantId) {
     const res = await ofrecerTx(orden.id, cand[0].id)
     if (res) {
       usados.add(cand[0].id)
+      try { await _fijarPagoChoferOferta(orden, res.transportistaId, res.choferId) } catch (e) { console.warn('pago chofer en oferta', e) }
       try {
         await db.collection('bulk_orderPay_carrier').doc(orden.id).set({ transportistaId: res.transportistaId, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })
         await db.collection('bulk_orderPay_chofer').doc(orden.id).set({ choferId: res.choferId, transportistaId: res.transportistaId, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })

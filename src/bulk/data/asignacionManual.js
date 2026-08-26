@@ -46,7 +46,7 @@ export async function asignarOrdenManual(tenantId, orden, chofer, ctx = {}, opts
   // Si está en línea, lo reservamos para que salga de la cola de disponibles.
   if (chofer.uid) { try { await reservar(chofer.uid, orden.id) } catch { /* noop */ } }
   // Inc.2: fija al dueño en los docs de pago (los importes ya están guardados).
-  try { await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId, numero: orden.numero, ...(opts.pagoChofer != null ? { pagoChofer: opts.pagoChofer } : {}) }) } catch { /* noop */ }
+  try { await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId, numero: orden.numero, ...(opts.pagoChofer != null ? { pagoChofer: opts.pagoChofer } : {}), ...(opts.tipoPago ? { tipoPago: opts.tipoPago } : {}) }) } catch { /* noop */ }
   try { enviarPush(tenantId, `chofer:${choferId}`, 'Orden asignada', `Orden ${orden.numero} — ${orden.pesoEstimado ?? ''} ton ${orden.tipoEquipo ? `(${orden.tipoEquipo})` : ''}`) } catch { /* noop */ }
   try { await auditar(tenantId, { usuario: ctx.usuario?.email, rol: ctx.rol, accion: prev ? 'transferir_orden' : 'asignar_manual', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre || choferId}${prev ? ' (transferida)' : ''}` }) } catch { /* noop */ }
 }

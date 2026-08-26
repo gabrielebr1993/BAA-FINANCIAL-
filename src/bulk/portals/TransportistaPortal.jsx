@@ -199,7 +199,7 @@ export default function TransportistaPortal() {
       const nuevo = calcularPagoChofer(o.precioTransportista, nuevaCfg)
       if (nuevo == null || Number(nuevo) === Number(o.pagoChofer)) continue
       try {
-        await crearConId('orderPay_chofer', o.id, tenantId, { pagoChofer: nuevo })
+        await crearConId('orderPay_chofer', o.id, tenantId, { pagoChofer: nuevo, tipoPago: nuevaCfg.tipo })
         try { await guardar('orders', o.id, { pagoChofer: nuevo }) } catch { /* precios ya viven en el doc de pago */ }
         n++
       } catch { /* sin permiso sobre esa orden: se omite */ }
@@ -212,8 +212,9 @@ export default function TransportistaPortal() {
   }
   const asignarChofer = async (orden, driverId) => {
     const d = choferes.find((c) => c.id === driverId)
-    const pago = calcularPagoChofer(orden.precioTransportista, configDeChofer(pagoChoferes, driverId))
-    await asignarOrdenManual(tenantId, orden, { uid: d?.uid || null, id: driverId, nombre: d?.nombre || '', carrierId: orden.transportistaId || carrierId }, { usuario, rol }, { pagoChofer: pago != null ? pago : undefined })
+    const conf = configDeChofer(pagoChoferes, driverId)
+    const pago = calcularPagoChofer(orden.precioTransportista, conf)
+    await asignarOrdenManual(tenantId, orden, { uid: d?.uid || null, id: driverId, nombre: d?.nombre || '', carrierId: orden.transportistaId || carrierId }, { usuario, rol }, { pagoChofer: pago != null ? pago : undefined, tipoPago: conf?.tipo })
   }
   // Alta de chofer: agrega al roster de MI carrier y, si se dio correo/clave, crea su
   // cuenta de acceso (rol chofer, mismo carrier) para que entre a la app del chofer.

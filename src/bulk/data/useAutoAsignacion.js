@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from './useColeccion'
+import { useOrdenesConPagos } from './useOrdenesConPagos'
 import { guardar } from './repo'
 import { reservar, liberar } from './presencia'
 import { auditar } from './auditoria'
@@ -28,7 +29,10 @@ const OCUPADO_EST = [E.NOTIFICANDO, E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RU
 export function useAutoAsignacion() {
   const { tenantId, usuario, rol } = useBulkAuth()
   const esStaff = STAFF.includes(rol)
-  const { datos: ordenes } = useColeccion('orders')
+  // Órdenes CON los importes fusionados de los docs de pago (tras la migración el
+  // precio del transportista ya no vive en la orden: sin esto el pago del chofer
+  // salía en $0 al ofertar).
+  const { datos: ordenes } = useOrdenesConPagos()
   const { datos: presencias } = useColeccion('presence')
   // Interruptor: si el matching corre en el SERVIDOR (Cloud Function), el motor del
   // navegador se apaga para no chocar. Se enciende en Modo test (señal 'matching').
@@ -44,7 +48,9 @@ export function useAutoAsignacion() {
     const carrier = (carriers || []).find((c) => c.id === chofer.carrierId)
     const rosterId = (carrier?.choferes || []).find((d) => d.uid === chofer.uid)?.id || null
     const cfg = (carrierConfigs || []).find((c) => c.id === chofer.carrierId)?.pagoChoferes || {}
-    return rosterId ? calcularPagoChofer(orden.precioTransportista, configDeChofer(cfg, rosterId)) : null
+    const conf = rosterId ? configDeChofer(cfg, rosterId) : null
+    const pago = conf ? calcularPagoChofer(orden.precioTransportista, conf) : null
+    return pago != null ? { pago, tipo: conf.tipo } : null
   }
 
   // Solo las que NO están ya asignadas a un transporte. Si un dispatcher se la dio a
@@ -67,8 +73,8 @@ export function useAutoAsignacion() {
     // Inc.2: fija al dueño (transportista/chofer) en los docs de pago; los importes
     // ya están guardados desde la creación. Si el transportista definió cómo paga a
     // este chofer, fijamos también su pago (consistente con la asignación manual).
-    const pago = pagoChoferDe(orden, chofer)
-    await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId: chofer.uid, numero: orden.numero, ...(pago != null ? { pagoChofer: pago } : {}) })
+    const pc = pagoChoferDe(orden, chofer)
+    await asignarPagos(tenantId, orden.id, { transportistaId: chofer.carrierId, choferId: chofer.uid, numero: orden.numero, ...(pc != null ? { pagoChofer: pc.pago, tipoPago: pc.tipo } : {}) })
     enviarPush(tenantId, `chofer:${chofer.uid}`, 'Nueva orden', `Orden ${orden.numero} — ${orden.pesoEstimado} ton (${orden.tipoEquipo || '—'})`)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'ofrecer_orden', entidad: 'orden', entidadId: orden.id, detalle: `→ ${chofer.nombre}` })
   }

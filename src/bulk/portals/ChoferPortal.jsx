@@ -84,8 +84,9 @@ export default function ChoferPortal() {
   // (fallback al campo de la orden para las órdenes anteriores a la migración).
   const { datos: pagosChofer } = useColeccion('orderPay_chofer', [where('choferId', '==', usuario?.id || '__none__')])
   const ordenes = useMemo(() => {
-    const m = {}; for (const p of pagosChofer || []) m[p.orderId || p.id] = p.pagoChofer
-    return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, pagoChofer: m[o.id] } : o))
+    const m = {}; const mt = {}
+    for (const p of pagosChofer || []) { const k = p.orderId || p.id; m[k] = p.pagoChofer; if (p.tipoPago) mt[k] = p.tipoPago }
+    return (_ordenesRaw || []).map((o) => ({ ...o, ...(m[o.id] != null ? { pagoChofer: m[o.id] } : {}), ...(mt[o.id] ? { tipoPago: mt[o.id] } : {}) }))
   }, [_ordenesRaw, pagosChofer])
   const { datos: geocercas } = useColeccion('geofences')
   const { datos: plantas } = useColeccion('plants')
@@ -510,6 +511,20 @@ export default function ChoferPortal() {
 
 // Orden entrante a pantalla completa: se sobrepone a todo con Aceptar / Rechazar
 // y un contador de 2:00. Si vence sin respuesta, cuenta como rechazo (timeout).
+// Pago APROXIMADO a mostrar al chofer: el fijado por su transportista (sobre el
+// peso estándar de referencia). Si ya hay peso real del ticket y el trato NO es
+// fijo por carga, se reescala en vivo (el ajuste oficial lo hace el backend al
+// liberar). Devuelve { monto, ajustado } o null si aún no hay pago definido.
+function pagoAproxDe(o) {
+  const base = Number(o?.pagoChofer)
+  if (!(base > 0)) return null
+  const pr = Number(o?.pesoReal), pe = Number(o?.pesoEstimado)
+  if (pr > 0 && pe > 0 && o?.tipoPago !== 'fijo' && Math.abs(pr - pe) > 0.01) {
+    return { monto: Math.round(base * (pr / pe) * 100) / 100, ajustado: true }
+  }
+  return { monto: base, ajustado: false }
+}
+
 function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, pos, onRechazo, onResponder, onDesmarcar, miChofer }) {
   const { t } = useLang()
   const OFERTA_MS = 120000
@@ -526,7 +541,7 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
   const plantaNom = planta?.nombre || _geoRec?.nombre || orden.plantaNombre || t('Planta')
   const plantaDir = planta?.direccion || ''
   // $/tonelada y distancia a la recogida (contexto para decidir la oferta).
-  const porTon = orden.pesoEstimado ? Number(orden.pagoChofer || 0) / Number(orden.pesoEstimado) : null
+  const porTon = orden.pesoEstimado && Number(orden.pagoChofer) > 0 ? Number(orden.pagoChofer) / Number(orden.pesoEstimado) : null
   const objRecogida = geocercaObjetivo(orden, 'recogida', geocercas, plantas)
   const objL = objRecogida ? (Array.isArray(objRecogida) ? objRecogida : [objRecogida]) : []
   const distM = (pos && objL.length) ? Math.min(...objL.map((g) => (g.lat != null ? distanciaM(pos, { lat: g.lat, lng: g.lng }) : Infinity))) : null
@@ -593,8 +608,12 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
 
           {/* Pago protagonista (APROXIMADO: el final depende del peso real del ticket) */}
           <div className="mt-3 text-center">
-            <div className="text-4xl font-black tracking-tight text-brand-navy dark:text-slate-100">≈ {money(orden.pagoChofer)}</div>
-            <div className="mt-0.5 text-xs font-medium text-slate-400">{t('Tu pago aproximado por este viaje')} · <span className="font-mono">{orden.numero}</span></div>
+            {pagoAproxDe(orden) ? (
+              <div className="text-4xl font-black tracking-tight text-brand-navy dark:text-slate-100">≈ {money(pagoAproxDe(orden).monto)}</div>
+            ) : (
+              <div className="text-2xl font-black tracking-tight text-slate-400">{t('Pago por definir')}</div>
+            )}
+            <div className="mt-0.5 text-xs font-medium text-slate-400">{pagoAproxDe(orden) ? `${t('Tu pago aproximado')} (${t('calculado con')} ${orden.pesoEstimado} tn ${t('de referencia')})` : t('Tu transportista aún no define tu pago para esta carga')} · <span className="font-mono">{orden.numero}</span></div>
             <p className="mx-auto mt-2 max-w-xs rounded-xl bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium leading-snug text-amber-700 dark:text-amber-300">
               {t('El precio puede variar según las toneladas que cargues en la planta. Tu pago real se calcula al finalizar la orden con el peso del ticket de báscula.')}
             </p>
@@ -1091,11 +1110,21 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
       )}
 
       <div className="mt-2 rounded-2xl bg-emerald-50 px-3 py-2 dark:bg-emerald-500/10">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">≈ {money(orden.pagoChofer)}</span>
-          <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago aproximado por este viaje')}</span>
-        </div>
-        <p className="mt-0.5 text-[10px] leading-snug text-emerald-700/60 dark:text-emerald-400/60">{t('El pago real se calcula al terminar, con las toneladas del ticket de báscula.')}</p>
+        {(() => { const pa = pagoAproxDe(orden); return pa ? (
+          <>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">≈ {money(pa.monto)}</span>
+              <span className="text-xs font-medium text-emerald-700/70 dark:text-emerald-400/70">{t('tu pago aproximado por este viaje')}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] leading-snug text-emerald-700/60 dark:text-emerald-400/60">
+              {pa.ajustado
+                ? `${t('Ajustado al ticket')}: ${orden.pesoReal} tn (${t('referencia')} ${orden.pesoEstimado} tn). ${t('El pago final se confirma al liberar la orden.')}`
+                : `${t('Calculado con')} ${orden.pesoEstimado} tn ${t('de referencia — puede subir o bajar según las toneladas reales del ticket de báscula.')}`}
+            </p>
+          </>
+        ) : (
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-300">{t('Pago por definir: tu transportista aún no configura tu pago para esta carga.')}</p>
+        ) })()}
       </div>
 
       <button onClick={llamarSupervisor}

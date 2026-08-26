@@ -30,7 +30,7 @@ export async function escribirPreciosBase(tenantId, orden) {
 
 // Fija el DUEÑO al asignar (merge): no toca los importes ya guardados. Si el
 // transportista recalcula el pago del chofer, se pasa en `pagoChofer`.
-export async function asignarPagos(tenantId, orderId, { transportistaId, choferId, pagoChofer, numero } = {}) {
+export async function asignarPagos(tenantId, orderId, { transportistaId, choferId, pagoChofer, tipoPago, numero } = {}) {
   if (!orderId) return
   const base = numero != null ? { orderId, numero } : { orderId }
   if (transportistaId != null) {
@@ -39,6 +39,7 @@ export async function asignarPagos(tenantId, orderId, { transportistaId, choferI
   if (choferId != null) {
     const d = { ...base, choferId, transportistaId: transportistaId ?? null }
     if (pagoChofer != null) d.pagoChofer = pagoChofer
+    if (tipoPago) d.tipoPago = tipoPago // 'porcentaje' | 'fijo' — para el preview del chofer
     try { await crearConId('orderPay_chofer', orderId, tenantId, d) } catch { /* reglas */ }
   }
 }
