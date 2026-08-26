@@ -199,10 +199,10 @@ export default function ChoferPortal() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miCarrier?.id, miChofer?.id])
-  // Cuenta un rechazo; al llegar a 3 me desactiva (salgo de la cola de espera).
-  // Contador de rechazos VOLUNTARIOS de ESTA sesión. Al llegar a 2, se le cierra la
-  // sesión (al reingresar, el contador vuelve a 0 y se vuelve a la cola al conectarse).
-  // La orden rechazada NO se detiene: sigue ofreciéndose a otros choferes disponibles.
+  // Contador de rechazos VOLUNTARIOS de ESTA sesión. Cada rechazo ya lo manda AL
+  // FINAL de la cola (liberar() reinicia su turno con desde=ahora). Al acumular 2,
+  // ya NO se le cierra la sesión: solo se le avisa que quedó al último y el
+  // contador se reinicia. La orden rechazada sigue ofreciéndose a otros choferes.
   const rechazosSesion = useRef(0)
   const registrarRechazo = async (esTimeout = false) => {
     // Intento (best-effort) de reflejar el conteo en el roster; si el chofer no tiene
@@ -214,10 +214,11 @@ export default function ChoferPortal() {
     if (esTimeout) return // no responder a tiempo NO cuenta como rechazo voluntario
     rechazosSesion.current += 1
     if (rechazosSesion.current >= 2) {
-      notificar(t('Sesión cerrada'), t('Rechazaste 2 órdenes. Vuelve a iniciar sesión para seguir recibiendo cargas.'))
-      window.alert(t('Rechazaste 2 órdenes. Se cerrará tu sesión. Vuelve a entrar y conéctate para volver a la cola.'))
-      try { await desconectar(usuario.id) } catch { /* noop */ } // salgo de la cola de inmediato
-      cerrarSesion()
+      rechazosSesion.current = 0
+      // Refuerzo del "al final": renueva su turno en la cola de disponibles.
+      try { await liberar(usuario.id) } catch { /* noop */ }
+      notificar(t('Pasaste al final de la cola'), t('Rechazaste varias órdenes seguidas: seguirás recibiendo cargas, pero después de los demás choferes disponibles.'))
+      window.alert(t('Rechazaste varias órdenes seguidas. Sigues en línea, pero pasaste AL FINAL de la cola: las próximas cargas se ofrecerán primero a los demás choferes disponibles.'))
     }
   }
   // Una orden es "mía" si me la asignaron por mi uid de login, por mi id en el
