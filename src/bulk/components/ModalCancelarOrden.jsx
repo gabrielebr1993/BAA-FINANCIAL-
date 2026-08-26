@@ -15,7 +15,7 @@ export default function ModalCancelarOrden({ orden, ctx, onClose, onDone }) {
     setOcupado(true)
     const m = motivo === 'Otro' ? (otro.trim() || 'Otro') : motivo
     try { await cancelarOrden(orden, { ...ctx, motivo: m }); onDone?.() }
-    catch { window.alert(t('No se pudo cancelar la orden.')); setOcupado(false) }
+    catch (e) { window.alert(`${t('No se pudo cancelar la orden.')}\n\n[${e?.code || 'error'}] ${e?.message || ''}`); setOcupado(false) }
   }
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>

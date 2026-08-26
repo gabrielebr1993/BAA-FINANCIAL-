@@ -32,11 +32,14 @@ export async function cancelarOrden(orden, { tenantId, usuario, rol, motivo }) {
     pagoChofer: orden.pagoChofer ?? null,
     ts: iso(),
   }
+  // En la ORDEN los precios van en null (las reglas prohíben valores de precio en
+  // el doc de la orden tras la migración: null = sin cobro/pago). Los ceros
+  // explícitos quedan en los docs de pago por audiencia.
   await guardar('orders', orden.id, {
     estado: E.CANCELADA,
     cancelacion: { por: usuario?.nombre || usuario?.email || '', motivo: motivo || 'Sin motivo', ts: iso() },
     asignacionExpira: null,
-    precioCliente: 0, precioTransportista: 0, pagoChofer: 0,
+    precioCliente: null, precioTransportista: null, pagoChofer: null,
     anulado,
   })
   // Docs de pago por audiencia: mismos ceros (si existen; aditivo y tolerante).
