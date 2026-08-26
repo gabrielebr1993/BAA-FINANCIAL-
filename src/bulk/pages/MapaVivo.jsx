@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import ChatOrden from '../components/ChatOrden'
 import { useColeccion } from '../data/useColeccion'
 import { suscribirTrack } from '../data/tracking'
+import { eliminar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { metricasRecorrido } from '../domain/geo'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_HITOS } from '../domain/constants'
@@ -50,12 +51,24 @@ export default function MapaVivo() {
   // El panel "Entradas y salidas" es EN VIVO, no un archivo: solo eventos de
   // órdenes aún en curso (los de viajes terminados viven en el historial de la
   // orden), y nunca de más de 12 horas.
+  // Notificaciones DESCARTADAS por el usuario (persisten en este navegador). El
+  // admin además borra el evento de la base para todos.
+  const [geoOcultos, setGeoOcultos] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('mp-geo-descartados') || '[]')) } catch { return new Set() }
+  })
+  const descartarGeo = (ids) => {
+    const s2 = new Set(geoOcultos); ids.forEach((id) => s2.add(id))
+    setGeoOcultos(s2)
+    try { localStorage.setItem('mp-geo-descartados', JSON.stringify([...s2].slice(-400))) } catch { /* lleno */ }
+    // Borrado real (solo lo permite la regla al admin; si no, queda el descarte local).
+    ids.forEach((id) => eliminar('geoeventos', id).catch(() => {}))
+  }
   const geoeventos = useMemo(() => {
     const enCurso = new Set(activas.map((o) => o.id))
     const limite = Date.now() - 12 * 3600 * 1000
     // Estricto: SOLO eventos cuya orden sigue en curso (sin orden conocida → fuera).
-    return (_geoeventosRaw || []).filter((e) => e.orderId && enCurso.has(e.orderId) && tsMillis(e.ts) >= limite)
-  }, [_geoeventosRaw, activas])
+    return (_geoeventosRaw || []).filter((e) => e.orderId && enCurso.has(e.orderId) && tsMillis(e.ts) >= limite && !geoOcultos.has(e.id))
+  }, [_geoeventosRaw, activas, geoOcultos])
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     return activas.filter((o) =>
@@ -144,6 +157,9 @@ export default function MapaVivo() {
           <div className="mb-2 flex items-center gap-2 px-1 text-sm font-bold text-brand-navy dark:text-slate-100">
             <MapPin size={15} className="text-amber-500" /> {t('Entradas y salidas de geocercas')}
             <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{t('En vivo')}</span>
+            <button onClick={() => descartarGeo(geoeventos.map((e) => e.id))} className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-500">
+              <X size={13} /> {t('Limpiar todo')}
+            </button>
           </div>
           <div className="scroll-thin max-h-60 space-y-1 overflow-y-auto">
             {geoeventos.map((e) => {
@@ -159,6 +175,7 @@ export default function MapaVivo() {
                     <div className="truncate text-[11px] text-slate-400">{e.unidad ? `${t('Unidad')} ${e.unidad} · ` : ''}{cuando}</div>
                   </div>
                   <Badge color={entrada ? 'green' : 'gold'}>{entrada ? t('Entrada') : t('Salida')}</Badge>
+                  <button onClick={() => descartarGeo([e.id])} title={t('Eliminar notificación')} className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-slate-300 transition hover:bg-rose-500/10 hover:text-rose-500"><X size={14} /></button>
                 </div>
               )
             })}
