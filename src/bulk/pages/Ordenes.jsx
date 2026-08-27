@@ -73,6 +73,7 @@ export default function Ordenes() {
   const { datos: jobsTk } = useColeccion('jobs')
   const { datos: plantasTk } = useColeccion('plants')
   const { datos: materialesTk } = useColeccion('materials')
+  const { datos: clientes } = useColeccion('clients')
   const jobsMap = useMemo(() => { const m = {}; for (const j of jobsTk || []) m[j.id] = j; return m }, [jobsTk])
   const plantasMap = useMemo(() => { const m = {}; for (const p of plantasTk || []) m[p.id] = p; return m }, [plantasTk])
   const carriersMap = useMemo(() => { const m = {}; for (const c of carriers || []) m[c.id] = c; return m }, [carriers])
