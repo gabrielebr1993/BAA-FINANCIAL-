@@ -168,6 +168,16 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
             <p className="mt-4 text-lg font-black text-brand-navy dark:text-slate-100">{t('¡En hora buena!')}</p>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Tu dinero está en camino')}{nombre ? `, ${nombre}` : ''}.</p>
             <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#15b66b]/10 px-3 py-1 text-sm font-bold text-[#15b66b]">{money(resultado?.neto || 0)}</div>
+            {resultado?.instant
+              ? <div className="mx-auto mt-2 flex max-w-xs items-center justify-center gap-1.5 rounded-xl bg-[#15b66b]/10 px-3 py-2 text-xs font-bold text-[#15b66b]"><Zap size={14} /> {t('Enviado a tu tarjeta de débito · llega en ~30 minutos')}</div>
+              : (
+                <div className="mx-auto mt-2 max-w-xs rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                  <b>{t('Va en depósito estándar a tu banco (1–2 días hábiles).')}</b>{' '}
+                  {resultado?.instantMotivo === 'SIN_TARJETA'
+                    ? t('Para cobrar en minutos, agrega una TARJETA DE DÉBITO como cuenta de cobro en tu panel de Stripe (te llegó el enlace por correo al registrarte).')
+                    : t('El envío instantáneo no estuvo disponible esta vez; tu dinero llega igual por la vía normal.')}
+                </div>
+              )}
             <div className="mt-2 space-y-0.5 text-[11px] text-slate-400">
               {resultado?.numero && <div>{t('Operación')}: <span className="font-mono font-bold">{resultado.numero}</span></div>}
               {resultado?.transferId && <div>{t('Referencia')}: <span className="font-mono">{resultado.transferId}</span></div>}

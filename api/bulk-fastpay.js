@@ -361,7 +361,7 @@ export default async function handler(req, res) {
       // Reintento idempotente: la operación YA existe → devolver su resultado tal cual.
       if (previo) {
         if (previo.estado === 'pagado' || previo.estado === 'procesando') {
-          return res.status(200).json({ ok: true, idempotente: true, numero: previo.numero, base: previo.montoBase, comision: previo.comision, neto: previo.neto, transferId: previo.transferId || '', balanceDespues: previo.balanceDespues, estado: previo.estado, test: previo.test === true })
+          return res.status(200).json({ ok: true, idempotente: true, numero: previo.numero, base: previo.montoBase, comision: previo.comision, neto: previo.neto, transferId: previo.transferId || '', balanceDespues: previo.balanceDespues, estado: previo.estado, instant: previo.instant === true, instantMotivo: previo.instantMotivo || '', test: previo.test === true })
         }
         return res.status(400).json({ ok: false, error: `Esta operación terminó en «${previo.estado}». Vuelve a intentar con un retiro nuevo.` })
       }
@@ -375,13 +375,49 @@ export default async function handler(req, res) {
           metadata: { bulkUid: auth.uid, tenant: auth.tenant, tipo: auth.tipo, opId, numero: retiro.numero, base: String(monto), comision: String(comision) },
         }, { idempotencyKey: 'fp_' + opId })
         retiro.transferId = tr.id
+
+        // ── INSTANT PAYOUT: empujar el dinero a la TARJETA DE DÉBITO ya mismo ──
+        // La transferencia deja el neto en la cuenta Stripe del titular; sin este
+        // paso, Stripe lo deposita al banco en 1-2 días hábiles. Aquí pedimos el
+        // envío instantáneo (~30 min, tarjeta de débito elegible). Se retira TODO
+        // el instant_available (incluye restos de retiros previos). La comisión de
+        // Stripe por instantáneo la cobra a la cuenta del titular: si el monto
+        // completo no cabe (balance_insufficient), se reintenta dejando margen de
+        // 2% + $0.50. Si la cuenta no es elegible (sin tarjeta de débito, cuenta
+        // recién creada), NO es un error del retiro: queda 'pagado' con depósito
+        // estándar y la app le explica al titular cómo activar lo instantáneo.
+        let instant = false, instantId = '', instantMotivo = ''
+        try {
+          const bal = await stripe.balance.retrieve({ stripeAccount: titular.stripeAccountId })
+          const inst = ((bal.instant_available || []).find((b) => b.currency === 'usd') || {}).amount || 0
+          if (inst > 0) {
+            const intentos = [inst, inst - Math.max(50, Math.ceil(inst * 0.02) + 50)]
+            for (const cent of intentos) {
+              if (!(cent > 0)) break
+              try {
+                const po = await stripe.payouts.create(
+                  { amount: cent, currency: 'usd', method: 'instant', description: `Fast Pay MilePay ${retiro.numero}`, metadata: { opId, numero: retiro.numero } },
+                  { stripeAccount: titular.stripeAccountId, idempotencyKey: 'fpi_' + opId + '_' + cent },
+                )
+                instant = true; instantId = po.id; break
+              } catch (pe) {
+                if (pe?.code === 'balance_insufficient') continue
+                instantMotivo = pe?.message || 'no elegible'; break
+              }
+            }
+            if (!instant && !instantMotivo) instantMotivo = 'saldo instantáneo insuficiente'
+          } else {
+            instantMotivo = 'SIN_TARJETA'
+          }
+        } catch (pe) { instantMotivo = pe?.message || 'no disponible' }
+
         const aplicadoA = auth.tipo === 'carrier' ? await aplicarAStatements(db, a, auth, { ...retiro, id: rref.id }) : []
-        await rref.set({ estado: 'pagado', transferId: tr.id, aplicadoA, pagadoEn: new Date().toISOString() }, { merge: true })
+        await rref.set({ estado: 'pagado', transferId: tr.id, aplicadoA, instant, instantId, instantMotivo, pagadoEn: new Date().toISOString() }, { merge: true })
         await db.collection('bulk_audit').add({
           tenantId: auth.tenant, usuario: auth.email || auth.uid, accion: 'fastpay_retiro', entidad: 'pago',
-          detalle: `${retiro.numero} · ${nombreTitular} (${auth.tipo}) · base $${monto} (${cfg.porcentaje}% eleg.) · comisión $${comision} · neto $${neto} · saldo ${retiro.disponibleAntes}→${retiro.balanceDespues} · ${tr.id}${test ? ' · TEST' : ''}`, ts,
+          detalle: `${retiro.numero} · ${nombreTitular} (${auth.tipo}) · base $${monto} (${cfg.porcentaje}% eleg.) · comisión $${comision} · neto $${neto} · saldo ${retiro.disponibleAntes}→${retiro.balanceDespues} · ${tr.id}${instant ? ` · instant ${instantId}` : ' · depósito estándar'}${test ? ' · TEST' : ''}`, ts,
         }).catch(() => {})
-        return res.status(200).json({ ok: true, numero: retiro.numero, base: monto, comision, neto, transferId: tr.id, balanceDespues: retiro.balanceDespues, estado: 'pagado', test })
+        return res.status(200).json({ ok: true, numero: retiro.numero, base: monto, comision, neto, transferId: tr.id, balanceDespues: retiro.balanceDespues, estado: 'pagado', instant, instantMotivo, test })
       } catch (e) {
         // Falló Stripe: liberar el monto reservado y dejar el intento en el historial.
         await db.runTransaction(async (tx) => {

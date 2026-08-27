@@ -247,7 +247,13 @@ export default function FastPay() {
                       <td className="px-2 py-2 text-right font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{money(r.neto)}</td>
                       <td className="px-2 py-2 text-right tabular-nums text-slate-500">{r.balanceDespues != null ? money(r.balanceDespues) : '—'}</td>
                       <td className="px-2 py-2 text-xs text-slate-500">{r.usuario || '—'}</td>
-                      <td className="px-2 py-2"><Badge color={e.c}>{t(e.l)}</Badge>{r.test && <div className="mt-0.5 text-[9px] font-bold uppercase text-amber-500">test</div>}</td>
+                      <td className="px-2 py-2">
+                        <Badge color={e.c}>{t(e.l)}</Badge>
+                        {r.estado === 'pagado' && (r.instant
+                          ? <div className="mt-0.5 text-[9px] font-bold uppercase text-emerald-500">⚡ {t('instantáneo')}</div>
+                          : r.instant === false && <div className="mt-0.5 text-[9px] font-semibold uppercase text-slate-400">{t('depósito 1–2 días')}</div>)}
+                        {r.test && <div className="mt-0.5 text-[9px] font-bold uppercase text-amber-500">test</div>}
+                      </td>
                       <td className="px-2 py-2 text-right">
                         {gestiona && r.estado === 'pagado' && (
                           <button onClick={() => setPorRevertir(r)} title={t('Revertir retiro')} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:hover:bg-rose-500/10"><RotateCcw size={12} /> {t('Revertir')}</button>
