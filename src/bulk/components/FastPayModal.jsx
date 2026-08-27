@@ -21,7 +21,7 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
 export default function FastPayModal({ abierto, onClose, nombre }) {
   const { t } = useLang()
-  const [paso, setPaso] = useState('cargando') // cargando|config|inactivo|sinsaldo|monto|procesando|listo|error
+  const [paso, setPaso] = useState('cargando') // cargando|config|tarjeta|inactivo|sinsaldo|monto|procesando|listo|error
   const [info, setInfo] = useState(null)
   const [monto, setMonto] = useState('')
   const [resultado, setResultado] = useState(null)
@@ -47,6 +47,8 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
         setInfo(d)
         if (!d.activo || !d.aplicaRol) { setPaso('inactivo'); return }
         if (d.estado !== 'verificado') { setPaso('config'); return }
+        // Fast Pay es solo instantáneo: sin tarjeta de débito no hay retiro.
+        if (!d.test && d.instantListo === false) { setPaso('tarjeta'); return }
         if (!(d.elegible > 0)) { setPaso('sinsaldo'); return }
         opIdRef.current = nuevoOpId()
         setMonto(String(d.elegible))
@@ -58,6 +60,22 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
 
   const configurar = async () => {
     try { const d = await api({ accion: 'onboarding' }); window.open(d.url, '_blank', 'noopener') } catch (e) { setErr(e.message); setPaso('error') }
+  }
+  const abrirPanel = async () => {
+    try { const d = await api({ accion: 'panel' }); window.open(d.url, '_blank', 'noopener') } catch (e) { setErr(e.message); setPaso('error') }
+  }
+  const reconsultar = () => {
+    setPaso('cargando'); setErr('')
+    api({ accion: 'estado' })
+      .then((d) => {
+        setInfo(d)
+        if (!d.activo || !d.aplicaRol) { setPaso('inactivo'); return }
+        if (d.estado !== 'verificado') { setPaso('config'); return }
+        if (!d.test && d.instantListo === false) { setPaso('tarjeta'); return }
+        if (!(d.elegible > 0)) { setPaso('sinsaldo'); return }
+        opIdRef.current = nuevoOpId(); setMonto(String(d.elegible)); setPaso('monto')
+      })
+      .catch((e) => { setErr(e.message); setPaso('error') })
   }
 
   const montoN = r2(monto)
@@ -114,7 +132,26 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
                 : t('Para recibir tu dinero, primero configura tu cuenta de cobro (se hace una sola vez, con Stripe).')}
             </p>
             {info && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
-            {info?.estado !== 'en_revision' && <Boton className="mt-4 w-full" onClick={configurar}><Landmark size={16} /> {t('Configurar mi cuenta de cobro')}</Boton>}
+            {info?.estado !== 'en_revision' && (
+              <>
+                <div className="mx-auto mt-2 max-w-xs rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                  ⚡ {t('Importante: registra una TARJETA DE DÉBITO como forma de cobro — así tu dinero llega en ~30 minutos.')}
+                </div>
+                <Boton className="mt-4 w-full" onClick={configurar}><Landmark size={16} /> {t('Configurar mi cuenta de cobro')}</Boton>
+              </>
+            )}
+            <button onClick={onClose} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
+          </div>
+        )}
+
+        {paso === 'tarjeta' && (
+          <div className="text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Zap size={26} /></div>
+            <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Te falta tu tarjeta de débito')}</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Tu cuenta está verificada, pero solo tiene banco registrado: agrega tu tarjeta en tu panel de Stripe (2 minutos).')}</p>
+            {info && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
+            <Boton className="mt-4 w-full" onClick={abrirPanel}><Landmark size={16} /> {t('Abrir mi panel de Stripe · agregar tarjeta')}</Boton>
+            <button onClick={reconsultar} className="mt-2 w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">{t('Ya la agregué · verificar de nuevo')}</button>
             <button onClick={onClose} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
           </div>
         )}
@@ -191,7 +228,7 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
           <div className="text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-rose-100 text-rose-500 dark:bg-rose-500/15"><AlertTriangle size={26} /></div>
             <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{err || t('Algo salió mal. Intenta de nuevo.')}</p>
-            <Boton className="mt-4 w-full" onClick={() => { setPaso('cargando'); setErr(''); api({ accion: 'estado' }).then((d) => { setInfo(d); if (d.estado !== 'verificado') setPaso('config'); else if (!(d.elegible > 0)) setPaso('sinsaldo'); else { opIdRef.current = nuevoOpId(); setMonto(String(d.elegible)); setPaso('monto') } }).catch((e) => { setErr(e.message); setPaso('error') }) }}>{t('Reintentar')}</Boton>
+            <Boton className="mt-4 w-full" onClick={reconsultar}>{t('Reintentar')}</Boton>
             <button onClick={onClose} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
           </div>
         )}

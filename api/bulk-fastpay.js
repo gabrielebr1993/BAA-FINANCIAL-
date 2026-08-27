@@ -52,6 +52,22 @@ async function configDe(db, tenantId) {
   }
 }
 
+// ¿La cuenta conectada tiene un destino de cobro INSTANTÁNEO (tarjeta de débito
+// elegible, o banco que Stripe admita en instantáneo)? Fast Pay es solo
+// instantáneo: sin esto el retiro se bloquea ANTES de mover dinero. Si la
+// consulta a Stripe falla (red), devolvemos null = no concluyente y no se
+// bloquea (el fallback tras la transferencia cubre ese caso raro).
+async function tieneDestinoInstant(stripe, accountId) {
+  try {
+    const [cards, banks] = await Promise.all([
+      stripe.accounts.listExternalAccounts(accountId, { object: 'card', limit: 10 }),
+      stripe.accounts.listExternalAccounts(accountId, { object: 'bank_account', limit: 10 }),
+    ])
+    const todos = [...(cards.data || []), ...(banks.data || [])]
+    return todos.some((x) => (x.available_payout_methods || []).includes('instant'))
+  } catch { return null }
+}
+
 // Autoriza al llamador. Devuelve { uid, tenant, rol, tipo, quienId, email } o error.
 //   chofer        → tipo 'chofer',  quienId = uid
 //   transportista → tipo 'carrier', quienId = bulkCarrierId
@@ -268,19 +284,34 @@ export default async function handler(req, res) {
 
     if (accion === 'estado') {
       let estado = 'sin_registrar'
+      let instantListo = null // true/false; null = sin cuenta o no se pudo consultar
       if (titular.stripeAccountId) {
         try {
           const stripe = await cargarStripe()
           const acct = await stripe.accounts.retrieve(titular.stripeAccountId)
           estado = (acct.payouts_enabled && acct.charges_enabled) ? 'verificado' : acct.details_submitted ? 'en_revision' : 'pendiente'
           await tref.set({ stripeEstado: estado, stripeActualizado: a.FieldValue.serverTimestamp() }, { merge: true })
+          if (estado === 'verificado') instantListo = await tieneDestinoInstant(stripe, titular.stripeAccountId)
         } catch { estado = titular.stripeEstado || 'pendiente' }
       }
       return res.status(200).json({
-        ok: true, estado, ganado, retirado, disponible, elegible,
+        ok: true, estado, instantListo, ganado, retirado, disponible, elegible,
         porcentaje: cfg.porcentaje, comisionPct: cfg.comisionPct, activo: cfg.activo, aplicaRol,
         test, modoReal: cfg.modoReal, tipo: auth.tipo,
       })
+    }
+
+    // Enlace de entrada al panel Stripe Express del titular (para agregar o
+    // cambiar su tarjeta de débito sin esperar el correo de Stripe).
+    if (accion === 'panel') {
+      if (!titular.stripeAccountId) return res.status(400).json({ ok: false, error: 'Primero configura tu cuenta de cobro.' })
+      try {
+        const stripe = await cargarStripe()
+        const link = await stripe.accounts.createLoginLink(titular.stripeAccountId)
+        return res.status(200).json({ ok: true, url: link.url })
+      } catch (e) {
+        return res.status(400).json({ ok: false, error: 'No se pudo abrir tu panel de Stripe: ' + (e?.message || '') })
+      }
     }
 
     if (accion === 'onboarding') {
@@ -313,6 +344,17 @@ export default async function handler(req, res) {
       }
       if (titular.stripeEstado !== 'verificado' || !titular.stripeAccountId) {
         return res.status(400).json({ ok: false, error: 'Tu cuenta de cobro aún no está verificada; completa el registro primero.' })
+      }
+      // Fast Pay es SOLO instantáneo: sin tarjeta de débito elegible no se retira
+      // (se verifica ANTES de mover dinero; en modo prueba no se exige porque las
+      // cuentas de test no traen tarjetas instantáneas). null = consulta fallida:
+      // no bloqueamos, el fallback posterior a la transferencia lo cubre.
+      if (!test) {
+        const stripeChk = await cargarStripe()
+        const puedeInstant = await tieneDestinoInstant(stripeChk, titular.stripeAccountId)
+        if (puedeInstant === false) {
+          return res.status(400).json({ ok: false, code: 'SIN_TARJETA', error: 'Fast Pay envía tu dinero en minutos a una TARJETA DE DÉBITO. Agrega la tuya en tu panel de Stripe y vuelve a intentar.' })
+        }
       }
       const opId = String(body.opId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64)
       if (opId.length < 8) return res.status(400).json({ ok: false, error: 'Falta el identificador de la operación (opId). Actualiza la app.' })
