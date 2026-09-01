@@ -451,7 +451,7 @@ export default function ChoferPortal() {
                   <DollarSign size={17} /> {t('Cobrar ahora · Fast Pay')}
                 </button>
               </div>
-              <div className="mt-1.5 text-center text-[11px] text-slate-400">{t('Retiro instantáneo a tu cuenta · comisión 3%')}</div>
+              <div className="mt-1.5 text-center text-[11px] text-slate-400">{t('Retiro instantáneo a tu tarjeta de débito · la comisión exacta se muestra antes de confirmar')}</div>
               {/* Gráfico últimos 7 días (por fecha de entrega). */}
               {(() => {
                 const hoyD = new Date(); const dias = []

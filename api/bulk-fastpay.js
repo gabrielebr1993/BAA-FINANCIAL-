@@ -289,17 +289,23 @@ export default async function handler(req, res) {
     if (accion === 'estado') {
       let estado = 'sin_registrar'
       let instantListo = null // true/false; null = sin cuenta o no se pudo consultar
+      let tarjeta = null // { marca, ultimos4 } de la tarjeta de cobro activa
       if (titular.stripeAccountId) {
         try {
           const stripe = await cargarStripe()
           const acct = await stripe.accounts.retrieve(titular.stripeAccountId)
           estado = (acct.payouts_enabled && acct.charges_enabled) ? 'verificado' : acct.details_submitted ? 'en_revision' : 'pendiente'
           await tref.set({ stripeEstado: estado, stripeActualizado: a.FieldValue.serverTimestamp() }, { merge: true })
-          if (estado === 'verificado') instantListo = await tieneDestinoInstant(stripe, titular.stripeAccountId)
+          if (estado === 'verificado') {
+            const dst = await destinosInstant(stripe, titular.stripeAccountId)
+            instantListo = dst == null ? null : dst.length > 0
+            const tarj = (dst || []).find((x) => x.id === titular.stripeCardId) || (dst || []).find((x) => x.object === 'card')
+            if (tarj) tarjeta = { marca: tarj.brand || '', ultimos4: tarj.last4 || '' }
+          }
         } catch { estado = titular.stripeEstado || 'pendiente' }
       }
       return res.status(200).json({
-        ok: true, estado, instantListo, ganado, retirado, disponible, elegible,
+        ok: true, estado, instantListo, tarjeta, ganado, retirado, disponible, elegible,
         porcentaje: cfg.porcentaje, comisionPct: cfg.comisionPct, activo: cfg.activo, aplicaRol,
         test, modoReal: cfg.modoReal, tipo: auth.tipo,
       })
@@ -321,6 +327,17 @@ export default async function handler(req, res) {
       try {
         const stripe = await cargarStripe()
         const card = await stripe.accounts.createExternalAccount(titular.stripeAccountId, { external_account: tok })
+        // La nueva tarjeta pasa a ser LA tarjeta de cobro: se recuerda su id (el
+        // payout instantáneo la prioriza) y las tarjetas anteriores se retiran de
+        // Stripe (mejor esfuerzo: si alguna es default y no se deja borrar, solo
+        // queda inactiva porque los pagos apuntan a la nueva por id).
+        await tref.set({ stripeCardId: card.id, stripeActualizado: a.FieldValue.serverTimestamp() }, { merge: true })
+        try {
+          const viejas = await stripe.accounts.listExternalAccounts(titular.stripeAccountId, { object: 'card', limit: 10 })
+          for (const v of (viejas.data || [])) {
+            if (v.id !== card.id) await stripe.accounts.deleteExternalAccount(titular.stripeAccountId, v.id).catch(() => {})
+          }
+        } catch { /* mejor esfuerzo */ }
         const instantListo = await tieneDestinoInstant(stripe, titular.stripeAccountId)
         await db.collection('bulk_audit').add({ tenantId: auth.tenant, usuario: auth.email || auth.uid, accion: 'fastpay_tarjeta', entidad: 'pago', detalle: `${nombreTitular} agregó tarjeta ${card.brand || ''} ····${card.last4 || ''} (instant: ${instantListo === true ? 'sí' : 'aún no'})`, ts: new Date().toISOString() }).catch(() => {})
         return res.status(200).json({ ok: true, marca: card.brand || '', ultimos4: card.last4 || '', instantListo })
@@ -464,7 +481,7 @@ export default async function handler(req, res) {
             // Destino explícito: la tarjeta de débito elegible (si el default de
             // la cuenta es el banco, sin esto el payout instantáneo fallaría).
             const dst = await destinosInstant(stripe, titular.stripeAccountId)
-            const dstId = ((dst || []).find((x) => x.object === 'card') || (dst || [])[0] || {}).id || null
+            const dstId = ((dst || []).find((x) => x.id === titular.stripeCardId) || (dst || []).find((x) => x.object === 'card') || (dst || [])[0] || {}).id || null
             const intentos = [inst, inst - Math.max(50, Math.ceil(inst * 0.02) + 50)]
             for (const cent of intentos) {
               if (!(cent > 0)) break

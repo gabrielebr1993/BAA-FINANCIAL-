@@ -198,9 +198,13 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
         {paso === 'tarjeta' && (
           <div className="text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Zap size={26} /></div>
-            <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Te falta tu tarjeta de débito')}</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Escríbela aquí mismo (la física de tu banco, la que usas en el cajero).')}</p>
-            {info && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
+            <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{info?.instantListo ? t('Cambiar tarjeta de débito') : t('Te falta tu tarjeta de débito')}</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+              {info?.instantListo
+                ? <>{info?.tarjeta?.ultimos4 ? `${t('Tarjeta actual')}: ${info.tarjeta.marca || ''} ····${info.tarjeta.ultimos4}. ` : ''}{t('Escribe la nueva tarjeta y reemplazará a la anterior; tus próximos cobros llegarán a la nueva.')}</>
+                : t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Escríbela aquí mismo (la física de tu banco, la que usas en el cajero).')}
+            </p>
+            {info && !info.instantListo && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
             {tarForm && (
               <div className="mt-4 text-left">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('Número de tu tarjeta de débito')}</span>
@@ -212,7 +216,7 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
             )}
             {tarErr && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{tarErr}</p>}
             <button onClick={abrirPanel} className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Landmark size={13} className="mr-1 inline" /> {t('Prefiero hacerlo en mi panel de Stripe')}</button>
-            <button onClick={reconsultar} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Ya la agregué · verificar de nuevo')}</button>
+            <button onClick={reconsultar} className="mt-2 w-full py-1 text-xs text-slate-400">{info?.instantListo ? t('Volver sin cambiar') : t('Ya la agregué · verificar de nuevo')}</button>
             <button onClick={onClose} className="mt-1 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
           </div>
         )}
@@ -252,7 +256,12 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
               <div className="text-right text-[11px] text-slate-400">{t('Saldo después del retiro')}: {money(r2(info.disponible - montoN))}</div>
             </div>
             <Boton className="mt-4 w-full" onClick={retirar} disabled={!valido}>{t('Confirmar retiro')} · {money(neto)}</Boton>
-            <button onClick={onClose} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cancelar')}</button>
+            {!info.test && (
+              <button onClick={() => setPaso('tarjeta')} className="mt-2 w-full py-1 text-center text-xs font-semibold text-slate-400 underline-offset-2 hover:text-amber-600 hover:underline">
+                {info.tarjeta?.ultimos4 ? `${t('Cambiar tarjeta de débito')} (····${info.tarjeta.ultimos4})` : t('Cambiar tarjeta de débito')}
+              </button>
+            )}
+            <button onClick={onClose} className="mt-1 w-full py-1 text-xs text-slate-400">{t('Cancelar')}</button>
           </div>
         )}
 
