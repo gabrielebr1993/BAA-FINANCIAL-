@@ -57,15 +57,19 @@ async function configDe(db, tenantId) {
 // instantáneo: sin esto el retiro se bloquea ANTES de mover dinero. Si la
 // consulta a Stripe falla (red), devolvemos null = no concluyente y no se
 // bloquea (el fallback tras la transferencia cubre ese caso raro).
-async function tieneDestinoInstant(stripe, accountId) {
+async function destinosInstant(stripe, accountId) {
   try {
     const [cards, banks] = await Promise.all([
       stripe.accounts.listExternalAccounts(accountId, { object: 'card', limit: 10 }),
       stripe.accounts.listExternalAccounts(accountId, { object: 'bank_account', limit: 10 }),
     ])
     const todos = [...(cards.data || []), ...(banks.data || [])]
-    return todos.some((x) => (x.available_payout_methods || []).includes('instant'))
+    return todos.filter((x) => (x.available_payout_methods || []).includes('instant'))
   } catch { return null }
+}
+async function tieneDestinoInstant(stripe, accountId) {
+  const d = await destinosInstant(stripe, accountId)
+  return d == null ? null : d.length > 0
 }
 
 // Autoriza al llamador. Devuelve { uid, tenant, rol, tipo, quienId, email } o error.
@@ -301,6 +305,30 @@ export default async function handler(req, res) {
       })
     }
 
+    // Llave publicable de Stripe (pk_...) para el formulario de tarjeta EN la app.
+    // Es pública por diseño (va en el navegador); la secreta jamás sale de aquí.
+    if (accion === 'pk') {
+      return res.status(200).json({ ok: true, pk: process.env.STRIPE_PUBLISHABLE_KEY || '' })
+    }
+
+    // Agregar TARJETA DE DÉBITO desde la app: el navegador tokeniza la tarjeta
+    // con Stripe.js (el número nunca pasa por nuestro servidor) y aquí solo se
+    // adjunta el token a la cuenta conectada del titular.
+    if (accion === 'agregarTarjeta') {
+      if (!titular.stripeAccountId) return res.status(400).json({ ok: false, error: 'Primero configura tu cuenta de cobro.' })
+      const tok = String(body.token || '')
+      if (!/^tok_[A-Za-z0-9]+$/.test(tok)) return res.status(400).json({ ok: false, error: 'Token de tarjeta inválido. Actualiza la app.' })
+      try {
+        const stripe = await cargarStripe()
+        const card = await stripe.accounts.createExternalAccount(titular.stripeAccountId, { external_account: tok })
+        const instantListo = await tieneDestinoInstant(stripe, titular.stripeAccountId)
+        await db.collection('bulk_audit').add({ tenantId: auth.tenant, usuario: auth.email || auth.uid, accion: 'fastpay_tarjeta', entidad: 'pago', detalle: `${nombreTitular} agregó tarjeta ${card.brand || ''} ····${card.last4 || ''} (instant: ${instantListo === true ? 'sí' : 'aún no'})`, ts: new Date().toISOString() }).catch(() => {})
+        return res.status(200).json({ ok: true, marca: card.brand || '', ultimos4: card.last4 || '', instantListo })
+      } catch (e) {
+        return res.status(400).json({ ok: false, error: 'Stripe no aceptó la tarjeta: ' + (e?.message || '') })
+      }
+    }
+
     // Enlace de entrada al panel Stripe Express del titular (para agregar o
     // cambiar su tarjeta de débito sin esperar el correo de Stripe).
     if (accion === 'panel') {
@@ -433,12 +461,16 @@ export default async function handler(req, res) {
           const bal = await stripe.balance.retrieve({ stripeAccount: titular.stripeAccountId })
           const inst = ((bal.instant_available || []).find((b) => b.currency === 'usd') || {}).amount || 0
           if (inst > 0) {
+            // Destino explícito: la tarjeta de débito elegible (si el default de
+            // la cuenta es el banco, sin esto el payout instantáneo fallaría).
+            const dst = await destinosInstant(stripe, titular.stripeAccountId)
+            const dstId = ((dst || []).find((x) => x.object === 'card') || (dst || [])[0] || {}).id || null
             const intentos = [inst, inst - Math.max(50, Math.ceil(inst * 0.02) + 50)]
             for (const cent of intentos) {
               if (!(cent > 0)) break
               try {
                 const po = await stripe.payouts.create(
-                  { amount: cent, currency: 'usd', method: 'instant', description: `Fast Pay MilePay ${retiro.numero}`, metadata: { opId, numero: retiro.numero } },
+                  { amount: cent, currency: 'usd', method: 'instant', ...(dstId ? { destination: dstId } : {}), description: `Fast Pay MilePay ${retiro.numero}`, metadata: { opId, numero: retiro.numero } },
                   { stripeAccount: titular.stripeAccountId, idempotencyKey: 'fpi_' + opId + '_' + cent },
                 )
                 instant = true; instantId = po.id; break

@@ -7,7 +7,7 @@
 // clic, refresh o reintentos de red NUNCA generan dos transferencias.
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Landmark, DollarSign, CheckCircle2, AlertTriangle, Zap } from 'lucide-react'
+import { X, Landmark, DollarSign, CheckCircle2, AlertTriangle, Zap, CreditCard } from 'lucide-react'
 import { authBulk } from '../firebaseBulk'
 import { Boton, Spinner } from '../../components/ui'
 import { money } from '../../utils/format'
@@ -63,6 +63,57 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
   }
   const abrirPanel = async () => {
     try { const d = await api({ accion: 'panel' }); window.open(d.url, '_blank', 'noopener') } catch (e) { setErr(e.message); setPaso('error') }
+  }
+
+  // ── Tarjeta de débito EN la app (Stripe.js tokeniza; el número nunca pasa
+  // por nuestro servidor). Si falta la llave publicable, queda el panel externo.
+  const [tarErr, setTarErr] = useState('')
+  const [tarBusy, setTarBusy] = useState(false)
+  const [tarForm, setTarForm] = useState(false) // formulario listo y montado
+  const stripeJsRef = useRef(null)
+  const cardElRef = useRef(null)
+  useEffect(() => {
+    if (paso !== 'tarjeta') { setTarForm(false); return }
+    let vivo = true
+    ;(async () => {
+      setTarErr('')
+      try {
+        const d = await api({ accion: 'pk' })
+        if (!vivo) return
+        if (!d.pk) return // sin pk: solo botón del panel externo
+        if (!window.Stripe) {
+          await new Promise((ok, mal) => { const s = document.createElement('script'); s.src = 'https://js.stripe.com/v3'; s.onload = ok; s.onerror = mal; document.head.appendChild(s) })
+        }
+        if (!vivo) return
+        stripeJsRef.current = window.Stripe(d.pk)
+        setTarForm(true)
+      } catch { if (vivo) setTarErr(t('No se pudo cargar el formulario de tarjeta. Usa el botón del panel de Stripe.')) }
+    })()
+    return () => { vivo = false; try { cardElRef.current?.unmount() } catch { /* noop */ } cardElRef.current = null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso])
+  // Montar el campo de tarjeta cuando el contenedor ya existe en pantalla.
+  useEffect(() => {
+    if (!tarForm || !stripeJsRef.current || cardElRef.current) return
+    try {
+      const el = stripeJsRef.current.elements().create('card', { hidePostalCode: false })
+      el.mount('#fp-card')
+      cardElRef.current = el
+    } catch { setTarErr(t('No se pudo cargar el formulario de tarjeta. Usa el botón del panel de Stripe.')) }
+  }, [tarForm, t])
+  const guardarTarjeta = async () => {
+    if (!stripeJsRef.current || !cardElRef.current || tarBusy) return
+    setTarBusy(true); setTarErr('')
+    try {
+      const r = await stripeJsRef.current.createToken(cardElRef.current, { currency: 'usd' })
+      if (r.error) throw new Error(r.error.message)
+      const d = await api({ accion: 'agregarTarjeta', token: r.token.id })
+      if (d.instantListo === false) {
+        setTarErr(t('Tarjeta guardada, pero Stripe aún no habilita el envío instantáneo en tu cuenta (es normal en cuentas nuevas; se activa solo en unos días).'))
+      } else {
+        reconsultar()
+      }
+    } catch (e) { setTarErr(e.message) } finally { setTarBusy(false) }
   }
   const reconsultar = () => {
     setPaso('cargando'); setErr('')
@@ -148,11 +199,21 @@ export default function FastPayModal({ abierto, onClose, nombre }) {
           <div className="text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Zap size={26} /></div>
             <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Te falta tu tarjeta de débito')}</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Tu cuenta está verificada, pero solo tiene banco registrado: agrega tu tarjeta en tu panel de Stripe (2 minutos).')}</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Escríbela aquí mismo (la física de tu banco, la que usas en el cajero).')}</p>
             {info && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
-            <Boton className="mt-4 w-full" onClick={abrirPanel}><Landmark size={16} /> {t('Abrir mi panel de Stripe · agregar tarjeta')}</Boton>
-            <button onClick={reconsultar} className="mt-2 w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">{t('Ya la agregué · verificar de nuevo')}</button>
-            <button onClick={onClose} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
+            {tarForm && (
+              <div className="mt-4 text-left">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('Número de tu tarjeta de débito')}</span>
+                <div id="fp-card" className="mt-1 rounded-xl border border-slate-300 bg-white px-3 py-3.5 dark:border-slate-600 dark:bg-slate-800" />
+                <Boton className="mt-3 w-full" onClick={guardarTarjeta} disabled={tarBusy}>
+                  <CreditCard size={16} /> {tarBusy ? t('Guardando…') : t('Guardar mi tarjeta')}
+                </Boton>
+              </div>
+            )}
+            {tarErr && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{tarErr}</p>}
+            <button onClick={abrirPanel} className="mt-3 w-full rounded-xl border border-slate-200 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Landmark size={13} className="mr-1 inline" /> {t('Prefiero hacerlo en mi panel de Stripe')}</button>
+            <button onClick={reconsultar} className="mt-2 w-full py-1 text-xs text-slate-400">{t('Ya la agregué · verificar de nuevo')}</button>
+            <button onClick={onClose} className="mt-1 w-full py-1 text-xs text-slate-400">{t('Cerrar')}</button>
           </div>
         )}
 
