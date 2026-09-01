@@ -1279,13 +1279,25 @@ async function matchTenant(tenantId) {
   if (!cola.length) return
   const libres = presSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => presenciaViva(p, now))
   const usados = new Set()
+  // Rechazar NO excluye: manda al final de la cola de ESA orden (rechazos
+  // ascendentes) y la orden sigue circulando entre todos, en ciclo. Solo se
+  // salta 3 min al que ACABA de rechazarla (enfriamiento anti re-timbre).
+  const RECHAZO_COOLDOWN_MS = 3 * 60 * 1000
+  const rechazosDe = (o, uid) => {
+    const m = o.rechazosNum || {}
+    if (m[uid] != null) return Number(m[uid]) || 0
+    return ((o.rechazadoPor || []).includes(uid)) ? 1 : 0
+  }
+  const enEnfriamiento = (o, uid) => {
+    const u = o.ultimoRechazo
+    return !!(u && u.porUid && u.porUid === uid && (now - tsMs(u.ts)) < RECHAZO_COOLDOWN_MS)
+  }
   for (const orden of cola) {
-    const rech = orden.rechazadoPor || []
     const cand = libres
-      .filter((p) => !usados.has(p.id) && !rech.includes(p.uid || p.id))
+      .filter((p) => !usados.has(p.id) && !enEnfriamiento(orden, p.uid || p.id))
       .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
       .filter((p) => trabajoCompatible(p.jobs, orden))
-      .sort((a, b) => tsMs(a.desde) - tsMs(b.desde))
+      .sort((a, b) => (rechazosDe(orden, a.uid || a.id) - rechazosDe(orden, b.uid || b.id)) || (tsMs(a.desde) - tsMs(b.desde)))
     if (!cand.length) continue
     const res = await ofrecerTx(orden.id, cand[0].id)
     if (res) {
@@ -1309,9 +1321,11 @@ async function reofertar(orderId) {
     if (o.estado !== 'notificando') return null
     const uid = o.choferId || null
     const rechazadoPor = Array.from(new Set([...(o.rechazadoPor || []), uid].filter(Boolean)))
+    const rechazosNum = { ...(o.rechazosNum || {}) }
+    if (uid) rechazosNum[uid] = (Number(rechazosNum[uid]) || 0) + 1
     tx.update(oref, {
-      estado: 'creada', transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor,
-      ultimoRechazo: { por: o.choferNombre || '', motivo: 'timeout', ts: new Date().toISOString() },
+      estado: 'creada', transportistaId: null, choferId: null, asignacionExpira: null, rechazadoPor, rechazosNum,
+      ultimoRechazo: { por: o.choferNombre || '', porUid: uid || '', motivo: 'timeout', ts: new Date().toISOString() },
       intentos: cerrarOfertaFn(o.intentos, 'expirada', new Date().toISOString()),
       actualizadoEn: FieldValue.serverTimestamp(),
     })

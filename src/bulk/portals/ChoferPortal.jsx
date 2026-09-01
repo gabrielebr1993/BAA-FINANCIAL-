@@ -630,12 +630,15 @@ function OverlayEntrante({ orden, usuario, tenantId, rol, plantas, geocercas, po
     setOcupado(true)
     onResponder?.(orden.id) // oculta la oferta YA (no espera a Firestore)
     try {
-      // Excluye TODOS mis identificadores (uid + id del roster + nombre) para que el
-      // motor no me reasigne la misma orden por otra vía; limpio choferNombre para que
-      // no vuelva a "engancharse" por nombre.
+      // Rechazar NO me excluye de la orden: el motor me manda AL FINAL de su cola
+      // (rechazosNum ascendente) y me la puede volver a ofrecer cuando el ciclo
+      // regrese a mí (con 3 min de enfriamiento). Registro todos mis identificadores
+      // (uid + id del roster + nombre) para que el conteo funcione por cualquier vía.
       const misIds = [usuario.id, miChofer?.id, usuario.nombre].filter(Boolean)
       const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), ...misIds])]
-      await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, ultimoRechazo: { por: usuario.nombre, motivo: m, ts: ahora() }, intentos: cerrarOferta(orden.intentos, 'rechazada', ahora(), { motivo: m }) })
+      const rechazosNum = { ...(orden.rechazosNum || {}) }
+      for (const idm of misIds) rechazosNum[idm] = (Number(rechazosNum[idm]) || 0) + 1
+      await guardar('orders', orden.id, { estado: E.CREADA, transportistaId: null, choferId: null, choferNombre: null, asignacionManual: false, asignacionExpira: null, rechazadoPor, rechazosNum, ultimoRechazo: { por: usuario.nombre, porUid: usuario.id, motivo: m, ts: ahora() }, intentos: cerrarOferta(orden.intentos, 'rechazada', ahora(), { motivo: m }) })
       await liberar(usuario.id) // vuelvo al final de la cola de en línea
       await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'chofer_rechaza', entidad: 'orden', entidadId: orden.id, detalle: m })
       // esTimeout = no respondió a tiempo (no cuenta como rechazo voluntario).
@@ -785,6 +788,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const [stripeInfo, setStripeInfo] = useState(null)
   const [stripeErr, setStripeErr] = useState('')
   const [stripeCargando, setStripeCargando] = useState(false)
+  const [modalTarjeta, setModalTarjeta] = useState(false) // agregar/cambiar tarjeta de débito
   const fastpayApi = async (accion) => {
     const tok = await authBulk.currentUser.getIdToken()
     const r = await fetch('/api/bulk-fastpay', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ accion }) })
@@ -920,12 +924,24 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
                 <p className="text-xs text-slate-400">{t('Stripe está revisando tu información. Suele tardar poco; vuelve a consultar en un rato.')}</p>
               )}
               {stripeInfo?.estado === 'verificado' && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('Todo listo: puedes retirar tus ganancias con Fast Pay desde la pestaña Ganancias.')}</p>
+                <>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('Todo listo: puedes retirar tus ganancias con Fast Pay desde la pestaña Ganancias.')}</p>
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-3 py-2.5 dark:border-slate-700">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('Tarjeta de débito para cobros')}</span>
+                    <span className={`text-xs font-bold ${stripeInfo.tarjeta?.ultimos4 ? 'text-brand-navy dark:text-slate-100' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {stripeInfo.tarjeta?.ultimos4 ? `${stripeInfo.tarjeta.marca || ''} ····${stripeInfo.tarjeta.ultimos4}` : t('sin tarjeta · agrégala para cobrar en minutos')}
+                    </span>
+                  </div>
+                  <Boton className="w-full justify-center" onClick={() => setModalTarjeta(true)}>
+                    <Landmark size={16} /> {stripeInfo.tarjeta?.ultimos4 ? t('Cambiar tarjeta de débito') : t('Agregar tarjeta de débito')}
+                  </Boton>
+                </>
               )}
               <button onClick={consultarStripe} disabled={stripeCargando} className="w-full py-1 text-center text-xs font-semibold text-slate-400 hover:text-brand-navy dark:hover:text-slate-200">{stripeCargando ? t('Consultando…') : t('Actualizar estado')}</button>
             </div>
           </>
         )}
+        {modalTarjeta && <FastPayModal abierto inicio="tarjeta" onClose={() => { setModalTarjeta(false); consultarStripe() }} nombre={usuario?.nombre} />}
       </Card>
 
       {/* Datos bancarios (MilePay) */}

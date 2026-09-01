@@ -136,13 +136,17 @@ export default function Ordenes() {
   // en BulkLayout), para que corra en cualquier pantalla del staff. Aquí solo se
   // observa y se ofrece la acción manual de "Reasignar".
 
-  // Reasignación MANUAL: devuelve la orden a la cola excluyendo al chofer actual.
+  // Reasignación MANUAL: devuelve la orden a la cola. El chofer actual NO queda
+  // excluido: suma un rechazo (va al final del ciclo de esa orden) y el motor
+  // se la puede volver a ofrecer cuando le toque de nuevo.
   const reofertar = async (orden, motivo) => {
     const uid = orden.choferId
     const rechazadoPor = [...new Set([...(orden.rechazadoPor || []), uid].filter(Boolean))]
+    const rechazosNum = { ...(orden.rechazosNum || {}) }
+    if (uid) rechazosNum[uid] = (Number(rechazosNum[uid]) || 0) + 1
     await guardar('orders', orden.id, {
       estado: E.CREADA, transportistaId: null, choferId: null, asignacionExpira: null,
-      rechazadoPor, ultimoRechazo: { por: orden.choferNombre || '', motivo, ts: iso() },
+      rechazadoPor, rechazosNum, ultimoRechazo: { por: orden.choferNombre || '', porUid: uid || '', motivo, ts: iso() },
     })
     if (uid) await liberar(uid)
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'reofertar_orden', entidad: 'orden', entidadId: orden.id, detalle: motivo })
@@ -252,7 +256,7 @@ export default function Ordenes() {
                   ))}
                 </ul>
               )}
-              <p className="text-xs text-slate-400">{t('Un chofer recibe la orden solo si: está en línea y libre (app activa), su equipo coincide con el que pide la orden, está afiliado al trabajo de la orden y no la rechazó antes.')}</p>
+              <p className="text-xs text-slate-400">{t('Un chofer recibe la orden solo si: está en línea y libre (app activa), su equipo coincide con el que pide la orden y está afiliado al trabajo de la orden. Rechazar no lo excluye: pasa al final del ciclo de esa orden y se le vuelve a ofrecer cuando le toque.')}</p>
             </Card>
           )}
         </div>
@@ -270,7 +274,7 @@ export default function Ordenes() {
                 const fin = desgloseVisible(o, rol, permisos)
                 const ofrecida = o.estado === E.NOTIFICANDO
                 const rest = ofrecida && o.asignacionExpira ? tsMillis(o.asignacionExpira) - now : 0
-                const compat = choferesLibres(presenciasReales, now).some((p) => equipoCompatible(p.equipos || p.equipo, o.tipoEquipo) && !(o.rechazadoPor || []).includes(p.uid))
+                const compat = choferesLibres(presenciasReales, now).some((p) => equipoCompatible(p.equipos || p.equipo, o.tipoEquipo))
                 const atr = alertaOrden(o, now)
                 return (
                   <Link key={o.id} to={`/bulk/ordenes/${o.id}`} className={`block cursor-pointer rounded-xl border p-3 transition hover:shadow-sm ${atr ? 'border-rose-400 bg-rose-50 hover:border-rose-500 dark:border-rose-500/50 dark:bg-rose-500/10' : ofrecida ? 'animate-pulse border-amber-400 bg-amber-50 hover:border-amber-400 dark:border-amber-400 dark:bg-amber-500/10' : 'border-slate-200 hover:border-amber-400 dark:border-slate-700/60'}`}>

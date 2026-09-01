@@ -4,7 +4,7 @@
 // emparejamiento para explicar, orden por orden, qué está bloqueando el match.
 // Es solo lectura: no cambia nada, solo informa al dispatcher.
 // ============================================================================
-import { choferDisponible, equipoCompatible, trabajoCompatible, PRESENCIA_TTL_MS } from './asignacionAuto'
+import { choferDisponible, equipoCompatible, trabajoCompatible, enEnfriamiento, PRESENCIA_TTL_MS } from './asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 
 // Explica por qué UN chofer en línea NO está recibiendo una orden de la cola (o 'ok').
@@ -18,8 +18,10 @@ export function diagnosticarChofer(p, ordenesCola, ahoraMs) {
   if (cola.length === 0) return { tipo: 'sin_cola', texto: 'No hay órdenes en cola' }
   const conEquipo = cola.filter((o) => equipoCompatible(equipos, o.tipoEquipo))
   if (conEquipo.length === 0) return { tipo: 'equipo', texto: `Su equipo (${equipos.join(', ') || '—'}) no coincide con las órdenes en cola` }
-  const noRech = conEquipo.filter((o) => !(o.rechazadoPor || []).includes(p.uid || p.id))
-  if (noRech.length === 0) return { tipo: 'rechazo', texto: 'Ya rechazó (o se le venció) todas las órdenes en cola compatibles' }
+  // Rechazar ya NO excluye (solo manda al final del ciclo de esa orden); el único
+  // bloqueo real es el enfriamiento de 3 min tras el último rechazo.
+  const sinEnfriar = conEquipo.filter((o) => !enEnfriamiento(o, p.uid || p.id, ahoraMs))
+  if (sinEnfriar.length === 0) return { tipo: 'rechazo', texto: 'Acaba de rechazar las órdenes compatibles: se le volverán a ofrecer en unos minutos (va al final del ciclo)' }
   return { tipo: 'ok', texto: 'Disponible — recibirá una orden en breve' }
 }
 
@@ -32,17 +34,17 @@ export function choferesReales(presencias, ahoraMs) {
 // PRIMERA razón que la deja sin chofer (o 'ok' si sí hay compatibles).
 export function diagnosticarOrden(orden, presencias, ahoraMs) {
   const libres = choferesReales(presencias, ahoraMs)
-  const rechazadoPor = orden.rechazadoPor || []
-  const noRech = libres.filter((p) => !rechazadoPor.includes(p.uid || p.id))
-  // Compatibilidad por EQUIPO (obligatorio) y afiliación al Trabajo (preferencia).
-  const compat = noRech.filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
+  // Rechazar NO excluye: solo aplica el enfriamiento de 3 min del último rechazo.
+  const sinEnfriar = libres.filter((p) => !enEnfriamiento(orden, p.uid || p.id, ahoraMs))
+  // Compatibilidad por EQUIPO (obligatorio) y afiliación al Trabajo (obligatoria).
+  const compat = sinEnfriar.filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
   const afiliados = compat.filter((p) => trabajoCompatible(p.jobs, orden))
 
   let razon
   if (afiliados.length) razon = { tipo: 'ok', texto: `${afiliados.length} chofer(es) afiliado(s) al trabajo en línea` }
   else if (compat.length) razon = { tipo: 'trabajo', texto: 'Hay choferes con el equipo, pero NINGUNO tiene asignado este trabajo (el transportista los asigna en "Mis choferes")' }
   else if (libres.length === 0) razon = { tipo: 'sin_online', texto: 'No hay choferes en línea, libres y con la app activa' }
-  else if (noRech.length === 0) razon = { tipo: 'rechazada', texto: 'Todos los choferes en línea ya la rechazaron o se les venció el tiempo' }
+  else if (sinEnfriar.length === 0) razon = { tipo: 'rechazada', texto: 'El último chofer acaba de rechazarla: se re-ofrece en unos minutos (el ciclo sigue con todos)' }
   else razon = { tipo: 'equipo', texto: `Ningún chofer en línea tiene el equipo que pide la orden (${orden.tipoEquipo || 'sin especificar'})` }
 
   return { orden, razon, compatibles: compat.length, enLinea: libres.length }

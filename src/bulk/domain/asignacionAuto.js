@@ -68,6 +68,23 @@ export function enriquecerConRoster(presencias, carriers) {
   })
 }
 
+// ── Rechazos: NO excluyen, solo mandan AL FINAL de la cola de ESA orden ──
+// Cada rechazo suma en orden.rechazosNum[uid]; el motor ordena a los candidatos
+// por rechazos ASCENDENTES (quien nunca rechazó va primero) y la orden sigue
+// circulando entre TODOS los choferes en ciclo. El único freno es un
+// enfriamiento corto para no re-timbrar al que ACABA de rechazarla.
+export const RECHAZO_COOLDOWN_MS = 3 * 60 * 1000
+export function rechazosDe(orden, uid) {
+  const m = (orden && orden.rechazosNum) || {}
+  if (m[uid] != null) return Number(m[uid]) || 0
+  return ((orden && orden.rechazadoPor) || []).includes(uid) ? 1 : 0
+}
+export function enEnfriamiento(orden, uid, ahoraMs) {
+  const u = orden && orden.ultimoRechazo
+  if (!u || !u.porUid || u.porUid !== uid) return false
+  return (ahoraMs - tsMillis(u.ts)) < RECHAZO_COOLDOWN_MS
+}
+
 // ¿Está esta presencia libre y viva ahora mismo?
 export function choferDisponible(p, ahoraMs) {
   if (!p || p.enLinea !== true) return false
@@ -82,8 +99,10 @@ export function choferesLibres(presencias, ahoraMs) {
 }
 
 // Empareja: para cada orden en cola (más antigua primero), toma el chofer libre
-// COMPATIBLE POR EQUIPO que lleva más tiempo en línea (orden de llegada), saltando a
-// quienes ya la rechazaron. 1 orden → 1 chofer (un chofer no recibe dos a la vez).
+// COMPATIBLE POR EQUIPO que lleva más tiempo en línea (orden de llegada). Quien
+// rechazó la orden NO queda fuera: va al final (rechazos ascendentes) y la orden
+// sigue circulando en ciclo; solo se salta al que la rechazó hace <3 min.
+// 1 orden → 1 chofer (un chofer no recibe dos a la vez).
 // La afiliación al Trabajo se toma en cuenta como PREFERENCIA: primero se ofrece a
 // los choferes afiliados al Job de la orden; si NINGUNO afiliado está libre, cae a
 // cualquier chofer con el equipo correcto (así las órdenes nunca se quedan atascadas).
@@ -95,15 +114,14 @@ export function emparejar(ordenesCola, presencias, ahoraMs) {
   const cola = [...(ordenesCola || [])].sort((a, b) => tsMillis(a.creadoEn || a.numero) - tsMillis(b.creadoEn || b.numero))
   const pares = []
   for (const orden of cola) {
-    const rechazadoPor = orden.rechazadoPor || []
     const disponibles = libres
       .filter((p) => !usados.has(p.id))
-      .filter((p) => !rechazadoPor.includes(p.uid || p.id))
+      .filter((p) => !enEnfriamiento(orden, p.uid || p.id, ahoraMs))
       .filter((p) => equipoCompatible(p.equipos || p.equipo, orden.tipoEquipo))
     // Afiliación al Trabajo OBLIGATORIA: sin trabajo asignado no llegan órdenes.
     const afiliados = disponibles.filter((p) => trabajoCompatible(p.jobs, orden))
     const cand = afiliados
-      .sort((a, b) => tsMillis(a.desde) - tsMillis(b.desde))
+      .sort((a, b) => (rechazosDe(orden, a.uid || a.id) - rechazosDe(orden, b.uid || b.id)) || (tsMillis(a.desde) - tsMillis(b.desde)))
     if (cand.length) { pares.push({ orden, chofer: cand[0] }); usados.add(cand[0].id) }
   }
   return pares
