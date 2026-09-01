@@ -236,6 +236,30 @@ export default async function handler(req, res) {
     const cfg = await configDe(db, auth.tenant)
     const test = esModoTest()
 
+    // ── DIAGNÓSTICO (solo admin): salud de Stripe para el panel de Fast Pay ──
+    // Llaves configuradas, modo, saldo de la plataforma y cuántos titulares
+    // tienen tarjeta lista para pago instantáneo. Solo LEE; no mueve nada.
+    if (accion === 'diagnostico') {
+      if (auth.tipo !== 'admin') return res.status(403).json({ ok: false, error: 'Solo el administrador puede ver el diagnóstico.' })
+      const pkv = process.env.STRIPE_PUBLISHABLE_KEY || ''
+      const out = {
+        ok: true, test, modoReal: cfg.modoReal, activo: cfg.activo,
+        porcentaje: cfg.porcentaje, comisionPct: cfg.comisionPct,
+        pk: { presente: !!pkv, live: pkv.startsWith('pk_live_') },
+        clave: null, balance: null,
+      }
+      try {
+        const stripe = await cargarStripe()
+        const bal = await stripe.balance.retrieve()
+        const usd = (arr) => r2((arr || []).filter((b) => b.currency === 'usd').reduce((s, b) => s + b.amount, 0) / 100)
+        out.clave = { ok: true, modo: test ? 'prueba' : 'real' }
+        out.balance = { disponible: usd(bal.available), pendiente: usd(bal.pending) }
+      } catch (e) {
+        out.clave = { ok: false, error: e?.message === 'SIN_STRIPE_KEY' ? 'Falta STRIPE_SECRET_KEY en Vercel.' : (e?.message || 'Stripe no respondió.') }
+      }
+      return res.status(200).json(out)
+    }
+
     // ── REVERTIR (solo admin): reversal en Stripe + estado 'revertido' + ledger ──
     if (accion === 'revertir') {
       if (auth.tipo !== 'admin') return res.status(403).json({ ok: false, error: 'Solo un administrador puede revertir un retiro.' })

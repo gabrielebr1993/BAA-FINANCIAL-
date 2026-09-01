@@ -119,6 +119,27 @@ export default function FastPay() {
     } finally { setRevirtiendo(false) }
   }
 
+  // ── Diagnóstico de Stripe (solo lectura): llaves, modo, saldo de la cuenta ──
+  const [diag, setDiag] = useState(null)
+  const [diagBusy, setDiagBusy] = useState(false)
+  const cargarDiag = async () => {
+    setDiagBusy(true)
+    try {
+      const tok = await authBulk.currentUser.getIdToken()
+      const resp = await fetch('/api/bulk-fastpay', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        body: JSON.stringify({ accion: 'diagnostico' }),
+      })
+      const d = await resp.json().catch(() => ({}))
+      if (!resp.ok || d.ok === false) throw new Error(d.error || t('Error de conexión.'))
+      setDiag(d)
+    } catch (e) {
+      setDiag({ clave: { ok: false, error: e?.message || t('No se pudo consultar.') } })
+    } finally { setDiagBusy(false) }
+  }
+  useEffect(() => { if (gestiona) cargarDiag() /* al entrar */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gestiona])
+
   const lista = useMemo(() => (retiros || [])
     .filter((r) => fTipo === 'todos' || (r.tipo || 'chofer') === fTipo)
     .filter((r) => enRangoFechas(r.ts, rango))
@@ -152,6 +173,66 @@ export default function FastPay() {
         <Card className="p-4"><div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Clock size={13} className="text-amber-500" /> {t('En proceso')}</div><div className="mt-1 text-2xl font-black text-brand-navy dark:text-slate-100">{kpis.nProc}</div></Card>
         <Card className="p-4"><div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><RotateCcw size={13} className="text-slate-400" /> {t('Revertidos')}</div><div className="mt-1 text-2xl font-black text-brand-navy dark:text-slate-100">{kpis.nRev}</div></Card>
       </div>
+
+      {/* Stripe · pago instantáneo (diagnóstico en vivo, solo admin) */}
+      {gestiona && (
+        <Card className="mb-5 p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="m-0 flex items-center gap-2 text-base font-bold text-brand-navy dark:text-slate-100"><Wallet size={17} className="text-amber-500" /> {t('Stripe · Pago instantáneo')}</h3>
+            <button onClick={cargarDiag} disabled={diagBusy} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><RotateCcw size={13} className={diagBusy ? 'animate-spin' : ''} /> {t('Actualizar')}</button>
+          </div>
+          {!diag && <div className="py-4"><Spinner /></div>}
+          {diag && (
+            <div className="space-y-2">
+              {/* Llave secreta */}
+              {diag.clave?.ok
+                ? (
+                  <div className={`flex items-start gap-2 rounded-xl p-3 text-xs ${diag.test ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'}`}>
+                    <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0" />
+                    <span><b>{t('Conexión con Stripe: OK')}</b> · {diag.test ? t('clave de PRUEBA (sk_test): no se mueve dinero real') : t('clave REAL (sk_live)')}. {!diag.test && !diag.modoReal && <b>{t('Falta encender el interruptor "Modo REAL" abajo para operar.')}</b>}</span>
+                  </div>
+                )
+                : (
+                  <div className="flex items-start gap-2 rounded-xl bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+                    <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
+                    <span><b>{t('Stripe no responde')}:</b> {diag.clave?.error || '—'} · {t('Revisa STRIPE_SECRET_KEY en Vercel (debe empezar con sk_live_).')}</span>
+                  </div>
+                )}
+              {/* Saldo de la plataforma (de aquí salen los Fast Pay) */}
+              {diag.balance && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={`rounded-xl border p-3 ${diag.balance.disponible > 0 ? 'border-emerald-200 dark:border-emerald-500/30' : 'border-rose-200 dark:border-rose-500/30'}`}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('Saldo disponible para pagar')}</div>
+                    <div className={`mt-0.5 text-xl font-black ${diag.balance.disponible > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>{money(diag.balance.disponible)}</div>
+                    {!(diag.balance.disponible > 0) && <div className="text-[11px] font-semibold text-rose-500">{t('Sin fondos: los retiros fallarán. Agrega dinero en Stripe → Balances → Add funds (payments balance).')}</div>}
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('En camino (pendiente)')}</div>
+                    <div className="mt-0.5 text-xl font-black text-brand-navy dark:text-slate-100">{money(diag.balance.pendiente)}</div>
+                    <div className="text-[11px] text-slate-400">{t('Fondeos ACH y cobros aún no liberados por Stripe.')}</div>
+                  </div>
+                </div>
+              )}
+              {/* Llave publicable (formulario de tarjeta en la app) */}
+              <div className={`flex items-start gap-2 rounded-xl p-3 text-xs ${diag.pk?.presente && (diag.test || diag.pk?.live) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'}`}>
+                {diag.pk?.presente && (diag.test || diag.pk?.live) ? <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />}
+                <span>
+                  <b>{t('Formulario de tarjeta en la app')}:</b>{' '}
+                  {!diag.pk?.presente
+                    ? t('falta STRIPE_PUBLISHABLE_KEY (pk_live_) en Vercel — los choferes verán solo el botón del panel de Stripe.')
+                    : (!diag.test && !diag.pk?.live)
+                      ? t('la llave publicable es de PRUEBA (pk_test) pero la secreta es REAL — reemplázala por la pk_live_.')
+                      : t('activo — los choferes escriben su tarjeta de débito sin salir de la app.')}
+                </span>
+              </div>
+              {/* Cómo funciona el instantáneo */}
+              <div className="rounded-xl bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                ⚡ {t('Pago instantáneo: cada retiro va directo a la TARJETA DE DÉBITO del titular (~30 min, también de noche y fines de semana). Sin tarjeta elegible no se permite retirar. Stripe cobra ~1.5% del envío al titular, aparte de tu comisión Fast Pay. En cuentas Stripe recién creadas, Stripe puede tardar unos días en habilitar lo instantáneo.')}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Configuración */}
       <Card className="mb-5 p-5">
