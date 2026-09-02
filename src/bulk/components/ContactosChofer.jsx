@@ -45,7 +45,7 @@ export default function ContactosChofer() {
   const [sub, setSub] = useState('contactos') // contactos | solicitudes | agregar | id
   const [chatCon, setChatCon] = useState(null) // contacto con chat abierto
   // Con teclado abierto, la capa del chat se ciñe al viewport visible (no salta).
-  const vvChat = useVisualViewport(!!chatCon)
+  const vvChat = useVisualViewport(!!chatCon, 99999) // sin tope: la app vive en marco angosto
   // Chat abierto: congela el scroll del fondo y re-ancla arriba al abrir/cerrar el
   // teclado (mismo patrón que Mensajes) para que la cabecera navy no se salga.
   useEffect(() => {

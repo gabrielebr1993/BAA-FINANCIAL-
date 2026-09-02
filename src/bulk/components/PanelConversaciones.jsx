@@ -88,7 +88,9 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
 
   // Con el teclado abierto (móvil), la capa del chat se ciñe al viewport VISIBLE
   // (visualViewport): el campo de mensaje queda a la vista y el layout no salta.
-  const vv = useVisualViewport(verChatMovil)
+  // En estiloApp SIN tope de ancho: la app del chofer vive en un marco angosto
+  // (max-w-md) aunque el visor del dispositivo reporte ancho de tablet/escritorio.
+  const vv = useVisualViewport(verChatMovil, estiloApp ? 99999 : undefined)
   // Con el chat móvil abierto se CONGELA el scroll del fondo: al abrir el teclado
   // el navegador ya no puede desplazar la página (era el "salto" del chat), y al
   // cambiar el viewport visible se re-ancla arriba para que nada quede cortado.
@@ -130,9 +132,13 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-3">
+      {/* En estiloApp (app del chofer) el maestro-detalle es SIEMPRE móvil: lista O
+          chat a pantalla completa. Sin variantes lg: aunque el visor sea ancho
+          (tablet/escritorio), la app vive en su marco angosto y el lado-a-lado
+          quedaba estrujado e inusable. */}
+      <div className={`grid min-h-0 flex-1 gap-4 ${estiloApp ? '' : 'lg:grid-cols-3'}`}>
         {/* Lista de conversaciones */}
-        <Card className={`min-h-0 flex-col p-3 lg:col-span-1 lg:flex ${verChatMovil ? 'hidden lg:flex' : 'flex'}`}>
+        <Card className={`min-h-0 flex-col p-3 ${estiloApp ? (verChatMovil ? 'hidden' : 'flex') : `lg:col-span-1 lg:flex ${verChatMovil ? 'hidden lg:flex' : 'flex'}`}`}>
           {/* Botón propio de cada pestaña: crear conversación (o grupo) filtrado por su rol. */}
           {seccion.onNueva && (
             <button type="button" onClick={seccion.onNueva} className="mb-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-slate-900 transition hover:bg-amber-600">
@@ -207,7 +213,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             (capa fija propia, como WhatsApp): así no comparte scroll con la página del
             portal ni salta cuando se abre el teclado. En escritorio sigue en la grilla. */}
         <div
-          className={`min-h-0 lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}
+          className={`min-h-0 ${estiloApp ? '' : 'lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0'} ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}
           style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}
         >
           {activa ? (

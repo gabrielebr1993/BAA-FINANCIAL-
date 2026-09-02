@@ -1013,7 +1013,7 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const [modal, setModal] = useState(null) // 'ticket' | 'pod' | 'chat'
   // Chat de la orden con el teclado abierto: capa ceñida al viewport VISIBLE y
   // scroll del fondo congelado (mismo patrón que el panel de Mensajes).
-  const vvChat = useVisualViewport(modal === 'chat')
+  const vvChat = useVisualViewport(modal === 'chat', 99999) // sin tope de ancho (marco angosto)
   useEffect(() => {
     if (modal !== 'chat') return
     const prev = document.body.style.overflow
