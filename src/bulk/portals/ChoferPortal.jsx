@@ -556,7 +556,9 @@ export default function ChoferPortal() {
         )}
       </main>
 
-      <nav className="nav-safe fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      {/* z-40: por ENCIMA del contenido (los hitos del timeline llevan z-10 y sin
+          esto se dibujaban sobre la barra). */}
+      <nav className="nav-safe fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosMsgTotal }, { k: 'contactos', l: t('Contactos'), I: Users, badge: solicitudesCount }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
           <button key={it.k} onClick={() => setTab(it.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${tab === it.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
             <span className="relative">
