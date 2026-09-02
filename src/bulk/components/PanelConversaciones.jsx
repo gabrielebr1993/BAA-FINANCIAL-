@@ -45,7 +45,10 @@ function horaCorta(ts) {
     : d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' })
 }
 
-export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, menuConversacion = null, alturaClass = 'h-mensajes' }) {
+// `estiloApp`: en el chat ABIERTO usa la cabecera NAVY tipo app de ChatOrden (con
+// volver y llamadas integradas) y oculta la cabecera clara del panel en móvil —
+// estándar visual del portal del chofer. Escritorio (lg) conserva su cabecera.
+export default function PanelConversaciones({ secciones = [], titulo, accion = null, abrir = null, onEliminarConversacion = null, menuConversacion = null, alturaClass = 'h-mensajes', estiloApp = false }) {
   const { t } = useLang()
   const [tab, setTab] = useState(secciones[0]?.k || '')
   const [sel, setSel] = useState('')
@@ -208,8 +211,8 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
           style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}
         >
           {activa ? (
-            <Card className="flex h-full min-h-0 flex-1 flex-col p-3 sm:p-4">
-              <div className="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <Card className={`flex h-full min-h-0 flex-1 flex-col ${estiloApp ? 'overflow-hidden p-0' : 'p-3 sm:p-4'}`}>
+              <div className={`mb-3 items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800 ${estiloApp ? 'hidden' : 'flex'}`}>
                 <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
                 <Avatar foto={activa.foto} icon={activa.icon} nombre={activa.titulo} size={42} />
                 <div className="min-w-0">
@@ -250,7 +253,8 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                 )}
               </div>
               <div className="min-h-0 flex-1">
-                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill />
+                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill
+                  estiloApp={estiloApp} onVolver={estiloApp ? () => setVerChatMovil(false) : null} />
               </div>
             </Card>
           ) : (

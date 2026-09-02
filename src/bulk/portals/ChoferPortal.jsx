@@ -14,6 +14,7 @@ import { onAbrirConversacion } from '../data/notifsMensajes'
 import { authBulk, funcsBulk } from '../firebaseBulk'
 import { httpsCallable } from 'firebase/functions'
 import PanelConversaciones from '../components/PanelConversaciones'
+import { useVisualViewport } from '../components/useVisualViewport'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
 import { useSolicitudesContacto } from '../data/contactos'
@@ -301,7 +302,10 @@ export default function ChoferPortal() {
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
 
   return (
-    <div className="min-h-dvh mx-auto flex max-w-md flex-col bg-[#f2f3f7] dark:bg-slate-950">
+    // Carcasa de ALTURA FIJA (h-dvh): el header navy y el nav claro quedan fijos
+    // y el CUERPO desplaza por dentro (overflow-y-auto en <main>). Antes, con
+    // min-h, desplazaba la página entera y el timeline de la orden se cortaba.
+    <div className="h-dvh mx-auto flex max-w-md flex-col overflow-hidden bg-[#f2f3f7] dark:bg-slate-950">
       <IndicadorConexion />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />
@@ -539,7 +543,7 @@ export default function ChoferPortal() {
         })()}
         {tab === 'mensajes' && (
           <>
-            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-chofer" abrir={abrirExterno || abrirPriv}
+            <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-chofer" abrir={abrirExterno || abrirPriv} estiloApp
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
               accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupoChofer} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
@@ -1007,6 +1011,16 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
   const fase = faseChofer(orden.estado)
   const guia = GUIA_CHOFER[orden.estado] || null
   const [modal, setModal] = useState(null) // 'ticket' | 'pod' | 'chat'
+  // Chat de la orden con el teclado abierto: capa ceñida al viewport VISIBLE y
+  // scroll del fondo congelado (mismo patrón que el panel de Mensajes).
+  const vvChat = useVisualViewport(modal === 'chat')
+  useEffect(() => {
+    if (modal !== 'chat') return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.scrollTo(0, 0)
+    return () => { document.body.style.overflow = prev }
+  }, [modal])
   const [ocupado, setOcupado] = useState(false)
   const [peso, setPeso] = useState('')
   const [ticketNum, setTicketNum] = useState('')
@@ -1353,10 +1367,18 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
 
       {/* Chat de la orden: alto proporcional a la pantalla (dvh) y scroll SOLO
           interno, para que no salte con el teclado ni mueva la página de atrás. */}
+      {/* Chat de la orden ACTIVA: pantalla completa con cabecera NAVY (estándar de
+          la app). Se ciñe al viewport VISIBLE (visualViewport) para que la barra de
+          escribir quede sobre el teclado, no debajo. */}
       {modal === 'chat' && (
-        <Modal onClose={() => setModal(null)} titulo={`${t('Chat')} · ${orden.numero}`}>
-          <div className="h-[62dvh] min-h-[300px]"><ChatOrden orden={orden} fill /></div>
-        </Modal>
+        <div
+          className="pt-safe pb-safe fixed inset-0 z-[70] mx-auto flex max-w-md flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950"
+          style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto', paddingTop: 8, paddingBottom: 8 } : undefined}
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-card dark:bg-slate-900">
+            <ChatOrden orden={orden} fill estiloApp onVolver={() => setModal(null)} />
+          </div>
+        </div>
       )}
 
       {/* Modal ticket de carga — el PESO lo pone el OCR. El chofer NO lo escribe;

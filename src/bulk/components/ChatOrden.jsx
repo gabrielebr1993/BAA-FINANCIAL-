@@ -2,7 +2,7 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users, ArrowLeft } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import { esConvGrupo } from '../data/grupos'
@@ -21,7 +21,11 @@ const EMOJIS = ['👍', '👎', '🙏', '👌', '💪', '👏', '🤝', '✌️'
 // ¿El mensaje es solo emojis (para mostrarlo grande, como WhatsApp)?
 const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.length > 0 && x.length <= 8 && !/[0-9a-zA-ZÀ-ɏ]/.test(x) }
 
-export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null, grupoUids = null }) {
+// `estiloApp`: cabecera NAVY tipo app (estándar del portal del chofer) con botón
+// volver (`onVolver`), avatar, nombre + rol y botones de llamada integrados.
+// `onVolver`: cierra/regresa (solo se muestra si viene). Sin estiloApp, el chat se
+// ve como siempre (staff/escritorio no cambian).
+export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null, grupoUids = null, estiloApp = false, onVolver = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
   const avatares = useAvatares()
@@ -154,8 +158,29 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         ? { id: contacto.uid || null, nombre: contacto.nombre || t('Conversación'), rol: contacto.rol || '' }
         : null))
   return (
-    <div className={`flex flex-col rounded-xl border border-slate-200 dark:border-slate-700/60 ${fill ? 'h-full' : ''}`}>
-      {cab && (
+    <div className={`flex flex-col ${estiloApp ? 'overflow-hidden' : 'rounded-xl border border-slate-200 dark:border-slate-700/60'} ${fill ? 'h-full' : ''}`}>
+      {estiloApp ? (
+        /* ESTÁNDAR de la app: cabecera NAVY con volver + identidad + llamadas ordenadas. */
+        <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 py-2.5 text-white">
+          {onVolver && <button type="button" onClick={onVolver} aria-label={t('Volver')} className="-ml-1 rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10"><ArrowLeft size={19} /></button>}
+          <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={34} />
+          <button type="button" onClick={() => cab?.id && setPerfilRapido(cab)} className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-sm font-black leading-tight">{cab?.nombre || orden?.numero || t('Conversación')}</span>
+            <span className="block truncate text-[11px] text-slate-300">
+              {cab?.grupo ? t('Grupo') : (t(BULK_ROLES_LABEL[cab?.rol]) || cab?.rol || t('En línea'))}
+            </span>
+          </button>
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            {otro && (
+              <>
+                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white transition active:scale-95"><Phone size={16} /></button>
+                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white transition active:scale-95"><Video size={16} /></button>
+              </>
+            )}
+            <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-[#c9a24b] transition active:scale-95"><Users size={16} /></button>
+          </div>
+        </div>
+      ) : cab && (
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
           <Avatar foto={cab.id ? avatares[cab.id] : null} nombre={cab.nombre} size={32} />
           <button type="button" onClick={() => cab.id && setPerfilRapido(cab)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{cab.nombre}</button>
@@ -173,14 +198,31 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           </div>
         </div>
       )}
-      <div ref={listRef} className={`scroll-thin space-y-2 overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
+      <div ref={listRef} className={`scroll-thin overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
+        {/* Las burbujas se ANCLAN ABAJO (como WhatsApp): con pocos mensajes no queda
+            un hueco enorme arriba del campo de escribir. */}
+        <div className="flex min-h-full flex-col justify-end space-y-2">
         {msgs.length === 0 && <div className="py-6 text-center text-xs text-slate-400">{t('Sin mensajes. Escribe el primero.')}</div>}
-        {msgs.map((m) => {
+        {msgs.map((m, iM) => {
+          // Divisor de día: se pinta cuando cambia la fecha respecto al mensaje anterior.
+          const dPrev = iM > 0 ? new Date(msgs[iM - 1].ts).toDateString() : null
+          const dEste = new Date(m.ts).toDateString()
+          const hoy = new Date().toDateString()
+          const ayer = new Date(Date.now() - 86400000).toDateString()
+          const divisor = dEste !== dPrev
+            ? (dEste === hoy ? t('Hoy') : dEste === ayer ? t('Ayer') : new Date(m.ts).toLocaleDateString('es', { day: 'numeric', month: 'short' }))
+            : null
           const mio = m.autorId === usuario?.id
           const leidoPorOtro = (m.leidoPor || []).some((u) => u !== m.autorId)
           const puedeBorrar = mio || esAdmin
           return (
-            <div key={m.id} className={`group flex items-center gap-1.5 ${mio ? 'justify-end' : 'justify-start'}`}>
+            <div key={m.id}>
+            {divisor && (
+              <div className="my-1.5 flex justify-center">
+                <span className="rounded-full bg-slate-200/80 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-700/80 dark:text-slate-300">{divisor}</span>
+              </div>
+            )}
+            <div className={`group flex items-center gap-1.5 ${mio ? 'justify-end' : 'justify-start'}`}>
               {!mio && (
                 <div className="shrink-0 self-end">
                   <Avatar foto={avatares[m.autorId]} nombre={m.autorNombre} size={28} />
@@ -214,8 +256,10 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}
             </div>
+            </div>
           )
         })}
+        </div>
       </div>
       {/* Panel de emojis (tipo WhatsApp) */}
       {verEmojis && (
@@ -231,7 +275,11 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
         <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
         <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
-        <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
+        <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())}
+          onFocus={() => { // al abrir el teclado, re-anclar al último mensaje
+            setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 150)
+            setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 450)
+          }} />
         <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
       </div>
       {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}
