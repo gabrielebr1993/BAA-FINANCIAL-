@@ -18,6 +18,10 @@ const BulkApp = lazy(() => import('./bulk/BulkApp'))
 // Landing PÚBLICA de Freight (marketing, sin autenticación). Se muestra en la raíz a
 // los visitantes que aún no han elegido módulo (clientes potenciales).
 const LandingFreight = lazy(() => import('./pages/LandingFreight'))
+// Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
+// nuevas, independientes de la landing (que queda intacta) y de la app.
+const SitioPublico = lazy(() => import('./pages/publico/SitioPublico'))
+const RUTAS_PUBLICAS = ['/asignacion', '/gps', '/app-chofer', '/facturacion', '/roles', '/sistema', '/por-que-milepay']
 
 // Páginas cargadas bajo demanda (code-splitting por ruta): cada una es su propio
 // chunk, así el arranque solo descarga lo imprescindible y cada pantalla se baja
@@ -148,6 +152,10 @@ function TopBranch() {
   // /dashboard y sus rutas propias; Freight bajo /bulk. Nada de eso cambia por dentro.
   if (pathname === '/' || pathname === '/inicio') {
     return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
+  }
+  // Páginas informativas del sitio público (una por función + Por qué MilePay).
+  if (RUTAS_PUBLICAS.includes(pathname)) {
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><SitioPublico /></Suspense>
   }
   return <PackageApp />
 }
