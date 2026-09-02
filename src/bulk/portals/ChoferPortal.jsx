@@ -1021,6 +1021,9 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     window.scrollTo(0, 0)
     return () => { document.body.style.overflow = prev }
   }, [modal])
+  // Al abrir/cerrar el teclado (cambia el viewport visible) la página se re-ancla
+  // arriba: sin esto iOS desplaza la capa y la cabecera navy queda fuera de vista.
+  useEffect(() => { if (modal === 'chat') window.scrollTo(0, 0) }, [vvChat, modal])
   const [ocupado, setOcupado] = useState(false)
   const [peso, setPeso] = useState('')
   const [ticketNum, setTicketNum] = useState('')
