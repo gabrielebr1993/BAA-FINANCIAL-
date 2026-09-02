@@ -6,7 +6,7 @@
 // de contactos/consentimiento la valida el backend (Cloud Function bulkContacto).
 // UI pensada para usarse trabajando: botones grandes y accesibles.
 // ============================================================================
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Users, UserPlus, IdCard, Copy, Check, Search, X, MessageSquare, Phone, Video,
   Shield, Ban, Trash2, Flag, Bell, BellOff, ChevronLeft, Send,
@@ -46,6 +46,16 @@ export default function ContactosChofer() {
   const [chatCon, setChatCon] = useState(null) // contacto con chat abierto
   // Con teclado abierto, la capa del chat se ciñe al viewport visible (no salta).
   const vvChat = useVisualViewport(!!chatCon)
+  // Chat abierto: congela el scroll del fondo y re-ancla arriba al abrir/cerrar el
+  // teclado (mismo patrón que Mensajes) para que la cabecera navy no se salga.
+  useEffect(() => {
+    if (!chatCon) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.scrollTo(0, 0)
+    return () => { document.body.style.overflow = prev }
+  }, [chatCon])
+  useEffect(() => { if (chatCon) window.scrollTo(0, 0) }, [vvChat, chatCon])
   const [verPerfil, setVerPerfil] = useState(null) // {id,nombre,rol} para ver perfil
   const [verGrupos, setVerGrupos] = useState(false)
   const [copiado, setCopiado] = useState(false)
@@ -83,10 +93,10 @@ export default function ContactosChofer() {
     return (
       <div className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950"
         style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}>
-        <button onClick={() => setChatCon(null)} className="mb-2 inline-flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ChevronLeft size={18} /> {t('Contactos')}</button>
-        {/* ChatOrden trae su propia cabecera: nombre (toca → ver perfil) + llamar/video/grupo. */}
-        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
-          <ChatOrden orden={{ id: convPrivada(uid, chatCon.uid), numero: chatCon.nombre }} participantes={[uid, chatCon.uid]} contacto={{ uid: chatCon.uid, nombre: chatCon.nombre, rol: 'chofer' }} fill />
+        {/* Cabecera NAVY estándar de la app (volver + nombre + llamadas) via estiloApp. */}
+        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-card dark:bg-slate-900">
+          <ChatOrden orden={{ id: convPrivada(uid, chatCon.uid), numero: chatCon.nombre }} participantes={[uid, chatCon.uid]} contacto={{ uid: chatCon.uid, nombre: chatCon.nombre, rol: 'chofer' }} fill
+            estiloApp onVolver={() => setChatCon(null)} />
         </div>
       </div>
     )
