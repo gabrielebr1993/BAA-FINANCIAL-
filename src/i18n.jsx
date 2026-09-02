@@ -2483,7 +2483,9 @@ const EN = {
 }
 
 const Ctx = createContext(null)
-const leerLang = () => { try { return localStorage.getItem('mp_lang') || 'es' } catch { return 'es' } }
+// Idioma inicial: INGLÉS por defecto; quien elija Español (toggle ES/EN) queda
+// guardado en localStorage y se respeta en las siguientes visitas.
+const leerLang = () => { try { return localStorage.getItem('mp_lang') || 'en' } catch { return 'en' } }
 
 export function LangProvider({ children }) {
   const [lang, setLangState] = useState(leerLang)
