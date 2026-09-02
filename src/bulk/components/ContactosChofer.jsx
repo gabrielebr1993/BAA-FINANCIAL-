@@ -91,13 +91,12 @@ export default function ContactosChofer() {
   // página del portal, así no salta con el teclado ni con mensajes nuevos).
   if (chatCon) {
     return (
-      <div className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950"
-        style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}>
-        {/* Cabecera NAVY estándar de la app (volver + nombre + llamadas) via estiloApp. */}
-        <div className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-card dark:bg-slate-900">
-          <ChatOrden orden={{ id: convPrivada(uid, chatCon.uid), numero: chatCon.nombre }} participantes={[uid, chatCon.uid]} contacto={{ uid: chatCon.uid, nombre: chatCon.nombre, rol: 'chofer' }} fill
-            estiloApp onVolver={() => setChatCon(null)} />
-        </div>
+      <div className="fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900"
+        style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto' } : undefined}>
+        {/* Cabecera NAVY estándar de la app (volver + nombre + llamadas) via estiloApp;
+            a SANGRE completa, tipo WhatsApp. */}
+        <ChatOrden orden={{ id: convPrivada(uid, chatCon.uid), numero: chatCon.nombre }} participantes={[uid, chatCon.uid]} contacto={{ uid: chatCon.uid, nombre: chatCon.nombre, rol: 'chofer' }} fill
+          estiloApp onVolver={() => setChatCon(null)} />
       </div>
     )
   }

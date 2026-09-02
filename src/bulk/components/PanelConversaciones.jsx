@@ -22,12 +22,13 @@ const ICONO = { cliente: Building2, transportista: Truck, chofer: User, admin: S
 
 // Avatar de una conversación: FOTO real si existe; si no, ícono según su tipo. No
 // inventa imágenes — solo muestra la foto cuando el dato existe en la base.
-function Avatar({ foto, icon, nombre, size = 40, resalte = false }) {
+function Avatar({ foto, icon, nombre, size = 40, resalte = false, redondo = false }) {
   const Icono = ICONO[icon] || MessageSquare
   const px = { width: size, height: size }
-  if (foto) return <img src={foto} alt={nombre || ''} style={px} className="chat-img flex-shrink-0 rounded-xl border border-slate-200 object-cover dark:border-slate-700" />
+  const forma = redondo ? 'rounded-full' : 'rounded-xl'
+  if (foto) return <img src={foto} alt={nombre || ''} style={px} className={`chat-img flex-shrink-0 ${forma} border border-slate-200 object-cover dark:border-slate-700`} />
   return (
-    <div style={px} className={`grid flex-shrink-0 place-items-center rounded-xl ${resalte ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+    <div style={px} className={`grid flex-shrink-0 place-items-center ${forma} ${resalte ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
       <Icono size={Math.round(size * 0.42)} />
     </div>
   )
@@ -83,6 +84,8 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   }, [seccion, buscar])
 
   const activa = items.find((c) => c.key === sel) || items[0] || null
+  // Envoltorio del chat abierto: tarjeta normal, o <div> a sangre en estiloApp.
+  const EnvChat = estiloApp ? 'div' : Card
 
   const elegir = (k) => { setSel(k); setVerChatMovil(true) }
 
@@ -160,7 +163,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                 <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${esActiva ? 'border-amber-500 bg-amber-500/10' : noLeido ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                   {/* Barra de acento a la izquierda cuando hay mensajes nuevos. */}
                   {noLeido && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-rose-500" aria-hidden="true" />}
-                  <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={40} resalte={c.noLeidos > 0} />
+                  <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={estiloApp ? 48 : 40} resalte={c.noLeidos > 0} redondo={estiloApp} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {noLeido && <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-rose-500" title={t('Mensajes nuevos')} />}
@@ -200,7 +203,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                     )}
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className={`truncate text-xs ${c.noLeidos > 0 ? 'font-semibold text-slate-600 dark:text-slate-200' : 'text-slate-400'}`}>{c.lastText || t('Sin mensajes aún')}</span>
-                      {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
+                      {c.noLeidos > 0 && <span className={`ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full px-1.5 text-[11px] font-bold text-white ${estiloApp ? 'bg-emerald-500' : 'bg-rose-500'}`}>{c.noLeidos}</span>}
                     </div>
                   </div>
                 </div>
@@ -213,11 +216,14 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             (capa fija propia, como WhatsApp): así no comparte scroll con la página del
             portal ni salta cuando se abre el teclado. En escritorio sigue en la grilla. */}
         <div
-          className={`min-h-0 ${estiloApp ? '' : 'lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0'} ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}
-          style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', paddingBottom: 8, paddingTop: 8 } : undefined}
+          className={`min-h-0 ${estiloApp
+            ? (verChatMovil ? 'fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900' : 'hidden')
+            : `lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}`}
+          style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', ...(estiloApp ? {} : { paddingBottom: 8, paddingTop: 8 }) } : undefined}
         >
           {activa ? (
-            <Card className={`flex h-full min-h-0 flex-1 flex-col ${estiloApp ? 'overflow-hidden p-0' : 'p-3 sm:p-4'}`}>
+            /* estiloApp: SIN tarjeta — el chat va a sangre completa, tipo WhatsApp. */
+            <EnvChat className={`flex h-full min-h-0 flex-1 flex-col ${estiloApp ? 'overflow-hidden bg-white dark:bg-slate-900' : 'p-3 sm:p-4'}`}>
               <div className={`mb-3 items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800 ${estiloApp ? 'hidden' : 'flex'}`}>
                 <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
                 <Avatar foto={activa.foto} icon={activa.icon} nombre={activa.titulo} size={42} />
@@ -262,7 +268,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                 <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill
                   estiloApp={estiloApp} onVolver={estiloApp ? () => setVerChatMovil(false) : null} />
               </div>
-            </Card>
+            </EnvChat>
           ) : (
             <EstadoVacio titulo={t('Selecciona una conversación')} texto={t('Elige un chat de la lista para ver los mensajes.')} mostrarBoton={false} />
           )}

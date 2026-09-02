@@ -2,7 +2,7 @@
 // transportista, cliente). Texto, foto, ubicación, marca de urgente y confirmación de
 // lectura. Elimina la necesidad de WhatsApp para la operación.
 import { useEffect, useRef, useState } from 'react'
-import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users, ArrowLeft } from 'lucide-react'
+import { Send, Camera, MapPin, AlertTriangle, Check, CheckCheck, Smile, Trash2, Phone, Video, Paperclip, FileText, Users, ArrowLeft, Plus } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje, suscribirChat, marcarLeidos, eliminarMensaje } from '../data/chat'
 import { esConvGrupo } from '../data/grupos'
@@ -41,6 +41,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
   const [urgente, setUrgente] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [verEmojis, setVerEmojis] = useState(false)
+  const [menuAdj, setMenuAdj] = useState(false) // hoja de adjuntos (botón +, estiloApp)
   const [perfilRapido, setPerfilRapido] = useState(null) // {id,nombre,rol} del autor al que se le hizo clic
   const listRef = useRef(null)
 
@@ -161,7 +162,8 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     <div className={`flex flex-col ${estiloApp ? 'overflow-hidden' : 'rounded-xl border border-slate-200 dark:border-slate-700/60'} ${fill ? 'h-full' : ''}`}>
       {estiloApp ? (
         /* ESTÁNDAR de la app: cabecera NAVY con volver + identidad + llamadas ordenadas. */
-        <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 py-2.5 text-white">
+        <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 pb-2.5 text-white"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}>
           {onVolver && <button type="button" onClick={onVolver} aria-label={t('Volver')} className="-ml-1 rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10"><ArrowLeft size={19} /></button>}
           <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={34} />
           <button type="button" onClick={() => cab?.id && setPerfilRapido(cab)} className="min-w-0 flex-1 text-left">
@@ -198,7 +200,13 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           </div>
         </div>
       )}
-      <div ref={listRef} className={`scroll-thin overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { maxHeight: alto }}>
+      <div ref={listRef}
+        className={`scroll-thin overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''} ${estiloApp ? 'bg-[#efe9df] dark:bg-slate-950' : ''}`}
+        style={{
+          ...(fill ? {} : { maxHeight: alto }),
+          // Patrón sutil tipo WhatsApp sobre el fondo beige.
+          ...(estiloApp ? { backgroundImage: 'radial-gradient(rgba(19,35,63,.05) 1px, transparent 1px)', backgroundSize: '16px 16px' } : {}),
+        }}>
         {/* Las burbujas se ANCLAN ABAJO (como WhatsApp): con pocos mensajes no queda
             un hueco enorme arriba del campo de escribir. */}
         <div className="flex min-h-full flex-col justify-end space-y-2">
@@ -231,10 +239,14 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
               {mio && puedeBorrar && (
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10' : mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente
+                ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10'
+                : estiloApp
+                  ? (mio ? 'rounded-br-md bg-[#d9fdd3] text-slate-900 shadow-sm dark:bg-emerald-700 dark:text-white' : 'rounded-bl-md bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100')
+                  : (mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800')}`}>
                 {!mio && (
                   <button type="button" onClick={() => setPerfilRapido({ id: m.autorId, nombre: m.autorNombre, rol: m.autorRol })}
-                    className="mb-0.5 text-[10px] font-semibold opacity-70 hover:underline">
+                    className={`mb-0.5 text-[10px] font-semibold hover:underline ${estiloApp ? 'text-[#a9863a] dark:text-amber-400' : 'opacity-70'}`}>
                     {m.autorNombre} · {t(BULK_ROLES_LABEL[m.autorRol]) || m.autorRol}
                   </button>
                 )}
@@ -247,7 +259,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                   <a href={m.archivo} download={m.nombreArchivo || 'archivo'} className="mb-0.5 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 underline dark:bg-white/10"><FileText size={16} /> <span className="truncate">{m.nombreArchivo || t('Archivo')}</span></a>
                 )}
                 {m.texto && <div className={`whitespace-pre-wrap break-words ${soloEmojis(m.texto) ? 'text-3xl leading-tight' : ''}`}>{m.texto}</div>}
-                <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${mio ? 'text-white/60 dark:text-slate-900/60' : 'text-slate-400'}`}>
+                <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${estiloApp ? 'text-slate-500/80 dark:text-white/60' : mio ? 'text-white/60 dark:text-slate-900/60' : 'text-slate-400'}`}>
                   {new Date(m.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                   {mio && (leidoPorOtro ? <CheckCheck size={11} /> : <Check size={11} />)}
                 </div>
@@ -269,19 +281,63 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-t border-slate-200 p-2 dark:border-slate-700/60">
-        <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`rounded-lg p-2 ${verEmojis ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Smile size={16} /></button>
-        <button onClick={() => setUrgente((u) => !u)} title={t('Marcar urgente')} className={`rounded-lg p-2 ${urgente ? 'bg-rose-500 text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><AlertTriangle size={16} /></button>
-        <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
-        <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
-        <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
-        <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())}
-          onFocus={() => { // al abrir el teclado, re-anclar al último mensaje
-            setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 150)
-            setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 450)
-          }} />
-        <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
-      </div>
+      {estiloApp ? (
+        /* Barra tipo WhatsApp: [+] adjuntos · píldora con emoji + texto + cámara · enviar dorado */
+        <div className="relative flex items-end gap-2 bg-[#efe9df] px-2 pt-2 dark:bg-slate-950"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}>
+          {menuAdj && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuAdj(false)} />
+              <div className="absolute bottom-full left-2 z-20 mb-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                <label className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                  <Camera size={17} className="text-[#c9a24b]" /> {t('Enviar foto')}
+                  <input type="file" accept="image/*" onChange={(e) => { setMenuAdj(false); onFoto(e) }} className="hidden" />
+                </label>
+                <label className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                  <Paperclip size={17} className="text-[#c9a24b]" /> {t('Adjuntar archivo')}
+                  <input type="file" onChange={(e) => { setMenuAdj(false); onArchivo(e) }} className="hidden" />
+                </label>
+                <button type="button" onClick={() => { setMenuAdj(false); compartirUbicacion() }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                  <MapPin size={17} className="text-[#c9a24b]" /> {t('Compartir ubicación')}
+                </button>
+                <button type="button" onClick={() => { setMenuAdj(false); setUrgente((u) => !u) }} className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 ${urgente ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>
+                  <AlertTriangle size={17} className={urgente ? 'text-rose-500' : 'text-[#c9a24b]'} /> {urgente ? t('Quitar urgente') : t('Marcar urgente')}
+                </button>
+              </div>
+            </>
+          )}
+          <button type="button" onClick={() => setMenuAdj((v) => !v)} title={t('Adjuntar')}
+            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-white text-slate-500 shadow-sm transition active:scale-95 dark:bg-slate-800 dark:text-slate-300">
+            <Plus size={22} className={`transition-transform ${menuAdj ? 'rotate-45' : ''}`} />
+          </button>
+          <div className={`flex min-h-[44px] flex-1 items-center gap-1.5 rounded-full bg-white px-3 shadow-sm dark:bg-slate-800 ${urgente ? 'ring-2 ring-rose-400' : ''}`}>
+            <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`flex-shrink-0 ${verEmojis ? 'text-amber-500' : 'text-slate-400'}`}><Smile size={20} /></button>
+            <input className="min-w-0 flex-1 bg-transparent py-2 text-base outline-none placeholder:text-slate-400 dark:text-slate-100"
+              placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())}
+              onFocus={() => {
+                setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 150)
+                setTimeout(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight }, 450)
+              }} />
+            <label className="flex-shrink-0 cursor-pointer text-slate-400" title={t('Enviar foto')}><Camera size={20} /><input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" /></label>
+          </div>
+          <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando}
+            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-[#c9a24b] text-[#13233f] shadow-md transition active:scale-95 disabled:opacity-50">
+            <Send size={19} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 border-t border-slate-200 p-2 dark:border-slate-700/60">
+          <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`rounded-lg p-2 ${verEmojis ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Smile size={16} /></button>
+          <button onClick={() => setUrgente((u) => !u)} title={t('Marcar urgente')} className={`rounded-lg p-2 ${urgente ? 'bg-rose-500 text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><AlertTriangle size={16} /></button>
+          <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
+          <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
+          <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
+          <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
+          <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
+        </div>
+      )}
       {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}
     </div>
   )

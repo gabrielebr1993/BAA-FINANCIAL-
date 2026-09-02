@@ -1375,12 +1375,10 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
           escribir quede sobre el teclado, no debajo. */}
       {modal === 'chat' && (
         <div
-          className="pt-safe pb-safe fixed inset-0 z-[70] mx-auto flex max-w-md flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950"
-          style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto', paddingTop: 8, paddingBottom: 8 } : undefined}
+          className="fixed inset-0 z-[70] mx-auto flex max-w-md flex-col bg-white dark:bg-slate-900"
+          style={vvChat ? { top: vvChat.top, height: vvChat.height, bottom: 'auto' } : undefined}
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-white shadow-card dark:bg-slate-900">
-            <ChatOrden orden={orden} fill estiloApp onVolver={() => setModal(null)} />
-          </div>
+          <ChatOrden orden={orden} fill estiloApp onVolver={() => setModal(null)} />
         </div>
       )}
 
