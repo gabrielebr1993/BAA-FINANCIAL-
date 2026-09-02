@@ -17,6 +17,15 @@ import { useLang, LangToggle } from '../i18n'
 const F_DISPLAY = "'Space Grotesk','Inter',sans-serif"
 const F_MONO = "'JetBrains Mono',ui-monospace,monospace"
 
+// Caja de campo con ícono integrado (foco: borde dorado + halo sutil).
+// FUERA del componente: si se define adentro, React la recrea en cada tecla y
+// el input pierde el foco (el teclado del móvil se abre y cierra por letra).
+const Caja = ({ children }) => (
+  <div className="flex items-center gap-2.5 rounded-[13px] border border-white/10 bg-white/5 px-3.5 transition focus-within:border-amber-400/70 focus-within:ring-2 focus-within:ring-amber-400/20">
+    {children}
+  </div>
+)
+
 export default function BulkLogin() {
   const { t } = useLang()
   const { iniciarSesion } = useBulkAuth()
@@ -45,13 +54,6 @@ export default function BulkLogin() {
       setMsg({ tipo: 'error', txt: t('No se pudo enviar el correo. Verifica que esté bien escrito.') })
     }
   }
-
-  // Caja de campo con ícono integrado (foco: borde dorado + halo sutil).
-  const Caja = ({ children }) => (
-    <div className="flex items-center gap-2.5 rounded-[13px] border border-white/10 bg-white/5 px-3.5 transition focus-within:border-amber-400/70 focus-within:ring-2 focus-within:ring-amber-400/20">
-      {children}
-    </div>
-  )
 
   return (
     <div className="flex min-h-screen flex-col" style={{ background: 'linear-gradient(180deg,#16294a 0%,#0a1424 100%)' }}>
