@@ -6,6 +6,7 @@
 // español. El idioma se guarda en localStorage (mp_lang).
 // ============================================================================
 import { createContext, useCallback, useContext, useState } from 'react'
+import { EN_EXTRA } from './i18n-extra'
 
 // Diccionario ES→EN. Ir agregando entradas por pantalla. Si falta una, cae al español.
 const EN = {
@@ -2494,7 +2495,7 @@ const leerLang = () => { try { return localStorage.getItem('mp_lang') || 'en' } 
 export function LangProvider({ children }) {
   const [lang, setLangState] = useState(leerLang)
   const setLang = useCallback((l) => { try { localStorage.setItem('mp_lang', l) } catch { /* noop */ } setLangState(l) }, [])
-  const t = useCallback((s) => (lang === 'en' ? (EN[s] ?? s) : s), [lang])
+  const t = useCallback((s) => (lang === 'en' ? (EN[s] ?? EN_EXTRA[s] ?? s) : s), [lang])
   return <Ctx.Provider value={{ lang, setLang, t }}>{children}</Ctx.Provider>
 }
 
