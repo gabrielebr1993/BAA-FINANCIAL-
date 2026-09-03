@@ -58,14 +58,17 @@ export default async function handler(req, res) {
   const accion = body.accion || 'punto'
 
   try {
-    // ── 1) Emitir/renovar el pase (requiere sesión web del chofer) ──────────
+    // ── 1) Emitir/renovar el pase de DISPOSITIVO (requiere sesión web) ──────
+    // Todos los roles lo piden: el chofer lo usa para el GPS en segundo plano y
+    // cualquier rol lo usa para registrar el token de notificaciones push de la
+    // app nativa (accion 'token').
     if (accion === 'pase') {
       const h = req.headers.authorization || ''
       const idToken = h.startsWith('Bearer ') ? h.slice(7) : ''
       if (!idToken) return res.status(401).json({ ok: false, error: 'Falta el token de sesión.' })
       let d
       try { d = await a.getAuth().verifyIdToken(idToken) } catch { return res.status(401).json({ ok: false, error: 'Token inválido o expirado.' }) }
-      if (!d.bulkTenant || d.bulkRole !== 'chofer') return res.status(403).json({ ok: false, error: 'Solo los choferes usan el rastreo.' })
+      if (!d.bulkTenant || !d.bulkRole) return res.status(403).json({ ok: false, error: 'Tu cuenta no pertenece al módulo Freight.' })
       const ref = db.collection('bulk_trackpass').doc(d.uid)
       const prev = await ref.get()
       const ahora = Date.now()
@@ -76,9 +79,46 @@ export default async function handler(req, res) {
       if (!pass || !(venceEn > ahora + 5 * DIA_MS)) {
         pass = crypto.randomBytes(24).toString('hex')
         venceEn = ahora + 30 * DIA_MS
-        await ref.set({ pass, venceEn, uid: d.uid, tenantId: d.bulkTenant, carrierId: d.bulkCarrierId || null, creadoEn: new Date().toISOString() })
       }
+      // La audiencia (rol/carrier/cliente) se refresca SIEMPRE desde los claims,
+      // para que el registro de tokens de push lleve los datos vigentes.
+      await ref.set({
+        pass, venceEn, uid: d.uid, tenantId: d.bulkTenant, rol: d.bulkRole || null,
+        carrierId: d.bulkCarrierId || null, clienteId: d.bulkClienteId || null,
+        creadoEn: prev.exists ? (prev.data().creadoEn || new Date().toISOString()) : new Date().toISOString(),
+        actualizadoEn: new Date().toISOString(),
+      })
       return res.status(200).json({ ok: true, pass, venceEn })
+    }
+
+    // Validación del pase (compartida por 'punto' y 'token').
+    const validarPase = async (uid, pass) => {
+      if (!uid || !pass) return null
+      const s = await db.collection('bulk_trackpass').doc(String(uid)).get()
+      const tp = s.exists ? s.data() : null
+      const okP = tp && typeof tp.pass === 'string' && tp.pass.length === String(pass).length &&
+        crypto.timingSafeEqual(Buffer.from(tp.pass), Buffer.from(String(pass)))
+      if (!okP || !(Number(tp.venceEn) > Date.now())) return null
+      return tp
+    }
+
+    // ── 1b) Registrar el token de PUSH de la app nativa (autenticado por pase) ──
+    // Guarda el token en bulk_pushTokens con la MISMA forma que la web (fcm.js),
+    // así las Cloud Functions existentes (órdenes/geocercas/mensajes/llamadas)
+    // le envían también al teléfono con la app cerrada.
+    if (accion === 'token') {
+      const tp = await validarPase(body.uid, body.pass)
+      if (!tp) return res.status(401).json({ ok: false, error: 'Pase inválido o vencido. Abre la app para renovarlo.' })
+      const token = String(body.token || '')
+      if (token.length < 20 || token.length > 4096) return res.status(400).json({ ok: false, error: 'Token inválido.' })
+      await db.collection('bulk_pushTokens').doc(token.replace(/\//g, '_')).set({
+        token,
+        tenantId: tp.tenantId, uid: tp.uid, rol: tp.rol || null,
+        carrierId: tp.carrierId || null, clienteId: tp.clienteId || null,
+        plataforma: String(body.plataforma || 'ios'),
+        actualizadoEn: a.FieldValue.serverTimestamp(),
+      }, { merge: true })
+      return res.status(200).json({ ok: true })
     }
 
     // ── 2) Recibir un punto GPS de la app nativa (autenticado por pase) ─────
@@ -89,12 +129,8 @@ export default async function handler(req, res) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       return res.status(400).json({ ok: false, error: 'Coordenadas inválidas.' })
     }
-    const tpSnap = await db.collection('bulk_trackpass').doc(String(uid)).get()
-    const tp = tpSnap.exists ? tpSnap.data() : null
-    const passOk = tp && typeof tp.pass === 'string' && tp.pass.length === String(pass).length &&
-      crypto.timingSafeEqual(Buffer.from(tp.pass), Buffer.from(String(pass)))
-    if (!passOk) return res.status(401).json({ ok: false, error: 'Pase inválido.' })
-    if (!(Number(tp.venceEn) > Date.now())) return res.status(401).json({ ok: false, error: 'Pase vencido. Abre la app para renovarlo.' })
+    const tp = await validarPase(uid, pass)
+    if (!tp) return res.status(401).json({ ok: false, error: 'Pase inválido o vencido. Abre la app para renovarlo.' })
 
     const oref = db.collection('bulk_orders').doc(String(ordenId))
     const oSnap = await oref.get()

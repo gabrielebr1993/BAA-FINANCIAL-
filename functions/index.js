@@ -962,6 +962,10 @@ async function enviarAPI(destinos, title, body, url) {
       tokens,
       notification: { title, body },
       webpush: { fcmOptions: url ? { link: url } : undefined },
+      // iPhone (app nativa): entrega inmediata y CON sonido aunque la app esté
+      // en segundo plano o cerrada. Android: prioridad alta (despierta el equipo).
+      apns: { headers: { 'apns-priority': '10' }, payload: { aps: { sound: 'default' } } },
+      android: { priority: 'high', notification: { sound: 'default' } },
       data: url ? { url } : {},
     })
     // Limpia tokens inválidos.

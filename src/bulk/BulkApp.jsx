@@ -5,6 +5,7 @@ import { useColeccion } from './data/useColeccion'
 import { logoutAplicable } from './data/sesiones'
 import { useInactividad } from '../hooks/useInactividad'
 import { activarPush } from './integraciones/fcm'
+import { authBulk } from './firebaseBulk'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import LlamadaProvider from './components/LlamadaProvider'
@@ -84,10 +85,27 @@ function ForceLogoutWatcher() {
 }
 
 // Registra el token de push (FCM) al iniciar sesión, con la audiencia del usuario.
+// Además pide el PASE DE DISPOSITIVO (/api/bulk-track accion 'pase') y lo deja en
+// localStorage: la app NATIVA (iOS/Android) lo lee para (a) registrar su token de
+// notificaciones y (b) mandar el GPS del chofer en segundo plano.
 function PushSetup() {
   const { usuario, tenantId, rol } = useBulkAuth()
   useEffect(() => {
-    if (usuario?.id) activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
+    if (!usuario?.id) return
+    activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
+    let vivo = true
+    ;(async () => {
+      try {
+        const tok = await authBulk.currentUser.getIdToken()
+        const r = await fetch('/api/bulk-track', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+          body: JSON.stringify({ accion: 'pase' }),
+        })
+        const j = await r.json()
+        if (vivo && j?.ok && j.pass) localStorage.setItem('mp_track_pase', JSON.stringify({ uid: usuario.id, tenantId, pass: j.pass }))
+      } catch { /* sin red: se reintenta en la próxima sesión */ }
+    })()
+    return () => { vivo = false }
   }, [usuario?.id, tenantId, rol])
   return null
 }
