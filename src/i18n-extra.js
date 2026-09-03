@@ -1279,4 +1279,8 @@ export const EN_EXTRA = {
   "✓ Amarrado a la geocerca: al llegar el camión, el supervisor recibe el aviso automático.": "✓ Tied to the geofence: when the truck arrives, the supervisor gets the automatic alert.",
   "🔔 Salida de geocerca": "🔔 Geofence exit",
   "🚨 Entrada a geocerca": "🚨 Geofence entry",
+
+  // — Textos que estaban incrustados sin t() (2.ª pasada) —
+  "No tienes acceso a esta sección": "You don't have access to this section",
+  "Pide a un administrador que te asigne el permiso correspondiente.": "Ask an administrator to grant you the corresponding permission.",
 }

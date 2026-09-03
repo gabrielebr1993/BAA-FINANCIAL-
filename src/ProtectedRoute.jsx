@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import { SECCIONES } from './constants'
 import { Spinner } from './components/ui'
+import { useLang } from './i18n'
 import Login from './Login'
 
 // `soloDriver` marca la ruta del Portal del chofer. El resto de rutas están
@@ -11,10 +12,11 @@ import Login from './Login'
 export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, roles, children }) {
   const { user, cargando, puede, esSuperAdmin, esDriver, perfil } = useAuth()
   const location = useLocation()
+  const { t } = useLang()
   if (cargando)
     return (
       <div className="flex min-h-screen items-center justify-center gap-3 bg-surface-light text-slate-500 dark:bg-surface-dark dark:text-slate-400">
-        <Spinner tamano="h-6 w-6" className="text-brand-gold" /> Cargando…
+        <Spinner tamano="h-6 w-6" className="text-brand-gold" /> {t('Cargando…')}
       </div>
     )
   if (!user) return <Login />
@@ -42,8 +44,8 @@ export default function ProtectedRoute({ filtro, soloSuperAdmin, soloDriver, rol
       <div className="grid min-h-screen place-items-center bg-surface-light p-6 text-center text-brand-navy dark:bg-surface-dark dark:text-slate-100">
         <div>
           <Lock size={40} strokeWidth={1.5} className="mx-auto text-brand-gold" />
-          <h3 className="mt-2 text-lg font-bold">No tienes acceso a esta sección</h3>
-          <p className="text-slate-500 dark:text-slate-400">Pide a un administrador que te asigne el permiso correspondiente.</p>
+          <h3 className="mt-2 text-lg font-bold">{t('No tienes acceso a esta sección')}</h3>
+          <p className="text-slate-500 dark:text-slate-400">{t('Pide a un administrador que te asigne el permiso correspondiente.')}</p>
         </div>
       </div>
     )

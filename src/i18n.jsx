@@ -2492,6 +2492,10 @@ const Ctx = createContext(null)
 // guardado en localStorage y se respeta en las siguientes visitas.
 const leerLang = () => { try { return localStorage.getItem('mp_lang') || 'en' } catch { return 'en' } }
 
+// Traducción FUERA de React (componentes de clase como ErrorBoundary, o código
+// que corre antes de montar el provider). Lee el idioma directo de localStorage.
+export const tDirecto = (s) => (leerLang() === 'en' ? (EN[s] ?? EN_EXTRA[s] ?? s) : s)
+
 export function LangProvider({ children }) {
   const [lang, setLangState] = useState(leerLang)
   const setLang = useCallback((l) => { try { localStorage.setItem('mp_lang', l) } catch { /* noop */ } setLangState(l) }, [])
