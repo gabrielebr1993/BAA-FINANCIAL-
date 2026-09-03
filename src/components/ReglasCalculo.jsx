@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { Save, SlidersHorizontal, Info } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useLang } from '../i18n'
 import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, METODOS_CLAIM, METODO_CLAIM_DEFAULT } from '../constants'
 import { guardarReglasEmpresa } from '../utils/empresaSettings'
 import { Card, Boton, Input, Select, Aviso, Spinner } from './ui'
@@ -14,6 +15,7 @@ const CATS = CATEGORIAS_CLAIM // [{key,label}]
 
 export default function ReglasCalculo() {
   const { activeCompanyId, ajustes, ciudadesEmpresa, reloadAjustes } = useData()
+  const { t } = useLang()
   const [porCiudad, setPorCiudad] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState('')
@@ -57,7 +59,7 @@ export default function ReglasCalculo() {
       }
       await guardarReglasEmpresa(activeCompanyId, emp, ciu)
       await reloadAjustes()
-      setOk('Reglas guardadas. Se aplican a las facturas que cargues a partir de ahora.')
+      setOk(t('Reglas guardadas. Se aplican a las facturas que cargues a partir de ahora.'))
     } finally {
       setGuardando(false)
     }
@@ -69,29 +71,29 @@ export default function ReglasCalculo() {
     <Card className="p-5 lg:col-span-2">
       <div className="mb-1 flex items-center gap-2">
         <SlidersHorizontal size={18} strokeWidth={1.8} className="text-brand-gold" />
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Reglas de cálculo</h3>
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Reglas de cálculo')}</h3>
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-        Configuración <b>manual por ciudad</b>. Por cada <b>categoría de claim</b> (se detecta sola desde la factura) eliges el <b>método</b> de cobro al chofer:
-        {' '}<b>Manual</b> = le cobras el monto que tú pones (ganancia = monto − Gofo) · <b>Lo que Gofo cobra</b> = al chofer se le descuenta lo mismo que Gofo (ganancia $0) · <b>Perdón</b> = no cobras, tú lo asumes (absorbes lo de Gofo).
+        {t('Configuración')} <b>{t('manual por ciudad')}</b>. {t('Por cada')} <b>{t('categoría de claim')}</b> {t('(se detecta sola desde la factura) eliges el')} <b>{t('método')}</b> {t('de cobro al chofer:')}
+        {' '}<b>{t('Manual')}</b> {t('= le cobras el monto que tú pones (ganancia = monto − Gofo) ·')} <b>{t('Lo que Gofo cobra')}</b> {t('= al chofer se le descuenta lo mismo que Gofo (ganancia $0) ·')} <b>{t('Perdón')}</b> {t('= no cobras, tú lo asumes (absorbes lo de Gofo).')}
       </p>
       <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <b>Ojo:</b> aquí NO se pone lo que le <b>pagas</b> al chofer (eso va por chofer en <b>Choferes</b> o al subir la factura). Cuando eliges el método <b>Manual</b> en una categoría, aparece un campo para poner el <b>monto que le cobras</b> por ese claim. El <b>Monto doble</b> solo sirve para <b>detectar</b> los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en <b>Claims</b>.
+        <b>{t('Ojo:')}</b> {t('aquí NO se pone lo que le')} <b>{t('pagas')}</b> {t('al chofer (eso va por chofer en')} <b>{t('Choferes')}</b> {t('o al subir la factura). Cuando eliges el método')} <b>{t('Manual')}</b> {t('en una categoría, aparece un campo para poner el')} <b>{t('monto que le cobras')}</b> {t('por ese claim. El')} <b>{t('Monto doble')}</b> {t('solo sirve para')} <b>{t('detectar')}</b> {t('los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en')} <b>Claims</b>.
       </p>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}
 
       {/* Configuración manual POR CIUDAD (sin defaults de empresa) */}
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Manual por ciudad — método por categoría · Monto doble = detección</div>
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Manual por ciudad — método por categoría · Monto doble = detección')}</div>
       {ciudadesConCodigo.length === 0 ? (
-        <p className="text-sm text-slate-400">Agrega ciudades con código en “Mis ciudades” para poder configurarlas.</p>
+        <p className="text-sm text-slate-400">{t('Agrega ciudades con código en “Mis ciudades” para poder configurarlas.')}</p>
       ) : (
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
           <table className="w-full min-w-[860px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
-                <th className="px-3 py-2 text-right font-semibold">Monto doble ($)</th>
-                {todasCats.map((cat) => (<th key={cat.key} className="px-3 py-2 text-left font-semibold">{cat.label}</th>))}
+                <th className="px-3 py-2 text-left font-semibold">{t('Ciudad')}</th>
+                <th className="px-3 py-2 text-right font-semibold">{t('Monto doble ($)')}</th>
+                {todasCats.map((cat) => (<th key={cat.key} className="px-3 py-2 text-left font-semibold">{t(cat.label)}</th>))}
               </tr>
             </thead>
             <tbody>
@@ -102,10 +104,10 @@ export default function ReglasCalculo() {
                   {todasCats.map((cat) => (
                     <td key={cat.key} className="px-3 py-2 align-top">
                       <Select className="w-40" value={valCiudadMetodo(c.codigo, cat.key) || METODO_CLAIM_DEFAULT} onChange={(e) => setCiudadMetodo(c.codigo, cat.key, e.target.value)}>
-                        {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{m.corto}</option>))}
+                        {METODOS_CLAIM.map((m) => (<option key={m.key} value={m.key}>{t(m.corto)}</option>))}
                       </Select>
                       {metodoEfCiudad(c.codigo, cat.key) === 'M1' && (
-                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${CLAIM_FEE} (monto manual)`} />
+                        <Input className="mt-1 w-40 text-right" type="number" step="0.01" min="0" value={valCiudadMonto(c.codigo, cat.key)} onChange={(e) => setCiudadMonto(c.codigo, cat.key, e.target.value)} placeholder={`$ ${CLAIM_FEE} ${t('(monto manual)')}`} />
                       )}
                     </td>
                   ))}
@@ -118,14 +120,12 @@ export default function ReglasCalculo() {
 
       <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
         <Info size={15} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
-        Cada factura guarda las reglas con que se procesó, así el histórico no cambia si luego ajustas estos valores. El
-        método se aplica automáticamente por la categoría detectada de cada claim; puedes cambiar el método de un claim
-        puntual desde su detalle.
+        {t('Cada factura guarda las reglas con que se procesó, así el histórico no cambia si luego ajustas estos valores. El método se aplica automáticamente por la categoría detectada de cada claim; puedes cambiar el método de un claim puntual desde su detalle.')}
       </div>
 
       <div className="mt-3">
         <Boton variant="gold" onClick={guardar} disabled={guardando || !activeCompanyId}>
-          {guardando ? <><Spinner /> Guardando…</> : <><Save size={16} strokeWidth={1.8} /> Guardar reglas</>}
+          {guardando ? <><Spinner /> {t('Guardando…')}</> : <><Save size={16} strokeWidth={1.8} /> {t('Guardar reglas')}</>}
         </Boton>
       </div>
     </Card>
