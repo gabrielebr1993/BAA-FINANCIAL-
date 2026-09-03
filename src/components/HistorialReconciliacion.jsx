@@ -5,8 +5,10 @@ import { useData } from '../DataContext'
 import { money } from '../utils/format'
 import { Card, Badge } from './ui'
 import { CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react'
+import { useLang } from '../i18n'
 
 export default function HistorialReconciliacion() {
+  const { t } = useLang()
   const { invoices } = useData()
   const filas = (invoices || [])
     .filter((i) => i.verificacion)
@@ -30,30 +32,30 @@ export default function HistorialReconciliacion() {
   const noCuadran = filas.filter((f) => f.cuadra === false).length
 
   const Estado = ({ f }) => {
-    if (f.cuadra === null) return <span className="inline-flex items-center gap-1 text-slate-400"><MinusCircle size={15} strokeWidth={1.9} /> Sin total Gofo</span>
-    if (f.cuadra) return <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={15} strokeWidth={1.9} /> Cuadra</span>
-    return <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400"><AlertTriangle size={15} strokeWidth={1.9} /> No cuadra</span>
+    if (f.cuadra === null) return <span className="inline-flex items-center gap-1 text-slate-400"><MinusCircle size={15} strokeWidth={1.9} /> {t('Sin total Gofo')}</span>
+    if (f.cuadra) return <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={15} strokeWidth={1.9} /> {t('Cuadra')}</span>
+    return <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400"><AlertTriangle size={15} strokeWidth={1.9} /> {t('No cuadra')}</span>
   }
 
   return (
     <Card className="mb-4 p-4">
       <div className="mb-3 flex items-center gap-2">
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Historial de reconciliación con Gofo</h3>
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Historial de reconciliación con Gofo')}</h3>
         {noCuadran > 0
-          ? <Badge color="red">{noCuadran} no cuadra(n)</Badge>
-          : <Badge color="green">Todo cuadra</Badge>}
-        <span className="ml-auto text-xs text-slate-400">{filas.length} factura(s)</span>
+          ? <Badge color="red">{noCuadran} {t('no cuadra(n)')}</Badge>
+          : <Badge color="green">{t('Todo cuadra')}</Badge>}
+        <span className="ml-auto text-xs text-slate-400">{filas.length} {t('factura(s)')}</span>
       </div>
       <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              <th className="px-3 py-2.5 text-left font-semibold">Ciudad</th>
-              <th className="px-3 py-2.5 text-left font-semibold">Semana</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Nuestro neto</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Total Gofo</th>
-              <th className="px-3 py-2.5 text-right font-semibold">Diferencia</th>
-              <th className="px-3 py-2.5 text-left font-semibold">Estado</th>
+              <th className="px-3 py-2.5 text-left font-semibold">{t('Ciudad')}</th>
+              <th className="px-3 py-2.5 text-left font-semibold">{t('Semana')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Nuestro neto')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Total Gofo')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{t('Diferencia')}</th>
+              <th className="px-3 py-2.5 text-left font-semibold">{t('Estado')}</th>
             </tr>
           </thead>
           <tbody>
@@ -70,7 +72,7 @@ export default function HistorialReconciliacion() {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-slate-400">Cada factura es una ciudad-semana. "No cuadra" = nuestro neto calculado difiere del total oficial que pagó Gofo — revisa esa carga.</p>
+      <p className="mt-2 text-xs text-slate-400">{t('Cada factura es una ciudad-semana. "No cuadra" = nuestro neto calculado difiere del total oficial que pagó Gofo — revisa esa carga.')}</p>
     </Card>
   )
 }

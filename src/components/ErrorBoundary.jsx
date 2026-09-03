@@ -3,6 +3,7 @@
 // con un botón para ACTUALIZAR (limpia el service worker + cachés y recarga).
 // Usa estilos en línea a propósito: funciona aunque el CSS no haya cargado.
 import React from 'react'
+import { tDirecto } from '../i18n'
 
 // ¿El error es de VERSIÓN VIEJA en caché? (tras un deploy, el index cacheado pide
 // un chunk JS que ya no existe y llega HTML en su lugar). Estos se auto-reparan.
@@ -52,7 +53,7 @@ export default class ErrorBoundary extends React.Component {
         <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
           <div>
             <div style={{ width: 56, height: 56, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 16, background: '#13233f', color: '#c9a24b', fontWeight: 800, fontSize: 26 }}>M</div>
-            <p style={{ color: '#9aa4b2', fontSize: 14 }}>Actualizando a la versión nueva…</p>
+            <p style={{ color: '#9aa4b2', fontSize: 14 }}>{tDirecto('Actualizando a la versión nueva…')}</p>
           </div>
         </div>
       )
@@ -61,15 +62,15 @@ export default class ErrorBoundary extends React.Component {
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
         <div style={{ maxWidth: 380 }}>
           <div style={{ width: 56, height: 56, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 16, background: '#13233f', color: '#c9a24b', fontWeight: 800, fontSize: 26 }}>M</div>
-          <h1 style={{ fontSize: 20, margin: '0 0 8px' }}>Necesitas actualizar la app</h1>
+          <h1 style={{ fontSize: 20, margin: '0 0 8px' }}>{tDirecto('Necesitas actualizar la app')}</h1>
           <p style={{ color: '#9aa4b2', margin: '0 0 20px', fontSize: 14, lineHeight: 1.5 }}>
-            Hay una versión nueva. Toca el botón para actualizar (se limpia la caché y se recarga). Tus datos no se pierden.
+            {tDirecto('Hay una versión nueva. Toca el botón para actualizar (se limpia la caché y se recarga). Tus datos no se pierden.')}
           </p>
           <button
             onClick={() => this.actualizar()}
             style={{ background: '#c9a24b', color: '#13233f', border: 0, borderRadius: 12, padding: '12px 22px', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
           >
-            Actualizar ahora
+            {tDirecto('Actualizar ahora')}
           </button>
           {this.state.error && (
             <pre style={{ marginTop: 20, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 11, color: '#f6a5a5', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: 12, maxHeight: 220, overflow: 'auto' }}>

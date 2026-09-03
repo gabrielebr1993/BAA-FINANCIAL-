@@ -10,6 +10,7 @@ import { rankingClaimsPorTipo } from '../utils/calc'
 import { num } from '../utils/format'
 import { Card, EstadoVacio } from '../components/ui'
 import { useChartTheme, PALETTE } from '../components/charts'
+import { useLang } from '../i18n'
 
 // Celda de conteo: en rojo/negrita cuando supera el umbral (2).
 function Celda({ n, umbral = 2, onClick }) {
@@ -23,13 +24,14 @@ function Celda({ n, umbral = 2, onClick }) {
 }
 
 function RankTipo({ label, rows, onPick }) {
+  const { t: tr } = useLang()
   const t = useChartTheme()
   const data = rows.slice(0, 8).map((r) => ({ name: r.courier, valor: r.n }))
   return (
     <Card className="p-4">
       <h4 className="m-0 mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">{label}</h4>
       {rows.length === 0 ? (
-        <div className="text-sm text-slate-400">Sin claims de este tipo.</div>
+        <div className="text-sm text-slate-400">{tr('Sin claims de este tipo.')}</div>
       ) : (
         <ResponsiveContainer width="100%" height={Math.max(120, data.length * 26)}>
           <BarChart data={data} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 8 }}>
@@ -47,12 +49,13 @@ function RankTipo({ label, rows, onPick }) {
 }
 
 export default function RankingClaimsTipo({ claims, compacto = false }) {
+  const { t } = useLang()
   const navigate = useNavigate()
   const { tipos, matriz, porTipo } = useMemo(() => rankingClaimsPorTipo(claims), [claims])
   const irAChofer = (nombre) => { if (nombre) navigate(`/choferes/${encodeURIComponent(nombre)}`) }
 
   if (matriz.length === 0) {
-    return <EstadoVacio titulo="Sin claims" texto="No hay claims en el rango/ciudad seleccionados para rankear por tipo." />
+    return <EstadoVacio titulo={t('Sin claims')} texto={t('No hay claims en el rango/ciudad seleccionados para rankear por tipo.')} />
   }
 
   const filas = compacto ? matriz.slice(0, 6) : matriz
@@ -63,14 +66,14 @@ export default function RankingClaimsTipo({ claims, compacto = false }) {
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
           <AlertTriangle size={18} className="text-rose-500" />
-          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Choferes por tipo de claim</h3>
-          <span className="ml-auto text-xs text-slate-400">En rojo: más de 2 de un mismo tipo</span>
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Choferes por tipo de claim')}</h3>
+          <span className="ml-auto text-xs text-slate-400">{t('En rojo: más de 2 de un mismo tipo')}</span>
         </div>
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                <th className="px-3 py-2.5 text-left font-semibold">Chofer</th>
+                <th className="px-3 py-2.5 text-left font-semibold">{t('Chofer')}</th>
                 {tipos.map((t) => (
                   <th key={t.key} className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">{t.label}</th>
                 ))}
@@ -95,14 +98,14 @@ export default function RankingClaimsTipo({ claims, compacto = false }) {
           </table>
         </div>
         {compacto && matriz.length > filas.length && (
-          <p className="mt-2 text-xs text-slate-400">Mostrando los {filas.length} con más claims. Ve a Performance para el ranking completo.</p>
+          <p className="mt-2 text-xs text-slate-400">{t('Mostrando los')} {filas.length} {t('con más claims. Ve a Performance para el ranking completo.')}</p>
         )}
       </Card>
 
       {/* Vista 2: ranking por cada tipo */}
       {!compacto && (
         <div>
-          <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ranking por tipo de claim</h3>
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('Ranking por tipo de claim')}</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {tipos.map((t) => (
               <RankTipo key={t.key} label={t.label} rows={porTipo[t.key]} onPick={irAChofer} />

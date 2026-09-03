@@ -7,8 +7,10 @@ import { guardarModoConfig } from '../utils/empresaSettings'
 import { Card, Aviso, Spinner } from './ui'
 import ReglasCalculo from './ReglasCalculo'
 import ReglasPorRuta from './ReglasPorRuta'
+import { useLang } from '../i18n'
 
 export default function ConfigReglas() {
+  const { t } = useLang()
   const { activeCompanyId, ajustes, reloadAjustes } = useData()
   const [modo, setModo] = useState('estandar')
   const [guardando, setGuardando] = useState(false)
@@ -37,7 +39,7 @@ export default function ConfigReglas() {
       <div className="mb-1 flex items-center gap-2">
         <Icon size={18} strokeWidth={1.9} className={modo === valor ? 'text-brand-gold' : 'text-slate-400'} />
         <span className="font-bold text-brand-navy dark:text-slate-100">{titulo}</span>
-        {modo === valor && <span className="ml-auto text-xs font-semibold text-brand-gold">Activo</span>}
+        {modo === valor && <span className="ml-auto text-xs font-semibold text-brand-gold">{t('Activo')}</span>}
       </div>
       <p className="m-0 text-xs text-slate-500 dark:text-slate-400">{desc}</p>
     </button>
@@ -48,15 +50,15 @@ export default function ConfigReglas() {
       <Card className="mb-4 p-5">
         <div className="mb-3 flex items-center gap-2">
           <Settings2 size={18} strokeWidth={1.8} className="text-brand-gold" />
-          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Modo de configuración</h3>
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Modo de configuración')}</h3>
           {guardando && <Spinner className="text-brand-gold" />}
         </div>
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          Elige cómo aplicar las reglas (tarifas y métodos de claim). Es el <b>primer paso</b>: define cómo se calcula el pago al cargar cada factura.
+          {t('Elige cómo aplicar las reglas (tarifas y métodos de claim). Es el')} <b>{t('primer paso')}</b>{t(': define cómo se calcula el pago al cargar cada factura.')}
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Opcion valor="estandar" icon={MapPin} titulo="Estándar (por ciudad)" desc="Las reglas se definen por empresa y por ciudad. Cada claim usa el método de su ciudad/categoría. Es el modo actual." />
-          <Opcion valor="ruta" icon={RouteIcon} titulo="Por ruta" desc="Creas un set de reglas por cada ruta (tarifas + métodos de claim). Al cargar la factura asignas manualmente qué choferes van a cada ruta." />
+          <Opcion valor="estandar" icon={MapPin} titulo={t('Estándar (por ciudad)')} desc={t('Las reglas se definen por empresa y por ciudad. Cada claim usa el método de su ciudad/categoría. Es el modo actual.')} />
+          <Opcion valor="ruta" icon={RouteIcon} titulo={t('Por ruta')} desc={t('Creas un set de reglas por cada ruta (tarifas + métodos de claim). Al cargar la factura asignas manualmente qué choferes van a cada ruta.')} />
         </div>
       </Card>
 

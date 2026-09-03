@@ -8,6 +8,7 @@ import { rankingCiudades, TODAS } from '../utils/calc'
 import { money, num, pct } from '../utils/format'
 import { Card, EstadoVacio, Badge } from './ui'
 import { BarCard } from './charts'
+import { useLang } from '../i18n'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -23,6 +24,7 @@ function SemaforoCiudad({ c }) {
 }
 
 export default function RankingCiudades({ compacto = false }) {
+  const { t } = useLang()
   const { facturaRango: inv, numSemanas, claims, drivers, managers, selectedCity, setSelectedCity } = useData()
   const ranking = useMemo(
     () => rankingCiudades(inv, claims, drivers, managers, numSemanas),
@@ -30,7 +32,7 @@ export default function RankingCiudades({ compacto = false }) {
   )
 
   if (!ranking.length) {
-    return <EstadoVacio titulo="Sin ciudades" texto="Carga una factura para ver el ranking de ciudades." />
+    return <EstadoVacio titulo={t('Sin ciudades')} texto={t('Carga una factura para ver el ranking de ciudades.')} />
   }
 
   const gananciaData = ranking.map((c) => ({ name: c.nombre, valor: Math.round(c.ganancia) }))
@@ -42,22 +44,22 @@ export default function RankingCiudades({ compacto = false }) {
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
           <Building2 size={18} strokeWidth={1.8} className="text-brand-gold" />
-          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Ranking de ciudades</h3>
-          <span className="ml-auto text-xs text-slate-400">Clic en una ciudad para filtrar todo por ella</span>
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ranking de ciudades')}</h3>
+          <span className="ml-auto text-xs text-slate-400">{t('Clic en una ciudad para filtrar todo por ella')}</span>
         </div>
         <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 <th className="px-3 py-2.5 text-left font-semibold">#</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Ciudad</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Paquetes</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Ingreso neto</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Ganancia</th>
+                <th className="px-3 py-2.5 text-left font-semibold">{t('Ciudad')}</th>
+                <th className="px-3 py-2.5 text-right font-semibold">{t('Paquetes')}</th>
+                <th className="px-3 py-2.5 text-right font-semibold">{t('Ingreso neto')}</th>
+                <th className="px-3 py-2.5 text-right font-semibold">{t('Ganancia')}</th>
                 <th className="px-3 py-2.5 text-right font-semibold">$/lb</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Claims</th>
                 <th className="px-3 py-2.5 text-right font-semibold">% claims</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Calificación</th>
+                <th className="px-3 py-2.5 text-left font-semibold">{t('Calificación')}</th>
               </tr>
             </thead>
             <tbody>
@@ -71,8 +73,8 @@ export default function RankingCiudades({ compacto = false }) {
                   <td className="px-3 py-2 font-medium text-brand-navy dark:text-slate-100">
                     <span className="inline-flex items-center gap-2">
                       {c.nombre}
-                      {esPrimera && <Badge color="gold">🥇 Mejor</Badge>}
-                      {esUltima && <Badge color="red">Peor</Badge>}
+                      {esPrimera && <Badge color="gold">🥇 {t('Mejor')}</Badge>}
+                      {esUltima && <Badge color="red">{t('Peor')}</Badge>}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right">{num(c.paquetes)}</td>
@@ -90,17 +92,17 @@ export default function RankingCiudades({ compacto = false }) {
         </div>
         {!compacto && (
           <p className="mt-2 text-xs text-slate-400">
-            Pesos: Ganancia 30% · Rentabilidad $/lb 20% · Calidad (claims) 25% · Fallidos 15% (proxy = claims) · Volumen 10%.
-            {ranking.length === 1 && ' Con una sola ciudad los factores relativos quedan al 100%.'}
+            {t('Pesos: Ganancia 30% · Rentabilidad $/lb 20% · Calidad (claims) 25% · Fallidos 15% (proxy = claims) · Volumen 10%.')}
+            {ranking.length === 1 && ` ${t('Con una sola ciudad los factores relativos quedan al 100%.')}`}
           </p>
         )}
       </Card>
 
       {!compacto && ranking.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <BarCard title="Ganancia por ciudad" data={gananciaData} fmt={money} horizontal height={220} />
-          <BarCard title="Claims por ciudad" data={claimsData} fmt={num} horizontal height={220} />
-          <BarCard title="$ por libra por ciudad" data={lbData} fmt={(v) => `$${Number(v).toFixed(3)}`} horizontal height={220} />
+          <BarCard title={t('Ganancia por ciudad')} data={gananciaData} fmt={money} horizontal height={220} />
+          <BarCard title={t('Claims por ciudad')} data={claimsData} fmt={num} horizontal height={220} />
+          <BarCard title={t('$ por libra por ciudad')} data={lbData} fmt={(v) => `$${Number(v).toFixed(3)}`} horizontal height={220} />
         </div>
       )}
     </div>

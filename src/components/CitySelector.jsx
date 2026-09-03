@@ -5,9 +5,11 @@ import { MapPin, Check, ChevronDown } from 'lucide-react'
 import { useData } from '../DataContext'
 import { TODAS, TODOS, ciudadesDeFactura, nombreCiudadDe } from '../utils/calc'
 import { Select } from './ui'
+import { useLang } from '../i18n'
 
 // Dropdown con casillas para elegir UNA o VARIAS ciudades (se ven combinadas).
 export default function CitySelector() {
+  const { t } = useLang()
   const {
     facturaRangoFull, selectedCity, selectedCities, setSelectedCities,
     ciudadBloqueada, ciudadUsuario, ciudadesUsuario, ciudadesEmpresa,
@@ -21,7 +23,7 @@ export default function CitySelector() {
     const misCiudades = (ciudadesUsuario && ciudadesUsuario.length ? ciudadesUsuario : [ciudadUsuario]).filter(Boolean)
     if (misCiudades.length <= 1) {
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title="Tu cuenta está asignada a esta ciudad">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title={t('Tu cuenta está asignada a esta ciudad')}>
           <MapPin size={15} strokeWidth={1.8} className="text-brand-gold" /> {nombreDe(misCiudades[0])}
         </span>
       )
@@ -47,6 +49,7 @@ export default function CitySelector() {
 }
 
 function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities }) {
+  const { t } = useLang()
   const [abierto, setAbierto] = useState(false)
   const [pos, setPos] = useState(null)
   const btnRef = useRef(null)
@@ -81,10 +84,10 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
   const todas = () => { setSelectedCities([]); setAbierto(false) }
 
   const etiqueta = seleccion.length === 0
-    ? 'Todas las ciudades'
+    ? t('Todas las ciudades')
     : seleccion.length === 1
       ? (nombrePorCode.get(seleccion[0]) || seleccion[0])
-      : `${seleccion.length} ciudades`
+      : `${seleccion.length} ${t('ciudades')}`
 
   return (
     <>
@@ -93,7 +96,7 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
         type="button"
         onClick={toggle}
         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-        aria-label="Filtro de ciudad"
+        aria-label={t('Filtro de ciudad')}
         aria-expanded={abierto}
       >
         <MapPin size={15} strokeWidth={1.8} className="text-brand-gold" />
@@ -111,11 +114,11 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
             onClick={todas}
             className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm ${seleccion.length === 0 ? 'bg-brand-navy/5 font-semibold text-brand-navy dark:bg-brand-gold/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'}`}
           >
-            Todas las ciudades
+            {t('Todas las ciudades')}
             {seleccion.length === 0 && <Check size={15} strokeWidth={2.4} className="text-brand-gold" />}
           </button>
           <div className="my-1 border-t border-slate-100 dark:border-slate-700/60" />
-          {opciones.length === 0 && <div className="px-2.5 py-2 text-sm text-slate-400">No hay ciudades con datos.</div>}
+          {opciones.length === 0 && <div className="px-2.5 py-2 text-sm text-slate-400">{t('No hay ciudades con datos.')}</div>}
           {opciones.map(([code, nombre]) => {
             const on = selSet.has(code)
             return (
@@ -133,7 +136,7 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
             )
           })}
           {seleccion.length >= 2 && (
-            <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">Viendo {seleccion.length} ciudades combinadas (sumadas).</div>
+            <div className="mt-1 border-t border-slate-100 px-2.5 pt-1.5 text-[11px] text-slate-400 dark:border-slate-700/60">{t('Viendo')} {seleccion.length} {t('ciudades combinadas (sumadas).')}</div>
           )}
         </div>,
         document.body
@@ -145,24 +148,26 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
 // Filtro de CHOFER (Refinar). Solo lista los choferes presentes en el período (y en
 // la ciudad elegida). Acota todos los datos a ese chofer (ver DataContext).
 export function DriverSelector() {
+  const { t } = useLang()
   const { facturaRangoFull, selectedCity, selectedDriver, setSelectedDriver } = useData()
   const choferes = (facturaRangoFull?.resumenChoferes || [])
     .filter((c) => selectedCity === TODAS || (c.ciudad || c.ubicacion) === selectedCity)
   const nombres = [...new Set(choferes.map((c) => c.nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   if (nombres.length === 0 && (!selectedDriver || selectedDriver === TODOS)) return null
   return (
-    <Select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} aria-label="Filtro de chofer">
-      <option value={TODOS}>Todos los choferes</option>
+    <Select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} aria-label={t('Filtro de chofer')}>
+      <option value={TODOS}>{t('Todos los choferes')}</option>
       {nombres.map((n) => (<option key={n} value={n}>{n}</option>))}
     </Select>
   )
 }
 
 export function InvoiceSelector() {
+  const { t } = useLang()
   const { invoices, selectedInvoiceId, setSelectedInvoiceId } = useData()
   if (invoices.length === 0) return null
   return (
-    <Select value={selectedInvoiceId || ''} onChange={(e) => setSelectedInvoiceId(e.target.value)} aria-label="Selector de semana">
+    <Select value={selectedInvoiceId || ''} onChange={(e) => setSelectedInvoiceId(e.target.value)} aria-label={t('Selector de semana')}>
       {invoices.map((inv) => (
         <option key={inv.id} value={inv.id}>
           {inv.semana || inv.archivoNombre || inv.id}

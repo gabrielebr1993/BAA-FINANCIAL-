@@ -5,8 +5,10 @@ import { CheckCircle2, Circle, MapPin, Upload, LayoutDashboard, ArrowRight, Spar
 import { useData } from '../DataContext'
 import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { Card, Boton } from './ui'
+import { useLang } from '../i18n'
 
 export default function Onboarding() {
+  const { t } = useLang()
   const { empresaActiva, ciudadesEmpresa, invoices, activeCompanyId, reloadAjustes } = useData()
   const navigate = useNavigate()
 
@@ -18,9 +20,9 @@ export default function Onboarding() {
   const omitir = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes() }
 
   const pasos = [
-    { hecho: paso1, icon: MapPin, titulo: 'Agrega tus ciudades', desc: 'Registra las ciudades donde operas (ej. Dallas · DFW01).', boton: 'Agregar ciudades', ir: () => navigate('/configuracion') },
-    { hecho: paso2, icon: Upload, titulo: 'Carga tu primera factura', desc: 'Sube el Excel de Gofo. En la pantalla previa configuras tus choferes y tarifas.', boton: 'Cargar factura', ir: () => navigate('/facturas'), bloqueado: !paso1 },
-    { hecho: listos, icon: LayoutDashboard, titulo: 'Revisa tu dashboard', desc: 'Cuando tengas una factura, verás tus métricas y verificación con Gofo.', boton: 'Ir al dashboard', ir: finalizar, bloqueado: !listos },
+    { hecho: paso1, icon: MapPin, titulo: t('Agrega tus ciudades'), desc: t('Registra las ciudades donde operas (ej. Dallas · DFW01).'), boton: t('Agregar ciudades'), ir: () => navigate('/configuracion') },
+    { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura'), desc: t('Sube el Excel de Gofo. En la pantalla previa configuras tus choferes y tarifas.'), boton: t('Cargar factura'), ir: () => navigate('/facturas'), bloqueado: !paso1 },
+    { hecho: listos, icon: LayoutDashboard, titulo: t('Revisa tu dashboard'), desc: t('Cuando tengas una factura, verás tus métricas y verificación con Gofo.'), boton: t('Ir al dashboard'), ir: finalizar, bloqueado: !listos },
   ]
   const completados = pasos.filter((p) => p.hecho).length
 
@@ -28,9 +30,9 @@ export default function Onboarding() {
     <Card className="mb-5 p-6">
       <div className="mb-1 flex items-center gap-2">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-brand-gold"><Sparkles size={20} strokeWidth={1.8} /></span>
-        <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">¡Bienvenido a MilePay{empresaActiva?.nombre ? `, ${empresaActiva.nombre}` : ''}!</h2>
+        <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{t('¡Bienvenido a MilePay')}{empresaActiva?.nombre ? `, ${empresaActiva.nombre}` : ''}!</h2>
       </div>
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Vamos a configurar tu cuenta en 3 pasos ({completados}/3 listos).</p>
+      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{t('Vamos a configurar tu cuenta en 3 pasos')} ({completados}/3 {t('listos')}).</p>
 
       <div className="space-y-3">
         {pasos.map((p, i) => {
@@ -48,15 +50,15 @@ export default function Onboarding() {
                   {p.boton} <ArrowRight size={15} strokeWidth={2} />
                 </Boton>
               )}
-              {p.hecho && i < 2 && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Hecho</span>}
+              {p.hecho && i < 2 && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{t('Hecho')}</span>}
             </div>
           )
         })}
       </div>
 
       <div className="mt-4 flex items-center gap-3">
-        {listos && <Boton variant="gold" onClick={finalizar}>Finalizar y ver mi dashboard <ArrowRight size={15} strokeWidth={2} /></Boton>}
-        <button onClick={omitir} className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">Omitir la guía por ahora</button>
+        {listos && <Boton variant="gold" onClick={finalizar}>{t('Finalizar y ver mi dashboard')} <ArrowRight size={15} strokeWidth={2} /></Boton>}
+        <button onClick={omitir} className="text-xs font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">{t('Omitir la guía por ahora')}</button>
       </div>
     </Card>
   )

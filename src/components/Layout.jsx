@@ -13,19 +13,21 @@ import GlobalFilterBar from './GlobalFilterBar'
 
 function ThemeToggle() {
   const { oscuro, alternar } = useTheme()
+  const { t } = useLang()
   return (
     <button
       onClick={alternar}
-      title={oscuro ? 'Cambiar a claro' : 'Cambiar a oscuro'}
+      title={oscuro ? t('Cambiar a claro') : t('Cambiar a oscuro')}
       className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40"
     >
       {oscuro ? <Sun size={17} strokeWidth={1.8} /> : <Moon size={17} strokeWidth={1.8} />}
-      <span>{oscuro ? 'Modo claro' : 'Modo oscuro'}</span>
+      <span>{oscuro ? t('Modo claro') : t('Modo oscuro')}</span>
     </button>
   )
 }
 
 function BuscadorGlobal({ onNavigate }) {
+  const { t } = useLang()
   const { drivers, facturaRangoFull, claims } = useData()
   const navigate = useNavigate()
   const [q, setQ] = useState('')
@@ -59,7 +61,7 @@ function BuscadorGlobal({ onNavigate }) {
         value={q}
         onChange={(e) => { setQ(e.target.value); setAbierto(true) }}
         onFocus={() => setAbierto(true)}
-        placeholder="Buscar…"
+        placeholder={t('Buscar…')}
         className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-brand-gold focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
       />
       {abierto && resultados.length > 0 && (
@@ -67,7 +69,7 @@ function BuscadorGlobal({ onNavigate }) {
           {resultados.map((r, i) => (
             <button key={i} onClick={() => ir(r)} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700">
               <span>{r.nombre}</span>
-              <span className="text-xs text-slate-400">{r.tipo}</span>
+              <span className="text-xs text-slate-400">{t(r.tipo)}</span>
             </button>
           ))}
         </div>
@@ -78,11 +80,12 @@ function BuscadorGlobal({ onNavigate }) {
 
 function CompanySwitcher() {
   const { esSuperAdmin } = useAuth()
+  const { t } = useLang()
   const { companies, activeCompanyId, setActiveCompanyId, empresaActiva } = useData()
   if (esSuperAdmin && companies.length > 0) {
     return (
       <div className="mb-4">
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-400"><Building2 size={13} strokeWidth={1.8} /> Empresa activa</div>
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-400"><Building2 size={13} strokeWidth={1.8} /> {t('Empresa activa')}</div>
         <select value={activeCompanyId || ''} onChange={(e) => setActiveCompanyId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
           {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
         </select>
@@ -208,6 +211,7 @@ function SidebarContent({ onNavigate }) {
 }
 
 export default function Layout({ children }) {
+  const { t } = useLang()
   const [abierto, setAbierto] = useState(false)
   return (
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
@@ -229,7 +233,7 @@ export default function Layout({ children }) {
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
           <header className="pt-safe sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
             <div className="flex items-center gap-3 px-4 py-2.5">
-              <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label="Abrir menú">
+              <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label={t('Abrir menú')}>
                 <Menu size={24} strokeWidth={1.8} />
               </button>
               <span className="font-extrabold text-brand-navy dark:text-white sm:hidden">MilePay</span>

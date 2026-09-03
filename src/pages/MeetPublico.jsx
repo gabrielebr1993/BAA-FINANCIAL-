@@ -10,12 +10,14 @@ import { useState } from 'react'
 import { Video, Phone, Truck, ArrowRight, AlertTriangle, Camera, Mic } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../bulk/firebaseBulk'
+import { useLang } from '../i18n'
 
 const NAVY = '#13233f'
 const GOLD = '#c9a24b'
 const CREMA = '#f8f3eb'
 
 export default function MeetPublico() {
+  const { t } = useLang()
   const codigo = (window.location.pathname.split('/')[2] || '').trim()
   const [nombre, setNombre] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -31,9 +33,9 @@ export default function MeetPublico() {
       setSala(r?.data || null)
     } catch (e) {
       const msg = e?.message || ''
-      setErr(/no existe|inválido|not-found/i.test(msg) ? 'Esta reunión no existe o el link es inválido.'
-        : /no está disponible|finaliz/i.test(msg) ? 'Esta reunión ya no está disponible.'
-          : msg || 'No se pudo entrar a la reunión. Intenta de nuevo.')
+      setErr(/no existe|inválido|not-found/i.test(msg) ? t('Esta reunión no existe o el link es inválido.')
+        : /no está disponible|finaliz/i.test(msg) ? t('Esta reunión ya no está disponible.')
+          : msg || t('No se pudo entrar a la reunión. Intenta de nuevo.'))
     } finally { setOcupado(false) }
   }
 
@@ -45,7 +47,7 @@ export default function MeetPublico() {
           <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: GOLD, color: NAVY }}><Truck size={19} /></span>
           <div className="min-w-0">
             <div className="truncate text-sm font-black text-white">{sala.titulo}</div>
-            <div className="text-[11px]" style={{ color: GOLD }}>MilePay · {sala.tipo === 'voz' ? 'Llamada de voz' : 'Videollamada'}</div>
+            <div className="text-[11px]" style={{ color: GOLD }}>MilePay · {sala.tipo === 'voz' ? t('Llamada de voz') : t('Videollamada')}</div>
           </div>
         </div>
         <div className="min-h-0 flex-1">
@@ -70,16 +72,16 @@ export default function MeetPublico() {
           <span className="grid h-11 w-11 place-items-center rounded-2xl" style={{ background: GOLD, color: NAVY }}><Truck size={24} /></span>
           <div>
             <div className="text-lg font-black text-white">MilePay</div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: GOLD }}>Reuniones</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: GOLD }}>{t('Reuniones')}</div>
           </div>
         </div>
 
         <div className="px-6 py-6">
           <div className="mb-1 flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl" style={{ background: CREMA, color: GOLD }}><Video size={18} /></span>
-            <h1 className="m-0 text-lg font-black" style={{ color: NAVY }}>Te invitaron a una reunión</h1>
+            <h1 className="m-0 text-lg font-black" style={{ color: NAVY }}>{t('Te invitaron a una reunión')}</h1>
           </div>
-          <p className="mb-5 text-sm text-slate-500">Escribe tu nombre para unirte. No necesitas una cuenta de MilePay.</p>
+          <p className="mb-5 text-sm text-slate-500">{t('Escribe tu nombre para unirte. No necesitas una cuenta de MilePay.')}</p>
 
           {err && (
             <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
@@ -88,12 +90,12 @@ export default function MeetPublico() {
           )}
 
           <label className="mb-4 block">
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Tu nombre</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">{t('Tu nombre')}</span>
             <input
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && unirse()}
-              placeholder="Ej. Juan Pérez"
+              placeholder={t('Ej. Juan Pérez')}
               autoFocus
               className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-800 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
             />
@@ -105,12 +107,12 @@ export default function MeetPublico() {
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-base font-black text-white transition disabled:opacity-50"
             style={{ background: ocupado ? '#5b6b82' : '#3f9d6b' }}
           >
-            {ocupado ? 'Conectando…' : 'Unirse a la reunión'} {!ocupado && <ArrowRight size={18} />}
+            {ocupado ? t('Conectando…') : t('Unirse a la reunión')} {!ocupado && <ArrowRight size={18} />}
           </button>
 
           <div className="mt-4 flex items-start gap-2 rounded-xl p-3 text-xs text-slate-500" style={{ background: CREMA }}>
             <span className="mt-0.5 flex gap-1"><Camera size={13} style={{ color: GOLD }} /><Mic size={13} style={{ color: GOLD }} /></span>
-            Al unirte, el navegador te pedirá permiso para usar la cámara y el micrófono; podrás encenderlos o apagarlos en la pantalla previa antes de entrar. Si la reunión tiene sala de espera, el anfitrión te admitirá en un momento.
+            {t('Al unirte, el navegador te pedirá permiso para usar la cámara y el micrófono; podrás encenderlos o apagarlos en la pantalla previa antes de entrar. Si la reunión tiene sala de espera, el anfitrión te admitirá en un momento.')}
           </div>
         </div>
       </div>

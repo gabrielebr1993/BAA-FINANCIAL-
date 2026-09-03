@@ -169,7 +169,7 @@ export default function Pagos() {
   const totSeguro = filtrados.reduce((a, p) => a + (p.seguro || 0), 0)
   const totPrestamo = filtrados.reduce((a, p) => a + (p.prestamo || 0), 0)
   const totBono = filtrados.reduce((a, p) => a + (p.bono || 0), 0)
-  const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} préstamos` : '', totBono > 0 ? `+${money(totBono)} bonos` : ''].filter(Boolean).join(' · ') || undefined
+  const subAjustes = [totPrestamo > 0 ? `−${money(totPrestamo)} ${t('préstamos')}` : '', totBono > 0 ? `+${money(totBono)} ${t('bonos')}` : ''].filter(Boolean).join(' · ') || undefined
 
   // GASTOS FIJOS del periodo (managers activos de la ciudad × semanas DISTINTAS del
   // rango). También los pagas tú, por eso aparecen aquí para marcarlos como pagados.
@@ -363,20 +363,20 @@ export default function Pagos() {
         <>
           <div className="mb-2 flex flex-wrap gap-3">
             {verIngreso && <KPI label={lIngreso(t('Ingreso total'))} value={fIngreso(totIngreso)} icon={DollarSign} accent="green" />}
-            <KPI label={t('Total a pagar')} value={money(totPagarPos + totGastosFijos + totSeguro)} icon={Receipt} accent="navy" sub={(totGastosFijos > 0 || totSeguro > 0) ? [`choferes ${money(totPagarPos)}`, totGastosFijos > 0 ? `fijos ${money(totGastosFijos)}` : '', totSeguro > 0 ? `seguro ${money(totSeguro)}` : ''].filter(Boolean).join(' + ') : (subAjustes || t('lo que sale del banco (saldos positivos)'))} />
+            <KPI label={t('Total a pagar')} value={money(totPagarPos + totGastosFijos + totSeguro)} icon={Receipt} accent="navy" sub={(totGastosFijos > 0 || totSeguro > 0) ? [`${t('choferes')} ${money(totPagarPos)}`, totGastosFijos > 0 ? `${t('fijos')} ${money(totGastosFijos)}` : '', totSeguro > 0 ? `${t('seguro')} ${money(totSeguro)}` : ''].filter(Boolean).join(' + ') : (subAjustes || t('lo que sale del banco (saldos positivos)'))} />
             {totPorCobrar > 0 && <KPI label={t('Por cobrar a choferes')} value={money(totPorCobrar)} icon={Wallet} accent="red" sub={t('saldos negativos: te deben (no se pagan por ACH)')} />}
             {totGastosFijos > 0 && <KPI label={t('Gastos fijos')} value={money(totGastosFijos)} icon={Landmark} accent="slate" sub={t('managers / renta / etc.')} />}
             {totSeguro > 0 && <KPI label={t('Seguro')} value={money(totSeguro)} icon={ShieldCheck} accent="slate" sub={`${money(seguroPorChofer)} ${t('c/u')} × ${num(nCho)}`} />}
             {(totPrestamo > 0 || totBono > 0) && <KPI label={t('Ajustes (préstamo / bono)')} value={`−${money(totPrestamo)} / +${money(totBono)}`} icon={Wallet} accent="slate" />}
-            {verGanancia && <KPI label={lGanancia(t('Ganancia real'))} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `ya resta ${money(totGastosFijos)} de gastos fijos` : 'ya resta gastos fijos')} />}
-            <KPI label={t('Pendientes / Pagados')} value={cargandoEstado ? '…' : `${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? 'incluye gastos fijos' : undefined} />
+            {verGanancia && <KPI label={lGanancia(t('Ganancia real'))} value={fGanancia(gananciaRealPagos)} icon={TrendingUp} accent="gold" sub={ocultarGanancia ? undefined : (totGastosFijos > 0 ? `${t('ya resta')} ${money(totGastosFijos)} ${t('de gastos fijos')}` : t('ya resta gastos fijos'))} />}
+            <KPI label={t('Pendientes / Pagados')} value={cargandoEstado ? '…' : `${num(nPend + gPend)} / ${num(nPag + gPag)}`} icon={Clock} accent="slate" sub={totGastosFijos > 0 ? t('incluye gastos fijos') : undefined} />
           </div>
           {verGanancia ? (
             <p className="mb-5 text-xs text-slate-400">
-              <b>Ganancia real</b> = ingreso − pago a choferes − descuento de Gofo por claims − <b>gastos fijos</b>. Los <b>Pendientes / Pagados</b> incluyen choferes y gastos fijos. Si filtras o buscas, el total es solo de lo mostrado.
+              <b>{t('Ganancia real')}</b> {t('= ingreso − pago a choferes − descuento de Gofo por claims −')} <b>{t('gastos fijos')}</b>{t('. Los')} <b>{t('Pendientes / Pagados')}</b> {t('incluyen choferes y gastos fijos. Si filtras o buscas, el total es solo de lo mostrado.')}
             </p>
           ) : (
-            <p className="mb-5 text-xs text-slate-400">Aquí registras los pagos a los choferes: marca cada uno como pagado y avísale. Total a pagar = entregas × tarifa − descuento por claims.</p>
+            <p className="mb-5 text-xs text-slate-400">{t('Aquí registras los pagos a los choferes: marca cada uno como pagado y avísale. Total a pagar = entregas × tarifa − descuento por claims.')}</p>
           )}
 
           {!selectedInvoice ? (
@@ -385,7 +385,7 @@ export default function Pagos() {
             <>
               {esRango && (
                 <Aviso tipo="info">
-                  Estás viendo un <b>acumulado de {numSemanas} semana(s)</b>. Los montos mostrados son la suma del periodo. Para <b>marcar pagos</b> (pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").
+                  {t('Estás viendo un')} <b>{t('acumulado de')} {numSemanas} {t('semana(s)')}</b>{t('. Los montos mostrados son la suma del periodo. Para')} <b>{t('marcar pagos')}</b> {t('(pendiente/pagado), selecciona una sola semana en el rango (ej. "Última semana").')}
                 </Aviso>
               )}
               {stripeMsg && <Aviso tipo={stripeMsg.tipo}>{stripeMsg.txt}</Aviso>}
@@ -504,7 +504,7 @@ export default function Pagos() {
                 </table>
               </div>
               <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
-                Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × multa por claim (configurable por empresa/ciudad). Perdonar un claim lo excluye del descuento y recalcula al instante.
+                {t('Fórmula: individuales × tarifa individual + dobles × tarifa doble − claims activos × multa por claim (configurable por empresa/ciudad). Perdonar un claim lo excluye del descuento y recalcula al instante.')}
               </p>
 
               {/* GASTOS FIJOS del periodo: también los pagas tú. */}
@@ -513,7 +513,7 @@ export default function Pagos() {
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Landmark size={18} strokeWidth={1.8} className="text-brand-gold" />
                     <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Gastos fijos del periodo')}</h3>
-                    <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Total: <b className="text-brand-navy dark:text-slate-100">{money(totGastosFijos)}</b></span>
+                    <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{t('Total:')} <b className="text-brand-navy dark:text-slate-100">{money(totGastosFijos)}</b></span>
                   </div>
                   <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                     <table className="w-full min-w-[480px] border-collapse text-sm">
@@ -551,7 +551,7 @@ export default function Pagos() {
                     </table>
                   </div>
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Gastos fijos activos de {selectedCity === TODAS ? 'todas las ciudades' : 'esta ciudad'} × {semanas} semana(s). {esRango ? 'Para marcarlos como pagados, elige una sola semana.' : 'Márcalos como pagados igual que a los choferes.'} Se configuran en Choferes → Gastos fijos.
+                    {t('Gastos fijos activos de')} {selectedCity === TODAS ? t('todas las ciudades') : t('esta ciudad')} × {semanas} {t('semana(s).')} {esRango ? t('Para marcarlos como pagados, elige una sola semana.') : t('Márcalos como pagados igual que a los choferes.')} {t('Se configuran en Choferes → Gastos fijos.')}
                   </p>
                 </Card>
               )}
@@ -598,7 +598,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
         {esRuta && <td className={TD}>{p.ruta ? <Badge color="gold">{p.ruta}</Badge> : '—'}</td>}
         <td className={TD}>{num(p.individuales)}</td>
         <td className={TD}>{num(p.dobles)}</td>
-        <td className={TD}>{p.claimsActivos}/{p.claimsTotales}{p.claimsPerdonados > 0 ? ` (${p.claimsPerdonados} perd.)` : ''}</td>
+        <td className={TD}>{p.claimsActivos}/{p.claimsTotales}{p.claimsPerdonados > 0 ? ` (${p.claimsPerdonados} ${t('perd.')})` : ''}</td>
         {verIngreso && <td className={TD}>{fIngreso(p.ingreso)}</td>}
         <td className={TD}>{money(p.tarifaInd)}</td>
         <td className={TD}>{money(p.tarifaDoble)}</td>
@@ -608,8 +608,8 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
           {(p.prestamo > 0 || p.bono > 0 || p.seguro > 0) && (
             <div className="text-[10px] font-medium">
               {p.seguro > 0 && <span className="text-rose-500">−{money(p.seguro)} {t('seguro')} </span>}
-              {p.prestamo > 0 && <span className="text-rose-500">−{money(p.prestamo)} préstamo </span>}
-              {p.bono > 0 && <span className="text-emerald-500">+{money(p.bono)} bono</span>}
+              {p.prestamo > 0 && <span className="text-rose-500">−{money(p.prestamo)} {t('préstamo')} </span>}
+              {p.bono > 0 && <span className="text-emerald-500">+{money(p.bono)} {t('bono')}</span>}
             </div>
           )}
         </td>
@@ -625,10 +625,10 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
               <>
                 <Boton variant="ghost" onClick={() => onMarcar(p, 'pendiente')} className="px-2 py-1 text-xs">{t('Marcar pendiente')}</Boton>
                 {avisoPago && (
-                  <span className="inline-flex items-center gap-0.5" title={`Avisar a ${p.nombre} que se le transfirió ${money(p.totalPagar)}`}>
-                    <a href={avisoPago.sms} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title="Avisar por SMS"><MessageSquare size={13} strokeWidth={1.9} /></a>
-                    <a href={avisoPago.wa} target="_blank" rel="noreferrer" className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500 text-white hover:bg-emerald-600" title="Avisar por WhatsApp"><MessageCircle size={13} strokeWidth={2} /></a>
-                    <a href={avisoPago.mail} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title="Avisar por correo"><Mail size={13} strokeWidth={1.9} /></a>
+                  <span className="inline-flex items-center gap-0.5" title={`${t('Avisar a')} ${p.nombre} ${t('que se le transfirió')} ${money(p.totalPagar)}`}>
+                    <a href={avisoPago.sms} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title={t('Avisar por SMS')}><MessageSquare size={13} strokeWidth={1.9} /></a>
+                    <a href={avisoPago.wa} target="_blank" rel="noreferrer" className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-500 text-white hover:bg-emerald-600" title={t('Avisar por WhatsApp')}><MessageCircle size={13} strokeWidth={2} /></a>
+                    <a href={avisoPago.mail} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:text-slate-200" title={t('Avisar por correo')}><Mail size={13} strokeWidth={1.9} /></a>
                   </span>
                 )}
               </>
@@ -641,7 +641,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
                 disabled={!verificado || pagandoStripe}
                 onClick={() => onPagarStripe(p, driver)}
                 className="px-2 py-1 text-xs"
-                title={verificado ? 'Pagar por Stripe (modo TEST)' : 'El chofer aún no tiene su banco verificado en Stripe'}
+                title={verificado ? t('Pagar por Stripe (modo TEST)') : t('El chofer aún no tiene su banco verificado en Stripe')}
               >
                 {pagandoStripe ? <Spinner /> : <CreditCard size={13} strokeWidth={1.9} />} {verificado ? t('Pagar (Stripe)') : t('Sin banco')}
               </Boton>
@@ -669,7 +669,7 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
                     {guardandoAjuste ? <Spinner /> : t('Guardar ajuste')}
                   </Boton>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
-                    Se resta el préstamo y se suma el bono al <b>Total a Pagar</b>. Se refleja en el dashboard, finanzas y el perfil del chofer.
+                    {t('Se resta el préstamo y se suma el bono al')} <b>{t('Total a Pagar')}</b>{t('. Se refleja en el dashboard, finanzas y el perfil del chofer.')}
                   </span>
                 </div>
               </div>

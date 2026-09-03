@@ -171,7 +171,7 @@ export default function CargarFactura() {
   const asignarManual = (raw, valor) => setMapaManual((m) => ({ ...m, [raw]: valor }))
   // Opciones del combobox de choferes (nuevo + toda la lista canónica).
   const opcionesChofer = useMemo(
-    () => [{ value: '__nuevo__', label: '➕ Es un chofer NUEVO (no unir)' }, ...canonicos.map((c) => ({ value: c.nombre, label: c.nombre }))],
+    () => [{ value: '__nuevo__', label: t('➕ Es un chofer NUEVO (no unir)') }, ...canonicos.map((c) => ({ value: c.nombre, label: c.nombre }))],
     [canonicos]
   )
 
@@ -923,12 +923,12 @@ export default function CargarFactura() {
     if (!fallidosProc) return t('Falta subir el Reporte de fallidos (GOFO).')
     if (modoRuta) {
       if (codigosRuta.length === 0) return t('Modo “Por ruta”: no hay rutas configuradas en Configuración.')
-      if (!todosDriversRuta) return `Modo “Por ruta”: faltan ${driversSinRuta.length} chofer(es) por asignar a una ruta.`
+      if (!todosDriversRuta) return `${t('Modo “Por ruta”: faltan')} ${driversSinRuta.length} ${t('chofer(es) por asignar a una ruta.')}`
     } else if (choferesNuevos.length > 0 && !todosConPrecio) {
       const faltan = choferesNuevos.filter((n) => !(Number(precios[n]?.ind) > 0 && Number(precios[n]?.doble) > 0))
-      return `Faltan ${faltan.length} chofer(es) con precio (individual y doble > 0)${faltan.length ? ': ' + faltan.slice(0, 4).join(', ') + (faltan.length > 4 ? '…' : '') : ''}.`
+      return `${t('Faltan')} ${faltan.length} ${t('chofer(es) con precio (individual y doble > 0)')}${faltan.length ? ': ' + faltan.slice(0, 4).join(', ') + (faltan.length > 4 ? '…' : '') : ''}.`
     }
-    if (!todosRepetidosResueltos) return `Hay ${casosRepetidos.filter((c) => !decisiones[c.waybill]).length} claim(s) repetido(s) sin aprobar/anular.`
+    if (!todosRepetidosResueltos) return `${t('Hay')} ${casosRepetidos.filter((c) => !decisiones[c.waybill]).length} ${t('claim(s) repetido(s) sin aprobar/anular.')}`
     return null
   })()
   const puedeGuardar = !motivoBloqueo
@@ -947,12 +947,12 @@ export default function CargarFactura() {
       <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>{t('Cargar Factura')}</PageTitle>
 
       {!activeCompanyId && (
-        <Aviso tipo="warn">No hay una empresa activa. Ve a <b>Empresas</b> (o pide a tu administrador que te asigne una) antes de cargar facturas.</Aviso>
+        <Aviso tipo="warn">{t('No hay una empresa activa. Ve a')} <b>{t('Empresas')}</b> {t('(o pide a tu administrador que te asigne una) antes de cargar facturas.')}</Aviso>
       )}
 
       {activeCompanyId && ciudadesEmpresa.length === 0 && (
         <Aviso tipo="warn">
-          <span className="inline-flex items-center gap-1.5"><MapPin size={15} strokeWidth={1.8} /> Aún no configuraste las ciudades de tu empresa. Agrégalas en <b>Configuración → Mis ciudades</b> (o al asignar la ciudad de cada archivo, abajo).</span>
+          <span className="inline-flex items-center gap-1.5"><MapPin size={15} strokeWidth={1.8} /> {t('Aún no configuraste las ciudades de tu empresa. Agrégalas en')} <b>{t('Configuración → Mis ciudades')}</b> {t('(o al asignar la ciudad de cada archivo, abajo).')}</span>
         </Aviso>
       )}
 
@@ -967,11 +967,11 @@ export default function CargarFactura() {
             dragOver ? 'border-brand-gold bg-brand-gold/5' : procesados.length ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-600/60 dark:bg-emerald-500/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
           }`}
         >
-          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand-navy px-2.5 py-0.5 text-[11px] font-bold text-white">1 · Obligatorio</div>
+          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand-navy px-2.5 py-0.5 text-[11px] font-bold text-white">{t('1 · Obligatorio')}</div>
           <Upload size={34} strokeWidth={1.5} className="mt-1 text-brand-gold" />
-          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Factura de pagos (GOFO)</div>
+          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">{t('Factura de pagos (GOFO)')}</div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('El Excel “Details of Delivery Fees”. Uno o varios .xlsx (uno por ciudad).')}</div>
-          {procesados.length > 0 && <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {procesados.length} archivo(s) cargado(s)</div>}
+          {procesados.length > 0 && <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {procesados.length} {t('archivo(s) cargado(s)')}</div>}
           <button type="button" onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="mt-3 inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-brand-navy px-4 py-2 text-sm font-semibold text-white">
             <FolderOpen size={16} strokeWidth={1.8} /> {t('Seleccionar factura')}
           </button>
@@ -987,9 +987,9 @@ export default function CargarFactura() {
             fallidosProc ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-600/60 dark:bg-emerald-500/5' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'
           }`}
         >
-          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-bold text-white">2 · Obligatorio</div>
+          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-bold text-white">{t('2 · Obligatorio')}</div>
           <PackageX size={34} strokeWidth={1.5} className="mt-1 text-rose-500" />
-          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">Reporte de fallidos (GOFO)</div>
+          <div className="mt-2 font-bold text-brand-navy dark:text-slate-100">{t('Reporte de fallidos (GOFO)')}</div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('El Excel con hoja “sheet”. Solo se usan los “Failed delivery” por chofer.')}</div>
           {procesandoFallidos ? (
             <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500"><Spinner className="text-rose-500" /> {t('Procesando…')}</div>
@@ -1010,7 +1010,7 @@ export default function CargarFactura() {
       )}
       {errores.map((e, i) => <Aviso key={i} tipo="error">{e}</Aviso>)}
       {avisos.map((a, i) => <Aviso key={i} tipo="warn">{a}</Aviso>)}
-      {guardado && <Aviso tipo="ok"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={15} strokeWidth={1.8} /> Factura guardada correctamente en la base de datos.</span></Aviso>}
+      {guardado && <Aviso tipo="ok"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={15} strokeWidth={1.8} /> {t('Factura guardada correctamente en la base de datos.')}</span></Aviso>}
 
       {combinado && (
         <>
@@ -1018,7 +1018,7 @@ export default function CargarFactura() {
           <Card className="mb-4 p-4">
             <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Ciudad de cada archivo')}</h3>
             <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-              La ciudad se detecta <strong>automáticamente</strong> desde la factura. Si es una ciudad nueva, se <strong>crea y se guarda sola</strong> en tu configuración (Mis ciudades) al guardar la factura, con sus reglas por defecto. Puedes cambiarla si hace falta; si la cambias a mano, se marca como <strong>Manual</strong>.
+              {t('La ciudad se detecta')} <strong>{t('automáticamente')}</strong> {t('desde la factura. Si es una ciudad nueva, se')} <strong>{t('crea y se guarda sola')}</strong> {t('en tu configuración (Mis ciudades) al guardar la factura, con sus reglas por defecto. Puedes cambiarla si hace falta; si la cambias a mano, se marca como')} <strong>{t('Manual')}</strong>.
             </p>
             <div className="scroll-thin overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
               <table className="w-full min-w-[560px] border-collapse text-sm">
@@ -1027,8 +1027,8 @@ export default function CargarFactura() {
                     <th className="px-3 py-2 text-left font-semibold">{t('Archivo')}</th>
                     <th className="px-3 py-2 text-left font-semibold">{t('Semana')}</th>
                     <th className="px-3 py-2 text-left font-semibold">{t('Ciudad detectada')}</th>
-                    {modoRuta && <th className="px-3 py-2 text-left font-semibold">Ruta(s) detectada(s)</th>}
-                    <th className="px-3 py-2 text-left font-semibold">Ciudad (automática) *</th>
+                    {modoRuta && <th className="px-3 py-2 text-left font-semibold">{t('Ruta(s) detectada(s)')}</th>}
+                    <th className="px-3 py-2 text-left font-semibold">{t('Ciudad (automática) *')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1048,12 +1048,12 @@ export default function CargarFactura() {
                                   <span key={r} className="inline-flex w-fit items-center gap-1.5 text-xs">
                                     <span className="font-medium text-brand-navy dark:text-slate-200">{r}</span>
                                     {enConfig
-                                      ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">● Automática</span>
-                                      : <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">nueva</span>}
+                                      ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{t('● Automática')}</span>
+                                      : <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{t('nueva')}</span>}
                                   </span>
                                 )
                               })}
-                              {rutasPorArchivo[i].length > 4 && <span className="text-[11px] text-slate-400">+{rutasPorArchivo[i].length - 4} más</span>}
+                              {rutasPorArchivo[i].length > 4 && <span className="text-[11px] text-slate-400">+{rutasPorArchivo[i].length - 4} {t('más')}</span>}
                             </div>
                           ) : <span className="text-slate-400">—</span>}
                         </td>
@@ -1061,7 +1061,7 @@ export default function CargarFactura() {
                       <td className="px-3 py-2">
                         <div className="flex flex-col gap-1">
                           <Select value={ciudadPorArchivo[i] || ''} onChange={(e) => setCiudad(i, e.target.value)} className={!ciudadPorArchivo[i] ? 'border-rose-400' : ''}>
-                            <option value="">— Elegir ciudad —</option>
+                            <option value="">{t('— Elegir ciudad —')}</option>
                             {opcionesCiudad.map((c) => (
                               <option key={c.codigo} value={c.codigo}>{c.nombre} ({c.codigo})</option>
                             ))}
@@ -1071,8 +1071,8 @@ export default function CargarFactura() {
                             if (!ciudadPorArchivo[i]) return null
                             const auto = ciudadPorArchivo[i] === sugerido
                             return auto
-                              ? <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">● Automática</span>
-                              : <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">● Manual</span>
+                              ? <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{t('● Automática')}</span>
+                              : <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">{t('● Manual')}</span>
                           })()}
                         </div>
                       </td>
@@ -1085,24 +1085,24 @@ export default function CargarFactura() {
               <div key={d.codigo} className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm dark:border-amber-500/40 dark:bg-amber-500/10">
                 <AlertTriangle size={16} strokeWidth={1.9} className="text-amber-600 dark:text-amber-400" />
                 <span className="text-amber-800 dark:text-amber-200">
-                  La ciudad <strong>{d.codigo}</strong> la tienes guardada como <strong>“{d.nombreConfig}”</strong>, pero en la factura corresponde a <strong>“{d.nombreFactura}”</strong>.
+                  {t('La ciudad')} <strong>{d.codigo}</strong> {t('la tienes guardada como')} <strong>“{d.nombreConfig}”</strong>{t(', pero en la factura corresponde a')} <strong>“{d.nombreFactura}”</strong>.
                 </span>
                 <Boton variant="gold" disabled={corrigiendoCiudad === d.codigo} onClick={() => usarNombreFactura(d.codigo, d.nombreFactura)} className="ml-auto px-3 py-1 text-xs">
-                  {corrigiendoCiudad === d.codigo ? 'Actualizando…' : `Usar “${d.nombreFactura}”`}
+                  {corrigiendoCiudad === d.codigo ? t('Actualizando…') : `${t('Usar')} “${d.nombreFactura}”`}
                 </Boton>
               </div>
             ))}
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Agregar ciudad — código</div>
-                <Input className="w-32" placeholder="Ej. PHX01" value={nuevaCiudad.codigo} onChange={(e) => setNuevaCiudad((c) => ({ ...c, codigo: e.target.value }))} />
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Agregar ciudad — código')}</div>
+                <Input className="w-32" placeholder={t('Ej. PHX01')} value={nuevaCiudad.codigo} onChange={(e) => setNuevaCiudad((c) => ({ ...c, codigo: e.target.value }))} />
               </div>
               <div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">nombre</div>
-                <Input className="w-40" placeholder="Ej. Phoenix" value={nuevaCiudad.nombre} onChange={(e) => setNuevaCiudad((c) => ({ ...c, nombre: e.target.value }))} />
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('nombre')}</div>
+                <Input className="w-40" placeholder={t('Ej. Phoenix')} value={nuevaCiudad.nombre} onChange={(e) => setNuevaCiudad((c) => ({ ...c, nombre: e.target.value }))} />
               </div>
-              <Boton variant="ghost" onClick={agregarCiudad}>+ Agregar ciudad</Boton>
-              {!todasCiudadesAsignadas && <span className="text-xs text-amber-600 dark:text-amber-400">Falta asignar ciudad a algún archivo.</span>}
+              <Boton variant="ghost" onClick={agregarCiudad}>{t('+ Agregar ciudad')}</Boton>
+              {!todasCiudadesAsignadas && <span className="text-xs text-amber-600 dark:text-amber-400">{t('Falta asignar ciudad a algún archivo.')}</span>}
             </div>
           </Card>
 
@@ -1111,7 +1111,7 @@ export default function CargarFactura() {
           {/* Reporte de fallidos: resumen + nombres sin asociar */}
           {!fallidosProc ? (
             <Aviso tipo="warn">
-              <span className="inline-flex flex-wrap items-center gap-1.5"><PackageX size={15} strokeWidth={1.8} /> Falta el <b>Reporte de fallidos (GOFO)</b> (obligatorio). Súbelo arriba para poder guardar.</span>
+              <span className="inline-flex flex-wrap items-center gap-1.5"><PackageX size={15} strokeWidth={1.8} /> {t('Falta el')} <b>{t('Reporte de fallidos (GOFO)')}</b> {t('(obligatorio). Súbelo arriba para poder guardar.')}</span>
             </Aviso>
           ) : fallidosAsoc && (
             <Card className="mb-4 border-2 border-rose-300/70 p-4">
@@ -1119,25 +1119,25 @@ export default function CargarFactura() {
                 <PackageX size={18} strokeWidth={1.8} className="text-rose-500" />
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Reporte de fallidos')}</h3>
                 <Badge color="red">{num(fallidosProc.totalFailed)} Failed delivery</Badge>
-                <Badge color="green">{num(fallidosAsoc.asociados)} choferes</Badge>
-                {fallidosAsoc.sinAsociar.length > 0 && <Badge color="gold">{num(fallidosAsoc.sinAsociar.length)} sin asociar</Badge>}
+                <Badge color="green">{num(fallidosAsoc.asociados)} {t('choferes')}</Badge>
+                {fallidosAsoc.sinAsociar.length > 0 && <Badge color="gold">{num(fallidosAsoc.sinAsociar.length)} {t('sin asociar')}</Badge>}
               </div>
               <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
-                Reporte de fallidos procesado: <b>{num(fallidosProc.totalFailed)}</b> “Failed delivery” asociados a <b>{num(fallidosAsoc.asociados)}</b> choferes.
-                {fallidosAsoc.sinAsociar.length > 0 ? <> <b>{num(fallidosAsoc.sinAsociar.length)}</b> nombres sin asociar (revisar).</> : ' Todos los nombres se asociaron.'}
+                {t('Reporte de fallidos procesado:')} <b>{num(fallidosProc.totalFailed)}</b> {t('“Failed delivery” asociados a')} <b>{num(fallidosAsoc.asociados)}</b> {t('choferes.')}
+                {fallidosAsoc.sinAsociar.length > 0 ? <> <b>{num(fallidosAsoc.sinAsociar.length)}</b> {t('nombres sin asociar (revisar).')}</> : ' ' + t('Todos los nombres se asociaron.')}
               </p>
               {fallidosAsoc.sinAsociar.length > 0 && (
                 <div className="rounded-lg bg-amber-50 p-3 text-xs dark:bg-amber-500/10">
-                  <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300"><FileWarning size={14} strokeWidth={1.9} /> Nombres del reporte que no coinciden con ningún chofer de la factura:</div>
+                  <div className="mb-1 inline-flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300"><FileWarning size={14} strokeWidth={1.9} /> {t('Nombres del reporte que no coinciden con ningún chofer de la factura:')}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {fallidosAsoc.sinAsociar.map((s, i) => (
                       <span key={i} className="rounded-md bg-white px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{s.nombre} <b className="text-rose-600 dark:text-rose-400">({s.n})</b></span>
                     ))}
                   </div>
-                  <div className="mt-1.5 text-amber-700/80 dark:text-amber-300/80">Estos fallidos NO se asignarán a ningún chofer. Si es el mismo chofer escrito distinto, ajústalo y vuelve a subir el reporte.</div>
+                  <div className="mt-1.5 text-amber-700/80 dark:text-amber-300/80">{t('Estos fallidos NO se asignarán a ningún chofer. Si es el mismo chofer escrito distinto, ajústalo y vuelve a subir el reporte.')}</div>
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-slate-400">Los fallidos son solo informativos de desempeño: no afectan el pago ni el neto de Gofo.</p>
+              <p className="mt-2 text-[11px] text-slate-400">{t('Los fallidos son solo informativos de desempeño: no afectan el pago ni el neto de Gofo.')}</p>
             </Card>
           )}
 
@@ -1145,15 +1145,14 @@ export default function CargarFactura() {
             <Card className="mb-4 border-2 border-amber-400/70 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Copy size={18} strokeWidth={1.8} className="text-amber-500" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Claims repetidos — requieren tu aprobación</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Claims repetidos — requieren tu aprobación')}</h3>
                 <Badge color={todosRepetidosResueltos ? 'green' : 'gold'}>
-                  {casosRepetidos.filter((c) => decisiones[c.waybill]).length}/{casosRepetidos.length} resueltos
+                  {casosRepetidos.filter((c) => decisiones[c.waybill]).length}/{casosRepetidos.length} {t('resueltos')}
                 </Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Estos trackings aparecen más de una vez en “Claims Detail” (normalmente un claim y su reversión).
-                Decide manualmente si cada uno se <b>aprueba</b> (cuenta como claim y se le cobran $100 al chofer) o se
-                <b> anula</b> (no cuenta, no se cobra). El monto que Gofo descuenta del neto no cambia.
+                {t('Estos trackings aparecen más de una vez en “Claims Detail” (normalmente un claim y su reversión). Decide manualmente si cada uno se')} <b>{t('aprueba')}</b> {t('(cuenta como claim y se le cobran $100 al chofer) o se')}
+                <b> {t('anula')}</b> {t('(no cuenta, no se cobra). El monto que Gofo descuenta del neto no cambia.')}
               </p>
               <div className="space-y-3">
                 {casosRepetidos.map((caso) => {
@@ -1165,21 +1164,21 @@ export default function CargarFactura() {
                         <span className="text-sm text-slate-500 dark:text-slate-400">· {caso.courier}</span>
                         <div className="ml-auto flex gap-2">
                           <Boton variant={d === 'aprobado' ? 'success' : 'ghost'} onClick={() => setDecision(caso.waybill, 'aprobado')} className="px-3 py-1.5 text-xs">
-                            <Check size={14} strokeWidth={2} /> Aprobar
+                            <Check size={14} strokeWidth={2} /> {t('Aprobar')}
                           </Boton>
                           <Boton variant={d === 'anulado' ? 'danger' : 'ghost'} onClick={() => setDecision(caso.waybill, 'anulado')} className="px-3 py-1.5 text-xs">
-                            <X size={14} strokeWidth={2} /> Anular
+                            <X size={14} strokeWidth={2} /> {t('Anular')}
                           </Boton>
                         </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {caso.claims.map((c, i) => (
                           <span key={i} className={`rounded-lg px-2 py-1 text-xs font-medium ${Number(c.montoGofo) < 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'}`}>
-                            {money(c.montoGofo)} · {c.claimType || 'sin tipo'}
+                            {money(c.montoGofo)} · {c.claimType || t('sin tipo')}
                           </span>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-xs text-slate-400">Este claim parece anulado por una reversión. Tú decides si cuenta.</p>
+                      <p className="mt-1.5 text-xs text-slate-400">{t('Este claim parece anulado por una reversión. Tú decides si cuenta.')}</p>
                     </div>
                   )
                 })}
@@ -1189,12 +1188,12 @@ export default function CargarFactura() {
 
           <div className="mb-4 flex flex-wrap gap-3">
             <KPI label={t('Paquetes')} value={num(combinado.totalPaquetes)} icon={Package} accent="navy" />
-            <KPI label="Individuales" value={num(combinado.totalIndividuales)} icon={Layers} accent="blue" />
-            <KPI label="Dobles" value={num(combinado.totalDobles)} accent="gold" />
+            <KPI label={t('Individuales')} value={num(combinado.totalIndividuales)} icon={Layers} accent="blue" />
+            <KPI label={t('Dobles')} value={num(combinado.totalDobles)} accent="gold" />
             <KPI label={t('Ingreso total')} value={money(combinado.ingresoTotal)} icon={DollarSign} accent="green" />
-            <KPI label="Choferes" value={num(combinado.numChoferes)} icon={Truck} accent="slate" />
-            <KPI label="Rutas" value={num(combinado.numRutas)} accent="slate" />
-            <KPI label="Claims válidos" value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} filas · ${casosRepetidos.length} repetido(s)` : `${combinado.totalClaims} filas`} />
+            <KPI label={t('Choferes')} value={num(combinado.numChoferes)} icon={Truck} accent="slate" />
+            <KPI label={t('Rutas')} value={num(combinado.numRutas)} accent="slate" />
+            <KPI label={t('Claims válidos')} value={num(claimsValidosPreview)} icon={AlertTriangle} accent="red" sub={casosRepetidos.length > 0 ? `${combinado.totalClaims} ${t('filas')} · ${casosRepetidos.length} ${t('repetido(s)')}` : `${combinado.totalClaims} ${t('filas')}`} />
           </div>
 
           {/* Modo POR RUTA: asignar manualmente choferes a cada ruta */}
@@ -1203,13 +1202,13 @@ export default function CargarFactura() {
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <RouteIcon size={18} strokeWidth={1.8} className="text-brand-gold" />
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Asigna cada chofer a su ruta')}</h3>
-                <Badge color={todosDriversRuta ? 'green' : 'gold'}>{nombresFactura.length - driversSinRuta.length}/{nombresFactura.length} asignados</Badge>
+                <Badge color={todosDriversRuta ? 'green' : 'gold'}>{nombresFactura.length - driversSinRuta.length}/{nombresFactura.length} {t('asignados')}</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Estás en modo <b>Por ruta</b>. Se ignora la ruta del archivo: tú decides a qué ruta pertenece cada chofer y se le paga con las tarifas y métodos de esa ruta. Un chofer pertenece a una sola ruta.
+                {t('Estás en modo')} <b>{t('Por ruta')}</b>{t('. Se ignora la ruta del archivo: tú decides a qué ruta pertenece cada chofer y se le paga con las tarifas y métodos de esa ruta. Un chofer pertenece a una sola ruta.')}
               </p>
               {codigosRuta.length === 0 ? (
-                <Aviso tipo="warn">No hay rutas configuradas. Ve a <b>Configuración → Modo de configuración → Por ruta</b> y crea al menos una ruta con sus tarifas.</Aviso>
+                <Aviso tipo="warn">{t('No hay rutas configuradas. Ve a')} <b>{t('Configuración → Modo de configuración → Por ruta')}</b> {t('y crea al menos una ruta con sus tarifas.')}</Aviso>
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -1230,7 +1229,7 @@ export default function CargarFactura() {
                             <Badge color="gold">{code}</Badge>
                             {r.nombre && <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">{r.nombre}</span>}
                             <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-                              Ind. {money(Number(r.tarifaInd) || 0)} · Doble {money(Number(r.tarifaDoble) || 0)} · {enRuta.length} chofer(es)
+                              {t('Ind.')} {money(Number(r.tarifaInd) || 0)} · {t('Doble')} {money(Number(r.tarifaDoble) || 0)} · {enRuta.length} {t('chofer(es)')}
                             </span>
                           </div>
                           <div className="scroll-thin max-h-56 space-y-1 overflow-y-auto">
@@ -1253,7 +1252,7 @@ export default function CargarFactura() {
                   {driversSinRuta.length > 0 && (
                     <Aviso tipo="warn" className="mt-3">
                       <span className="inline-flex flex-wrap items-center gap-1.5">
-                        <AlertTriangle size={15} strokeWidth={1.8} /> Faltan <b>{driversSinRuta.length}</b> chofer(es) sin ruta: {driversSinRuta.slice(0, 8).join(', ')}{driversSinRuta.length > 8 ? '…' : ''}
+                        <AlertTriangle size={15} strokeWidth={1.8} /> {t('Faltan')} <b>{driversSinRuta.length}</b> {t('chofer(es) sin ruta:')} {driversSinRuta.slice(0, 8).join(', ')}{driversSinRuta.length > 8 ? '…' : ''}
                       </span>
                     </Aviso>
                   )}
@@ -1262,9 +1261,9 @@ export default function CargarFactura() {
                       <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
                         <AlertTriangle size={16} strokeWidth={1.9} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                         <div>
-                          <b>Rutas sin tarifa:</b> {rutasSinTarifa.join(', ')}. Los choferes de estas rutas se pagarían en <b>$0</b>.
+                          <b>{t('Rutas sin tarifa:')}</b> {rutasSinTarifa.join(', ')}{t('. Los choferes de estas rutas se pagarían en')} <b>$0</b>.
                           <div className="mt-1 text-[13px] text-amber-700 dark:text-amber-300/90">
-                            <b>Solución:</b> puedes guardar igual (la ruta se registra sola en <b>Configuración → Reglas por ruta</b>) y luego ponle su <b>tarifa individual y doble</b>; al recargar los pagos se recalculan. Si ya la tienes creada con otro código, renómbrala o ponle como <b>nombre</b> el valor exacto de la ruta del archivo para que coincida.
+                            <b>{t('Solución:')}</b> {t('puedes guardar igual (la ruta se registra sola en')} <b>{t('Configuración → Reglas por ruta')}</b>{t(') y luego ponle su')} <b>{t('tarifa individual y doble')}</b>{t('; al recargar los pagos se recalculan. Si ya la tienes creada con otro código, renómbrala o ponle como')} <b>{t('nombre')}</b> {t('el valor exacto de la ruta del archivo para que coincida.')}
                           </div>
                         </div>
                       </div>
@@ -1280,8 +1279,8 @@ export default function CargarFactura() {
             <Aviso tipo={choferesNuevos.length === 0 ? 'ok' : 'info'}>
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 <Users size={15} strokeWidth={1.8} />
-                <b>{reconocidos.length}</b> chofer(es) reconocidos con su tarifa guardada · <b>{choferesNuevos.length}</b> nuevo(s)
-                {choferesNuevos.length === 0 ? '. Se procesa directo con las tarifas guardadas.' : ' que requieren precio.'}
+                <b>{reconocidos.length}</b> {t('chofer(es) reconocidos con su tarifa guardada ·')} <b>{choferesNuevos.length}</b> {t('nuevo(s)')}
+                {choferesNuevos.length === 0 ? t('. Se procesa directo con las tarifas guardadas.') : ' ' + t('que requieren precio.')}
               </span>
             </Aviso>
           )}
@@ -1291,10 +1290,10 @@ export default function CargarFactura() {
             <Card className="mb-4 p-4">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <FileSpreadsheet size={18} strokeWidth={1.8} className="text-brand-gold" />
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Precios de choferes desde archivo (opcional)</h3>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Precios de choferes desde archivo (opcional)')}</h3>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Dos formas de poner precios: escríbelos <b>a mano</b> abajo, o sube el <b>Excel de rates</b> (hoja <b>“Rates”</b>: <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>). Ese archivo es tu <b>lista maestra</b> de choferes reales: se usan sus nombres para <b>unificar</b> las variantes de la factura y se rellenan los precios. Todo queda editable.
+                {t('Dos formas de poner precios: escríbelos')} <b>{t('a mano')}</b> {t('abajo, o sube el')} <b>{t('Excel de rates')}</b> {t('(hoja')} <b>“Rates”</b>: <b>Nombre</b>, <b>Rate</b>, <b>Paquetes Dobles</b>{t('). Ese archivo es tu')} <b>{t('lista maestra')}</b> {t('de choferes reales: se usan sus nombres para')} <b>{t('unificar')}</b> {t('las variantes de la factura y se rellenan los precios. Todo queda editable.')}
               </p>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragPrecios(true) }}
@@ -1306,12 +1305,12 @@ export default function CargarFactura() {
                 }`}
               >
                 <Upload size={26} strokeWidth={1.5} className="text-brand-gold" />
-                <div className="text-sm text-slate-500 dark:text-slate-400"><b>{t('Arrastra el Excel aquí')}</b> o haz clic para seleccionarlo</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400"><b>{t('Arrastra el Excel aquí')}</b> {t('o haz clic para seleccionarlo')}</div>
                 <Boton variant="gold" onClick={(e) => { e.stopPropagation(); inputPreciosRef.current?.click() }} disabled={procesandoPrecios}>
                   {procesandoPrecios ? <><Spinner /> {t('Leyendo…')}</> : <><Upload size={16} strokeWidth={1.8} /> {t('Cargar rates / precios desde Excel')}</>}
                 </Boton>
                 <input ref={inputPreciosRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => manejarArchivoPrecios(e.target.files)} />
-                {preciosResumen && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(preciosResumen.total)} choferes en la lista · {preciosResumen.archivoNombre}</span>}
+                {preciosResumen && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={14} strokeWidth={1.9} /> {num(preciosResumen.total)} {t('choferes en la lista ·')} {preciosResumen.archivoNombre}</span>}
               </div>
             </Card>
           )}
@@ -1322,17 +1321,17 @@ export default function CargarFactura() {
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
                 <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Unificación de nombres')}</h3>
-                <Badge color="green">{num(rawCouriers.length)} → {num(unif.totalReal)} choferes</Badge>
-                {unif.unidas > 0 && <Badge color="gold">{num(unif.unidas)} variantes unidas</Badge>}
-                {unif.sinAsociar.length > 0 && <Badge color="red">{num(unif.sinAsociar.length)} sin asociar</Badge>}
+                <Badge color="green">{num(rawCouriers.length)} → {num(unif.totalReal)} {t('choferes')}</Badge>
+                {unif.unidas > 0 && <Badge color="gold">{num(unif.unidas)} {t('variantes unidas')}</Badge>}
+                {unif.sinAsociar.length > 0 && <Badge color="red">{num(unif.sinAsociar.length)} {t('sin asociar')}</Badge>}
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                <b>{num(rawCouriers.length)}</b> nombres en la factura se asociaron a <b>{num(unif.totalReal)}</b> choferes reales ({num(unif.unidas)} variantes unidas). Los paquetes, pagos y claims de cada variante se suman al chofer correcto.
+                <b>{num(rawCouriers.length)}</b> {t('nombres en la factura se asociaron a')} <b>{num(unif.totalReal)}</b> {t('choferes reales (')}{num(unif.unidas)} {t('variantes unidas). Los paquetes, pagos y claims de cada variante se suman al chofer correcto.')}
               </p>
 
               {unif.sinAsociar.length > 0 && (
                 <div className="mb-3 rounded-lg border border-rose-200 p-3 dark:border-rose-700/50">
-                  <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={15} strokeWidth={1.9} /> Sin asociar — asígnalos a un chofer o déjalos como nuevo</div>
+                  <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300"><FileWarning size={15} strokeWidth={1.9} /> {t('Sin asociar — asígnalos a un chofer o déjalos como nuevo')}</div>
                   <div className="space-y-1.5">
                     {unif.sinAsociar.map((raw) => (
                       <div key={raw} className="flex flex-wrap items-center gap-2">
@@ -1343,19 +1342,19 @@ export default function CargarFactura() {
                           onChange={(v) => asignarManual(raw, v)}
                           options={opcionesChofer}
                           placeholder={t('— Revisar / elegir —')}
-                          searchPlaceholder="Escribe un nombre (ej. figue)…"
+                          searchPlaceholder={t('Escribe un nombre (ej. figue)…')}
                         />
                       </div>
                     ))}
                   </div>
-                  <p className="mt-2 text-xs text-slate-400">Al asignar a un chofer, ese nombre se guarda como <b>alias</b> y en próximas facturas se unirá solo.</p>
+                  <p className="mt-2 text-xs text-slate-400">{t('Al asignar a un chofer, ese nombre se guarda como')} <b>{t('alias')}</b> {t('y en próximas facturas se unirá solo.')}</p>
                 </div>
               )}
 
               {Object.keys(unif.auto).length > 0 && (
                 <div>
                   <button onClick={() => setVerUniones((v) => !v)} className="flex items-center gap-2 text-left text-sm font-semibold text-brand-navy dark:text-slate-100">
-                    <ChevronDown size={16} strokeWidth={2} className={`transition ${verUniones ? 'rotate-180' : ''}`} /> Ver uniones automáticas ({Object.keys(unif.auto).length})
+                    <ChevronDown size={16} strokeWidth={2} className={`transition ${verUniones ? 'rotate-180' : ''}`} /> {t('Ver uniones automáticas')} ({Object.keys(unif.auto).length})
                   </button>
                   {verUniones && (
                     <div className="mt-2 scroll-thin max-h-64 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
@@ -1364,7 +1363,7 @@ export default function CargarFactura() {
                           <span className="text-slate-500 dark:text-slate-400">{raw}</span>
                           <span className="text-brand-gold">→</span>
                           <b className="text-brand-navy dark:text-slate-100">{canon}</b>
-                          <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">separar (es otro)</button>
+                          <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">{t('separar (es otro)')}</button>
                         </div>
                       ))}
                     </div>
@@ -1378,18 +1377,18 @@ export default function CargarFactura() {
           {!modoRuta && reconocidos.length > 0 && (
             <Card className="mb-4 p-4">
               <button onClick={() => setVerExistentes((v) => !v)} className="flex w-full items-center gap-2 text-left text-sm font-semibold text-brand-navy dark:text-slate-100">
-                <ChevronDown size={16} strokeWidth={2} className={`transition ${verExistentes ? 'rotate-180' : ''}`} /> Ver/editar choferes existentes ({reconocidos.length})
+                <ChevronDown size={16} strokeWidth={2} className={`transition ${verExistentes ? 'rotate-180' : ''}`} /> {t('Ver/editar choferes existentes')} ({reconocidos.length})
               </button>
               {verExistentes && (
                 <div className="mt-3">
-                  <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Opcional: cambia una tarifa antes de procesar. Si no tocas nada, se usan las tarifas guardadas.</p>
+                  <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t('Opcional: cambia una tarifa antes de procesar. Si no tocas nada, se usan las tarifas guardadas.')}</p>
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <div className="relative">
                       <Users size={14} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <Input className="w-64 pl-8" value={filtroExist} onChange={(e) => setFiltroExist(e.target.value)} placeholder={t('Filtrar por nombre o rate (ej. 1.6)')} />
                     </div>
-                    {filtroExist && <Boton variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setFiltroExist('')}><X size={13} strokeWidth={2} /> Limpiar</Boton>}
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{reconocidosFiltrados.length} de {reconocidos.length}</span>
+                    {filtroExist && <Boton variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setFiltroExist('')}><X size={13} strokeWidth={2} /> {t('Limpiar')}</Boton>}
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{reconocidosFiltrados.length} {t('de')} {reconocidos.length}</span>
                   </div>
                   <div className="scroll-thin max-h-80 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
                     <table className="w-full border-collapse text-sm">
@@ -1407,7 +1406,7 @@ export default function CargarFactura() {
                           </tr>
                         ))}
                         {reconocidosFiltrados.length === 0 && (
-                          <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">Ningún chofer con ese nombre o rate.</td></tr>
+                          <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">{t('Ningún chofer con ese nombre o rate.')}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1425,22 +1424,22 @@ export default function CargarFactura() {
           {!modoRuta && choferesNuevos.length > 0 && (
             <Card className="mb-4 border-2 border-brand-gold/60 p-4">
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Choferes nuevos — asigna sus tarifas</h3>
-                <Badge color="gold">{choferesNuevos.length} nuevos</Badge>
-                <Badge color={nConPrecio === choferesNuevos.length ? 'green' : 'slate'}>{nConPrecio}/{choferesNuevos.length} con precio</Badge>
+                <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Choferes nuevos — asigna sus tarifas')}</h3>
+                <Badge color="gold">{choferesNuevos.length} {t('nuevos')}</Badge>
+                <Badge color={nConPrecio === choferesNuevos.length ? 'green' : 'slate'}>{nConPrecio}/{choferesNuevos.length} {t('con precio')}</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Cada chofer tiene su propia tarifa. Asigna precio individual y doble (&gt; 0) a todos antes de guardar.
+                {t('Cada chofer tiene su propia tarifa. Asigna precio individual y doble (> 0) a todos antes de guardar.')}
               </p>
               <div className="mb-3 flex flex-wrap items-end gap-2">
                 <Input className="w-56" placeholder={t('Buscar por nombre o rate (ej. 1.6)…')} value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <div className="ml-auto flex items-end gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
                   <div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">Rellenar: individual</div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('Rellenar: individual')}</div>
                     <Input className="w-24" type="number" step="0.01" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
                   </div>
                   <div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">doble</div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{t('doble')}</div>
                     <Input className="w-24" type="number" step="0.01" value={bulk.doble} onChange={(e) => setBulk((b) => ({ ...b, doble: e.target.value }))} />
                   </div>
                   <Boton variant="ghost" onClick={aplicarBulk}>{t('Aplicar a vacíos')}</Boton>
@@ -1471,7 +1470,7 @@ export default function CargarFactura() {
                       )
                     })}
                     {nuevosFiltrados.length === 0 && (
-                      <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">Sin choferes que coincidan.</td></tr>
+                      <tr><td colSpan={3} className="px-3 py-4 text-center text-slate-400">{t('Sin choferes que coincidan.')}</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1483,13 +1482,13 @@ export default function CargarFactura() {
             <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Resumen por ciudad')}</h3>
             <Tabla
               columns={[
-                { key: 'nombreCiudad', label: 'Ciudad' },
+                { key: 'nombreCiudad', label: t('Ciudad') },
                 { key: 'paquetes', label: t('Paquetes'), align: 'right' },
-                { key: 'individuales', label: 'Ind.', align: 'right' },
-                { key: 'dobles', label: 'Dobles', align: 'right' },
+                { key: 'individuales', label: t('Ind.'), align: 'right' },
+                { key: 'dobles', label: t('Dobles'), align: 'right' },
                 { key: 'ingreso', label: t('Ingreso (bruto)'), align: 'right' },
-                { key: 'numChoferes', label: 'Choferes', align: 'right' },
-                { key: 'numRutas', label: 'Rutas', align: 'right' },
+                { key: 'numChoferes', label: t('Choferes'), align: 'right' },
+                { key: 'numRutas', label: t('Rutas'), align: 'right' },
                 { key: 'numClaims', label: 'Claims', align: 'right' },
               ]}
               rows={combinado.resumenCiudades.map((c) => ({ ...c, _key: c.ubicacion }))}
@@ -1501,28 +1500,28 @@ export default function CargarFactura() {
             {/* CONFIANZA DE DATOS: avisos antes de guardar */}
             {noCuadra && (
               <Aviso tipo="warn" className="mb-3">
-                <b>El neto no cuadra con Gofo.</b> Diferencia de {money(combinado.verificacion.diferencia)} entre nuestro neto ({money(combinado.verificacion.netoCalculado)}) y el total de Gofo ({money(combinado.verificacion.gofo?.totalGofo)}). Revisa los archivos antes de guardar; igual puedes continuar.
+                <b>{t('El neto no cuadra con Gofo.')}</b> {t('Diferencia de')} {money(combinado.verificacion.diferencia)} {t('entre nuestro neto (')}{money(combinado.verificacion.netoCalculado)}{t(') y el total de Gofo (')}{money(combinado.verificacion.gofo?.totalGofo)}{t('). Revisa los archivos antes de guardar; igual puedes continuar.')}
               </Aviso>
             )}
             {facturasDuplicadas.length > 0 && (
               <Aviso tipo="error" className="mb-3">
-                <b>Posible duplicado.</b> Ya existe una carga para <b>{facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')}</b>. Guardar de nuevo crea una factura aparte y <b>duplica</b> los números.
+                <b>{t('Posible duplicado.')}</b> {t('Ya existe una carga para')} <b>{facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')}</b>{t('. Guardar de nuevo crea una factura aparte y')} <b>{t('duplica')}</b> {t('los números.')}
                 <label className="mt-2 flex items-center gap-2 text-sm font-medium">
                   <input type="checkbox" checked={confirmarDuplicado} onChange={(e) => setConfirmarDuplicado(e.target.checked)} />
-                  Guardar de todos modos (sé que se duplicará)
+                  {t('Guardar de todos modos (sé que se duplicará)')}
                 </label>
               </Aviso>
             )}
             <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm text-slate-500 dark:text-slate-400">Semana:</label>
-              <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder="ej. 22_06_2026-28_06_2026" />
+              <label className="text-sm text-slate-500 dark:text-slate-400">{t('Semana:')}</label>
+              <Input className="min-w-[240px]" value={semana} onChange={(e) => setSemana(e.target.value)} placeholder={t('ej. 22_06_2026-28_06_2026')} />
               <div className="ml-auto flex items-center gap-3">
                 {motivoBloqueo && !guardando && (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                    <AlertTriangle size={14} strokeWidth={1.9} /> No puedes procesar: {motivoBloqueo}
+                    <AlertTriangle size={14} strokeWidth={1.9} /> {t('No puedes procesar:')} {motivoBloqueo}
                   </span>
                 )}
-                <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" title={motivoBloqueo || 'Procesar factura'}>
+                <Boton onClick={guardar} disabled={!puedeGuardar} variant="gold" title={motivoBloqueo || t('Procesar factura')}>
                   {guardando ? <><Spinner /> {t('Guardando…')}</> : <><Save size={16} strokeWidth={1.8} /> {choferesNuevos.length > 0 ? t('Guardar tarifas y procesar') : t('Guardar en base de datos')}</>}
                 </Boton>
                 <Boton onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }} variant="ghost">{t('Descartar')}</Boton>
