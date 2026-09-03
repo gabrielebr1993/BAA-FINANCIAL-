@@ -2,8 +2,10 @@
 // en Android/Chrome; en iOS muestra instrucciones. Descartable (en memoria).
 import { useState, useEffect } from 'react'
 import { Share, X } from 'lucide-react'
+import { useLang } from '../i18n'
 
 export default function InstallBanner() {
+  const { t } = useLang()
   const [deferred, setDeferred] = useState(null)
   const [visible, setVisible] = useState(false)
   const [esIOS, setEsIOS] = useState(false)
@@ -44,17 +46,17 @@ export default function InstallBanner() {
     <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-800 md:hidden">
       <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-brand-gold font-extrabold text-brand-navy">M</div>
       <div className="flex-1 text-sm">
-        <div className="font-bold text-brand-navy dark:text-slate-100">Instala MilePay en tu teléfono</div>
+        <div className="font-bold text-brand-navy dark:text-slate-100">{t('Instala MilePay en tu teléfono')}</div>
         {esIOS ? (
-          <div className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">Toca Compartir <Share size={13} strokeWidth={1.8} /> y luego “Añadir a pantalla de inicio”.</div>
+          <div className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">{t('Toca Compartir')} <Share size={13} strokeWidth={1.8} /> {t('y luego “Añadir a pantalla de inicio”.')}</div>
         ) : (
-          <div className="text-xs text-slate-500 dark:text-slate-400">Accede rápido y úsala como una app.</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{t('Accede rápido y úsala como una app.')}</div>
         )}
       </div>
       {!esIOS && deferred && (
-        <button onClick={instalar} className="rounded-lg bg-brand-navy px-3 py-1.5 text-sm font-semibold text-white">Instalar</button>
+        <button onClick={instalar} className="rounded-lg bg-brand-navy px-3 py-1.5 text-sm font-semibold text-white">{t('Instalar')}</button>
       )}
-      <button onClick={() => setVisible(false)} className="px-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label="Cerrar"><X size={16} strokeWidth={2} /></button>
+      <button onClick={() => setVisible(false)} className="px-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" aria-label={t('Cerrar')}><X size={16} strokeWidth={2} /></button>
     </div>
   )
 }

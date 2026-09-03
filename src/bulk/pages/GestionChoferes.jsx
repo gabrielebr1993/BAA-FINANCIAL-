@@ -6,6 +6,7 @@ import { guardar } from '../data/repo'
 import { useBulkAuth } from '../BulkAuthContext'
 import { auditar } from '../data/auditoria'
 import { PageTitle, Card, Boton, Input, Select, Cargando, EstadoVacio } from '../../components/ui'
+import { useLang } from '../../i18n'
 import { Gate } from '../components/Gate'
 import { UserIdDeUid } from '../components/UserId'
 import Avatar from '../components/Avatar'
@@ -14,6 +15,7 @@ import { useAvatares } from '../data/useCodigoUsuario'
 const nuevoId = () => `d_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
 export default function GestionChoferes() {
+  const { t } = useLang()
   const { tenantId, usuario, rol } = useBulkAuth()
   const { datos: carriers, cargando } = useColeccion('carriers')
   const { datos: equipos } = useColeccion('equipment')
@@ -35,7 +37,7 @@ export default function GestionChoferes() {
     if (!c || !f.nombre.trim()) return
     // Un chofer solo puede estar en UN transporte.
     const yaExiste = carriers.some((x) => (x.choferes || []).some((d) => (d.nombre || '').toLowerCase() === f.nombre.trim().toLowerCase()))
-    if (yaExiste) { window.alert('Ese chofer ya está en un transporte. Un chofer solo puede estar en uno; usa “Reasignar” para moverlo.'); return }
+    if (yaExiste) { window.alert(t('Ese chofer ya está en un transporte. Un chofer solo puede estar en uno; usa “Reasignar” para moverlo.')); return }
     const chofer = { id: nuevoId(), nombre: f.nombre.trim(), telefono: f.telefono.trim(), licencia: f.licencia.trim(), equipos: f.equipos, equipo: f.equipos[0] || '', jobs: f.jobs || [], jobsNombres: (f.jobs || []).map(nombreJob), activo: true }
     await guardar('carriers', c.id, { choferes: [...(c.choferes || []), chofer] })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'alta_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${c.nombre}` })
@@ -75,7 +77,7 @@ export default function GestionChoferes() {
     const nombre = nuevo.trim()
     if (!nombre || nombre === chofer.nombre) return
     const dup = carriers.some((x) => (x.choferes || []).some((d) => d.id !== chofer.id && (d.nombre || '').toLowerCase() === nombre.toLowerCase()))
-    if (dup) { window.alert('Ya existe otro chofer con ese nombre.'); return }
+    if (dup) { window.alert(t('Ya existe otro chofer con ese nombre.')); return }
     await editarChofer(carrier, chofer, { nombre })
     await auditar(tenantId, { usuario: usuario?.email, rol, accion: 'renombrar_chofer', entidad: 'chofer', detalle: `${chofer.nombre} → ${nombre}` })
   }
@@ -99,32 +101,32 @@ export default function GestionChoferes() {
 
   return (
     <div>
-      <PageTitle>Choferes por transporte</PageTitle>
+      <PageTitle>{t('Choferes por transporte')}</PageTitle>
 
       {/* Barra: buscador + botón para mostrar el alta */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Buscar chofer…" className="w-64 pl-8" />
+          <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar chofer…')} className="w-64 pl-8" />
         </div>
-        <Gate perm="choferes.crear"><Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> Cerrar</> : <><Plus size={16} /> Nuevo chofer</>}</Boton></Gate>
+        <Gate perm="choferes.crear"><Boton variant="gold" onClick={() => setAlta((v) => !v)} className="ml-auto">{alta ? <><X size={16} /> {t('Cerrar')}</> : <><Plus size={16} /> {t('Nuevo chofer')}</>}</Boton></Gate>
       </div>
 
       {/* Alta (colapsable) */}
       {alta && (
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">Nuevo chofer</h3>
+        <h3 className="m-0 mb-3 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Nuevo chofer')}</h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Select value={f.carrierId} onChange={set('carrierId')}>
-            <option value="">— Transporte —</option>
+            <option value="">{t('— Transporte —')}</option>
             {carriers.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </Select>
-          <Input placeholder="Nombre del chofer" value={f.nombre} onChange={set('nombre')} />
-          <Input placeholder="Teléfono" value={f.telefono} onChange={set('telefono')} />
-          <Input placeholder="Licencia" value={f.licencia} onChange={set('licencia')} />
+          <Input placeholder={t('Nombre del chofer')} value={f.nombre} onChange={set('nombre')} />
+          <Input placeholder={t('Teléfono')} value={f.telefono} onChange={set('telefono')} />
+          <Input placeholder={t('Licencia')} value={f.licencia} onChange={set('licencia')} />
         </div>
         <div className="mt-3">
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-slate-400"><Truck size={12} /> Equipos (camiones) que maneja <span className="normal-case text-slate-400">(uno o varios)</span></div>
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-slate-400"><Truck size={12} /> {t('Equipos (camiones) que maneja')} <span className="normal-case text-slate-400">{t('(uno o varios)')}</span></div>
           <div className="flex flex-wrap gap-1.5">
             {equiposAct.map((e) => (
               <button key={e.id} type="button" onClick={() => toggleFEquipo(e.nombre)} className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${f.equipos.includes(e.nombre) ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>{e.nombre}</button>
@@ -133,7 +135,7 @@ export default function GestionChoferes() {
         </div>
         {jobsAct.length > 0 && (
           <div className="mt-3">
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-slate-400"><Briefcase size={12} /> Trabajos afiliados <span className="normal-case text-slate-400">(vacío = todos)</span></div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-slate-400"><Briefcase size={12} /> {t('Trabajos afiliados')} <span className="normal-case text-slate-400">{t('(vacío = todos)')}</span></div>
             <div className="flex flex-wrap gap-1.5">
               {jobsAct.map((j) => (
                 <button key={j.id} type="button" onClick={() => toggleFJob(j.id)} className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${f.jobs.includes(j.id) ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>{j.nombre || j.codigo}</button>
@@ -141,15 +143,15 @@ export default function GestionChoferes() {
             </div>
           </div>
         )}
-        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.carrierId || !f.nombre.trim()}><Plus size={16} /> Agregar chofer</Boton></div>
-        <p className="mt-2 text-[11px] text-slate-400">El equipo del chofer decide qué órdenes recibe (solo las que piden ese camión). Los trabajos afiliados lo limitan a esos trabajos (si no eliges ninguno, recibe de todos). Para acceso a la app, créalo también en “Usuarios y roles” como Chofer.</p>
+        <div className="mt-3"><Boton variant="gold" onClick={agregar} disabled={!f.carrierId || !f.nombre.trim()}><Plus size={16} /> {t('Agregar chofer')}</Boton></div>
+        <p className="mt-2 text-[11px] text-slate-400">{t('El equipo del chofer decide qué órdenes recibe (solo las que piden ese camión). Los trabajos afiliados lo limitan a esos trabajos (si no eliges ninguno, recibe de todos). Para acceso a la app, créalo también en “Usuarios y roles” como Chofer.')}</p>
       </Card>
       )}
 
-      {carriers.length === 0 ? <EstadoVacio titulo="Sin transportes" texto="Primero crea transportistas." mostrarBoton={false} /> : totalChoferes === 0 ? (
-        <EstadoVacio titulo="Sin choferes" texto="Agrega el primero (botón “Nuevo chofer”), o carga el Modo test." mostrarBoton={false} />
+      {carriers.length === 0 ? <EstadoVacio titulo={t('Sin transportes')} texto={t('Primero crea transportistas.')} mostrarBoton={false} /> : totalChoferes === 0 ? (
+        <EstadoVacio titulo={t('Sin choferes')} texto={t('Agrega el primero (botón “Nuevo chofer”), o carga el Modo test.')} mostrarBoton={false} />
       ) : carriersV.length === 0 ? (
-        <EstadoVacio titulo="Sin resultados" texto="Ningún chofer coincide con la búsqueda." mostrarBoton={false} />
+        <EstadoVacio titulo={t('Sin resultados')} texto={t('Ningún chofer coincide con la búsqueda.')} mostrarBoton={false} />
       ) : (
         <div className="space-y-3">
           {carriersV.map((c) => (
@@ -157,7 +159,7 @@ export default function GestionChoferes() {
               <div className="mb-2 flex items-center gap-2">
                 <Truck size={16} className="text-amber-500" />
                 <Link to={`/bulk/transportistas/${c.id}`} className="font-bold text-brand-navy hover:text-amber-600 hover:underline dark:text-slate-100">{c.nombre}</Link>
-                <span className="text-xs text-slate-400">· {c._cho.length} chofer(es)</span>
+                <span className="text-xs text-slate-400">· {c._cho.length} {t('chofer(es)')}</span>
               </div>
               <div className="space-y-2">
                 {c._cho.map((d) => (
@@ -167,7 +169,7 @@ export default function GestionChoferes() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
                           <Link to={`/bulk/chofer/${encodeURIComponent(d.nombre)}`} className="text-sm font-semibold text-brand-navy hover:text-amber-600 dark:text-slate-100">{d.nombre}</Link>
-                          <button onClick={() => renombrar(c, d)} title="Renombrar" className="text-slate-400 hover:text-amber-600"><Pencil size={12} /></button>
+                          <button onClick={() => renombrar(c, d)} title={t('Renombrar')} className="text-slate-400 hover:text-amber-600"><Pencil size={12} /></button>
                           <UserIdDeUid uid={d.uid} />
                         </div>
                         <div className="flex flex-wrap gap-2 text-[11px] text-slate-400">
@@ -178,29 +180,29 @@ export default function GestionChoferes() {
                       <div className="ml-auto flex items-center gap-1.5">
                         <ArrowRightLeft size={13} className="text-slate-400" />
                         <Select value="" onChange={(e) => reasignar(c, d, e.target.value)} className="py-1 text-xs">
-                          <option value="">Reasignar a…</option>
+                          <option value="">{t('Reasignar a…')}</option>
                           {carriers.filter((x) => x.id !== c.id).map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                         </Select>
                         <button onClick={() => borrar(c, d)} className="text-rose-400 hover:text-rose-600"><Trash2 size={14} /></button>
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-700/50">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Truck size={11} /> Equipos:</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Truck size={11} /> {t('Equipos:')}</span>
                       {equiposAct.map((e) => {
                         const on = equiposDe(d).includes(e.nombre)
                         return <button key={e.id} type="button" onClick={() => toggleEquipoBorrador(d, e.nombre)} className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{e.nombre}</button>
                       })}
-                      {equiposDe(d).length === 0 && <span className="text-[11px] text-amber-600 dark:text-amber-400">sin equipo</span>}
-                      {dirtyEquipos(d) && <button onClick={() => guardarEquipos(c, d)} className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-600"><Save size={11} /> Guardar</button>}
+                      {equiposDe(d).length === 0 && <span className="text-[11px] text-amber-600 dark:text-amber-400">{t('sin equipo')}</span>}
+                      {dirtyEquipos(d) && <button onClick={() => guardarEquipos(c, d)} className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-600"><Save size={11} /> {t('Guardar')}</button>}
                     </div>
                     {jobsAct.length > 0 && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-700/50">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Briefcase size={11} /> Trabajos:</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400"><Briefcase size={11} /> {t('Trabajos:')}</span>
                         {jobsAct.map((j) => {
                           const on = (d.jobs || []).includes(j.id)
                           return <button key={j.id} type="button" onClick={() => toggleJob(c, d, j.id)} className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition ${on ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>{j.nombre || j.codigo}</button>
                         })}
-                        {(d.jobs || []).length === 0 && <span className="text-[11px] text-slate-400">todos</span>}
+                        {(d.jobs || []).length === 0 && <span className="text-[11px] text-slate-400">{t('todos')}</span>}
                       </div>
                     )}
                   </div>

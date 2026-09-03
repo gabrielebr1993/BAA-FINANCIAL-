@@ -6,6 +6,7 @@ import { Star, Search, RotateCcw, Trophy } from 'lucide-react'
 import { useData } from '../DataContext'
 import { calcularPagos, promediosFlota, calificarChofer } from '../utils/calc'
 import { money, num } from '../utils/format'
+import { useLang } from '../i18n'
 import { Card, Input, Boton, Badge } from './ui'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
@@ -27,6 +28,7 @@ function Semaforo({ nivel }) {
 export default function RankingCalificacion({ compacto = false, limite = 5 }) {
   const { facturaRango: inv, claims, drivers, selectedCity } = useData()
   const navigate = useNavigate()
+  const { t } = useLang()
   const [sortKey, setSortKey] = useState('puntaje')
   const [asc, setAsc] = useState(false)
   const [busca, setBusca] = useState('')
@@ -55,7 +57,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
       <Card className="p-4">
         <div className="mb-2 flex items-center gap-2">
           <Trophy size={18} strokeWidth={1.8} className="text-brand-gold" />
-          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Mejores choferes (calificación)</h3>
+          <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mejores choferes (calificación)')}</h3>
         </div>
         <ol className="m-0 space-y-1.5">
           {top.map((r, i) => (
@@ -66,7 +68,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
               <span className="ml-auto inline-flex items-center gap-1.5"><Semaforo nivel={r.calif.nivel} /> {r.calif.puntaje}</span>
             </li>
           ))}
-          {top.length === 0 && <li className="text-sm text-slate-400">Sin datos en el periodo.</li>}
+          {top.length === 0 && <li className="text-sm text-slate-400">{t('Sin datos en el periodo.')}</li>}
         </ol>
       </Card>
     )
@@ -101,7 +103,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
             <span className="h-3 w-3 rounded-full" style={{ background: COLOR_NIVEL[k] }} />
             <div>
               <div className="text-2xl font-bold text-brand-navy dark:text-slate-100">{num(conteo[k])}</div>
-              <div className="text-xs text-slate-400">{label}</div>
+              <div className="text-xs text-slate-400">{t(label)}</div>
             </div>
           </Card>
         ))}
@@ -112,14 +114,14 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search size={15} strokeWidth={1.8} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input className="w-52 pl-8" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar chofer…" />
+            <Input className="w-52 pl-8" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder={t('Buscar chofer…')} />
           </div>
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Categoría</span>
-          <Pill v="bueno">Buenos</Pill>
-          <Pill v="regular">Regulares</Pill>
-          <Pill v="malo">Malos</Pill>
-          {(busca || fCat) && <Boton variant="ghost" onClick={() => { setBusca(''); setFCat('') }} className="px-3 py-1.5 text-xs"><RotateCcw size={14} strokeWidth={2} /> Limpiar</Boton>}
-          <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{rows.length} de {n}</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Categoría')}</span>
+          <Pill v="bueno">{t('Buenos')}</Pill>
+          <Pill v="regular">{t('Regulares')}</Pill>
+          <Pill v="malo">{t('Malos')}</Pill>
+          {(busca || fCat) && <Boton variant="ghost" onClick={() => { setBusca(''); setFCat('') }} className="px-3 py-1.5 text-xs"><RotateCcw size={14} strokeWidth={2} /> {t('Limpiar')}</Boton>}
+          <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{rows.length} {t('de')} {n}</span>
         </div>
       </Card>
 
@@ -129,15 +131,15 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 [&>th]:bg-slate-100 dark:[&>th]:bg-slate-800">
                 <th className="px-2.5 py-2.5 text-left font-semibold">#</th>
-                <th className="cursor-pointer px-2.5 py-2.5 text-left font-semibold" onClick={() => cambiar('nombre')}>Chofer{flecha('nombre')}</th>
-                <th className="px-2.5 py-2.5 text-left font-semibold">Estrellas</th>
-                <th className="px-2.5 py-2.5 text-center font-semibold">Semáforo</th>
-                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('puntaje')}>Puntaje{flecha('puntaje')}</th>
-                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('paquetes')}>Paquetes{flecha('paquetes')}</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-left font-semibold" onClick={() => cambiar('nombre')}>{t('Chofer')}{flecha('nombre')}</th>
+                <th className="px-2.5 py-2.5 text-left font-semibold">{t('Estrellas')}</th>
+                <th className="px-2.5 py-2.5 text-center font-semibold">{t('Semáforo')}</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('puntaje')}>{t('Puntaje')}{flecha('puntaje')}</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('paquetes')}>{t('Paquetes')}{flecha('paquetes')}</th>
                 <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('claims')}>Claims{flecha('claims')}</th>
-                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('fallidos')}>Fallidos{flecha('fallidos')}</th>
-                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('ganancia')}>Ganancia{flecha('ganancia')}</th>
-                <th className="px-2.5 py-2.5 text-left font-semibold">Etiqueta</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('fallidos')}>{t('Fallidos')}{flecha('fallidos')}</th>
+                <th className="cursor-pointer px-2.5 py-2.5 text-right font-semibold" onClick={() => cambiar('ganancia')}>{t('Ganancia')}{flecha('ganancia')}</th>
+                <th className="px-2.5 py-2.5 text-left font-semibold">{t('Etiqueta')}</th>
               </tr>
             </thead>
             <tbody>
@@ -149,7 +151,7 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
                   <tr key={r.nombre} onClick={() => irPerfil(r.nombre)}
                     className={`cursor-pointer border-t border-slate-100 transition hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30 ${esTop ? 'bg-emerald-50/50 dark:bg-emerald-500/5' : esBottom ? 'bg-rose-50/40 dark:bg-rose-500/5' : ''}`}>
                     <td className="px-2.5 py-2 font-semibold text-slate-400">{pos}{esTop && <Trophy size={12} strokeWidth={2} className="ml-1 inline text-brand-gold" />}</td>
-                    <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{r.nombre}{r.sinTarifa && <Badge color="red">sin tarifa</Badge>}</td>
+                    <td className="px-2.5 py-2 font-medium text-brand-navy dark:text-slate-100">{r.nombre}{r.sinTarifa && <Badge color="red">{t('sin tarifa')}</Badge>}</td>
                     <td className="px-2.5 py-2"><Estrellas n={r.calif.estrellas} /></td>
                     <td className="px-2.5 py-2 text-center"><Semaforo nivel={r.calif.nivel} /></td>
                     <td className="px-2.5 py-2 text-right font-bold" style={{ color: COLOR_NIVEL[r.calif.nivel] }}>{r.calif.puntaje}</td>
@@ -162,12 +164,12 @@ export default function RankingCalificacion({ compacto = false, limite = 5 }) {
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400">Sin choferes con estos filtros.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400">{t('Sin choferes con estos filtros.')}</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-slate-400">Estrellas: 90-100=5★, 75-89=4★, 60-74=3★, 40-59=2★, &lt;40=1★. Semáforo: verde ≥75, amarillo 50-74, rojo &lt;50.</p>
+        <p className="mt-2 text-xs text-slate-400">{t('Estrellas: 90-100=5★, 75-89=4★, 60-74=3★, 40-59=2★, <40=1★. Semáforo: verde ≥75, amarillo 50-74, rojo <50.')}</p>
       </Card>
     </div>
   )

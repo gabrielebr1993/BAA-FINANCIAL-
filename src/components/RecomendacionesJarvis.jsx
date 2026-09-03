@@ -7,6 +7,7 @@ import { Sparkles, RefreshCw, ArrowRight, Lightbulb } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { obtenerRecomendaciones } from '../utils/recomendaciones'
+import { useLang } from '../i18n'
 import { Card, Spinner } from './ui'
 
 const RUTA = { pagos: '/pagos', choferes: '/choferes', rutas: '/rutas', performance: '/performance', financiero: '/financiero', claims: '/claims', dashboard: '/dashboard' }
@@ -14,6 +15,7 @@ const COLOR_PRIO = ['#c9a24b', '#c9a24b', '#d97706', '#64748b', '#64748b']
 
 export default function RecomendacionesJarvis() {
   const navigate = useNavigate()
+  const { t } = useLang()
   const { perfil, esSuperAdmin } = useAuth()
   const { activeCompanyId, facturaRango, selectedCity } = useData()
   // Dueño, súper-admin y admin. Las recomendaciones dependen del FILTRO: se generan
@@ -38,7 +40,7 @@ export default function RecomendacionesJarvis() {
     setCargando(true); setError('')
     try {
       const r = await obtenerRecomendaciones({ companyId: activeCompanyId, semana, ciudad: selectedCity })
-      if (!r.ok) { setError(r.error || 'No se pudieron generar.'); return }
+      if (!r.ok) { setError(r.error || t('No se pudieron generar.')); return }
       guardarCache(r.recomendaciones || [])
       setRecs(r.recomendaciones || [])
     } catch (e) { setError('Error: ' + e.message) } finally { setCargando(false) }
@@ -52,19 +54,19 @@ export default function RecomendacionesJarvis() {
     <Card className="mb-4 p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Sparkles size={18} strokeWidth={1.8} className="text-brand-gold" />
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Recomendaciones de JARVIS</h3>
-        <span className="text-xs text-slate-400">análisis de {semana}</span>
-        <button onClick={() => cargar(true)} disabled={cargando} className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-brand-navy disabled:opacity-40 dark:hover:text-white" title="Volver a analizar">
-          {cargando ? <Spinner /> : <RefreshCw size={13} strokeWidth={1.9} />} Analizar
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Recomendaciones de JARVIS')}</h3>
+        <span className="text-xs text-slate-400">{t('análisis de')} {semana}</span>
+        <button onClick={() => cargar(true)} disabled={cargando} className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-brand-navy disabled:opacity-40 dark:hover:text-white" title={t('Volver a analizar')}>
+          {cargando ? <Spinner /> : <RefreshCw size={13} strokeWidth={1.9} />} {t('Analizar')}
         </button>
       </div>
 
       {cargando && recs.length === 0 ? (
-        <div className="flex items-center gap-2 py-3 text-sm text-slate-500"><Spinner /> JARVIS está analizando tu semana…</div>
+        <div className="flex items-center gap-2 py-3 text-sm text-slate-500"><Spinner /> {t('JARVIS está analizando tu semana…')}</div>
       ) : error ? (
         <div className="text-sm text-amber-600 dark:text-amber-400">{error}</div>
       ) : recs.length === 0 ? (
-        <div className="text-sm text-slate-500">Sin recomendaciones destacadas esta semana. ¡Buen trabajo!</div>
+        <div className="text-sm text-slate-500">{t('Sin recomendaciones destacadas esta semana. ¡Buen trabajo!')}</div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {recs.map((r, i) => (
@@ -76,13 +78,13 @@ export default function RecomendacionesJarvis() {
               <div className="mb-1.5 text-sm text-slate-600 dark:text-slate-300">{r.detalle}</div>
               {r.dato && <div className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Lightbulb size={13} strokeWidth={1.8} className="mt-0.5 flex-shrink-0 text-brand-gold" />{r.dato}</div>}
               {r.seccion && RUTA[r.seccion] && (
-                <button onClick={() => navigate(RUTA[r.seccion])} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-gold hover:underline">Ver {r.seccion} <ArrowRight size={12} strokeWidth={2.2} /></button>
+                <button onClick={() => navigate(RUTA[r.seccion])} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-gold hover:underline">{t('Ver')} {r.seccion} <ArrowRight size={12} strokeWidth={2.2} /></button>
               )}
             </div>
           ))}
         </div>
       )}
-      <div className="mt-3 text-[11px] text-slate-400">Sugerencias basadas en tus datos para ayudarte a decidir — la decisión es tuya. Pídele a JARVIS “dame recomendaciones” para profundizar.</div>
+      <div className="mt-3 text-[11px] text-slate-400">{t('Sugerencias basadas en tus datos para ayudarte a decidir — la decisión es tuya. Pídele a JARVIS “dame recomendaciones” para profundizar.')}</div>
     </Card>
   )
 }

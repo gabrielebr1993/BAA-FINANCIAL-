@@ -9,12 +9,14 @@ import { costoManagers, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
+import { useLang, tDirecto } from '../i18n'
 import { Card, Boton, Aviso, Badge, Input, Select } from './ui'
 
 const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 
 export default function ManagersPanel() {
   const navigate = useNavigate()
+  const { t } = useLang()
   const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity, selectedCities } = useData()
   const { ciudadBloqueada, ciudadesUsuario } = useAuth()
   // Gastos fijos visibles según el filtro global + las ciudades del usuario:
@@ -45,7 +47,7 @@ export default function ManagersPanel() {
 
   // Nombre legible de una ciudad (por su código): ciudades de la empresa → tabla estándar.
   const nombreDe = (code) => {
-    if (!code) return 'Sin ciudad'
+    if (!code) return tDirecto('Sin ciudad')
     const c = (ciudadesEmpresa || []).find((x) => x.codigo === code)
     return c ? c.nombre : nombreCiudad(code)
   }
@@ -81,12 +83,12 @@ export default function ManagersPanel() {
   }
 
   const guardar = async () => {
-    if (!form.nombre.trim()) return setError('El nombre es obligatorio.')
+    if (!form.nombre.trim()) return setError(t('El nombre es obligatorio.'))
     // Ciudad del gasto fijo: usuario bloqueado a UNA ciudad → esa; si tiene varias
     // (o no está bloqueado) → la que eligió en el formulario (limitada a las suyas).
     const ciudadFinal = (ciudadBloqueada && (ciudadesUsuario || []).length === 1) ? (ciudadesUsuario[0] || '') : form.ciudad
-    if (!ciudadFinal) return setError('Elige la ciudad a la que pertenece el gasto fijo.')
-    if (Number(form.sueldoSemanal) < 0) return setError('El monto no puede ser negativo.')
+    if (!ciudadFinal) return setError(t('Elige la ciudad a la que pertenece el gasto fijo.'))
+    if (Number(form.sueldoSemanal) < 0) return setError(t('El monto no puede ser negativo.'))
     setGuardando(true); setError('')
     try {
       const payload = { nombre: form.nombre.trim(), ciudad: ciudadFinal, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
@@ -95,7 +97,7 @@ export default function ManagersPanel() {
       await reloadManagers()
       cancelar()
     } catch (e) {
-      setError('Error al guardar: ' + e.message)
+      setError(t('Error al guardar:') + ' ' + e.message)
     } finally {
       setGuardando(false)
     }
@@ -123,63 +125,63 @@ export default function ManagersPanel() {
   return (
     <div>
       <Card className="mb-4 p-4">
-        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? 'Editar gasto fijo' : 'Agregar gasto fijo'}</h3>
+        <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? t('Editar gasto fijo') : t('Agregar gasto fijo')}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
         {(ciudadesEmpresa || []).length === 0 && (
-          <Aviso tipo="warn">Primero agrega ciudades en <b>Configuración → Mis ciudades</b>: cada gasto fijo pertenece a una ciudad.</Aviso>
+          <Aviso tipo="warn">{t('Primero agrega ciudades en')} <b>{t('Configuración → Mis ciudades')}</b>{t(': cada gasto fijo pertenece a una ciudad.')}</Aviso>
         )}
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Nombre</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Nombre')}</div>
             <Input className="w-52" value={form.nombre} onChange={(e) => setF('nombre', e.target.value)} disabled={!!editId} />
           </div>
           {/* El selector de ciudad solo lo ve el dueño; el manager va fijo a su ciudad. */}
           {!ciudadBloqueada && (
             <div>
-              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Ciudad</div>
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Ciudad')}</div>
               <Select className="w-44" value={form.ciudad} onChange={(e) => setF('ciudad', e.target.value)}>
-                <option value="">— Elegir ciudad —</option>
+                <option value="">{t('— Elegir ciudad —')}</option>
                 {ciudadesForm.map((c) => (<option key={c.codigo} value={c.codigo}>{c.nombre}</option>))}
               </Select>
             </div>
           )}
           <div>
-            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">Monto semanal ($) en esa ciudad</div>
+            <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Monto semanal ($) en esa ciudad')}</div>
             <Input className="w-40" type="number" step="0.01" min="0" value={form.sueldoSemanal} onChange={(e) => setF('sueldoSemanal', e.target.value)} />
           </div>
-          <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : editId ? 'Guardar' : 'Agregar'}</Boton>
-          {editId && <Boton variant="ghost" onClick={cancelar}>Cancelar</Boton>}
+          <Boton variant="gold" onClick={guardar} disabled={guardando}>{guardando ? t('Guardando…') : editId ? t('Guardar') : t('Agregar')}</Boton>
+          {editId && <Boton variant="ghost" onClick={cancelar}>{t('Cancelar')}</Boton>}
         </div>
-        <p className="mt-2 text-xs text-slate-400">Un mismo gasto que aplica en dos ciudades agrégalo como dos gastos fijos (uno por ciudad) con su propio monto.</p>
+        <p className="mt-2 text-xs text-slate-400">{t('Un mismo gasto que aplica en dos ciudades agrégalo como dos gastos fijos (uno por ciudad) con su propio monto.')}</p>
       </Card>
 
       {!ciudadBloqueada && sinCiudad.length > 0 && (
         <Aviso tipo="warn">
           <div className="flex flex-wrap items-center gap-2">
-            <span><b>{sinCiudad.length} gasto(s) fijo(s) en una ciudad que ya no existe.</b> Su costo puede aparecer atribuido raro. Reasígnalos a una ciudad válida o <b>bórralos</b>.</span>
+            <span><b>{sinCiudad.length} {t('gasto(s) fijo(s) en una ciudad que ya no existe.')}</b> {t('Su costo puede aparecer atribuido raro. Reasígnalos a una ciudad válida o')} <b>{t('bórralos')}</b>.</span>
             {ciudadesConCodigo.length === 1 && (
               <Boton variant="gold" disabled={reasignando} onClick={() => reasignarTodos(ciudadesConCodigo[0].codigo)} className="px-3 py-1.5 text-xs">
-                {reasignando ? 'Asignando…' : `Asignar todos a ${ciudadesConCodigo[0].nombre}`}
+                {reasignando ? t('Asignando…') : `${t('Asignar todos a')} ${ciudadesConCodigo[0].nombre}`}
               </Boton>
             )}
-            <Boton variant="ghost" disabled={reasignando} onClick={eliminarSinCiudad} className="px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={13} strokeWidth={1.8} /> Eliminar los {sinCiudad.length}</Boton>
+            <Boton variant="ghost" disabled={reasignando} onClick={eliminarSinCiudad} className="px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={13} strokeWidth={1.8} /> {t('Eliminar los')} {sinCiudad.length}</Boton>
           </div>
         </Aviso>
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Users size={18} strokeWidth={1.8} className="text-brand-gold" />
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">Gastos fijos ({managers.length})</h3>
-        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={managers.length === 0} title="Descargar nombre, cuenta, ruta y banco de todos">
-          <Landmark size={15} strokeWidth={1.8} /> Datos bancarios
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Gastos fijos')} ({managers.length})</h3>
+        <Boton variant="ghost" className="px-3 py-1.5 text-xs" onClick={exportarBancarios} disabled={managers.length === 0} title={t('Descargar nombre, cuenta, ruta y banco de todos')}>
+          <Landmark size={15} strokeWidth={1.8} /> {t('Datos bancarios')}
         </Boton>
         <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">
-          Costo total del periodo ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(costoTotal)}</b>
+          {t('Costo total del periodo')} ({semanas} {t('sem.')}): <b className="text-brand-navy dark:text-slate-200">{money(costoTotal)}</b>
         </span>
       </div>
 
       {grupos.length === 0 ? (
-        <Card className="p-4 text-sm text-slate-400">Aún no hay gastos fijos. Agrégalos arriba eligiendo su ciudad; su monto se suma como costo de esa ciudad.</Card>
+        <Card className="p-4 text-sm text-slate-400">{t('Aún no hay gastos fijos. Agrégalos arriba eligiendo su ciudad; su monto se suma como costo de esa ciudad.')}</Card>
       ) : (
         <div className="space-y-4">
           {grupos.map((g) => (
@@ -187,15 +189,15 @@ export default function ManagersPanel() {
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Building2 size={16} strokeWidth={1.8} className="text-slate-400" />
                 <h4 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{g.nombre}{g.code ? <span className="ml-1 text-xs font-normal text-slate-400">({g.code})</span> : null}</h4>
-                <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">Costo ciudad ({semanas} sem.): <b className="text-brand-navy dark:text-slate-200">{money(g.costo)}</b></span>
+                <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">{t('Costo ciudad')} ({semanas} {t('sem.')}): <b className="text-brand-navy dark:text-slate-200">{money(g.costo)}</b></span>
               </div>
               <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
                 <table className="w-full min-w-[420px] border-collapse text-sm">
                   <thead>
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      <th className="px-3 py-2 text-left font-semibold">Gasto fijo</th>
-                      <th className="px-3 py-2 text-right font-semibold">Monto semanal</th>
-                      <th className="px-3 py-2 text-center font-semibold">Estado</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t('Gasto fijo')}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t('Monto semanal')}</th>
+                      <th className="px-3 py-2 text-center font-semibold">{t('Estado')}</th>
                       <th className="px-3 py-2 text-right font-semibold"></th>
                     </tr>
                   </thead>
@@ -213,11 +215,11 @@ export default function ManagersPanel() {
                           </div>
                         </td>
                         <td className="px-3 py-2 text-right">{money(m.sueldoSemanal)}</td>
-                        <td className="px-3 py-2 text-center">{m.activo !== false ? <Badge color="green">Activo</Badge> : <Badge color="slate">Inactivo</Badge>}</td>
+                        <td className="px-3 py-2 text-center">{m.activo !== false ? <Badge color="green">{t('Activo')}</Badge> : <Badge color="slate">{t('Inactivo')}</Badge>}</td>
                         <td className="px-3 py-2 text-right">
                           <div className="flex justify-end gap-2">
-                            <Boton variant="ghost" onClick={() => editar(m)} className="px-2.5 py-1 text-xs">Editar</Boton>
-                            <Boton variant="ghost" onClick={() => toggle(m)} className="px-2.5 py-1 text-xs">{m.activo !== false ? 'Desactivar' : 'Activar'}</Boton>
+                            <Boton variant="ghost" onClick={() => editar(m)} className="px-2.5 py-1 text-xs">{t('Editar')}</Boton>
+                            <Boton variant="ghost" onClick={() => toggle(m)} className="px-2.5 py-1 text-xs">{m.activo !== false ? t('Desactivar') : t('Activar')}</Boton>
                             <Boton variant="ghost" onClick={() => eliminar(m)} className="px-2 py-1 text-xs text-rose-600 dark:text-rose-400"><Trash2 size={13} strokeWidth={1.8} /></Boton>
                           </div>
                         </td>
