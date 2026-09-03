@@ -232,6 +232,34 @@ export default function ChoferPortal() {
   const miCodigoCho = useCodigoUsuario(usuario?.id)
   const unidadCho = miChofer?.unidad || miChofer?.placa || miChofer?.equipo || activa?.unidad || activa?.placa || activa?.tipoEquipo || ''
   useGpsTracker(activa, geocercas, tenantId, { nombre: usuario?.nombre, codigo: miCodigoCho, unidad: unidadCho, uid: usuario?.id, carrierId }) // GPS + eventos/notificaciones de geocerca
+
+  // ── Rastreo en SEGUNDO PLANO (app nativa iOS/Android) ─────────────────────
+  // El WebView se congela al bloquear el teléfono, así que la app NATIVA sigue
+  // mandando el GPS a /api/bulk-track. Aquí solo dejamos listo lo que la app
+  // nativa necesita leer de localStorage:
+  //   mp_track_pase  = { uid, tenantId, pass }  (pase de 30 días emitido por el API)
+  //   mp_track_orden = { ordenId, activo }      (la orden activa del momento)
+  useEffect(() => {
+    if (!usuario?.id || !tenantId) return
+    let vivo = true
+    ;(async () => {
+      try {
+        // Siempre se pide al API: si el pase vigente aún sirve (>5 días), lo
+        // devuelve tal cual; si venció o está por vencer, emite uno nuevo.
+        const tok = await authBulk.currentUser.getIdToken()
+        const r = await fetch('/api/bulk-track', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+          body: JSON.stringify({ accion: 'pase' }),
+        })
+        const j = await r.json()
+        if (vivo && j?.ok && j.pass) localStorage.setItem('mp_track_pase', JSON.stringify({ uid: usuario.id, tenantId, pass: j.pass }))
+      } catch { /* sin red: se reintenta en la próxima visita */ }
+    })()
+    return () => { vivo = false }
+  }, [usuario?.id, tenantId])
+  useEffect(() => {
+    try { localStorage.setItem('mp_track_orden', JSON.stringify({ ordenId: activa?.id || null, activo: !!activa })) } catch { /* noop */ }
+  }, [activa?.id, activa?.estado])
   // Orden que el dispatcher me OFRECIÓ automáticamente (notificando + a mi uid) y aún
   // no respondo → pantalla superpuesta con contador de 2:00.
   // Oferta entrante = cualquier orden NOTIFICANDO que sea MÍA (por uid, por id del
