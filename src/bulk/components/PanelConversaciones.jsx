@@ -10,11 +10,10 @@
 // No cambia la mensajería; solo ORGANIZA y PRESENTA lo que ya existe.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Search, ArrowLeft, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus, MoreVertical, LogOut } from 'lucide-react'
+import { Search, MessageSquare, Building2, Truck, User, Shield, Trash2, Users, Plus, MoreVertical, LogOut } from 'lucide-react'
 import ChatOrden from './ChatOrden'
 import { useVisualViewport } from './useVisualViewport'
 import { tsMillis } from '../data/chatKeys'
-import { BULK_ROLES_LABEL } from '../domain/constants'
 import { Card, Badge, Input, EstadoVacio } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -84,10 +83,18 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   }, [seccion, buscar])
 
   const activa = items.find((c) => c.key === sel) || items[0] || null
-  // Envoltorio del chat abierto: tarjeta normal, o <div> a sangre en estiloApp.
-  const EnvChat = estiloApp ? 'div' : Card
 
   const elegir = (k) => { setSel(k); setVerChatMovil(true) }
+
+  // ¿Visor de escritorio (dos paneles)? Solo aplica fuera de estiloApp: la app del
+  // chofer vive en un marco angosto aunque el visor reporte ancho de escritorio.
+  const [anchoLg, setAnchoLg] = useState(() => { try { return window.matchMedia('(min-width:1024px)').matches } catch { return false } })
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width:1024px)')
+    const f = (e) => setAnchoLg(e.matches)
+    mq.addEventListener('change', f)
+    return () => mq.removeEventListener('change', f)
+  }, [])
 
   // Con el teclado abierto (móvil), la capa del chat se ciñe al viewport VISIBLE
   // (visualViewport): el campo de mensaje queda a la vista y el layout no salta.
@@ -97,14 +104,15 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   // Con el chat móvil abierto se CONGELA el scroll del fondo: al abrir el teclado
   // el navegador ya no puede desplazar la página (era el "salto" del chat), y al
   // cambiar el viewport visible se re-ancla arriba para que nada quede cortado.
+  const overlayActivo = verChatMovil && (estiloApp || !anchoLg)
   useEffect(() => {
-    if (!verChatMovil) return
+    if (!overlayActivo) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     window.scrollTo(0, 0)
     return () => { document.body.style.overflow = prev }
-  }, [verChatMovil])
-  useEffect(() => { if (verChatMovil) window.scrollTo(0, 0) }, [vv, verChatMovil])
+  }, [overlayActivo])
+  useEffect(() => { if (overlayActivo) window.scrollTo(0, 0) }, [vv, overlayActivo])
 
   return (
     <div className={`flex flex-col ${alturaClass}`}>
@@ -163,7 +171,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                 <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${esActiva ? 'border-amber-500 bg-amber-500/10' : noLeido ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                   {/* Barra de acento a la izquierda cuando hay mensajes nuevos. */}
                   {noLeido && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-rose-500" aria-hidden="true" />}
-                  <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={estiloApp ? 48 : 40} resalte={c.noLeidos > 0} redondo={estiloApp} />
+                  <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={estiloApp ? 48 : 44} resalte={c.noLeidos > 0} redondo />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {noLeido && <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-rose-500" title={t('Mensajes nuevos')} />}
@@ -203,7 +211,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                     )}
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className={`truncate text-xs ${c.noLeidos > 0 ? 'font-semibold text-slate-600 dark:text-slate-200' : 'text-slate-400'}`}>{c.lastText || t('Sin mensajes aún')}</span>
-                      {c.noLeidos > 0 && <span className={`ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full px-1.5 text-[11px] font-bold text-white ${estiloApp ? 'bg-emerald-500' : 'bg-rose-500'}`}>{c.noLeidos}</span>}
+                      {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
                     </div>
                   </div>
                 </div>
@@ -213,62 +221,22 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
         </Card>
 
         {/* Conversación activa. En MÓVIL el chat abierto se muestra a PANTALLA COMPLETA
-            (capa fija propia, como WhatsApp): así no comparte scroll con la página del
-            portal ni salta cuando se abre el teclado. En escritorio sigue en la grilla. */}
+            (capa fija propia, como WhatsApp) en TODOS los roles: no comparte scroll con
+            la página del portal ni salta con el teclado. En escritorio (fuera de
+            estiloApp) sigue en la grilla, con el MISMO chat (cabecera navy, hilo crema). */}
         <div
-          className={`min-h-0 ${estiloApp
-            ? (verChatMovil ? 'fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900' : 'hidden')
-            : `lg:static lg:z-auto lg:col-span-2 lg:block lg:bg-transparent lg:p-0 ${verChatMovil ? 'pt-safe pb-safe fixed inset-0 z-[60] flex flex-col bg-[#f2f3f7] p-2 dark:bg-slate-950' : 'hidden'}`}`}
-          style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto', ...(estiloApp ? {} : { paddingBottom: 8, paddingTop: 8 }) } : undefined}
+          className={`min-h-0 ${verChatMovil ? 'fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900' : 'hidden'} ${estiloApp ? '' : 'lg:static lg:z-auto lg:col-span-2 lg:flex lg:bg-transparent'}`}
+          style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto' } : undefined}
         >
           {activa ? (
-            /* estiloApp: SIN tarjeta — el chat va a sangre completa, tipo WhatsApp. */
-            <EnvChat className={`flex h-full min-h-0 flex-1 flex-col ${estiloApp ? 'overflow-hidden bg-white dark:bg-slate-900' : 'p-3 sm:p-4'}`}>
-              <div className={`mb-3 items-center gap-2.5 border-b border-slate-100 pb-3 dark:border-slate-800 ${estiloApp ? 'hidden' : 'flex'}`}>
-                <button type="button" onClick={() => setVerChatMovil(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"><ArrowLeft size={18} /></button>
-                <Avatar foto={activa.foto} icon={activa.icon} nombre={activa.titulo} size={42} />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-bold text-brand-navy dark:text-slate-100">{activa.titulo}</span>
-                    {activa.rolLabel && <Badge color={activa.rolColor || 'slate'}>{activa.rolLabel}</Badge>}
-                  </div>
-                  {(activa.viaje || activa.material || activa.carga || activa.carrierNombre || activa.operacion) && (
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      {activa.viaje && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono font-semibold text-brand-navy dark:bg-slate-800 dark:text-slate-200">{activa.viaje}</span>}
-                      {activa.operacion && <span className="inline-flex items-center gap-0.5"><MessageSquare size={11} /> {activa.operacion}</span>}
-                      {activa.material && <span>{activa.material}</span>}
-                      {activa.carga && <span className="text-slate-400">· {activa.carga}</span>}
-                      {activa.carrierNombre && <span className="inline-flex items-center gap-0.5"><Truck size={11} /> {activa.carrierNombre}</span>}
-                    </div>
-                  )}
-                </div>
-                {/* Menú ⋮ del chat abierto: acciones diferenciadas (salir / eliminar). */}
-                {menuDe(activa).length > 0 && (
-                  <div className="relative ml-auto flex-shrink-0">
-                    <button type="button" onClick={() => setMenuKey(menuKey === 'activa' ? null : 'activa')} title={t('Opciones')} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"><MoreVertical size={18} /></button>
-                    {menuKey === 'activa' && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setMenuKey(null)} />
-                        <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                          {menuDe(activa).map((m, i) => {
-                            const IcoM = ICONO_MENU[m.icon] || Trash2
-                            return (
-                              <button key={i} type="button" onClick={() => { setMenuKey(null); m.onClick() }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${m.danger ? 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'}`}>
-                                <IcoM size={15} /> {m.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="min-h-0 flex-1">
-                <ChatOrden key={activa.chatId} orden={{ id: activa.chatId, numero: activa.titulo }} participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill
-                  estiloApp={estiloApp} onVolver={estiloApp ? () => setVerChatMovil(false) : null} />
-              </div>
-            </EnvChat>
+            /* SIN tarjeta contenedora: el chat va a sangre (en escritorio, un solo
+               panel redondeado al nivel de la lista — nunca card dentro de card). */
+            <div className={`flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-slate-900 ${estiloApp ? '' : 'lg:rounded-xl'}`}>
+              <ChatOrden key={activa.chatId}
+                orden={{ id: activa.chatId, numero: activa.viaje || activa.titulo, material: activa.material }}
+                participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill
+                onVolver={estiloApp || !anchoLg ? () => setVerChatMovil(false) : null} />
+            </div>
           ) : (
             <EstadoVacio titulo={t('Selecciona una conversación')} texto={t('Elige un chat de la lista para ver los mensajes.')} mostrarBoton={false} />
           )}

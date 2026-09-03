@@ -13,7 +13,6 @@ import { useAvatares } from '../data/useCodigoUsuario'
 import { useLlamada } from './LlamadaProvider'
 import { leerFotoReducida } from './foto'
 import { BULK_ROLES_LABEL } from '../domain/constants'
-import { Input } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 // Emojis frecuentes estilo WhatsApp (caras, manitos, corazones, trabajo).
@@ -21,10 +20,13 @@ const EMOJIS = ['👍', '👎', '🙏', '👌', '💪', '👏', '🤝', '✌️'
 // ¿El mensaje es solo emojis (para mostrarlo grande, como WhatsApp)?
 const soloEmojis = (s) => { const x = (s || '').replace(/\s/g, ''); return x.length > 0 && x.length <= 8 && !/[0-9a-zA-ZÀ-ɏ]/.test(x) }
 
-// `estiloApp`: cabecera NAVY tipo app (estándar del portal del chofer) con botón
-// volver (`onVolver`), avatar, nombre + rol y botones de llamada integrados.
-// `onVolver`: cierra/regresa (solo se muestra si viene). Sin estiloApp, el chat se
-// ve como siempre (staff/escritorio no cambian).
+// DISEÑO ÚNICO en todos los roles (chofer, transportista, dispatcher, cliente,
+// supervisor): cabecera NAVY con volver (`onVolver`, solo si viene), avatar,
+// nombre + contexto de la orden, llamadas como iconos discretos; hilo crema con
+// patrón de puntos; burbujas mías navy / del otro blancas; barra de escribir en
+// píldora con [+] adjuntos y botón enviar dorado. `estiloApp` se acepta por
+// compatibilidad pero ya no cambia nada (el diseño viejo se eliminó).
+// eslint-disable-next-line no-unused-vars
 export default function ChatOrden({ orden, alto = 340, fill = false, participantes: partProp = null, contacto = null, grupoUids = null, estiloApp = false, onVolver = null }) {
   const { t } = useLang()
   const { usuario, tenantId, rol } = useBulkAuth()
@@ -158,54 +160,41 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
     : (otro || (contacto && (contacto.nombre || contacto.uid)
         ? { id: contacto.uid || null, nombre: contacto.nombre || t('Conversación'), rol: contacto.rol || '' }
         : null))
+  // Contexto de la orden en el SUBTÍTULO del header (no en chips aparte).
+  const subCab = cab?.grupo
+    ? t('Grupo')
+    : [
+        t(BULK_ROLES_LABEL[cab?.rol]) || cab?.rol || t('En línea'),
+        orden?.numero !== cab?.nombre ? orden?.numero : null, // no repetir el nombre
+        orden?.material,
+      ].filter(Boolean).join(' · ')
   return (
-    <div className={`flex flex-col ${estiloApp ? 'overflow-hidden' : 'rounded-xl border border-slate-200 dark:border-slate-700/60'} ${fill ? 'h-full' : ''}`}>
-      {estiloApp ? (
-        /* ESTÁNDAR de la app: cabecera NAVY con volver + identidad + llamadas ordenadas. */
-        <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 pb-2.5 text-white"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}>
-          {onVolver && <button type="button" onClick={onVolver} aria-label={t('Volver')} className="-ml-1 rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10"><ArrowLeft size={19} /></button>}
-          <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={34} />
-          <button type="button" onClick={() => cab?.id && setPerfilRapido(cab)} className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-sm font-black leading-tight">{cab?.nombre || orden?.numero || t('Conversación')}</span>
-            <span className="block truncate text-[11px] text-slate-300">
-              {cab?.grupo ? t('Grupo') : (t(BULK_ROLES_LABEL[cab?.rol]) || cab?.rol || t('En línea'))}
-            </span>
-          </button>
-          <div className="flex flex-shrink-0 items-center gap-1.5">
-            {otro && (
-              <>
-                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white transition active:scale-95"><Phone size={16} /></button>
-                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-white transition active:scale-95"><Video size={16} /></button>
-              </>
-            )}
-            <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-[#c9a24b] transition active:scale-95"><Users size={16} /></button>
-          </div>
+    <div className={`flex flex-col overflow-hidden ${fill ? 'h-full' : 'rounded-xl'}`}>
+      {/* Cabecera NAVY única: volver + identidad + llamadas como iconos discretos. */}
+      <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 pb-2.5 text-white"
+        style={fill ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)' } : { paddingTop: 10 }}>
+        {onVolver && <button type="button" onClick={onVolver} aria-label={t('Volver')} className="-ml-1 rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10"><ArrowLeft size={19} /></button>}
+        <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={34} redondo />
+        <button type="button" onClick={() => cab?.id && setPerfilRapido(cab)} className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-sm font-black leading-tight">{cab?.nombre || orden?.numero || t('Conversación')}</span>
+          <span className="block truncate text-[11px] text-slate-300">{subCab}</span>
+        </button>
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {otro && (
+            <>
+              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Phone size={16} strokeWidth={1.75} /></button>
+              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Video size={16} strokeWidth={1.75} /></button>
+            </>
+          )}
+          <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Users size={16} strokeWidth={1.75} /></button>
         </div>
-      ) : cab && (
-        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700/60">
-          <Avatar foto={cab.id ? avatares[cab.id] : null} nombre={cab.nombre} size={32} />
-          <button type="button" onClick={() => cab.id && setPerfilRapido(cab)} className="truncate text-sm font-bold text-brand-navy hover:underline dark:text-slate-100">{cab.nombre}</button>
-          <div className="ml-auto flex items-center gap-1.5">
-            {/* Llamada 1-a-1: SOLO si el titular tiene cuenta (uid). Llama a ESA persona. */}
-            {otro && (
-              <>
-                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white transition hover:bg-emerald-600"><Phone size={15} /></button>
-                <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-8 w-8 place-items-center rounded-full bg-brand-navy text-white transition hover:opacity-90 dark:bg-slate-700"><Video size={15} /></button>
-                <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-slate-700" />
-              </>
-            )}
-            <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={15} /></button>
-            <button type="button" onClick={() => llamarGrupo('video')} title={t('Videollamada grupal')} className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-500 text-slate-900 transition hover:bg-amber-600"><Users size={13} /><Video size={9} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-brand-navy p-[1px] text-white" /></button>
-          </div>
-        </div>
-      )}
+      </div>
       <div ref={listRef}
-        className={`scroll-thin overflow-y-auto overscroll-contain p-3 ${fill ? 'min-h-0 flex-1' : ''} ${estiloApp ? 'bg-[#efe9df] dark:bg-slate-950' : ''}`}
+        className={`scroll-thin overflow-y-auto overscroll-contain bg-[#EEE9DC] p-3 dark:bg-slate-950 ${fill ? 'min-h-0 flex-1' : ''}`}
         style={{
           ...(fill ? {} : { maxHeight: alto }),
-          // Patrón sutil tipo WhatsApp sobre el fondo beige.
-          ...(estiloApp ? { backgroundImage: 'radial-gradient(rgba(19,35,63,.05) 1px, transparent 1px)', backgroundSize: '16px 16px' } : {}),
+          // Patrón de puntos sutil sobre el fondo crema.
+          backgroundImage: 'radial-gradient(rgba(19,35,63,.05) 1px, transparent 1px)', backgroundSize: '16px 16px',
         }}>
         {/* Las burbujas se ANCLAN ABAJO (como WhatsApp): con pocos mensajes no queda
             un hueco enorme arriba del campo de escribir. */}
@@ -239,14 +228,14 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
               {mio && puedeBorrar && (
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente
+              <div className={`max-w-[80%] rounded-[18px] px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente
                 ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10'
-                : estiloApp
-                  ? (mio ? 'rounded-br-md bg-[#d9fdd3] text-slate-900 shadow-sm dark:bg-emerald-700 dark:text-white' : 'rounded-bl-md bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100')
-                  : (mio ? 'bg-brand-navy text-white dark:bg-amber-500 dark:text-slate-900' : 'bg-slate-100 dark:bg-slate-800')}`}>
+                : (mio
+                  ? 'rounded-br-[6px] bg-[#13233f] text-white shadow-sm dark:bg-[#1e3a5f]'
+                  : 'rounded-bl-[6px] bg-white text-[#13233f] shadow-sm dark:bg-slate-800 dark:text-slate-100')}`}>
                 {!mio && (
                   <button type="button" onClick={() => setPerfilRapido({ id: m.autorId, nombre: m.autorNombre, rol: m.autorRol })}
-                    className={`mb-0.5 text-[10px] font-semibold hover:underline ${estiloApp ? 'text-[#a9863a] dark:text-amber-400' : 'opacity-70'}`}>
+                    className="mb-0.5 text-[10px] font-semibold text-[#a9863a] hover:underline dark:text-amber-400">
                     {m.autorNombre} · {t(BULK_ROLES_LABEL[m.autorRol]) || m.autorRol}
                   </button>
                 )}
@@ -259,7 +248,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                   <a href={m.archivo} download={m.nombreArchivo || 'archivo'} className="mb-0.5 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 underline dark:bg-white/10"><FileText size={16} /> <span className="truncate">{m.nombreArchivo || t('Archivo')}</span></a>
                 )}
                 {m.texto && <div className={`whitespace-pre-wrap break-words ${soloEmojis(m.texto) ? 'text-3xl leading-tight' : ''}`}>{m.texto}</div>}
-                <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${estiloApp ? 'text-slate-500/80 dark:text-white/60' : mio ? 'text-white/60 dark:text-slate-900/60' : 'text-slate-400'}`}>
+                <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${mio ? 'text-white/60' : 'text-slate-500/80 dark:text-white/60'}`}>
                   {new Date(m.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                   {mio && (leidoPorOtro ? <CheckCheck size={11} /> : <Check size={11} />)}
                 </div>
@@ -281,10 +270,9 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           ))}
         </div>
       )}
-      {estiloApp ? (
-        /* Barra tipo WhatsApp: [+] adjuntos · píldora con emoji + texto + cámara · enviar dorado */
-        <div className="relative flex items-end gap-2 bg-[#efe9df] px-2 pt-2 dark:bg-slate-950"
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}>
+      {/* Barra única: [+] adjuntos · píldora con emoji + texto + cámara · enviar dorado */}
+      <div className="relative flex items-end gap-2 bg-[#EEE9DC] px-2 pt-2 dark:bg-slate-950"
+        style={{ paddingBottom: fill ? 'calc(env(safe-area-inset-bottom, 0px) + 8px)' : 8 }}>
           {menuAdj && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuAdj(false)} />
@@ -326,18 +314,7 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
             className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-[#c9a24b] text-[#13233f] shadow-md transition active:scale-95 disabled:opacity-50">
             <Send size={19} />
           </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5 border-t border-slate-200 p-2 dark:border-slate-700/60">
-          <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`rounded-lg p-2 ${verEmojis ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Smile size={16} /></button>
-          <button onClick={() => setUrgente((u) => !u)} title={t('Marcar urgente')} className={`rounded-lg p-2 ${urgente ? 'bg-rose-500 text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><AlertTriangle size={16} /></button>
-          <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Enviar foto')}><Camera size={16} /><input type="file" accept="image/*" onChange={onFoto} className="hidden" /></label>
-          <label className="cursor-pointer rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title={t('Adjuntar archivo')}><Paperclip size={16} /><input type="file" onChange={onArchivo} className="hidden" /></label>
-          <button onClick={compartirUbicacion} title={t('Compartir ubicación')} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MapPin size={16} /></button>
-          <Input className="flex-1 !text-base" placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !enviando && (setVerEmojis(false), enviar())} />
-          <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando} className="rounded-lg bg-amber-500 p-2 text-slate-900 disabled:opacity-50"><Send size={16} /></button>
-        </div>
-      )}
+      </div>
       {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}
     </div>
   )

@@ -12,6 +12,18 @@ export default function LandingFreight() {
   const navigate = useNavigate()
   const rootRef = useRef(null)
 
+  // Fondo del documento en el navy del header MIENTRAS la landing está montada:
+  // así la franja bajo la Dynamic Island / status bar es del MISMO color que el
+  // nav (sin parches de otro tono). Se restaura al navegar a la app.
+  useEffect(() => {
+    const html = document.documentElement
+    const prevHtml = html.style.background
+    const prevBody = document.body.style.background
+    html.style.background = '#0d1a30'
+    document.body.style.background = '#0d1a30'
+    return () => { html.style.background = prevHtml; document.body.style.background = prevBody }
+  }, [])
+
   // SEO básico (título + descripción); se restaura al desmontar.
   useEffect(() => {
     const tituloPrev = document.title
@@ -52,11 +64,11 @@ export default function LandingFreight() {
       lang = lg
       document.documentElement.lang = lg
       nodes.forEach((n) => { n.innerHTML = lg === 'en' ? n.getAttribute('data-en') : n._es })
-      root.querySelectorAll('#langToggle button').forEach((b) => b.classList.toggle('active', b.dataset.lang === lg))
+      root.querySelectorAll('.lang-toggle button').forEach((b) => b.classList.toggle('active', b.dataset.lang === lg))
       const mt = root.querySelector('#matchText')
       if (mt && !mt.dataset.dyn) mt.textContent = board.matchBy[lg]
     }
-    const langHandlers = [...root.querySelectorAll('#langToggle button')].map((b) => {
+    const langHandlers = [...root.querySelectorAll('.lang-toggle button')].map((b) => {
       const h = () => setLang(b.dataset.lang); b.addEventListener('click', h); return [b, h]
     })
 

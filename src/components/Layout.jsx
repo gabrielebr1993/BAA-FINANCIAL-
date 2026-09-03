@@ -231,7 +231,7 @@ export default function Layout({ children }) {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header global: fila superior (menú/campana) + barra de filtros fija
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
-          <header className="pt-safe sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
+          <header className="pt-safe sticky top-0 z-20 bg-white/90 shadow-[0_1px_0_rgba(15,23,42,.06)] backdrop-blur dark:bg-surface-dark-card/90 dark:shadow-[0_1px_0_rgba(255,255,255,.05)]">
             <div className="flex items-center gap-3 px-4 py-2.5">
               <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label={t('Abrir menú')}>
                 <Menu size={24} strokeWidth={1.8} />

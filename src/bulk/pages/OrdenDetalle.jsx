@@ -436,10 +436,8 @@ export default function OrdenDetalle() {
         </Card>
 
         {/* Chat */}
-        <Card className="p-4">
-          <h3 className="m-0 mb-3 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><MessageSquare size={15} className="text-amber-500" /> {t('Chat de la orden')}</h3>
-          <ChatOrden orden={orden} alto={300} />
-        </Card>
+        {/* El chat trae su propia cabecera navy: sin tarjeta ni título duplicado. */}
+        <div className="overflow-hidden rounded-xl shadow-sm"><ChatOrden orden={orden} alto={300} /></div>
       </div>
     </div>
   )
