@@ -95,6 +95,7 @@ function PushSetup() {
     activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
     let vivo = true
     ;(async () => {
+      let diag = ''
       try {
         const tok = await authBulk.currentUser.getIdToken()
         const r = await fetch('/api/bulk-track', {
@@ -102,8 +103,21 @@ function PushSetup() {
           body: JSON.stringify({ accion: 'pase' }),
         })
         const j = await r.json()
-        if (vivo && j?.ok && j.pass) localStorage.setItem('mp_track_pase', JSON.stringify({ uid: usuario.id, tenantId, pass: j.pass }))
-      } catch { /* sin red: se reintenta en la próxima sesión */ }
+        if (vivo && j?.ok && j.pass) {
+          localStorage.setItem('mp_track_pase', JSON.stringify({ uid: usuario.id, tenantId, pass: j.pass }))
+          diag = 'PASE OK'
+        } else {
+          diag = `PASE FALLÓ: ${j?.error || `HTTP ${r.status}`}`
+        }
+      } catch (e) { diag = `PASE ERROR RED: ${e?.message || e}` }
+      // Modo diagnóstico: abre /bulk?diag=push y muestra qué pasó con el registro.
+      try {
+        localStorage.setItem('mp_pase_diag', `${diag} · rol ${rol} · ${new Date().toLocaleTimeString()}`)
+        if (new URLSearchParams(window.location.search).get('diag') === 'push') {
+          const pase = localStorage.getItem('mp_track_pase') ? 'pase guardado ✓' : 'SIN pase ✗'
+          window.alert(`Diagnóstico push:\n${diag}\n${pase}\nUA: ${/MilePayApp/.test(navigator.userAgent) ? 'app nativa' : 'navegador'}`)
+        }
+      } catch { /* noop */ }
     })()
     return () => { vivo = false }
   }, [usuario?.id, tenantId, rol])
