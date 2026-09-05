@@ -84,7 +84,11 @@ export function registrarTokensNativos({ tenantId, uid, rol, carrierId, clienteI
           actualizadoEn: serverTimestamp(),
         }, { merge: true })
         _regNativos.add(marca)
-      } catch { /* reintenta en el siguiente ciclo */ }
+        try { localStorage.setItem('mp_reg_diag', `${plataforma} registrado ✓ ${new Date().toLocaleTimeString()}`) } catch { /* noop */ }
+      } catch (e) {
+        // Guarda el ERROR para el diagnóstico visible (p. ej. permission-denied).
+        try { localStorage.setItem('mp_reg_diag', `${plataforma} ERROR: ${e?.code || e?.message || e}`) } catch { /* noop */ }
+      }
     }
   }
   intento()

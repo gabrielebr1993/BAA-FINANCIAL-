@@ -122,7 +122,20 @@ function PushSetup() {
         }
       } catch { /* noop */ }
     })()
-    return () => { vivo = false; pararNativos?.() }
+    // DIAGNÓSTICO visible dentro de la app nativa (solo admins): a los 20 s
+    // muestra si los boletos nativos llegaron y si el registro funcionó.
+    const idDiag = setTimeout(() => {
+      try {
+        if (!/MilePayApp/.test(navigator.userAgent)) return
+        if (!['admin', 'super_admin'].includes(rol)) return
+        const ios = (localStorage.getItem('mp_tok_ios') || '').length > 19 ? '✓' : '✗'
+        const voip = (localStorage.getItem('mp_tok_voip') || '').length > 19 ? '✓' : '✗'
+        const pase = localStorage.getItem('mp_track_pase') ? '✓' : '✗'
+        const reg = localStorage.getItem('mp_reg_diag') || '(sin intento)'
+        window.alert(`Diagnóstico push (solo admins):\nBoleto notificaciones (ios): ${ios}\nBoleto llamadas (voip): ${voip}\nPase: ${pase}\nRegistro: ${reg}`)
+      } catch { /* noop */ }
+    }, 20000)
+    return () => { vivo = false; pararNativos?.(); clearTimeout(idDiag) }
   }, [usuario?.id, tenantId, rol])
   return null
 }
