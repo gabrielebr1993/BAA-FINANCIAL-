@@ -7,7 +7,7 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle, Users, UserPlus, MicOff as MicOffMini } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle, Users, UserPlus, Volume2, MicOff as MicOffMini } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
 import { enviarMensaje } from '../data/chat'
 import {
@@ -799,6 +799,28 @@ export default function LlamadaProvider({ children }) {
 
   const esVideo = info?.tipo === 'video' || entrante?.tipo === 'video'
 
+  // ── Puente con la app NATIVA (iOS): audio en segundo plano y altavoz ────────
+  // La app nativa muestrea localStorage cada segundo:
+  //   mp_llamada = {"activa":true,"video":bool} → activa la sesión de audio del
+  //     sistema (playAndRecord/voiceChat) para que la llamada SIGA VIVA con la
+  //     pantalla bloqueada o al cambiar de app.
+  //   mp_audio = 'altavoz' | 'auricular' → enruta la salida. Arranque por
+  //     defecto: videollamada = altavoz, llamada de voz = auricular.
+  const [altavoz, setAltavoz] = useState(false)
+  const enCurso = fase === 'saliente' || fase === 'activa'
+  useEffect(() => {
+    try {
+      if (enCurso) localStorage.setItem('mp_llamada', JSON.stringify({ activa: true, video: !!esVideo }))
+      else { localStorage.removeItem('mp_llamada'); localStorage.removeItem('mp_audio') }
+    } catch { /* noop */ }
+  }, [enCurso, esVideo])
+  useEffect(() => { setAltavoz(enCurso ? !!esVideo : false) }, [enCurso]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleAltavoz = () => setAltavoz((v) => {
+    const n = !v
+    try { localStorage.setItem('mp_audio', n ? 'altavoz' : 'auricular') } catch { /* noop */ }
+    return n
+  })
+
   const inicialCon = ((info?.con || entrante?.de?.nombre || '?').trim().charAt(0) || '?').toUpperCase()
 
   // Elementos de MEDIOS (video remoto + self-view, o audio). El avatar/adornos van aparte.
@@ -1033,6 +1055,7 @@ export default function LlamadaProvider({ children }) {
           {/* Barra de controles moderna */}
           <div className="flex flex-wrap items-end justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-4 sm:gap-5">
             <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
+            <Ctrl onClick={toggleAltavoz} label={t('Altavoz')} activo={altavoz}><Volume2 size={22} /></Ctrl>
             {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
             {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
             {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}

@@ -1008,6 +1008,28 @@ exports.bulkPushOrdenes = onDocumentUpdated('bulk_orders/{id}', async (event) =>
     const motivo = after.rechazo && after.rechazo.motivo ? ` · ${after.rechazo.motivo}` : ''
     await enviarAPI(staff, 'Orden rechazada', `${num} — ${(after.rechazo && after.rechazo.por) || ''}${motivo}`, base)
   }
+
+  // Cambio de ESTADO operativo (en planta / cargando / en ruta / en destino /
+  // entregada) → staff + el transportista del carrier; al entregar, también el
+  // cliente de la orden.
+  const ETAPAS = { en_planta: 'En planta', cargando: 'Cargando', en_ruta: 'En ruta', en_destino: 'En destino', entregada: 'Entregada' }
+  if (after.estado !== before.estado && ETAPAS[after.estado]) {
+    const dest = await tokensDe(tenantId, (x) => STAFF.includes(x.rol)
+      || (x.rol === 'transportista' && after.transportistaId && x.carrierId === after.transportistaId)
+      || (after.estado === 'entregada' && x.rol === 'cliente' && after.clienteId && x.clienteId === after.clienteId))
+    await enviarAPI(dest, `Orden ${num}`, `${after.choferNombre || 'Chofer'} → ${ETAPAS[after.estado]}`, base)
+  }
+
+  // Ticket de báscula REGISTRADO (aparece la foto del ticket en la orden) →
+  // staff + transportista del carrier.
+  const tenia = !!(before.ticket && before.ticket.foto)
+  const tiene = !!(after.ticket && after.ticket.foto)
+  if (tiene && !tenia) {
+    const peso = after.ticket && (after.ticket.peso || after.ticket.pesoTon) ? ` · ${after.ticket.peso || after.ticket.pesoTon} ton` : ''
+    const dest = await tokensDe(tenantId, (x) => STAFF.includes(x.rol)
+      || (x.rol === 'transportista' && after.transportistaId && x.carrierId === after.transportistaId))
+    await enviarAPI(dest, '🧾 Ticket registrado', `${num} — ${after.choferNombre || ''}${peso}`, base)
+  }
 })
 
 // ============================================================================

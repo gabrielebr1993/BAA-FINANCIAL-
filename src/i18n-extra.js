@@ -1280,6 +1280,7 @@ export const EN_EXTRA = {
   "🔔 Salida de geocerca": "🔔 Geofence exit",
   "🚨 Entrada a geocerca": "🚨 Geofence entry",
 
+  "Altavoz": "Speaker",
   // — Textos que estaban incrustados sin t() (2.ª pasada) —
   "No tienes acceso a esta sección": "You don't have access to this section",
   "Pide a un administrador que te asigne el permiso correspondiente.": "Ask an administrator to grant you the corresponding permission.",
