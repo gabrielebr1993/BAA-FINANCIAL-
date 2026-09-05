@@ -1135,6 +1135,8 @@ exports.bulkPushLlamada = onDocumentCreated({ document: 'bulk_calls/{id}', secre
   const todos = []
   const snap = await db.collection('bulk_pushTokens').where('tenantId', '==', c.tenantId).get()
   snap.forEach((d) => { const x = d.data(); if (x.token && x.uid === c.para) todos.push({ id: d.id, ...x }) })
+  // Huellas de diagnóstico (visibles con `firebase functions:log`).
+  console.log('[llamada]', event.params.id, 'para', c.para, 'tokens:', todos.map((x) => x.plataforma || 'web').join(',') || 'NINGUNO')
   const voip = todos.filter((x) => x.plataforma === 'ios_voip')
   const resto = todos.filter((x) => x.plataforma !== 'ios_voip' && x.plataforma !== 'ios') // web/Android
   // iPhones con app (token FCM 'ios'): si tienen VoIP, CallKit cubre; si NO
@@ -1154,8 +1156,11 @@ exports.bulkPushLlamada = onDocumentCreated({ document: 'bulk_calls/{id}', secre
     }
     for (const v of voip) {
       const st = await enviarVoip(v.token, payload, p8, keyId)
+      console.log('[llamada] voip →', v.token.slice(0, 8) + '…', 'status', st)
       if (st === 410 || st === 400) await db.collection('bulk_pushTokens').doc(v.id).delete().catch(() => {})
     }
+  } else {
+    console.log('[llamada] sin voip:', voip.length, 'tokens ·', p8 ? 'APNS_KEY ok' : 'FALTA APNS_KEY', '·', keyId ? 'KEY_ID ok' : 'FALTA KEY_ID')
   }
   const dest = [...resto, ...iosSinVoip, ...(!p8 || !keyId ? voip : [])]
   if (dest.length) {
