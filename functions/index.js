@@ -13,6 +13,7 @@
 // ============================================================================
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore')
+const { defineSecret } = require('firebase-functions/params')
 const { onSchedule } = require('firebase-functions/v2/scheduler')
 const admin = require('firebase-admin')
 
@@ -1074,16 +1075,103 @@ exports.bulkPushMensajes = onDocumentCreated('bulk_messages/{id}', async (event)
 })
 
 // ============================================================================
-// bulkPushLlamada — PUSH al crearse una LLAMADA entrante (bulk_calls). Avisa al
-// destinatario aunque tenga la app en segundo plano; al tocar la notificación se
-// abre Mensajes y (si sigue vigente) entra la llamada.
+// LLAMADAS EN SEGUNDO PLANO (VoIP push + CallKit) — la app iOS registra un token
+// VoIP aparte (bulk_pushTokens con plataforma 'ios_voip'). Al crearse una
+// llamada se le manda un push VoIP DIRECTO a Apple (apns-push-type: voip): iOS
+// despierta la app al instante y CallKit pone el tono + la pantalla nativa,
+// con la app cerrada o bloqueada. Los dispositivos SIN token VoIP (web/Android)
+// siguen recibiendo la notificación normal.
+//
+// Secretos (una vez, en Cloud Shell):
+//   npx firebase-tools functions:secrets:set APNS_KEY      ← contenido del .p8
+//   npx firebase-tools functions:secrets:set APNS_KEY_ID   ← Key ID (10 caracteres)
 // ============================================================================
-exports.bulkPushLlamada = onDocumentCreated('bulk_calls/{id}', async (event) => {
+const APNS_KEY = defineSecret('APNS_KEY')
+const APNS_KEY_ID = defineSecret('APNS_KEY_ID')
+const APNS_TEAM = 'TYR85U4RMM'
+const APNS_TOPIC_VOIP = 'io.milepay.MilePay.voip'
+
+// JWT ES256 para APNs, firmado a mano con node:crypto (sin dependencias).
+let _apnsJwt = null // { token, ts } — Apple lo acepta hasta 60 min; renovamos a los 45.
+function apnsJwt(p8, keyId) {
+  if (_apnsJwt && Date.now() - _apnsJwt.ts < 45 * 60000) return _apnsJwt.token
+  const crypto = require('node:crypto')
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const head = b64u({ alg: 'ES256', kid: keyId })
+  const body = b64u({ iss: APNS_TEAM, iat: Math.floor(Date.now() / 1000) })
+  const clave = crypto.createPrivateKey(p8)
+  const firma = crypto.sign('sha256', Buffer.from(`${head}.${body}`), { key: clave, dsaEncoding: 'ieee-p1363' }).toString('base64url')
+  _apnsJwt = { token: `${head}.${body}.${firma}`, ts: Date.now() }
+  return _apnsJwt.token
+}
+
+// Envía UN push VoIP por http/2 a api.push.apple.com. Devuelve el status.
+function enviarVoip(token, payload, p8, keyId) {
+  return new Promise((resolve) => {
+    const http2 = require('node:http2')
+    const cli = http2.connect('https://api.push.apple.com')
+    cli.on('error', () => resolve(0))
+    const req = cli.request({
+      ':method': 'POST', ':path': `/3/device/${token}`,
+      authorization: `bearer ${apnsJwt(p8, keyId)}`,
+      'apns-topic': APNS_TOPIC_VOIP, 'apns-push-type': 'voip', 'apns-priority': '10', 'apns-expiration': '0',
+    })
+    let status = 0
+    req.on('response', (h) => { status = h[':status'] })
+    req.on('close', () => { cli.close(); resolve(status) })
+    req.on('error', () => { cli.close(); resolve(0) })
+    req.end(JSON.stringify(payload))
+  })
+}
+
+// ============================================================================
+// bulkPushLlamada — al crearse una LLAMADA entrante (bulk_calls):
+//   1) push VoIP (CallKit: tono + pantalla nativa) a los iPhones del receptor;
+//   2) notificación normal a sus dispositivos SIN VoIP (web/Android).
+// ============================================================================
+exports.bulkPushLlamada = onDocumentCreated({ document: 'bulk_calls/{id}', secrets: [APNS_KEY, APNS_KEY_ID] }, async (event) => {
   const c = (event.data && event.data.data()) || {}
   if (!c.tenantId || !c.para) return
-  const dest = await tokensDe(c.tenantId, (x) => x.uid === c.para)
+  const todos = []
+  const snap = await db.collection('bulk_pushTokens').where('tenantId', '==', c.tenantId).get()
+  snap.forEach((d) => { const x = d.data(); if (x.token && x.uid === c.para) todos.push({ id: d.id, ...x }) })
+  const voip = todos.filter((x) => x.plataforma === 'ios_voip')
+  const resto = todos.filter((x) => x.plataforma !== 'ios_voip' && x.plataforma !== 'ios') // web/Android
+  // iPhones con app (token FCM 'ios'): si tienen VoIP, CallKit cubre; si NO
+  // tienen VoIP (app vieja), que les llegue la notificación normal.
+  const iosSinVoip = todos.filter((x) => x.plataforma === 'ios' && !voip.length)
   const tipo = c.tipo === 'video' ? 'Videollamada' : 'Llamada'
-  await enviarAPI(dest, `📞 ${tipo} entrante`, `${(c.de && c.de.nombre) || 'Alguien'} te está llamando`, 'https://www.milepay.io/bulk/mensajes')
+
+  const p8 = APNS_KEY.value() || ''
+  const keyId = APNS_KEY_ID.value() || ''
+  if (voip.length && p8 && keyId) {
+    const payload = {
+      aps: {}, // los VoIP push no llevan alert: CallKit pone la UI
+      callId: event.params.id,
+      callerName: (c.de && c.de.nombre) || 'MilePay',
+      hasVideo: c.tipo === 'video',
+      tenantId: c.tenantId,
+    }
+    for (const v of voip) {
+      const st = await enviarVoip(v.token, payload, p8, keyId)
+      if (st === 410 || st === 400) await db.collection('bulk_pushTokens').doc(v.id).delete().catch(() => {})
+    }
+  }
+  const dest = [...resto, ...iosSinVoip, ...(!p8 || !keyId ? voip : [])]
+  if (dest.length) {
+    await enviarAPI(dest.map((x) => ({ id: x.id, token: x.token })), `📞 ${tipo} entrante`,
+      `${(c.de && c.de.nombre) || 'Alguien'} te está llamando`, 'https://www.milepay.io/bulk/mensajes')
+  }
+})
+
+// Llamada PERDIDA (el emisor marcó estado 'perdida' tras 45 s sin respuesta) →
+// notificación normal al receptor.
+exports.bulkPushLlamadaPerdida = onDocumentUpdated('bulk_calls/{id}', async (event) => {
+  const before = event.data.before.data() || {}
+  const after = event.data.after.data() || {}
+  if (after.estado !== 'perdida' || before.estado === 'perdida' || !after.tenantId || !after.para) return
+  const dest = await tokensDe(after.tenantId, (x) => x.uid === after.para && x.plataforma !== 'ios_voip')
+  await enviarAPI(dest, 'Llamada perdida', `${(after.de && after.de.nombre) || 'Alguien'} te llamó`, 'https://www.milepay.io/bulk/mensajes')
 })
 
 // ============================================================================

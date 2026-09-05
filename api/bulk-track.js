@@ -121,6 +121,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
+    // ── 1c) Acciones de LLAMADA desde la pantalla nativa (CallKit) ──────────
+    // 'rechazar': el usuario deslizó Rechazar en la pantalla nativa; se marca la
+    // llamada para que al emisor le deje de repicar.
+    if (accion === 'llamada') {
+      const tp = await validarPase(body.uid, body.pass)
+      if (!tp) return res.status(401).json({ ok: false, error: 'Pase inválido o vencido.' })
+      const callId = String(body.callId || '')
+      if (!callId) return res.status(400).json({ ok: false, error: 'Falta callId.' })
+      const cref = db.collection('bulk_calls').doc(callId)
+      const cSnap = await cref.get()
+      const c = cSnap.exists ? cSnap.data() : null
+      if (!c || c.tenantId !== tp.tenantId || c.para !== tp.uid) return res.status(200).json({ ok: true, ignorado: true })
+      if (body.op === 'rechazar') await cref.set({ estado: 'rechazada' }, { merge: true }).catch(() => {})
+      return res.status(200).json({ ok: true })
+    }
+
     // ── 2) Recibir un punto GPS de la app nativa (autenticado por pase) ─────
     const { uid, pass, ordenId } = body
     const lat = Number(body.lat), lng = Number(body.lng)

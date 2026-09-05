@@ -180,11 +180,40 @@ export default function LlamadaProvider({ children }) {
       tonoRef.current = { ctx, intervalo: setInterval(ciclo, esEntrante ? 1300 : 3200) }
     } catch { /* noop */ }
   }
+  // Dentro de la APP NATIVA (iOS) el tono ENTRANTE lo pone CallKit (llega por
+  // VoIP push aunque la app esté cerrada): no duplicamos el repique del WebView.
+  const esAppNativa = typeof navigator !== 'undefined' && /MilePayApp/.test(navigator.userAgent)
   useEffect(() => {
     if (fase === 'saliente') iniciarTono(false)
-    else if (fase === 'entrante') iniciarTono(true)
+    else if (fase === 'entrante') { if (!esAppNativa) iniciarTono(true) }
     else pararTono()
+  }, [fase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // TIMEOUT del emisor: a los 45 s sin respuesta se marca 'perdida' (el backend
+  // le avisa al receptor "Llamada perdida") y se cuelga.
+  useEffect(() => {
+    if (fase !== 'saliente') return
+    const id = setTimeout(async () => {
+      try { if (callIdRef.current) await actualizarLlamada(callIdRef.current, { estado: 'perdida' }) } catch { /* noop */ }
+      colgarRef.current?.()
+    }, 45000)
+    return () => clearTimeout(id)
   }, [fase])
+
+  // Al ACEPTAR en la pantalla nativa (CallKit) la app abre /bulk?llamada=<id>&aceptar=1:
+  // cuando la llamada entrante con ese id llega por Firestore, se contesta sola.
+  const autoAceptarRef = useRef(null)
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search)
+      const id = q.get('llamada')
+      if (id) {
+        autoAceptarRef.current = { id, aceptar: q.get('aceptar') === '1', ts: Date.now() }
+        q.delete('llamada'); q.delete('aceptar')
+        window.history.replaceState({}, '', window.location.pathname + (q.toString() ? `?${q}` : ''))
+      }
+    } catch { /* noop */ }
+  }, [])
 
   // ── Colaboración por CANAL DE DATOS (pizarra / chat / reacciones) ───────────
   const dibujarSegmento = (a, b, col) => {
@@ -611,6 +640,8 @@ export default function LlamadaProvider({ children }) {
 
   // Colgar unificado: grupo o 1-a-1.
   const colgar = () => { if (esGrupoRef.current) limpiarGrupo(false); else limpiar(false) }
+  const colgarRef = useRef(null)
+  colgarRef.current = colgar
 
   // ── Iniciar llamada saliente ───────────────────────────────────────────────
   const iniciar = useCallback(async (paraUid, nombre, tipo = 'audio', ctx = null) => {
@@ -754,6 +785,15 @@ export default function LlamadaProvider({ children }) {
   // Aceptar/rechazar unificado (1-a-1 o grupo) desde el timbre.
   const onAceptar = () => { if (entrante?.grupo) unirseAGrupo(entrante.sala); else aceptar() }
   const onRechazar = () => { if (entrante?.grupo) rechazarSala(entrante.sala); else rechazar() }
+
+  // Auto-contestar la llamada aceptada desde la pantalla nativa (CallKit).
+  useEffect(() => {
+    const p = autoAceptarRef.current
+    if (!p || !entrante || entrante.grupo) return
+    if (entrante.id !== p.id || Date.now() - p.ts > 90000) return
+    autoAceptarRef.current = null
+    if (p.aceptar) aceptar()
+  }, [entrante]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Limpieza al desmontar / cerrar sesión.
   useEffect(() => () => { try { pcRef.current?.close() } catch { /* noop */ } pararTono() }, [])
