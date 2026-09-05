@@ -5,6 +5,20 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Rediseño móvil 2026 (Bloque 1): tokens mp-* (ver src/styles/tokens.css).
+        mp: {
+          navy: '#0B1628',
+          'navy-2': '#12213A',
+          gold: '#C9A24A',
+          cream: '#F3EFE6',
+          ink: '#0B1628',
+          'ink-2': '#7A776F',
+          line: '#E6E1D2',
+          blue: '#2B4C8C',
+          green: '#2E9E6B',
+          amber: '#D9822B',
+          red: '#E0533D',
+        },
         brand: {
           navy: '#13233f',
           gold: '#c9a24b',
@@ -30,11 +44,18 @@ export default {
       },
       borderRadius: {
         '2xl': '1rem',
+        // Rediseño 2026: SOLO estos tres radios en las pantallas nuevas.
+        pill: '999px',
+        card: '24px',
+        row: '18px',
+        bubble: '20px',
       },
       boxShadow: {
         // sombras Mercury casi imperceptibles
         card: '0 1px 2px rgba(0,0,0,0.04)',
         cardhover: '0 4px 14px rgba(0,0,0,0.06)',
+        // Rediseño 2026: sombra de la tab bar flotante.
+        float: '0 6px 20px rgba(11,22,40,.12)',
       },
       keyframes: {
         'slide-up': {

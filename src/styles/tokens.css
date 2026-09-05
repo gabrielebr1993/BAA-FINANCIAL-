@@ -1,0 +1,30 @@
+/* ============================================================================
+   MilePay · Tokens del rediseño móvil 2026 (Bloque 1)
+   Un solo lenguaje visual para la APP (los 5 roles). La landing y el login
+   siguen en navy; dentro de la app el navy es color de TARJETA, no de barra.
+   ========================================================================== */
+:root {
+  --mp-navy: #0B1628;        /* tarjeta destacada, burbuja propia, texto principal */
+  --mp-navy-2: #12213A;      /* superficies dentro del navy */
+  --mp-gold: #C9A24A;        /* UNA acción principal por pantalla, acento */
+  --mp-cream: #F3EFE6;       /* fondo de toda la app */
+  --mp-white: #FFFFFF;       /* tarjetas */
+  --mp-ink: #0B1628;         /* texto sobre claro */
+  --mp-ink-2: #7A776F;       /* texto secundario */
+  --mp-line: #E6E1D2;        /* divisores */
+  --mp-blue: #2B4C8C;        /* avatares */
+  --mp-green: #2E9E6B;       /* éxito, en vivo, llamada activa */
+  --mp-amber: #D9822B;       /* alerta */
+  --mp-red: #E0533D;         /* colgar, error */
+}
+
+/* Carcasa de pantalla de la app 2026: fondo crema en TODO el alto, texto ink.
+   Se aplica por pantalla (clase mp-app) para no tocar landing/login/Package. */
+.mp-app {
+  background: var(--mp-cream);
+  color: var(--mp-ink);
+  min-height: 100dvh;
+}
+
+/* La barra de estado se funde con el fondo crema (texto oscuro del sistema). */
+.mp-app-safe { padding-top: max(env(safe-area-inset-top), 12px); }
