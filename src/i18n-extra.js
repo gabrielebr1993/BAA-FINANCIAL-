@@ -1281,6 +1281,15 @@ export const EN_EXTRA = {
   "🚨 Entrada a geocerca": "🚨 Geofence entry",
 
   "Altavoz": "Speaker",
+  // — Rediseño 2026 —
+  "Tu día": "Your day",
+  "Ponte en línea para recibir cargas": "Go online to receive loads",
+  "Ir a órdenes": "Go to orders",
+  "Viajes hoy": "Trips today",
+  "Cobrar": "Cash out",
+  "Siguientes": "Up next",
+  "Chats": "Chats",
+  "Tickets": "Tickets",
   // — Textos que estaban incrustados sin t() (2.ª pasada) —
   "No tienes acceso a esta sección": "You don't have access to this section",
   "Pide a un administrador que te asigne el permiso correspondiente.": "Ask an administrator to grant you the corresponding permission.",

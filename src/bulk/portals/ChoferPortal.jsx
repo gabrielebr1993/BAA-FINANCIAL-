@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX, AlertTriangle, Users } from 'lucide-react'
+import { Truck, ClipboardList, DollarSign, User, LogOut, Grid2x2, CheckCircle2, Camera, MapPin, Clock, MessageSquare, ScanLine, Navigation, Copy, Check, Building2, Package, FileText, KeyRound, Wifi, Power, Landmark, Save, Phone, IdCard, Languages, Volume2, VolumeX, AlertTriangle, Users, Home } from 'lucide-react'
 import { sonidoActivo, setSonido } from '../integraciones/sonido'
 import ChatOrden from '../components/ChatOrden'
 import DocumentosChofer from '../components/DocumentosChofer'
@@ -18,7 +18,8 @@ import { useVisualViewport } from '../components/useVisualViewport'
 import GruposModal from '../components/GruposModal'
 import ContactosChofer from '../components/ContactosChofer'
 import { useSolicitudesContacto } from '../data/contactos'
-import { useCodigoUsuario } from '../data/useCodigoUsuario'
+import { useCodigoUsuario, useFotoUsuario } from '../data/useCodigoUsuario'
+import Avatar from '../components/Avatar'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
 import { menuGrupoConv } from '../data/grupos'
@@ -46,6 +47,8 @@ import { etaOrden, etaTexto } from '../domain/eta'
 import { escanearParaOCR } from '../integraciones/escaner'
 import FirmaPad from '../components/FirmaPad'
 import { Card, Boton, Input, Badge, Aviso, Spinner } from '../../components/ui'
+// Kit del REDISEÑO 2026 (Bloque 1): la home y la carcasa usan este lenguaje.
+import { IconButton, PrimaryButton, SecondaryButton, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
 
@@ -102,7 +105,7 @@ export default function ChoferPortal() {
   const { dato: miPerfilDoc } = useDoc('driverProfiles', usuario?.id)
   const { datos: signals } = useColeccion('signals')
   const liberacionAuto = (signals || []).some((s) => s.id === 'liberacion' && s.auto === true)
-  const [tab, setTab] = useState('ordenes')
+  const [tab, setTab] = useState('inicio')
   // Fast Pay: retiro instantáneo de las ganancias PAGADAS a la cuenta del chofer.
   // Flujo: null → 'confirmar' (revisar monto/comisión/cuenta) → 'listo' (dinero en camino).
   const [rangoGan, setRangoGan] = useState(RANGO_VACIO) // filtro de fechas de Ganancias
@@ -230,6 +233,7 @@ export default function ChoferPortal() {
   const activa = misOrdenes.find((o) => ESTADOS_ACTIVOS_CHOFER.includes(o.estado))
   // Datos del chofer para las notificaciones de geocerca (nombre, ID, unidad).
   const miCodigoCho = useCodigoUsuario(usuario?.id)
+  const miFotoHome = useFotoUsuario(usuario?.id) // avatar del header 2026
   const unidadCho = miChofer?.unidad || miChofer?.placa || miChofer?.equipo || activa?.unidad || activa?.placa || activa?.tipoEquipo || ''
   useGpsTracker(activa, geocercas, tenantId, { nombre: usuario?.nombre, codigo: miCodigoCho, unidad: unidadCho, uid: usuario?.id, carrierId }) // GPS + eventos/notificaciones de geocerca
 
@@ -314,30 +318,100 @@ export default function ChoferPortal() {
     // Carcasa de ALTURA FIJA (h-dvh): el header navy y el nav claro quedan fijos
     // y el CUERPO desplaza por dentro (overflow-y-auto en <main>). Antes, con
     // min-h, desplazaba la página entera y el timeline de la orden se cortaba.
-    <div className="h-dvh mx-auto flex max-w-md flex-col overflow-hidden bg-[#f2f3f7] dark:bg-slate-950">
+    // Rediseño 2026: carcasa CREMA, sin barra navy — el header es una fila de
+    // botones circulares sobre el fondo; el perfil se abre tocando el avatar.
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
       <IndicadorConexion />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />
-      <header className="head-safe bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-4 pb-9 text-white">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-11 w-11 flex-shrink-0 place-items-center overflow-hidden rounded-2xl bg-[#c9a24b] text-[#13233f] shadow-md"><Truck size={22} strokeWidth={2} className="animate-truck" /></div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-black leading-tight">{usuario?.nombre}</div>
-            {usuario?.codigo && <UserId codigo={usuario.codigo} className="!text-slate-300" />}
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-300">
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${enLinea ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-              {enLinea ? t('En línea') : t('Desconectado')} · {t('Chofer')}
-            </div>
+      <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
+        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+          <Avatar foto={miFotoHome} nombre={usuario?.nombre} size={40} redondo />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-medium text-mp-ink">{usuario?.nombre}</div>
+          <div className="flex items-center gap-1.5 text-[12px] text-mp-ink-2">
+            <span className="inline-block h-1.5 w-1.5 rounded-pill" style={{ background: enLinea ? 'var(--mp-green)' : 'var(--mp-ink-2)' }} />
+            {enLinea ? t('En línea') : t('Desconectado')} · {t('Chofer')}
           </div>
-          <button onClick={() => navigate('/elegir')} className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10" title={t('Cambiar módulo')}><Grid2x2 size={18} /></button>
-          <button onClick={cerrarSesion} className="rounded-xl p-2 text-rose-300 transition hover:bg-white/10" title={t('Salir')}><LogOut size={18} /></button>
         </div>
+        <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+        <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>
 
       {/* En la pestaña Mensajes la página NO desplaza (overflow-hidden): el panel de
           chats mide exacto y desplaza por dentro. Antes convivían el scroll de la
           página y el del chat y la pantalla se movía para todos lados. */}
-      <main className={`relative -mt-5 flex-1 rounded-t-[1.75rem] bg-[#f2f3f7] p-3 dark:bg-slate-950 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-24'}`}>
+      <main className={`relative flex-1 p-3 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+        {tab === 'inicio' && (() => {
+          // ── HOME 2026 (Bloque 2.1) ────────────────────────────────────────
+          const hoyStr = new Date().toDateString()
+          const esHoy = (ts) => { const ms = tsMillis(ts) || Date.parse(ts); return Number.isFinite(ms) && new Date(ms).toDateString() === hoyStr }
+          const entregadasHoy = misOrdenes.filter((o) => esHoy(o.hitos?.entrega || o.hitos?.liberacion))
+          const asignadasHoy = misOrdenes.filter((o) => esHoy(o.creadoEn) || esHoy(o.hitos?.tomada) || esHoy(o.hitos?.entrega))
+          const tonHoy = entregadasHoy.reduce((a, o) => a + (Number(o.pesoReal) || Number(o.pesoEstimado) || 0), 0)
+          const siguientes = misOrdenes.filter((o) => o.id !== activa?.id && !ESTADOS_HISTORIAL.includes(o.estado) && o.estado !== E.CANCELADA && ESTADOS_ACTIVOS_CHOFER.includes(o.estado)).slice(0, 4)
+          const paso = activa ? siguientePasoChofer(activa.estado) : null
+          return (
+            <div className="space-y-2 px-1">
+              <div className="pb-1 pt-1">
+                <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
+                <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Tu día')}</h1>
+              </div>
+
+              {/* Tarjeta protagonista: la orden activa (o el estado de la cola). */}
+              {activa ? (
+                <FeatureCard>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[12px] text-mp-cream/70">{activa.numero}</span>
+                    <StatusPill sobreNavy color="var(--mp-gold)">{t(ORDEN_ESTADO_LABEL[activa.estado] || activa.estado)}</StatusPill>
+                  </div>
+                  <div className="mt-2 text-[22px] font-medium leading-tight">{t(activa.material || 'Carga')}</div>
+                  <div className="mt-1 truncate text-[13px] text-mp-cream/80">
+                    {activa.plantaNombre || t('Planta')} → {activa.direccionEntrega || t('Destino')}
+                  </div>
+                  <PrimaryButton className="mt-4" onClick={() => setTab('ordenes')}>{t(paso?.label || 'Ver la orden')}</PrimaryButton>
+                </FeatureCard>
+              ) : (
+                <FeatureCard>
+                  <StatusPill sobreNavy color={enLinea ? 'var(--mp-green)' : 'var(--mp-red)'}>{enLinea ? t('En línea') : t('Desconectado')}</StatusPill>
+                  <div className="mt-2 text-[22px] font-medium leading-tight">{enLinea ? t('Buscando cargas para ti…') : t('Ponte en línea para recibir cargas')}</div>
+                  <PrimaryButton className="mt-4" onClick={() => setTab('ordenes')}>{t('Ir a órdenes')}</PrimaryButton>
+                </FeatureCard>
+              )}
+
+              {/* Stats del día */}
+              <div className="grid grid-cols-2 gap-2">
+                <StatCard etiqueta={t('Viajes hoy')} valor={entregadasHoy.length} sufijo={asignadasHoy.length ? `/${asignadasHoy.length}` : ''} />
+                <StatCard etiqueta={t('Toneladas')} valor={tonHoy ? tonHoy.toFixed(1) : '0'} />
+              </div>
+
+              {/* Fast Pay */}
+              <div className="rounded-card bg-white p-4 shadow-card">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[12px] text-mp-ink-2">{t('Ganancias acumuladas')}</div>
+                    <div className="mt-0.5 text-[28px] font-medium leading-none text-mp-ink">{money(ganancias)}</div>
+                  </div>
+                  <SecondaryButton className="!w-auto px-5" onClick={() => setTab('ganancias')} icon={DollarSign}>{t('Cobrar')}</SecondaryButton>
+                </div>
+              </div>
+
+              {/* Siguientes órdenes */}
+              {siguientes.length > 0 && (
+                <>
+                  <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Siguientes')}</div>
+                  {siguientes.map((o) => (
+                    <ListRow key={o.id} icon={Package} titulo={`${t(o.material || 'Carga')} · ${o.numero || ''}`}
+                      meta={`${o.plantaNombre || ''}${o.direccionEntrega ? ` → ${o.direccionEntrega}` : ''}`}
+                      derecha={<StatusPill color="var(--mp-gold)">{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>}
+                      onClick={() => setTab('ordenes')} />
+                  ))}
+                </>
+              )}
+            </div>
+          )
+        })()}
         {tab === 'ordenes' && (
           <>
             {!carrierId && (
@@ -554,7 +628,10 @@ export default function ChoferPortal() {
           <>
             <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-chofer" abrir={abrirExterno || abrirPriv} estiloApp
               menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
-              accion={<button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300"><MessageSquare size={13} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>} />
+              accion={<div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setTab('contactos')} className="relative inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><Users size={13} strokeWidth={1.75} /> {t('Contactos')}{solicitudesCount > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-pill bg-mp-gold px-1 text-[10px] font-bold text-mp-navy">{solicitudesCount}</span>}</button>
+                <button type="button" onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><MessageSquare size={13} strokeWidth={1.75} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-pill bg-mp-gold px-1 text-[10px] font-bold text-mp-navy">{invitaciones.length}</span>}</button>
+              </div>} />
             {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupoChofer} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
             {modalPriv}
           </>
@@ -565,19 +642,19 @@ export default function ChoferPortal() {
         )}
       </main>
 
-      {/* z-40: por ENCIMA del contenido (los hitos del timeline llevan z-10 y sin
-          esto se dibujaban sobre la barra). */}
-      <nav className="nav-safe fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        {[{ k: 'ordenes', l: t('Órdenes'), I: ClipboardList }, { k: 'historial', l: t('Historial'), I: Clock }, { k: 'mensajes', l: t('Mensajes'), I: MessageSquare, badge: noLeidosMsgTotal }, { k: 'contactos', l: t('Contactos'), I: Users, badge: solicitudesCount }, { k: 'ganancias', l: t('Ganancias'), I: DollarSign }, { k: 'perfil', l: t('Perfil'), I: User }].map((it) => (
-          <button key={it.k} onClick={() => setTab(it.k)} className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] ${tab === it.k ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
-            <span className="relative">
-              <it.I size={20} strokeWidth={tab === it.k ? 2.4 : 1.8} />
-              {it.badge > 0 && <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{it.badge}</span>}
-            </span>
-            {it.l}
-          </button>
-        ))}
-      </nav>
+      {/* Barra FLOTANTE 2026 (Bloque 2.1): 4 tabs, Chats en tercera posición.
+          Historial/Ganancias/Contactos/Perfil siguen existiendo como pantallas
+          (se llega desde la home, el avatar o Chats), solo salen de la barra. */}
+      <FloatingTabBar
+        activo={['perfil', 'ganancias'].includes(tab) ? 'inicio' : (tab === 'contactos' ? 'mensajes' : tab)}
+        onSelect={setTab}
+        tabs={[
+          { k: 'inicio', label: t('Inicio'), icon: Home },
+          { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList },
+          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosMsgTotal + solicitudesCount },
+          { k: 'historial', label: t('Tickets'), icon: FileText },
+        ]}
+      />
 
       {/* Pantalla superpuesta cuando entra una orden nueva (suena hasta responder) */}
       {entrante && <OverlayEntrante orden={entrante} usuario={usuario} tenantId={tenantId} rol={rol} plantas={plantas} geocercas={geocercas} pos={pos} onRechazo={registrarRechazo} onResponder={marcarRespondida} onDesmarcar={desmarcarRespondida} miChofer={miChofer} />}

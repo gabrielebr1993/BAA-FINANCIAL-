@@ -11,7 +11,7 @@ import { useLang } from '../../i18n'
 const PALETA = ['#1e3a8a', '#0f766e', '#7c3aed', '#b45309', '#be123c', '#0369a1', '#4d7c0f', '#9333ea']
 const colorDe = (s) => { let h = 0; for (const ch of (s || '?')) h = (h * 31 + ch.charCodeAt(0)) % 997; return PALETA[h % PALETA.length] }
 
-export default function Avatar({ foto, nombre, size = 40, editable = false, onFoto, className = '', title }) {
+export default function Avatar({ foto, nombre, size = 40, editable = false, onFoto, className = '', title, redondo = false }) {
   const { t } = useLang()
   const galRef = useRef(null)   // galería (sin capture → el SO ofrece la fototeca)
   const camRef = useRef(null)   // cámara (capture → abre la cámara directamente)
@@ -29,8 +29,8 @@ export default function Avatar({ foto, nombre, size = 40, editable = false, onFo
   return (
     <div className={`relative flex-shrink-0 ${className}`} style={box} title={title || nombre || ''}>
       {foto
-        ? <img src={foto} alt={nombre || ''} className="h-full w-full rounded-xl border border-slate-200 object-cover dark:border-slate-700" style={box} />
-        : <div className="grid h-full w-full place-items-center rounded-xl font-black text-white" style={{ ...box, background: colorDe(nombre), fontSize: Math.round(size * 0.42) }}>{inicial}</div>}
+        ? <img src={foto} alt={nombre || ''} className={`h-full w-full border border-slate-200 object-cover dark:border-slate-700 ${redondo ? 'rounded-full' : 'rounded-xl'}`} style={box} />
+        : <div className={`grid h-full w-full place-items-center font-black text-white ${redondo ? 'rounded-full' : 'rounded-xl'}`} style={{ ...box, background: colorDe(nombre), fontSize: Math.round(size * 0.42) }}>{inicial}</div>}
       {editable && (
         <>
           <button type="button" onClick={() => setMenu(true)} title={t('Cambiar foto')} className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-brand-gold text-slate-900 shadow ring-2 ring-white transition hover:scale-110 dark:ring-slate-900"><Camera size={11} /></button>
