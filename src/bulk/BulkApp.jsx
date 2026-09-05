@@ -4,7 +4,7 @@ import { BulkAuthProvider, useBulkAuth } from './BulkAuthContext'
 import { useColeccion } from './data/useColeccion'
 import { logoutAplicable } from './data/sesiones'
 import { useInactividad } from '../hooks/useInactividad'
-import { activarPush } from './integraciones/fcm'
+import { activarPush, registrarTokensNativos } from './integraciones/fcm'
 import { authBulk } from './firebaseBulk'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
@@ -93,6 +93,9 @@ function PushSetup() {
   useEffect(() => {
     if (!usuario?.id) return
     activarPush({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
+    // Tokens de la app NATIVA (los deja en localStorage): la web, ya autenticada,
+    // los registra directo en Firestore — sin depender del pase ni de la red nativa.
+    const pararNativos = registrarTokensNativos({ tenantId, uid: usuario.id, rol, carrierId: usuario.carrierId, clienteId: usuario.clienteId, nombre: usuario.nombre })
     let vivo = true
     ;(async () => {
       let diag = ''
@@ -119,7 +122,7 @@ function PushSetup() {
         }
       } catch { /* noop */ }
     })()
-    return () => { vivo = false }
+    return () => { vivo = false; pararNativos?.() }
   }, [usuario?.id, tenantId, rol])
   return null
 }

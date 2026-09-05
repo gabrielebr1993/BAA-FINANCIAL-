@@ -35,6 +35,9 @@ export async function activarPush({ tenantId, uid, rol, carrierId, clienteId, no
       if (p !== 'granted') return null
     }
     if (Notification.permission !== 'granted') return null
+    // Dentro de la APP NATIVA no hay service worker: los tokens nativos se
+    // registran por registrarTokensNativos(); aquí no hay nada que hacer.
+    if (/MilePayApp/.test(navigator.userAgent)) return null
     const qs = new URLSearchParams(CFG).toString()
     _reg = _reg || await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${qs}`, { scope: '/firebase-cloud-messaging-push-scope' })
     _msg = _msg || getMessaging(appBulk)
@@ -52,4 +55,40 @@ export async function activarPush({ tenantId, uid, rol, carrierId, clienteId, no
     }, { merge: true })
     return token
   } catch { return null }
+}
+
+// ── Tokens de la APP NATIVA (iOS/Android) ───────────────────────────────────
+// La app nativa deja sus tokens en localStorage (mp_tok_ios = FCM,
+// mp_tok_voip = PushKit). La web, YA AUTENTICADA, los registra directo en
+// bulk_pushTokens (mismo camino que el push del navegador): así el registro no
+// depende de pases ni de red del lado nativo. Se revisa por un rato tras el
+// login porque los tokens pueden llegar unos segundos después.
+const _regNativos = new Set()
+export function registrarTokensNativos({ tenantId, uid, rol, carrierId, clienteId, nombre } = {}) {
+  const intento = async () => {
+    for (const [clave, plataforma] of [['mp_tok_ios', 'ios'], ['mp_tok_voip', 'ios_voip']]) {
+      try {
+        const token = localStorage.getItem(clave) || ''
+        if (token.length < 20) continue
+        const marca = `${plataforma}|${token}|${uid}`
+        if (_regNativos.has(marca)) continue
+        await setDoc(doc(dbBulk, 'bulk_pushTokens', token.replace(/\//g, '_')), {
+          token,
+          plataforma,
+          tenantId: tenantId || null,
+          uid: uid || null,
+          rol: rol || null,
+          carrierId: carrierId || null,
+          clienteId: clienteId || null,
+          nombre: nombre || null,
+          actualizadoEn: serverTimestamp(),
+        }, { merge: true })
+        _regNativos.add(marca)
+      } catch { /* reintenta en el siguiente ciclo */ }
+    }
+  }
+  intento()
+  const id = setInterval(intento, 3000)
+  setTimeout(() => clearInterval(id), 90000) // vigila 90 s tras el login
+  return () => clearInterval(id)
 }
