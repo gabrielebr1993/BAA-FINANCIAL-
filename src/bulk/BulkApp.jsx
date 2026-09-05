@@ -126,13 +126,13 @@ function PushSetup() {
     // muestra si los boletos nativos llegaron y si el registro funcionó.
     const idDiag = setTimeout(() => {
       try {
-        if (!/MilePayApp/.test(navigator.userAgent)) return
         if (!['admin', 'super_admin'].includes(rol)) return
+        const esApp = /MilePayApp/.test(navigator.userAgent)
         const ios = (localStorage.getItem('mp_tok_ios') || '').length > 19 ? '✓' : '✗'
         const voip = (localStorage.getItem('mp_tok_voip') || '').length > 19 ? '✓' : '✗'
         const pase = localStorage.getItem('mp_track_pase') ? '✓' : '✗'
         const reg = localStorage.getItem('mp_reg_diag') || '(sin intento)'
-        window.alert(`Diagnóstico push (solo admins):\nBoleto notificaciones (ios): ${ios}\nBoleto llamadas (voip): ${voip}\nPase: ${pase}\nRegistro: ${reg}`)
+        window.alert(`Diagnóstico push (solo admins):\nEntorno: ${esApp ? 'APP NATIVA (v6+)' : 'navegador o app VIEJA'}\nBoleto notificaciones (ios): ${ios}\nBoleto llamadas (voip): ${voip}\nPase: ${pase}\nRegistro: ${reg}`)
       } catch { /* noop */ }
     }, 20000)
     return () => { vivo = false; pararNativos?.(); clearTimeout(idDiag) }
