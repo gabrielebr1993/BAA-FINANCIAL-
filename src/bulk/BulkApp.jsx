@@ -122,11 +122,12 @@ function PushSetup() {
         }
       } catch { /* noop */ }
     })()
-    // DIAGNÓSTICO visible dentro de la app nativa (solo admins): a los 20 s
-    // muestra si los boletos nativos llegaron y si el registro funcionó.
+    // DIAGNÓSTICO bajo demanda: abrir /bulk?diag=push lo muestra (admins).
+    // El cuadro automático de los 20 s se retiró (ya cumplió su misión).
     const idDiag = setTimeout(() => {
       try {
         if (!['admin', 'super_admin'].includes(rol)) return
+        if (new URLSearchParams(window.location.search).get('diag') !== 'push') return
         const esApp = /MilePayApp/.test(navigator.userAgent)
         const ios = (localStorage.getItem('mp_tok_ios') || '').length > 19 ? '✓' : '✗'
         const voip = (localStorage.getItem('mp_tok_voip') || '').length > 19 ? '✓' : '✗'

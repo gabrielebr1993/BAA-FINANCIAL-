@@ -1043,7 +1043,9 @@ exports.bulkPushOrdenes = onDocumentUpdated('bulk_orders/{id}', async (event) =>
 const slugNombre = (s) => (s || '').trim().toLowerCase().normalize('NFD')
   .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60)
 
-exports.bulkPushMensajes = onDocumentCreated('bulk_messages/{id}', async (event) => {
+// minInstances 1: una instancia SIEMPRE despierta → el aviso sale en 1-3 s
+// (sin esto, tras un rato de inactividad el arranque en frío suma 5-15 s).
+exports.bulkPushMensajes = onDocumentCreated({ document: 'bulk_messages/{id}', minInstances: 1 }, async (event) => {
   const m = (event.data && event.data.data()) || {}
   const tenantId = m.tenantId
   const orderId = String(m.orderId || '')
@@ -1106,10 +1108,10 @@ function apnsJwt(p8, keyId) {
 }
 
 // Envía UN push VoIP por http/2 a api.push.apple.com. Devuelve el status.
-function enviarVoip(token, payload, p8, keyId) {
+function enviarVoipA(host, token, payload, p8, keyId) {
   return new Promise((resolve) => {
     const http2 = require('node:http2')
-    const cli = http2.connect('https://api.push.apple.com')
+    const cli = http2.connect(host)
     cli.on('error', () => resolve(0))
     const req = cli.request({
       ':method': 'POST', ':path': `/3/device/${token}`,
@@ -1124,12 +1126,24 @@ function enviarVoip(token, payload, p8, keyId) {
   })
 }
 
+// Envía al canal REAL (TestFlight/App Store); si Apple contesta 400 (token del
+// canal de ENSAYO — builds instalados con cable desde Xcode), reintenta en el
+// canal de ensayo. Así las llamadas suenan en ambos tipos de instalación.
+async function enviarVoip(token, payload, p8, keyId) {
+  let st = await enviarVoipA('https://api.push.apple.com', token, payload, p8, keyId)
+  if (st === 400) {
+    const st2 = await enviarVoipA('https://api.sandbox.push.apple.com', token, payload, p8, keyId)
+    if (st2 === 200) return 200
+  }
+  return st
+}
+
 // ============================================================================
 // bulkPushLlamada — al crearse una LLAMADA entrante (bulk_calls):
 //   1) push VoIP (CallKit: tono + pantalla nativa) a los iPhones del receptor;
 //   2) notificación normal a sus dispositivos SIN VoIP (web/Android).
 // ============================================================================
-exports.bulkPushLlamada = onDocumentCreated({ document: 'bulk_calls/{id}', secrets: [APNS_KEY, APNS_KEY_ID] }, async (event) => {
+exports.bulkPushLlamada = onDocumentCreated({ document: 'bulk_calls/{id}', secrets: [APNS_KEY, APNS_KEY_ID], minInstances: 1 }, async (event) => {
   const c = (event.data && event.data.data()) || {}
   if (!c.tenantId || !c.para) return
   const todos = []
