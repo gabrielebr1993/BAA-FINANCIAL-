@@ -93,6 +93,6 @@ export function registrarTokensNativos({ tenantId, uid, rol, carrierId, clienteI
   }
   intento()
   const id = setInterval(intento, 3000)
-  setTimeout(() => clearInterval(id), 90000) // vigila 90 s tras el login
+  setTimeout(() => clearInterval(id), 600000) // vigila 10 min tras el login
   return () => clearInterval(id)
 }
