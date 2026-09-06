@@ -91,6 +91,40 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, pass, venceEn })
     }
 
+    // ── 1d) PRUEBA de notificación (con sesión web): envía un push de prueba a
+    // TODOS los dispositivos registrados del usuario y devuelve la respuesta
+    // EXACTA de Apple/Google por cada uno — el diagnóstico definitivo sin
+    // consola. Se dispara desde la web con /bulk?probar=push.
+    if (accion === 'probar_push') {
+      const h = req.headers.authorization || ''
+      const idToken = h.startsWith('Bearer ') ? h.slice(7) : ''
+      if (!idToken) return res.status(401).json({ ok: false, error: 'Falta el token de sesión.' })
+      let d
+      try { d = await a.getAuth().verifyIdToken(idToken) } catch { return res.status(401).json({ ok: false, error: 'Token inválido.' }) }
+      if (!d.bulkTenant) return res.status(403).json({ ok: false, error: 'Cuenta sin módulo Freight.' })
+      const snap = await db.collection('bulk_pushTokens')
+        .where('tenantId', '==', d.bulkTenant).where('uid', '==', d.uid).get()
+      const msg = a.getMessaging()
+      const resultados = []
+      for (const doc of snap.docs) {
+        const x = doc.data()
+        if (x.plataforma === 'ios_voip') { resultados.push(`${x.plataforma}: (se prueba con una llamada)`); continue }
+        try {
+          await msg.send({
+            token: x.token,
+            notification: { title: 'Prueba MilePay', body: '✅ Si lees esto, las notificaciones funcionan' },
+            apns: { headers: { 'apns-priority': '10' }, payload: { aps: { sound: 'default' } } },
+            android: { priority: 'high' },
+          })
+          resultados.push(`${x.plataforma || 'web'}: ENVIADO ✓`)
+        } catch (e) {
+          resultados.push(`${x.plataforma || 'web'}: ERROR ${e?.errorInfo?.code || e?.code || e?.message}`)
+        }
+      }
+      if (!resultados.length) resultados.push('SIN dispositivos registrados para tu usuario')
+      return res.status(200).json({ ok: true, resultados })
+    }
+
     // Validación del pase (compartida por 'punto' y 'token').
     const validarPase = async (uid, pass) => {
       if (!uid || !pass) return null

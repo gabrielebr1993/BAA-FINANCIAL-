@@ -122,6 +122,22 @@ function PushSetup() {
         }
       } catch { /* noop */ }
     })()
+    // PRUEBA DE ENVÍO bajo demanda: abrir /bulk?probar=push manda una
+    // notificación de prueba a TODOS tus dispositivos y muestra la respuesta
+    // exacta de Apple/Google por cada uno.
+    ;(async () => {
+      try {
+        if (new URLSearchParams(window.location.search).get('probar') !== 'push') return
+        const tok = await authBulk.currentUser.getIdToken()
+        const r = await fetch('/api/bulk-track', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` },
+          body: JSON.stringify({ accion: 'probar_push' }),
+        })
+        const j = await r.json()
+        window.alert(`Prueba de notificación:\n${(j?.resultados || [j?.error || 'sin respuesta']).join('\n')}`)
+      } catch (e) { window.alert(`Prueba de notificación: ERROR ${e?.message || e}`) }
+    })()
+
     // DIAGNÓSTICO bajo demanda: abrir /bulk?diag=push lo muestra (admins).
     // El cuadro automático de los 20 s se retiró (ya cumplió su misión).
     const idDiag = setTimeout(() => {

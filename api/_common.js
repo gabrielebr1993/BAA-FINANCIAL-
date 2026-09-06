@@ -8,10 +8,11 @@
 let admin = null
 export async function cargarAdmin() {
   if (admin) return admin
-  const [appMod, authMod, fsMod] = await Promise.all([
+  const [appMod, authMod, fsMod, msgMod] = await Promise.all([
     import('firebase-admin/app'),
     import('firebase-admin/auth'),
     import('firebase-admin/firestore'),
+    import('firebase-admin/messaging'),
   ])
   admin = {
     getApps: appMod.getApps,
@@ -20,6 +21,7 @@ export async function cargarAdmin() {
     getAuth: authMod.getAuth,
     getFirestore: fsMod.getFirestore,
     FieldValue: fsMod.FieldValue,
+    getMessaging: msgMod.getMessaging,
   }
   return admin
 }
