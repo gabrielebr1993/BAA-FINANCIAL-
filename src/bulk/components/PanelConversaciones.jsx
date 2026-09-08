@@ -53,6 +53,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
   const [tab, setTab] = useState(secciones[0]?.k || '')
   const [sel, setSel] = useState('')
   const [buscar, setBuscar] = useState('')
+  const [filtro, setFiltro] = useState('todos') // todos | activas | noleidos (2026)
   const [verChatMovil, setVerChatMovil] = useState(false)
   const [menuKey, setMenuKey] = useState(null) // conversación cuyo menú ⋮ está abierto
 
@@ -78,9 +79,10 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
     const q = buscar.trim().toLowerCase()
     return (seccion.items || [])
       .filter((c) => !q || [c.titulo, c.viaje, c.material, c.carrierNombre, c.lastText].filter(Boolean).some((x) => String(x).toLowerCase().includes(q)))
+      .filter((c) => filtro === 'todos' || (filtro === 'noleidos' ? (c.noLeidos || 0) > 0 : !!(c.viaje || c.material)))
       .slice()
       .sort((a, b) => (b.noLeidos || 0) - (a.noLeidos || 0) || tsMillis(b.lastTs) - tsMillis(a.lastTs))
-  }, [seccion, buscar])
+  }, [seccion, buscar, filtro])
 
   const activa = items.find((c) => c.key === sel) || items[0] || null
 
@@ -88,9 +90,9 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
 
   // ¿Visor de escritorio (dos paneles)? Solo aplica fuera de estiloApp: la app del
   // chofer vive en un marco angosto aunque el visor reporte ancho de escritorio.
-  const [anchoLg, setAnchoLg] = useState(() => { try { return window.matchMedia('(min-width:1024px)').matches } catch { return false } })
+  const [anchoLg, setAnchoLg] = useState(() => { try { return window.matchMedia('(min-width:768px)').matches } catch { return false } })
   useEffect(() => {
-    const mq = window.matchMedia('(min-width:1024px)')
+    const mq = window.matchMedia('(min-width:768px)')
     const f = (e) => setAnchoLg(e.matches)
     mq.addEventListener('change', f)
     return () => mq.removeEventListener('change', f)
@@ -147,9 +149,9 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
           chat a pantalla completa. Sin variantes lg: aunque el visor sea ancho
           (tablet/escritorio), la app vive en su marco angosto y el lado-a-lado
           quedaba estrujado e inusable. */}
-      <div className={`grid min-h-0 flex-1 gap-4 ${estiloApp ? '' : 'lg:grid-cols-3'}`}>
+      <div className={`grid min-h-0 flex-1 gap-4 ${estiloApp ? '' : 'md:grid-cols-3'}`}>
         {/* Lista de conversaciones */}
-        <Card className={`min-h-0 flex-col p-3 ${estiloApp ? (verChatMovil ? 'hidden' : 'flex') : `lg:col-span-1 lg:flex ${verChatMovil ? 'hidden lg:flex' : 'flex'}`}`}>
+        <Card className={`min-h-0 flex-col p-3 ${estiloApp ? (verChatMovil ? 'hidden' : 'flex') : `md:col-span-1 md:flex ${verChatMovil ? 'hidden md:flex' : 'flex'}`}`}>
           {/* Botón propio de cada pestaña: crear conversación (o grupo) filtrado por su rol. */}
           {seccion.onNueva && (
             <button type="button" onClick={seccion.onNueva} className="mb-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-slate-900 transition hover:bg-amber-600">
@@ -157,8 +159,17 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             </button>
           )}
           <div className="relative mb-2">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar…')} className="w-full pl-8" />
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mp-ink-2" />
+            <Input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={t('Buscar…')} className="w-full !rounded-pill bg-white pl-9" />
+          </div>
+          {/* Filtros 2026: pills Todos / Activas / No leídos */}
+          <div className="mb-2 flex gap-1.5">
+            {[['todos', t('Todos')], ['activas', t('Activas')], ['noleidos', t('No leídos')]].map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setFiltro(k)}
+                className={`rounded-pill px-3.5 py-1.5 text-[12px] font-medium transition ${filtro === k ? 'bg-mp-navy text-mp-cream' : 'bg-white text-mp-ink-2 shadow-card'}`}>
+                {l}
+              </button>
+            ))}
           </div>
           <div className="scroll-thin min-h-0 flex-1 space-y-1 overflow-y-auto">
             {items.length === 0 ? (
@@ -168,16 +179,15 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
               const esActiva = activa?.key === c.key
               const noLeido = c.noLeidos > 0 && !esActiva // el chat abierto ya se marca leído
               return (
-                <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 text-left transition ${esActiva ? 'border-amber-500 bg-amber-500/10' : noLeido ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-                  {/* Barra de acento a la izquierda cuando hay mensajes nuevos. */}
-                  {noLeido && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-rose-500" aria-hidden="true" />}
+                <div key={c.key} role="button" tabIndex={0} onClick={() => elegir(c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && elegir(c.key)} className={`group relative flex w-full cursor-pointer items-start gap-2.5 rounded-row bg-white p-3 text-left shadow-card transition ${esActiva ? 'ring-1 ring-mp-gold' : ''}`}>
                   <Avatar foto={c.foto} icon={c.icon} nombre={c.titulo} size={estiloApp ? 48 : 44} resalte={c.noLeidos > 0} redondo />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {noLeido && <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-rose-500" title={t('Mensajes nuevos')} />}
                       <span className={`truncate text-sm text-brand-navy dark:text-slate-100 ${noLeido ? 'font-black' : 'font-bold'}`}>{c.titulo}</span>
                       {c.rolLabel && <Badge color={c.rolColor || 'slate'}>{c.rolLabel}</Badge>}
-                      <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400">{horaCorta(c.lastTs)}</span>
+                      {/* Hora en DORADO cuando hay mensajes sin leer (2026). */}
+                      <span className={`ml-auto flex-shrink-0 text-[10px] ${noLeido ? 'font-semibold text-mp-gold' : 'text-mp-ink-2'}`}>{horaCorta(c.lastTs)}</span>
                       {/* Menú ⋮ para actuar sin abrir el chat (eliminar / salir). */}
                       {menu.length > 0 && (
                         <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -211,7 +221,7 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
                     )}
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className={`truncate text-xs ${c.noLeidos > 0 ? 'font-semibold text-slate-600 dark:text-slate-200' : 'text-slate-400'}`}>{c.lastText || t('Sin mensajes aún')}</span>
-                      {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold text-white">{c.noLeidos}</span>}
+                      {c.noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] flex-shrink-0 place-items-center rounded-pill bg-mp-gold px-1.5 text-[11px] font-semibold text-mp-navy">{c.noLeidos}</span>}
                     </div>
                   </div>
                 </div>
@@ -225,13 +235,13 @@ export default function PanelConversaciones({ secciones = [], titulo, accion = n
             la página del portal ni salta con el teclado. En escritorio (fuera de
             estiloApp) sigue en la grilla, con el MISMO chat (cabecera navy, hilo crema). */}
         <div
-          className={`min-h-0 ${verChatMovil ? 'fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900' : 'hidden'} ${estiloApp ? '' : 'lg:static lg:z-auto lg:col-span-2 lg:flex lg:bg-transparent'}`}
+          className={`min-h-0 ${verChatMovil ? 'fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900' : 'hidden'} ${estiloApp ? '' : 'md:static md:z-auto md:col-span-2 md:flex md:bg-transparent'}`}
           style={verChatMovil && vv ? { top: vv.top, height: vv.height, bottom: 'auto' } : undefined}
         >
           {activa ? (
             /* SIN tarjeta contenedora: el chat va a sangre (en escritorio, un solo
                panel redondeado al nivel de la lista — nunca card dentro de card). */
-            <div className={`flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-slate-900 ${estiloApp ? '' : 'lg:rounded-xl'}`}>
+            <div className={`flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white dark:bg-slate-900 ${estiloApp ? '' : 'md:rounded-xl'}`}>
               <ChatOrden key={activa.chatId}
                 orden={{ id: activa.chatId, numero: activa.viaje || activa.titulo, material: activa.material }}
                 participantes={activa.participantes ?? null} contacto={activa.contacto ?? null} grupoUids={activa.grupoUids ?? null} fill

@@ -169,33 +169,33 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
         orden?.material,
       ].filter(Boolean).join(' · ')
   return (
-    <div className={`flex flex-col overflow-hidden ${fill ? 'h-full' : 'rounded-xl'}`}>
-      {/* Cabecera NAVY única: volver + identidad + llamadas como iconos discretos. */}
-      <div className="flex items-center gap-2 bg-gradient-to-b from-[#13233f] to-[#1e3a5f] px-3 pb-2.5 text-white"
+    <div className={`flex flex-col overflow-hidden bg-mp-cream ${fill ? 'h-full' : 'rounded-xl'}`}>
+      {/* Cabecera 2026: SIN barra de color — botones circulares blancos sobre crema. */}
+      <div className="flex items-center gap-2.5 px-3 pb-2"
         style={fill ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 10px)' } : { paddingTop: 10 }}>
-        {onVolver && <button type="button" onClick={onVolver} aria-label={t('Volver')} className="-ml-1 rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10"><ArrowLeft size={19} /></button>}
-        <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={34} redondo />
+        {onVolver && (
+          <button type="button" onClick={onVolver} aria-label={t('Volver')}
+            className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-pill bg-white text-mp-navy shadow-card transition active:scale-95"><ArrowLeft size={20} strokeWidth={1.75} /></button>
+        )}
+        <Avatar foto={cab?.id ? avatares[cab.id] : null} nombre={cab?.nombre || orden?.numero} size={36} redondo />
         <button type="button" onClick={() => cab?.id && setPerfilRapido(cab)} className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-sm font-black leading-tight">{cab?.nombre || orden?.numero || t('Conversación')}</span>
-          <span className="block truncate text-[11px] text-slate-300">{subCab}</span>
+          <span className="block truncate text-[14px] font-medium leading-tight text-mp-ink">{cab?.nombre || orden?.numero || t('Conversación')}</span>
+          <span className="block truncate text-[12px] text-mp-ink-2">{subCab}</span>
         </button>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {otro && (
             <>
-              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Phone size={16} strokeWidth={1.75} /></button>
-              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Video size={16} strokeWidth={1.75} /></button>
+              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'audio', ctxLlamada)} title={t('Llamar')} className="grid h-10 w-10 place-items-center rounded-pill bg-white text-mp-navy shadow-card transition active:scale-95"><Phone size={20} strokeWidth={1.75} /></button>
+              <button type="button" onClick={() => iniciar(otro.id, otro.nombre, 'video', ctxLlamada)} title={t('Videollamada')} className="grid h-10 w-10 place-items-center rounded-pill bg-white text-mp-navy shadow-card transition active:scale-95"><Video size={20} strokeWidth={1.75} /></button>
             </>
           )}
-          <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-9 w-9 place-items-center rounded-full border border-white/25 text-white transition hover:bg-white/10 active:scale-95"><Users size={16} strokeWidth={1.75} /></button>
+          <button type="button" onClick={() => llamarGrupo('audio')} title={t('Llamada grupal')} className="grid h-10 w-10 place-items-center rounded-pill bg-white text-mp-navy shadow-card transition active:scale-95"><Users size={20} strokeWidth={1.75} /></button>
         </div>
       </div>
+      {/* Hilo: crema LISO (sin patrón). */}
       <div ref={listRef}
-        className={`scroll-thin overflow-y-auto overscroll-contain bg-[#EEE9DC] p-3 dark:bg-slate-950 ${fill ? 'min-h-0 flex-1' : ''}`}
-        style={{
-          ...(fill ? {} : { maxHeight: alto }),
-          // Patrón de puntos sutil sobre el fondo crema.
-          backgroundImage: 'radial-gradient(rgba(19,35,63,.05) 1px, transparent 1px)', backgroundSize: '16px 16px',
-        }}>
+        className={`scroll-thin overflow-y-auto overscroll-contain bg-mp-cream p-3 ${fill ? 'min-h-0 flex-1' : ''}`}
+        style={fill ? {} : { maxHeight: alto }}>
         {/* Las burbujas se ANCLAN ABAJO (como WhatsApp): con pocos mensajes no queda
             un hueco enorme arriba del campo de escribir. */}
         <div className="flex min-h-full flex-col justify-end space-y-2">
@@ -212,27 +212,40 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           const mio = m.autorId === usuario?.id
           const leidoPorOtro = (m.leidoPor || []).some((u) => u !== m.autorId)
           const puedeBorrar = mio || esAdmin
+          // Mensaje de SISTEMA ("Andrea marcó cargado"): centrado, gris, sin burbuja.
+          if (m.tipo === 'sistema') {
+            return (
+              <div key={m.id}>
+                {divisor && (
+                  <div className="my-1.5 flex justify-center">
+                    <span className="rounded-pill bg-white/70 px-3 py-0.5 text-[10px] font-semibold text-mp-ink-2">{divisor}</span>
+                  </div>
+                )}
+                <div className="my-1 text-center text-[12px] text-mp-ink-2">{m.texto}</div>
+              </div>
+            )
+          }
           return (
             <div key={m.id}>
             {divisor && (
               <div className="my-1.5 flex justify-center">
-                <span className="rounded-full bg-slate-200/80 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-700/80 dark:text-slate-300">{divisor}</span>
+                <span className="rounded-pill bg-white/70 px-3 py-0.5 text-[10px] font-semibold text-mp-ink-2">{divisor}</span>
               </div>
             )}
             <div className={`group flex items-center gap-1.5 ${mio ? 'justify-end' : 'justify-start'}`}>
               {!mio && (
                 <div className="shrink-0 self-end">
-                  <Avatar foto={avatares[m.autorId]} nombre={m.autorNombre} size={28} />
+                  <Avatar foto={avatares[m.autorId]} nombre={m.autorNombre} size={28} redondo />
                 </div>
               )}
               {mio && puedeBorrar && (
                 <button type="button" onClick={() => borrarMensaje(m)} title={t('Eliminar mensaje')} className="order-1 opacity-0 transition group-hover:opacity-100 text-slate-300 hover:text-rose-500"><Trash2 size={14} /></button>
               )}
-              <div className={`max-w-[80%] rounded-[18px] px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente
-                ? 'border border-rose-400 bg-rose-50 dark:bg-rose-500/10'
+              <div className={`max-w-[78%] rounded-bubble px-3 py-2 text-sm ${mio ? 'order-2' : ''} ${m.urgente
+                ? 'border border-mp-red bg-rose-50'
                 : (mio
-                  ? 'rounded-br-[6px] bg-[#13233f] text-white shadow-sm dark:bg-[#1e3a5f]'
-                  : 'rounded-bl-[6px] bg-white text-[#13233f] shadow-sm dark:bg-slate-800 dark:text-slate-100')}`}>
+                  ? 'rounded-br-[6px] bg-mp-navy text-mp-cream shadow-card'
+                  : 'rounded-bl-[6px] bg-white text-mp-ink shadow-card')}`}>
                 {!mio && (
                   <button type="button" onClick={() => setPerfilRapido({ id: m.autorId, nombre: m.autorNombre, rol: m.autorRol })}
                     className="mb-0.5 text-[10px] font-semibold text-[#a9863a] hover:underline dark:text-amber-400">
@@ -248,9 +261,10 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
                   <a href={m.archivo} download={m.nombreArchivo || 'archivo'} className="mb-0.5 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 underline dark:bg-white/10"><FileText size={16} /> <span className="truncate">{m.nombreArchivo || t('Archivo')}</span></a>
                 )}
                 {m.texto && <div className={`whitespace-pre-wrap break-words ${soloEmojis(m.texto) ? 'text-3xl leading-tight' : ''}`}>{m.texto}</div>}
-                <div className={`mt-0.5 flex items-center gap-1 text-[9px] ${mio ? 'text-white/60' : 'text-slate-500/80 dark:text-white/60'}`}>
+                <div className={`mt-0.5 flex items-center gap-1 text-[9.5px] ${mio ? 'text-mp-cream/60' : 'text-mp-ink-2'}`}>
                   {new Date(m.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
-                  {mio && (leidoPorOtro ? <CheckCheck size={11} /> : <Check size={11} />)}
+                  {/* ✓ enviado · ✓✓ dorado = leído */}
+                  {mio && (leidoPorOtro ? <CheckCheck size={11} className="text-mp-gold" /> : <Check size={11} />)}
                 </div>
               </div>
               {!mio && esAdmin && (
@@ -270,8 +284,8 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
           ))}
         </div>
       )}
-      {/* Barra única: [+] adjuntos · píldora con emoji + texto + cámara · enviar dorado */}
-      <div className="relative flex items-end gap-2 bg-[#EEE9DC] px-2 pt-2 dark:bg-slate-950"
+      {/* Barra 2026: [+] blanco · píldora con emoji + texto + cámara · enviar NAVY con flecha dorada */}
+      <div className="relative flex items-end gap-2 bg-mp-cream px-2 pt-2"
         style={{ paddingBottom: fill ? 'calc(env(safe-area-inset-bottom, 0px) + 8px)' : 8 }}>
           {menuAdj && (
             <>
@@ -295,10 +309,10 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
             </>
           )}
           <button type="button" onClick={() => setMenuAdj((v) => !v)} title={t('Adjuntar')}
-            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-white text-slate-500 shadow-sm transition active:scale-95 dark:bg-slate-800 dark:text-slate-300">
-            <Plus size={22} className={`transition-transform ${menuAdj ? 'rotate-45' : ''}`} />
+            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-pill bg-white text-mp-navy shadow-card transition active:scale-95">
+            <Plus size={22} strokeWidth={1.75} className={`transition-transform ${menuAdj ? 'rotate-45' : ''}`} />
           </button>
-          <div className={`flex min-h-[44px] flex-1 items-center gap-1.5 rounded-full bg-white px-3 shadow-sm dark:bg-slate-800 ${urgente ? 'ring-2 ring-rose-400' : ''}`}>
+          <div className={`flex min-h-[44px] flex-1 items-center gap-1.5 rounded-pill bg-white px-3 shadow-card ${urgente ? 'ring-2 ring-mp-red' : ''}`}>
             <button onClick={() => setVerEmojis((v) => !v)} title={t('Emojis')} className={`flex-shrink-0 ${verEmojis ? 'text-amber-500' : 'text-slate-400'}`}><Smile size={20} /></button>
             <input className="min-w-0 flex-1 bg-transparent py-2 text-base outline-none placeholder:text-slate-400 dark:text-slate-100"
               placeholder={urgente ? t('Mensaje URGENTE…') : t('Escribe un mensaje…')} value={texto}
@@ -311,8 +325,8 @@ export default function ChatOrden({ orden, alto = 340, fill = false, participant
             <label className="flex-shrink-0 cursor-pointer text-slate-400" title={t('Enviar foto')}><Camera size={20} /><input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" /></label>
           </div>
           <button onClick={() => { setVerEmojis(false); enviar() }} disabled={enviando}
-            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-full bg-[#c9a24b] text-[#13233f] shadow-md transition active:scale-95 disabled:opacity-50">
-            <Send size={19} />
+            className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-pill bg-mp-navy text-mp-gold shadow-card transition active:scale-95 disabled:opacity-50">
+            <Send size={19} strokeWidth={1.75} />
           </button>
       </div>
       {perfilRapido && <PerfilRapido autor={perfilRapido} ctxLlamada={ctxLlamada} onClose={() => setPerfilRapido(null)} />}
