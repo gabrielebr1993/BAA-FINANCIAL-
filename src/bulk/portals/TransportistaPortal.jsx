@@ -10,8 +10,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
-  Home, LogOut, Grid2x2, Camera, KeyRound, Languages, User,
+  Home, LogOut, Grid2x2, Camera, KeyRound, Languages, User, Download,
 } from 'lucide-react'
+// Gráficas de la home (orden "Negocio y roles", Bloque 1). Import estático normal:
+// Recharts ya viene en el bundle (misma librería del panel admin de Package).
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList, LineChart, Line,
+} from 'recharts'
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
 import ChatOrden from '../components/ChatOrden'
@@ -51,7 +56,7 @@ import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla, Spinner } from '../../components/ui'
 // Kit del REDISEÑO 2026 (Bloque 1): la carcasa, la home y el perfil usan este lenguaje.
-import { IconButton, PrimaryButton, SecondaryButton, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
+import { IconButton, PrimaryButton, SecondaryButton, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar, Card as CardApp } from '../ui'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
@@ -65,6 +70,40 @@ const FINAL = [...ENTREGADAS, E.CANCELADA]
 const nuevoId = (p) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 const fecha = (v) => (v ? new Date(tsMillis(v) || v).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—')
 const FLOTA_ESTADO = { disponible: { c: 'green', l: 'Disponible' }, en_viaje: { c: 'blue', l: 'En viaje' }, mantenimiento: { c: 'gold', l: 'Mantenimiento' } }
+
+// ── GRÁFICAS de la home (orden "Negocio y roles", Bloque 1) ──────────────────
+// Colores del sistema (tokens de src/styles/tokens.css): serie principal dorado,
+// pasado navy al 30 %, grilla en el color de los divisores, alerta ámbar.
+const GRAF = { gold: '#C9A24A', navy: '#0B1628', navy30: 'rgba(11,22,40,0.30)', grid: '#E6E1D2', amber: '#D9822B', ink2: '#7A776F' }
+const DIA_MS = 86400000
+const numV = (v) => Number(v) || 0
+// Fecha "contable" de una orden entregada (mismo criterio que la tarjeta de
+// ingresos de la home: entrega → liberación → creación).
+const msOrden = (o) => { const v = o.hitos?.entrega || o.hitos?.liberacion || o.creadoEn; const m = tsMillis(v) || Date.parse(v); return Number.isFinite(m) ? m : null }
+// Semana ISO 'YYYY-Www' — MISMO formato de los agregados nocturnos (bulk_stats),
+// para poder mezclar semanas del servidor con semanas calculadas en cliente.
+function semanaISO(d) {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7) + 3) // jueves de esa semana
+  const inicio = new Date(Date.UTC(x.getUTCFullYear(), 0, 4))
+  const sem = 1 + Math.round(((x - inicio) / DIA_MS - 3 + ((inicio.getUTCDay() + 6) % 7)) / 7)
+  return `${x.getUTCFullYear()}-W${String(sem).padStart(2, '0')}`
+}
+// Lunes (00:00 local) de la semana que contiene `ms`.
+const lunesDe = (ms) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime() }
+// Acumula UNA orden entregada en el stat de su semana (misma forma que un doc de
+// bulk_stats; la espera guarda la suma en minutos para poder promediar al final).
+function sumarOrdenStat(s, o, nombrePlanta) {
+  s.ingresos += numV(o.precioTransportista); s.viajes += 1
+  const ton = numV(o.pesoReal ?? o.pesoEstimado); s.toneladas += ton
+  if (o.choferNombre) { const c = (s.porChofer[o.choferNombre] ||= { ton: 0, viajes: 0 }); c.ton += ton; c.viajes += 1 }
+  // Espera en planta: solo si la orden trae AMBOS hitos y el lapso es razonable.
+  const lleg = tsMillis(o.hitos?.llegadaPlanta); const sal = tsMillis(o.hitos?.salidaPlanta)
+  if (lleg && sal && sal > lleg && sal - lleg < DIA_MS) {
+    const p = (s.esperaPlanta[o.plantaId || '?'] ||= { nombre: nombrePlanta(o.plantaId) || 'Planta', sum: 0, n: 0 })
+    p.sum += (sal - lleg) / 60000; p.n += 1
+  }
+}
 
 export default function TransportistaPortal() {
   const { t } = useLang()
@@ -80,6 +119,9 @@ export default function TransportistaPortal() {
   const { datos: carriers } = useColeccion('carriers', [where(documentId(), '==', carrierId)])
   const { datos: configs } = useColeccion('carrierConfig', [where(documentId(), '==', carrierId)])
   const { datos: statements } = useColeccion('carrierStatements', [where('carrierId', '==', carrierId)])
+  // Agregados NOCTURNOS por semana (bulk_stats) para las gráficas de la home; la
+  // semana en curso siempre se recalcula en cliente (la función corre de noche).
+  const { datos: statsAgg } = useColeccion('stats', [where('carrierId', '==', carrierId)])
   // Retiros Fast Pay de MI carrier (los míos y los de mis choferes): para
   // descontarlos al pagar a cada chofer y no pagar doble.
   const { datos: retiros } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
@@ -367,6 +409,10 @@ export default function TransportistaPortal() {
                 <PrimaryButton className="mt-3" icon={FileText} onClick={() => setTab(tabFacturas)}>{t('Facturar')}</PrimaryButton>
               </div>
 
+              {/* Sparkline (Negocio·B1): facturación acumulada de ESTE mes vs el
+                  anterior, con las mismas órdenes entregadas de la home. */}
+              <SparklineFacturar t={t} entregadas={stats.entregadas} />
+
               {/* Choferes con orden activa */}
               {enRuta.length > 0 && (
                 <>
@@ -388,6 +434,11 @@ export default function TransportistaPortal() {
               <ListRow icon={Truck} titulo={t('Equipos')} meta={t('Tu flota de camiones')} onClick={() => setTab('equipos')} />
               <ListRow icon={DollarSign} titulo={t('Pago a choferes')} onClick={() => setTab('pagos')} />
               {tabFacturas === 'facturacion' && <ListRow icon={Wallet} titulo={t('Estado de cuenta')} onClick={() => setTab('cuenta')} />}
+
+              {/* Gráficas (Negocio·B1): agregados nocturnos + cálculo en cliente. */}
+              <SeccionGraficas t={t} entregadas={stats.entregadas} statsAgg={statsAgg}
+                nombrePlanta={nombrePlanta} choferes={choferes} avatares={avatares}
+                irAChoferes={() => setTab('choferes')} />
             </div>
           )
         })()}
@@ -452,6 +503,276 @@ export default function TransportistaPortal() {
         ]}
       />
     </div>
+  )
+}
+
+// ── SECCIÓN DE GRÁFICAS de la home (Negocio·B1) ──────────────────────────────
+// Doble fuente: agregados nocturnos (bulk_stats, por semana ISO) y, como respaldo
+// y para la semana EN CURSO, el cálculo en cliente sobre las mismas órdenes
+// entregadas de la home (ingreso = precioTransportista). Todo estilo del sistema.
+
+// Tick del eje Y de "Toneladas por chofer": avatar redondo (si el sistema ya lo
+// tiene a mano) + nombre a la izquierda. Recharts clona el elemento con x/y/payload.
+function TickChofer({ x = 0, y = 0, payload = {}, fotos = {} }) {
+  const nombre = String(payload.value || '')
+  const foto = fotos[nombre] || null
+  const corto = nombre.length > 12 ? `${nombre.slice(0, 11)}…` : nombre
+  const clip = `gcht_${payload.index || 0}`
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {foto && (
+        <>
+          <defs><clipPath id={clip}><circle cx={-100} cy={0} r={8} /></clipPath></defs>
+          <image href={foto} x={-108} y={-8} width={16} height={16} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clip})`} />
+        </>
+      )}
+      <text x={foto ? -88 : -108} y={0} dy={3.5} fontSize={11} fill={GRAF.ink2} textAnchor="start">{corto}</text>
+    </g>
+  )
+}
+
+function SeccionGraficas({ t, entregadas = [], statsAgg = [], nombrePlanta, choferes = [], avatares = {}, irAChoferes }) {
+  const [modo, setModo] = useState('sem')  // toggle pill Semana / Mes
+  const [sel, setSel] = useState(null)     // barra tocada en "Ingresos" (índice)
+
+  // Todo lo que pintan las gráficas, con la regla de fuentes en un solo lugar.
+  const datos = useMemo(() => {
+    // 1) Cálculo en CLIENTE por semana ISO (respaldo + día en curso).
+    const cli = {}
+    for (const o of entregadas) {
+      const m = msOrden(o); if (m == null) continue
+      const k = semanaISO(new Date(m))
+      const s = (cli[k] ||= { semana: k, ingresos: 0, viajes: 0, toneladas: 0, porChofer: {}, esperaPlanta: {} })
+      sumarOrdenStat(s, o, nombrePlanta)
+    }
+    // 2) Agregados nocturnos por semana.
+    const agg = {}; for (const s of statsAgg) if (s.semana) agg[s.semana] = s
+    const kAhora = semanaISO(new Date())
+    // Fuente de cada semana: agregado si existe; la semana ACTUAL siempre cliente.
+    const de = (k) => (k === kAhora ? cli[k] : (agg[k] || cli[k])) || null
+
+    // Serie SEMANAS: últimas 8 (lunes local → etiqueta corta d/m).
+    const lunes0 = lunesDe(Date.now())
+    const semanas = []; const clavesSem = []
+    for (let i = 7; i >= 0; i--) {
+      const m = lunes0 - i * 7 * DIA_MS
+      const k = semanaISO(new Date(m)); clavesSem.push(k)
+      const d = new Date(m); const s = de(k)
+      semanas.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, ingresos: numV(s?.ingresos), viajes: numV(s?.viajes), actual: k === kAhora })
+    }
+
+    // Serie MESES: últimos 6, sumando cada semana (misma fuente elegida) en el
+    // mes de su jueves — así los agregados nocturnos también cuentan aquí.
+    const hoy = new Date()
+    const iniMeses = new Date(hoy.getFullYear(), hoy.getMonth() - 5, 1).getTime()
+    const mesAcc = {}; const vistos = new Set(); const clavesMes = []
+    for (let w = lunesDe(iniMeses); w <= lunes0; w += 7 * DIA_MS) {
+      const k = semanaISO(new Date(w))
+      if (vistos.has(k)) continue; vistos.add(k); clavesMes.push(k)
+      const s = de(k); if (!s) continue
+      const j = new Date(w + 3 * DIA_MS) // jueves de la semana
+      const km = `${j.getFullYear()}-${j.getMonth()}`
+      const acc = (mesAcc[km] ||= { ingresos: 0, viajes: 0 })
+      acc.ingresos += numV(s.ingresos); acc.viajes += numV(s.viajes)
+    }
+    const meses = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+      const acc = mesAcc[`${d.getFullYear()}-${d.getMonth()}`] || { ingresos: 0, viajes: 0 }
+      meses.push({ label: d.toLocaleDateString('es', { month: 'short' }), ingresos: acc.ingresos, viajes: acc.viajes, actual: i === 0 })
+    }
+
+    // Resumen del PERÍODO VISIBLE (toneladas por chofer + espera por planta).
+    const resumen = (claves) => {
+      const porChofer = {}; const espera = {}
+      for (const k of claves) {
+        const s = de(k); if (!s) continue
+        for (const [n, v] of Object.entries(s.porChofer || {})) { const c = (porChofer[n] ||= { ton: 0, viajes: 0 }); c.ton += numV(v.ton); c.viajes += numV(v.viajes) }
+        for (const [id, v] of Object.entries(s.esperaPlanta || {})) {
+          const e = (espera[id] ||= { nombre: v.nombre || nombrePlanta(id) || 'Planta', sum: 0, n: 0 })
+          const nn = numV(v.n) || 1
+          e.sum += v.sum != null ? numV(v.sum) : numV(v.minProm) * nn // cliente trae suma; el agregado, promedio
+          e.n += nn
+        }
+      }
+      const topChoferes = Object.entries(porChofer).map(([nombre, v]) => ({ nombre, ton: Math.round(v.ton * 10) / 10, viajes: v.viajes }))
+        .sort((a, b) => b.ton - a.ton).slice(0, 8)
+      const esperaPlantas = Object.values(espera).filter((e) => e.n > 0)
+        .map((e) => ({ nombre: e.nombre, minProm: Math.round(e.sum / e.n) }))
+        .sort((a, b) => b.minProm - a.minProm).slice(0, 8)
+      return { topChoferes, esperaPlantas }
+    }
+
+    return {
+      semanas, meses,
+      porModo: { sem: resumen(clavesSem), mes: resumen(clavesMes) },
+      inicioPeriodo: { sem: lunes0 - 7 * 7 * DIA_MS, mes: iniMeses },
+    }
+  }, [entregadas, statsAgg, nombrePlanta])
+
+  const serie = modo === 'sem' ? datos.semanas : datos.meses
+  const hayIngresos = serie.some((p) => p.ingresos > 0 || p.viajes > 0)
+  const { topChoferes, esperaPlantas } = datos.porModo[modo]
+  const puntoSel = serie[sel != null && sel < serie.length ? sel : serie.length - 1]
+  const fotosChofer = useMemo(() => {
+    const m = {}; for (const c of choferes) { const f = c.foto || avatares[c.uid]; if (f) m[c.nombre] = f }
+    return m
+  }, [choferes, avatares])
+
+  // Exportar CSV del período visible (orden, fecha, chofer, planta, ton, ingreso).
+  // Comparte el ARCHIVO con navigator.share si el dispositivo lo permite; si no,
+  // copia al portapapeles y avisa. Nada de <a download> (la app nativa lo bloquea).
+  const exportar = async () => {
+    const desde = datos.inicioPeriodo[modo]
+    const filas = entregadas.filter((o) => { const m = msOrden(o); return m != null && m >= desde }).sort((a, b) => (msOrden(a) || 0) - (msOrden(b) || 0))
+    if (filas.length === 0) { window.alert(t('Sin datos en el período.')); return }
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+    const csv = [
+      [t('Orden'), t('Fecha'), t('Chofer'), t('Planta'), t('Toneladas'), t('Ingreso')].map(esc).join(','),
+      ...filas.map((o) => [o.numero || o.id, new Date(msOrden(o)).toISOString().slice(0, 10), o.choferNombre || '', nombrePlanta(o.plantaId) || '', numV(o.pesoReal ?? o.pesoEstimado), numV(o.precioTransportista)].map(esc).join(',')),
+    ].join('\n')
+    try {
+      const archivo = new File([csv], 'milepay-viajes.csv', { type: 'text/csv' })
+      if (navigator.canShare?.({ files: [archivo] })) { await navigator.share({ files: [archivo], title: t('Ingresos') }); return }
+    } catch (e) { if (e?.name === 'AbortError') return /* canceló el share */ }
+    try { await navigator.clipboard.writeText(csv); window.alert(t('Copiado para compartir.')) } catch { window.alert(t('No se pudo exportar:') + ' CSV') }
+  }
+
+  return (
+    <>
+      {/* Título de la sección + Exportar (discreto, NO dorado). */}
+      <div className="flex items-center justify-between gap-2 pt-2">
+        <div className="text-[15px] font-medium text-mp-ink">{t('Estadísticas')}</div>
+        <button type="button" onClick={exportar}
+          className="inline-flex items-center gap-1.5 rounded-pill px-2 py-1 text-[12px] text-mp-ink-2 transition active:scale-95">
+          <Download size={14} strokeWidth={1.75} /> {t('Exportar')}
+        </button>
+      </div>
+
+      {/* 1) Ingresos por semana/mes: la barra del período ACTUAL en dorado, las
+          anteriores en navy al 30 %. Tocar una barra → detalle bajo la gráfica. */}
+      <CardApp>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[12px] text-mp-ink-2">{modo === 'sem' ? t('Ingresos por semana') : t('Ingresos por mes')}</div>
+          <div className="flex rounded-pill bg-mp-navy/5 p-0.5 text-[12px]">
+            {[['sem', t('Semana')], ['mes', t('Mes')]].map(([k, l]) => (
+              <button key={k} type="button" onClick={() => { setModo(k); setSel(null) }}
+                className={`rounded-pill px-3 py-1 transition ${modo === k ? 'bg-mp-navy text-mp-cream' : 'text-mp-ink-2'}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        {hayIngresos ? (
+          <>
+            <div className="mt-3 h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={serie} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRAF.grid} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tick={{ fontSize: 10, fill: GRAF.ink2 }} />
+                  <Bar dataKey="ingresos" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false} cursor="pointer"
+                    onClick={(_, i) => setSel(i)}>
+                    {serie.map((p, i) => <Cell key={i} fill={p.actual ? GRAF.gold : GRAF.navy30} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            {puntoSel && (
+              <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-mp-line pt-2 text-[13px]">
+                <span className="text-mp-ink-2">{modo === 'sem' ? `${t('Semana')} ${puntoSel.label}` : puntoSel.label}</span>
+                <span className="font-medium text-mp-ink">{money(puntoSel.ingresos)} · {puntoSel.viajes} {t('viaje(s)')}</span>
+              </div>
+            )}
+          </>
+        ) : <div className="mt-3 text-[13px] text-mp-ink-2">{t('Sin datos en el período.')}</div>}
+      </CardApp>
+
+      {/* 2) Toneladas por chofer: horizontales, top 8 del período visible; tocar
+          la gráfica lleva a la pestaña Choferes. */}
+      {topChoferes.length > 0 && (
+        <CardApp onClick={irAChoferes}>
+          <div className="text-[12px] text-mp-ink-2">{t('Toneladas por chofer')}</div>
+          <div className="mt-2" style={{ height: topChoferes.length * 32 + 8 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topChoferes} layout="vertical" margin={{ top: 0, right: 34, left: 0, bottom: 0 }}>
+                <CartesianGrid horizontal={false} stroke={GRAF.grid} />
+                <XAxis type="number" hide domain={[0, (max) => Math.ceil((max || 1) * 1.15)]} />
+                <YAxis type="category" dataKey="nombre" width={112} axisLine={false} tickLine={false} tick={<TickChofer fotos={fotosChofer} />} />
+                <Bar dataKey="ton" fill={GRAF.gold} radius={[0, 4, 4, 0]} maxBarSize={16} isAnimationActive={false} cursor="pointer">
+                  <LabelList dataKey="ton" position="right" style={{ fontSize: 11, fill: GRAF.ink2 }} formatter={(v) => `${v} ${t('Ton').toLowerCase()}`} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardApp>
+      )}
+
+      {/* 3) Tiempo de espera por planta (minutos promedio): >30 min en ámbar.
+          Sin hitos llegada/salida de planta, la tarjeta ni aparece. */}
+      {esperaPlantas.length > 0 && (
+        <CardApp>
+          <div className="text-[12px] text-mp-ink-2">{t('Tiempo de espera por planta')}</div>
+          <div className="mt-2" style={{ height: esperaPlantas.length * 32 + 8 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={esperaPlantas} layout="vertical" margin={{ top: 0, right: 46, left: 0, bottom: 0 }}>
+                <CartesianGrid horizontal={false} stroke={GRAF.grid} />
+                <XAxis type="number" hide domain={[0, (max) => Math.ceil((max || 1) * 1.15)]} />
+                <YAxis type="category" dataKey="nombre" width={112} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: GRAF.ink2 }} />
+                <Bar dataKey="minProm" radius={[0, 4, 4, 0]} maxBarSize={16} isAnimationActive={false}>
+                  {esperaPlantas.map((p, i) => <Cell key={i} fill={p.minProm > 30 ? GRAF.amber : GRAF.navy30} />)}
+                  <LabelList dataKey="minProm" position="right" style={{ fontSize: 11, fill: GRAF.ink2 }} formatter={(v) => `${v} ${t('min')}`} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardApp>
+      )}
+    </>
+  )
+}
+
+// Mini gráfica de LÍNEA bajo "Por facturar": facturación acumulada del mes en
+// curso (dorado) contra el mes anterior (navy 30 %). Sin ejes, ~48 px de alto.
+function SparklineFacturar({ t, entregadas = [] }) {
+  const puntos = useMemo(() => {
+    const hoy = new Date(); const a = hoy.getFullYear(); const m = hoy.getMonth()
+    const aPrev = m === 0 ? a - 1 : a; const mPrev = m === 0 ? 11 : m - 1
+    const diasAct = new Date(a, m + 1, 0).getDate(); const diasPrev = new Date(aPrev, mPrev + 1, 0).getDate()
+    const act = Array(diasAct).fill(0); const prev = Array(diasPrev).fill(0)
+    let hay = false
+    for (const o of entregadas) {
+      const ms = msOrden(o); if (ms == null) continue
+      const d = new Date(ms)
+      if (d.getFullYear() === a && d.getMonth() === m) { act[d.getDate() - 1] += numV(o.precioTransportista); hay = true }
+      else if (d.getFullYear() === aPrev && d.getMonth() === mPrev) { prev[d.getDate() - 1] += numV(o.precioTransportista); hay = true }
+    }
+    if (!hay) return null
+    const lista = []; let sa = 0; let sp = 0
+    for (let d = 1; d <= Math.max(diasAct, diasPrev); d++) {
+      if (d <= diasAct) sa += act[d - 1]
+      if (d <= diasPrev) sp += prev[d - 1]
+      // La línea dorada se corta HOY (lo que va del mes); la navy corre completa.
+      lista.push({ d, act: d <= hoy.getDate() ? sa : null, prev: d <= diasPrev ? sp : null })
+    }
+    return lista
+  }, [entregadas])
+  if (!puntos) return null
+  return (
+    <CardApp>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <span className="text-[12px] text-mp-ink-2">{t('Facturación acumulada')}</span>
+        <span className="flex items-center gap-2.5 text-[11px] text-mp-ink-2">
+          <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-pill" style={{ background: GRAF.gold }} /> {t('Este mes')}</span>
+          <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-pill" style={{ background: GRAF.navy30 }} /> {t('Mes anterior')}</span>
+        </span>
+      </div>
+      <div className="mt-2 h-[48px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={puntos} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+            <Line dataKey="prev" stroke={GRAF.navy30} strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="act" stroke={GRAF.gold} strokeWidth={2} dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </CardApp>
   )
 }
 
