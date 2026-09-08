@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, ClipboardList, FileText, PenLine, LayoutDashboard, Layers, MessageSquare, Navigation, Home, Package, Plus, Grid2x2, LogOut, KeyRound, Printer } from 'lucide-react'
+import { DollarSign, ClipboardList, FileText, PenLine, LayoutDashboard, Layers, MessageSquare, Navigation, Home, Package, Plus, Grid2x2, LogOut, KeyRound, Printer, Repeat, Share2, X, Trash2, Pause, Play, Pencil } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -27,7 +27,8 @@ import { menuGrupoConv } from '../data/grupos'
 import { convClienteOrden, resumenPorConversacion } from '../data/chat'
 import { tsMillis } from '../data/chatKeys'
 import { useColeccion } from '../data/useColeccion'
-import { where, guardar } from '../data/repo'
+import { where, guardar, crear, eliminar } from '../data/repo'
+import { authBulk } from '../firebaseBulk'
 import { ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
 import { generarFacturaPDF } from '../data/facturaPDF'
 import FirmaPad from '../components/FirmaPad'
@@ -60,6 +61,19 @@ const fHora = (v) => { const ms = tsMillis(v) || Date.parse(v); return Number.is
 const fFecha = (v) => { const ms = tsMillis(v) || Date.parse(v); return Number.isFinite(ms) ? new Date(ms).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '' }
 // ¿El cliente ya puede imprimir/ver los tickets del pedido? (misma regla que la tabla)
 const ticketDisponible = (o) => !!(o.ticketCarga || o.ticketEntrega || ENTREGADAS.includes(o.estado) || o.hitos?.carga)
+// ── Pedidos del cliente en 3 toques (orden "Negocio y roles", Bloque 2) ─────
+// Fecha local YYYY-MM-DD (+n días), mismo formato que el backend (hoyMX).
+const ymdLocal = (masDias = 0) => new Date(Date.now() + masDias * 86400000).toLocaleDateString('en-CA')
+// Texto corto de los días de una regla recurrente (0=domingo).
+const DIAS_TXT = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+const diasTexto = (dias = []) => {
+  const s = new Set(dias)
+  const lv = [1, 2, 3, 4, 5].every((d) => s.has(d))
+  return [
+    ...(lv ? ['L–V'] : [1, 2, 3, 4, 5].filter((d) => s.has(d)).map((d) => DIAS_TXT[d])),
+    ...(s.has(6) ? ['S'] : []), ...(s.has(0) ? ['D'] : []),
+  ].join(' · ') || '—'
+}
 
 export default function ClientePortal() {
   const { t } = useLang()
@@ -78,6 +92,25 @@ export default function ClientePortal() {
     return (_ordenesRaw || []).map((o) => (m[o.id] != null ? { ...o, precioCliente: m[o.id] } : o))
   }, [_ordenesRaw, pagosCliente])
   const { datos: facturas } = useColeccion('invoices', [where('clienteId', '==', clienteId)])
+  // Pedidos en 3 toques (Negocio B2): solicitudes propias aún sin convertir y
+  // reglas recurrentes del cliente. Las órdenes reales las crea el backend.
+  const { datos: pedidosCli } = useColeccion('pedidos', [where('clienteId', '==', clienteId)])
+  const { datos: reglasRec } = useColeccion('recurringOrders', [where('clienteId', '==', clienteId)])
+  // Hoja "Nuevo pedido": {} vacía, { prefill } al repetir, { regla } al editar recurrente.
+  const [hoja, setHoja] = useState(null)
+  const [aviso, setAviso] = useState('') // confirmación breve tras crear/copiar
+  const avisar = (msg) => { setAviso(msg); setTimeout(() => setAviso(''), 2500) }
+  // Link PÚBLICO de seguimiento (encargado de obra): lo emite /api/bulk-track.
+  const compartirSeguimiento = async (ordenId) => {
+    try {
+      const tok = await authBulk.currentUser.getIdToken()
+      const r = await fetch('/api/bulk-track', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ accion: 'compartir', ordenId }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.url) throw new Error(d.error || t('Error de conexión.'))
+      if (navigator.share) await navigator.share({ url: d.url }).catch(() => {})
+      else { await navigator.clipboard.writeText(d.url); avisar(t('Link copiado')) }
+    } catch (e) { window.alert(t('No se pudo generar el link: ') + (e?.message || '')) }
+  }
   // ¿El admin permite al cliente ver los chats por viaje? (señal bulk_signals/chat)
   const { datos: signalsChat } = useColeccion('signals')
   const veChatsViaje = ((signalsChat || []).find((x) => x.id === 'chat') || {}).clienteVeOrdenes !== false
@@ -299,9 +332,9 @@ export default function ClientePortal() {
                       </FeatureCard>
                     )}
 
-                    {/* ÚNICO botón dorado de la pantalla. El cliente no crea pedidos
-                        (los emite la oficina), así que lleva a su lista de pedidos. */}
-                    <PrimaryButton icon={Plus} onClick={() => setTab('ordenes')}>{t('Nuevo pedido')}</PrimaryButton>
+                    {/* ÚNICO botón dorado de la pantalla: abre la hoja "Nuevo pedido"
+                        (3 toques; el backend lo convierte en órdenes reales). */}
+                    <PrimaryButton icon={Plus} onClick={() => setHoja({})}>{t('Nuevo pedido')}</PrimaryButton>
 
                     {/* Stats del mes */}
                     <div className="grid grid-cols-2 gap-2">
@@ -415,7 +448,70 @@ export default function ClientePortal() {
                 )
               })()}
 
-              {tab === 'ordenes' && (
+              {tab === 'ordenes' && (() => {
+                // Solicitudes propias aún sin convertir (el cliente puede borrarlas
+                // mientras estén 'pendiente'/'programado'; reglas de Firestore).
+                const solicitudes = (pedidosCli || [])
+                  .filter((p) => ['pendiente', 'programado'].includes(p.estado))
+                  .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')))
+                const reglas = (reglasRec || []).slice().sort((a, b) => String(a.material || '').localeCompare(String(b.material || '')))
+                return (
+                <div className="space-y-2 px-1">
+                  {/* ÚNICO dorado de la pestaña: la misma hoja de 3 toques de la home. */}
+                  <PrimaryButton icon={Plus} onClick={() => setHoja({})}>{t('Nuevo pedido')}</PrimaryButton>
+
+                  {/* Solicitudes enviadas (pendientes de convertir o programadas). */}
+                  {solicitudes.length > 0 && (
+                    <>
+                      <div className="pt-1 text-[15px] font-medium text-mp-ink">{t('Solicitudes')}</div>
+                      {solicitudes.map((p) => (
+                        <ListRow key={p.id} icon={Package} chevron={false}
+                          titulo={`${t(p.material || '—')} · ${p.cantidadTon} ${t('ton')}`}
+                          meta={`${p.fecha || ''}${p.destino ? ` · ${p.destino}` : ''}`}
+                          derecha={<span className="flex flex-shrink-0 items-center gap-1">
+                            <StatusPill color="var(--mp-gold)">{p.estado === 'programado' ? t('Programado') : t('Pendiente')}</StatusPill>
+                            <button type="button" title={t('Eliminar')} className="grid h-8 w-8 place-items-center rounded-pill text-mp-ink-2 transition active:scale-95"
+                              onClick={() => { if (window.confirm(t('¿Eliminar este pedido?'))) eliminar('pedidos', p.id) }}>
+                              <Trash2 size={16} strokeWidth={1.75} />
+                            </button>
+                          </span>} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* Reglas RECURRENTES del cliente: pausar/reanudar, editar, eliminar.
+                      Las órdenes las genera el backend cada día elegido a las 00:05. */}
+                  {reglas.length > 0 && (
+                    <>
+                      <div className="pt-1 text-[15px] font-medium text-mp-ink">{t('Recurrentes')}</div>
+                      {reglas.map((r) => (
+                        <CardApp key={r.id}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-[14px] font-medium text-mp-ink">{t(r.material || '—')} · {r.cantidadTon} {t('ton')}</div>
+                              <div className="truncate text-[12px] text-mp-ink-2">{diasTexto(r.dias)}{r.hora ? ` · ${r.hora}` : ''}{r.destino ? ` · ${r.destino}` : ''}{r.fin ? ` · → ${r.fin}` : ''}</div>
+                            </div>
+                            <StatusPill color={r.pausada ? 'var(--mp-ink-2)' : 'var(--mp-green)'}>{r.pausada ? t('Pausada') : t('Activa')}</StatusPill>
+                          </div>
+                          <div className="mt-2.5 flex gap-2">
+                            <button type="button" onClick={() => guardar('recurringOrders', r.id, { pausada: !r.pausada })}
+                              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill border border-mp-navy text-[12px] font-medium text-mp-navy transition active:scale-95">
+                              {r.pausada ? <Play size={14} strokeWidth={1.75} /> : <Pause size={14} strokeWidth={1.75} />} {r.pausada ? t('Reanudar') : t('Pausar')}
+                            </button>
+                            <button type="button" onClick={() => setHoja({ regla: r })}
+                              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill border border-mp-navy text-[12px] font-medium text-mp-navy transition active:scale-95">
+                              <Pencil size={14} strokeWidth={1.75} /> {t('Editar')}
+                            </button>
+                            <button type="button" onClick={() => { if (window.confirm(t('¿Eliminar esta regla recurrente?'))) eliminar('recurringOrders', r.id) }}
+                              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill border border-mp-red/60 text-[12px] font-medium text-mp-red transition active:scale-95">
+                              <Trash2 size={14} strokeWidth={1.75} /> {t('Eliminar')}
+                            </button>
+                          </div>
+                        </CardApp>
+                      ))}
+                    </>
+                  )}
+
                 <Card className="p-4">
                   <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Mis órdenes')}</h3>
                   {ordenes.length === 0 ? <EstadoVacio titulo={t('Aún no hay órdenes')} texto={t('Aquí verás tus órdenes con su estado en tiempo real.')} mostrarBoton={false} /> : (
@@ -435,7 +531,9 @@ export default function ClientePortal() {
                       }} />
                   )}
                 </Card>
-              )}
+                </div>
+                )
+              })()}
 
               {tab === 'facturas' && (
                 <>
@@ -510,6 +608,19 @@ export default function ClientePortal() {
       </div>
 
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
+
+      {/* Hoja "Nuevo pedido" (3 toques) / editar recurrente — Negocio B2. */}
+      {hoja && (
+        <HojaNuevoPedido t={t} ordenes={ordenes} tenantId={tenantId} clienteId={usuario?.clienteId}
+          clienteNombre={empresaCliente} prefill={hoja.prefill} regla={hoja.regla}
+          onClose={() => setHoja(null)} onListo={(msg) => { setHoja(null); avisar(msg) }} />
+      )}
+      {/* Confirmación breve (pedido enviado / link copiado). */}
+      {aviso && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[85] flex justify-center px-4">
+          <div className="rounded-pill bg-mp-navy px-4 py-2 text-[13px] text-mp-cream shadow-float">{aviso}</div>
+        </div>
+      )}
 
       {/* ── DETALLE DE PEDIDO apilado (Bloque 3): esqueleto compartido ────────
           Se abre al tocar un pedido en la home (destacado/programados) o una
@@ -598,6 +709,14 @@ export default function ClientePortal() {
                 )}
               </CardApp>
             </div>
+            {/* Acciones del pedido (Negocio B2): repetir en 3 toques y, mientras
+                está activo, el link público de seguimiento para el encargado. */}
+            <ListRow icon={Repeat} titulo={t('Repetir pedido')} meta={t('Misma carga y destino; solo eliges la fecha.')}
+              onClick={() => { cerrar(); setTab('ordenes'); setHoja({ prefill: { material: o.material || '', cantidadTon: n(o.pesoReal ?? o.pesoEstimado), destino: o.direccionEntrega || '', jobId: o.jobId || null } }) }} />
+            {activa && (
+              <ListRow icon={Share2} titulo={t('Compartir seguimiento')} meta={t('Link en vivo sin login para el encargado de obra')}
+                onClick={() => compartirSeguimiento(o.id)} />
+            )}
             {/* Documentos del pedido: ticket imprimible cuando la carga ya salió
                 (solo-impresión: el cliente no genera folios). */}
             {ticketDisponible(o) && (
@@ -645,5 +764,233 @@ export default function ClientePortal() {
         </div>
       )}
     </>
+  )
+}
+
+// ── Chip pill de la hoja (material / destino / fecha / días) ─────────────────
+function Chip({ on, onClick, children, className = '' }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`max-w-full truncate rounded-pill px-3.5 py-2 text-[13px] font-medium transition active:scale-95 ${on ? 'bg-mp-navy text-mp-cream' : 'bg-white text-mp-ink shadow-card'} ${className}`}>
+      {children}
+    </button>
+  )
+}
+
+// ── Hoja "NUEVO PEDIDO" en 3 toques (orden "Negocio y roles", Bloque 2) ──────
+// El cliente NO puede leer bulk_jobs: materiales, destinos y jobIds salen de SUS
+// órdenes pasadas. La hoja escribe bulk_pedidos (estado 'pendiente') y el backend
+// (bulkPedidoCliente) lo convierte en órdenes reales; con "Repetir cada…" activo
+// escribe además la regla en bulk_recurringOrders (createRecurringOrders la corre
+// cada día elegido a las 00:05). `prefill` = repetir una orden; `regla` = editar
+// una recurrente existente (guarda sobre la misma).
+function HojaNuevoPedido({ t, ordenes, tenantId, clienteId, clienteNombre, prefill = null, regla = null, onClose, onListo }) {
+  // Órdenes más recientes primero: el "catálogo" personal del cliente.
+  const recientes = useMemo(() => (ordenes || []).slice()
+    .sort((a, b) => (tsMillis(b.creadoEn) || Date.parse(b.ts) || 0) - (tsMillis(a.creadoEn) || Date.parse(a.ts) || 0)), [ordenes])
+  // Últimos 6 materiales usados (sin repetir).
+  const materiales = useMemo(() => {
+    const v = []
+    for (const o of recientes) { if (o.material && !v.includes(o.material)) v.push(o.material); if (v.length >= 6) break }
+    return v
+  }, [recientes])
+  // Últimas 4 direcciones de entrega DISTINTAS, cada una con el jobId de su orden.
+  const destinos = useMemo(() => {
+    const v = []
+    for (const o of recientes) {
+      const d = (o.direccionEntrega || '').trim()
+      if (d && o.jobId && !v.some((x) => x.dir === d)) v.push({ dir: d, jobId: o.jobId })
+      if (v.length >= 4) break
+    }
+    return v
+  }, [recientes])
+  // jobId para "Otra" dirección: la orden más reciente del material elegido.
+  const jobDeMaterial = (mat) => (recientes.find((o) => o.material === mat && o.jobId) || recientes.find((o) => o.jobId) || {}).jobId || null
+
+  const ini = regla || prefill || {}
+  const [material, setMaterial] = useState(ini.material || materiales[0] || '')
+  const [cantidad, setCantidad] = useState(ini.cantidadTon ? String(ini.cantidadTon) : '')
+  const [destinoSel, setDestinoSel] = useState(() => {
+    const d = (ini.destino || '').trim()
+    if (d) return destinos.some((x) => x.dir === d) ? d : 'otra'
+    return destinos[0]?.dir || 'otra'
+  })
+  const [destinoOtra, setDestinoOtra] = useState(() => {
+    const d = (ini.destino || '').trim()
+    return d && !destinos.some((x) => x.dir === d) ? d : ''
+  })
+  const [fechaSel, setFechaSel] = useState('hoy') // hoy | manana | elegir
+  const [fechaOtra, setFechaOtra] = useState('')
+  const [masOpc, setMasOpc] = useState(false)
+  const [notas, setNotas] = useState('')
+  // Recurrente: chips L–V / S / D (multiselección de bloques de días).
+  const [rec, setRec] = useState(!!regla)
+  const [dLV, setDLV] = useState(regla ? (regla.dias || []).some((d) => d >= 1 && d <= 5) : true)
+  const [dS, setDS] = useState(regla ? (regla.dias || []).includes(6) : false)
+  const [dD, setDD] = useState(regla ? (regla.dias || []).includes(0) : false)
+  const [hora, setHora] = useState(regla?.hora || '')
+  const [fin, setFin] = useState(regla?.fin || '')
+  const [ocupado, setOcupado] = useState(false)
+
+  // Sin órdenes previas no hay catálogo (ni jobId válido): la hoja lo explica.
+  const sinCatalogo = materiales.length === 0 || !recientes.some((o) => o.jobId)
+  // ESTIMADO: precio por tonelada de la orden más reciente del mismo material
+  // (precioCliente ya viene fusionado desde bulk_orderPay_cliente en `ordenes`).
+  const refPrecio = recientes.find((o) => o.material === material && n(o.precioCliente) > 0 && n(o.pesoReal ?? o.pesoEstimado) > 0)
+  const porTon = refPrecio ? n(refPrecio.precioCliente) / n(refPrecio.pesoReal ?? refPrecio.pesoEstimado) : null
+  const estimado = porTon && Number(cantidad) > 0 ? porTon * Number(cantidad) : null
+
+  const pedir = async () => {
+    const dir = destinoSel === 'otra' ? destinoOtra.trim() : destinoSel
+    const ton = Number(cantidad)
+    // jobId: el de la dirección conocida; con "Otra" el del material elegido
+    // (o el de la regla/orden origen si la dirección no cambió).
+    const jobId = destinoSel !== 'otra'
+      ? destinos.find((x) => x.dir === destinoSel)?.jobId
+      : (ini.destino && dir === ini.destino.trim() && ini.jobId) ? ini.jobId : jobDeMaterial(material)
+    if (!material || !(ton > 0) || !dir || !jobId) { window.alert(t('Elige material, cantidad y destino.')); return }
+    const fecha = fechaSel === 'hoy' ? ymdLocal(0) : fechaSel === 'manana' ? ymdLocal(1) : fechaOtra
+    if (!rec && !fecha) { window.alert(t('Elige la fecha.')); return }
+    const dias = [...(dLV ? [1, 2, 3, 4, 5] : []), ...(dS ? [6] : []), ...(dD ? [0] : [])]
+    if (rec && dias.length === 0) { window.alert(t('Elige al menos un día.')); return }
+    setOcupado(true)
+    try {
+      const base = { clienteId, jobId, material, cantidadTon: ton, destino: dir }
+      if (rec) {
+        const datos = { ...base, clienteNombre: clienteNombre || '', dias, hora: hora || '', fin: fin || null, activa: true, pausada: regla ? !!regla.pausada : false }
+        if (regla) await guardar('recurringOrders', regla.id, datos)
+        else await crear('recurringOrders', tenantId, datos)
+        // El pedido de la PRIMERA fecha solo si es hoy/mañana; los siguientes
+        // los crea el backend según la regla.
+        if (!regla && fecha && fecha <= ymdLocal(1)) {
+          await crear('pedidos', tenantId, { ...base, fecha, ...(notas.trim() ? { notas: notas.trim() } : {}), estado: 'pendiente' })
+        }
+        onListo(t('Regla guardada'))
+      } else {
+        await crear('pedidos', tenantId, { ...base, fecha, ...(notas.trim() ? { notas: notas.trim() } : {}), estado: 'pendiente' })
+        onListo(t('Pedido enviado'))
+      }
+    } catch (e) { window.alert(t('No se pudo crear el pedido: ') + (e?.message || '')); setOcupado(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50" onClick={ocupado ? undefined : onClose}>
+      <div className="mp-app flex max-h-[90dvh] w-full max-w-md flex-col rounded-t-card bg-mp-cream p-4 pb-[max(env(safe-area-inset-bottom),16px)]" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-pill bg-white text-mp-navy shadow-card">
+            {regla ? <Repeat size={18} strokeWidth={1.75} /> : <Plus size={18} strokeWidth={1.75} />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-medium text-mp-ink">{regla ? t('Editar recurrente') : t('Nuevo pedido')}</div>
+            <div className="truncate text-[12px] text-mp-ink-2">{regla ? t('Los cambios aplican desde el próximo día.') : t('La oficina lo recibe al instante.')}</div>
+          </div>
+          <IconButton icon={X} label={t('Cerrar')} onClick={onClose} />
+        </div>
+
+        {sinCatalogo ? (
+          <div className="py-8 text-center text-[13px] text-mp-ink-2">{t('Aún no puedes pedir aquí: tus materiales y destinos salen de tus órdenes anteriores.')}</div>
+        ) : (
+          <>
+            <div className="scroll-thin min-h-0 flex-1 space-y-3 overflow-y-auto pb-2">
+              {/* 1) Material: los últimos 6 usados. */}
+              <div>
+                <div className="mb-1.5 text-[12px] text-mp-ink-2">{t('Material')}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {materiales.map((m) => <Chip key={m} on={material === m} onClick={() => setMaterial(m)}>{t(m)}</Chip>)}
+                </div>
+              </div>
+
+              {/* 2) Cantidad: número grande con sufijo ton + estimado si hay precio. */}
+              <div>
+                <div className="mb-1.5 text-[12px] text-mp-ink-2">{t('Cantidad')}</div>
+                <div className="flex items-baseline justify-center gap-2 rounded-card bg-white p-3 shadow-card">
+                  <input value={cantidad} onChange={(e) => setCantidad(e.target.value.replace(',', '.'))} inputMode="decimal" placeholder="0" autoFocus={!regla}
+                    className="w-32 bg-transparent text-center text-[28px] font-medium text-mp-ink outline-none placeholder:text-mp-ink-2/40" />
+                  <span className="text-[15px] text-mp-ink-2">{t('ton')}</span>
+                </div>
+                {estimado != null && (
+                  <div className="mt-1 text-center text-[12px] text-mp-ink-2">{t('Precio estimado')}: <span className="font-medium text-mp-ink">{money(estimado)}</span></div>
+                )}
+              </div>
+
+              {/* 3) Destino: últimas 4 direcciones + "Otra" (texto libre). */}
+              <div>
+                <div className="mb-1.5 text-[12px] text-mp-ink-2">{t('Destino')}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {destinos.map((d) => <Chip key={d.dir} on={destinoSel === d.dir} onClick={() => setDestinoSel(d.dir)} className="max-w-[260px]">{d.dir}</Chip>)}
+                  <Chip on={destinoSel === 'otra'} onClick={() => setDestinoSel('otra')}>{t('Otra')}</Chip>
+                </div>
+                {destinoSel === 'otra' && (
+                  <input value={destinoOtra} onChange={(e) => setDestinoOtra(e.target.value)} placeholder={t('Dirección de entrega…')}
+                    className="mt-1.5 h-11 w-full rounded-pill bg-white px-4 text-[14px] text-mp-ink shadow-card outline-none placeholder:text-mp-ink-2" />
+                )}
+              </div>
+
+              {/* 4) Fecha: Hoy / Mañana / Elegir (una regla recurrente no lleva fecha). */}
+              {!regla && (
+                <div>
+                  <div className="mb-1.5 text-[12px] text-mp-ink-2">{t('Fecha')}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Chip on={fechaSel === 'hoy'} onClick={() => setFechaSel('hoy')}>{t('Hoy')}</Chip>
+                    <Chip on={fechaSel === 'manana'} onClick={() => setFechaSel('manana')}>{t('Mañana')}</Chip>
+                    <Chip on={fechaSel === 'elegir'} onClick={() => setFechaSel('elegir')}>{t('Elegir')}</Chip>
+                    {fechaSel === 'elegir' && (
+                      <input type="date" value={fechaOtra} min={ymdLocal(0)} onChange={(e) => setFechaOtra(e.target.value)}
+                        className="h-10 rounded-pill bg-white px-3 text-[13px] text-mp-ink shadow-card outline-none" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Repetir cada…: días L–V / S / D + hora y fecha fin opcionales. */}
+              <div className="rounded-card bg-white p-3 shadow-card">
+                <button type="button" onClick={() => setRec(!rec)} className="flex w-full items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2 text-[14px] font-medium text-mp-ink"><Repeat size={16} strokeWidth={1.75} className="text-mp-ink-2" /> {t('Repetir cada…')}</span>
+                  <span className={`relative h-6 w-11 flex-shrink-0 rounded-pill transition ${rec ? 'bg-mp-navy' : 'bg-mp-line'}`}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-pill bg-white shadow-card transition-all ${rec ? 'left-[22px]' : 'left-0.5'}`} />
+                  </span>
+                </button>
+                {rec && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip on={dLV} onClick={() => setDLV(!dLV)} className={dLV ? '' : '!bg-mp-cream'}>L–V</Chip>
+                      <Chip on={dS} onClick={() => setDS(!dS)} className={dS ? '' : '!bg-mp-cream'}>S</Chip>
+                      <Chip on={dD} onClick={() => setDD(!dD)} className={dD ? '' : '!bg-mp-cream'}>D</Chip>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="mb-1 block text-[12px] text-mp-ink-2">{t('Hora (opcional)')}</span>
+                        <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="h-10 w-full rounded-pill bg-mp-cream px-3 text-[13px] text-mp-ink outline-none" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[12px] text-mp-ink-2">{t('Hasta (opcional)')}</span>
+                        <input type="date" value={fin || ''} min={ymdLocal(0)} onChange={(e) => setFin(e.target.value)} className="h-10 w-full rounded-pill bg-mp-cream px-3 text-[13px] text-mp-ink outline-none" />
+                      </label>
+                    </div>
+                    <p className="m-0 text-[11px] text-mp-ink-2">{t('El pedido se crea solo cada día elegido a las 00:05.')}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Más opciones plegado: notas para la oficina. */}
+              {!regla && (
+                <div>
+                  <button type="button" onClick={() => setMasOpc(!masOpc)} className="text-[13px] font-medium text-mp-ink-2">{masOpc ? '−' : '+'} {t('Más opciones')}</button>
+                  {masOpc && (
+                    <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} placeholder={t('Notas para la oficina…')}
+                      className="mt-1.5 w-full rounded-[18px] bg-white p-3 text-[14px] text-mp-ink shadow-card outline-none placeholder:text-mp-ink-2" />
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ÚNICO dorado de la hoja. */}
+            <PrimaryButton onClick={pedir} disabled={ocupado} className="mt-2 flex-shrink-0">
+              {regla ? t('Guardar cambios') : t('Pedir')}
+            </PrimaryButton>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
