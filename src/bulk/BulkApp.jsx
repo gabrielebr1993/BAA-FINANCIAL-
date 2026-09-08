@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { BulkAuthProvider, useBulkAuth } from './BulkAuthContext'
 import { useColeccion } from './data/useColeccion'
@@ -47,6 +47,7 @@ const ChoferPortal = lazy(() => import('./portals/ChoferPortal'))
 const ClientePortal = lazy(() => import('./portals/ClientePortal'))
 const TransportistaPortal = lazy(() => import('./portals/TransportistaPortal'))
 const SupervisorPortal = lazy(() => import('./portals/SupervisorPortal'))
+const DispatcherPortal = lazy(() => import('./portals/DispatcherPortal'))
 
 // Cada rol operativo entra a SU propio portal (no al panel de staff).
 const PORTALES = {
@@ -160,11 +161,30 @@ function PushSetup() {
 function Interno() {
   const { t } = useLang()
   const { usuario, cargando, rol } = useBulkAuth()
+  // DISPATCHER (rediseño 2026, Bloque 2.3): en el TELÉFONO entra a su portal
+  // móvil; en pantalla grande (o al tocar "Modo escritorio") usa el panel
+  // completo de siempre. La preferencia dura la SESIÓN del navegador
+  // (sessionStorage) para no dejar a nadie atrapado en la vista equivocada;
+  // ?vista=portal|escritorio en la URL la fuerza.
+  const [vistaDisp, setVistaDisp] = useState(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get('vista')
+      if (q === 'portal' || q === 'escritorio') { sessionStorage.setItem('mp_disp_vista', q); return q }
+      return sessionStorage.getItem('mp_disp_vista') || 'auto'
+    } catch { return 'auto' }
+  })
+  const irEscritorio = () => { try { sessionStorage.setItem('mp_disp_vista', 'escritorio') } catch { /* noop */ } setVistaDisp('escritorio') }
   if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto={t('Cargando Freight…')} /></div>
   if (!usuario) return <BulkLogin />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
   if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
+  if (rol === 'dispatcher') {
+    const esMovil = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+    if (vistaDisp === 'portal' || (vistaDisp === 'auto' && esMovil)) {
+      return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><DispatcherPortal irEscritorio={irEscritorio} /></Suspense></>
+    }
+  }
   return (
     <>
     <PushSetup />

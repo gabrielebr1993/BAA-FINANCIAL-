@@ -66,6 +66,29 @@ export function notificacionesTransportista({ ordenes = [], statements = [], men
   return out.sort((a, b) => (PESO_SEV[a.sev] - PESO_SEV[b.sev]))
 }
 
+// CHOFER: su oferta pendiente, su orden activa estancada y sus mensajes (Bloque 6).
+export function notificacionesChofer({ oferta = null, activa = null, mensajesNuevos = 0, ahoraMs }) {
+  const out = []
+  if (oferta) out.push({ id: `oferta:${oferta.id}`, sev: 'critico', tipo: 'riesgo', titulo: `Orden ${oferta.numero || ''} ofrecida`, detalle: 'Tienes una orden nueva por aceptar', accion: 'Acepta o rechaza en Inicio' })
+  if (mensajesNuevos > 0) out.push({ id: 'mensajes', sev: 'info', tipo: 'mensaje', titulo: `${mensajesNuevos} mensaje(s) sin leer`, accion: 'Abre el chat y responde' })
+  if (activa) {
+    const r = alertaOrden(activa, ahoraMs, LIMITE_RIESGO_MS)
+    if (r) out.push({ id: `riesgo:${activa.id}`, sev: 'warn', tipo: 'riesgo', titulo: `Orden ${activa.numero} lleva rato sin avanzar`, detalle: r.tipo === 'recogida' ? 'Marca tu llegada o la carga' : 'Marca tu avance de entrega', accion: 'Actualiza el estado en tu orden' })
+  }
+  return out.sort((a, b) => (PESO_SEV[a.sev] - PESO_SEV[b.sev]))
+}
+
+// SUPERVISOR DE PLANTA: choferes esperando su código + camiones con espera larga
+// en el patio (Bloque 6). `patio` = [{ id, numero, choferNombre, min }].
+export function notificacionesSupervisor({ porAutorizar = [], patio = [] }) {
+  const out = []
+  for (const o of porAutorizar) out.push({ id: `aut:${o.id}`, sev: 'warn', tipo: 'sla', titulo: `${o.choferNombre || 'Chofer'} espera tu código`, detalle: `Orden ${o.numero || ''}`, accion: 'Autoriza la entrega' })
+  for (const c of patio) {
+    if (c.min != null && c.min >= 30) out.push({ id: `patio:${c.id}`, sev: 'warn', tipo: 'riesgo', titulo: `Camión lleva ${c.min} min en el patio`, detalle: [c.choferNombre, c.numero ? `Orden ${c.numero}` : ''].filter(Boolean).join(' · '), accion: 'Revisa la báscula' })
+  }
+  return out.sort((a, b) => (PESO_SEV[a.sev] - PESO_SEV[b.sev]))
+}
+
 // CLIENTE: sus facturas (por firmar / disputadas) + mensajes. No ve costos internos.
 export function notificacionesCliente({ facturas = [], mensajesNuevos = 0 }) {
   const out = []

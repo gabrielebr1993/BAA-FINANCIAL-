@@ -25,6 +25,8 @@ import { ahora } from '../domain/flujo'
 import { etaOrden, etaTexto } from '../domain/eta'
 import { NIVEL_LABEL } from '../domain/liberacion'
 import { beep, notificar } from '../integraciones/alertasLocales'
+import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import { notificacionesSupervisor } from '../domain/notificaciones'
 import { Card, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 // Kit del REDISEÑO 2026 (Bloque 1): carcasa, home y accesos usan este lenguaje.
 import { IconButton, PrimaryButton, Card as MpCard, StatCard, ListRow, Badge as MpBadge, FloatingTabBar } from '../ui'
@@ -158,6 +160,11 @@ export default function SupervisorPortal() {
     const ms = llegadaPatioMs(o)
     return ms == null ? null : Math.max(0, Math.round((Date.now() - ms) / 60000))
   }
+  // Campana 2026 (Bloque 6): choferes esperando código + esperas largas en patio.
+  const notifsSup = useMemo(
+    () => notificacionesSupervisor({ porAutorizar, patio: enPatio.map((o) => ({ id: o.id, numero: o.numero, choferNombre: o.choferNombre, min: minEsperando(o) })) }),
+    [porAutorizar, enPatio] // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
 
@@ -235,7 +242,7 @@ export default function SupervisorPortal() {
   return (
     // Carcasa 2026: fondo crema a todo el alto, header de fila (sin barra navy),
     // el cuerpo desplaza por dentro y la barra de pestañas FLOTA abajo.
-    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-[640px] md:pl-24">
       <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
         <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
           <Avatar foto={miFoto} nombre={usuario?.nombre} size={40} redondo />
@@ -244,6 +251,7 @@ export default function SupervisorPortal() {
           <div className="truncate text-[14px] font-medium text-mp-ink">{usuario?.nombre}</div>
           <div className="truncate text-[12px] text-mp-ink-2">{t('Supervisor de trabajos')}{jobsNombres.length > 0 ? ` · ${jobsNombres.join(', ')}` : ''}</div>
         </div>
+        <CampanaNotificaciones notifs={notifsSup} claveLS="bulk_notif_supervisor" />
         <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
         <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>

@@ -10,6 +10,8 @@ import RepararAcceso from '../components/RepararAcceso'
 import CambiarClave from '../components/CambiarClave'
 import IndicadorConexion from '../components/IndicadorConexion'
 import AvisosMensajes from '../components/AvisosMensajes'
+import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import { notificacionesChofer } from '../domain/notificaciones'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import { authBulk, funcsBulk } from '../firebaseBulk'
 import { httpsCallable } from 'firebase/functions'
@@ -313,6 +315,8 @@ export default function ChoferPortal() {
   }, [noLeidosOficina])
   const historial = misOrdenes.filter((o) => ESTADOS_HISTORIAL.includes(o.estado))
   const ganancias = misOrdenes.filter((o) => [E.ENTREGADA, ...ESTADOS_HISTORIAL].includes(o.estado)).reduce((a, o) => a + (Number(o.pagoChofer) || 0), 0)
+  // Campana 2026 (Bloque 6): oferta pendiente + orden estancada + mensajes.
+  const notifsCh = useMemo(() => notificacionesChofer({ oferta: entrante, activa, mensajesNuevos: noLeidosOficina, ahoraMs: Date.now() }), [entrante, activa, noLeidosOficina])
 
   return (
     // Carcasa de ALTURA FIJA (h-dvh): el header navy y el nav claro quedan fijos
@@ -335,6 +339,7 @@ export default function ChoferPortal() {
             {enLinea ? t('En línea') : t('Desconectado')} · {t('Chofer')}
           </div>
         </div>
+        <CampanaNotificaciones notifs={notifsCh} claveLS="bulk_notif_chofer" />
         <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
         <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>
