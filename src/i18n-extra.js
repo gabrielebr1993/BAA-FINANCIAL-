@@ -676,6 +676,8 @@ export const EN_EXTRA = {
   "toca para volver": "tap to return",
   "Más": "More",
   "Marcar todas": "Mark all",
+  "Completado": "Completed",
+  "Ticket registrado": "Ticket recorded",
   // ── Rediseño 2026 · Bloque 2.3: portal móvil del dispatcher ──
   "Tablero": "Board",
   "Despacho": "Dispatch",
