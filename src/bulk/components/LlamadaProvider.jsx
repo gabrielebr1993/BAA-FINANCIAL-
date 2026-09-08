@@ -7,8 +7,9 @@
 // Aislamiento por reglas: solo los 2 participantes acceden a la llamada.
 // ============================================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle, Users, UserPlus, Volume2, MicOff as MicOffMini } from 'lucide-react'
+import { Phone, PhoneOff, Video, Mic, MicOff, VideoOff, PhoneIncoming, Minimize2, Maximize2, MonitorUp, SwitchCamera, PenTool, MessageSquare, Eraser, Send, X, Hand, Captions, Settings, Disc, StopCircle, Users, UserPlus, Volume2, MoreHorizontal, MicOff as MicOffMini } from 'lucide-react'
 import { useBulkAuth } from '../BulkAuthContext'
+import { useTemaColor } from '../../hooks/useTemaColor'
 import { enviarMensaje } from '../data/chat'
 import {
   nuevaConexion, callRef, candCol, crearLlamada, actualizarLlamada,
@@ -26,6 +27,10 @@ import { useLang } from '../../i18n'
 
 const LlamadaContext = createContext({ iniciar: () => {}, iniciarGrupo: () => {}, pedirLlamadaGrupo: () => {} })
 export const useLlamada = () => useContext(LlamadaContext)
+
+// Mientras una pantalla de llamada NAVY está visible, la barra de estado del
+// sistema se pinta a juego (orden "Pantalla completa"). Se monta condicionalmente.
+function TemaLlamada() { useTemaColor('#0B1628'); return null }
 
 // Baldosa de un participante REMOTO en la llamada grupal. Se define fuera del
 // proveedor para que no se re-monte en cada render (evita parpadeo del video).
@@ -106,6 +111,7 @@ export default function LlamadaProvider({ children }) {
   const [subOtro, setSubOtro] = useState('')
   const [hablaOtro, setHablaOtro] = useState(false)
   const [ajustes, setAjustes] = useState(false)
+  const [masAbierto, setMasAbierto] = useState(false) // hoja "Más" (funciones avanzadas)
   const [dispos, setDispos] = useState({ mics: [], cams: [], salidas: [] })
   const recorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -803,7 +809,7 @@ export default function LlamadaProvider({ children }) {
     if (fase === 'idle') {
       setMin(false); setTick(0); setCompartiendo(false); setPos(null); setPizarra(false); setChatAbierto(false)
       setMensajesCall([]); setReaccion(null); setNoLeidoCall(0); dcRef.current = null
-      setManoMia(false); setManoOtro(false); setSubMio(''); setSubOtro(''); setHablaOtro(false); setAjustes(false)
+      setManoMia(false); setManoOtro(false); setSubMio(''); setSubOtro(''); setHablaOtro(false); setAjustes(false); setMasAbierto(false)
       try { recorderRef.current?.stop() } catch { /* noop */ } recorderRef.current = null; setGrabando(false)
       try { recognitionRef.current?.stop() } catch { /* noop */ } recognitionRef.current = null; setSubsOn(false)
     }
@@ -876,10 +882,10 @@ export default function LlamadaProvider({ children }) {
     <audio ref={remoteVid} autoPlay />
   )
 
-  // Botón de control redondo con etiqueta (estilo moderno tipo Zoom+).
+  // Botón de control redondo con etiqueta (rediseño 2026: activo = dorado).
   const Ctrl = ({ onClick, label, children, activo, danger, size = 'h-14 w-14' }) => (
     <button type="button" onClick={onClick} title={label} className="group flex flex-col items-center gap-1.5">
-      <span className={`grid ${size} place-items-center rounded-full backdrop-blur transition active:scale-90 group-hover:scale-105 ${danger ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-600' : activo ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'}`}>{children}</span>
+      <span className={`grid ${size} place-items-center rounded-pill backdrop-blur transition active:scale-90 group-hover:scale-105 ${danger ? 'bg-mp-red text-white shadow-lg hover:brightness-110' : activo ? 'bg-mp-gold text-mp-navy shadow-lg' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'}`}>{children}</span>
       <span className="text-[11px] font-medium text-white/70">{label}</span>
     </button>
   )
@@ -905,40 +911,43 @@ export default function LlamadaProvider({ children }) {
         />
       )}
 
-      {/* Timbre de llamada ENTRANTE — moderno, con anillo pulsante */}
+      {/* Timbre de llamada ENTRANTE — pantalla completa NAVY (rediseño 2026) */}
       {fase === 'entrante' && entrante && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-2xl ring-1 ring-white/10">
-            <div className="relative mx-auto h-24 w-24">
-              <span className="absolute inset-0 animate-ping rounded-full bg-amber-500/30" />
-              <div className="relative grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-3xl font-black text-slate-900 shadow-lg">
-                {entrante.grupo ? <Users size={40} />
+        <div className="fixed inset-0 z-[80] flex flex-col bg-mp-navy px-6 pb-[max(env(safe-area-inset-bottom),28px)] pt-[max(env(safe-area-inset-top),40px)]">
+          <TemaLlamada />
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <p className="mb-8 flex items-center justify-center gap-1.5 text-[13px] uppercase tracking-[0.18em] text-mp-cream/50">
+              {entrante.grupo ? <Users size={14} /> : entrante.tipo === 'video' ? <Video size={14} /> : <PhoneIncoming size={14} />}
+              {entrante.grupo ? t('Llamada grupal') : entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}
+            </p>
+            <div className="relative mx-auto h-28 w-28">
+              <span className="absolute inset-0 animate-ping rounded-full bg-mp-gold/25" />
+              <div className="relative grid h-28 w-28 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-4xl font-black text-mp-navy shadow-lg">
+                {entrante.grupo ? <Users size={44} />
                   : avatares[entrante.de?.uid] ? <img src={avatares[entrante.de.uid]} alt="" className="h-full w-full object-cover" />
                   : (entrante.de?.nombre || '?').charAt(0).toUpperCase()}
               </div>
             </div>
-            <h3 className="mt-5 text-xl font-black text-white">{entrante.grupo ? (entrante.nombre || t('Llamada grupal')) : (entrante.de?.nombre || t('Alguien'))}</h3>
-            <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-white/60">
-              {entrante.grupo ? <Users size={14} /> : entrante.tipo === 'video' ? <Video size={14} /> : <PhoneIncoming size={14} />}
-              {entrante.grupo ? `${t('Llamada grupal de')} ${entrante.de?.nombre || ''}` : entrante.tipo === 'video' ? t('Videollamada entrante…') : t('Llamada entrante…')}
-            </p>
-            <div className="mt-8 flex items-center justify-center gap-10">
-              <div className="flex flex-col items-center gap-1.5">
-                <button onClick={onRechazar} className="grid h-16 w-16 place-items-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 transition hover:scale-105 hover:bg-rose-600 active:scale-95"><PhoneOff size={26} /></button>
-                <span className="text-[11px] text-white/60">{t('Rechazar')}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5">
-                <button onClick={onAceptar} className="grid h-16 w-16 animate-bounce place-items-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 transition hover:scale-105 hover:bg-emerald-600 active:scale-95">{entrante.tipo === 'video' ? <Video size={26} /> : <Phone size={26} />}</button>
-                <span className="text-[11px] text-white/60">{t('Aceptar')}</span>
-              </div>
+            <h3 className="mt-6 text-[26px] font-semibold text-mp-cream">{entrante.grupo ? (entrante.nombre || t('Llamada grupal')) : (entrante.de?.nombre || t('Alguien'))}</h3>
+            {entrante.grupo && <p className="mt-1 text-[14px] text-mp-cream/60">{t('Llamada grupal de')} {entrante.de?.nombre || ''}</p>}
+          </div>
+          <div className="mx-auto mb-4 flex w-full max-w-[280px] items-center justify-between">
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={onRechazar} className="grid h-[68px] w-[68px] place-items-center rounded-pill bg-mp-red text-white shadow-lg transition hover:scale-105 active:scale-95"><PhoneOff size={28} strokeWidth={1.75} /></button>
+              <span className="text-[12px] text-mp-cream/60">{t('Rechazar')}</span>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <button onClick={onAceptar} className="grid h-[68px] w-[68px] animate-bounce place-items-center rounded-pill bg-mp-green text-white shadow-lg transition hover:scale-105 active:scale-95">{entrante.tipo === 'video' ? <Video size={28} strokeWidth={1.75} /> : <Phone size={28} strokeWidth={1.75} />}</button>
+              <span className="text-[12px] text-mp-cream/60">{t('Aceptar')}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Llamada SALIENTE o ACTIVA — PANTALLA COMPLETA (moderna) */}
+      {/* Llamada SALIENTE o ACTIVA — PANTALLA COMPLETA NAVY (rediseño 2026) */}
       {(fase === 'saliente' || fase === 'activa') && !min && (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-gradient-to-b from-slate-900 via-slate-950 to-black">
+        <div className="fixed inset-0 z-[80] flex flex-col bg-mp-navy">
+          <TemaLlamada />
           <div className="relative flex-1 overflow-hidden">
             {info?.grupo ? (
               /* ── Cuadrícula de la llamada GRUPAL ── */
@@ -1086,35 +1095,72 @@ export default function LlamadaProvider({ children }) {
               <button onClick={() => setMin(true)} title={t('Minimizar')} className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-white/10 text-white ring-1 ring-white/15 backdrop-blur transition hover:bg-white/20"><Minimize2 size={18} /></button>
             </div>
           </div>
-          {/* Reacciones rápidas */}
-          <div className="flex items-center justify-center gap-2 pb-1">
-            {['👍', '❤️', '😂', '👏', '🎉', '😮'].map((e) => (
-              <button key={e} onClick={() => enviarReaccion(e)} className="rounded-full bg-white/5 px-2 py-1 text-lg transition hover:scale-125 hover:bg-white/15">{e}</button>
-            ))}
+          {/* Controles 2026: cuadrícula 3×2 fija + colgar grande. Todo lo demás
+              (girar, pantalla, subtítulos, grabar, ajustes, reacciones) vive en
+              la hoja "Más" para no saturar la pantalla. */}
+          <div className="relative bg-gradient-to-t from-black/60 to-transparent px-6 pb-[max(env(safe-area-inset-bottom),24px)] pt-3">
+            <div className="mx-auto grid w-full max-w-[300px] grid-cols-3 justify-items-center gap-x-4 gap-y-3">
+              <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
+              <Ctrl onClick={toggleAltavoz} label={t('Altavoz')} activo={altavoz}><Volume2 size={22} /></Ctrl>
+              {esVideo
+                ? <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>
+                : <Ctrl onClick={toggleMano} label={t('Mano')} activo={manoMia}><Hand size={22} /></Ctrl>}
+              <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
+                <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-mp-red px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>
+              </Ctrl>
+              {info?.grupo
+                ? <Ctrl onClick={() => setPickGrupo({ tipo: tipoRef.current, titulo: t('Agregar a la llamada'), preseleccion: [usuario?.id, ...remotos.map((r) => r.uid)].filter(Boolean), onConfirmar: (personas) => agregarPersonas(personas) })} label={t('Agregar')}><UserPlus size={22} /></Ctrl>
+                : <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>}
+              <Ctrl onClick={() => setMasAbierto((v) => !v)} label={t('Más')} activo={masAbierto}><MoreHorizontal size={22} /></Ctrl>
+            </div>
+            <div className="mt-4 flex justify-center">
+              <Ctrl onClick={colgar} label={info?.grupo ? t('Salir') : t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
+            </div>
           </div>
-          {/* Barra de controles moderna */}
-          <div className="flex flex-wrap items-end justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent px-4 pb-8 pt-4 sm:gap-5">
-            <Ctrl onClick={toggleMic} label={micOff ? t('Activar') : t('Silenciar')} activo={micOff}>{micOff ? <MicOff size={22} /> : <Mic size={22} />}</Ctrl>
-            <Ctrl onClick={toggleAltavoz} label={t('Altavoz')} activo={altavoz}><Volume2 size={22} /></Ctrl>
-            {esVideo && <Ctrl onClick={toggleCam} label={t('Cámara')} activo={camOff}>{camOff ? <VideoOff size={22} /> : <Video size={22} />}</Ctrl>}
-            {esVideo && !compartiendo && <Ctrl onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={22} /></Ctrl>}
-            {esVideo && <Ctrl onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={22} /></Ctrl>}
-            {info?.grupo && <Ctrl onClick={() => setPickGrupo({ tipo: tipoRef.current, titulo: t('Agregar a la llamada'), preseleccion: [usuario?.id, ...remotos.map((r) => r.uid)].filter(Boolean), onConfirmar: (personas) => agregarPersonas(personas) })} label={t('Agregar')}><UserPlus size={22} /></Ctrl>}
-            {!info?.grupo && <Ctrl onClick={togglePizarra} label={t('Pizarra')} activo={pizarra}><PenTool size={22} /></Ctrl>}
-            <Ctrl onClick={() => setChatAbierto((v) => !v)} label={t('Chat')} activo={chatAbierto}>
-              <span className="relative"><MessageSquare size={22} />{noLeidoCall > 0 && <span className="absolute -right-2 -top-2 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{noLeidoCall}</span>}</span>
-            </Ctrl>
-            <Ctrl onClick={toggleMano} label={t('Mano')} activo={manoMia}><Hand size={22} /></Ctrl>
-            {!info?.grupo && <Ctrl onClick={toggleSubs} label={t('Subtítulos')} activo={subsOn}><Captions size={22} /></Ctrl>}
-            {!info?.grupo && <Ctrl onClick={toggleGrabar} label={grabando ? t('Detener') : t('Grabar')} activo={grabando}>{grabando ? <StopCircle size={22} /> : <Disc size={22} />}</Ctrl>}
-            <Ctrl onClick={() => { setAjustes((v) => !v); cargarDispositivos() }} label={t('Ajustes')} activo={ajustes}><Settings size={22} /></Ctrl>
-            <Ctrl onClick={colgar} label={info?.grupo ? t('Salir') : t('Finalizar')} danger size="h-16 w-16"><PhoneOff size={26} /></Ctrl>
-          </div>
+
+          {/* Hoja "Más": reacciones + funciones avanzadas */}
+          {masAbierto && (
+            <div className="absolute inset-x-0 bottom-0 z-30 rounded-t-card bg-mp-navy-2 px-5 pb-[max(env(safe-area-inset-bottom),20px)] pt-3 shadow-2xl ring-1 ring-white/10">
+              <button type="button" onClick={() => setMasAbierto(false)} aria-label={t('Cerrar')} className="mx-auto mb-3 block h-1.5 w-10 rounded-pill bg-white/25" />
+              <div className="flex items-center justify-center gap-2">
+                {['👍', '❤️', '😂', '👏', '🎉', '😮'].map((e) => (
+                  <button key={e} onClick={() => { enviarReaccion(e); setMasAbierto(false) }} className="rounded-pill bg-white/5 px-2 py-1 text-xl transition hover:scale-125 hover:bg-white/15">{e}</button>
+                ))}
+              </div>
+              <div className="mt-4 grid grid-cols-4 justify-items-center gap-x-3 gap-y-3">
+                {esVideo && !compartiendo && <Ctrl size="h-12 w-12" onClick={cambiarCamara} label={t('Girar')}><SwitchCamera size={20} /></Ctrl>}
+                {esVideo && <Ctrl size="h-12 w-12" onClick={compartirPantalla} label={t('Pantalla')} activo={compartiendo}><MonitorUp size={20} /></Ctrl>}
+                {esVideo && <Ctrl size="h-12 w-12" onClick={toggleMano} label={t('Mano')} activo={manoMia}><Hand size={20} /></Ctrl>}
+                {!info?.grupo && <Ctrl size="h-12 w-12" onClick={toggleSubs} label={t('Subtítulos')} activo={subsOn}><Captions size={20} /></Ctrl>}
+                {!info?.grupo && <Ctrl size="h-12 w-12" onClick={toggleGrabar} label={grabando ? t('Detener') : t('Grabar')} activo={grabando}>{grabando ? <StopCircle size={20} /> : <Disc size={20} />}</Ctrl>}
+                <Ctrl size="h-12 w-12" onClick={() => { setAjustes((v) => !v); cargarDispositivos(); setMasAbierto(false) }} label={t('Ajustes')} activo={ajustes}><Settings size={20} /></Ctrl>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Llamada MINIMIZADA — widget flotante moderno y ARRASTRABLE */}
-      {(fase === 'saliente' || fase === 'activa') && min && (
+      {/* Llamada de VOZ minimizada — banner VERDE global (rediseño 2026):
+          franja fija arriba con nombre y cronómetro; tocarla vuelve a la llamada. */}
+      {(fase === 'saliente' || fase === 'activa') && min && !esVideo && (
+        <>
+          {/* El <audio> remoto DEBE seguir montado o la voz se corta al minimizar. */}
+          {medios(true)}
+          <button
+            type="button" onClick={() => setMin(false)}
+            className="fixed inset-x-0 top-0 z-[80] flex items-center justify-center gap-2 bg-mp-green px-4 pb-2.5 text-[13px] font-medium text-white shadow-card"
+            style={{ paddingTop: 'max(env(safe-area-inset-top), 10px)' }}
+          >
+            <Phone size={15} strokeWidth={1.75} className="animate-pulse" />
+            <span className="truncate">{info?.con || t('Llamada')}</span>
+            <span className="opacity-80">· {duracion()}</span>
+            <span className="opacity-70">— {t('toca para volver')}</span>
+          </button>
+        </>
+      )}
+
+      {/* VIDEOLLAMADA minimizada — PiP flotante y ARRASTRABLE (se ve al otro) */}
+      {(fase === 'saliente' || fase === 'activa') && min && esVideo && (
         <div
           className="fixed z-[80] w-64 overflow-hidden rounded-2xl bg-gradient-to-b from-slate-800 to-slate-900 shadow-2xl ring-1 ring-white/10"
           style={pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 }}

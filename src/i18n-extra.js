@@ -673,6 +673,7 @@ export const EN_EXTRA = {
   "No se pudo guardar la firma.": "The signature couldn't be saved.",
   "No se pudo guardar la foto. ¿Falta desplegar las reglas nuevas?": "The photo couldn't be saved. Are the new rules deployed?",
   "No se pudo guardar la foto.": "The photo couldn't be saved.",
+  "toca para volver": "tap to return",
   "No se pudo guardar la plantilla.": "The template couldn't be saved.",
   "No se pudo guardar.": "Couldn't save.",
   "No se pudo guardar. Revisa tu conexión e inténtalo otra vez.": "Couldn't save. Check your connection and try again.",
