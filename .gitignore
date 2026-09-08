@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 firestore-debug.log
+# Andamiaje del arnés visual de la sesión (entries de esbuild) y buzón de
+# agentes (JSON de i18n intermedios): no forman parte de la app.
+.*-entry.jsx
+scratchpad/
