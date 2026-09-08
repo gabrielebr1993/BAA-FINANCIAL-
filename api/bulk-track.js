@@ -171,6 +171,65 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
+    // ── 1e) LINK PÚBLICO de seguimiento ("Negocio y roles", Bloque 4) ───────
+    // 'compartir' (con sesión web): el cliente/staff genera un link SIN LOGIN
+    // para el encargado de obra. El link muestra el camión en vivo y CADUCA
+    // solo cuando la orden se entrega.
+    if (accion === 'compartir') {
+      const h = req.headers.authorization || ''
+      const idToken = h.startsWith('Bearer ') ? h.slice(7) : ''
+      if (!idToken) return res.status(401).json({ ok: false, error: 'Falta el token de sesión.' })
+      let d
+      try { d = await a.getAuth().verifyIdToken(idToken) } catch { return res.status(401).json({ ok: false, error: 'Token inválido o expirado.' }) }
+      const ordenId = String(body.ordenId || '')
+      if (!ordenId) return res.status(400).json({ ok: false, error: 'Falta ordenId.' })
+      const oSnap2 = await db.collection('bulk_orders').doc(ordenId).get()
+      const o2 = oSnap2.exists ? oSnap2.data() : null
+      if (!o2 || o2.tenantId !== d.bulkTenant) return res.status(404).json({ ok: false, error: 'Orden no encontrada.' })
+      // Alcance: staff, el cliente dueño, el transportista asignado o el chofer.
+      const esStaffTk = d.bulkRole && !['cliente', 'transportista', 'chofer', 'supervisor_planta'].includes(d.bulkRole)
+      const puedeVerla = esStaffTk
+        || (d.bulkRole === 'cliente' && o2.clienteId === d.bulkClienteId)
+        || (d.bulkRole === 'transportista' && o2.transportistaId === d.bulkCarrierId)
+        || (d.bulkRole === 'chofer' && (o2.choferId === d.uid || o2.choferUid === d.uid))
+      if (!puedeVerla) return res.status(403).json({ ok: false, error: 'No tienes acceso a esta orden.' })
+      // Reutiliza el link vigente de la orden si ya existe (un link por orden).
+      const prevLink = await db.collection('bulk_trackLinks').where('orderId', '==', ordenId).limit(1).get()
+      let tk = prevLink.empty ? null : prevLink.docs[0].id
+      if (!tk) {
+        tk = crypto.randomBytes(16).toString('hex')
+        await db.collection('bulk_trackLinks').doc(tk).set({
+          orderId: ordenId, tenantId: o2.tenantId, numero: o2.numero || '',
+          creadoPor: d.uid, rol: d.bulkRole || '', creadoEn: new Date().toISOString(),
+        })
+      }
+      return res.status(200).json({ ok: true, url: `https://www.milepay.io/seguimiento?t=${tk}` })
+    }
+
+    // 'seguimiento' (SIN login): estado + última posición para el link público.
+    // Al entregarse la orden responde { caducado: true } y no expone nada más.
+    if (accion === 'seguimiento') {
+      const tk = String(body.t || '')
+      if (!/^[0-9a-f]{32}$/.test(tk)) return res.status(400).json({ ok: false, error: 'Link inválido.' })
+      const lSnap = await db.collection('bulk_trackLinks').doc(tk).get()
+      const link = lSnap.exists ? lSnap.data() : null
+      if (!link) return res.status(404).json({ ok: false, error: 'Link inválido.' })
+      const oSnap3 = await db.collection('bulk_orders').doc(String(link.orderId)).get()
+      const o3 = oSnap3.exists ? oSnap3.data() : null
+      if (!o3) return res.status(404).json({ ok: false, error: 'Orden no encontrada.' })
+      if (['entregada', 'liberada', 'cerrada', 'cancelada'].includes(o3.estado)) {
+        return res.status(200).json({ ok: true, caducado: true })
+      }
+      // Solo lo necesario para el encargado de obra (sin precios ni datos internos).
+      return res.status(200).json({
+        ok: true, caducado: false,
+        numero: o3.numero || '', material: o3.material || '', estado: o3.estado || '',
+        destino: o3.direccionEntrega || '', choferNombre: o3.choferNombre || '',
+        unidad: o3.unidad || o3.placa || o3.tipoEquipo || '',
+        pos: o3.ultimaPos ? { lat: o3.ultimaPos.lat, lng: o3.ultimaPos.lng, ts: o3.ultimaPos.ts } : null,
+      })
+    }
+
     // ── 2) Recibir un punto GPS de la app nativa (autenticado por pase) ─────
     const { uid, pass, ordenId } = body
     const lat = Number(body.lat), lng = Number(body.lng)

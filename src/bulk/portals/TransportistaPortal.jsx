@@ -10,10 +10,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
-  Home, LogOut, Grid2x2, Camera, KeyRound, Languages,
+  Home, LogOut, Grid2x2, Camera, KeyRound, Languages, User,
 } from 'lucide-react'
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
+import ChatOrden from '../components/ChatOrden'
+// Detalle de orden 2026 (Bloque 3): esqueleto COMPARTIDO por los 5 roles.
+import DetalleOrdenApp from '../components/DetalleOrdenApp'
 import BotonReunion from '../components/BotonReunion'
 import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import { etaOrden, etaTexto } from '../domain/eta'
@@ -42,7 +45,7 @@ import { auditar } from '../data/auditoria'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesTransportista } from '../domain/notificaciones'
 import { useNotifsGeocerca } from '../data/geoeventos'
-import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR } from '../domain/constants'
+import { BULK_ROLES, ORDEN_ESTADO as E, ORDEN_ESTADO_LABEL, ORDEN_ESTADO_COLOR, ORDEN_HITOS } from '../domain/constants'
 import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pagoChofer'
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
@@ -247,6 +250,18 @@ export default function TransportistaPortal() {
   const editarEquipo = async (id, patch) => guardarFlota(flota.map((f) => (f.id === id ? { ...f, ...patch } : f)))
   const eliminarEquipo = async (id) => guardarFlota(flota.filter((f) => f.id !== id))
 
+  // ── DETALLE DE ORDEN 2026 (Bloque 3) ───────────────────────────────────────
+  // Tocar una orden en la cola/órdenes abre el esqueleto compartido. Se guarda
+  // el ID (no el objeto) para que el detalle se refresque con los datos en vivo.
+  const [detalleId, setDetalleId] = useState(null)
+  const [chatDe, setChatDe] = useState(null)       // orden con su chat abierto
+  const [asignarDe, setAsignarDe] = useState(null) // orden en el sheet de asignación
+  const ordenDetalle = ordenes.find((o) => o.id === detalleId) || null
+  const abrirDetalle = (o) => setDetalleId(o.id)
+  // Mismo criterio que el select de la tabla de órdenes: choferes asignados al
+  // trabajo de la orden; si ninguno lo tiene, se ofrecen todos.
+  const choferesDeTrabajoDe = (cod) => { const asig = choferes.filter((c) => (c.jobs || []).includes(cod)); return asig.length ? asig : choferes }
+
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
   // ── Pestañas 2026 ──────────────────────────────────────────────────────────
@@ -361,7 +376,7 @@ export default function TransportistaPortal() {
                       titulo={<span className="inline-flex max-w-full items-center gap-1.5"><span className="truncate">{c.nombre}</span>{choferEnLinea(c) && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-pill" style={{ background: 'var(--mp-green)' }} />}</span>}
                       meta={`${t(o.material || 'Carga')} · ${o.numero || ''}`}
                       derecha={<StatusPill color={PILL_COLOR[ORDEN_ESTADO_COLOR[o.estado]] || 'var(--mp-gold)'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>}
-                      onClick={verOrdenes ? () => setTab('cola') : undefined} />
+                      onClick={verOrdenes ? () => abrirDetalle(o) : undefined} />
                   ))}
                 </>
               )}
@@ -377,8 +392,8 @@ export default function TransportistaPortal() {
           )
         })()}
 
-        {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
-      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo, geocercas: geocercasEta }} />}
+        {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo, abrirDetalle }} />}
+      {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo, geocercas: geocercasEta, abrirDetalle }} />}
       {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
@@ -399,6 +414,29 @@ export default function TransportistaPortal() {
         <PerfilTransportista t={t} usuario={usuario} tenantId={tenantId} carrier={carrier} avatares={avatares} navigate={navigate} cerrarSesion={cerrarSesion} />
       )}
       </main>
+
+      {/* DETALLE DE ORDEN 2026 (Bloque 3): capa completa sobre el portal. */}
+      {ordenDetalle && (
+        <DetalleOrdenTransportista t={t} orden={ordenDetalle} choferes={choferes} nombrePlanta={nombrePlanta}
+          avatares={avatares} choferEnLinea={choferEnLinea} noLeidos={resumenOrd[ordenDetalle.id]?.noLeidos || 0}
+          onVolver={() => setDetalleId(null)} onChat={() => setChatDe(ordenDetalle)} onAsignar={() => setAsignarDe(ordenDetalle)} />
+      )}
+
+      {/* Sheet de asignación/transferencia: el MISMO flujo asignarChofer del
+          select de la tabla, en formato táctil (roster del trabajo). */}
+      {asignarDe && (
+        <SheetAsignarChofer t={t} orden={asignarDe} choferes={choferesDeTrabajoDe(codigoTrabajo(asignarDe))}
+          rosterIdDe={rosterIdDe} choferEnLinea={choferEnLinea} avatares={avatares}
+          onAsignar={async (driverId) => { await asignarChofer(asignarDe, driverId); setAsignarDe(null) }}
+          onClose={() => setAsignarDe(null)} />
+      )}
+
+      {/* Chat de la orden abierta: capa completa por encima del detalle. */}
+      {chatDe && (
+        <div className="fixed inset-0 z-[70] mx-auto flex max-w-md flex-col bg-white dark:bg-slate-900">
+          <ChatOrden orden={chatDe} fill estiloApp onVolver={() => setChatDe(null)} />
+        </div>
+      )}
 
       {/* Barra FLOTANTE 2026 (Bloque 2.2): 4 tabs, Chats SIEMPRE en tercera
           posición. Cola/Órdenes/Equipos/Pagos/Estado de cuenta/Perfil siguen
@@ -477,7 +515,7 @@ function PerfilTransportista({ t, usuario, tenantId, carrier, avatares, navigate
 // un chofer YA ACEPTÓ y están en curso (aceptada → en destino). La asignación de
 // choferes se hace en la pestaña "Órdenes"; aquí no se asigna.
 const EN_PROCESO_EST = [E.ACEPTADA, E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO]
-function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () => '' }) {
+function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () => '', abrirDetalle = () => {} }) {
   const PRIO = { aceptada: 0, en_planta: 1, cargando: 2, en_ruta: 3, en_destino: 4 }
   const [fTrabajo, setFTrabajo] = useState('')
   const cola = ordenes.filter((o) => EN_PROCESO_EST.includes(o.estado))
@@ -499,7 +537,8 @@ function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () =
         : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {cola.map((o) => (
-              <Card key={o.id} className="p-3.5">
+              // Tocar la tarjeta abre el DETALLE de la orden (Bloque 3).
+              <Card key={o.id} className="cursor-pointer p-3.5" onClick={() => abrirDetalle(o)}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                   <Badge color="navy">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
@@ -521,7 +560,7 @@ function TabCola({ t, ordenes, nombrePlanta, trabajos = [], codigoTrabajo = () =
 }
 
 // ── Tab Órdenes: tabla filtrada a MIS órdenes, con estados de color ───────────
-function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '', geocercas = [] }) {
+function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos = [], codigoTrabajo = () => '', geocercas = [], abrirDetalle = () => {} }) {
   const { usuario, tenantId, rol } = useBulkAuth()
   const [q, setQ] = useState('')
   const [fEstado, setFEstado] = useState('')
@@ -583,7 +622,9 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
         {trabajos.length > 0 && <Select value={fTrabajo} onChange={(e) => setFTrabajo(e.target.value)} className="py-2"><option value="">{t('Todos los trabajos')}</option>{trabajos.map((c) => <option key={c} value={c}>{c}</option>)}</Select>}
         <span className="ml-auto text-xs text-slate-400">{rows.length} {t('órdenes')}</span>
       </div>
-      <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[860px]" emptyText={t('Ninguna orden coincide con el filtro.')} />
+      {/* Tocar una fila abre el DETALLE de la orden (Bloque 3); el select de
+          chofer y el ticket ya cortan la propagación del clic. */}
+      <Tabla columns={cols} rows={rows} renderCell={render} minWidth="min-w-[860px]" emptyText={t('Ninguna orden coincide con el filtro.')} onRowClick={(o) => abrirDetalle(o)} />
     </>
   )
 }
@@ -1015,5 +1056,161 @@ function TabPagoChoferes({ t, choferes = [], ordenes = [], retiros = [], avatare
       ))}
       <p className="mt-2 text-[11px] text-slate-400">{t('El pago de cada viaje ya está ajustado al peso real del ticket de báscula. Los retiros Fast Pay en proceso también se descuentan (ese dinero ya va en camino al chofer).')}</p>
     </>
+  )
+}
+
+// ── DETALLE DE ORDEN 2026 (Bloque 3): esqueleto compartido + contenido del rol ─
+// El transportista ve el viaje (planta → entrega), el estado y el pago, al chofer
+// asignado y las evidencias reales (foto de ticket/POD). La ÚNICA acción dorada:
+// asignar chofer (si no tiene) o transferir (si tiene y el viaje sigue activo).
+function DetalleOrdenTransportista({ t, orden: o, choferes, nombrePlanta, avatares, choferEnLinea, noLeidos, onVolver, onChat, onAsignar }) {
+  const [verChofer, setVerChofer] = useState(false) // atajo Chofer → expande sus datos
+  const [verDocs, setVerDocs] = useState(false)     // atajo Documentos → expande evidencias
+  const hora = (ts) => (ts ? new Date(tsMillis(ts) || ts).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null)
+  // Origen "hecho" = ya cargó (hito de carga/salida o un estado posterior).
+  const cargo = !!(o.hitos?.carga || o.hitos?.salidaPlanta) || [E.EN_RUTA, E.EN_DESTINO, ...ENTREGADAS].includes(o.estado)
+  const entregado = ENTREGADAS.includes(o.estado)
+  const completada = FINAL.includes(o.estado)
+  const chofer = choferes.find((c) => c.uid === o.choferId || c.id === o.choferId) || null
+  const fichaChofer = [chofer?.telefono, chofer?.licencia, chofer?.equipo || (chofer?.equipos || [])[0]].filter(Boolean).join(' · ')
+  // Documentos REALES de la orden (evidencias que suben el chofer/la báscula).
+  const docs = [
+    o.ticket?.foto ? { k: 'ticket', src: o.ticket.foto, label: t('Ticket') } : null,
+    o.pod?.foto ? { k: 'pod', src: o.pod.foto, label: t('Entrega') } : null,
+    o.pod?.firma ? { k: 'firma', src: o.pod.firma, label: t('Firma') } : null,
+  ].filter(Boolean)
+  return (
+    <DetalleOrdenApp
+      numero={o.numero}
+      material={t(o.material || 'material s/e')}
+      cliente={o.clienteNombre || ''}
+      toneladas={o.pesoReal ?? o.pesoEstimado}
+      origen={{ nombre: nombrePlanta(o.plantaId) || t('Planta'), hecho: cargo, estado: cargo ? t('Cargada') : undefined, hora: hora(o.hitos?.salidaPlanta || o.hitos?.carga) }}
+      destino={{ nombre: o.direccionEntrega || '—', hecho: entregado, estado: entregado ? t('Entregada') : undefined, hora: hora(o.hitos?.entrega || o.hitos?.liberacion) }}
+      atajos={[
+        { icon: MessageSquare, label: t('Chat'), onClick: onChat, badge: noLeidos },
+        // Con chofer asignado muestra sus datos abajo; sin chofer, directo a asignar.
+        { icon: User, label: t('Chofer'), onClick: () => ((o.choferId || o.choferNombre) ? setVerChofer((v) => !v) : onAsignar()) },
+        { icon: FileText, label: t('Documentos'), onClick: () => setVerDocs((v) => !v) },
+      ]}
+      ticket={o.ticket ? { numero: o.ticket.numero, peso: o.ticket.peso } : null}
+      accion={completada ? null : { label: o.choferId ? t('Transferir') : t('Asignar chofer'), icon: UserPlus, onClick: onAsignar }}
+      onVolver={onVolver} onChat={onChat} chatBadge={noLeidos}
+    >
+      {/* Estado actual + pago del viaje (los mismos números de la cola de hoy). */}
+      <div className="rounded-card bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] text-mp-ink-2">{t('Estado')}</span>
+          <StatusPill color={PILL_COLOR[ORDEN_ESTADO_COLOR[o.estado]] || 'var(--mp-gold)'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>
+        </div>
+        {o.precioTransportista != null && (
+          <div className="mt-2 space-y-1 border-t border-mp-line pt-2 text-[13px]">
+            <div className="flex items-baseline justify-between gap-2"><span className="text-mp-ink-2">{t('Pago del viaje')}</span><span className="font-medium text-mp-ink">{money(o.precioTransportista)}</span></div>
+            {o.pagoChofer != null && <div className="flex items-baseline justify-between gap-2"><span className="text-mp-ink-2">{t('Pago chofer')}</span><span className="text-mp-ink">{money(o.pagoChofer)}</span></div>}
+            <div className="flex items-baseline justify-between gap-2"><span className="text-mp-ink-2">{t('Tu utilidad')}</span><span className="font-medium" style={{ color: 'var(--mp-green)' }}>{money((Number(o.precioTransportista) || 0) - (Number(o.pagoChofer) || 0))}</span></div>
+          </div>
+        )}
+      </div>
+
+      {/* Datos del chofer asignado (los abre el atajo Chofer). */}
+      {verChofer && (o.choferId || o.choferNombre) && (
+        <div className="rounded-card bg-white p-4 shadow-card">
+          <div className="mb-2 text-[12px] text-mp-ink-2">{t('Datos del chofer')}</div>
+          <div className="flex items-center gap-3">
+            <Avatar foto={chofer?.foto || avatares[chofer?.uid]} nombre={o.choferNombre || chofer?.nombre} size={40} redondo />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-[14px] font-medium text-mp-ink">{o.choferNombre || chofer?.nombre}</span>
+                {chofer && choferEnLinea(chofer) && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-pill" style={{ background: 'var(--mp-green)' }} title={t('en línea')} />}
+              </div>
+              {fichaChofer && <div className="truncate text-[12px] text-mp-ink-2">{fichaChofer}</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evidencias reales de la orden (las abre el atajo Documentos). */}
+      {verDocs && (
+        <div className="rounded-card bg-white p-4 shadow-card">
+          <div className="mb-2 text-[12px] text-mp-ink-2">{t('Documentos')}</div>
+          {docs.length === 0
+            ? <div className="text-[13px] text-mp-ink-2">{t('Sin documentos de esta orden todavía.')}</div>
+            : (
+              <div className="flex flex-wrap gap-2">
+                {docs.map((d) => (
+                  <a key={d.k} href={d.src} target="_blank" rel="noreferrer" className="block">
+                    <img src={d.src} alt={d.label} className="h-20 w-24 rounded-[10px] border border-mp-line bg-white object-cover" />
+                    <span className="mt-0.5 block text-center text-[11px] text-mp-ink-2">{d.label}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+        </div>
+      )}
+
+      {/* Trayectoria: SOLO los hitos ya registrados (los pendientes no se pintan). */}
+      {ORDEN_HITOS.some((h) => o.hitos?.[h.key]) && (
+        <div className="rounded-card bg-white p-4 shadow-card">
+          <div className="mb-2 text-[12px] text-mp-ink-2">{t('Trayectoria')}</div>
+          <div className="space-y-1.5">
+            {ORDEN_HITOS.filter((h) => o.hitos?.[h.key]).map((h) => (
+              <div key={h.key} className="flex items-center justify-between gap-2 text-[13px]">
+                <span className="text-mp-ink">{t(h.label)}</span>
+                <span className="flex-shrink-0 text-[12px] text-mp-ink-2">{hora(o.hitos[h.key])}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </DetalleOrdenApp>
+  )
+}
+
+// ── Sheet de ASIGNAR/TRANSFERIR chofer (Bloque 3) ────────────────────────────
+// Formato táctil del MISMO flujo del select de la tabla de órdenes: candidatos
+// = choferes del trabajo (o todos), marca quién está en línea y quién la tiene
+// ahora; tocar uno llama asignarChofer (pago según la config del transportista).
+function SheetAsignarChofer({ t, orden, choferes = [], rosterIdDe, choferEnLinea, avatares = {}, onAsignar, onClose }) {
+  const [ocupado, setOcupado] = useState(false)
+  const actualId = rosterIdDe(orden.choferId)
+  const elegir = async (c) => {
+    if (orden.choferId && c.id === actualId) { window.alert(t('Esta orden ya está con ese chofer.')); return }
+    setOcupado(true)
+    try { await onAsignar(c.id) } catch (e) { window.alert(t('No se pudo asignar: ') + (e?.message || '')); setOcupado(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-[65] flex items-end justify-center bg-black/50" onClick={ocupado ? undefined : onClose}>
+      <div className="mp-app flex max-h-[85dvh] w-full max-w-md flex-col rounded-t-card bg-mp-cream p-4 pb-[max(env(safe-area-inset-bottom),16px)]" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-pill bg-white text-mp-navy shadow-card"><UserPlus size={18} strokeWidth={1.75} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-medium text-mp-ink">{orden.choferId ? t('Transferir') : t('Asignar chofer')} · {orden.numero}</div>
+            <div className="truncate text-[12px] text-mp-ink-2">{t('Pide equipo:')} {orden.tipoEquipo || '—'} · {t('el chofer recibe la oferta y debe aceptarla')}</div>
+          </div>
+          <IconButton icon={X} label={t('Cerrar')} onClick={onClose} />
+        </div>
+        <div className="scroll-thin min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+          {choferes.length === 0 ? (
+            <div className="py-8 text-center text-[13px] text-mp-ink-2">{t('Da de alta a tus choferes para asignarles cargas y definir su pago.')}</div>
+          ) : choferes.map((c) => {
+            const actual = !!orden.choferId && c.id === actualId
+            return (
+              <button key={c.id} type="button" onClick={() => elegir(c)} disabled={ocupado || actual}
+                className={`flex w-full items-center gap-2.5 rounded-row bg-white p-3 text-left shadow-card transition active:scale-[0.99] disabled:opacity-60 ${actual ? 'ring-1 ring-mp-green' : ''}`}>
+                <Avatar foto={c.foto || avatares[c.uid]} nombre={c.nombre} size={36} redondo />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[14px] font-medium text-mp-ink">{c.nombre}</span>
+                    {choferEnLinea(c) && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-pill" style={{ background: 'var(--mp-green)' }} title={t('en línea')} />}
+                    {actual && <StatusPill color="var(--mp-green)">{t('actual')}</StatusPill>}
+                  </span>
+                  <span className="block truncate text-[12px] text-mp-ink-2">{c.equipo || (c.equipos || [])[0] || t('sin equipo')}{c.telefono ? ` · ${c.telefono}` : ''}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   )
 }

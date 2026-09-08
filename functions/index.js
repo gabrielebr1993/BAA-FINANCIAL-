@@ -1961,3 +1961,280 @@ exports.bulkEntregarOrden = onCall({ timeoutSeconds: 30 }, async (req) => {
 
   return { ok: true, orderId: String(orderId), numero: orden.numero || '', supervisor: autorizador.nombre || '', entregadaEn: ahora }
 })
+
+// ============================================================================
+// PEDIDOS DEL CLIENTE + PEDIDOS RECURRENTES (orden "Negocio y roles", Bloque 2)
+// ----------------------------------------------------------------------------
+// El cliente NO puede crear bulk_orders (las reglas lo prohíben): crea un
+// documento en `bulk_pedidos` (su solicitud de 3 toques) y ESTE backend lo
+// convierte en órdenes reales para que el dispatcher las vea en "Por asignar".
+//
+//   bulk_pedidos/{id}         { tenantId, clienteId, jobId, material, cantidadTon,
+//                               destino?, fecha (YYYY-MM-DD), notas?, estado:
+//                               'pendiente' | 'programado' | 'convertida' | 'error',
+//                               recurrenteId? }
+//   bulk_recurringOrders/{id} { tenantId, clienteId, clienteNombre?, jobId, material,
+//                               cantidadTon, destino?, dias [0-6, 0=domingo], hora?,
+//                               fin (YYYY-MM-DD|null), activa, pausada, saltar?,
+//                               ultimaCreacion }
+//
+//   bulkPedidoCliente      → onCreate de bulk_pedidos: si la fecha es HOY o pasada
+//                            lo convierte de una vez; si es futura lo deja
+//                            'programado' (createRecurringOrders lo toma su día).
+//   createRecurringOrders  → 00:05 (hora del centro de México): crea el pedido del
+//                            día de cada regla activa y convierte los programados.
+//   bulkRecordatorioRecurrentes → 20:00: push al cliente "Mañana: … ¿sigue en pie?".
+//
+// Precios: la orden nace SIN precios en el doc (igual que el front); los importes
+// van a bulk_orderPay_* copiados de la orden MÁS RECIENTE del mismo job+material.
+// Si no hay referencia, quedan en null y el staff los completa.
+// ============================================================================
+const PED_MAX_TON = 25 // = MAX_TON_POR_VIAJE del front (domain/constants.js)
+const hoyMX = (masDias = 0) => {
+  const d = new Date(Date.now() + masDias * 86400000)
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }) // YYYY-MM-DD
+}
+const diaSemanaMX = (fechaYmd) => new Date(fechaYmd + 'T12:00:00Z').getUTCDay() // 0=domingo
+
+// Convierte UN pedido en órdenes reales. `ref` = doc de bulk_pedidos.
+async function convertirPedido(ref, p) {
+  const { tenantId, clienteId, jobId } = p
+  if (!tenantId || !clienteId || !jobId) { await ref.set({ estado: 'error', error: 'faltan datos' }, { merge: true }); return }
+  const jdoc = await db.collection('bulk_jobs').doc(jobId).get()
+  const job = jdoc.exists ? (jdoc.data() || {}) : null
+  // Seguridad: el trabajo debe ser del MISMO tenant y del MISMO cliente del pedido.
+  if (!job || job.tenantId !== tenantId || job.clienteId !== clienteId) {
+    await ref.set({ estado: 'error', error: 'trabajo inválido' }, { merge: true }); return
+  }
+  const material = p.material || (job.materiales || [])[0] || ''
+  // Numeración: continúa la del job (mismo criterio que Jobs.jsx del staff).
+  const previas = await db.collection('bulk_orders').where('tenantId', '==', tenantId).where('jobId', '==', jobId).get()
+  // Plantilla de PRECIOS: la orden más reciente del job con el mismo material.
+  let precios = { cliente: null, carrier: null, chofer: null }
+  const parecidas = previas.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((o) => (o.material || '') === material)
+    .sort((a, b) => String(b.creadoEn?.toMillis?.() || b.ts || '').localeCompare(String(a.creadoEn?.toMillis?.() || a.ts || '')))
+  if (parecidas[0]) {
+    const [pc, pt, pch] = await db.getAll(
+      db.collection('bulk_orderPay_cliente').doc(parecidas[0].id),
+      db.collection('bulk_orderPay_carrier').doc(parecidas[0].id),
+      db.collection('bulk_orderPay_chofer').doc(parecidas[0].id),
+    )
+    precios = {
+      cliente: pc.exists ? (pc.data().precioCliente ?? null) : null,
+      carrier: pt.exists ? (pt.data().precioTransportista ?? null) : null,
+      chofer: pch.exists ? (pch.data().pagoChofer ?? null) : null,
+    }
+  }
+  // Divide la cantidad en viajes de hasta 25 ton (dividirEnViajes del front).
+  const total = Math.max(0, Number(p.cantidadTon) || 0)
+  if (!total) { await ref.set({ estado: 'error', error: 'cantidad inválida' }, { merge: true }); return }
+  const pesos = []
+  let resto = total
+  while (resto > 0.0001) { const v = Math.min(PED_MAX_TON, resto); pesos.push(Math.round(v * 100) / 100); resto -= v }
+
+  const ts = new Date().toISOString()
+  const ordenIds = []; const numeros = []
+  let seq = previas.size + 1
+  for (const peso of pesos) {
+    const numero = `${job.codigo || 'JOB'}-${String(seq).padStart(4, '0')}`; seq += 1
+    const od = await db.collection('bulk_orders').add({
+      tenantId, numero, jobId, clienteId,
+      plantaId: job.plantaId || null,
+      direccionEntrega: p.destino || job.destino || '',
+      po: job.po || '',
+      material, tipoEquipo: job.tipoEquipo || '',
+      pesoEstimado: peso, pesoReal: null,
+      transportistaId: null, choferId: null, asignacionExpira: null,
+      estado: 'creada',
+      // Trazabilidad del origen (el dispatcher ve la etiqueta "Recurrente"/"Pedido").
+      origen: p.recurrenteId ? 'recurrente' : 'pedido_cliente',
+      ...(p.recurrenteId ? { recurrenteId: p.recurrenteId } : {}),
+      pedidoId: ref.id,
+      ...(p.notas ? { notas: p.notas } : {}),
+      ts, creadoEn: admin.firestore.FieldValue.serverTimestamp(), actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    ordenIds.push(od.id); numeros.push(numero)
+    // Importes por audiencia (mismo esquema que escribirPreciosBase del front).
+    const base = { orderId: od.id, numero }
+    await db.collection('bulk_orderPay_cliente').doc(od.id).set({ ...base, tenantId, clienteId, precioCliente: precios.cliente }, { merge: true })
+    await db.collection('bulk_orderPay_carrier').doc(od.id).set({ ...base, tenantId, precioTransportista: precios.carrier }, { merge: true })
+    await db.collection('bulk_orderPay_chofer').doc(od.id).set({ ...base, tenantId, pagoChofer: precios.chofer }, { merge: true })
+  }
+  await ref.set({ estado: 'convertida', ordenIds, numeros, convertidaEn: ts, ...(precios.cliente == null ? { sinPrecio: true } : {}) }, { merge: true })
+  await db.collection('bulk_audit').add({
+    tenantId, usuario: 'sistema (pedido cliente)', accion: p.recurrenteId ? 'orden_recurrente' : 'pedido_cliente', entidad: 'orden',
+    detalle: `${numeros.join(', ')} · ${material} · ${total} ton${p.recurrenteId ? ' · recurrente' : ''}`, ts,
+  }).catch(() => {})
+  // Aviso al staff: entra directo a "Por asignar".
+  const staff = await tokensDe(tenantId, (x) => STAFF.includes(x.rol))
+  await enviarAPI(staff, p.recurrenteId ? 'Pedido recurrente creado' : 'Nuevo pedido de cliente',
+    `${numeros.join(', ')} · ${material} · ${total} ton`, 'https://www.milepay.io/bulk/ordenes')
+}
+
+exports.bulkPedidoCliente = onDocumentCreated('bulk_pedidos/{id}', async (event) => {
+  const snap = event.data; if (!snap) return
+  const p = snap.data() || {}
+  if (p.estado && p.estado !== 'pendiente') return // 'programado' lo toma el scheduler
+  try {
+    // Pedido para HOY (o sin fecha/pasado) → se convierte de una vez.
+    // Pedido FUTURO → queda 'programado' y createRecurringOrders lo convierte su día.
+    if (p.fecha && p.fecha > hoyMX()) { await snap.ref.set({ estado: 'programado' }, { merge: true }); return }
+    await convertirPedido(snap.ref, p)
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[bulkPedidoCliente]', event.params.id, (e && e.message) || e)
+    await snap.ref.set({ estado: 'error', error: String((e && e.message) || e) }, { merge: true }).catch(() => {})
+  }
+})
+
+// 00:05 del centro de México: crea las órdenes del día de cada regla recurrente
+// y convierte los pedidos puntuales programados cuya fecha llegó.
+exports.createRecurringOrders = onSchedule({ schedule: '5 0 * * *', timeZone: 'America/Mexico_City' }, async () => {
+  const hoy = hoyMX(); const dia = diaSemanaMX(hoy)
+  // 1) Reglas recurrentes que tocan hoy.
+  const reglas = await db.collection('bulk_recurringOrders').where('activa', '==', true).get()
+  for (const rdoc of reglas.docs) {
+    const r = rdoc.data() || {}
+    try {
+      if (r.pausada) continue
+      if (!Array.isArray(r.dias) || !r.dias.includes(dia)) continue
+      if (r.fin && r.fin < hoy) continue
+      if (r.saltar === hoy) { await rdoc.ref.set({ saltar: null }, { merge: true }); continue } // "Cancelar mañana"
+      if (r.ultimaCreacion === hoy) continue // ya corrió hoy (re-ejecución del scheduler)
+      const ped = await db.collection('bulk_pedidos').add({
+        tenantId: r.tenantId, clienteId: r.clienteId, jobId: r.jobId,
+        material: r.material || '', cantidadTon: r.cantidadTon || 0,
+        destino: r.destino || '', fecha: hoy, hora: r.hora || '',
+        recurrenteId: rdoc.id, estado: 'pendiente',
+        ts: new Date().toISOString(), creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      await rdoc.ref.set({ ultimaCreacion: hoy, ultimoPedidoId: ped.id }, { merge: true })
+      // (bulkPedidoCliente convierte el pedido en órdenes al instante.)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[createRecurringOrders]', rdoc.id, (e && e.message) || e)
+    }
+  }
+  // 2) Pedidos puntuales programados cuya fecha llegó.
+  const prog = await db.collection('bulk_pedidos').where('estado', '==', 'programado').get()
+  for (const pdoc of prog.docs) {
+    const p = pdoc.data() || {}
+    if (p.fecha && p.fecha > hoy) continue
+    try { await convertirPedido(pdoc.ref, p) } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[createRecurringOrders/programado]', pdoc.id, (e && e.message) || e)
+      await pdoc.ref.set({ estado: 'error', error: String((e && e.message) || e) }, { merge: true }).catch(() => {})
+    }
+  }
+})
+
+// 20:00: recordatorio al CLIENTE de sus recurrentes de mañana ("¿sigue en pie?").
+// La cancelación de un solo día se hace desde la app (regla.saltar = fecha).
+exports.bulkRecordatorioRecurrentes = onSchedule({ schedule: '0 20 * * *', timeZone: 'America/Mexico_City' }, async () => {
+  const manana = hoyMX(1); const dia = diaSemanaMX(manana)
+  const reglas = await db.collection('bulk_recurringOrders').where('activa', '==', true).get()
+  for (const rdoc of reglas.docs) {
+    const r = rdoc.data() || {}
+    try {
+      if (r.pausada || !Array.isArray(r.dias) || !r.dias.includes(dia)) continue
+      if (r.fin && r.fin < manana) continue
+      if (r.saltar === manana) continue
+      const dest = await tokensDe(r.tenantId, (x) => x.rol === 'cliente' && x.clienteId === r.clienteId)
+      await enviarAPI(dest, 'Pedido recurrente de mañana',
+        `Mañana: ${r.material || 'material'} · ${r.cantidadTon || '?'} t${r.destino ? ` · ${r.destino}` : ''}. ¿Sigue en pie? Puedes pausarlo desde la app.`,
+        'https://www.milepay.io/bulk')
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[bulkRecordatorioRecurrentes]', rdoc.id, (e && e.message) || e)
+    }
+  }
+})
+
+// ============================================================================
+// AGREGADO NOCTURNO PARA LAS GRÁFICAS DEL TRANSPORTISTA ("Negocio y roles", B1)
+// ----------------------------------------------------------------------------
+// aggregateStats corre de madrugada y escribe, POR TRANSPORTISTA y POR SEMANA
+// ISO, el resumen que las gráficas leen sin agregar en el cliente:
+//   bulk_stats/{tenantId}_{carrierId}_{YYYY-Www} = {
+//     tenantId, carrierId, semana, ingresos, viajes, toneladas,
+//     porChofer:   { [nombre]: { ton, viajes } },
+//     esperaPlanta:{ [plantaId]: { nombre, minProm, n } },
+//   }
+// Ingresos = precioTransportista (bulk_orderPay_carrier). Espera = minutos entre
+// llegadaPlanta y salidaPlanta/carga (hitos del chofer o geocercas).
+// Ventana: últimas 9 semanas (8 para la gráfica + la actual).
+// ============================================================================
+const semanaISO = (ms) => {
+  const d = new Date(ms)
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  const dia = t.getUTCDay() || 7
+  t.setUTCDate(t.getUTCDate() + 4 - dia) // jueves de la semana ISO
+  const anio = t.getUTCFullYear()
+  const s = Math.ceil((((t - Date.UTC(anio, 0, 1)) / 86400000) + 1) / 7)
+  return `${anio}-W${String(s).padStart(2, '0')}`
+}
+const STATS_ENTREGADAS = ['entregada', 'liberada', 'cerrada']
+
+exports.aggregateStats = onSchedule({ schedule: '0 2 * * *', timeZone: 'America/Mexico_City' }, async () => {
+  const desdeMs = Date.now() - 9 * 7 * 86400000
+  const carriers = await db.collection('bulk_carriers').get()
+  for (const cdoc of carriers.docs) {
+    const c = cdoc.data() || {}
+    if (!c.tenantId) continue
+    try {
+      const ords = await db.collection('bulk_orders')
+        .where('tenantId', '==', c.tenantId).where('transportistaId', '==', cdoc.id).get()
+      const entregadas = ords.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .filter((o) => STATS_ENTREGADAS.includes(o.estado))
+        .map((o) => ({ ...o, entregaMs: Date.parse((o.hitos && (o.hitos.entrega || o.hitos.liberacion)) || '') }))
+        .filter((o) => Number.isFinite(o.entregaMs) && o.entregaMs >= desdeMs)
+      if (!entregadas.length) continue
+      // Importes del transportista (documentos de pago por audiencia).
+      const pagos = await db.getAll(...entregadas.map((o) => db.collection('bulk_orderPay_carrier').doc(o.id)))
+      const precio = {}
+      pagos.forEach((p) => { if (p.exists) precio[p.id] = Number(p.data().precioTransportista) || 0 })
+      // Nombres de planta (para la gráfica de esperas).
+      const plantaIds = [...new Set(entregadas.map((o) => o.plantaId).filter(Boolean))]
+      const plantaNombre = {}
+      if (plantaIds.length) {
+        const pdocs = await db.getAll(...plantaIds.map((p) => db.collection('bulk_plants').doc(p)))
+        pdocs.forEach((p) => { if (p.exists) plantaNombre[p.id] = (p.data() || {}).nombre || '' })
+      }
+      // Acumula por semana ISO.
+      const semanas = {}
+      for (const o of entregadas) {
+        const wk = semanaISO(o.entregaMs)
+        const s = semanas[wk] || (semanas[wk] = { ingresos: 0, viajes: 0, toneladas: 0, porChofer: {}, esperaPlanta: {} })
+        const ton = Number(o.pesoReal != null ? o.pesoReal : o.pesoEstimado) || 0
+        s.ingresos += precio[o.id] || 0
+        s.viajes += 1
+        s.toneladas += ton
+        const ch = o.choferNombre || 'Sin chofer'
+        const pc = s.porChofer[ch] || (s.porChofer[ch] = { ton: 0, viajes: 0 })
+        pc.ton += ton; pc.viajes += 1
+        // Espera en planta: llegadaPlanta → salidaPlanta (o carga).
+        const lleg = Date.parse((o.hitos && o.hitos.llegadaPlanta) || '')
+        const sal = Date.parse((o.hitos && (o.hitos.salidaPlanta || o.hitos.carga)) || '')
+        if (Number.isFinite(lleg) && Number.isFinite(sal) && sal > lleg && o.plantaId) {
+          const ep = s.esperaPlanta[o.plantaId] || (s.esperaPlanta[o.plantaId] = { nombre: plantaNombre[o.plantaId] || '', totalMin: 0, n: 0 })
+          ep.totalMin += Math.round((sal - lleg) / 60000); ep.n += 1
+        }
+      }
+      // Redondeos + promedio de espera, y escritura de un doc por semana.
+      const r2s = (n) => Math.round(n * 100) / 100
+      for (const [wk, s] of Object.entries(semanas)) {
+        for (const ep of Object.values(s.esperaPlanta)) { ep.minProm = Math.round(ep.totalMin / Math.max(1, ep.n)); delete ep.totalMin }
+        await db.collection('bulk_stats').doc(`${c.tenantId}_${cdoc.id}_${wk}`).set({
+          tenantId: c.tenantId, carrierId: cdoc.id, semana: wk,
+          ingresos: r2s(s.ingresos), viajes: s.viajes, toneladas: r2s(s.toneladas),
+          porChofer: s.porChofer, esperaPlanta: s.esperaPlanta,
+          actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true })
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[aggregateStats]', cdoc.id, (e && e.message) || e)
+    }
+  }
+})

@@ -18,6 +18,7 @@ const BulkApp = lazy(() => import('./bulk/BulkApp'))
 // Landing PÚBLICA de Freight (marketing, sin autenticación). Se muestra en la raíz a
 // los visitantes que aún no han elegido módulo (clientes potenciales).
 const LandingFreight = lazy(() => import('./pages/LandingFreight'))
+const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
 // nuevas, independientes de la landing (que queda intacta) y de la app.
 const SitioPublico = lazy(() => import('./pages/publico/SitioPublico'))
@@ -143,6 +144,10 @@ function TopBranch() {
   // Reuniones: página PÚBLICA del invitado externo (sin cuenta), /meet/{codigo}.
   if (pathname.startsWith('/meet/')) {
     return <Suspense fallback={<Cargando texto="Cargando reunión…" />}><MeetPublico /></Suspense>
+  }
+  // Seguimiento PÚBLICO de una orden (link compartido, sin login): /seguimiento?t=…
+  if (pathname === '/seguimiento') {
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><SeguimientoPublico /></Suspense>
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />

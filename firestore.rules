@@ -675,6 +675,42 @@ service cloud.firestore {
       allow update, delete: if bStaff(resource.data.tenantId);
     }
 
+    // AGREGADOS para las gráficas del transportista ("Negocio y roles", B1).
+    // Solo el backend (aggregateStats, Admin SDK) escribe; leen el staff y el
+    // transportista dueño del agregado.
+    match /bulk_stats/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && bRole() == 'transportista' && resource.data.carrierId == bCarrier());
+      allow create, update, delete: if false;
+    }
+
+    // PEDIDOS del cliente (3 toques) — orden "Negocio y roles", Bloque 2.
+    // El cliente crea SU solicitud; el backend (bulkPedidoCliente, Admin SDK) la
+    // convierte en bulk_orders reales. El cliente solo puede tocar su pedido
+    // mientras no se haya convertido; el staff lo ve todo.
+    match /bulk_pedidos/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente());
+      allow create: if bSame(request.resource.data.tenantId) && bRole() == 'cliente'
+        && request.resource.data.clienteId == bCliente()
+        && request.resource.data.get('estado', 'pendiente') == 'pendiente';
+      allow update, delete: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente()
+            && resource.data.get('estado', '') in ['pendiente', 'programado']);
+    }
+
+    // Reglas de PEDIDOS RECURRENTES del cliente (L–V, días elegidos, cada N días).
+    // El cliente gestiona las suyas (crear/pausar/editar/borrar); las órdenes las
+    // GENERA el backend (createRecurringOrders) cada día a las 00:05.
+    match /bulk_recurringOrders/{id} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente());
+      allow create: if bStaff(request.resource.data.tenantId)
+        || (bSame(request.resource.data.tenantId) && bRole() == 'cliente' && request.resource.data.clienteId == bCliente());
+      allow update, delete: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente());
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

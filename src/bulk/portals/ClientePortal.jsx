@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DollarSign, ClipboardList, FileText, PenLine, LayoutDashboard, Layers, MessageSquare, Navigation, Home, Package, Plus, Grid2x2, LogOut, KeyRound } from 'lucide-react'
+import { DollarSign, ClipboardList, FileText, PenLine, LayoutDashboard, Layers, MessageSquare, Navigation, Home, Package, Plus, Grid2x2, LogOut, KeyRound, Printer } from 'lucide-react'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesCliente } from '../domain/notificaciones'
 import { useBulkAuth } from '../BulkAuthContext'
@@ -35,6 +35,8 @@ import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { estadoDocumento } from '../domain/facturacion'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
+// Detalle de pedido 2026 (Bloque 3): esqueleto compartido por los 5 roles.
+import DetalleOrdenApp from '../components/DetalleOrdenApp'
 // Kit del REDISEÑO 2026 (Bloque 1): la home y la carcasa usan este lenguaje.
 import { IconButton, PrimaryButton, SecondaryButton, Card as CardApp, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
 import { money } from '../../utils/format'
@@ -49,6 +51,15 @@ const codigoProyecto = (o) => o.jobId || String(o.numero || '').split('-').slice
 const fechaEntrega = (o) => o?.hitos?.entrega ? new Date(o.hitos.entrega) : null
 // Avance del pedido EN CAMINO (home 2026): % de la barra dorada por estado.
 const PROGRESO_CAMINO = { [E.ACEPTADA]: 20, [E.EN_PLANTA]: 40, [E.CARGANDO]: 55, [E.EN_RUTA]: 75, [E.EN_DESTINO]: 90 }
+// ── Detalle de pedido (Bloque 3) · helpers del cliente ──────────────────────
+// Estados en los que la carga YA salió de la planta (punto de origen "hecho").
+const YA_CARGO = [E.EN_RUTA, E.EN_DESTINO, ...ENTREGADAS]
+// Color CSS del StatusPill según el color de badge del estado.
+const PILL_COLOR = { green: 'var(--mp-green)', gold: 'var(--mp-gold)', red: 'var(--mp-red)', blue: 'var(--mp-blue)', navy: 'var(--mp-navy)', slate: 'var(--mp-ink-2)' }
+const fHora = (v) => { const ms = tsMillis(v) || Date.parse(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '' }
+const fFecha = (v) => { const ms = tsMillis(v) || Date.parse(v); return Number.isFinite(ms) ? new Date(ms).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '' }
+// ¿El cliente ya puede imprimir/ver los tickets del pedido? (misma regla que la tabla)
+const ticketDisponible = (o) => !!(o.ticketCarga || o.ticketEntrega || ENTREGADAS.includes(o.estado) || o.hitos?.carga)
 
 export default function ClientePortal() {
   const { t } = useLang()
@@ -79,6 +90,10 @@ export default function ClientePortal() {
     if (!ordenMapa || !tenantId) { setTrackCli([]); return }
     return suscribirTrack(tenantId, ordenMapa, setTrackCli)
   }, [tenantId, ordenMapa])
+  // ── Detalle de pedido apilado (Bloque 3): id de la orden abierta ──────────
+  const [detalle, setDetalle] = useState(null)
+  const refEstadoDet = useRef(null) // tarjeta "Estado actual" (atajo Seguimiento en pedidos cerrados)
+  const refDocsDet = useRef(null) // tarjeta "Documentos del pedido" (atajo Documentos)
   const [firmando, setFirmando] = useState(null) // factura en firma
   const [detalleFac, setDetalleFac] = useState(null) // factura abierta en el drawer de detalle
   const [verDocFac, setVerDocFac] = useState(null) // factura abierta como documento imprimible
@@ -255,8 +270,10 @@ export default function ClientePortal() {
                       <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Tus pedidos')}</h1>
                     </div>
 
-                    {/* Tarjeta protagonista: el pedido en camino con su avance en vivo. */}
+                    {/* Tarjeta protagonista: el pedido en camino con su avance en vivo.
+                        Al tocarla se abre el DETALLE apilado del pedido (Bloque 3). */}
                     {destacado ? (
+                      <button type="button" onClick={() => setDetalle(destacado.id)} className="block w-full text-left transition active:scale-[0.99]">
                       <FeatureCard>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-mono text-[12px] text-mp-cream/70">{destacado.numero}</span>
@@ -274,6 +291,7 @@ export default function ClientePortal() {
                           {eta && <span className="flex-shrink-0">ETA {etaTexto(eta)}</span>}
                         </div>
                       </FeatureCard>
+                      </button>
                     ) : (
                       <FeatureCard>
                         <StatusPill sobreNavy color="var(--mp-gold)">{t('Sin entregas en camino')}</StatusPill>
@@ -300,7 +318,7 @@ export default function ClientePortal() {
                             titulo={`${t(o.material || 'Carga')} · ${o.pesoReal ?? o.pesoEstimado} ${t('ton')}`}
                             meta={`${o.numero || ''}${fFec(o.creadoEn) ? ` · ${fFec(o.creadoEn)}` : ''}`}
                             derecha={<StatusPill color="var(--mp-gold)">{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>}
-                            onClick={() => setTab('ordenes')} />
+                            onClick={() => setDetalle(o.id)} />
                         ))}
                       </>
                     )}
@@ -403,6 +421,7 @@ export default function ClientePortal() {
                   {ordenes.length === 0 ? <EstadoVacio titulo={t('Aún no hay órdenes')} texto={t('Aquí verás tus órdenes con su estado en tiempo real.')} mostrarBoton={false} /> : (
                     <Tabla columns={[{ key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') }, { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'precioCliente', label: t('Precio'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'center' }, { key: 'ticket', label: t('Ticket'), align: 'center' }]}
                       rows={ordenes.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).slice(0, 100).map((o) => ({ ...o, _key: o.id }))}
+                      onRowClick={(o) => setDetalle(o.id)}
                       renderCell={(o, k) => {
                         if (k === 'ton') return o.pesoReal ?? o.pesoEstimado
                         if (k === 'precioCliente') return o.precioCliente != null ? money(o.precioCliente) : '—'
@@ -491,6 +510,107 @@ export default function ClientePortal() {
       </div>
 
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
+
+      {/* ── DETALLE DE PEDIDO apilado (Bloque 3): esqueleto compartido ────────
+          Se abre al tocar un pedido en la home (destacado/programados) o una
+          fila de la pestaña Pedidos. Capa fixed a pantalla completa sin tab bar;
+          lee la orden EN VIVO de `ordenes` (sigue actualizándose abierta). */}
+      {detalle && (() => {
+        const o = ordenes.find((x) => x.id === detalle)
+        if (!o) return null
+        const cerrar = () => setDetalle(null)
+        const hitos = o.hitos || {}
+        const entregada = ENTREGADAS.includes(o.estado)
+        const activa = !FINAL.includes(o.estado)
+        const cargo = !!(hitos.carga || hitos.salidaPlanta) || YA_CARGO.includes(o.estado)
+        const plantaNom = (plantasCli || []).find((p) => p.id === o.plantaId)?.nombre || o.plantaNombre || t('Planta')
+        const eta = activa ? etaOrden(o, geocercasCli, plantasCli) : null
+        // Chat del viaje: mismo canal cliente↔oficina que la pestaña Mensajes
+        // (respeta el interruptor del admin `veChatsViaje`).
+        const chatKey = convClienteOrden(o.id)
+        const abrirChat = veChatsViaje ? () => { cerrar(); setTab('mensajes'); setAbrirExterno(chatKey); setTimeout(() => setAbrirExterno(null), 0) } : null
+        // Factura LIGADA al pedido (una línea con su orderId); las anuladas no cuentan.
+        const fac = (facturas || []).find((f) => f.estado !== 'anulada' && (f.lineas || []).some((l) => l.orderId === o.id))
+        // Atajos (máx. 3, mismo layout): Chat · Seguimiento · Factura/Documentos.
+        const atajos = [
+          ...(abrirChat ? [{ icon: MessageSquare, label: t('Chat'), onClick: abrirChat, badge: resumenMsg[chatKey]?.noLeidos || 0 }] : []),
+          // Seguimiento: pedido activo → mapa en vivo enfocado en él; pedido
+          // cerrado → baja a la tarjeta de estado (última hora registrada).
+          { icon: Navigation, label: t('Seguimiento'), onClick: activa ? () => { cerrar(); setOrdenMapa(o.id); setTab('mapa') } : () => refEstadoDet.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
+          fac
+            ? { icon: FileText, label: t('Factura'), badge: fac.estado === 'enviada' ? 1 : 0, onClick: () => { cerrar(); setTab('facturas'); setDetalleFac(fac) } }
+            : ticketDisponible(o)
+              ? { icon: Printer, label: t('Documentos'), onClick: () => refDocsDet.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+              // Sin factura ni ticket todavía (el cliente no crea pedidos): a su lista de facturas.
+              : { icon: FileText, label: t('Facturas'), onClick: () => { cerrar(); setTab('facturas') } },
+        ]
+        // Acción del pie (ÚNICO botón dorado de la pantalla): firmar la factura
+        // enviada del pedido entregado; o el seguimiento en vivo si hay GPS.
+        const accion = entregada && fac?.estado === 'enviada'
+          ? { label: t('Revisar y firmar'), icon: PenLine, onClick: () => { cerrar(); setTab('facturas'); setFirmando(fac); setFirma(null) } }
+          : activa && o.ultimaPos?.lat != null
+            ? { label: t('Ver seguimiento'), icon: Navigation, onClick: () => { cerrar(); setOrdenMapa(o.id); setTab('mapa') } }
+            : null
+        // Hora del último hito registrado (para la tarjeta de estado).
+        const ultHito = [hitos.liberacion, hitos.entrega, hitos.llegadaDestino, hitos.salidaPlanta, hitos.carga, hitos.llegadaPlanta, hitos.tomada].find(Boolean)
+        // Filas de datos REALES (solo se pintan las que tienen valor).
+        const filas = [
+          [t('Solicitado'), fFecha(o.creadoEn)],
+          [t('Cantidad'), `${o.pesoReal ?? o.pesoEstimado} ${t('ton')}`],
+          [t('Precio'), o.precioCliente != null ? money(o.precioCliente) : null],
+          [t('Proyecto'), codigoProyecto(o) !== '—' ? codigoProyecto(o) : null],
+          ['PO', o.po || null],
+          [t('Chofer'), o.choferNombre || null],
+          [t('Equipo'), o.tipoEquipo || null],
+        ].filter(([, v]) => v)
+        return (
+          <DetalleOrdenApp
+            numero={o.numero}
+            material={t(o.material || 'Carga')}
+            cliente={o.direccionEntrega || `${t('Proyecto')} ${codigoProyecto(o)}`}
+            toneladas={o.pesoReal ?? o.pesoEstimado}
+            origen={{ nombre: plantaNom, hecho: cargo, hora: fHora(hitos.salidaPlanta || hitos.carga), estado: cargo ? undefined : t(ORDEN_ESTADO_LABEL[o.estado] || o.estado) }}
+            destino={{ nombre: o.direccionEntrega || t('Destino'), hecho: entregada, hora: fHora(hitos.entrega || hitos.liberacion), estado: entregada || o.estado === E.CANCELADA ? t(ORDEN_ESTADO_LABEL[o.estado] || o.estado) : eta ? `ETA ${etaTexto(eta)}` : undefined }}
+            atajos={atajos}
+            ticket={o.ticket ? { numero: o.ticket.numero, peso: o.ticket.peso, hora: fHora(o.ticket.ts) } : null}
+            accion={accion}
+            onVolver={cerrar}
+            onChat={abrirChat || undefined}
+            chatBadge={resumenMsg[chatKey]?.noLeidos || 0}
+          >
+            {/* Estado actual + datos reales del pedido */}
+            <div ref={refEstadoDet}>
+              <CardApp>
+                <div className="mb-2 text-[12px] text-mp-ink-2">{t('Estado actual')}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <StatusPill color={PILL_COLOR[ORDEN_ESTADO_COLOR[o.estado]] || 'var(--mp-gold)'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>
+                  {ultHito && <span className="text-[12px] text-mp-ink-2">{fHora(ultHito)}</span>}
+                </div>
+                {filas.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {filas.map(([k, v]) => (
+                      <div key={k} className="flex items-baseline justify-between gap-2 text-[13px]">
+                        <span className="flex-shrink-0 text-mp-ink-2">{k}</span>
+                        <span className="min-w-0 truncate text-right font-medium text-mp-ink">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardApp>
+            </div>
+            {/* Documentos del pedido: ticket imprimible cuando la carga ya salió
+                (solo-impresión: el cliente no genera folios). */}
+            {ticketDisponible(o) && (
+              <div ref={refDocsDet}>
+                <CardApp>
+                  <div className="mb-2 text-[12px] text-mp-ink-2">{t('Documentos del pedido')}</div>
+                  <ImprimirTicket orden={o} empresa="Freight" canGenerar={false} tenantId={tenantId} usuario={usuario} rol="cliente" clientesMap={usuario?.clienteId ? { [usuario.clienteId]: { nombre: empresaCliente } } : {}} ordenesJob={ordenes} />
+                </CardApp>
+              </div>
+            )}
+          </DetalleOrdenApp>
+        )
+      })()}
 
       {detalleFac && (
         <DocDrawer r={detalleFac} tipo="cliente" empresa="Freight" persona={null} t={t} onClose={() => setDetalleFac(null)}

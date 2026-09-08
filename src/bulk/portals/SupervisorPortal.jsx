@@ -8,12 +8,15 @@
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft, MessageSquare, Home, Scale, Grid2x2, LogOut, Languages } from 'lucide-react'
+import { CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft, MessageSquare, Home, Scale, Grid2x2, LogOut, Languages, User, FileText } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
 import MapaLeaflet from '../components/MapaLeaflet'
 import Avatar from '../components/Avatar'
+import ChatOrden from '../components/ChatOrden'
+// Detalle de orden 2026 (Bloque 3): esqueleto COMPARTIDO por los 5 roles.
+import DetalleOrdenApp from '../components/DetalleOrdenApp'
 import CambiarClave from '../components/CambiarClave'
 import { useFotoUsuario } from '../data/useCodigoUsuario'
 import { useColeccion, useDoc } from '../data/useColeccion'
@@ -29,7 +32,7 @@ import CampanaNotificaciones from '../components/CampanaNotificaciones'
 import { notificacionesSupervisor } from '../domain/notificaciones'
 import { Card, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 // Kit del REDISEÑO 2026 (Bloque 1): carcasa, home y accesos usan este lenguaje.
-import { IconButton, PrimaryButton, Card as MpCard, StatCard, ListRow, Badge as MpBadge, FloatingTabBar } from '../ui'
+import { IconButton, PrimaryButton, Card as MpCard, StatCard, ListRow, Badge as MpBadge, StatusPill, FloatingTabBar } from '../ui'
 import PanelConversaciones from '../components/PanelConversaciones'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -91,6 +94,10 @@ export default function SupervisorPortal() {
   const [msg, setMsg] = useState(null)
   const [tab, setTab] = useState('inicio')
   const [verClave, setVerClave] = useState(false)
+  // ── DETALLE DE ORDEN 2026 (Bloque 3): camión del patio u orden por autorizar.
+  // Se guarda el ID (no el objeto) para que se refresque con los datos en vivo.
+  const [detalleId, setDetalleId] = useState(null)
+  const [chatDe, setChatDe] = useState(null) // orden con su chat abierto
   const miFoto = useFotoUsuario(usuario?.id)
 
   // Órdenes 'entregada' = SOLO legado (el sistema nuevo entrega y libera en un
@@ -167,6 +174,8 @@ export default function SupervisorPortal() {
   )
 
   const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
+  // Orden abierta en el DETALLE (Bloque 3), resuelta en vivo por su ID.
+  const ordenDetalle = ordenes.find((o) => o.id === detalleId) || null
 
   const liberarOrden = async (orden) => {
     const nivel = nivelDe(orden)
@@ -283,8 +292,11 @@ export default function SupervisorPortal() {
                 const uni = unidadDe(s)
                 return (
                   <>
-                    <div className="mt-1 truncate text-[18px] font-medium text-mp-ink">{s.choferNombre || t('Sin chofer')}{uni ? ` · ${uni}` : ''}</div>
-                    <div className="mt-0.5 truncate text-[13px] text-mp-ink-2">{t(s.material || 'material s/e')} · {s.pesoReal ?? s.pesoEstimado} ton · {s.numero}</div>
+                    {/* Tocar el camión abre el DETALLE de su orden (Bloque 3). */}
+                    <button type="button" onClick={() => setDetalleId(s.id)} className="block w-full text-left transition active:scale-[0.99]">
+                      <div className="mt-1 truncate text-[18px] font-medium text-mp-ink">{s.choferNombre || t('Sin chofer')}{uni ? ` · ${uni}` : ''}</div>
+                      <div className="mt-0.5 truncate text-[13px] text-mp-ink-2">{t(s.material || 'material s/e')} · {s.pesoReal ?? s.pesoEstimado} ton · {s.numero}</div>
+                    </button>
                     <PrimaryButton className="mt-4" icon={Scale} onClick={() => setTab('g:planta')}>{t('Registrar peso')}</PrimaryButton>
                   </>
                 )
@@ -304,7 +316,7 @@ export default function SupervisorPortal() {
                     <ListRow key={o.id} icon={Truck} titulo={`${o.choferNombre || t('Sin chofer')}${unidadDe(o) ? ` · ${unidadDe(o)}` : ''}`}
                       meta={`${t(o.material || 'material s/e')} · ${o.pesoReal ?? o.pesoEstimado} ton · ${o.numero}`}
                       derecha={min != null ? <span className="flex-shrink-0 text-[12px] text-mp-ink-2">{min} {t('min')}</span> : null}
-                      onClick={() => setTab('g:planta')} />
+                      onClick={() => setDetalleId(o.id)} />
                   )
                 })}
               </>
@@ -412,19 +424,21 @@ export default function SupervisorPortal() {
           ) : (
             <div className="mb-4 grid gap-2 sm:grid-cols-2">
               {porAutorizar.map((o) => (
-                <Card key={o.id} className="p-3.5">
+                // Tocar la tarjeta abre el DETALLE de la orden (Bloque 3); los
+                // botones internos cortan la propagación para no abrirlo.
+                <Card key={o.id} className="cursor-pointer p-3.5" onClick={() => setDetalleId(o.id)}>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
                     <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
                     {o.estado === E.EN_DESTINO
                       ? <Badge color="blue">{t('En destino')}</Badge>
                       : <Badge color="gold"><MapPin size={10} className="mr-0.5 inline" />{t('Cruzó la geocerca de entrega')}</Badge>}
-                    <button onClick={() => setTab('token')} className="ml-auto inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><KeyRound size={13} strokeWidth={1.75} /> {t('Ver mi código')}</button>
+                    <button onClick={(e) => { e.stopPropagation(); setTab('token') }} className="ml-auto inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><KeyRound size={13} strokeWidth={1.75} /> {t('Ver mi código')}</button>
                   </div>
                   <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
                   {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
                   <ProgresoViaje o={o} t={t} />
-                  {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
+                  {o.ultimaPos?.lat != null && <button onClick={(e) => { e.stopPropagation(); setTab('mapa') }} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
                 </Card>
               ))}
             </div>
@@ -576,6 +590,23 @@ export default function SupervisorPortal() {
         </>)}
       </main>
 
+      {/* DETALLE DE ORDEN 2026 (Bloque 3): capa completa sobre el portal. */}
+      {ordenDetalle && (
+        <DetalleOrdenSupervisor t={t} orden={ordenDetalle}
+          llegadaPatioMs={llegadaPatioMs} minEsperando={minEsperando} unidadDe={unidadDe} nivelDe={nivelDe}
+          esperaAutorizacion={porAutorizar.some((x) => x.id === ordenDetalle.id)}
+          onVolver={() => setDetalleId(null)} onChat={() => setChatDe(ordenDetalle)}
+          onMapa={() => { setDetalleId(null); setTab('mapa') }}
+          onLiberar={() => liberarOrden(ordenDetalle)} />
+      )}
+
+      {/* Chat de la orden abierta: capa completa por encima del detalle. */}
+      {chatDe && (
+        <div className="fixed inset-0 z-[70] mx-auto flex max-w-md flex-col bg-white dark:bg-slate-900">
+          <ChatOrden orden={chatDe} fill estiloApp onVolver={() => setChatDe(null)} />
+        </div>
+      )}
+
       {/* Barra FLOTANTE 2026: 4 pestañas, Chats en tercera posición.
           Báscula = patio de la planta (sección real «En planta / cargando»);
           Registro = sección real «Actividad» (tabla + terminadas recientes). */}
@@ -669,6 +700,62 @@ function TokenSupervisor({ t }) {
   )
 }
 
+
+// ── DETALLE DE ORDEN 2026 (Bloque 3): esqueleto compartido + contenido del rol ─
+// El supervisor ve el camión: llegada al patio (hito o geocerca), minutos de
+// espera, chofer/unidad y nivel de confianza de liberación (si existe). Liberar
+// SOLO cuando la orden espera su autorización en destino; en patio no hay
+// acción (el supervisor no avanza órdenes).
+const PILL_NIVEL = { alta: 'var(--mp-green)', media: 'var(--mp-gold)', baja: 'var(--mp-ink-2)', critico: 'var(--mp-red)' }
+function DetalleOrdenSupervisor({ t, orden: o, llegadaPatioMs, minEsperando, unidadDe, nivelDe, esperaAutorizacion, onVolver, onChat, onMapa, onLiberar }) {
+  const choferRef = useRef(null) // atajo Chofer (sin ticket) → enfoca su tarjeta
+  const hora = (ts) => { const ms = Date.parse(ts || ''); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : null }
+  const msPatio = llegadaPatioMs(o)
+  const enPatio = [E.EN_PLANTA, E.CARGANDO].includes(o.estado)
+  // Origen "hecho" = el camión ya llegó a la planta (o va más adelante).
+  const llego = msPatio != null || [E.EN_PLANTA, E.CARGANDO, E.EN_RUTA, E.EN_DESTINO, E.ENTREGADA, E.LIBERADA, E.CERRADA].includes(o.estado)
+  const entregado = [E.ENTREGADA, E.LIBERADA, E.CERRADA].includes(o.estado)
+  const nivel = nivelDe(o)
+  // Minutos esperando: en patio desde su llegada; en destino desde ese hito.
+  const min = enPatio ? minEsperando(o)
+    : esperaAutorizacion ? (() => { const m = Date.parse(o.hitos?.llegadaDestino || ''); return Number.isFinite(m) ? Math.max(0, Math.round((Date.now() - m) / 60000)) : null })()
+      : null
+  // El ListRow del ticket es lo ÚLTIMO del scroll del detalle: darle foco = ir
+  // al fondo (el esqueleto compartido no expone un ref a esa fila).
+  const enfocarTicket = () => { const c = document.querySelector('.mp-app.fixed .overflow-y-auto'); if (c) c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }) }
+  return (
+    <DetalleOrdenApp
+      numero={o.numero}
+      material={t(o.material || 'material s/e')}
+      cliente={o.clienteNombre || ''}
+      toneladas={o.pesoReal ?? o.pesoEstimado}
+      origen={{ nombre: t('Planta'), hecho: llego, estado: enPatio ? t('En patio') : undefined, hora: msPatio != null ? new Date(msPatio).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : null }}
+      destino={{ nombre: o.direccionEntrega || '—', hecho: entregado, estado: entregado ? t(ORDEN_ESTADO_LABEL[o.estado] || o.estado) : (esperaAutorizacion ? t('Esperando autorización') : undefined), hora: hora(o.hitos?.entrega || o.hitos?.liberacion) }}
+      atajos={[
+        { icon: MessageSquare, label: t('Chat'), onClick: onChat },
+        // El portal SÍ tiene pestaña de mapa: el atajo salta a ella.
+        { icon: MapIcon, label: t('Mapa'), onClick: onMapa },
+        // Con ticket registrado el atajo le da foco; sin ticket, va al chofer.
+        o.ticket
+          ? { icon: FileText, label: t('Ticket'), onClick: enfocarTicket }
+          : { icon: User, label: t('Chofer'), onClick: () => choferRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
+      ]}
+      ticket={o.ticket ? { numero: o.ticket.numero, peso: o.ticket.peso ?? o.pesoReal } : null}
+      accion={esperaAutorizacion ? { label: t('Liberar'), icon: CheckCircle2, onClick: onLiberar } : null}
+      onVolver={onVolver} onChat={onChat}
+    >
+      {/* Chofer/unidad + minutos de espera + nivel de confianza (si existe). */}
+      <div ref={choferRef} className="rounded-card bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] text-mp-ink-2">{t('Chofer')}</span>
+          {nivel && <StatusPill color={PILL_NIVEL[nivel] || 'var(--mp-ink-2)'}>{t(NIVEL_LABEL[nivel] || nivel)}</StatusPill>}
+        </div>
+        <div className="mt-1 truncate text-[15px] font-medium text-mp-ink">{o.choferNombre || t('Sin chofer')}{unidadDe(o) ? ` · ${unidadDe(o)}` : ''}</div>
+        {min != null && <div className="mt-0.5 text-[12px] text-mp-ink-2">{min} {t('min')} {t('esperando')}</div>}
+      </div>
+    </DetalleOrdenApp>
+  )
+}
 
 // ── Progreso del viaje (mini barra por tarjeta) ─────────────────────────────
 // Etapas del viaje hacia la entrega y el % que representa cada estado.

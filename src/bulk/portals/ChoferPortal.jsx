@@ -459,6 +459,8 @@ export default function ChoferPortal() {
                         )}
                       </div>
                       <button onClick={conectarme} disabled={!miEquipos.length} className="mt-5 w-full rounded-2xl bg-emerald-500 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800"><Wifi size={18} className="mr-1 inline" /> {t('Conectarme')}</button>
+                      {/* B4: acceso directo a declarar días/horario de trabajo. */}
+                      <button onClick={() => setTab('perfil')} className="mt-2 w-full rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-500 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"><Clock size={15} className="mr-1 inline" /> {t('Avisar disponibilidad')}</button>
                     </div>
                   )}
                 </div>
@@ -836,6 +838,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
   const [telefono, setTelefono] = useState('')
   const [licencia, setLicencia] = useState('')
   const [banco, setBanco] = useState({ titular: '', banco: '', cuenta: '', routing: '' })
+  const [dispo, setDispo] = useState({ dias: [], desde: '', hasta: '' }) // disponibilidad (B4)
   const [guardando, setGuardando] = useState(false)
   const [ok, setOk] = useState(false)
   const [verClave, setVerClave] = useState(false)
@@ -851,6 +854,7 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
     if (tocado.current) return // no pisar lo que el chofer está editando
     setLicencia(miPerfil?.licencia || miChofer?.licencia || '')
     setBanco(miPerfil?.banco || { titular: '', banco: '', cuenta: '', routing: '' })
+    setDispo(miPerfil?.disponibilidad || { dias: [], desde: '', hasta: '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [miPerfil?.uid, miChofer?.id])
 
@@ -963,6 +967,35 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
         <div className="space-y-2.5">
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><Phone size={15} className="text-slate-400" /><input value={telefono} onChange={(e) => { tocado.current = true; setTelefono(e.target.value) }} placeholder={t('Teléfono')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
           <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700"><IdCard size={15} className="text-slate-400" /><input value={licencia} onChange={(e) => { tocado.current = true; setLicencia(e.target.value) }} placeholder={t('N.º de licencia')} className="w-full bg-transparent text-sm outline-none dark:text-slate-100" /></label>
+        </div>
+      </Card>
+
+      {/* DISPONIBILIDAD ("Negocio y roles", B4): días y horario en que trabaja.
+          El dispatcher la ve al asignar. Se guarda al instante (merge). */}
+      <Card className="p-4">
+        <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-brand-navy dark:text-slate-100"><Clock size={16} className="text-amber-500" /> {t('Disponibilidad')}</div>
+        <p className="mb-3 text-[11px] text-slate-400">{t('Marca los días y el horario en que trabajas. La oficina lo ve al asignarte órdenes.')}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {[[1, 'L'], [2, 'M'], [3, 'Mi'], [4, 'J'], [5, 'V'], [6, 'S'], [0, 'D']].map(([d, etq]) => {
+            const on = (dispo.dias || []).includes(d)
+            return (
+              <button key={d} type="button" onClick={() => {
+                const dias = on ? dispo.dias.filter((x) => x !== d) : [...(dispo.dias || []), d]
+                const next = { ...dispo, dias }
+                setDispo(next); guardarCampo({ disponibilidad: next })
+              }}
+                className={`grid h-9 w-9 place-items-center rounded-full text-xs font-bold transition ${on ? 'bg-[#c9a24b] text-[#13233f]' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                {etq}
+              </button>
+            )
+          })}
+        </div>
+        <div className="mt-3 flex items-center gap-2 text-sm">
+          <input type="time" value={dispo.desde || ''} onChange={(e) => { const next = { ...dispo, desde: e.target.value }; setDispo(next); guardarCampo({ disponibilidad: next }) }}
+            className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm outline-none dark:border-slate-700 dark:bg-transparent dark:text-slate-100" />
+          <span className="text-slate-400">{t('a')}</span>
+          <input type="time" value={dispo.hasta || ''} onChange={(e) => { const next = { ...dispo, hasta: e.target.value }; setDispo(next); guardarCampo({ disponibilidad: next }) }}
+            className="rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm outline-none dark:border-slate-700 dark:bg-transparent dark:text-slate-100" />
         </div>
       </Card>
 
