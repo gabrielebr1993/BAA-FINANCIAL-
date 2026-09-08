@@ -6,9 +6,11 @@
 //   Pestañas: Órdenes · Mis choferes · Equipos · Estado de cuenta · Mensajes.
 // ============================================================================
 import { useMemo, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
+  Home, LogOut, Grid2x2, Camera, KeyRound, Languages,
 } from 'lucide-react'
 import RepararAcceso from '../components/RepararAcceso'
 import AvisosGeocerca from '../components/AvisosGeocerca'
@@ -22,7 +24,7 @@ import FastPayModal from '../components/FastPayModal'
 import ImprimirTicket from '../components/ImprimirTicket'
 import { DocumentoFactura } from '../pages/FacturaPagina'
 import DashboardFacturacion from '../components/DashboardFacturacion'
-import PortalLayout from '../components/PortalLayout'
+import CambiarClave from '../components/CambiarClave'
 import PanelConversaciones from '../components/PanelConversaciones'
 import GruposModal from '../components/GruposModal'
 import { usePrivados } from '../components/usePrivados'
@@ -33,7 +35,8 @@ import { useBulkAuth } from '../BulkAuthContext'
 import { useColeccion } from '../data/useColeccion'
 import { useAvatares } from '../data/useCodigoUsuario'
 import Avatar from '../components/Avatar'
-import { crearConId, guardar, where, documentId } from '../data/repo'
+import { leerFotoReducida } from '../components/foto'
+import { crearConId, guardar, guardarAvatar, where, documentId } from '../data/repo'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { auditar } from '../data/auditoria'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
@@ -44,10 +47,15 @@ import { calcularPagoChofer, configDeChofer, etiquetaPago } from '../domain/pago
 import { PRESENCIA_TTL_MS } from '../domain/asignacionAuto'
 import { tsMillis } from '../data/chatKeys'
 import { Card, KPI, Badge, Cargando, Aviso, EstadoVacio, Select, Input, Boton, Tabla, Spinner } from '../../components/ui'
+// Kit del REDISEÑO 2026 (Bloque 1): la carcasa, la home y el perfil usan este lenguaje.
+import { IconButton, PrimaryButton, SecondaryButton, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
 import BuscadorFacturas from '../components/BuscadorFacturas'
 import { filtrarFacturas, hayFiltroActivo, FILTRO_FACTURAS_VACIO } from '../domain/filtroFacturas'
 import { money } from '../../utils/format'
-import { useLang } from '../../i18n'
+import { LangToggle, useLang } from '../../i18n'
+
+// Color del punto de los StatusPill 2026 según el color de badge del estado.
+const PILL_COLOR = { green: 'var(--mp-green)', blue: 'var(--mp-blue)', gold: 'var(--mp-gold)', red: 'var(--mp-red)', navy: 'var(--mp-navy)', slate: 'var(--mp-ink-2)' }
 
 const ENTREGADAS = [E.ENTREGADA, E.LIBERADA, E.CERRADA]
 const FINAL = [...ENTREGADAS, E.CANCELADA]
@@ -57,7 +65,8 @@ const FLOTA_ESTADO = { disponible: { c: 'green', l: 'Disponible' }, en_viaje: { 
 
 export default function TransportistaPortal() {
   const { t } = useLang()
-  const { usuario, tenantId, rol, crearUsuario, puede } = useBulkAuth()
+  const { usuario, tenantId, rol, crearUsuario, puede, cerrarSesion } = useBulkAuth()
+  const navigate = useNavigate()
   const carrierId = usuario?.carrierId || '__none__'
 
   // ── Datos (TODO filtrado a MI carrier) ─────────────────────────────────────
@@ -99,7 +108,7 @@ export default function TransportistaPortal() {
     }))
   }, [_ordenesRaw, pagosCarrier, pagosChofer])
 
-  const [tab, setTab] = useState('cola')
+  const [tab, setTab] = useState('inicio')
   const [verGrupos, setVerGrupos] = useState(false)
   const { items: gruposItems, grupos, invitaciones } = useGrupos()
   const carrier = carriers.find((c) => c.id === carrierId)
@@ -240,56 +249,135 @@ export default function TransportistaPortal() {
 
   if (cargando) return <div className="grid min-h-screen place-items-center"><Cargando /></div>
 
-  const items = [
-    // "Órdenes" (solo las afiliadas a su transporte) — controlable desde Roles con
-    // el permiso ordenes.ver (activado por defecto para el transportista).
-    // "Cola" = sus órdenes ACTIVAS (por asignar / en curso) para despachar sus
-    // choferes. "Órdenes" = todas sus órdenes afiliadas (lista completa/historial).
-    // Ambas controlables desde Roles con ordenes.ver (activado por defecto).
-    ...(puede('ordenes.ver') ? [{ k: 'cola', label: t('Cola'), icon: Radio }] : []),
-    ...(puede('ordenes.ver') ? [{ k: 'ordenes', label: t('Órdenes'), icon: ClipboardList }] : []),
-    { k: 'choferes', label: t('Mis choferes'), icon: Users },
-    { k: 'equipos', label: t('Equipos'), icon: Truck },
-    { k: 'cuenta', label: t('Estado de cuenta'), icon: Wallet },
-    { k: 'pagos', label: t('Pago a choferes'), icon: DollarSign },
-    // "Facturación" (sus avisos de pago) aparece SOLO si el admin le activó el
-    // permiso facturacion.ver en la pantalla de Roles.
-    ...(puede('facturacion.ver') ? [{ k: 'facturacion', label: t('Facturación'), icon: FileText }] : []),
-    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: mensajesNuevos },
-  ]
-  // Sección activa: si la actual quedó oculta por permisos, cae a la primera visible.
-  const activo = items.some((i) => i.k === tab) ? tab : (items[0]?.k || 'mensajes')
+  // ── Pestañas 2026 ──────────────────────────────────────────────────────────
+  // Barra flotante: Inicio · Choferes · Chats · Facturas. Las DEMÁS pestañas del
+  // portal (cola, órdenes, equipos, estado de cuenta, pago a choferes, perfil)
+  // siguen existiendo como pantallas internas: se llega desde la home (Accesos)
+  // o tocando el avatar (perfil). Los permisos de Roles siguen mandando.
+  const tabFacturas = puede('facturacion.ver') ? 'facturacion' : 'cuenta'
+  // Si la pestaña actual quedó oculta por permisos, cae a la home.
+  const activo = ((tab === 'cola' || tab === 'ordenes') && !puede('ordenes.ver')) ? 'inicio'
+    : (tab === 'facturacion' && !puede('facturacion.ver')) ? 'cuenta'
+      : tab
+  const barActivo = activo === 'mensajes' ? 'mensajes'
+    : ['choferes', 'equipos', 'pagos'].includes(activo) ? 'choferes'
+      : ['cuenta', 'facturacion'].includes(activo) ? tabFacturas
+        : 'inicio'
 
   return (
-    <PortalLayout
-      icon={Truck}
-      empresa={carrier?.nombre || ''}
-      titulo={usuario?.nombre}
-      subtitulo={t('Transportista')}
-      items={items}
-      activo={activo}
-      onSelect={setTab}
-      campana={<CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" />}
-      aviso={!usuario?.carrierId && (
-        <Aviso tipo="warn" className="mb-3">
-          <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
-          <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
-        </Aviso>
-      )}
-    >
+    // Carcasa móvil 2026: fondo crema, altura fija (h-dvh) y el CUERPO desplaza
+    // por dentro (overflow-y-auto en <main>); en Chats el panel mide exacto.
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
       {/* Avisos en-app de entrada/salida de geocercas (de SU carrier). */}
       <AvisosGeocerca carrierId={carrierId} />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />
-      {/* KPIs (mismas tarjetas del admin), persistentes arriba del contenido */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KPI label={t('Órdenes activas')} value={stats.activas} icon={ClipboardList} accent="navy" />
-        <KPI label={t('Viajes hechos')} value={stats.viajes} icon={Truck} accent="green" />
-        <KPI label={t('Choferes en línea')} value={choferesEnLineaN} icon={Users} accent="gold" />
-        <KPI label={t('Tu utilidad')} value={money(stats.util)} icon={DollarSign} accent="blue" />
-      </div>
+      <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
+        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+          <Avatar foto={avatares[usuario?.id]} nombre={usuario?.nombre} size={40} redondo />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-medium text-mp-ink">{usuario?.nombre}</div>
+          <div className="truncate text-[12px] text-mp-ink-2">{carrier?.nombre ? `${carrier.nombre} · ${t('Transportista')}` : t('Transportista')}</div>
+        </div>
+        <CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" />
+        <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+        <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
+      </header>
 
-      {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
+      <main className={`relative flex-1 p-3 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+        {!usuario?.carrierId && (
+          <Aviso tipo="warn" className="mb-3">
+            <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
+            <RepararAcceso className="mt-2 px-3 py-1 text-xs" />
+          </Aviso>
+        )}
+
+        {activo === 'inicio' && (() => {
+          // ── HOME 2026 (Bloque 2.2) ────────────────────────────────────────
+          const num = (v) => Number(v) || 0
+          const ms = (v) => { const m = tsMillis(v) || Date.parse(v); return Number.isFinite(m) ? m : null }
+          const hoy = new Date()
+          const hoyStr = hoy.toDateString()
+          const esHoy = (v) => { const m = ms(v); return m != null && new Date(m).toDateString() === hoyStr }
+          // Ingresos de la semana (lunes→hoy) vs la semana pasada, con las MISMAS
+          // órdenes entregadas que ya alimentan el estado de cuenta.
+          const iniSem = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - ((hoy.getDay() + 6) % 7)).getTime()
+          const iniPrev = iniSem - 7 * 86400000
+          let ingSem = 0; let ingPrev = 0; let viajesSem = 0
+          for (const o of stats.entregadas) {
+            const f = ms(o.hitos?.entrega || o.hitos?.liberacion || o.creadoEn)
+            if (f == null) continue
+            if (f >= iniSem) { ingSem += num(o.precioTransportista); viajesSem++ }
+            else if (f >= iniPrev) ingPrev += num(o.precioTransportista)
+          }
+          const difPct = ingPrev > 0 ? Math.round(((ingSem - ingPrev) / ingPrev) * 100) : null
+          const viajesHoy = ordenes.filter((o) => esHoy(o.hitos?.entrega)).length
+          const enRuta = choferes.map((c) => ({ c, o: viajeActual(c) })).filter((x) => x.o)
+          const totalFlota = flota.length || choferes.length
+          const avisosPend = (statements || []).filter((s) => s.estado !== 'pagado').length
+          const verOrdenes = puede('ordenes.ver')
+          return (
+            <div className="space-y-2 px-1">
+              <div className="pb-1 pt-1">
+                <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
+                <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Tu semana')}</h1>
+              </div>
+
+              {/* Tarjeta protagonista: ingresos de la semana (sin botón dorado aquí). */}
+              <FeatureCard>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] text-mp-cream/70">{t('Ingresos de la semana')}</span>
+                  {difPct != null && (
+                    <StatusPill sobreNavy color={difPct >= 0 ? 'var(--mp-green)' : 'var(--mp-red)'}>
+                      {difPct >= 0 ? '+' : ''}{difPct}% {t('vs semana pasada')}
+                    </StatusPill>
+                  )}
+                </div>
+                <div className="mt-2 text-[32px] font-medium leading-none">{money(ingSem)}</div>
+                <div className="mt-2 text-[13px] text-mp-cream/80">{viajesSem} {t('viaje(s) entregados')}</div>
+              </FeatureCard>
+
+              {/* Stats de hoy */}
+              <div className="grid grid-cols-2 gap-2">
+                <StatCard etiqueta={t('Camiones activos')} valor={choferesEnLineaN} sufijo={totalFlota ? `/${totalFlota}` : ''} />
+                <StatCard etiqueta={t('Viajes hoy')} valor={viajesHoy} />
+              </div>
+
+              {/* Por facturar → ÚNICO botón dorado de la pantalla. */}
+              <div className="rounded-card bg-white p-4 shadow-card">
+                <div className="text-[12px] text-mp-ink-2">{t('Por facturar')}</div>
+                <div className="mt-1 text-[28px] font-medium leading-none text-mp-ink">{money(cuenta.pendiente)}</div>
+                <div className="mt-1 text-[12px] text-mp-ink-2">{stats.entregadas.length} {t('viaje(s) entregados')} · {avisosPend} {t('aviso(s) de pago pendientes')}</div>
+                <PrimaryButton className="mt-3" icon={FileText} onClick={() => setTab(tabFacturas)}>{t('Facturar')}</PrimaryButton>
+              </div>
+
+              {/* Choferes con orden activa */}
+              {enRuta.length > 0 && (
+                <>
+                  <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Choferes en ruta')}</div>
+                  {enRuta.map(({ c, o }) => (
+                    <ListRow key={c.id} icon={Truck}
+                      titulo={<span className="inline-flex max-w-full items-center gap-1.5"><span className="truncate">{c.nombre}</span>{choferEnLinea(c) && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-pill" style={{ background: 'var(--mp-green)' }} />}</span>}
+                      meta={`${t(o.material || 'Carga')} · ${o.numero || ''}`}
+                      derecha={<StatusPill color={PILL_COLOR[ORDEN_ESTADO_COLOR[o.estado]] || 'var(--mp-gold)'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>}
+                      onClick={verOrdenes ? () => setTab('cola') : undefined} />
+                  ))}
+                </>
+              )}
+
+              {/* Accesos: el resto de las pestañas del portal vive aquí */}
+              <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Accesos')}</div>
+              {verOrdenes && <ListRow icon={Radio} titulo={t('Cola')} meta={t('En proceso')} onClick={() => setTab('cola')} />}
+              {verOrdenes && <ListRow icon={ClipboardList} titulo={t('Órdenes')} meta={t('Todas tus órdenes y asignación de choferes')} onClick={() => setTab('ordenes')} />}
+              <ListRow icon={Truck} titulo={t('Equipos')} meta={t('Tu flota de camiones')} onClick={() => setTab('equipos')} />
+              <ListRow icon={DollarSign} titulo={t('Pago a choferes')} onClick={() => setTab('pagos')} />
+              {tabFacturas === 'facturacion' && <ListRow icon={Wallet} titulo={t('Estado de cuenta')} onClick={() => setTab('cuenta')} />}
+            </div>
+          )
+        })()}
+
+        {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo }} />}
       {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo, geocercas: geocercasEta }} />}
       {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
@@ -299,15 +387,89 @@ export default function TransportistaPortal() {
       {activo === 'mensajes' && (
         usuario?.carrierId
           ? <>
-              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-portal" abrir={abrirExterno || abrirPriv}
+              <PanelConversaciones secciones={seccionesMsg} alturaClass="h-mensajes-chofer" abrir={abrirExterno || abrirPriv} estiloApp
                 menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
-                accion={<span className="flex items-center gap-1.5"><BotonReunion /><Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</Boton></span>} />
+                accion={<span className="flex items-center gap-1.5"><BotonReunion /><Boton variant="ghost" className="px-3 py-1.5 text-sm" onClick={() => setVerGrupos(true)}><Users size={15} strokeWidth={1.75} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-1 grid h-4 min-w-[16px] place-items-center rounded-pill bg-mp-gold px-1 text-[10px] font-bold text-mp-navy">{invitaciones.length}</span>}</Boton></span>} />
               {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={candidatosGrupo} puedeCrear uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
               {modalPriv}
             </>
           : <Card className="p-4"><span className="text-sm text-slate-400">{t('Tu cuenta no está ligada a un transportista. Pídele al administrador que la asigne.')}</span></Card>
       )}
-    </PortalLayout>
+      {activo === 'perfil' && (
+        <PerfilTransportista t={t} usuario={usuario} tenantId={tenantId} carrier={carrier} avatares={avatares} navigate={navigate} cerrarSesion={cerrarSesion} />
+      )}
+      </main>
+
+      {/* Barra FLOTANTE 2026 (Bloque 2.2): 4 tabs, Chats SIEMPRE en tercera
+          posición. Cola/Órdenes/Equipos/Pagos/Estado de cuenta/Perfil siguen
+          existiendo como pantallas (se llega desde la home o el avatar). */}
+      <FloatingTabBar
+        activo={barActivo}
+        onSelect={setTab}
+        tabs={[
+          { k: 'inicio', label: t('Inicio'), icon: Home },
+          { k: 'choferes', label: t('Choferes'), icon: Users },
+          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: mensajesNuevos },
+          { k: tabFacturas, label: t('Facturas'), icon: FileText },
+        ]}
+      />
+    </div>
+  )
+}
+
+// ── Pestaña PERFIL (2026, mínima): avatar editable (sistema central de avatares),
+// idioma, cambio de contraseña, cambio de módulo y salir. Sin datos inventados.
+function PerfilTransportista({ t, usuario, tenantId, carrier, avatares, navigate, cerrarSesion }) {
+  const [verClave, setVerClave] = useState(false)
+  const [foto, setFoto] = useState(null)
+  const fotoActual = foto || avatares[usuario?.id] || null
+  const onFoto = async (e) => {
+    const f = await leerFotoReducida(e.target.files?.[0])
+    if (!f) return
+    setFoto(f)
+    try { await guardarAvatar(tenantId, usuario.id, f) } catch { window.alert(t('No se pudo guardar la foto.')) }
+  }
+  return (
+    <div className="space-y-2 px-1">
+      <div className="rounded-card bg-white p-4 shadow-card">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-shrink-0">
+            <Avatar foto={fotoActual} nombre={usuario?.nombre} size={64} redondo />
+            <label className="absolute -bottom-1 -right-1 grid h-7 w-7 cursor-pointer place-items-center rounded-pill bg-mp-gold text-mp-navy shadow-card" title={t('Cambiar foto')}>
+              <Camera size={14} strokeWidth={1.75} />
+              <input type="file" accept="image/*" onChange={onFoto} className="hidden" />
+            </label>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-medium text-mp-ink">{usuario?.nombre}</div>
+            <div className="truncate text-[12px] text-mp-ink-2">{usuario?.email}</div>
+            <div className="mt-1.5"><StatusPill color="var(--mp-gold)">{carrier?.nombre || t('Transportista')}</StatusPill></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-card bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-[14px] font-medium text-mp-ink"><Languages size={18} strokeWidth={1.75} /> {t('Idioma')}</span>
+          <LangToggle />
+        </div>
+      </div>
+
+      <SecondaryButton icon={KeyRound} onClick={() => setVerClave(true)}>{t('Cambiar contraseña')}</SecondaryButton>
+      <SecondaryButton icon={Grid2x2} onClick={() => navigate('/elegir')}>{t('Cambiar módulo')}</SecondaryButton>
+      <button type="button" onClick={cerrarSesion}
+        className="flex h-[44px] w-full items-center justify-center gap-2 rounded-pill border text-[14px] font-medium transition active:scale-[0.99]"
+        style={{ borderColor: 'var(--mp-red)', color: 'var(--mp-red)' }}>
+        <LogOut size={18} strokeWidth={1.75} /> {t('Cerrar sesión')}
+      </button>
+
+      <div className="rounded-card bg-white p-4 shadow-card">
+        <div className="mb-1.5 text-[12px] text-mp-ink-2">{t('¿No ves tus órdenes o cambió tu transportista? Refresca tus permisos aquí.')}</div>
+        <RepararAcceso variant="ghost" />
+      </div>
+
+      {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
+    </div>
   )
 }
 

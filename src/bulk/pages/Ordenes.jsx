@@ -269,7 +269,7 @@ export default function Ordenes() {
           {izquierda.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">{q ? t('Ninguna orden coincide.') : t('No hay órdenes por asignar. Genera órdenes desde un Trabajo (Job).')}</p>
           ) : (
-            <div className="scroll-thin grid max-h-[calc(100vh-15rem)] grid-cols-1 gap-2 overflow-y-auto pr-1">
+            <div className="scroll-thin grid max-h-[calc(100dvh-15rem)] grid-cols-1 gap-2 overflow-y-auto pr-1">
               {izquierda.map((o) => {
                 const fin = desgloseVisible(o, rol, permisos)
                 const ofrecida = o.estado === E.NOTIFICANDO
@@ -319,7 +319,7 @@ export default function Ordenes() {
           {derecha.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-400">{q ? t('Ningún chofer coincide.') : t('Ningún chofer en línea. Los choferes se conectan desde su app para recibir órdenes.')}</p>
           ) : (
-            <div className="scroll-thin grid max-h-[calc(100vh-15rem)] grid-cols-1 gap-2 overflow-y-auto pr-1">
+            <div className="scroll-thin grid max-h-[calc(100dvh-15rem)] grid-cols-1 gap-2 overflow-y-auto pr-1">
               {derecha.map((p) => {
                 const entrando = numOrdenPorChofer[p.uid]
                 const rest = entrando?.expira ? tsMillis(entrando.expira) - now : 0

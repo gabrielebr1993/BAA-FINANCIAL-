@@ -298,7 +298,7 @@ export default function CorreoCRM() {
 
       {/* Cliente de correo: carpetas · lista · lector */}
       <Card className="overflow-hidden">
-        <div className="flex" style={{ height: 'calc(100vh - 320px)', minHeight: 520 }}>
+        <div className="flex" style={{ height: 'calc(100dvh - 320px)', minHeight: 520 }}>
           {/* Carpetas (escondidas en móvil; ahí se usa el select de la barra) */}
           <aside className="hidden w-52 flex-shrink-0 flex-col border-r border-slate-100 p-2 dark:border-slate-800 md:flex">
             {CARPETAS.map((c) => {

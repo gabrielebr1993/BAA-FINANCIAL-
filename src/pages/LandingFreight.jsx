@@ -5,6 +5,7 @@
 // ruta REAL de login/selección de módulo (/elegir). No requiere autenticación.
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTemaColor } from '../hooks/useTemaColor'
 import landingCss from './landing/landing.css?raw'
 import landingHtml from './landing/landing-body.html?raw'
 
@@ -12,17 +13,10 @@ export default function LandingFreight() {
   const navigate = useNavigate()
   const rootRef = useRef(null)
 
-  // Fondo del documento en el navy del header MIENTRAS la landing está montada:
-  // así la franja bajo la Dynamic Island / status bar es del MISMO color que el
-  // nav (sin parches de otro tono). Se restaura al navegar a la app.
-  useEffect(() => {
-    const html = document.documentElement
-    const prevHtml = html.style.background
-    const prevBody = document.body.style.background
-    html.style.background = '#0d1a30'
-    document.body.style.background = '#0d1a30'
-    return () => { html.style.background = prevHtml; document.body.style.background = prevBody }
-  }, [])
+  // Pantalla NAVY: fondo del documento + theme-color a juego mientras está
+  // montada (la franja bajo la Dynamic Island queda del color del nav); al
+  // navegar a la app se restaura el crema.
+  useTemaColor('#0d1a30')
 
   // SEO básico (título + descripción); se restaura al desmontar.
   useEffect(() => {

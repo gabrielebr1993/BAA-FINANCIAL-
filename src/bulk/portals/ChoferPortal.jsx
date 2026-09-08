@@ -320,7 +320,7 @@ export default function ChoferPortal() {
     // min-h, desplazaba la página entera y el timeline de la orden se cortaba.
     // Rediseño 2026: carcasa CREMA, sin barra navy — el header es una fila de
     // botones circulares sobre el fondo; el perfil se abre tocando el avatar.
-    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-[640px] md:pl-24">
       <IndicadorConexion />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />

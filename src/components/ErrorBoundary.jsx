@@ -50,7 +50,7 @@ export default class ErrorBoundary extends React.Component {
     if (!this.state.error) return this.props.children
     if (this.state.autoFix) {
       return (
-        <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
+        <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
           <div>
             <div style={{ width: 56, height: 56, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 16, background: '#13233f', color: '#c9a24b', fontWeight: 800, fontSize: 26 }}>M</div>
             <p style={{ color: '#9aa4b2', fontSize: 14 }}>{tDirecto('Actualizando a la versión nueva…')}</p>
@@ -59,7 +59,7 @@ export default class ErrorBoundary extends React.Component {
       )
     }
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
+      <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: '#0f1729', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
         <div style={{ maxWidth: 380 }}>
           <div style={{ width: 56, height: 56, margin: '0 auto 16px', display: 'grid', placeItems: 'center', borderRadius: 16, background: '#13233f', color: '#c9a24b', fontWeight: 800, fontSize: 26 }}>M</div>
           <h1 style={{ fontSize: 20, margin: '0 0 8px' }}>{tDirecto('Necesitas actualizar la app')}</h1>

@@ -13,6 +13,7 @@ import { useBulkAuth } from './BulkAuthContext'
 import { authBulk } from './firebaseBulk'
 import { Aviso, Spinner } from '../components/ui'
 import { useLang, LangToggle } from '../i18n'
+import { useTemaColor } from '../hooks/useTemaColor'
 
 const F_DISPLAY = "'Space Grotesk','Inter',sans-serif"
 const F_MONO = "'JetBrains Mono',ui-monospace,monospace"
@@ -28,6 +29,8 @@ const Caja = ({ children }) => (
 
 export default function BulkLogin() {
   const { t } = useLang()
+  // Pantalla NAVY: documento + theme-color a juego mientras está montada.
+  useTemaColor('#0d1a30')
   const { iniciarSesion } = useBulkAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [verPass, setVerPass] = useState(false)

@@ -1,18 +1,21 @@
 // ============================================================================
-// BULK · Portal del SUPERVISOR — mismo lenguaje visual del admin (KPIs, tabla,
-// badges), enfocado en SUS TRABAJOS (jobs). AISLAMIENTO: solo ve las órdenes
-// cuyo jobId está en sus trabajos asignados (bulk_users.jobIds, reforzado por
-// las reglas con bMyJobs). COMPAT: un supervisor aún no migrado (solo con
-// plantaId del modelo viejo) sigue viendo su planta hasta que le asignen jobs.
-// Acción principal: confirmar/LIBERAR cargas entregadas (por código o lista).
+// BULK · Portal del SUPERVISOR — REDISEÑO MÓVIL 2026 (Bloque 2.5).
+// Carcasa app (crema, header sin barra, FloatingTabBar) con la MISMA lógica de
+// siempre: solo ve las órdenes cuyo jobId está en sus trabajos asignados
+// (bulk_users.jobIds, reforzado por las reglas con bMyJobs). COMPAT: un
+// supervisor aún no migrado (solo con plantaId) sigue viendo su planta.
+// Acción principal: autorizar entregas con su código (token) y vigilar el patio.
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ShieldCheck, CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft, MessageSquare } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { CheckCircle2, ClipboardList, Package, Truck, PackageCheck, KeyRound, RefreshCw, History, Copy, Clock, MapPin, Map as MapIcon, ArrowLeft, MessageSquare, Home, Scale, Grid2x2, LogOut, Languages } from 'lucide-react'
 import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import { useBulkAuth } from '../BulkAuthContext'
-import PortalLayout from '../components/PortalLayout'
 import MapaLeaflet from '../components/MapaLeaflet'
+import Avatar from '../components/Avatar'
+import CambiarClave from '../components/CambiarClave'
+import { useFotoUsuario } from '../data/useCodigoUsuario'
 import { useColeccion, useDoc } from '../data/useColeccion'
 import { guardar, suscribir, where } from '../data/repo'
 import { liberar as liberarPresencia } from '../data/presencia'
@@ -22,7 +25,9 @@ import { ahora } from '../domain/flujo'
 import { etaOrden, etaTexto } from '../domain/eta'
 import { NIVEL_LABEL } from '../domain/liberacion'
 import { beep, notificar } from '../integraciones/alertasLocales'
-import { Card, KPI, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
+import { Card, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
+// Kit del REDISEÑO 2026 (Bloque 1): carcasa, home y accesos usan este lenguaje.
+import { IconButton, PrimaryButton, Card as MpCard, StatCard, ListRow, Badge as MpBadge, FloatingTabBar } from '../ui'
 import PanelConversaciones from '../components/PanelConversaciones'
 import { usePrivados } from '../components/usePrivados'
 import { useGrupos } from '../data/useGrupos'
@@ -30,10 +35,11 @@ import GruposModal from '../components/GruposModal'
 import { menuGrupoConv } from '../data/grupos'
 import BotonReunion from '../components/BotonReunion'
 import { esRolStaff } from '../domain/comunicacion'
-import { useLang } from '../../i18n'
+import { useLang, LangToggle } from '../../i18n'
 
 const FINAL = [E.ENTREGADA, E.LIBERADA, E.CERRADA, E.CANCELADA]
-// Grupos de estado del panel: cada tarjeta KPI abre la lista de SUS órdenes.
+// Grupos de estado: cada página interna lista las órdenes de SUS trabajos en
+// ese estado. 'planta' es además la pestaña BÁSCULA de la barra flotante.
 const GRUPOS_ESTADO = {
   cola: { label: 'En cola (por aceptar)', estados: [E.CREADA, E.EN_COLA, E.NOTIFICANDO], icon: ClipboardList },
   hacia: { label: 'Hacia la planta', estados: [E.ACEPTADA], icon: Truck },
@@ -41,10 +47,13 @@ const GRUPOS_ESTADO = {
   ruta: { label: 'En ruta', estados: [E.EN_RUTA], icon: Truck },
 }
 const COLOR_NIVEL = { alta: 'green', media: 'gold', baja: 'slate', critico: 'red' }
+// Pestañas internas válidas (todas las secciones del portal siguen existiendo).
+const TABS_VALIDAS = ['inicio', 'perfil', 'token', 'espera', 'mensajes', 'mapa', 'liberar', 'liberaciones', 'actividad']
 
 export default function SupervisorPortal() {
   const { t } = useLang()
-  const { usuario, tenantId, rol } = useBulkAuth()
+  const navigate = useNavigate()
+  const { usuario, cerrarSesion, tenantId, rol } = useBulkAuth()
   // Alcance por TRABAJOS, leído EN VIVO de su propio doc de usuario (get por id,
   // permitido por reglas). Así, cuando el admin le asigna trabajos, el portal se
   // actualiza al instante — sin depender de la sesión ni de volver a entrar.
@@ -78,7 +87,9 @@ export default function SupervisorPortal() {
   }, [tenantId, jobsClave, plantaId])
   const { datos: geocercas } = useColeccion('geofences')
   const [msg, setMsg] = useState(null)
-  const [tab, setTab] = useState('token')
+  const [tab, setTab] = useState('inicio')
+  const [verClave, setVerClave] = useState(false)
+  const miFoto = useFotoUsuario(usuario?.id)
 
   // Órdenes 'entregada' = SOLO legado (el sistema nuevo entrega y libera en un
   // paso con el token; ninguna orden nueva se queda en este estado).
@@ -121,6 +132,32 @@ export default function SupervisorPortal() {
     for (const [k, g] of Object.entries(GRUPOS_ESTADO)) n[k] = ordenes.filter((o) => g.estados.includes(o.estado)).length
     return n
   }, [ordenes])
+
+  // ── HOME 2026 (Bloque 2.5): el patio de la planta ──────────────────────────
+  // "En patio" = camiones físicamente en la planta ahora (en_planta | cargando).
+  // Momento de llegada: hito llegadaPlanta del chofer o, si no lo marcó, el
+  // evento de ENTRADA a la geocerca de la planta (lo escribe el GPS solo).
+  const llegadaPatioMs = (o) => {
+    const ms = Date.parse(o.hitos?.llegadaPlanta || '')
+    if (Number.isFinite(ms)) return ms
+    const ev = (o.geoEventos || []).filter((e) => e.tipo === 'planta' && e.evento === 'entrada').pop()
+    const ms2 = Date.parse(ev?.ts || '')
+    return Number.isFinite(ms2) ? ms2 : null
+  }
+  const enPatio = useMemo(() => {
+    const lista = ordenes.filter((o) => [E.EN_PLANTA, E.CARGANDO].includes(o.estado))
+    // El que sigue en báscula = el que llegó PRIMERO (sin timestamp, al final).
+    return lista.sort((a, b) => (llegadaPatioMs(a) ?? Infinity) - (llegadaPatioMs(b) ?? Infinity))
+  }, [ordenes])
+  const hoyStr = new Date().toDateString()
+  const esHoy = (ts) => { const ms = Date.parse(ts || ''); return Number.isFinite(ms) && new Date(ms).toDateString() === hoyStr }
+  // "Cargados hoy" = órdenes con hito de CARGA (ticket de báscula) de hoy.
+  const cargadosHoy = useMemo(() => ordenes.filter((o) => esHoy(o.hitos?.carga)).length, [ordenes]) // eslint-disable-line react-hooks/exhaustive-deps
+  const unidadDe = (o) => o.unidad || o.placa || o.tipoEquipo || ''
+  const minEsperando = (o) => {
+    const ms = llegadaPatioMs(o)
+    return ms == null ? null : Math.max(0, Math.round((Date.now() - ms) / 60000))
+  }
 
   const nivelDe = (o) => (o.liberacion && o.liberacion.nivel) || null
 
@@ -173,269 +210,378 @@ export default function SupervisorPortal() {
     seccionPriv,
     { k: 'grupos', label: t('Grupos'), icon: 'grupo', items: gruposItems, vacio: t('No perteneces a ningún grupo.') },
   ], [seccionPriv, gruposItems, t])
+  const noLeidosMsgTotal = noLeidosPriv + noLeidosGrupos
 
-  // "Cargas antiguas" SOLO aparece si quedan órdenes del sistema anterior: así
-  // no conviven dos formas de liberar y el token es el único camino visible.
-  const items = [
-    { k: 'token', label: t('Mi código'), icon: KeyRound },
-    { k: 'espera', label: t('Por autorizar'), icon: Clock, badge: porAutorizar.length },
-    { k: 'mensajes', label: t('Mensajes'), icon: MessageSquare, badge: noLeidosPriv + noLeidosGrupos },
-    { k: 'mapa', label: t('Mapa'), icon: MapIcon },
-    ...(pendientes.length > 0 ? [{ k: 'liberar', label: t('Cargas antiguas'), icon: PackageCheck, badge: pendientes.length }] : []),
-    { k: 'liberaciones', label: t('Liberaciones'), icon: History },
-    { k: 'actividad', label: t('Actividad'), icon: ClipboardList },
-  ]
-  const activo = (tab.startsWith('g:') || items.some((i) => i.k === tab)) ? tab : 'token'
+  // Pestaña interna activa (todas las secciones anteriores siguen existiendo).
+  const activo = (tab.startsWith('g:') || TABS_VALIDAS.includes(tab)) ? tab : 'inicio'
+  // Pestaña de la BARRA flotante que corresponde a la sección interna:
+  //   Báscula = la operación en la planta (patio, mi código, por autorizar,
+  //   cargas antiguas). Registro = actividad, liberaciones y mapa en vivo.
+  const activoBar = ['inicio', 'perfil'].includes(activo) ? 'inicio'
+    : activo === 'mensajes' ? 'mensajes'
+      : (activo.startsWith('g:') && activo !== 'g:planta') ? 'inicio'
+        : (activo === 'g:planta' || ['token', 'espera', 'liberar'].includes(activo)) ? 'bascula'
+          : 'registro'
+
+  // Avisos comunes (mensaje de acción + estado de asignación), sobre el contenido.
+  const avisos = (
+    <>
+      {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
+      {sinAsignacion && <Aviso tipo="warn" className="mb-3">{t('Aún no tienes trabajos asignados. Pídele al administrador que te asigne tus trabajos en Usuarios para ver sus cargas.')}</Aviso>}
+      {jobIds.length === 0 && plantaId && <Aviso tipo="info" className="mb-3">{t('Estás viendo las cargas de tu planta (modelo anterior). El administrador puede asignarte trabajos para el nuevo alcance por trabajo.')}</Aviso>}
+    </>
+  )
 
   return (
-    <PortalLayout
-      icon={ShieldCheck}
-      titulo={usuario?.nombre}
-      subtitulo={t('Supervisor de trabajos')}
-      items={items}
-      activo={activo}
-      onSelect={setTab}
-      aviso={<>
-        {msg && <Aviso tipo={msg.tipo} className="mb-3">{msg.txt}</Aviso>}
-        {sinAsignacion && <Aviso tipo="warn" className="mb-3">{t('Aún no tienes trabajos asignados. Pídele al administrador que te asigne tus trabajos en Usuarios para ver sus cargas.')}</Aviso>}
-        {jobsNombres.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Mis trabajos')}:</span>
-            {jobsNombres.map((n, i) => <Badge key={i} color="navy">{n}</Badge>)}
-          </div>
-        )}
-        {jobIds.length === 0 && plantaId && <Aviso tipo="info" className="mb-3">{t('Estás viendo las cargas de tu planta (modelo anterior). El administrador puede asignarte trabajos para el nuevo alcance por trabajo.')}</Aviso>}
-      </>}
-    >
-      {/* KPIs clicables: cada tarjeta abre la LISTA de órdenes en ese estado. */}
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <KPI label={t('En cola (por aceptar)')} value={stats.cola} icon={ClipboardList} accent="navy" onClick={() => setTab('g:cola')} />
-        <KPI label={t('Hacia la planta')} value={stats.hacia} icon={Truck} accent="gold" onClick={() => setTab('g:hacia')} />
-        <KPI label={t('En planta / cargando')} value={stats.planta} icon={Package} accent="gold" onClick={() => setTab('g:planta')} />
-        <KPI label={t('En ruta')} value={stats.ruta} icon={Truck} accent="blue" onClick={() => setTab('g:ruta')} />
-        <KPI label={t('Por autorizar')} value={porAutorizar.length} icon={KeyRound} accent="green" onClick={() => setTab('espera')} />
-      </div>
+    // Carcasa 2026: fondo crema a todo el alto, header de fila (sin barra navy),
+    // el cuerpo desplaza por dentro y la barra de pestañas FLOTA abajo.
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
+      <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
+        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+          <Avatar foto={miFoto} nombre={usuario?.nombre} size={40} redondo />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14px] font-medium text-mp-ink">{usuario?.nombre}</div>
+          <div className="truncate text-[12px] text-mp-ink-2">{t('Supervisor de trabajos')}{jobsNombres.length > 0 ? ` · ${jobsNombres.join(', ')}` : ''}</div>
+        </div>
+        <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+        <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
+      </header>
 
-      {/* Página de un ESTADO: las órdenes de la tarjeta KPI seleccionada. */}
-      {activo.startsWith('g:') && (() => {
-        const g = GRUPOS_ESTADO[activo.slice(2)]
-        if (!g) return null
-        const lista = ordenes.filter((o) => g.estados.includes(o.estado)).sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
-        const GIcon = g.icon
-        return (
-          <>
-            <div className="mb-3 flex items-center gap-2">
-              <button onClick={() => setTab('token')} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ArrowLeft size={16} /> {t('Volver')}</button>
-              <GIcon size={16} className="text-amber-500" />
-              <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t(g.label)}</h3>
-              <Badge color="navy">{lista.length}</Badge>
+      {/* En Mensajes la página NO desplaza: el panel de chats mide exacto y
+          desplaza por dentro (mismo patrón que el portal del chofer). */}
+      <main className={`relative flex-1 p-3 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+        {activo !== 'mensajes' && avisos}
+
+        {/* ── INICIO (Bloque 2.5): la planta de un vistazo ────────────────── */}
+        {activo === 'inicio' && (
+          <div className="space-y-2 px-1">
+            <div className="pb-1 pt-1">
+              <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
+              <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Planta')}</h1>
             </div>
-            {lista.length === 0 ? (
-              <Card className="flex flex-col items-center gap-2 p-8 text-center text-slate-400"><GIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('No hay órdenes en este estado ahora mismo.')}</p></Card>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {lista.map((o) => (
-                  <Card key={o.id} className="p-3.5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                      <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
-                      {(() => { const e = etaOrden(o, geocercas); return e ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${e.viejo ? 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-blue-500/10 text-blue-600 dark:text-blue-300'}`} title={`${e.distKm} km ${e.fase === 'recogida' ? t('a la planta') : t('a la entrega')}`}>{etaTexto(e)}{e.viejo ? ` (${t('GPS viejo')})` : ''}</span> : null })()}
-                      <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
-                      {o.urgente && <Badge color="red">{t('Urgente')}</Badge>}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || t('sin asignar')}{o.tipoEquipo ? ` · ${o.tipoEquipo}` : ''}</div>
-                    {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
-                    <ProgresoViaje o={o} t={t} />
-                    {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
-                  </Card>
-                ))}
-              </div>
+
+            {/* Patio ahora + cargados del día */}
+            <div className="grid grid-cols-2 gap-2">
+              <StatCard oscura etiqueta={t('En patio')} valor={enPatio.length} />
+              <StatCard etiqueta={t('Cargados hoy')} valor={cargadosHoy} />
+            </div>
+
+            {/* Siguiente en báscula: el camión que llegó primero al patio. */}
+            <MpCard>
+              <div className="text-[12px] text-mp-ink-2">{t('Siguiente en báscula')}</div>
+              {enPatio.length > 0 ? (() => {
+                const s = enPatio[0]
+                const uni = unidadDe(s)
+                return (
+                  <>
+                    <div className="mt-1 truncate text-[18px] font-medium text-mp-ink">{s.choferNombre || t('Sin chofer')}{uni ? ` · ${uni}` : ''}</div>
+                    <div className="mt-0.5 truncate text-[13px] text-mp-ink-2">{t(s.material || 'material s/e')} · {s.pesoReal ?? s.pesoEstimado} ton · {s.numero}</div>
+                    <PrimaryButton className="mt-4" icon={Scale} onClick={() => setTab('g:planta')}>{t('Registrar peso')}</PrimaryButton>
+                  </>
+                )
+              })() : (
+                <div className="mt-1 text-[14px] text-mp-ink-2">{t('No hay camiones en el patio ahora mismo.')}</div>
+              )}
+            </MpCard>
+
+            {/* Camiones en espera (el resto del patio), con minutos esperando
+                cuando hay timestamp de llegada (hito o geocerca). */}
+            {enPatio.length > 1 && (
+              <>
+                <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Camiones en espera')}</div>
+                {enPatio.slice(1).map((o) => {
+                  const min = minEsperando(o)
+                  return (
+                    <ListRow key={o.id} icon={Truck} titulo={`${o.choferNombre || t('Sin chofer')}${unidadDe(o) ? ` · ${unidadDe(o)}` : ''}`}
+                      meta={`${t(o.material || 'material s/e')} · ${o.pesoReal ?? o.pesoEstimado} ton · ${o.numero}`}
+                      derecha={min != null ? <span className="flex-shrink-0 text-[12px] text-mp-ink-2">{min} {t('min')}</span> : null}
+                      onClick={() => setTab('g:planta')} />
+                  )
+                })}
+              </>
             )}
+            {/* NOTA: el portal no tiene datos de INVENTARIO por material (solo
+                órdenes y geocercas), así que esa sección se omite a propósito. */}
+
+            {/* Accesos a las demás secciones del portal (siguen todas vivas). */}
+            <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Accesos rápidos')}</div>
+            <ListRow icon={KeyRound} titulo={t('Mi código')} meta={t('Autoriza las entregas de tus trabajos')} onClick={() => setTab('token')} />
+            <ListRow icon={Clock} titulo={t('Por autorizar')} meta={t('En destino, esperando tu autorización')}
+              derecha={porAutorizar.length > 0 ? <MpBadge>{porAutorizar.length}</MpBadge> : null} onClick={() => setTab('espera')} />
+            <ListRow icon={ClipboardList} titulo={t('En cola (por aceptar)')} derecha={stats.cola > 0 ? <MpBadge>{stats.cola}</MpBadge> : null} onClick={() => setTab('g:cola')} />
+            <ListRow icon={Truck} titulo={t('Hacia la planta')} derecha={stats.hacia > 0 ? <MpBadge>{stats.hacia}</MpBadge> : null} onClick={() => setTab('g:hacia')} />
+            <ListRow icon={Truck} titulo={t('En ruta')} derecha={stats.ruta > 0 ? <MpBadge>{stats.ruta}</MpBadge> : null} onClick={() => setTab('g:ruta')} />
+            <ListRow icon={MapIcon} titulo={t('Mapa')} meta={t('Mis camiones en vivo')} onClick={() => setTab('mapa')} />
+            <ListRow icon={History} titulo={t('Liberaciones')} onClick={() => setTab('liberaciones')} />
+            {pendientes.length > 0 && (
+              <ListRow icon={PackageCheck} titulo={t('Cargas antiguas')} derecha={<MpBadge>{pendientes.length}</MpBadge>} onClick={() => setTab('liberar')} />
+            )}
+          </div>
+        )}
+
+        {/* ── PERFIL (mínimo): idioma, clave, módulo, salir ───────────────── */}
+        {activo === 'perfil' && (
+          <div className="space-y-2 px-1">
+            <MpCard className="flex items-center gap-3">
+              <Avatar foto={miFoto} nombre={usuario?.nombre} size={48} redondo />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium text-mp-ink">{usuario?.nombre}</div>
+                <div className="truncate text-[12px] text-mp-ink-2">{usuario?.email}</div>
+                <div className="truncate text-[12px] text-mp-ink-2">{t('Supervisor de trabajos')}{jobsNombres.length > 0 ? ` · ${jobsNombres.join(', ')}` : ''}</div>
+              </div>
+            </MpCard>
+            <MpCard className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-[14px] font-medium text-mp-ink"><Languages size={18} strokeWidth={1.75} className="text-mp-ink-2" /> {t('Idioma')}</span>
+              <LangToggle />
+            </MpCard>
+            <ListRow icon={KeyRound} titulo={t('Cambiar contraseña')} onClick={() => setVerClave(true)} />
+            <ListRow icon={Grid2x2} titulo={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+            <ListRow icon={LogOut} iconClass="bg-mp-red/10 text-mp-red" titulo={t('Cerrar sesión')} onClick={cerrarSesion} />
+            {verClave && <CambiarClave onClose={() => setVerClave(false)} />}
+          </div>
+        )}
+
+        {/* Página de un ESTADO (g:planta = pestaña Báscula de la barra). */}
+        {activo.startsWith('g:') && (() => {
+          const g = GRUPOS_ESTADO[activo.slice(2)]
+          if (!g) return null
+          const lista = ordenes.filter((o) => g.estados.includes(o.estado)).sort((a, b) => (b.numero || '').localeCompare(a.numero || ''))
+          const GIcon = g.icon
+          return (
+            <>
+              <div className="mb-3 flex items-center gap-2">
+                <button onClick={() => setTab('inicio')} className="inline-flex items-center gap-1 rounded-pill px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><ArrowLeft size={16} strokeWidth={1.75} /> {t('Volver')}</button>
+                <GIcon size={16} className="text-amber-500" />
+                <h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t(g.label)}</h3>
+                <Badge color="navy">{lista.length}</Badge>
+              </div>
+              {lista.length === 0 ? (
+                <Card className="flex flex-col items-center gap-2 p-8 text-center text-slate-400"><GIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('No hay órdenes en este estado ahora mismo.')}</p></Card>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {lista.map((o) => (
+                    <Card key={o.id} className="p-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                        <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                        {(() => { const e = etaOrden(o, geocercas); return e ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${e.viejo ? 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-blue-500/10 text-blue-600 dark:text-blue-300'}`} title={`${e.distKm} km ${e.fase === 'recogida' ? t('a la planta') : t('a la entrega')}`}>{etaTexto(e)}{e.viejo ? ` (${t('GPS viejo')})` : ''}</span> : null })()}
+                        <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                        {o.urgente && <Badge color="red">{t('Urgente')}</Badge>}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || t('sin asignar')}{o.tipoEquipo ? ` · ${o.tipoEquipo}` : ''}</div>
+                      {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
+                      <ProgresoViaje o={o} t={t} />
+                      {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()}
+
+        {activo === 'mensajes' && (
+          <>
+            <PanelConversaciones secciones={seccionesSup} alturaClass="h-mensajes-chofer" abrir={abrirPriv} estiloApp
+              menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
+              accion={<span className="flex items-center gap-1.5">
+                <BotonReunion />
+                <button onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><MessageSquare size={13} strokeWidth={1.75} /> {t('Grupos')}{invitaciones.length > 0 && <span className="ml-0.5 grid h-4 min-w-[16px] place-items-center rounded-pill bg-mp-gold px-1 text-[10px] font-bold text-mp-navy">{invitaciones.length}</span>}</button>
+              </span>} />
+            {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
+            {modalPriv}
           </>
-        )
-      })()}
-
-      {activo === 'mensajes' && (
-        <>
-          <PanelConversaciones secciones={seccionesSup} alturaClass="h-mensajes-portal" abrir={abrirPriv}
-            menuConversacion={(item) => menuGrupoConv({ item, grupos, uid: usuario?.id, t })}
-            accion={<span className="flex items-center gap-1.5">
-              <BotonReunion />
-              <button onClick={() => setVerGrupos(true)} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><MessageSquare size={15} /> {t('Grupos')}{invitaciones.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{invitaciones.length}</span>}</button>
-            </span>} />
-          {verGrupos && <GruposModal grupos={grupos} invitaciones={invitaciones} candidatos={[]} puedeCrear={false} uid={usuario?.id} onClose={() => setVerGrupos(false)} />}
-          {modalPriv}
-        </>
-      )}
-
-      {activo === 'token' && <TokenSupervisor t={t} />}
-
-      {activo === 'espera' && (<>
-        <Aviso tipo="info" className="mb-3">{t('Estas cargas están EN EL DESTINO: el chofer necesita tu código de 6 dígitos (pestaña «Mi código») para poder entregar. Al validar el código, la orden queda entregada y liberada de una vez.')}</Aviso>
-        <div className="mb-2 flex items-center gap-2"><Clock size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En destino, esperando tu autorización')}</h3><Badge color="gold">{porAutorizar.length}</Badge></div>
-        {porAutorizar.length === 0 ? (
-          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('Nadie está esperando tu código ahora mismo. Cuando un chofer llegue al destino, aparecerá aquí.')}</p></Card>
-        ) : (
-          <div className="mb-4 grid gap-2 sm:grid-cols-2">
-            {porAutorizar.map((o) => (
-              <Card key={o.id} className="border-l-4 border-l-amber-500 p-3.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                  <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
-                  {o.estado === E.EN_DESTINO
-                    ? <Badge color="blue">{t('En destino')}</Badge>
-                    : <Badge color="gold"><MapPin size={10} className="mr-0.5 inline" />{t('Cruzó la geocerca de entrega')}</Badge>}
-                  <button onClick={() => setTab('token')} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm transition hover:bg-amber-400"><KeyRound size={13} /> {t('Ver mi código')}</button>
-                </div>
-                <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
-                {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
-                <ProgresoViaje o={o} t={t} />
-                {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
-              </Card>
-            ))}
-          </div>
         )}
-        {enCamino.length > 0 && (<>
-          <div className="mb-2 flex items-center gap-2"><Truck size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En camino (pronto pedirán tu código)')}</h3><Badge color="blue">{enCamino.length}</Badge></div>
-          <div className="mb-4 grid gap-2 sm:grid-cols-2">
-            {enCamino.map((o) => (
-              <Card key={o.id} className="p-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                  <Badge color="blue">{t('En ruta')}</Badge>
-                  <span className="ml-auto text-xs text-slate-400">{o.choferNombre || '—'}</span>
-                </div>
-                <ProgresoViaje o={o} t={t} />
-              </Card>
-            ))}
-          </div>
-        </>)}
-      </>)}
 
-      {activo === 'mapa' && (() => {
-        // Camiones ACTIVOS de sus trabajos con posición conocida, coloreados por
-        // etapa, sobre las geocercas (planta y zona de entrega).
-        const colorPunto = { aceptada: '#64748b', en_planta: '#13233f', cargando: '#13233f', en_ruta: '#2563eb', en_destino: '#f59e0b' }
-        const activos = ordenes.filter((o) => !FINAL.includes(o.estado) && o.ultimaPos?.lat != null)
-        const marcadores = activos.map((o) => ({ id: `o_${o.id}`, lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto[o.estado] || '#64748b', label: `${o.numero} · ${o.choferNombre || t('sin chofer')} · ${t(PASO_LABEL[o.estado] || o.estado)}` }))
-        return (
-          <Card className="p-3">
-            <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
-              <MapIcon size={14} className="text-amber-500" />
-              <span className="font-bold text-brand-navy dark:text-slate-100">{t('Mis camiones en vivo')}</span>
-              <Badge color="navy">{activos.length}</Badge>
-              <span className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#2563eb' }} /> {t('En ruta')}</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#f59e0b' }} /> {t('En destino')}</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#13233f' }} /> {t('En planta / cargando')}</span>
-              </span>
-            </div>
-            {activos.length === 0
-              ? <div className="flex flex-col items-center gap-2 py-10 text-center text-slate-400"><MapIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ningún camión activo con GPS ahora mismo. Cuando un chofer esté en viaje, lo verás aquí con las geocercas.')}</p></div>
-              : <MapaLeaflet geocercas={geocercas} marcadores={marcadores} alto="58vh" />}
-            <p className="mt-2 px-1 text-[11px] text-slate-400">{t('La posición se actualiza con el GPS del chofer (cada ~20 s en viaje). Los círculos son las geocercas de planta y de entrega.')}</p>
-          </Card>
-        )
-      })()}
+        {activo === 'token' && <TokenSupervisor t={t} />}
 
-      {activo === 'liberaciones' && (<>
-        <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
-        {misLiberaciones.length === 0 ? (
-          <EstadoVacio titulo={t('Aún no has liberado entregas')} texto={t('Cuando un chofer entregue con tu código, cada autorización quedará registrada aquí.')} mostrarBoton={false} />
-        ) : (
-          <div className="space-y-2">
-            {misLiberaciones.slice().sort((a, b) => (b.autorizadaEn || '').localeCompare(a.autorizadaEn || '')).map((l) => (
-              <Card key={l.id} className="p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
-                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{l.orderNumero || l.orderId}</span>
-                  <Badge color="green">{t('Liberada')}</Badge>
-                  <span className="ml-auto text-xs text-slate-400">{String(l.autorizadaEn || '').slice(0, 16).replace('T', ' ')}</span>
-                </div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {t('Entregó')}: <b>{l.empleadoNombre || '—'}</b> ({t(l.empleadoRol || '')})
-                  {l.intentosFallidosPrevios > 0 && <span className="ml-2 text-amber-600 dark:text-amber-400">· {l.intentosFallidosPrevios} {t('intento(s) fallido(s) previos')}</span>}
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </>)}
-
-      {activo === 'liberar' && (<>
-        {/* SOLO órdenes ANTIGUAS: entregadas antes del sistema de token. Las
-            entregas nuevas se autorizan con «Mi código» y no pasan por aquí.
-            Estas se liberan directo con el botón (sin códigos de 4 dígitos). */}
-        <Aviso tipo="info" className="mb-3">{t('Estas cargas quedaron entregadas con el sistema anterior. Libéralas con el botón. Las entregas nuevas se autorizan con tu código de la pestaña «Mi código» y no aparecen aquí.')}</Aviso>
-        <div className="mb-2 flex items-center gap-2"><PackageCheck size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cargas antiguas por liberar')}</h3><Badge color="gold">{pendientes.length}</Badge></div>
-        {pendientes.length === 0 ? (
-          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('No queda ninguna carga del sistema anterior. Todo lo nuevo se autoriza con tu código.')}</p></Card>
-        ) : (
-          <div className="mb-4 grid gap-2 sm:grid-cols-2">
-            {pendientes.map((o) => (
-              <Card key={o.id} className="p-3.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                  <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
-                  {nivelDe(o) && <Badge color={COLOR_NIVEL[nivelDe(o)] || 'slate'}>{t(NIVEL_LABEL[nivelDe(o)] || nivelDe(o))}</Badge>}
-                  <button onClick={() => liberarOrden(o)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"><CheckCircle2 size={14} /> {t('Liberar')}</button>
-                </div>
-                <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </>)}
-
-      {activo === 'actividad' && (<>
-        <div className="mb-2 flex items-center gap-2"><ClipboardList size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Actividad de mis trabajos')}</h3><Badge color="navy">{activas.length} {t('en curso')}</Badge></div>
-        {activas.length === 0 ? (
-          <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><ClipboardList size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ahora mismo no hay viajes EN CURSO en tus trabajos. Abajo quedan los terminados recientes; cuando arranque un viaje nuevo, aparecerá aquí con su avance.')}</p></Card>
-        ) : (
-          <Tabla
-            columns={[
-              { key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') },
-              { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'tipoEquipo', label: t('Camión') },
-              { key: 'chofer', label: t('Chofer') }, { key: 'estado', label: t('Estado') },
-            ]}
-            rows={activas.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((o) => ({ ...o, _key: o.id }))}
-            renderCell={(o, k) => {
-              if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{o.numero}</span>
-              if (k === 'material') return t(o.material || '—')
-              if (k === 'ton') return o.pesoReal ?? o.pesoEstimado ?? '—'
-              if (k === 'tipoEquipo') return o.tipoEquipo || '—'
-              if (k === 'chofer') return o.choferNombre || <span className="text-slate-400">{t('Sin asignar')}</span>
-              if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
-              return null
-            }}
-            minWidth="min-w-[640px]"
-          />
-        )}
-        {(() => {
-          // Terminadas recientes (liberadas/cerradas/canceladas), las últimas 15.
-          const term = ordenes
-            .filter((o) => [E.LIBERADA, E.CERRADA, E.CANCELADA].includes(o.estado))
-            .sort((a, b) => String(b.hitos?.liberacion || b.hitos?.entrega || '').localeCompare(String(a.hitos?.liberacion || a.hitos?.entrega || '')))
-            .slice(0, 15)
-          if (!term.length) return null
-          return (<>
-            <div className="mb-2 mt-5 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Terminadas recientes')}</h3><Badge color="green">{term.length}</Badge></div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {term.map((o) => (
-                <Card key={o.id} className="p-3">
-                  <div className="flex flex-wrap items-center gap-2">
+        {activo === 'espera' && (<>
+          <Aviso tipo="info" className="mb-3">{t('Estas cargas están EN EL DESTINO: el chofer necesita tu código de 6 dígitos (pestaña «Mi código») para poder entregar. Al validar el código, la orden queda entregada y liberada de una vez.')}</Aviso>
+          <div className="mb-2 flex items-center gap-2"><Clock size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En destino, esperando tu autorización')}</h3><Badge color="gold">{porAutorizar.length}</Badge></div>
+          {porAutorizar.length === 0 ? (
+            <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('Nadie está esperando tu código ahora mismo. Cuando un chofer llegue al destino, aparecerá aquí.')}</p></Card>
+          ) : (
+            <div className="mb-4 grid gap-2 sm:grid-cols-2">
+              {porAutorizar.map((o) => (
+                <Card key={o.id} className="p-3.5">
+                  <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
-                    <Badge color={o.estado === E.CANCELADA ? 'red' : 'green'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
-                    <span className="ml-auto text-xs text-slate-400">{String(o.hitos?.liberacion || o.hitos?.entrega || '').slice(0, 16).replace('T', ' ')}</span>
+                    <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                    {o.estado === E.EN_DESTINO
+                      ? <Badge color="blue">{t('En destino')}</Badge>
+                      : <Badge color="gold"><MapPin size={10} className="mr-0.5 inline" />{t('Cruzó la geocerca de entrega')}</Badge>}
+                    <button onClick={() => setTab('token')} className="ml-auto inline-flex items-center gap-1 rounded-pill bg-white px-3 py-1.5 text-xs font-semibold text-mp-ink shadow-card"><KeyRound size={13} strokeWidth={1.75} /> {t('Ver mi código')}</button>
                   </div>
-                  <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton · {o.choferNombre || '—'}</div>
+                  <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
+                  {o.direccionEntrega && <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400"><MapPin size={11} /> {o.direccionEntrega}</div>}
+                  <ProgresoViaje o={o} t={t} />
+                  {o.ultimaPos?.lat != null && <button onClick={() => setTab('mapa')} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:underline dark:text-amber-400"><MapIcon size={11} /> {t('Ver en el mapa')}</button>}
                 </Card>
               ))}
             </div>
-          </>)
+          )}
+          {enCamino.length > 0 && (<>
+            <div className="mb-2 flex items-center gap-2"><Truck size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('En camino (pronto pedirán tu código)')}</h3><Badge color="blue">{enCamino.length}</Badge></div>
+            <div className="mb-4 grid gap-2 sm:grid-cols-2">
+              {enCamino.map((o) => (
+                <Card key={o.id} className="p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Badge color="blue">{t('En ruta')}</Badge>
+                    <span className="ml-auto text-xs text-slate-400">{o.choferNombre || '—'}</span>
+                  </div>
+                  <ProgresoViaje o={o} t={t} />
+                </Card>
+              ))}
+            </div>
+          </>)}
+        </>)}
+
+        {activo === 'mapa' && (() => {
+          // Camiones ACTIVOS de sus trabajos con posición conocida, coloreados por
+          // etapa, sobre las geocercas (planta y zona de entrega).
+          const colorPunto = { aceptada: '#64748b', en_planta: '#13233f', cargando: '#13233f', en_ruta: '#2563eb', en_destino: '#f59e0b' }
+          const activos = ordenes.filter((o) => !FINAL.includes(o.estado) && o.ultimaPos?.lat != null)
+          const marcadores = activos.map((o) => ({ id: `o_${o.id}`, lat: o.ultimaPos.lat, lng: o.ultimaPos.lng, icon: 'truck', color: colorPunto[o.estado] || '#64748b', label: `${o.numero} · ${o.choferNombre || t('sin chofer')} · ${t(PASO_LABEL[o.estado] || o.estado)}` }))
+          return (
+            <Card className="p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+                <MapIcon size={14} className="text-amber-500" />
+                <span className="font-bold text-brand-navy dark:text-slate-100">{t('Mis camiones en vivo')}</span>
+                <Badge color="navy">{activos.length}</Badge>
+                <span className="ml-auto flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#2563eb' }} /> {t('En ruta')}</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#f59e0b' }} /> {t('En destino')}</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#13233f' }} /> {t('En planta / cargando')}</span>
+                </span>
+              </div>
+              {activos.length === 0
+                ? <div className="flex flex-col items-center gap-2 py-10 text-center text-slate-400"><MapIcon size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ningún camión activo con GPS ahora mismo. Cuando un chofer esté en viaje, lo verás aquí con las geocercas.')}</p></div>
+                : <MapaLeaflet geocercas={geocercas} marcadores={marcadores} alto="58vh" />}
+              <p className="mt-2 px-1 text-[11px] text-slate-400">{t('La posición se actualiza con el GPS del chofer (cada ~20 s en viaje). Los círculos son las geocercas de planta y de entrega.')}</p>
+            </Card>
+          )
         })()}
-      </>)}
-    </PortalLayout>
+
+        {activo === 'liberaciones' && (<>
+          <div className="mb-2 flex items-center gap-2"><History size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Órdenes que he liberado')}</h3><Badge color="navy">{misLiberaciones.length}</Badge></div>
+          {misLiberaciones.length === 0 ? (
+            <EstadoVacio titulo={t('Aún no has liberado entregas')} texto={t('Cuando un chofer entregue con tu código, cada autorización quedará registrada aquí.')} mostrarBoton={false} />
+          ) : (
+            <div className="space-y-2">
+              {misLiberaciones.slice().sort((a, b) => (b.autorizadaEn || '').localeCompare(a.autorizadaEn || '')).map((l) => (
+                <Card key={l.id} className="p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-500"><CheckCircle2 size={16} /></span>
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{l.orderNumero || l.orderId}</span>
+                    <Badge color="green">{t('Liberada')}</Badge>
+                    <span className="ml-auto text-xs text-slate-400">{String(l.autorizadaEn || '').slice(0, 16).replace('T', ' ')}</span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {t('Entregó')}: <b>{l.empleadoNombre || '—'}</b> ({t(l.empleadoRol || '')})
+                    {l.intentosFallidosPrevios > 0 && <span className="ml-2 text-amber-600 dark:text-amber-400">· {l.intentosFallidosPrevios} {t('intento(s) fallido(s) previos')}</span>}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>)}
+
+        {activo === 'liberar' && (<>
+          {/* SOLO órdenes ANTIGUAS: entregadas antes del sistema de token. Las
+              entregas nuevas se autorizan con «Mi código» y no pasan por aquí.
+              Estas se liberan directo con el botón (sin códigos de 4 dígitos). */}
+          <Aviso tipo="info" className="mb-3">{t('Estas cargas quedaron entregadas con el sistema anterior. Libéralas con el botón. Las entregas nuevas se autorizan con tu código de la pestaña «Mi código» y no aparecen aquí.')}</Aviso>
+          <div className="mb-2 flex items-center gap-2"><PackageCheck size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Cargas antiguas por liberar')}</h3><Badge color="gold">{pendientes.length}</Badge></div>
+          {pendientes.length === 0 ? (
+            <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><CheckCircle2 size={30} strokeWidth={1.4} className="text-emerald-400" /><p className="max-w-xs text-sm">{t('No queda ninguna carga del sistema anterior. Todo lo nuevo se autoriza con tu código.')}</p></Card>
+          ) : (
+            <div className="mb-4 grid gap-2 sm:grid-cols-2">
+              {pendientes.map((o) => (
+                <Card key={o.id} className="p-3.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                    <Badge color="gold">{o.pesoReal ?? o.pesoEstimado} ton</Badge>
+                    {nivelDe(o) && <Badge color={COLOR_NIVEL[nivelDe(o)] || 'slate'}>{t(NIVEL_LABEL[nivelDe(o)] || nivelDe(o))}</Badge>}
+                    <button onClick={() => liberarOrden(o)} className="ml-auto inline-flex items-center gap-1 rounded-pill bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"><CheckCircle2 size={14} strokeWidth={1.75} /> {t('Liberar')}</button>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {t('chofer:')} {o.choferNombre || '—'}</div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>)}
+
+        {activo === 'actividad' && (<>
+          <div className="mb-2 flex items-center gap-2"><ClipboardList size={16} className="text-amber-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Actividad de mis trabajos')}</h3><Badge color="navy">{activas.length} {t('en curso')}</Badge></div>
+          {activas.length === 0 ? (
+            <Card className="mb-4 flex flex-col items-center gap-2 p-8 text-center text-slate-400"><ClipboardList size={30} strokeWidth={1.4} /><p className="max-w-xs text-sm">{t('Ahora mismo no hay viajes EN CURSO en tus trabajos. Abajo quedan los terminados recientes; cuando arranque un viaje nuevo, aparecerá aquí con su avance.')}</p></Card>
+          ) : (
+            <Tabla
+              columns={[
+                { key: 'numero', label: t('Orden') }, { key: 'material', label: t('Material') },
+                { key: 'ton', label: t('Ton'), align: 'right' }, { key: 'tipoEquipo', label: t('Camión') },
+                { key: 'chofer', label: t('Chofer') }, { key: 'estado', label: t('Estado') },
+              ]}
+              rows={activas.slice().sort((a, b) => (b.numero || '').localeCompare(a.numero || '')).map((o) => ({ ...o, _key: o.id }))}
+              renderCell={(o, k) => {
+                if (k === 'numero') return <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                if (k === 'material') return t(o.material || '—')
+                if (k === 'ton') return o.pesoReal ?? o.pesoEstimado ?? '—'
+                if (k === 'tipoEquipo') return o.tipoEquipo || '—'
+                if (k === 'chofer') return o.choferNombre || <span className="text-slate-400">{t('Sin asignar')}</span>
+                if (k === 'estado') return <Badge color={ORDEN_ESTADO_COLOR[o.estado] || 'slate'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                return null
+              }}
+              minWidth="min-w-[640px]"
+            />
+          )}
+          {(() => {
+            // Terminadas recientes (liberadas/cerradas/canceladas), las últimas 15.
+            const term = ordenes
+              .filter((o) => [E.LIBERADA, E.CERRADA, E.CANCELADA].includes(o.estado))
+              .sort((a, b) => String(b.hitos?.liberacion || b.hitos?.entrega || '').localeCompare(String(a.hitos?.liberacion || a.hitos?.entrega || '')))
+              .slice(0, 15)
+            if (!term.length) return null
+            return (<>
+              <div className="mb-2 mt-5 flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-500" /><h3 className="m-0 text-sm font-bold text-brand-navy dark:text-slate-100">{t('Terminadas recientes')}</h3><Badge color="green">{term.length}</Badge></div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {term.map((o) => (
+                  <Card key={o.id} className="p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{o.numero}</span>
+                      <Badge color={o.estado === E.CANCELADA ? 'red' : 'green'}>{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</Badge>
+                      <span className="ml-auto text-xs text-slate-400">{String(o.hitos?.liberacion || o.hitos?.entrega || '').slice(0, 16).replace('T', ' ')}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">{t(o.material || 'material s/e')} · {o.pesoReal ?? o.pesoEstimado} ton · {o.choferNombre || '—'}</div>
+                  </Card>
+                ))}
+              </div>
+            </>)
+          })()}
+          <div className="mt-4 space-y-2">
+            {/* Desde Registro también se llega al historial de liberaciones y al mapa. */}
+            <ListRow icon={History} titulo={t('Liberaciones')} meta={t('Órdenes que he liberado')} onClick={() => setTab('liberaciones')} />
+            <ListRow icon={MapIcon} titulo={t('Mapa')} meta={t('Mis camiones en vivo')} onClick={() => setTab('mapa')} />
+          </div>
+        </>)}
+      </main>
+
+      {/* Barra FLOTANTE 2026: 4 pestañas, Chats en tercera posición.
+          Báscula = patio de la planta (sección real «En planta / cargando»);
+          Registro = sección real «Actividad» (tabla + terminadas recientes). */}
+      <FloatingTabBar
+        activo={activoBar}
+        onSelect={(k) => setTab(k === 'bascula' ? 'g:planta' : k === 'registro' ? 'actividad' : k)}
+        tabs={[
+          { k: 'inicio', label: t('Inicio'), icon: Home },
+          { k: 'bascula', label: t('Báscula'), icon: Scale },
+          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosMsgTotal },
+          { k: 'registro', label: t('Registro'), icon: ClipboardList },
+        ]}
+      />
+    </div>
   )
 }
 

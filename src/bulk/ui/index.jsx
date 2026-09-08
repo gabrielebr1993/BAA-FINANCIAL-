@@ -68,7 +68,8 @@ export function StatCard({ etiqueta, valor, sufijo, oscura = false, className = 
   return (
     <div className={`rounded-[22px] p-4 shadow-card ${oscura ? 'bg-mp-navy' : 'bg-white'} ${className}`}>
       <div className={`text-[12px] ${oscura ? 'text-mp-cream/70' : 'text-mp-ink-2'}`}>{etiqueta}</div>
-      <div className={`mt-1 text-[28px] font-medium leading-none ${oscura ? 'text-mp-gold' : 'text-mp-ink'}`}>
+      {/* iPhone SE (≤375): el número baja de 28 a 24 para no cortarse. */}
+      <div className={`mt-1 text-[28px] font-medium leading-none max-[375px]:text-[24px] ${oscura ? 'text-mp-gold' : 'text-mp-ink'}`}>
         {valor}{sufijo && <span className={`text-[15px] font-normal ${oscura ? 'text-mp-cream/60' : 'text-mp-ink-2'}`}> {sufijo}</span>}
       </div>
     </div>
@@ -114,21 +115,24 @@ export function StatusPill({ color = 'var(--mp-green)', children, sobreNavy = fa
 // Barra de pestañas FLOTANTE: pill translúcido con blur, 4 tabs, activo = círculo
 // navy con icono dorado. Chats SIEMPRE en tercera posición (responsabilidad del
 // que arma el arreglo `tabs`).
+// En iPad/tablet (≥768px) la barra pasa a COLUMNA lateral izquierda de 72px con
+// los mismos iconos (orden "Pantalla completa", Bloque 3.2).
 export function FloatingTabBar({ tabs = [], activo, onSelect, className = '' }) {
   return (
-    <nav className={`fixed inset-x-4 z-40 mx-auto max-w-md rounded-pill shadow-float ${className}`}
-      style={{ bottom: 'max(env(safe-area-inset-bottom), 12px)', background: 'rgba(255,255,255,.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
-      <div className="flex items-center justify-around px-2 py-2">
+    <nav
+      className={`fixed inset-x-4 bottom-[max(env(safe-area-inset-bottom),12px)] z-40 mx-auto max-w-md rounded-pill shadow-float md:inset-x-auto md:bottom-auto md:left-4 md:top-1/2 md:mx-0 md:w-[72px] md:max-w-none md:-translate-y-1/2 ${className}`}
+      style={{ background: 'rgba(255,255,255,.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+      <div className="flex items-center justify-around px-2 py-2 md:flex-col md:gap-3 md:px-2 md:py-4">
         {tabs.map((tb) => {
           const on = tb.k === activo
           const Icon = tb.icon
           return (
             <button key={tb.k} type="button" onClick={() => onSelect?.(tb.k)} aria-label={tb.label}
-              className="relative flex flex-col items-center gap-0.5 px-2">
+              className="relative flex flex-col items-center gap-0.5 px-2 md:px-0">
               <span className={`grid h-10 w-10 place-items-center rounded-pill transition ${on ? 'bg-mp-navy text-mp-gold' : 'text-mp-ink-2'}`}>
                 <Icon size={on ? 20 : 24} strokeWidth={S} />
               </span>
-              {!on && <span className="text-[10px] text-mp-ink-2">{tb.label}</span>}
+              {!on && <span className="text-[10px] text-mp-ink-2 md:hidden">{tb.label}</span>}
               {tb.badge > 0 && <Badge className="absolute -right-0.5 -top-0.5">{tb.badge > 99 ? '99+' : tb.badge}</Badge>}
             </button>
           )
@@ -142,15 +146,15 @@ export function FloatingTabBar({ tabs = [], activo, onSelect, className = '' }) 
 //   [safe-area, fondo crema] [fila de header sin barra] [contenido scroll] [tab bar o botón fijo]
 export function PantallaApp({ izquierda, titulo, derecha, children, tabBar, accionFija, className = '' }) {
   return (
-    <div className={`mp-app mp-app-safe mx-auto flex min-h-dvh max-w-md flex-col ${className}`}>
+    <div className={`mp-app mp-app-safe mx-auto flex min-h-dvh max-w-md flex-col md:max-w-[640px] md:pl-24 ${className}`}>
       {(izquierda || titulo || derecha) && (
-        <div className="flex items-center gap-3 px-4 pb-1 pt-2">
+        <div className="flex items-center gap-3 px-4 pb-1 pt-2 min-[430px]:px-5">
           {izquierda || <span className="w-10" />}
           <div className="min-w-0 flex-1 text-center text-[12px] text-mp-ink-2">{titulo}</div>
           {derecha || <span className="w-10" />}
         </div>
       )}
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-32 pt-1">{children}</div>
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-32 pt-1 min-[430px]:px-5">{children}</div>
       {tabBar}
       {accionFija && !tabBar && (
         <div className="fixed inset-x-4 z-40 mx-auto max-w-md" style={{ bottom: 'max(env(safe-area-inset-bottom), 12px)' }}>
