@@ -218,7 +218,14 @@ export default function ClientePortal() {
     })
     return [{ k: 'admin', label: t('Administrador'), icon: 'admin', items, vacio: t('Aún no tienes conversaciones. Se crean por viaje cuando escribes al administrador.') }]
   }, [ordenesChat, resumenMsg, clienteId, t])
-  const noLeidosMsg = useMemo(() => Object.values(resumenMsg).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenMsg])
+  // Cuenta SOLO los hilos que su panel muestra (chats por viaje visibles y, si
+  // el admin los apagó, ninguno). Antes sumaba TODAS las conversaciones donde
+  // el cliente figura (p. ej. el chat de la orden del chofer, que este panel
+  // no lista) → el globito quedaba congelado en un número imposible de "leer".
+  const noLeidosMsg = useMemo(
+    () => (veChatsViaje ? (seccionesMsg[0]?.items || []) : []).reduce((a, it) => a + (it.noLeidos || 0), 0),
+    [seccionesMsg, veChatsViaje],
+  )
   // Grupos del cliente (puede ser invitado; no crea). Se añaden como sección aparte.
   const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
   const [verGrupos, setVerGrupos] = useState(false)

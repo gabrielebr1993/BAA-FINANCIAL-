@@ -193,7 +193,14 @@ export default function TransportistaPortal() {
   const noLeidosOficina = (noLeidosPorConv(mensajes, usuario?.id)[convCarrier(carrierId)]) || 0
   // Resumen de los chats de orden (por chofer/viaje) para la sección CHOFERES.
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
-  const noLeidosChoferes = useMemo(() => Object.values(resumenOrd).reduce((a, r) => a + (r.noLeidos || 0), 0), [resumenOrd])
+  // Cuenta SOLO los hilos que el panel muestra (órdenes con chofer asignado).
+  // Antes sumaba TODO lo que llegaba (incluida la conversación con la oficina,
+  // que ya se cuenta aparte, y órdenes sin chofer que no se listan) → el
+  // globito se congelaba en un número imposible de "leer".
+  const noLeidosChoferes = useMemo(
+    () => (ordenes || []).reduce((a, o) => (o.choferNombre && resumenOrd[o.id]) ? a + (resumenOrd[o.id].noLeidos || 0) : a, 0),
+    [resumenOrd, ordenes],
+  )
   // Chat interno PRIVADO 1-a-1 (transportista↔chofer de su flota, transportista↔oficina…).
   const yoPriv = useMemo(() => ({ uid: usuario?.id, rol: 'transportista', carrierId: carrierId || null }), [usuario?.id, carrierId])
   const { seccion: seccionPriv, abrir: abrirPriv, modal: modalPriv, noLeidos: noLeidosPriv } = usePrivados({ mensajes: mensajesPriv, uid: usuario?.id, tenantId, yo: yoPriv })

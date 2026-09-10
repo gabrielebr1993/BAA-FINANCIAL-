@@ -121,9 +121,16 @@ export default function ChoferPortal() {
   // La consulta trae solo los mensajes donde el chofer participa (aislado por reglas).
   const { datos: mensajesOrdenes } = useColeccion('messages', [where('participantes', 'array-contains', usuario?.id || '__none__')])
   const resumenOrd = useMemo(() => resumenPorConversacion(mensajesOrdenes, usuario?.id), [mensajesOrdenes, usuario])
-  // No leídos de ÓRDENES: excluye las conversaciones privadas (pv_), que se cuentan
-  // aparte en su propia sección para no duplicar el indicador.
-  const noLeidosOrdenes = useMemo(() => Object.entries(resumenOrd).reduce((a, [k, r]) => a + (esConvPrivada(k) ? 0 : (r.noLeidos || 0)), 0), [resumenOrd])
+  // No leídos de ÓRDENES: cuenta SOLO los hilos que el panel de Chats muestra
+  // (órdenes que puedo leer). Sin este filtro, el globito sumaba también la
+  // conversación de oficina y los grupos (doble conteo) y mensajes de hilos
+  // que ya no aparecen (órdenes de otro transporte, borradas…) → número
+  // congelado que nunca se podía "leer".
+  const noLeidosOrdenes = useMemo(() => Object.entries(resumenOrd).reduce((a, [k, r]) => {
+    if (esConvPrivada(k) || k === miConv || String(k).startsWith('grp_')) return a // se cuentan en su propia sección
+    if (!(ordenes || []).some((o) => o.id === k)) return a                          // hilo que el panel no muestra
+    return a + (r.noLeidos || 0)
+  }, 0), [resumenOrd, ordenes, miConv])
   const { items: gruposItems, grupos, invitaciones, noLeidos: noLeidosGrupos } = useGrupos()
   const [verGrupos, setVerGrupos] = useState(false)
   // Chat interno PRIVADO 1-a-1 (chofer↔chofer del mismo transporte, chofer↔transportista,

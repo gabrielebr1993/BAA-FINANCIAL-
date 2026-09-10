@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useColeccion } from '../data/useColeccion'
 import { useBulkAuth } from '../BulkAuthContext'
-import { noLeidosPorConv } from '../data/chat'
+import { noLeidosVisibles } from '../data/chat'
+import { where } from '../data/repo'
 import { construirNotificaciones } from '../domain/notificaciones'
 import { useNotifsGeocerca } from '../data/geoeventos'
 import CampanaNotificaciones from './CampanaNotificaciones'
@@ -15,7 +16,12 @@ export default function NotificacionesCentro() {
   const { datos: incidencias } = useColeccion('incidents')
   const { datos: documentos } = useColeccion('documents')
   const { datos: mensajes } = useColeccion('messages')
-  const mensajesNuevos = useMemo(() => Object.values(noLeidosPorConv(mensajes, usuario?.id)).reduce((a, n) => a + n, 0), [mensajes, usuario])
+  // Mismo criterio que el badge del menú (BulkLayout): solo cuentan los hilos
+  // VISIBLES para este usuario (excluye privados ajenos y grupos que dejó) —
+  // si no, el contador se congela en mensajes que nunca podría "leer".
+  const { datos: misGrupos } = useColeccion('groups', [where('miembros', 'array-contains', usuario?.id || '__none__')])
+  const gruposActivos = useMemo(() => new Set((misGrupos || []).map((g) => 'grp_' + g.id)), [misGrupos])
+  const mensajesNuevos = useMemo(() => noLeidosVisibles(mensajes, usuario?.id, gruposActivos), [mensajes, usuario, gruposActivos])
 
   const geo = useNotifsGeocerca(null) // staff: entradas/salidas de geocerca de todo el tenant
   // Pulso de 1 min: la alerta de GPS APAGADO depende de que NO lleguen datos,
