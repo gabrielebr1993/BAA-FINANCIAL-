@@ -161,17 +161,16 @@ function PushSetup() {
 function Interno() {
   const { t } = useLang()
   const { usuario, cargando, rol } = useBulkAuth()
-  // DISPATCHER (rediseño 2026, Bloque 2.3): en el TELÉFONO entra a su portal
-  // móvil; en pantalla grande (o al tocar "Modo escritorio") usa el panel
-  // completo de siempre. La preferencia dura la SESIÓN del navegador
-  // (sessionStorage) para no dejar a nadie atrapado en la vista equivocada;
-  // ?vista=portal|escritorio en la URL la fuerza.
+  // DISPATCHER: usa SIEMPRE el panel de escritorio (igual que el admin). El
+  // portal móvil 2026 queda como opción para el teléfono en campo: se activa
+  // con ?vista=portal en la URL y dura la sesión del navegador; "Modo
+  // escritorio" (o ?vista=escritorio) regresa al panel.
   const [vistaDisp, setVistaDisp] = useState(() => {
     try {
       const q = new URLSearchParams(window.location.search).get('vista')
       if (q === 'portal' || q === 'escritorio') { sessionStorage.setItem('mp_disp_vista', q); return q }
-      return sessionStorage.getItem('mp_disp_vista') || 'auto'
-    } catch { return 'auto' }
+      return sessionStorage.getItem('mp_disp_vista') || 'escritorio'
+    } catch { return 'escritorio' }
   })
   const irEscritorio = () => { try { sessionStorage.setItem('mp_disp_vista', 'escritorio') } catch { /* noop */ } setVistaDisp('escritorio') }
   if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto={t('Cargando Freight…')} /></div>
@@ -179,11 +178,8 @@ function Interno() {
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
   if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
-  if (rol === 'dispatcher') {
-    const esMovil = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
-    if (vistaDisp === 'portal' || (vistaDisp === 'auto' && esMovil)) {
-      return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><DispatcherPortal irEscritorio={irEscritorio} /></Suspense></>
-    }
+  if (rol === 'dispatcher' && vistaDisp === 'portal') {
+    return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><DispatcherPortal irEscritorio={irEscritorio} /></Suspense></>
   }
   return (
     <>

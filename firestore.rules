@@ -691,9 +691,10 @@ service cloud.firestore {
     match /bulk_pedidos/{id} {
       allow read: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente());
-      allow create: if bSame(request.resource.data.tenantId) && bRole() == 'cliente'
+      allow create: if bStaff(request.resource.data.tenantId)
+        || (bSame(request.resource.data.tenantId) && bRole() == 'cliente'
         && request.resource.data.clienteId == bCliente()
-        && request.resource.data.get('estado', 'pendiente') == 'pendiente';
+        && request.resource.data.get('estado', 'pendiente') == 'pendiente');
       allow update, delete: if bStaff(resource.data.tenantId)
         || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente()
             && resource.data.get('estado', '') in ['pendiente', 'programado']);

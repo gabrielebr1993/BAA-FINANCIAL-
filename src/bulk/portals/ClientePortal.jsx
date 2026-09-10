@@ -39,6 +39,7 @@ import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../com
 // Detalle de pedido 2026 (Bloque 3): esqueleto compartido por los 5 roles.
 import DetalleOrdenApp from '../components/DetalleOrdenApp'
 import CalificacionViaje from '../components/CalificacionViaje'
+import PortalEscritorio from '../components/PortalEscritorio'
 // Kit del REDISEÑO 2026 (Bloque 1): la home y la carcasa usan este lenguaje.
 import { IconButton, PrimaryButton, SecondaryButton, Card as CardApp, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
 import { money } from '../../utils/format'
@@ -254,12 +255,28 @@ export default function ClientePortal() {
           una fila sin barra de color (avatar → perfil + botones circulares) y el
           cuerpo desplaza por dentro (overflow-y-auto en <main>). Reemplaza al
           PortalLayout de sidebar; las pestañas viejas siguen viviendo aquí. */}
-      <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
+      <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-none md:pl-64">
+        {/* ESCRITORIO (≥768px): barra lateral estilo admin con TODAS las
+            secciones; en el teléfono se conserva la carcasa tipo app. */}
+        <PortalEscritorio
+          activo={tab} onSelect={setTab} usuario={usuario} foto={miFotoHome}
+          rolLabel={empresaCliente ? `${empresaCliente} · ${t('Cliente')}` : t('Cliente')}
+          cerrarSesion={cerrarSesion} irModulos={() => navigate('/elegir')} onPerfil={() => setTab('perfil')}
+          tabs={[
+            { k: 'inicio', label: t('Inicio'), icon: Home },
+            { k: 'ordenes', label: t('Pedidos'), icon: Package },
+            { k: 'mapa', label: t('Mapa en vivo'), icon: Navigation },
+            { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosTotal },
+            { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
+            { k: 'resumen', label: t('Resumen'), icon: LayoutDashboard },
+            { k: 'proyectos', label: t('Proyectos'), icon: Layers },
+          ]}
+        />
         <IndicadorConexion />
         {/* Aviso VISUAL rápido de mensajes nuevos. */}
         <AvisosMensajes />
         <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
-          <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+          <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95 md:hidden">
             <Avatar foto={miFotoHome} nombre={usuario?.nombre} size={40} redondo />
           </button>
           <div className="min-w-0 flex-1">
@@ -267,13 +284,13 @@ export default function ClientePortal() {
             <div className="truncate text-[12px] text-mp-ink-2">{empresaCliente ? `${empresaCliente} · ` : ''}{t('Cliente')}</div>
           </div>
           <CampanaNotificaciones notifs={notifsC} claveLS="bulk_notif_cliente" />
-          <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
-          <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
+          <IconButton className="md:!hidden" icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+          <IconButton className="md:!hidden" icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
         </header>
 
         {/* En la pestaña Mensajes la página NO desplaza (overflow-hidden): el panel
             de chats mide exacto y desplaza por dentro. */}
-        <main className={`relative flex-1 p-3 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+        <main className={`relative flex-1 p-3 md:mx-auto md:w-full md:max-w-[1100px] md:px-5 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
           {!usuario?.clienteId ? (
             <div className="pt-6 text-center">
               <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.')} mostrarBoton={false} />
@@ -604,16 +621,19 @@ export default function ClientePortal() {
         {/* Barra FLOTANTE 2026 (Bloque 2.4): 4 tabs, Chats en tercera posición.
             Resumen/Mapa/Proyectos/Perfil siguen existiendo como pantallas (se
             llega desde la home o el avatar), solo salen de la barra. */}
-        <FloatingTabBar
-          activo={['perfil', 'resumen', 'mapa', 'proyectos'].includes(tab) ? 'inicio' : tab}
-          onSelect={setTab}
-          tabs={[
-            { k: 'inicio', label: t('Inicio'), icon: Home },
-            { k: 'ordenes', label: t('Pedidos'), icon: Package },
-            { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosTotal },
-            { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
-          ]}
-        />
+        {/* En escritorio la navegación vive en la barra lateral (estilo admin). */}
+        <div className="md:hidden">
+          <FloatingTabBar
+            activo={['perfil', 'resumen', 'mapa', 'proyectos'].includes(tab) ? 'inicio' : tab}
+            onSelect={setTab}
+            tabs={[
+              { k: 'inicio', label: t('Inicio'), icon: Home },
+              { k: 'ordenes', label: t('Pedidos'), icon: Package },
+              { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosTotal },
+              { k: 'facturas', label: t('Facturas'), icon: FileText, badge: facturasPend },
+            ]}
+          />
+        </div>
       </div>
 
       {verClave && <CambiarClave onClose={() => setVerClave(false)} />}

@@ -10,8 +10,9 @@ import { useNavigate } from 'react-router-dom'
 import {
   Truck, ClipboardList, Users, DollarSign, Phone, IdCard,
   MessageSquare, Plus, X, UserPlus, Wallet, Search, Trash2, MapPin, FileText, Radio,
-  Home, LogOut, Grid2x2, Camera, KeyRound, Languages, User, Download,
+  Home, LogOut, Grid2x2, Camera, KeyRound, Languages, User, Download, Landmark,
 } from 'lucide-react'
+import PortalEscritorio from '../components/PortalEscritorio'
 // Gráficas de la home (orden "Negocio y roles", Bloque 1). Import estático normal:
 // Recharts ya viene en el bundle (misma librería del panel admin de Package).
 import {
@@ -341,13 +342,30 @@ export default function TransportistaPortal() {
   return (
     // Carcasa móvil 2026: fondo crema, altura fija (h-dvh) y el CUERPO desplaza
     // por dentro (overflow-y-auto en <main>); en Chats el panel mide exacto.
-    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden">
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-none md:pl-64">
+      {/* ESCRITORIO (≥768px): barra lateral estilo admin con TODAS las
+          secciones; en el teléfono se conserva la carcasa tipo app. */}
+      <PortalEscritorio
+        activo={activo} onSelect={setTab} usuario={usuario} foto={avatares[usuario?.id]}
+        rolLabel={carrier?.nombre ? `${carrier.nombre} · ${t('Transportista')}` : t('Transportista')}
+        cerrarSesion={cerrarSesion} irModulos={() => navigate('/elegir')} onPerfil={() => setTab('perfil')}
+        tabs={[
+          { k: 'inicio', label: t('Inicio'), icon: Home },
+          ...(puede('ordenes.ver') ? [{ k: 'cola', label: t('Cola'), icon: Radio }, { k: 'ordenes', label: t('Órdenes'), icon: ClipboardList }] : []),
+          { k: 'choferes', label: t('Choferes'), icon: Users },
+          { k: 'equipos', label: t('Equipos'), icon: Truck },
+          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: mensajesNuevos },
+          ...(puede('facturacion.ver') ? [{ k: 'facturacion', label: t('Facturación'), icon: FileText }] : []),
+          { k: 'cuenta', label: t('Estado de cuenta'), icon: DollarSign },
+          { k: 'pagos', label: t('Pago a choferes'), icon: Landmark },
+        ]}
+      />
       {/* Avisos en-app de entrada/salida de geocercas (de SU carrier). */}
       <AvisosGeocerca carrierId={carrierId} />
       {/* Aviso VISUAL rápido de mensajes nuevos. */}
       <AvisosMensajes />
       <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
-        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95 md:hidden">
           <Avatar foto={avatares[usuario?.id]} nombre={usuario?.nombre} size={40} redondo />
         </button>
         <div className="min-w-0 flex-1">
@@ -355,11 +373,11 @@ export default function TransportistaPortal() {
           <div className="truncate text-[12px] text-mp-ink-2">{carrier?.nombre ? `${carrier.nombre} · ${t('Transportista')}` : t('Transportista')}</div>
         </div>
         <CampanaNotificaciones notifs={notifsT} claveLS="bulk_notif_transportista" />
-        <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
-        <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
+        <IconButton className="md:!hidden" icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+        <IconButton className="md:!hidden" icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>
 
-      <main className={`relative flex-1 p-3 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+      <main className={`relative flex-1 p-3 md:mx-auto md:w-full md:max-w-[1100px] md:px-5 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
         {!usuario?.carrierId && (
           <Aviso tipo="warn" className="mb-3">
             <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
@@ -509,16 +527,19 @@ export default function TransportistaPortal() {
       {/* Barra FLOTANTE 2026 (Bloque 2.2): 4 tabs, Chats SIEMPRE en tercera
           posición. Cola/Órdenes/Equipos/Pagos/Estado de cuenta/Perfil siguen
           existiendo como pantallas (se llega desde la home o el avatar). */}
-      <FloatingTabBar
-        activo={barActivo}
-        onSelect={setTab}
-        tabs={[
-          { k: 'inicio', label: t('Inicio'), icon: Home },
-          { k: 'choferes', label: t('Choferes'), icon: Users },
-          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: mensajesNuevos },
-          { k: tabFacturas, label: t('Facturas'), icon: FileText },
-        ]}
-      />
+      {/* En escritorio la navegación vive en la barra lateral (estilo admin). */}
+      <div className="md:hidden">
+        <FloatingTabBar
+          activo={barActivo}
+          onSelect={setTab}
+          tabs={[
+            { k: 'inicio', label: t('Inicio'), icon: Home },
+            { k: 'choferes', label: t('Choferes'), icon: Users },
+            { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: mensajesNuevos },
+            { k: tabFacturas, label: t('Facturas'), icon: FileText },
+          ]}
+        />
+      </div>
     </div>
   )
 }

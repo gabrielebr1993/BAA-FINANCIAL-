@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban, AlertTriangle } from 'lucide-react'
+import { Radio, Truck, CheckCircle2, XCircle, MessageSquare, User, Search, Clock, Package, Wifi, RefreshCw, Ban, AlertTriangle, CalendarClock } from 'lucide-react'
+import ProgramarOrdenes from '../components/ProgramarOrdenes'
 import { Link, useNavigate } from 'react-router-dom'
 import { Input } from '../../components/ui'
 import ChatOrden from '../components/ChatOrden'
@@ -65,6 +66,7 @@ export default function Ordenes() {
   const { t } = useLang()
   const { tenantId, usuario, rol, permisos } = useBulkAuth()
   const esStaff = STAFF.includes(rol)
+  const [verProgramar, setVerProgramar] = useState(false) // modal programadas/recurrentes
   const { datos: ordenes, cargando } = useOrdenesConPagos()
   const { datos: carriers } = useColeccion('carriers')
   const { datos: presencias } = useColeccion('presence')
@@ -192,8 +194,15 @@ export default function Ordenes() {
 
   return (
     <div>
-      <PageTitle>{t('Órdenes / Cola')}</PageTitle>
+      <div className="flex items-start justify-between gap-3">
+        <PageTitle>{t('Órdenes / Cola')}</PageTitle>
+        {/* Programadas y recurrentes: el staff crea pedidos a nombre del cliente. */}
+        <Boton variant="ghost" onClick={() => setVerProgramar(true)} className="flex-shrink-0">
+          <CalendarClock size={16} /> {t('Programadas')}
+        </Boton>
+      </div>
       <p className="-mt-3 mb-4 text-sm text-slate-400">{t('Asignación automática por disponibilidad. El sistema empareja cada orden con un chofer en línea; tú solo observas.')}</p>
+      {verProgramar && <ProgramarOrdenes onClose={() => setVerProgramar(false)} />}
 
       {atrasadasN > 0 && (
         <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300">
