@@ -29,6 +29,7 @@ import { etaOrden, etaTexto } from '../domain/eta'
 import { NIVEL_LABEL } from '../domain/liberacion'
 import { beep, notificar } from '../integraciones/alertasLocales'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import PortalEscritorio from '../components/PortalEscritorio'
 import { notificacionesSupervisor } from '../domain/notificaciones'
 import { Card, Badge, Aviso, EstadoVacio, Tabla } from '../../components/ui'
 // Kit del REDISEÑO 2026 (Bloque 1): carcasa, home y accesos usan este lenguaje.
@@ -251,9 +252,26 @@ export default function SupervisorPortal() {
   return (
     // Carcasa 2026: fondo crema a todo el alto, header de fila (sin barra navy),
     // el cuerpo desplaza por dentro y la barra de pestañas FLOTA abajo.
-    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-[640px] md:pl-24">
+    <div className="mp-app h-dvh mx-auto flex max-w-md flex-col overflow-hidden md:max-w-none md:pl-64">
+      {/* ESCRITORIO (≥768px): barra lateral estilo admin con TODAS las
+          secciones; en teléfono/tablet se conserva la carcasa tipo app. */}
+      <PortalEscritorio
+        activo={activo === 'liberar' ? 'espera' : activo} onSelect={setTab} usuario={usuario} foto={miFoto}
+        rolLabel={t('Supervisor de trabajos')}
+        cerrarSesion={cerrarSesion} irModulos={() => navigate('/elegir')} onPerfil={() => setTab('perfil')}
+        tabs={[
+          { k: 'inicio', label: t('Inicio'), icon: Home },
+          { k: 'g:planta', label: t('Báscula'), icon: Scale },
+          { k: 'espera', label: t('Por autorizar'), icon: Clock },
+          { k: 'token', label: t('Mi código'), icon: KeyRound },
+          { k: 'liberaciones', label: t('Liberaciones'), icon: PackageCheck },
+          { k: 'mapa', label: t('Mapa'), icon: MapIcon },
+          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosMsgTotal },
+          { k: 'actividad', label: t('Registro'), icon: History },
+        ]}
+      />
       <header className="mp-app-safe flex items-center gap-3 px-4 pb-1 pt-2">
-        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95">
+        <button type="button" onClick={() => setTab('perfil')} title={t('Mi perfil')} className="transition active:scale-95 md:hidden">
           <Avatar foto={miFoto} nombre={usuario?.nombre} size={40} redondo />
         </button>
         <div className="min-w-0 flex-1">
@@ -261,22 +279,26 @@ export default function SupervisorPortal() {
           <div className="truncate text-[12px] text-mp-ink-2">{t('Supervisor de trabajos')}{jobsNombres.length > 0 ? ` · ${jobsNombres.join(', ')}` : ''}</div>
         </div>
         <CampanaNotificaciones notifs={notifsSup} claveLS="bulk_notif_supervisor" />
-        <IconButton icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
-        <IconButton icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
+        <IconButton className="md:!hidden" icon={Grid2x2} label={t('Cambiar módulo')} onClick={() => navigate('/elegir')} />
+        <IconButton className="md:!hidden" icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>
 
       {/* En Mensajes la página NO desplaza: el panel de chats mide exacto y
           desplaza por dentro (mismo patrón que el portal del chofer). */}
-      <main className={`relative flex-1 p-3 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+      <main className={`relative flex-1 p-3 md:max-w-[1100px] md:px-6 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
         {activo !== 'mensajes' && avisos}
 
         {/* ── INICIO (Bloque 2.5): la planta de un vistazo ────────────────── */}
         {activo === 'inicio' && (
-          <div className="space-y-2 px-1">
+          <div className="px-1">
             <div className="pb-1 pt-1">
               <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
               <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Planta')}</h1>
             </div>
+            {/* En escritorio la home va a DOS columnas (patio | espera+accesos)
+                para no dejar espacio en blanco; en teléfono, una columna. */}
+            <div className="space-y-2 md:grid md:grid-cols-2 md:items-start md:gap-4 md:space-y-0">
+            <div className="space-y-2">
 
             {/* Patio ahora + cargados del día */}
             <div className="grid grid-cols-2 gap-2">
@@ -305,6 +327,8 @@ export default function SupervisorPortal() {
               )}
             </MpCard>
 
+            </div>{/* /columna izquierda */}
+            <div className="mt-2 space-y-2 md:mt-0">
             {/* Camiones en espera (el resto del patio), con minutos esperando
                 cuando hay timestamp de llegada (hito o geocerca). */}
             {enPatio.length > 1 && (
@@ -337,6 +361,8 @@ export default function SupervisorPortal() {
             {pendientes.length > 0 && (
               <ListRow icon={PackageCheck} titulo={t('Cargas antiguas')} derecha={<MpBadge>{pendientes.length}</MpBadge>} onClick={() => setTab('liberar')} />
             )}
+            </div>{/* /columna derecha */}
+            </div>{/* /grid escritorio */}
           </div>
         )}
 
@@ -610,16 +636,19 @@ export default function SupervisorPortal() {
       {/* Barra FLOTANTE 2026: 4 pestañas, Chats en tercera posición.
           Báscula = patio de la planta (sección real «En planta / cargando»);
           Registro = sección real «Actividad» (tabla + terminadas recientes). */}
-      <FloatingTabBar
-        activo={activoBar}
-        onSelect={(k) => setTab(k === 'bascula' ? 'g:planta' : k === 'registro' ? 'actividad' : k)}
-        tabs={[
-          { k: 'inicio', label: t('Inicio'), icon: Home },
-          { k: 'bascula', label: t('Báscula'), icon: Scale },
-          { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosMsgTotal },
-          { k: 'registro', label: t('Registro'), icon: ClipboardList },
-        ]}
-      />
+      {/* En escritorio la navegación vive en la barra lateral (estilo admin). */}
+      <div className="md:hidden">
+        <FloatingTabBar
+          activo={activoBar}
+          onSelect={(k) => setTab(k === 'bascula' ? 'g:planta' : k === 'registro' ? 'actividad' : k)}
+          tabs={[
+            { k: 'inicio', label: t('Inicio'), icon: Home },
+            { k: 'bascula', label: t('Báscula'), icon: Scale },
+            { k: 'mensajes', label: t('Chats'), icon: MessageSquare, badge: noLeidosMsgTotal },
+            { k: 'registro', label: t('Registro'), icon: ClipboardList },
+          ]}
+        />
+      </div>
     </div>
   )
 }

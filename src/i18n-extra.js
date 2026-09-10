@@ -731,6 +731,8 @@ export const EN_EXTRA = {
   "Tiempo de espera por planta": "Wait time by plant",
   "Facturación acumulada": "Cumulative billing",
   "Mes anterior": "Last month",
+  "Entregas recientes": "Recent deliveries",
+  "Aún no hay entregas.": "No deliveries yet.",
   // ── Órdenes programadas y recurrentes (staff) ──
   "Órdenes programadas y recurrentes": "Scheduled and recurring orders",
   "Programadas": "Scheduled",

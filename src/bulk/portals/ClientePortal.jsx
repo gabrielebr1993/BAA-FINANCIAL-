@@ -290,7 +290,7 @@ export default function ClientePortal() {
 
         {/* En la pestaña Mensajes la página NO desplaza (overflow-hidden): el panel
             de chats mide exacto y desplaza por dentro. */}
-        <main className={`relative flex-1 p-3 md:mx-auto md:w-full md:max-w-[1100px] md:px-5 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
+        <main className={`relative flex-1 p-3 md:w-full md:max-w-[1150px] md:px-6 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
           {!usuario?.clienteId ? (
             <div className="pt-6 text-center">
               <EstadoVacio titulo={t('Cuenta no vinculada')} texto={t('Tu usuario aún no está ligado a un cliente. Si el administrador ya lo asignó, toca “Reparar mi acceso”. Si no, pídele que lo asigne.')} mostrarBoton={false} />
@@ -322,11 +322,15 @@ export default function ClientePortal() {
                   .filter((x) => x.ms && Date.now() - x.ms < 7 * 86400000)
                   .sort((a, b) => b.ms - a.ms)[0]?.o || null
                 return (
-                  <div className="space-y-2 px-1">
+                  <div className="px-1">
                     <div className="pb-1 pt-1">
                       <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
                       <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Tus pedidos')}</h1>
                     </div>
+                    {/* En escritorio la home se acomoda en DOS columnas para no
+                        dejar espacio en blanco; en el teléfono sigue en una. */}
+                    <div className="md:grid md:grid-cols-2 md:items-start md:gap-4">
+                    <div className="space-y-2">
                     {porCalificar && <CalificacionViaje orden={porCalificar} soloPedir />}
 
                     {/* Tarjeta protagonista: el pedido en camino con su avance en vivo.
@@ -367,6 +371,8 @@ export default function ClientePortal() {
                       <StatCard etiqueta={t('Entregado (mes)')} valor={Math.round(stats.tonMes * 10) / 10} sufijo={t('ton')} />
                       <StatCard etiqueta={t('Facturas abiertas')} valor={facturasAbiertas} />
                     </div>
+                    </div>{/* /columna izquierda */}
+                    <div className="mt-2 space-y-2 md:mt-0">
 
                     {/* Pedidos programados (futuros / pendientes de salir) */}
                     {programados.length > 0 && (
@@ -382,11 +388,37 @@ export default function ClientePortal() {
                       </>
                     )}
 
-                    {/* Accesos a las pantallas que salieron de la barra. */}
-                    <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Explorar')}</div>
-                    <ListRow icon={Navigation} titulo={t('Mapa en vivo')} onClick={() => setTab('mapa')} />
-                    <ListRow icon={Layers} titulo={t('Proyectos')} onClick={() => setTab('proyectos')} />
-                    <ListRow icon={LayoutDashboard} titulo={t('Resumen')} onClick={() => setTab('resumen')} />
+                    {/* Accesos a las pantallas que salieron de la barra (en
+                        escritorio ya están en el menú lateral: no se repiten). */}
+                    <div className="md:hidden">
+                      <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Explorar')}</div>
+                      <div className="mt-2 space-y-2">
+                        <ListRow icon={Navigation} titulo={t('Mapa en vivo')} onClick={() => setTab('mapa')} />
+                        <ListRow icon={Layers} titulo={t('Proyectos')} onClick={() => setTab('proyectos')} />
+                        <ListRow icon={LayoutDashboard} titulo={t('Resumen')} onClick={() => setTab('resumen')} />
+                      </div>
+                    </div>
+                    {/* En escritorio, la columna derecha muestra los pedidos
+                        recientes para llenar la pantalla con algo ÚTIL. */}
+                    <div className="hidden md:block">
+                      <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Entregas recientes')}</div>
+                      <div className="mt-2 space-y-2">
+                        {ordenes.filter((o) => ENTREGADAS.includes(o.estado))
+                          .sort((a, b) => (tsMillis(b.hitos?.entrega || b.hitos?.liberacion) || 0) - (tsMillis(a.hitos?.entrega || a.hitos?.liberacion) || 0))
+                          .slice(0, 6).map((o) => (
+                            <ListRow key={`rec_${o.id}`} icon={Package}
+                              titulo={`${t(o.material || 'Carga')} · ${o.pesoReal ?? o.pesoEstimado} ${t('ton')}`}
+                              meta={`${o.numero || ''}${fFec(o.hitos?.entrega || o.hitos?.liberacion) ? ` · ${fFec(o.hitos?.entrega || o.hitos?.liberacion)}` : ''}`}
+                              derecha={<StatusPill color="var(--mp-green)">{t(ORDEN_ESTADO_LABEL[o.estado] || o.estado)}</StatusPill>}
+                              onClick={() => setDetalle(o.id)} />
+                          ))}
+                        {ordenes.filter((o) => ENTREGADAS.includes(o.estado)).length === 0 && (
+                          <div className="rounded-card bg-white p-6 text-center text-[13px] text-mp-ink-2 shadow-card">{t('Aún no hay entregas.')}</div>
+                        )}
+                      </div>
+                    </div>
+                    </div>{/* /columna derecha */}
+                    </div>{/* /grid escritorio */}
                   </div>
                 )
               })()}

@@ -377,7 +377,7 @@ export default function TransportistaPortal() {
         <IconButton className="md:!hidden" icon={LogOut} label={t('Salir')} onClick={cerrarSesion} />
       </header>
 
-      <main className={`relative flex-1 p-3 md:mx-auto md:w-full md:max-w-[1100px] md:px-5 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
+      <main className={`relative flex-1 p-3 md:w-full md:max-w-[1150px] md:px-6 ${activo === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32 md:pb-8'}`}>
         {!usuario?.carrierId && (
           <Aviso tipo="warn" className="mb-3">
             <div>{t('Tu cuenta no está ligada a un transportista. Si el administrador ya la asignó, toca “Reparar mi acceso”. Si no, pídele que la asigne.')}</div>
@@ -462,13 +462,18 @@ export default function TransportistaPortal() {
                 </>
               )}
 
-              {/* Accesos: el resto de las pestañas del portal vive aquí */}
-              <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Accesos')}</div>
-              {verOrdenes && <ListRow icon={Radio} titulo={t('Cola')} meta={t('En proceso')} onClick={() => setTab('cola')} />}
-              {verOrdenes && <ListRow icon={ClipboardList} titulo={t('Órdenes')} meta={t('Todas tus órdenes y asignación de choferes')} onClick={() => setTab('ordenes')} />}
-              <ListRow icon={Truck} titulo={t('Equipos')} meta={t('Tu flota de camiones')} onClick={() => setTab('equipos')} />
-              <ListRow icon={DollarSign} titulo={t('Pago a choferes')} onClick={() => setTab('pagos')} />
-              {tabFacturas === 'facturacion' && <ListRow icon={Wallet} titulo={t('Estado de cuenta')} onClick={() => setTab('cuenta')} />}
+              {/* Accesos: el resto de las pestañas del portal vive aquí. En
+                  ESCRITORIO no se repiten (ya están en la barra lateral). */}
+              <div className="md:hidden">
+                <div className="pt-2 text-[15px] font-medium text-mp-ink">{t('Accesos')}</div>
+                <div className="mt-2 space-y-2">
+                  {verOrdenes && <ListRow icon={Radio} titulo={t('Cola')} meta={t('En proceso')} onClick={() => setTab('cola')} />}
+                  {verOrdenes && <ListRow icon={ClipboardList} titulo={t('Órdenes')} meta={t('Todas tus órdenes y asignación de choferes')} onClick={() => setTab('ordenes')} />}
+                  <ListRow icon={Truck} titulo={t('Equipos')} meta={t('Tu flota de camiones')} onClick={() => setTab('equipos')} />
+                  <ListRow icon={DollarSign} titulo={t('Pago a choferes')} onClick={() => setTab('pagos')} />
+                  {tabFacturas === 'facturacion' && <ListRow icon={Wallet} titulo={t('Estado de cuenta')} onClick={() => setTab('cuenta')} />}
+                </div>
+              </div>
 
               {/* Gráficas (Negocio·B1): agregados nocturnos + cálculo en cliente. */}
               <SeccionGraficas t={t} entregadas={stats.entregadas} statsAgg={statsAgg}
@@ -687,9 +692,12 @@ function SeccionGraficas({ t, entregadas = [], statsAgg = [], nombrePlanta, chof
         </button>
       </div>
 
+      {/* En escritorio las gráficas van a DOS columnas (ingresos a lo ancho);
+          en el teléfono siguen apiladas. */}
+      <div className="space-y-2 md:grid md:grid-cols-2 md:items-start md:gap-3 md:space-y-0">
       {/* 1) Ingresos por semana/mes: la barra del período ACTUAL en dorado, las
           anteriores en navy al 30 %. Tocar una barra → detalle bajo la gráfica. */}
-      <CardApp>
+      <CardApp className="md:col-span-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[12px] text-mp-ink-2">{modo === 'sem' ? t('Ingresos por semana') : t('Ingresos por mes')}</div>
           <div className="flex rounded-pill bg-mp-navy/5 p-0.5 text-[12px]">
@@ -763,6 +771,7 @@ function SeccionGraficas({ t, entregadas = [], statsAgg = [], nombrePlanta, chof
           </div>
         </CardApp>
       )}
+      </div>{/* /grid escritorio */}
     </>
   )
 }
