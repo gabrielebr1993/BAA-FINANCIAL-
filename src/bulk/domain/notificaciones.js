@@ -8,6 +8,20 @@ import { alertaOrden, LIMITE_ALERTA_MS, LIMITE_RIESGO_MS } from './alertas'
 import { estadoDocumento } from './facturacion'
 
 const PESO_SEV = { critico: 0, warn: 1, info: 2 }
+// GPS apagado en ruta: >12 min sin punto nuevo en una orden que venía reportando.
+const GPS_SILENCIO_MS = 12 * 60000
+function avisoGps(o, ahoraMs, link) {
+  if (!['en_ruta', 'en_destino'].includes(o.estado)) return null
+  const posTs = Date.parse(o.ultimaPos?.ts || '')
+  if (!Number.isFinite(posTs) || (ahoraMs - posTs) < GPS_SILENCIO_MS) return null
+  const min = Math.round((ahoraMs - posTs) / 60000)
+  return {
+    id: `gps:${o.id}:${o.ultimaPos.ts}`, sev: 'warn', tipo: 'gps',
+    titulo: `GPS de ${o.choferNombre || 'un chofer'} sin señal`,
+    detalle: `Orden ${o.numero || ''} · última posición hace ${min} min`,
+    accion: 'Llama al chofer para confirmar', link,
+  }
+}
 // Texto humano del vencimiento a partir de los días que faltan (negativo = vencido).
 const txtVence = (dias) => dias == null ? '' : dias < 0 ? `Venció hace ${Math.abs(dias)} día(s)` : dias === 0 ? 'Vence hoy' : `Vence en ${dias} día(s)`
 const montoTxt = (n) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
@@ -19,6 +33,8 @@ export function construirNotificaciones({ ordenes = [], facturas = [], incidenci
     out.push({ id: 'mensajes', sev: 'info', tipo: 'mensaje', titulo: `${mensajesNuevos} mensaje(s) sin leer`, detalle: '', accion: 'Abre el chat y responde', link: '/bulk/mensajes' })
   }
   for (const o of ordenes) {
+    const gps = avisoGps(o, ahoraMs, `/bulk/ordenes/${o.id}`)
+    if (gps) out.push(gps)
     const sla = alertaOrden(o, ahoraMs, LIMITE_ALERTA_MS)
     if (sla) {
       out.push({ id: `sla:${o.id}`, sev: 'critico', tipo: 'sla', titulo: `Orden ${o.numero} fuera de SLA`, detalle: sla.tipo === 'recogida' ? `Sin recoger · ${sla.horas}h` : `Sin entregar · ${sla.horas}h`, accion: sla.tipo === 'recogida' ? 'Contacta al chofer o reasigna' : 'Confirma el avance de la entrega', link: `/bulk/ordenes/${o.id}` })
@@ -54,6 +70,8 @@ export function notificacionesTransportista({ ordenes = [], statements = [], men
   const out = []
   if (mensajesNuevos > 0) out.push({ id: 'mensajes', sev: 'info', tipo: 'mensaje', titulo: `${mensajesNuevos} mensaje(s) sin leer`, accion: 'Abre el chat y responde', link: '/bulk' })
   for (const o of ordenes) {
+    const gps = avisoGps(o, ahoraMs, '/bulk')
+    if (gps) out.push(gps)
     const sla = alertaOrden(o, ahoraMs, LIMITE_ALERTA_MS)
     if (sla) { out.push({ id: `sla:${o.id}`, sev: 'critico', tipo: 'sla', titulo: `Orden ${o.numero} fuera de SLA`, detalle: sla.tipo === 'recogida' ? `Sin recoger · ${sla.horas}h` : `Sin entregar · ${sla.horas}h`, accion: 'Asigna o contacta a tu chofer', link: '/bulk' }); continue }
     const r = alertaOrden(o, ahoraMs, LIMITE_RIESGO_MS)

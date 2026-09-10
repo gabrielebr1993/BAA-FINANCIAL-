@@ -11,7 +11,7 @@ import { Bell, AlertTriangle, Timer, FileWarning, Receipt, MessageSquare, CheckC
 import { useLang } from '../../i18n'
 
 const S = 1.75 // stroke Lucide del sistema
-const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning, mensaje: MessageSquare, pago: Receipt, geocerca: MapPin }
+const ICONO = { sla: AlertTriangle, riesgo: Timer, factura: Receipt, incidencia: AlertTriangle, documento: FileWarning, mensaje: MessageSquare, pago: Receipt, geocerca: MapPin, gps: MapPin }
 // Color del icono por severidad (tokens mp-*).
 const COLOR = { critico: 'text-mp-red', warn: 'text-mp-amber', info: 'text-mp-blue' }
 

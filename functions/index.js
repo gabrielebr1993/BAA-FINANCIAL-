@@ -2238,3 +2238,37 @@ exports.aggregateStats = onSchedule({ schedule: '0 2 * * *', timeZone: 'America/
     }
   }
 })
+
+// ============================================================================
+// ALERTA DE GPS APAGADO EN RUTA
+// ----------------------------------------------------------------------------
+// Cada 10 minutos revisa las órdenes EN MOVIMIENTO (en_ruta / en_destino) que
+// YA venían reportando posición y llevan >12 min sin un punto nuevo: push al
+// staff ("el camión desapareció del mapa"). Una sola alerta por episodio de
+// silencio: se marca gpsAlerta.posTs con la última posición vista; si el GPS
+// vuelve y se vuelve a apagar, posTs cambia y se alerta otra vez.
+// La campana de la app avisa lo mismo en vivo (domain/notificaciones.js).
+// ============================================================================
+const GPS_SILENCIO_MS = 12 * 60000
+exports.bulkAlertaGps = onSchedule('every 10 minutes', async () => {
+  const ahora = Date.now()
+  const snap = await db.collection('bulk_orders').where('estado', 'in', ['en_ruta', 'en_destino']).get()
+  for (const doc of snap.docs) {
+    const o = doc.data() || {}
+    try {
+      const posTs = o.ultimaPos && o.ultimaPos.ts ? Date.parse(o.ultimaPos.ts) : NaN
+      if (!Number.isFinite(posTs)) continue                    // nunca reportó: no hay qué perder
+      if (ahora - posTs < GPS_SILENCIO_MS) continue            // sigue reportando
+      if (o.gpsAlerta && o.gpsAlerta.posTs === o.ultimaPos.ts) continue // ya avisado este episodio
+      const min = Math.round((ahora - posTs) / 60000)
+      const staff = await tokensDe(o.tenantId, (x) => STAFF.includes(x.rol))
+      await enviarAPI(staff, 'GPS sin señal',
+        `${o.choferNombre || 'El chofer'} · orden ${o.numero || ''}: sin posición desde hace ${min} min. Llámalo para confirmar.`,
+        'https://www.milepay.io/bulk/mapa')
+      await doc.ref.set({ gpsAlerta: { ts: new Date().toISOString(), posTs: o.ultimaPos.ts, min } }, { merge: true })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[bulkAlertaGps]', doc.id, (e && e.message) || e)
+    }
+  }
+})

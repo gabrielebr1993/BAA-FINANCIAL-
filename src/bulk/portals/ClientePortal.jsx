@@ -38,6 +38,7 @@ import { estadoDocumento } from '../domain/facturacion'
 import { Card, KPI, Badge, Boton, Cargando, EstadoVacio, Tabla } from '../../components/ui'
 // Detalle de pedido 2026 (Bloque 3): esqueleto compartido por los 5 roles.
 import DetalleOrdenApp from '../components/DetalleOrdenApp'
+import CalificacionViaje from '../components/CalificacionViaje'
 // Kit del REDISEÑO 2026 (Bloque 1): la home y la carcasa usan este lenguaje.
 import { IconButton, PrimaryButton, SecondaryButton, Card as CardApp, FeatureCard, StatCard, ListRow, StatusPill, FloatingTabBar } from '../ui'
 import { money } from '../../utils/format'
@@ -296,12 +297,20 @@ export default function ClientePortal() {
                 const fFec = (v) => { const ms = tsMillis(v) || Date.parse(v); return Number.isFinite(ms) ? new Date(ms).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '' }
                 // Facturas ABIERTAS: emitidas y aún no pagadas (las anuladas no cuentan).
                 const facturasAbiertas = facturas.filter((f) => f.estado !== 'pagada' && f.estado !== 'anulada').length
+                // Calificación pendiente: la entrega MÁS RECIENTE de los últimos 7 días
+                // (la tarjeta se oculta sola si ya la calificó — soloPedir).
+                const porCalificar = ordenes
+                  .filter((o) => ENTREGADAS.includes(o.estado))
+                  .map((o) => ({ o, ms: tsMillis(o.hitos?.entrega || o.hitos?.liberacion) || 0 }))
+                  .filter((x) => x.ms && Date.now() - x.ms < 7 * 86400000)
+                  .sort((a, b) => b.ms - a.ms)[0]?.o || null
                 return (
                   <div className="space-y-2 px-1">
                     <div className="pb-1 pt-1">
                       <div className="text-[12px] text-mp-ink-2">{t('Hola')}, {String(usuario?.nombre || '').split(' ')[0]} 👋</div>
                       <h1 className="m-0 text-[22px] font-medium text-mp-ink">{t('Tus pedidos')}</h1>
                     </div>
+                    {porCalificar && <CalificacionViaje orden={porCalificar} soloPedir />}
 
                     {/* Tarjeta protagonista: el pedido en camino con su avance en vivo.
                         Al tocarla se abre el DETALLE apilado del pedido (Bloque 3). */}
@@ -690,6 +699,8 @@ export default function ClientePortal() {
             chatBadge={resumenMsg[chatKey]?.noLeidos || 0}
           >
             {/* Estado actual + datos reales del pedido */}
+            {/* Calificación del viaje: el cliente la pone al recibir; luego queda visible. */}
+            <CalificacionViaje orden={o} />
             <div ref={refEstadoDet}>
               <CardApp>
                 <div className="mb-2 text-[12px] text-mp-ink-2">{t('Estado actual')}</div>

@@ -33,6 +33,8 @@ import { menuGrupoConv } from '../data/grupos'
 import { conversacionesAdmin } from '../domain/conversaciones'
 import { onAbrirConversacion } from '../data/notifsMensajes'
 import CampanaNotificaciones from '../components/CampanaNotificaciones'
+import RecorridoOrden from '../components/RecorridoOrden'
+import CalificacionViaje from '../components/CalificacionViaje'
 import { construirNotificaciones } from '../domain/notificaciones'
 import { asignarOrdenManual } from '../data/asignacionManual'
 import { guardarAvatar } from '../data/repo'
@@ -469,6 +471,10 @@ function DetalleOrden({ t, orden: o, nombreCliente, nombrePlanta, carriers, inci
           <ListRow icon={Truck} titulo={carrier?.nombre || t('sin asignar')} meta={t('Transporte')} />
         </>
       )}
+
+      {/* Recorrido GPS real (plegado) + calificación del cliente si existe. */}
+      <RecorridoOrden orden={o} />
+      <CalificacionViaje orden={o} />
 
       {/* Trayectoria: solo los hitos ya registrados (los pendientes no se pintan). */}
       {ORDEN_HITOS.some((x) => h[x.key]) && (

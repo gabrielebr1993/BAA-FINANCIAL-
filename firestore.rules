@@ -711,6 +711,24 @@ service cloud.firestore {
         || (bSame(resource.data.tenantId) && bRole() == 'cliente' && resource.data.clienteId == bCliente());
     }
 
+    // CALIFICACIÓN del viaje (1–5 estrellas del cliente). Un doc por orden
+    // (id = orderId). Solo el cliente DUEÑO de esa orden, ya ENTREGADA, puede
+    // crearla; no se edita (una calificación es una sola vez). La leen el staff,
+    // el transportista del viaje y el propio cliente.
+    match /bulk_ratings/{orderId} {
+      allow read: if bStaff(resource.data.tenantId)
+        || (bSame(resource.data.tenantId) && (
+             (bRole() == 'cliente' && resource.data.clienteId == bCliente())
+          || (bRole() == 'transportista' && resource.data.carrierId == bCarrier())));
+      allow create: if bSame(request.resource.data.tenantId) && bRole() == 'cliente'
+        && request.resource.data.clienteId == bCliente()
+        && request.resource.data.estrellas is int
+        && request.resource.data.estrellas >= 1 && request.resource.data.estrellas <= 5
+        && get(/databases/$(database)/documents/bulk_orders/$(orderId)).data.clienteId == bCliente()
+        && get(/databases/$(database)/documents/bulk_orders/$(orderId)).data.estado in ['entregada', 'liberada', 'cerrada'];
+      allow update, delete: if bAdmin(resource.data.tenantId);
+    }
+
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
   }

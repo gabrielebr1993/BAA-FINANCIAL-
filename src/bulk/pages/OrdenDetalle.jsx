@@ -24,6 +24,7 @@ import { httpsCallable } from 'firebase/functions'
 import { funcsBulk } from '../firebaseBulk'
 import MapaLeaflet from '../components/MapaLeaflet'
 import ChatOrden from '../components/ChatOrden'
+import CalificacionViaje from '../components/CalificacionViaje'
 import { Card, Badge, Boton, Cargando, EstadoVacio } from '../../components/ui'
 import { money } from '../../utils/format'
 import { useLang } from '../../i18n'
@@ -405,6 +406,9 @@ export default function OrdenDetalle() {
           </ol>
         </Card>
       </div>
+
+      {/* Calificación del cliente (solo se pinta si existe). */}
+      <CalificacionViaje orden={orden} className="mt-4" />
 
       {/* Recorrido */}
       <Card className="mt-4 p-4">

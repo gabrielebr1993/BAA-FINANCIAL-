@@ -22,6 +22,8 @@ import AvisosGeocerca from '../components/AvisosGeocerca'
 import ChatOrden from '../components/ChatOrden'
 // Detalle de orden 2026 (Bloque 3): esqueleto COMPARTIDO por los 5 roles.
 import DetalleOrdenApp from '../components/DetalleOrdenApp'
+import RecorridoOrden from '../components/RecorridoOrden'
+import CalificacionViaje, { Estrellas } from '../components/CalificacionViaje'
 import BotonReunion from '../components/BotonReunion'
 import FiltroFechas, { enRangoFechas, RANGO_VACIO } from '../components/FiltroFechas'
 import { etaOrden, etaTexto } from '../domain/eta'
@@ -122,6 +124,18 @@ export default function TransportistaPortal() {
   // Agregados NOCTURNOS por semana (bulk_stats) para las gráficas de la home; la
   // semana en curso siempre se recalcula en cliente (la función corre de noche).
   const { datos: statsAgg } = useColeccion('stats', [where('carrierId', '==', carrierId)])
+  // Calificaciones de MIS viajes (estrellas del cliente) → promedio por chofer.
+  const { datos: califs } = useColeccion('ratings', [where('carrierId', '==', carrierId || '__none__')])
+  const califPorChofer = useMemo(() => {
+    const m = {}
+    for (const r of califs || []) {
+      for (const k of [r.choferId, r.choferNombre].filter(Boolean)) {
+        const e = m[k] || (m[k] = { suma: 0, n: 0 })
+        e.suma += Number(r.estrellas) || 0; e.n += 1
+      }
+    }
+    return m
+  }, [califs])
   // Retiros Fast Pay de MI carrier (los míos y los de mis choferes): para
   // descontarlos al pagar a cada chofer y no pagar doble.
   const { datos: retiros } = useColeccion('retiros', [where('carrierId', '==', carrierId)])
@@ -208,7 +222,10 @@ export default function TransportistaPortal() {
     ]
   }, [ordenes, resumenOrd, mensajes, usuario, carrierId, noLeidosOficina, choferes, gruposItems, avatares, seccionPriv, t])
   const geoNotifs = useNotifsGeocerca(carrierId) // entradas/salidas de geocerca de SU carrier
-  const notifsT = useMemo(() => [...geoNotifs, ...notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: Date.now() })], [geoNotifs, ordenes, statements, mensajesNuevos])
+  // Pulso de 1 min: la alerta de GPS apagado necesita que el reloj avance solo.
+  const [minuto, setMinuto] = useState(Date.now())
+  useEffect(() => { const id = setInterval(() => setMinuto(Date.now()), 60000); return () => clearInterval(id) }, [])
+  const notifsT = useMemo(() => [...geoNotifs, ...notificacionesTransportista({ ordenes, statements, mensajesNuevos, ahoraMs: minuto })], [geoNotifs, ordenes, statements, mensajesNuevos, minuto])
 
   // Presencia viva (en línea) por uid de chofer.
   const now = Date.now()
@@ -445,7 +462,7 @@ export default function TransportistaPortal() {
 
         {activo === 'cola' && puede('ordenes.ver') && <TabCola {...{ t, ordenes, nombrePlanta, trabajos, codigoTrabajo, abrirDetalle }} />}
       {activo === 'ordenes' && puede('ordenes.ver') && <TabOrdenes {...{ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePlanta, trabajos, codigoTrabajo, geocercas: geocercasEta, abrirDetalle }} />}
-      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos }} />}
+      {activo === 'choferes' && <TabChoferes {...{ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos, guardarTrabajosChofer, avatares, tiposCamion, cargandoEquipos, califs: califPorChofer }} />}
       {activo === 'equipos' && <TabEquipos {...{ t, flota, choferes, carrier, agregarEquipo, editarEquipo, eliminarEquipo }} />}
       {activo === 'cuenta' && <TabCuenta {...{ t, cuenta, stats, statements }} />}
       {activo === 'pagos' && <TabPagoChoferes {...{ t, choferes, ordenes, retiros, avatares }} />}
@@ -951,7 +968,12 @@ function TabOrdenes({ t, ordenes, choferes, rosterIdDe, asignarChofer, nombrePla
 }
 
 // ── Tab Mis choferes: tabla con estado en línea, viaje actual y forma de pago ──
-function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {}, avatares = {}, tiposCamion = [], cargandoEquipos = false }) {
+function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, guardarPago, quitarPago, toggleActivoChofer, agregarChofer, trabajos = [], guardarTrabajosChofer = async () => {}, avatares = {}, tiposCamion = [], cargandoEquipos = false, califs = {} }) {
+  // Promedio de estrellas del chofer (por uid, id del roster o nombre).
+  const califDe = (c) => {
+    const e = califs[c.uid] || califs[c.id] || califs[c.nombre]
+    return e && e.n ? { prom: e.suma / e.n, n: e.n } : null
+  }
   const [alta, setAlta] = useState(false)
   const [pagoEdit, setPagoEdit] = useState(null) // chofer.id en edición de pago
   const toggleTrabajo = (c, cod) => {
@@ -983,7 +1005,14 @@ function TabChoferes({ t, choferes, choferEnLinea, viajeActual, pagoChoferes, gu
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-semibold text-brand-navy dark:text-slate-100">{c.nombre}</span>
+                          {califDe(c) && (
+                            <span className="inline-flex flex-shrink-0 items-center gap-0.5 text-[11px] font-semibold text-amber-600" title={`${califDe(c).n} ${t('calificación(es) de clientes')}`}>
+                              <Estrellas valor={Math.round(califDe(c).prom)} size={11} /> {califDe(c).prom.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
                         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
                           {c.telefono && <span className="inline-flex items-center gap-1"><Phone size={10} /> {c.telefono}</span>}
                           {c.licencia && <span className="inline-flex items-center gap-1"><IdCard size={10} /> {c.licencia}</span>}
@@ -1468,6 +1497,10 @@ function DetalleOrdenTransportista({ t, orden: o, choferes, nombrePlanta, avatar
             )}
         </div>
       )}
+
+      {/* Recorrido GPS real (plegado) + calificación del cliente si existe. */}
+      <RecorridoOrden orden={o} />
+      <CalificacionViaje orden={o} />
 
       {/* Trayectoria: SOLO los hitos ya registrados (los pendientes no se pintan). */}
       {ORDEN_HITOS.some((h) => o.hitos?.[h.key]) && (
