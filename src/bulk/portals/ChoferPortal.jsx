@@ -1063,10 +1063,15 @@ function PerfilChofer({ usuario, tenantId, miPerfil, miCarrier, miChofer, carrie
               {stripeInfo?.estado === 'verificado' && (
                 <>
                   <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('Todo listo: puedes retirar tus ganancias con Fast Pay desde la pestaña Ganancias.')}</p>
+                  {/* Destino del cobro instantáneo: tarjeta de débito o BANCO
+                      elegible (Stripe permite instantáneo en ciertos bancos —
+                      la etiqueta "Instant-eligible" del panel de Stripe). */}
                   <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-3 py-2.5 dark:border-slate-700">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('Tarjeta de débito para cobros')}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{t('Destino de tus cobros')}</span>
                     <span className={`text-xs font-bold ${stripeInfo.tarjeta?.ultimos4 ? 'text-brand-navy dark:text-slate-100' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {stripeInfo.tarjeta?.ultimos4 ? `${stripeInfo.tarjeta.marca || ''} ····${stripeInfo.tarjeta.ultimos4}` : t('sin tarjeta · agrégala para cobrar en minutos')}
+                      {stripeInfo.tarjeta?.ultimos4
+                        ? `${stripeInfo.tarjeta.marca || ''} ····${stripeInfo.tarjeta.ultimos4}${stripeInfo.tarjeta.tipo === 'banco' ? ` · ${t('instantáneo')} ⚡` : ''}`
+                        : t('sin tarjeta · agrégala para cobrar en minutos')}
                     </span>
                   </div>
                   <Boton className="w-full justify-center" onClick={() => setModalTarjeta(true)}>

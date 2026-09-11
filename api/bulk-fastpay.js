@@ -324,7 +324,14 @@ export default async function handler(req, res) {
             const dst = await destinosInstant(stripe, titular.stripeAccountId)
             instantListo = dst == null ? null : dst.length > 0
             const tarj = (dst || []).find((x) => x.id === titular.stripeCardId) || (dst || []).find((x) => x.object === 'card')
-            if (tarj) tarjeta = { marca: tarj.brand || '', ultimos4: tarj.last4 || '' }
+            if (tarj) tarjeta = { tipo: 'tarjeta', marca: tarj.brand || '', ultimos4: tarj.last4 || '' }
+            else {
+              // Sin tarjeta pero con BANCO elegible para instantáneo (Stripe lo
+              // permite en ciertos bancos): se muestra como destino válido para
+              // que la app no diga "sin tarjeta" cuando ya puede cobrar en minutos.
+              const banco = (dst || []).find((x) => x.object === 'bank_account')
+              if (banco) tarjeta = { tipo: 'banco', marca: banco.bank_name || 'Banco', ultimos4: banco.last4 || '' }
+            }
           }
         } catch { estado = titular.stripeEstado || 'pendiente' }
       }

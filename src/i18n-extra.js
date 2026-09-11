@@ -732,6 +732,7 @@ export const EN_EXTRA = {
   "Facturación acumulada": "Cumulative billing",
   "Mes anterior": "Last month",
   "Entregas recientes": "Recent deliveries",
+  "Destino de tus cobros": "Where your payouts go",
   "Aún no hay entregas.": "No deliveries yet.",
   // ── Órdenes programadas y recurrentes (staff) ──
   "Órdenes programadas y recurrentes": "Scheduled and recurring orders",
