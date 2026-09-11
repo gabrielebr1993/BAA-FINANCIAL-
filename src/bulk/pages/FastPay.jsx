@@ -332,7 +332,12 @@ export default function FastPay() {
                         <Badge color={e.c}>{t(e.l)}</Badge>
                         {r.estado === 'pagado' && (r.instant
                           ? <div className="mt-0.5 text-[9px] font-bold uppercase text-emerald-500">⚡ {t('instantáneo')}</div>
-                          : r.instant === false && <div className="mt-0.5 text-[9px] font-semibold uppercase text-slate-400">{t('depósito 1–2 días')}</div>)}
+                          : r.instant === false && (
+                            <div className="mt-0.5 text-[9px] font-semibold uppercase text-slate-400" title={r.instantMotivo || ''}>
+                              {t('depósito 1–2 días')}
+                              {r.instantMotivo && <div className="max-w-[220px] truncate normal-case text-slate-400/80">{r.instantMotivo}</div>}
+                            </div>
+                          ))}
                         {r.test && <div className="mt-0.5 text-[9px] font-bold uppercase text-amber-500">test</div>}
                       </td>
                       <td className="px-2 py-2 text-right">

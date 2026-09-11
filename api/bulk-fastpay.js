@@ -506,8 +506,18 @@ export default async function handler(req, res) {
         // estándar y la app le explica al titular cómo activar lo instantáneo.
         let instant = false, instantId = '', instantMotivo = ''
         try {
-          const bal = await stripe.balance.retrieve({ stripeAccount: titular.stripeAccountId })
-          const inst = ((bal.instant_available || []).find((b) => b.currency === 'usd') || {}).amount || 0
+          // El saldo instantáneo puede tardar unos segundos en reflejar la
+          // transferencia recién hecha: se consulta hasta 3 veces (0s/2.5s/5s)
+          // antes de rendirse y caer al depósito estándar.
+          const instDisponible = async () => {
+            const bal = await stripe.balance.retrieve({ stripeAccount: titular.stripeAccountId })
+            return ((bal.instant_available || []).find((b) => b.currency === 'usd') || {}).amount || 0
+          }
+          let inst = await instDisponible()
+          for (let i = 0; i < 2 && inst <= 0; i++) {
+            await new Promise((r) => setTimeout(r, 2500))
+            inst = await instDisponible()
+          }
           if (inst > 0) {
             // Destino explícito: la tarjeta de débito elegible (si el default de
             // la cuenta es el banco, sin esto el payout instantáneo fallaría).
@@ -529,7 +539,13 @@ export default async function handler(req, res) {
             }
             if (!instant && !instantMotivo) instantMotivo = 'saldo instantáneo insuficiente'
           } else {
-            instantMotivo = 'SIN_TARJETA'
+            // Hay destino elegible pero Stripe reporta 0 instantáneo: en cuentas
+            // NUEVAS, Stripe habilita lo instantáneo tras el primer cobro o unos
+            // días de historial. El motivo queda claro para el panel del admin.
+            const dstChk = await destinosInstant(stripe, titular.stripeAccountId)
+            instantMotivo = (dstChk || []).length > 0
+              ? 'cuenta nueva: Stripe aún no habilita el instantáneo (se activa tras el primer cobro o unos días)'
+              : 'SIN_TARJETA'
           }
         } catch (pe) { instantMotivo = pe?.message || 'no disponible' }
 
