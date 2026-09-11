@@ -733,6 +733,11 @@ export const EN_EXTRA = {
   "Mes anterior": "Last month",
   "Entregas recientes": "Recent deliveries",
   "Destino de tus cobros": "Where your payouts go",
+  "Tu cobro instantáneo ya está activo": "Your instant payout is already active",
+  "Destino actual": "Current destination",
+  "No necesitas tarjeta; si además quieres cobrar a una tarjeta de débito, escríbela abajo y pasará a ser el destino.": "You don't need a card; if you'd also like to get paid to a debit card, enter it below and it will become the destination.",
+  "cuenta": "account",
+  "usar tarjeta de débito": "use a debit card",
   "Aún no hay entregas.": "No deliveries yet.",
   // ── Órdenes programadas y recurrentes (staff) ──
   "Órdenes programadas y recurrentes": "Scheduled and recurring orders",

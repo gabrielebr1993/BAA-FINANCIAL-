@@ -202,10 +202,12 @@ export default function FastPayModal({ abierto, onClose, nombre, inicio = '' }) 
         {paso === 'tarjeta' && (
           <div className="text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-amber-600 dark:bg-amber-500/15"><Zap size={26} /></div>
-            <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{info?.instantListo ? t('Cambiar tarjeta de débito') : t('Te falta tu tarjeta de débito')}</p>
+            <p className="mt-3 text-sm font-bold text-brand-navy dark:text-slate-100">{info?.instantListo ? (info?.tarjeta?.tipo === 'banco' ? t('Tu cobro instantáneo ya está activo') : t('Cambiar tarjeta de débito')) : t('Te falta tu tarjeta de débito')}</p>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
               {info?.instantListo
-                ? <>{info?.tarjeta?.ultimos4 ? `${t('Tarjeta actual')}: ${info.tarjeta.marca || ''} ····${info.tarjeta.ultimos4}. ` : ''}{t('Escribe la nueva tarjeta y reemplazará a la anterior; tus próximos cobros llegarán a la nueva.')}</>
+                ? (info?.tarjeta?.tipo === 'banco'
+                  ? <>{`${t('Destino actual')}: ${t('cuenta bancaria')} ${info.tarjeta.marca || ''} ····${info.tarjeta.ultimos4} (${t('instantáneo')} ⚡). `}{t('No necesitas tarjeta; si además quieres cobrar a una tarjeta de débito, escríbela abajo y pasará a ser el destino.')}</>
+                  : <>{info?.tarjeta?.ultimos4 ? `${t('Tarjeta actual')}: ${info.tarjeta.marca || ''} ····${info.tarjeta.ultimos4}. ` : ''}{t('Escribe la nueva tarjeta y reemplazará a la anterior; tus próximos cobros llegarán a la nueva.')}</>)
                 : t('Fast Pay envía tu dinero en ~30 minutos a una tarjeta de débito. Escríbela aquí mismo (la física de tu banco, la que usas en el cajero).')}
             </p>
             {info && !info.instantListo && <div className="mt-2 text-xs text-slate-400">{t('Saldo disponible')}: <b>{money(info.disponible)}</b> · {t('elegible')} ({pctTxt}): <b>{money(info.elegible)}</b></div>}
@@ -262,7 +264,9 @@ export default function FastPayModal({ abierto, onClose, nombre, inicio = '' }) 
             <Boton className="mt-4 w-full" onClick={retirar} disabled={!valido}>{t('Confirmar retiro')} · {money(neto)}</Boton>
             {!info.test && (
               <button onClick={() => setPaso('tarjeta')} className="mt-2 w-full py-1 text-center text-xs font-semibold text-slate-400 underline-offset-2 hover:text-amber-600 hover:underline">
-                {info.tarjeta?.ultimos4 ? `${t('Cambiar tarjeta de débito')} (····${info.tarjeta.ultimos4})` : t('Cambiar tarjeta de débito')}
+                {info.tarjeta?.tipo === 'banco'
+                  ? `${t('Destino')}: ${t('cuenta')} ····${info.tarjeta.ultimos4} ⚡ · ${t('usar tarjeta de débito')}`
+                  : info.tarjeta?.ultimos4 ? `${t('Cambiar tarjeta de débito')} (····${info.tarjeta.ultimos4})` : t('Cambiar tarjeta de débito')}
               </button>
             )}
             <button onClick={onClose} className="mt-1 w-full py-1 text-xs text-slate-400">{t('Cancelar')}</button>
