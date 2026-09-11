@@ -354,7 +354,9 @@ export default function ChoferPortal() {
       {/* En la pestaña Mensajes la página NO desplaza (overflow-hidden): el panel de
           chats mide exacto y desplaza por dentro. Antes convivían el scroll de la
           página y el del chat y la pantalla se movía para todos lados. */}
-      <main className={`relative flex-1 p-3 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-32'}`}>
+      {/* pb-44: deja LIBRE la franja de la barra flotante — sin esto, el botón
+          "Llegué"/el respaldo manual quedaban tapados al final del scroll. */}
+      <main className={`relative flex-1 p-3 ${tab === 'mensajes' ? 'overflow-hidden pb-2' : 'overflow-y-auto pb-44'}`}>
         {tab === 'inicio' && (() => {
           // ── HOME 2026 (Bloque 2.1) ────────────────────────────────────────
           const hoyStr = new Date().toDateString()
@@ -1204,7 +1206,15 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
     waze: (gps && gps.lat != null) ? `https://waze.com/ul?ll=${gps.lat},${gps.lng}&navigate=yes` : `https://waze.com/ul?q=${encodeURIComponent(dirTexto)}&navigate=yes`,
     apple: `https://maps.apple.com/?daddr=${navDest}`,
   }
-  const puedeLlegar = paso?.gate ? puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) : true
+  // Respaldo del SERVIDOR: el GPS nativo (app en segundo plano, o WebView sin
+  // permiso de ubicación) escribe los eventos de geocerca en la orden; si el
+  // servidor ya vio ENTRAR el camión a la zona de esta fase, el botón se activa
+  // aunque el GPS del navegador no fije. (Mismo criterio que el supervisor.)
+  const dentroSrv = useMemo(() => {
+    const evs = (orden.geoEventos || []).filter((e) => (fase === 'recogida' ? e.tipo === 'planta' : ['destino', 'proyecto'].includes(e.tipo)))
+    return evs.length > 0 && evs[evs.length - 1].evento === 'entrada'
+  }, [orden.geoEventos, fase])
+  const puedeLlegar = paso?.gate ? (puedeMarcarLlegada(pos, orden, fase, geocercas, plantas) || dentroSrv) : true
   const objetivo = geocercaObjetivo(orden, fase, geocercas, plantas)
   const hayGeocerca = !!objetivo
   // Distancia en vivo al punto objetivo (para orientar al chofer mientras se acerca).
@@ -1484,10 +1494,11 @@ function OrdenActiva({ orden, tenantId, usuario, rol, geocercas, plantas, pos, l
               <p className="mt-1.5 flex items-center justify-center gap-1 text-center text-[11px] text-slate-400">
                 <MapPin size={12} /> {distTxt ? `${t('A')} ${distTxt} — ${t('se activa al llegar · o toca abajo si el GPS falla')}` : (hayGeocerca ? t('El botón se activa cuando llegues (dentro de la zona).') : t('Acércate al punto para activar el botón.'))}
               </p>
-              {/* Override: si el GPS no fija (o falla), el chofer no queda atascado. */}
+              {/* Override: si el GPS no fija (o falla), el chofer no queda atascado.
+                  En ámbar y bien visible: es la salida cuando "no me detecta". */}
               <button onClick={avanzarManual} disabled={ocupado}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                <MapPin size={13} /> {t('No me detecta el GPS — ya estoy aquí')}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-amber-400 bg-amber-500/10 py-3 text-sm font-bold text-amber-700 transition hover:bg-amber-500/20 disabled:opacity-50 dark:text-amber-400">
+                <MapPin size={15} /> {t('No me detecta el GPS — ya estoy aquí')}
               </button>
             </>
           ) : (
