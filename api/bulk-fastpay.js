@@ -241,7 +241,9 @@ export default async function handler(req, res) {
     // tienen tarjeta lista para pago instantáneo. Solo LEE; no mueve nada.
     if (accion === 'diagnostico') {
       if (auth.tipo !== 'admin') return res.status(403).json({ ok: false, error: 'Solo el administrador puede ver el diagnóstico.' })
-      const pkv = process.env.STRIPE_PUBLISHABLE_KEY || ''
+      // Acepta ambos nombres: en Vercel la llave está guardada como
+      // VITE_STRIPE_PUBLISHABLE_KEY (nombre del frontend) desde el inicio.
+      const pkv = process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || ''
       const out = {
         ok: true, test, modoReal: cfg.modoReal, activo: cfg.activo,
         porcentaje: cfg.porcentaje, comisionPct: cfg.comisionPct,
@@ -345,7 +347,7 @@ export default async function handler(req, res) {
     // Llave publicable de Stripe (pk_...) para el formulario de tarjeta EN la app.
     // Es pública por diseño (va en el navegador); la secreta jamás sale de aquí.
     if (accion === 'pk') {
-      return res.status(200).json({ ok: true, pk: process.env.STRIPE_PUBLISHABLE_KEY || '' })
+      return res.status(200).json({ ok: true, pk: process.env.STRIPE_PUBLISHABLE_KEY || process.env.VITE_STRIPE_PUBLISHABLE_KEY || '' })
     }
 
     // Agregar TARJETA DE DÉBITO desde la app: el navegador tokeniza la tarjeta
