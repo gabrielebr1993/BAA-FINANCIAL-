@@ -8,6 +8,7 @@ import { activarPush, registrarTokensNativos } from './integraciones/fcm'
 import { authBulk } from './firebaseBulk'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
+import RepararAcceso from './components/RepararAcceso'
 import LlamadaProvider from './components/LlamadaProvider'
 import ReunionProvider from './components/ReunionProvider'
 import { puedeVer } from './nav'
@@ -64,8 +65,36 @@ function P({ perm, roles, children }) {
   const { t } = useLang()
   const { rol, puede } = useBulkAuth()
   const permitido = perm ? puede(perm) : (!roles || puedeVer(rol, roles))
-  if (!permitido) return <BulkLayout><div className="p-6 text-slate-400">{t('No tienes acceso a esta sección.')}</div></BulkLayout>
+  if (!permitido) {
+    return (
+      <BulkLayout>
+        <div className="p-6">
+          <div className="text-slate-400">{t('No tienes acceso a esta sección.')}</div>
+          {/* Salida cuando el token quedó viejo (rol cambiado tras el último login). */}
+          <div className="mt-3 max-w-xs"><RepararAcceso className="w-full justify-center px-3 py-2 text-sm" /></div>
+        </div>
+      </BulkLayout>
+    )
+  }
   return <BulkLayout><Suspense fallback={<Cargando texto={t('Cargando…')} />}>{children}</Suspense></BulkLayout>
+}
+
+// La sesión inició pero NO trae rol (claims vacíos o token viejo): sin esto, el
+// usuario caía al panel de staff con "no tienes acceso" y SIN salida. Aquí puede
+// auto-repararse (re-aplica claims desde su perfil y recarga) o salir.
+function SinRol() {
+  const { t } = useLang()
+  const { cerrarSesion } = useBulkAuth()
+  return (
+    <div className="grid min-h-screen place-items-center bg-slate-950 p-6">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900">
+        <div className="text-base font-bold text-brand-navy dark:text-slate-100">{t('Tu sesión no trae permisos')}</div>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{t('Tu cuenta entró pero su rol no llegó (pasa si te lo asignaron o cambiaron después de tu último ingreso). Toca reparar y la app se acomoda sola.')}</p>
+        <div className="mt-4"><RepararAcceso className="w-full justify-center px-3 py-2.5 text-sm" /></div>
+        <button onClick={cerrarSesion} className="mt-2 w-full py-2 text-sm font-semibold text-slate-400 hover:text-slate-600">{t('Salir y entrar de nuevo')}</button>
+      </div>
+    </div>
+  )
 }
 
 // Vigila la señal de cierre de sesión forzado: si el admin la emite y aplica a
@@ -178,6 +207,8 @@ function Interno() {
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
   if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>
+  // Sesión SIN rol: pantalla de auto-reparación (nunca el panel de staff en blanco).
+  if (!rol) return <SinRol />
   if (rol === 'dispatcher' && vistaDisp === 'portal') {
     return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><DispatcherPortal irEscritorio={irEscritorio} /></Suspense></>
   }
