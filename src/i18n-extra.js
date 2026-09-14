@@ -735,6 +735,8 @@ export const EN_EXTRA = {
   "Tu sesión no trae permisos": "Your session has no permissions",
   "Tu cuenta entró pero su rol no llegó (pasa si te lo asignaron o cambiaron después de tu último ingreso). Toca reparar y la app se acomoda sola.": "Your account signed in but its role didn't come through (this happens if it was assigned or changed after your last sign-in). Tap repair and the app fixes itself.",
   "Salir y entrar de nuevo": "Sign out and back in",
+  "No se pudo reparar. Revisa tu conexión.": "Could not repair. Check your connection.",
+  "Cuenta": "Account",
   "Destino de tus cobros": "Where your payouts go",
   "Tu cobro instantáneo ya está activo": "Your instant payout is already active",
   "Destino actual": "Current destination",

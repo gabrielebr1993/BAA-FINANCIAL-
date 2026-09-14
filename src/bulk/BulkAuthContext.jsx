@@ -114,12 +114,17 @@ export function BulkAuthProvider({ children }) {
   }, [])
 
   // Auto-repara los permisos del propio usuario (re-aplica claims desde su perfil)
-  // y refresca el token. Si la función aún no está desplegada, solo refresca.
+  // y refresca el token. Si el backend rechaza (p. ej. "tu usuario no tiene
+  // perfil"), el error SE PROPAGA para que el botón lo muestre — antes se
+  // tragaba y el usuario quedaba en un ciclo sin pista.
   const repararPermisos = useCallback(async () => {
     try {
       const fn = httpsCallable(funcsBulk, 'repararMisClaims')
       await fn({})
-    } catch { /* función no desplegada: seguimos igual */ }
+    } catch (e) {
+      try { if (authBulk.currentUser) await authBulk.currentUser.getIdToken(true) } catch { /* noop */ }
+      throw e
+    }
     try { if (authBulk.currentUser) await authBulk.currentUser.getIdToken(true) } catch { /* noop */ }
   }, [])
 

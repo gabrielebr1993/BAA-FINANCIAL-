@@ -12,8 +12,16 @@ export default function RepararAcceso({ variant = 'gold', className = '' }) {
   const [reparando, setReparando] = useState(false)
   const reparar = async () => {
     setReparando(true)
-    try { await repararPermisos() } catch { /* noop */ }
-    window.location.reload()
+    try {
+      await repararPermisos()
+      window.location.reload()
+    } catch (e) {
+      // Mostrar el MOTIVO real (antes se tragaba el error y parecía que el botón
+      // "no hacía nada"): p. ej. "Tu usuario no tiene perfil. Pide a un
+      // administrador que te cree."
+      window.alert((e?.message || t('No se pudo reparar. Revisa tu conexión.')).replace(/^functions\/[a-z-]+:?\s*/i, ''))
+      setReparando(false)
+    }
   }
   return (
     <Boton variant={variant} onClick={reparar} disabled={reparando} className={className || 'px-3 py-1 text-xs'}>

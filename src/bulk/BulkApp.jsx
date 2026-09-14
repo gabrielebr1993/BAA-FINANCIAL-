@@ -84,12 +84,14 @@ function P({ perm, roles, children }) {
 // auto-repararse (re-aplica claims desde su perfil y recarga) o salir.
 function SinRol() {
   const { t } = useLang()
-  const { cerrarSesion } = useBulkAuth()
+  const { usuario, cerrarSesion } = useBulkAuth()
   return (
     <div className="grid min-h-screen place-items-center bg-slate-950 p-6">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900">
         <div className="text-base font-bold text-brand-navy dark:text-slate-100">{t('Tu sesión no trae permisos')}</div>
         <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{t('Tu cuenta entró pero su rol no llegó (pasa si te lo asignaron o cambiaron después de tu último ingreso). Toca reparar y la app se acomoda sola.')}</p>
+        {/* Con QUÉ cuenta está entrando: clave para diagnosticar (¿cuenta sin ficha?). */}
+        {usuario?.email && <div className="mt-2 rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{t('Cuenta')}: {usuario.email}</div>}
         <div className="mt-4"><RepararAcceso className="w-full justify-center px-3 py-2.5 text-sm" /></div>
         <button onClick={cerrarSesion} className="mt-2 w-full py-2 text-sm font-semibold text-slate-400 hover:text-slate-600">{t('Salir y entrar de nuevo')}</button>
       </div>
