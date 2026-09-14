@@ -76,7 +76,21 @@ exports.crearUsuarioBulk = onCall(async (req) => {
 
   let user
   try { user = await admin.auth().createUser({ email: String(email).toLowerCase(), password, displayName: nombre }) }
-  catch (e) { throw new HttpsError('already-exists', e.message) }
+  catch (e) {
+    // Correo YA registrado en el login pero sin ficha (cuenta creada a mano o
+    // huérfana): se ADOPTA en vez de fallar — así el admin puede darle rol y
+    // vínculo desde Usuarios. Protección multi-empresa: si la cuenta ya tiene
+    // ficha de OTRO tenant, se rechaza igual que antes.
+    let existente = null
+    try { existente = await admin.auth().getUserByEmail(String(email).toLowerCase()) } catch { /* no existe: error original */ }
+    if (!existente) throw new HttpsError('already-exists', e.message)
+    const prev = await db.collection('bulk_users').doc(existente.uid).get()
+    if (prev.exists && prev.data().tenantId && prev.data().tenantId !== t.bulkTenant) {
+      throw new HttpsError('already-exists', 'Ese correo ya pertenece a otra empresa.')
+    }
+    try { await admin.auth().updateUser(existente.uid, { ...(password ? { password } : {}), ...(nombre ? { displayName: nombre } : {}) }) } catch { /* noop */ }
+    user = existente
+  }
 
   const perfil = {
     nombre: nombre || '', email: String(email).toLowerCase(), rol, tenantId: t.bulkTenant,
