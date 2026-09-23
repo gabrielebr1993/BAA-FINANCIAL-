@@ -12,6 +12,7 @@ import ProtectedRoute from './ProtectedRoute'
 import Layout from './components/Layout'
 import { Cargando } from './components/ui'
 import ModuleSelector from './ModuleSelector'
+import { CarrierProvider, CarrierGate } from './carriers/CarrierContext'
 
 // Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
 const BulkApp = lazy(() => import('./bulk/BulkApp'))
@@ -99,7 +100,11 @@ function PackageApp() {
   return (
     <AuthProvider>
       <DataProvider>
+        {/* Multi-Company: tras el login se elige la compañía (Gofo/SpeedX).
+            Con Gofo TODO corre exactamente igual que siempre. */}
+        <CarrierProvider>
             <SesionGuard />
+            <CarrierGate>
             <Routes>
               <Route path="/portal" element={<PortalPage><DriverPortal /></PortalPage>} />
               <Route path="/dashboard" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
@@ -129,6 +134,8 @@ function PackageApp() {
               <Route path="/ia/panel" element={<Page soloSuperAdmin><PanelControl /></Page>} />
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>
+            </CarrierGate>
+        </CarrierProvider>
       </DataProvider>
     </AuthProvider>
   )
