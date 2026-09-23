@@ -12,6 +12,8 @@ import { conFechas, invoicesEnRango, combinarFacturas, combinarVerificacion, fac
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
 import { subirBackupStorage } from './utils/backup'
+import { useCarrier } from './carriers/CarrierContext'
+import { CARRIERS, carrierDe } from './carriers'
 
 const INTERVALO_BACKUP_MS = 24 * 60 * 60 * 1000 // backup automático cada 24 h
 
@@ -31,6 +33,16 @@ export function DataProvider({ children }) {
   const [drivers, setDrivers] = useState([])
   const [managers, setManagers] = useState([])
   const [claims, setClaims] = useState([])
+
+  // ── Multi-Company: SOLO los datos de la compañía activa (Gofo / SpeedX). Los
+  // registros históricos sin campo `carrier` son Gofo (carrierDe): aislamiento
+  // total de facturas, choferes, claims y gastos fijos sin tocar las pantallas.
+  const { carrier } = useCarrier()
+  const carrierActivo = CARRIERS[carrier] ? carrier : 'gofo'
+  const invoicesCarrier = useMemo(() => invoices.filter((x) => carrierDe(x) === carrierActivo), [invoices, carrierActivo])
+  const driversCarrier = useMemo(() => drivers.filter((x) => carrierDe(x) === carrierActivo), [drivers, carrierActivo])
+  const managersCarrier = useMemo(() => managers.filter((x) => carrierDe(x) === carrierActivo), [managers, carrierActivo])
+  const claimsCarrier = useMemo(() => claims.filter((x) => carrierDe(x) === carrierActivo), [claims, carrierActivo])
   const [ajustes, setAjustes] = useState(null) // settings/{companyId}: ciudades, onboardingCompleto, marca…
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   // Ciudad y rango PERSISTIDOS: al recargar se mantiene lo que tenías elegido.
@@ -251,13 +263,13 @@ export function DataProvider({ children }) {
   // de SU ciudad en TODAS las pantallas (filtro, dashboard, por factura, ganancias…).
   // El dueño y el súper-admin ven todo.
   const invoicesVisibles = useMemo(() => {
-    if (!ciudadBloqueada || !ciudadesUsuarioKey) return invoices
+    if (!ciudadBloqueada || !ciudadesUsuarioKey) return invoicesCarrier
     const set = new Set(ciudadesUsuarioKey.split('|'))
-    return invoices.filter((inv) =>
+    return invoicesCarrier.filter((inv) =>
       set.has(inv.ciudad || '') ||
       (inv.resumenCiudades || []).some((c) => set.has(c.ubicacion))
     )
-  }, [invoices, ciudadBloqueada, ciudadesUsuarioKey])
+  }, [invoicesCarrier, ciudadBloqueada, ciudadesUsuarioKey])
 
   const invoicesRangoBase = useMemo(() => invoicesEnRango(invoicesVisibles, rango), [invoicesVisibles, rango])
   // En modo subconjunto, se dejan SOLO las facturas de las ciudades elegidas (una
@@ -312,7 +324,7 @@ export function DataProvider({ children }) {
   // (inv.claimsData) para las facturas del rango que no trajeron ningún claim de la
   // colección (facturas duplicadas, índices, etc.). Así el claim siempre se ve.
   const claimsEfectivos = useMemo(() => {
-    const conDocs = new Set(claims.map((c) => c.invoiceId))
+    const conDocs = new Set(claimsCarrier.map((c) => c.invoiceId))
     const extra = []
     for (const inv of invoicesRango) {
       if (conDocs.has(inv.id)) continue
@@ -320,8 +332,8 @@ export function DataProvider({ children }) {
         for (const c of inv.claimsData) extra.push({ ...c, invoiceId: inv.id })
       }
     }
-    return extra.length ? [...claims, ...extra] : claims
-  }, [claims, invoicesRango])
+    return extra.length ? [...claimsCarrier, ...extra] : claimsCarrier
+  }, [claimsCarrier, invoicesRango])
 
   // Claims que consumen las páginas: reducidos al chofer elegido (si lo hay), para
   // que los claims/fallidos correspondan a la MISMA selección que el resto.
@@ -365,10 +377,10 @@ export function DataProvider({ children }) {
     if (ciudadBloqueada || selectedCity === TODAS) return
     const disponibles = new Set([
       ...((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean)),
-      ...invoices.flatMap((i) => (i.resumenCiudades || []).map((c) => c.ubicacion)),
+      ...invoicesCarrier.flatMap((i) => (i.resumenCiudades || []).map((c) => c.ubicacion)),
     ])
     if (disponibles.size > 0 && !disponibles.has(selectedCity)) setSelectedCity(TODAS)
-  }, [activeCompanyId, ajustes, invoices, selectedCity, ciudadBloqueada])
+  }, [activeCompanyId, ajustes, invoicesCarrier, selectedCity, ciudadBloqueada])
 
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
@@ -407,17 +419,17 @@ export function DataProvider({ children }) {
     if (!existe) setSelectedDriver(TODOS)
   }, [hayChofer, facturaRangoFull, selectedDriver])
 
-  const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId) || null
+  const selectedInvoice = invoicesCarrier.find((i) => i.id === selectedInvoiceId) || null
 
   // Alertas SIEMPRE globales (no dependen del filtro de chofer): se calculan sobre la
   // factura completa del rango y todos sus claims.
   const invAnterior = useMemo(() => {
     if (!facturaRangoFull || facturaRangoFull.esRango) return null
-    const idx = invoices.findIndex((i) => i.id === facturaRangoFull.id)
-    return idx >= 0 ? invoices[idx + 1] : null
-  }, [facturaRangoFull, invoices])
+    const idx = invoicesCarrier.findIndex((i) => i.id === facturaRangoFull.id)
+    return idx >= 0 ? invoicesCarrier[idx + 1] : null
+  }, [facturaRangoFull, invoicesCarrier])
 
-  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers, managers, semanas: numSemanas, invAnterior }), [facturaRangoFull, claimsEfectivos, drivers, managers, numSemanas, invAnterior])
+  const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers: driversCarrier, managers: managersCarrier, semanas: numSemanas, invAnterior }), [facturaRangoFull, claimsEfectivos, driversCarrier, managersCarrier, numSemanas, invAnterior])
   // Todas las alertas con su estado persistido adjunto.
   const alertasTodas = useMemo(
     () => alertasBase
@@ -503,8 +515,8 @@ export function DataProvider({ children }) {
     reloadCompanies: cargarCompanies,
     // datos
     invoices: invoicesVisibles,
-    drivers,
-    managers,
+    drivers: driversCarrier,
+    managers: managersCarrier,
     claims: claimsFiltrados,
     ajustesPorChofer,
     ajustes,

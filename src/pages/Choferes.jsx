@@ -15,13 +15,19 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../compone
 import ManagersPanel from '../components/ManagersPanel'
 import RegistroChoferes from '../components/RegistroChoferes'
 import { useLang } from '../i18n'
+import { useCarrier } from '../carriers/CarrierContext'
 
-const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
+const vacio = { nombre: '', precioIndividual: '', precioDoble: '', precioStopAdicional: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
   const { t } = useLang()
   const { drivers: driversAll, reloadDrivers, facturaRango, invoices, claims, activeCompanyId, selectedCity, ciudadesEmpresa, ajustes } = useData()
+  // Compañía activa (Multi-Company): con SpeedX se muestra además la tarifa de
+  // STOP (paquete adicional de una misma parada) y los choferes nuevos nacen
+  // con carrier:'speedx'. Con Gofo todo sigue exactamente igual.
+  const { carrier } = useCarrier()
+  const esSpeedx = carrier === 'speedx'
   // Modo POR RUTA: el rate del chofer sale de su RUTA (no editable aquí); en modo
   // estándar sale de su ficha (editable). Se muestra el que realmente se le aplica.
   const modoRuta = ajustes?.modoConfig === 'ruta'
@@ -211,6 +217,8 @@ export default function Choferes() {
         precioDoble: Number(form.precioDoble) || 0,
         activo: !!form.activo,
         companyId: activeCompanyId,
+        // Multi-Company: el chofer nace en la compañía activa (sin campo = Gofo).
+        ...(esSpeedx ? { carrier: 'speedx', precioStopAdicional: Number(form.precioStopAdicional) || 0 } : {}),
       })
       await reloadDrivers()
       setForm(vacio)
@@ -324,7 +332,7 @@ export default function Choferes() {
   // ---- modal ----
   const abrirModal = async (d) => {
     setModal(d)
-    setModalForm({ nombre: d.nombre || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', activo: d.activo !== false, notas: d.notas || '' })
+    setModalForm({ nombre: d.nombre || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', precioStopAdicional: d.precioStopAdicional ?? '', activo: d.activo !== false, notas: d.notas || '' })
     setAccesoForm({ email: '', password: '' })
     setAccesoMsg(null)
     setCargandoHist(true)
@@ -346,6 +354,7 @@ export default function Choferes() {
       await updateDoc(doc(db, 'drivers', modal.id), {
         precioIndividual: Number(modalForm.precioIndividual) || 0,
         precioDoble: Number(modalForm.precioDoble) || 0,
+        ...(esSpeedx ? { precioStopAdicional: Number(modalForm.precioStopAdicional) || 0 } : {}),
         activo: !!modalForm.activo,
         notas: modalForm.notas,
         notasEditadoEn: serverTimestamp(),
@@ -402,6 +411,7 @@ export default function Choferes() {
           <Campo label={t('Nombre (= Courier del Excel)')}><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
           <Campo label={t('Rate individual ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
           <Campo label={t('Rate doble ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+          {esSpeedx && <Campo label={t('Rate stop adicional ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioStopAdicional} onChange={(e) => setForm((f) => ({ ...f, precioStopAdicional: e.target.value }))} /></Campo>}
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
         </div>
       </Card>
@@ -567,6 +577,7 @@ export default function Choferes() {
             <div className="mb-3 flex flex-wrap gap-3">
               <Campo label={t('Rate individual ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
               <Campo label={t('Rate doble ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
+              {esSpeedx && <Campo label={t('Rate stop adicional ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioStopAdicional} onChange={(e) => setModalForm((f) => ({ ...f, precioStopAdicional: e.target.value }))} /></Campo>}
               <Campo label={t('Activo')}>
                 <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={modalForm.activo} onChange={(e) => setModalForm((f) => ({ ...f, activo: e.target.checked }))} /> {modalForm.activo ? t('Sí') : t('No')}</label>
               </Campo>

@@ -30,6 +30,8 @@ import {
   procesarArchivo, procesarReporteFallidos, procesarArchivoPrecios,
   construirResumen, combinarArchivos,
 } from '../utils/excel'
+import { procesarArchivoSpeedX } from './speedx/parser'
+import { construirResumenSpeedX } from './speedx/resumen'
 
 export const CARRIERS = {
   gofo: {
@@ -51,9 +53,18 @@ export const CARRIERS = {
     id: 'speedx',
     nombre: 'SpeedX',
     color: '#2b4c8c',
-    descripcion: 'Nuevo módulo. Su estructura de facturas se define analizando un archivo real.',
-    listo: false,   // el parser se implementa tras analizar una factura real de SpeedX
-    parser: null,
+    descripcion: 'Facturas semanales de SpeedX — pago por paquete y por parada, con fondo a 2 semanas.',
+    listo: true, // parser construido y verificado contra una factura real (DFW_TTC_15.xlsx)
+    // Adaptador propio: 1 archivo con 5 hojas, pago por paquete + stop, claims M2.
+    parser: {
+      procesarFactura: procesarArchivoSpeedX,
+      construirResumen: construirResumenSpeedX,
+    },
+    // Etiquetas para las pantallas compartidas (mismos campos, otro significado).
+    etiquetas: { individuales: '<1 lb', dobles: '≥1 lb', stopAdicional: 'Stop adicional' },
+    // Fondo: la semana (corte sábado) se cobra ~19 días después de su fecha fin
+    // (ejemplo real: semana 01–06 sep → se cobra el 25 sep). Editable por factura.
+    diasFondo: 19,
   },
 }
 

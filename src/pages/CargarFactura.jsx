@@ -16,8 +16,19 @@ import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinne
 import Combobox from '../components/Combobox'
 import Verificacion from '../components/Verificacion'
 import { useLang } from '../i18n'
+import { useCarrier } from '../carriers/CarrierContext'
+import CargarFacturaSpeedX from '../carriers/speedx/CargarFacturaSpeedX'
 
+// Multi-Company: ÚNICA bifurcación por compañía a nivel de página. Cada carrier
+// tiene su propio importador (parser + algoritmo); el resto de pantallas son
+// compartidas. Gofo sigue en este archivo EXACTAMENTE igual que siempre.
 export default function CargarFactura() {
+  const { carrier } = useCarrier()
+  if (carrier === 'speedx') return <CargarFacturaSpeedX />
+  return <CargarFacturaGofo />
+}
+
+function CargarFacturaGofo() {
   const { t } = useLang()
   const { perfil } = useAuth()
   const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadAjustes, setSelectedInvoiceId } = useData()

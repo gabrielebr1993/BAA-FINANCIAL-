@@ -10,6 +10,7 @@ import { nombreCiudad } from '../constants'
 import { money } from '../utils/format'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { useLang, tDirecto } from '../i18n'
+import { useCarrier } from '../carriers/CarrierContext'
 import { Card, Boton, Aviso, Badge, Input, Select } from './ui'
 
 const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
@@ -19,6 +20,9 @@ export default function ManagersPanel() {
   const { t } = useLang()
   const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity, selectedCities } = useData()
   const { ciudadBloqueada, ciudadesUsuario } = useAuth()
+  // Multi-Company: el gasto fijo nace en la compañía activa (sin campo = Gofo),
+  // así los gastos de SpeedX no se mezclan con los de Gofo y viceversa.
+  const { carrier } = useCarrier()
   // Gastos fijos visibles según el filtro global + las ciudades del usuario:
   //  - Ciudad elegida (≠ Todas): solo los de esa ciudad.
   //  - "Todas" con usuario bloqueado: solo los de SUS ciudades.
@@ -93,7 +97,7 @@ export default function ManagersPanel() {
     try {
       const payload = { nombre: form.nombre.trim(), ciudad: ciudadFinal, sueldoSemanal: Number(form.sueldoSemanal) || 0 }
       if (editId) await updateDoc(doc(db, 'managers', editId), payload)
-      else await addDoc(collection(db, 'managers'), { ...payload, activo: true, companyId: activeCompanyId })
+      else await addDoc(collection(db, 'managers'), { ...payload, activo: true, companyId: activeCompanyId, ...(carrier && carrier !== 'gofo' ? { carrier } : {}) })
       await reloadManagers()
       cancelar()
     } catch (e) {

@@ -33,6 +33,7 @@ const CargarFactura = lazy(() => import('./pages/CargarFactura'))
 const Facturas = lazy(() => import('./pages/Facturas'))
 const Configuracion = lazy(() => import('./pages/Configuracion'))
 const Financiero = lazy(() => import('./pages/Financiero'))
+const Cobros = lazy(() => import('./pages/Cobros'))
 const ReclamosGofo = lazy(() => import('./pages/ReclamosGofo'))
 const Claims = lazy(() => import('./pages/Claims'))
 const Choferes = lazy(() => import('./pages/Choferes'))
@@ -99,10 +100,10 @@ function SesionGuard() {
 function PackageApp() {
   return (
     <AuthProvider>
+      {/* Multi-Company: la compañía activa (Gofo/SpeedX) se elige tras el login
+          y DataProvider AÍSLA los datos por carrier. Con Gofo todo corre igual. */}
+      <CarrierProvider>
       <DataProvider>
-        {/* Multi-Company: tras el login se elige la compañía (Gofo/SpeedX).
-            Con Gofo TODO corre exactamente igual que siempre. */}
-        <CarrierProvider>
             <SesionGuard />
             <CarrierGate>
             <Routes>
@@ -112,6 +113,7 @@ function PackageApp() {
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
             <Route path="/configuracion" element={<Page filtro="gestionarConfiguracion"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
+              <Route path="/cobros" element={<Page filtro="verFinanzas"><Cobros /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
@@ -135,8 +137,8 @@ function PackageApp() {
               <Route path="*" element={<Page filtro="verDashboard"><Dashboard /></Page>} />
             </Routes>
             </CarrierGate>
-        </CarrierProvider>
       </DataProvider>
+      </CarrierProvider>
     </AuthProvider>
   )
 }

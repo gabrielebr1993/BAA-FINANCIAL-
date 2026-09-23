@@ -141,6 +141,7 @@ export default function Financiero() {
             <KPI label={t('Ingreso neto (Gofo)')} value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
             <KPI label={t('− Pago choferes')} value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
             <KPI label={t('− Gastos fijos')} value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
+            {(gReal.gastosTemporales || 0) > 0 && <KPI label={t('− Gastos temporales')} value={money(gReal.gastosTemporales)} icon={AlertTriangle} accent="red" sub={t('solo de esta factura')} />}
             <KPI label={t('Ganancia real')} value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
             <KPI label={t('Margen')} value={pct(margen)} icon={Target} accent="blue" />
           </div>

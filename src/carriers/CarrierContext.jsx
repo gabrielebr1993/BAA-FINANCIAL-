@@ -93,23 +93,21 @@ function SelectorCompania() {
   )
 }
 
-// ── Módulo SPEEDX (cascarón): se completa tras analizar una factura real ────
-function SpeedXApp() {
+// ── Módulo EN PREPARACIÓN (carrier declarado pero sin parser listo) ─────────
+function CarrierEnPreparacion({ id }) {
   const { t } = useLang()
   const { cambiarCarrier } = useCarrier()
   const { cerrarSesion } = useAuth()
+  const c = CARRIERS[id] || {}
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6 dark:bg-surface-dark">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl text-white shadow-sm" style={{ background: CARRIERS.speedx.color }}>
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl text-white shadow-sm" style={{ background: c.color || '#334155' }}>
           <Zap size={30} strokeWidth={1.9} />
         </div>
-        <h1 className="mt-4 text-xl font-extrabold text-brand-navy dark:text-slate-100">MilePay · SpeedX</h1>
+        <h1 className="mt-4 text-xl font-extrabold text-brand-navy dark:text-slate-100">MilePay · {c.nombre || id}</h1>
         <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">
-          {t('El módulo de SpeedX está en preparación: su estructura de facturas, columnas y cálculos se definen analizando un archivo REAL de factura de SpeedX (no se inventa nada).')}
-        </p>
-        <p className="mx-auto mt-2 max-w-sm text-sm font-semibold text-brand-navy dark:text-slate-200">
-          {t('Entrega una factura real de SpeedX para analizar su estructura y construir el módulo.')}
+          {t('Este módulo está en preparación: su estructura de facturas se define analizando un archivo real (no se inventa nada).')}
         </p>
         <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2">
           <button onClick={cambiarCarrier} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90">
@@ -127,12 +125,14 @@ function SpeedXApp() {
 // ── Puerta: decide qué se pinta según sesión + compañía elegida ─────────────
 // Sin sesión → children (el Login aparece como siempre vía ProtectedRoute).
 // Chofer → children (su portal es de Gofo; no elige compañía).
-// Sin compañía elegida → selector. SpeedX → su módulo. Gofo → children intacto.
+// Sin compañía elegida → selector. Carrier no listo → pantalla de preparación.
+// Compañía LISTA (Gofo o SpeedX) → las MISMAS rutas/pantallas de siempre: el
+// aislamiento y el algoritmo cambian por debajo (DataContext + parsers).
 export function CarrierGate({ children }) {
   const { user, cargando, esDriver } = useAuth()
   const { carrier } = useCarrier()
   if (cargando || !user || esDriver) return children
   if (!carrier) return <SelectorCompania />
-  if (carrier === 'speedx') return <SpeedXApp />
+  if (!CARRIERS[carrier]?.listo) return <CarrierEnPreparacion id={carrier} />
   return children
 }

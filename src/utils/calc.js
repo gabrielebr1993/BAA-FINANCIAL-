@@ -496,7 +496,12 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
     const descuentoClaims = misActivos.reduce((a, cl) => a + feeDeClaim(inv, ch.ciudad, cl), 0)
     // Lo que GOFO te descontó a ti por los claims de este chofer (pérdida real).
     const descontadoGofo = descGofoPorCh[key] || 0
-    const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble
+    // SpeedX (aditivo; en Gofo el campo no existe y suma 0): los paquetes
+    // ADICIONALES de una misma parada se pagan a la tarifa de stop del chofer.
+    const stopAdicionales = Number(ch.stopAdicionales) || 0
+    const dStop = stopAdicionales ? buscarDriver(drivers, ch.nombre) : null
+    const tarifaStop = dStop ? Number(dStop.precioStopAdicional) || 0 : 0
+    const pagoBase = ch.individuales * tarifaInd + ch.dobles * tarifaDoble + stopAdicionales * tarifaStop
     const totalPagar = pagoBase - descuentoClaims
     // Fallidos ("Failed delivery"): informativo de desempeño; no afecta pago ni neto.
     const fallidos = Number(ch.fallidos) || 0
@@ -508,6 +513,9 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
       nombreCiudad: nombreCiudad(ch.ciudad),
       individuales: ch.individuales,
       dobles: ch.dobles,
+      stopAdicionales,
+      tarifaStop,
+      temu: Number(ch.temu) || 0,
       ingreso: ch.ingreso,
       fallidos,
       pctFallidos: intentos > 0 ? fallidos / intentos : 0,
@@ -690,7 +698,11 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
   } else {
     cMgr = sueldoDe(activosMgr.filter((m) => (m.ciudad || '') === ciudad))
   }
-  const ganancia = ingresoNeto - costoChoferes - cMgr
+  // Gastos TEMPORALES de la factura (SpeedX): gastos puntuales de ESA semana
+  // (guardados en la factura) que se debitan solo de ella. En Gofo el campo no
+  // existe y suma 0. Un chofer individual no los carga (son de la empresa).
+  const gTemp = inv?.__choferScope ? 0 : (inv?.gastosTemporales || []).reduce((a, g) => a + (Number(g.monto) || 0), 0)
+  const ganancia = ingresoNeto - costoChoferes - cMgr - gTemp
   // Ajustes manuales incluidos en el pago a choferes (para transparencia contable).
   const totalPrestamo = pagos.reduce((a, p) => a + (Number(p.prestamo) || 0), 0)
   const totalBono = pagos.reduce((a, p) => a + (Number(p.bono) || 0), 0)
@@ -698,6 +710,7 @@ export function gananciaRealDe(inv, claims, drivers, managers, ciudad, semanas =
     ingresoNeto,
     costoChoferes,
     costoManagers: cMgr,
+    gastosTemporales: gTemp,
     gananciaReal: ganancia,
     margen: ingresoNeto > 0 ? ganancia / ingresoNeto : 0,
     ingresoAprox: !esTodas, // en una ciudad el ingreso neto es aproximado
