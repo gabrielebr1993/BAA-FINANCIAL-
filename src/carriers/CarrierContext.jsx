@@ -11,7 +11,7 @@
 // Los CHOFERES (role=driver) no eligen: van directo a su portal (Gofo).
 // ============================================================================
 import { createContext, useContext, useState, useCallback } from 'react'
-import { FileText, Zap, ArrowLeftRight, LogOut, ArrowRight, Package, PackageOpen, Boxes, Truck } from 'lucide-react'
+import { FileText, Zap, ArrowLeftRight, LogOut, ArrowRight, Package } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
 import { useLang, LangToggle } from '../i18n'
@@ -41,15 +41,59 @@ export function CarrierProvider({ children }) {
 // Pantalla COMPLETA (de punta a punta): un panel gigante por compañía, con
 // paquetes/camiones decorativos de fondo y su color de marca. En escritorio
 // los paneles van lado a lado; en el teléfono, apilados a toda altura.
-const DECOR = [
-  { I: Package, l: '6%', t: '14%', s: 96, r: -14, d: 0 },
-  { I: Boxes, l: '80%', t: '12%', s: 72, r: 16, d: 1.4 },
-  { I: Truck, l: '10%', t: '72%', s: 120, r: 6, d: 0.7 },
-  { I: Package, l: '72%', t: '68%', s: 58, r: -20, d: 2 },
-  { I: PackageOpen, l: '44%', t: '6%', s: 46, r: 22, d: 1 },
-  { I: Boxes, l: '88%', t: '46%', s: 44, r: -8, d: 2.6 },
-  { I: Package, l: '30%', t: '84%', s: 40, r: 12, d: 1.7 },
+// Caja de cartón REALISTA (isométrica, con cinta y etiqueta) para el fondo.
+function Caja({ size = 100, opacity = 1, flip = false, style }) {
+  return (
+    <svg viewBox="0 0 100 104" width={size} height={size * 1.04} style={{ opacity, transform: flip ? 'scaleX(-1)' : undefined, ...style }} aria-hidden="true">
+      {/* tapa */}
+      <polygon points="50,6 93,29 50,52 7,29" fill="#c9a273" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
+      {/* solapa marcada en la tapa */}
+      <polygon points="50,6 93,29 50,52" fill="#000" opacity="0.05" />
+      {/* cara izquierda */}
+      <polygon points="7,29 50,52 50,100 7,77" fill="#a87f4f" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
+      {/* cara derecha (más oscura) */}
+      <polygon points="93,29 50,52 50,100 93,77" fill="#8a663c" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
+      {/* cinta de embalar: cruza la tapa y baja por la arista frontal */}
+      <polygon points="45.5,8.5 54.5,8.5 54.5,49.5 45.5,49.5" fill="#e8dcc0" opacity="0.9" />
+      <polygon points="45.5,50 54.5,50 54.5,74 45.5,74" fill="#e8dcc0" opacity="0.55" />
+      {/* etiqueta de envío en la cara izquierda */}
+      <polygon points="15,44 34,54 34,70 15,60" fill="#f4efe3" stroke="#6e5432" strokeWidth="0.5" />
+      <line x1="18" y1="50.5" x2="31" y2="57.5" stroke="#8a8172" strokeWidth="1.4" />
+      <line x1="18" y1="54" x2="28" y2="59.4" stroke="#b3aa99" strokeWidth="1.1" />
+      {/* código de barras en la cara derecha */}
+      <g opacity="0.6">
+        {[60, 63, 65.5, 69, 71.5, 75].map((x, i) => (
+          <line key={i} x1={x} y1={62 - (x - 60) * 0.53} x2={x} y2={74 - (x - 60) * 0.53} stroke="#4c3a20" strokeWidth={i % 2 ? 1 : 1.8} />
+        ))}
+      </g>
+    </svg>
+  )
+}
+// Cajas flotando al fondo del panel (posición, tamaño, opacidad, retardo).
+const CAJAS = [
+  { l: '6%', t: '12%', s: 84, o: 0.16, d: 0.4, flip: false },
+  { l: '82%', t: '10%', s: 64, o: 0.13, d: 1.6, flip: true },
+  { l: '13%', t: '48%', s: 56, o: 0.12, d: 2.3, flip: false },
+  { l: '86%', t: '44%', s: 48, o: 0.11, d: 0.9, flip: false },
 ]
+// Pila de cajas "en el piso" del panel (recortada por el borde inferior).
+const PILA = [
+  { l: '-3%', b: -34, s: 150, o: 0.32, flip: false },
+  { l: '13%', b: -50, s: 180, o: 0.38, flip: true },
+  { l: '34%', b: -30, s: 130, o: 0.3, flip: false },
+  { l: '55%', b: -54, s: 195, o: 0.4, flip: false },
+  { l: '76%', b: -36, s: 155, o: 0.33, flip: true },
+]
+// El nombre tratado como LOGOTIPO (hasta tener los archivos oficiales).
+function NombreLogo({ c }) {
+  if (c.id === 'gofo') {
+    return <span className="bg-gradient-to-b from-[#f2d896] via-[#dcb964] to-[#b8903f] bg-clip-text text-5xl font-black tracking-tight text-transparent md:text-7xl">GOFO</span>
+  }
+  if (c.id === 'speedx') {
+    return <span className="text-5xl font-black italic tracking-tight md:text-7xl">Speed<span className="text-[#8fb1f5]">X</span></span>
+  }
+  return <span className="text-4xl font-black tracking-tight md:text-6xl">{c.nombre}</span>
+}
 function SelectorCompania() {
   const { t } = useLang()
   const { user, perfil, cerrarSesion } = useAuth()
@@ -111,19 +155,20 @@ function SelectorCompania() {
                 className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                 style={{ background: `radial-gradient(130% 100% at 50% 115%, ${c.color}99, transparent 65%)`, boxShadow: `inset 0 0 0 3px ${c.color}55` }}
               />
-              {/* Paquetes y camiones decorativos, flotando suave */}
-              {DECOR.map((d, i) => {
-                const DIcon = d.I
-                return (
-                  <div key={i} className="pointer-events-none absolute" style={{ left: d.l, top: d.t, animation: `mpflot ${7 + i}s ease-in-out ${d.d}s infinite` }}>
-                    <DIcon
-                      strokeWidth={1.1}
-                      className="text-white transition-transform duration-700 group-hover:scale-110"
-                      style={{ width: d.s, height: d.s, opacity: 0.07, transform: `rotate(${d.r}deg)` }}
-                    />
-                  </div>
-                )
-              })}
+              {/* Cajas de cartón flotando suave */}
+              {CAJAS.map((d, i) => (
+                <div key={i} className="pointer-events-none absolute" style={{ left: d.l, top: d.t, animation: `mpflot ${8 + i}s ease-in-out ${d.d}s infinite` }}>
+                  <Caja size={d.s} opacity={d.o} flip={d.flip} />
+                </div>
+              ))}
+              {/* Pila de paquetes en el piso del panel */}
+              {PILA.map((d, i) => (
+                <div key={`p${i}`} className="pointer-events-none absolute transition-transform duration-700 group-hover:-translate-y-1.5" style={{ left: d.l, bottom: d.b }}>
+                  <Caja size={d.s} opacity={d.o} flip={d.flip} />
+                </div>
+              ))}
+              {/* Sombra del piso para asentar las cajas */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)' }} />
               {/* Contenido */}
               <div className="relative z-10 flex flex-col items-center gap-4 md:gap-5">
                 <span
@@ -133,7 +178,7 @@ function SelectorCompania() {
                   <Icon size={40} strokeWidth={1.8} />
                 </span>
                 <div className="flex items-center gap-3">
-                  <span className="text-4xl font-black tracking-tight md:text-6xl">{c.nombre}</span>
+                  <NombreLogo c={c} />
                   {!c.listo && <span className="rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">{t('En preparación')}</span>}
                 </div>
                 <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-base font-bold text-[#0d1526] shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:gap-3.5 group-hover:shadow-2xl">
