@@ -3,6 +3,7 @@
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, Circle, MapPin, Upload, LayoutDashboard, ArrowRight, Sparkles } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useCarrier } from '../carriers/CarrierContext'
 import { setOnboardingCompleto } from '../utils/empresaSettings'
 import { Card, Boton } from './ui'
 import { useLang } from '../i18n'
@@ -10,19 +11,25 @@ import { useLang } from '../i18n'
 export default function Onboarding() {
   const { t } = useLang()
   const { empresaActiva, ciudadesEmpresa, invoices, activeCompanyId, reloadAjustes } = useData()
+  const { carrier } = useCarrier()
   const navigate = useNavigate()
+  // SpeedX no pide configurar ciudades: la ciudad se crea SOLA al subir la
+  // primera factura (y se reutiliza en las siguientes). Solo Gofo tiene paso 1.
+  const conCiudades = (carrier || 'gofo') === 'gofo'
 
   const paso1 = ciudadesEmpresa.length > 0
   const paso2 = invoices.length > 0
-  const listos = paso1 && paso2
+  const listos = (!conCiudades || paso1) && paso2
 
   const finalizar = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes(); navigate('/dashboard') }
   const omitir = async () => { await setOnboardingCompleto(activeCompanyId, true); await reloadAjustes() }
 
   const pasos = [
-    { hecho: paso1, icon: MapPin, titulo: t('Agrega tus ciudades'), desc: t('Registra las ciudades donde operas (ej. Dallas · DFW01).'), boton: t('Agregar ciudades'), ir: () => navigate('/configuracion') },
-    { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura'), desc: t('Sube el Excel de Gofo. En la pantalla previa configuras tus choferes y tarifas.'), boton: t('Cargar factura'), ir: () => navigate('/facturas'), bloqueado: !paso1 },
-    { hecho: listos, icon: LayoutDashboard, titulo: t('Revisa tu dashboard'), desc: t('Cuando tengas una factura, verás tus métricas y verificación con Gofo.'), boton: t('Ir al dashboard'), ir: finalizar, bloqueado: !listos },
+    ...(conCiudades ? [{ hecho: paso1, icon: MapPin, titulo: t('Agrega tus ciudades'), desc: t('Registra las ciudades donde operas (ej. Dallas · DFW01).'), boton: t('Agregar ciudades'), ir: () => navigate('/configuracion') }] : []),
+    conCiudades
+      ? { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura'), desc: t('Sube el Excel de Gofo. En la pantalla previa configuras tus choferes y tarifas.'), boton: t('Cargar factura'), ir: () => navigate('/facturas'), bloqueado: !paso1 }
+      : { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura de SpeedX'), desc: t('Sube el Excel semanal de SpeedX. La ciudad y los choferes se crean solos con la factura; tú solo pones la tarifa por paquete de cada chofer.'), boton: t('Cargar factura'), ir: () => navigate('/facturas') },
+    { hecho: listos, icon: LayoutDashboard, titulo: t('Revisa tu dashboard'), desc: conCiudades ? t('Cuando tengas una factura, verás tus métricas y verificación con Gofo.') : t('Cuando tengas una factura, verás tus métricas y el cuadre con SpeedX.'), boton: t('Ir al dashboard'), ir: finalizar, bloqueado: !listos },
   ]
   const completados = pasos.filter((p) => p.hecho).length
 
@@ -32,7 +39,7 @@ export default function Onboarding() {
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-brand-gold"><Sparkles size={20} strokeWidth={1.8} /></span>
         <h2 className="m-0 text-xl font-bold text-brand-navy dark:text-slate-100">{t('¡Bienvenido a MilePay')}{empresaActiva?.nombre ? `, ${empresaActiva.nombre}` : ''}!</h2>
       </div>
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{t('Vamos a configurar tu cuenta en 3 pasos')} ({completados}/3 {t('listos')}).</p>
+      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{t('Vamos a configurar tu cuenta en')} {pasos.length} {t('pasos')} ({completados}/{pasos.length} {t('listos')}).</p>
 
       <div className="space-y-3">
         {pasos.map((p, i) => {
