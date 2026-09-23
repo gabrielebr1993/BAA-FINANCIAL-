@@ -42,13 +42,13 @@ export function CarrierProvider({ children }) {
 // paquetes/camiones decorativos de fondo y su color de marca. En escritorio
 // los paneles van lado a lado; en el teléfono, apilados a toda altura.
 const DECOR = [
-  { I: Package, l: '6%', t: '14%', s: 96, r: -14 },
-  { I: Boxes, l: '80%', t: '12%', s: 72, r: 16 },
-  { I: Truck, l: '10%', t: '72%', s: 120, r: 6 },
-  { I: Package, l: '72%', t: '68%', s: 58, r: -20 },
-  { I: PackageOpen, l: '44%', t: '6%', s: 46, r: 22 },
-  { I: Boxes, l: '88%', t: '46%', s: 44, r: -8 },
-  { I: Package, l: '30%', t: '84%', s: 40, r: 12 },
+  { I: Package, l: '6%', t: '14%', s: 96, r: -14, d: 0 },
+  { I: Boxes, l: '80%', t: '12%', s: 72, r: 16, d: 1.4 },
+  { I: Truck, l: '10%', t: '72%', s: 120, r: 6, d: 0.7 },
+  { I: Package, l: '72%', t: '68%', s: 58, r: -20, d: 2 },
+  { I: PackageOpen, l: '44%', t: '6%', s: 46, r: 22, d: 1 },
+  { I: Boxes, l: '88%', t: '46%', s: 44, r: -8, d: 2.6 },
+  { I: Package, l: '30%', t: '84%', s: 40, r: 12, d: 1.7 },
 ]
 function SelectorCompania() {
   const { t } = useLang()
@@ -58,7 +58,12 @@ function SelectorCompania() {
   const ICONO = { gofo: FileText, speedx: Zap }
   const carriers = listaCarriers()
   return (
-    <div className="flex min-h-screen w-full flex-col bg-[#0d1526] text-white">
+    <div
+      className="flex min-h-screen w-full flex-col bg-[#0d1526] text-white"
+      style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px)', backgroundSize: '28px 28px' }}
+    >
+      {/* Animación de flotado de los paquetes decorativos */}
+      <style>{'@keyframes mpflot{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}'}</style>
       {/* Barra superior */}
       <header className="flex items-center justify-between px-5 py-4 md:px-10">
         <div className="flex items-center gap-3">
@@ -82,7 +87,8 @@ function SelectorCompania() {
       <div className="px-6 pb-6 pt-2 text-center md:pb-8">
         <div className="text-sm font-semibold text-brand-gold">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋</div>
         <h1 className="mt-1 text-3xl font-black leading-tight md:text-5xl">{t('¿Con qué compañía quieres trabajar hoy?')}</h1>
-        <p className="mx-auto mt-2 max-w-xl text-sm text-white/50 md:text-base">{t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')}</p>
+        <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-brand-gold/80" />
+        <p className="mx-auto mt-3 max-w-xl text-sm text-white/50 md:text-base">{t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')}</p>
       </div>
 
       {/* Paneles gigantes, de punta a punta */}
@@ -96,28 +102,33 @@ function SelectorCompania() {
               onClick={() => setCarrier(c.id)}
               className={`group relative flex min-h-[38vh] flex-col items-center justify-center overflow-hidden px-8 py-12 text-center transition-all duration-300 hover:brightness-125 md:min-h-0 ${idx > 0 ? 'border-t border-white/10 md:border-l md:border-t-0' : ''}`}
             >
-              {/* Fondo con el color de la compañía */}
+              {/* Fondo con el color de la compañía (el halo crece al pasar el mouse) */}
               <div
                 className="absolute inset-0 transition-opacity duration-300"
                 style={{ background: `radial-gradient(120% 90% at 50% 115%, ${c.color}66, transparent 62%), linear-gradient(165deg, #131f38 0%, #0d1526 70%)` }}
               />
-              {/* Paquetes y camiones decorativos */}
+              <div
+                className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                style={{ background: `radial-gradient(130% 100% at 50% 115%, ${c.color}99, transparent 65%)`, boxShadow: `inset 0 0 0 3px ${c.color}55` }}
+              />
+              {/* Paquetes y camiones decorativos, flotando suave */}
               {DECOR.map((d, i) => {
                 const DIcon = d.I
                 return (
-                  <DIcon
-                    key={i}
-                    strokeWidth={1.2}
-                    className="pointer-events-none absolute text-white transition-transform duration-500 group-hover:scale-110"
-                    style={{ left: d.l, top: d.t, width: d.s, height: d.s, opacity: 0.06, transform: `rotate(${d.r}deg)` }}
-                  />
+                  <div key={i} className="pointer-events-none absolute" style={{ left: d.l, top: d.t, animation: `mpflot ${7 + i}s ease-in-out ${d.d}s infinite` }}>
+                    <DIcon
+                      strokeWidth={1.1}
+                      className="text-white transition-transform duration-700 group-hover:scale-110"
+                      style={{ width: d.s, height: d.s, opacity: 0.07, transform: `rotate(${d.r}deg)` }}
+                    />
+                  </div>
                 )
               })}
               {/* Contenido */}
               <div className="relative z-10 flex flex-col items-center gap-4 md:gap-5">
                 <span
-                  className="grid h-20 w-20 place-items-center rounded-3xl text-white shadow-2xl ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-110 md:h-24 md:w-24"
-                  style={{ background: c.color }}
+                  className="grid h-20 w-20 place-items-center rounded-3xl text-white ring-1 ring-white/25 transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110 md:h-24 md:w-24"
+                  style={{ background: `linear-gradient(160deg, ${c.color}, ${c.color}cc)`, boxShadow: `0 18px 50px -12px ${c.color}aa` }}
                 >
                   <Icon size={40} strokeWidth={1.8} />
                 </span>
@@ -125,8 +136,7 @@ function SelectorCompania() {
                   <span className="text-4xl font-black tracking-tight md:text-6xl">{c.nombre}</span>
                   {!c.listo && <span className="rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">{t('En preparación')}</span>}
                 </div>
-                <p className="max-w-sm text-sm leading-relaxed text-white/60 md:text-base">{t(c.descripcion)}</p>
-                <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-[#0d1526] shadow-lg transition-all duration-300 group-hover:gap-3.5 group-hover:shadow-xl">
+                <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-base font-bold text-[#0d1526] shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:gap-3.5 group-hover:shadow-2xl">
                   {t('Entrar')} <ArrowRight size={17} strokeWidth={2.2} />
                 </span>
               </div>
