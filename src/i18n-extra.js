@@ -2035,6 +2035,13 @@ export const EN_EXTRA = {
   "Concepto (p. ej. renta de van)": "Concept (e.g. van rental)",
   "Neto de esta factura tras gastos temporales:": "Net of this invoice after temporary expenses:",
   "Rate stop adicional ($)": "Additional stop rate ($)",
+  "chofer(es) con su tarifa por paquete (> 0)": "driver(s) with their per-package rate (> 0)",
+  "$ por paquete": "$ per package",
+  "SpeedX te paga": "SpeedX pays you",
+  "Tarifa por paquete": "Rate per package",
+  "Rate por paquete ($) — lo que le pagas": "Rate per package ($) — what you pay them",
+  "Rate por paquete ($)": "Rate per package ($)",
+  "Lo que TÚ le pagas a cada chofer: una tarifa FIJA por paquete (todos sus paquetes valen lo mismo, sin importar peso ni stops). Lo que SpeedX TE paga a ti sale solo de la factura (columna «SpeedX te paga»). Los claims se descuentan con el método M2: al chofer se le cobra exactamente lo que SpeedX te descontó.": "What YOU pay each driver: a FLAT rate per package (all their packages are worth the same, regardless of weight or stops). What SpeedX pays YOU comes straight from the invoice (“SpeedX pays you” column). Claims are deducted with method M2: the driver is charged exactly what SpeedX deducted from you.",
   "− Gastos temporales": "− Temporary expenses",
   "solo de esta factura": "only from this invoice",
 }
