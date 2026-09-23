@@ -24,6 +24,7 @@ import { construirResumenSpeedX } from './resumen'
 import { CARRIERS } from '../index'
 import { buscarDriver, calcularPagos, promediosFlota, calificarChofer, TODAS } from '../../utils/calc'
 import { registrarAuditoria } from '../../utils/auditoria'
+import { guardarCiudadesEmpresa } from '../../utils/empresaSettings'
 import { money, num } from '../../utils/format'
 import { Upload, Zap, Package, DollarSign, Truck, AlertTriangle, Save, CheckCircle2, X, PiggyBank, CalendarClock, FileSpreadsheet, Layers } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../../components/ui'
@@ -51,7 +52,7 @@ export default function CargarFacturaSpeedX() {
   const { t } = useLang()
   const { perfil } = useAuth()
   const navigate = useNavigate()
-  const { invoices, drivers, activeCompanyId, empresaActiva, reloadInvoices, reloadDrivers, reloadClaims, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, activeCompanyId, empresaActiva, ciudadesEmpresa, reloadInvoices, reloadDrivers, reloadClaims, reloadAjustes, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -264,6 +265,18 @@ export default function CargarFacturaSpeedX() {
         semana,
         monto: montoCobro,
       })
+
+      // Ciudad de SpeedX: se registra UNA sola vez en el catálogo propio de
+      // SpeedX (separado del de Gofo). Si otra factura trae la misma ciudad,
+      // se reutiliza la existente — nunca se crea duplicada.
+      try {
+        const cod = String(proc.ciudad || '').trim()
+        const yaExiste = (ciudadesEmpresa || []).some((c) => String(c.codigo || '').toUpperCase() === cod.toUpperCase())
+        if (cod && !yaExiste) {
+          await guardarCiudadesEmpresa(activeCompanyId, [...(ciudadesEmpresa || []), { codigo: cod, nombre: cod }], 'speedx')
+          await reloadAjustes()
+        }
+      } catch { /* si falla el registro de ciudad no se bloquea el guardado */ }
 
       // c) Claims — SIEMPRE M2 en SpeedX: se le cobra al chofer exactamente lo
       // que SpeedX nos descontó. Anti-doble-cobro: un tracking ya cobrado en

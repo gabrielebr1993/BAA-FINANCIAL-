@@ -1,7 +1,10 @@
 // Gestión de las ciudades propias de la empresa (settings/{companyId}.ciudades).
+// Multi-Company: cada carrier tiene SU catálogo (ciudadesEmpresa ya viene del
+// carrier activo vía DataContext, y se guarda en su campo correspondiente).
 import { useState } from 'react'
 import { MapPin, Plus, Trash2, Check, X, Pencil } from 'lucide-react'
 import { useData } from '../DataContext'
+import { useCarrier } from '../carriers/CarrierContext'
 import { guardarCiudadesEmpresa } from '../utils/empresaSettings'
 import { useLang } from '../i18n'
 import { Card, Boton, Input, Aviso } from './ui'
@@ -9,6 +12,7 @@ import { Card, Boton, Input, Aviso } from './ui'
 export default function MisCiudades({ enTarjeta = true }) {
   const { t } = useLang()
   const { activeCompanyId, ciudadesEmpresa, reloadAjustes } = useData()
+  const { carrier } = useCarrier()
   const [nuevo, setNuevo] = useState({ nombre: '', codigo: '' })
   const [editando, setEditando] = useState(null) // índice
   const [editForm, setEditForm] = useState({ nombre: '', codigo: '' })
@@ -17,7 +21,7 @@ export default function MisCiudades({ enTarjeta = true }) {
 
   const persistir = async (lista) => {
     setGuardando(true); setError('')
-    try { await guardarCiudadesEmpresa(activeCompanyId, lista); await reloadAjustes() }
+    try { await guardarCiudadesEmpresa(activeCompanyId, lista, carrier || 'gofo'); await reloadAjustes() }
     catch (e) { setError(t('No se pudo guardar:') + ' ' + e.message) }
     finally { setGuardando(false) }
   }

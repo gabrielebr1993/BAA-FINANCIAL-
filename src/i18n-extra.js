@@ -2036,6 +2036,8 @@ export const EN_EXTRA = {
   "Neto de esta factura tras gastos temporales:": "Net of this invoice after temporary expenses:",
   "Rate stop adicional ($)": "Additional stop rate ($)",
   "chofer(es) con su tarifa por paquete (> 0)": "driver(s) with their per-package rate (> 0)",
+  "Entrar": "Enter",
+  "Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.": "Each company has its own invoices, drivers, rates and cities — nothing gets mixed.",
   "$ por paquete": "$ per package",
   "SpeedX te paga": "SpeedX pays you",
   "Tarifa por paquete": "Rate per package",

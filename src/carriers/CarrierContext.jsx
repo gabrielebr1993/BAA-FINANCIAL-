@@ -11,7 +11,7 @@
 // Los CHOFERES (role=driver) no eligen: van directo a su portal (Gofo).
 // ============================================================================
 import { createContext, useContext, useState, useCallback } from 'react'
-import { FileText, Zap, ArrowLeftRight, LogOut, Check } from 'lucide-react'
+import { FileText, Zap, ArrowLeftRight, LogOut, ArrowRight, Package, PackageOpen, Boxes, Truck } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
 import { useLang, LangToggle } from '../i18n'
@@ -38,57 +38,104 @@ export function CarrierProvider({ children }) {
 }
 
 // ── Pantalla: Login → SELECCIONA COMPAÑÍA → módulo ──────────────────────────
+// Pantalla COMPLETA (de punta a punta): un panel gigante por compañía, con
+// paquetes/camiones decorativos de fondo y su color de marca. En escritorio
+// los paneles van lado a lado; en el teléfono, apilados a toda altura.
+const DECOR = [
+  { I: Package, l: '6%', t: '14%', s: 96, r: -14 },
+  { I: Boxes, l: '80%', t: '12%', s: 72, r: 16 },
+  { I: Truck, l: '10%', t: '72%', s: 120, r: 6 },
+  { I: Package, l: '72%', t: '68%', s: 58, r: -20 },
+  { I: PackageOpen, l: '44%', t: '6%', s: 46, r: 22 },
+  { I: Boxes, l: '88%', t: '46%', s: 44, r: -8 },
+  { I: Package, l: '30%', t: '84%', s: 40, r: 12 },
+]
 function SelectorCompania() {
   const { t } = useLang()
   const { user, perfil, cerrarSesion } = useAuth()
   const { setCarrier } = useCarrier()
   const nombre = perfil?.nombre || user?.email || ''
   const ICONO = { gofo: FileText, speedx: Zap }
+  const carriers = listaCarriers()
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-6 py-10 dark:bg-surface-dark">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center justify-between">
-          <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition hover:text-brand-navy dark:hover:text-slate-200">
-            <LogOut size={15} strokeWidth={1.9} /> {t('Salir')}
-          </button>
-          <LangToggle />
-        </div>
-        <div className="mb-8 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-navy shadow-sm">
-            <FileText size={22} strokeWidth={1.9} className="text-brand-gold" />
+    <div className="flex min-h-screen w-full flex-col bg-[#0d1526] text-white">
+      {/* Barra superior */}
+      <header className="flex items-center justify-between px-5 py-4 md:px-10">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-navy shadow-lg ring-1 ring-white/10">
+            <Package size={20} strokeWidth={1.9} className="text-brand-gold" />
           </div>
           <div>
-            <div className="text-xl font-extrabold leading-none text-brand-navy dark:text-slate-100">MilePay</div>
-            <div className="mt-1 text-[10px] font-semibold tracking-[0.18em] text-slate-400">{t('GESTIÓN DE FACTURAS DE REPARTO')}</div>
+            <div className="text-lg font-extrabold leading-none">MilePay</div>
+            <div className="mt-0.5 text-[9px] font-semibold tracking-[0.2em] text-white/40">{t('GESTIÓN DE FACTURAS DE REPARTO')}</div>
           </div>
         </div>
-
-        <h1 className="text-lg font-bold text-brand-navy dark:text-slate-100">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋</h1>
-        <p className="mb-5 mt-1 text-sm text-slate-500 dark:text-slate-400">{t('¿Con qué compañía quieres trabajar hoy?')}</p>
-
-        <div className="space-y-3">
-          {listaCarriers().map((c) => {
-            const Icon = ICONO[c.id] || FileText
-            return (
-              <button key={c.id} type="button" onClick={() => setCarrier(c.id)}
-                className="group flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-navy/40 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-                <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-xl text-white shadow-sm" style={{ background: c.color }}>
-                  <Icon size={22} strokeWidth={1.9} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="text-base font-bold text-brand-navy dark:text-slate-100">{c.nombre}</span>
-                    {!c.listo && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-600">{t('En preparación')}</span>}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{t(c.descripcion)}</span>
-                </span>
-                <Check size={18} className="flex-shrink-0 text-slate-300 transition group-hover:text-brand-navy dark:group-hover:text-slate-200" />
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-3">
+          <LangToggle />
+          <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white">
+            <LogOut size={15} strokeWidth={1.9} /> {t('Salir')}
+          </button>
         </div>
-        <p className="mt-4 text-center text-[11px] text-slate-400">{t('Podrás cambiar de compañía en cualquier momento desde el menú.')}</p>
+      </header>
+
+      {/* Saludo + título */}
+      <div className="px-6 pb-6 pt-2 text-center md:pb-8">
+        <div className="text-sm font-semibold text-brand-gold">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋</div>
+        <h1 className="mt-1 text-3xl font-black leading-tight md:text-5xl">{t('¿Con qué compañía quieres trabajar hoy?')}</h1>
+        <p className="mx-auto mt-2 max-w-xl text-sm text-white/50 md:text-base">{t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')}</p>
       </div>
+
+      {/* Paneles gigantes, de punta a punta */}
+      <div className="grid w-full flex-1 grid-cols-1 md:grid-cols-2">
+        {carriers.map((c, idx) => {
+          const Icon = ICONO[c.id] || Package
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCarrier(c.id)}
+              className={`group relative flex min-h-[38vh] flex-col items-center justify-center overflow-hidden px-8 py-12 text-center transition-all duration-300 hover:brightness-125 md:min-h-0 ${idx > 0 ? 'border-t border-white/10 md:border-l md:border-t-0' : ''}`}
+            >
+              {/* Fondo con el color de la compañía */}
+              <div
+                className="absolute inset-0 transition-opacity duration-300"
+                style={{ background: `radial-gradient(120% 90% at 50% 115%, ${c.color}66, transparent 62%), linear-gradient(165deg, #131f38 0%, #0d1526 70%)` }}
+              />
+              {/* Paquetes y camiones decorativos */}
+              {DECOR.map((d, i) => {
+                const DIcon = d.I
+                return (
+                  <DIcon
+                    key={i}
+                    strokeWidth={1.2}
+                    className="pointer-events-none absolute text-white transition-transform duration-500 group-hover:scale-110"
+                    style={{ left: d.l, top: d.t, width: d.s, height: d.s, opacity: 0.06, transform: `rotate(${d.r}deg)` }}
+                  />
+                )
+              })}
+              {/* Contenido */}
+              <div className="relative z-10 flex flex-col items-center gap-4 md:gap-5">
+                <span
+                  className="grid h-20 w-20 place-items-center rounded-3xl text-white shadow-2xl ring-1 ring-white/20 transition-transform duration-300 group-hover:scale-110 md:h-24 md:w-24"
+                  style={{ background: c.color }}
+                >
+                  <Icon size={40} strokeWidth={1.8} />
+                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl font-black tracking-tight md:text-6xl">{c.nombre}</span>
+                  {!c.listo && <span className="rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">{t('En preparación')}</span>}
+                </div>
+                <p className="max-w-sm text-sm leading-relaxed text-white/60 md:text-base">{t(c.descripcion)}</p>
+                <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-[#0d1526] shadow-lg transition-all duration-300 group-hover:gap-3.5 group-hover:shadow-xl">
+                  {t('Entrar')} <ArrowRight size={17} strokeWidth={2.2} />
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      <p className="px-6 py-4 text-center text-[11px] text-white/35">{t('Podrás cambiar de compañía en cualquier momento desde el menú.')}</p>
     </div>
   )
 }

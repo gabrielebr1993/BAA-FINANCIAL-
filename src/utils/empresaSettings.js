@@ -4,9 +4,13 @@ import { db } from '../firebase'
 
 // Ciudades propias de la empresa: [{ nombre, codigo }].
 // Se incluye companyId para cumplir las reglas de seguridad de Firestore.
-export async function guardarCiudadesEmpresa(cid, ciudades) {
+// Multi-Company: cada carrier tiene SU catálogo de ciudades (las de SpeedX no
+// son las de Gofo). Gofo usa el campo histórico `ciudades` (sin migraciones);
+// los demás carriers guardan en `ciudades_<carrier>` del mismo doc de settings.
+export async function guardarCiudadesEmpresa(cid, ciudades, carrier = 'gofo') {
   if (!cid) return
-  await setDoc(doc(db, 'settings', cid), { companyId: cid, ciudades: ciudades || [], actualizadoEn: serverTimestamp() }, { merge: true })
+  const campo = !carrier || carrier === 'gofo' ? 'ciudades' : `ciudades_${carrier}`
+  await setDoc(doc(db, 'settings', cid), { companyId: cid, [campo]: ciudades || [], actualizadoEn: serverTimestamp() }, { merge: true })
 }
 
 // Marca el onboarding como completado (o lo reabre).

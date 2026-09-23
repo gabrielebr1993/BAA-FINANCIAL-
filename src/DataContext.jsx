@@ -44,6 +44,12 @@ export function DataProvider({ children }) {
   const managersCarrier = useMemo(() => managers.filter((x) => carrierDe(x) === carrierActivo), [managers, carrierActivo])
   const claimsCarrier = useMemo(() => claims.filter((x) => carrierDe(x) === carrierActivo), [claims, carrierActivo])
   const [ajustes, setAjustes] = useState(null) // settings/{companyId}: ciudades, onboardingCompleto, marca…
+  // Catálogo de ciudades del CARRIER activo: cada compañía tiene SUS ciudades
+  // (las de SpeedX no son las de Gofo). Gofo usa el campo histórico `ciudades`;
+  // los demás carriers, `ciudades_<carrier>` en el mismo doc de settings.
+  const ciudadesEmpresaCarrier = useMemo(() => (
+    carrierActivo === 'gofo' ? (ajustes?.ciudades || []) : (ajustes?.[`ciudades_${carrierActivo}`] || [])
+  ), [ajustes, carrierActivo])
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   // Ciudad y rango PERSISTIDOS: al recargar se mantiene lo que tenías elegido.
   const [selectedCity, setSelectedCity] = useState(() => {
@@ -364,9 +370,9 @@ export function DataProvider({ children }) {
   const autoCiudadHecha = useRef(false)
   useEffect(() => {
     if (autoCiudadHecha.current || ciudadBloqueada) return
-    const cities = (ajustes?.ciudades || []).filter((c) => c.codigo)
+    const cities = ciudadesEmpresaCarrier.filter((c) => c.codigo)
     if (cities.length === 1 && selectedCity === TODAS) { autoCiudadHecha.current = true; setSelectedCity(cities[0].codigo) }
-  }, [ajustes, ciudadBloqueada, selectedCity])
+  }, [ciudadesEmpresaCarrier, ciudadBloqueada, selectedCity])
 
   // CADA EMPRESA TIENE SUS CIUDADES. Si la ciudad seleccionada (se persiste por
   // usuario) no pertenece a la empresa activa, se vuelve a "Todas" para no arrastrar
@@ -376,11 +382,11 @@ export function DataProvider({ children }) {
     if (empresaCiudadRef.current !== activeCompanyId) { empresaCiudadRef.current = activeCompanyId; autoCiudadHecha.current = false }
     if (ciudadBloqueada || selectedCity === TODAS) return
     const disponibles = new Set([
-      ...((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean)),
+      ...(ciudadesEmpresaCarrier.map((c) => c.codigo).filter(Boolean)),
       ...invoicesCarrier.flatMap((i) => (i.resumenCiudades || []).map((c) => c.ubicacion)),
     ])
     if (disponibles.size > 0 && !disponibles.has(selectedCity)) setSelectedCity(TODAS)
-  }, [activeCompanyId, ajustes, invoicesCarrier, selectedCity, ciudadBloqueada])
+  }, [activeCompanyId, ciudadesEmpresaCarrier, invoicesCarrier, selectedCity, ciudadBloqueada])
 
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
@@ -459,7 +465,7 @@ export function DataProvider({ children }) {
   // acotada a las del usuario si está bloqueado. Base para el multiselector.
   const ciudadesDisponibles = useMemo(() => {
     const set = new Set([
-      ...((ajustes?.ciudades || []).map((c) => c.codigo).filter(Boolean)),
+      ...(ciudadesEmpresaCarrier.map((c) => c.codigo).filter(Boolean)),
       ...invoicesVisibles.flatMap((i) => [...(i.resumenCiudades || []).map((c) => c.ubicacion), i.ciudad]).filter(Boolean),
     ])
     let arr = [...set]
@@ -468,7 +474,7 @@ export function DataProvider({ children }) {
       arr = arr.filter((c) => permit.has(c))
     }
     return arr
-  }, [ajustes, invoicesVisibles, ciudadBloqueada, ciudadesUsuarioKey])
+  }, [ciudadesEmpresaCarrier, invoicesVisibles, ciudadBloqueada, ciudadesUsuarioKey])
 
   // Conjunto de ciudades EN VISTA ahora mismo (para filtrar managers/gastos fijos):
   //  - subconjunto → las elegidas; una ciudad → [esa]; Todas → todas las disponibles.
@@ -520,7 +526,7 @@ export function DataProvider({ children }) {
     claims: claimsFiltrados,
     ajustesPorChofer,
     ajustes,
-    ciudadesEmpresa: (ajustes?.ciudades || []),
+    ciudadesEmpresa: ciudadesEmpresaCarrier,
     reloadAjustes: () => cargarAjustes(activeCompanyId),
     selectedInvoice,
     selectedInvoiceId,
