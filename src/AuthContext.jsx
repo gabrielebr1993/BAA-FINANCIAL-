@@ -7,8 +7,12 @@ const AuthContext = createContext()
 export const useAuth = () => useContext(AuthContext)
 
 // Correos con acceso de súper-admin (bootstrap), configurables por variable de
-// entorno VITE_SUPERADMIN_EMAILS (separados por coma). Evita hardcodear correos.
-const SUPERADMIN_EMAILS = (import.meta.env.VITE_SUPERADMIN_EMAILS || '')
+// entorno VITE_SUPERADMIN_EMAILS (separados por coma). Si la variable no está
+// definida, el DUEÑO queda como respaldo — el MISMO correo que las reglas de
+// Firestore ya tratan como súper (isSuper en firestore.rules): así el selector
+// de "Empresa activa" y las funciones de súper-admin nunca dependen de un
+// flag suelto en la ficha ni de configurar la variable en Vercel.
+const SUPERADMIN_EMAILS = (import.meta.env.VITE_SUPERADMIN_EMAILS || 'gabriele.brandonisio.o@gmail.com')
   .split(',')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean)
