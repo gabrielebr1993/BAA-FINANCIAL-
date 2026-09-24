@@ -17,7 +17,7 @@ import RegistroChoferes from '../components/RegistroChoferes'
 import { useLang } from '../i18n'
 import { useCarrier } from '../carriers/CarrierContext'
 
-const vacio = { nombre: '', precioIndividual: '', precioDoble: '', precioStopAdicional: '', activo: true }
+const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
@@ -172,8 +172,7 @@ export default function Choferes() {
     if (!w) return null
     const ind = Number(borradores[d.id]?.ind ?? d.precioIndividual) || 0
     const dob = Number(borradores[d.id]?.dob ?? d.precioDoble) || 0
-    // SpeedX: los stops adicionales también se pagan (tarifa fija = ind).
-    return w.individuales * ind + w.dobles * dob + (esSpeedx ? (w.stopAdicionales || 0) * ind : 0) - (w.descuentoClaims || 0)
+    return w.individuales * ind + w.dobles * dob - (w.descuentoClaims || 0)
   }
   const totalNomina = filtrados.reduce((a, d) => a + (totalRow(d) || 0), 0)
 
@@ -212,16 +211,14 @@ export default function Choferes() {
     setGuardandoAlta(true)
     setError('')
     try {
-      // SpeedX: tarifa FIJA por paquete → el mismo valor en los 3 campos de precio.
-      const rateFijo = Number(form.precioIndividual) || 0
       await addDoc(collection(db, 'drivers'), {
         nombre: form.nombre.trim(),
-        precioIndividual: rateFijo,
-        precioDoble: esSpeedx ? rateFijo : Number(form.precioDoble) || 0,
+        precioIndividual: Number(form.precioIndividual) || 0,
+        precioDoble: Number(form.precioDoble) || 0,
         activo: !!form.activo,
         companyId: activeCompanyId,
         // Multi-Company: el chofer nace en la compañía activa (sin campo = Gofo).
-        ...(esSpeedx ? { carrier: 'speedx', precioStopAdicional: rateFijo } : {}),
+        ...(esSpeedx ? { carrier: 'speedx' } : {}),
       })
       await reloadDrivers()
       setForm(vacio)
@@ -239,16 +236,6 @@ export default function Choferes() {
     const dob = Number(borradores[d.id]?.dob)
     if (isNaN(ind) || isNaN(dob) || ind < 0 || dob < 0) return
     if (ind === Number(d.precioIndividual) && dob === Number(d.precioDoble)) return
-    // SpeedX: tarifa FIJA por paquete → los 3 campos siempre iguales (manda el
-    // valor que el usuario acaba de cambiar).
-    if (esSpeedx) {
-      const rate = ind !== Number(d.precioIndividual) ? ind : dob
-      await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: rate, precioDoble: rate, precioStopAdicional: rate })
-      await reloadDrivers()
-      setGuardadoId(d.id)
-      setTimeout(() => setGuardadoId((g) => (g === d.id ? null : g)), 1800)
-      return
-    }
     await updateDoc(doc(db, 'drivers', d.id), { precioIndividual: ind, precioDoble: dob })
     await reloadDrivers()
     setGuardadoId(d.id)
@@ -293,8 +280,6 @@ export default function Choferes() {
         const p = {}
         if (bulkTarifa.ind !== '') p.precioIndividual = ind
         if (bulkTarifa.dob !== '') p.precioDoble = dob
-        // SpeedX: tarifa fija → los 3 campos iguales (manda la que se llenó).
-        if (esSpeedx) { const r = bulkTarifa.ind !== '' ? ind : dob; p.precioIndividual = r; p.precioDoble = r; p.precioStopAdicional = r }
         batch.update(doc(db, 'drivers', d.id), p)
       }),
     })
@@ -310,7 +295,7 @@ export default function Choferes() {
     }
     setConfirm({
       texto: `${t('Ajustar tarifas')} ${bulkAjuste.op === 'restar' ? '−' : '+'}${v}${bulkAjuste.modo === 'pct' ? '%' : ' $'} ${t('a')} ${idsSel().length} ${t('chofer(es).')}`,
-      accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { precioIndividual: ajustar(Number(d.precioIndividual) || 0), precioDoble: ajustar(Number(d.precioDoble) || 0), ...(esSpeedx ? { precioStopAdicional: ajustar(Number(d.precioIndividual) || 0) } : {}) })),
+      accion: () => aplicarBatch((batch, d) => batch.update(doc(db, 'drivers', d.id), { precioIndividual: ajustar(Number(d.precioIndividual) || 0), precioDoble: ajustar(Number(d.precioDoble) || 0) })),
     })
   }
 
@@ -366,12 +351,9 @@ export default function Choferes() {
     if (Number(modalForm.precioIndividual) < 0 || Number(modalForm.precioDoble) < 0) return setError(t('Las tarifas no pueden ser negativas.'))
     setGuardandoModal(true)
     try {
-      // SpeedX: tarifa FIJA por paquete → mismo valor en los 3 campos de precio.
-      const rateFijoM = Number(modalForm.precioIndividual) || 0
       await updateDoc(doc(db, 'drivers', modal.id), {
-        precioIndividual: rateFijoM,
-        precioDoble: esSpeedx ? rateFijoM : Number(modalForm.precioDoble) || 0,
-        ...(esSpeedx ? { precioStopAdicional: rateFijoM } : {}),
+        precioIndividual: Number(modalForm.precioIndividual) || 0,
+        precioDoble: Number(modalForm.precioDoble) || 0,
         activo: !!modalForm.activo,
         notas: modalForm.notas,
         notasEditadoEn: serverTimestamp(),
@@ -426,9 +408,8 @@ export default function Choferes() {
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Agregar chofer')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <Campo label={t('Nombre (= Courier del Excel)')}><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
-          {/* SpeedX: UNA tarifa fija por paquete. Gofo: individual + doble, como siempre. */}
-          <Campo label={esSpeedx ? t('Rate por paquete ($) — lo que le pagas') : t('Rate individual ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-          {!esSpeedx && <Campo label={t('Rate doble ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>}
+          <Campo label={t('Rate individual ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+          <Campo label={t('Rate doble ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
         </div>
       </Card>
@@ -592,8 +573,8 @@ export default function Choferes() {
               <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">{modalForm.nombre}</div>
             </div>
             <div className="mb-3 flex flex-wrap gap-3">
-              <Campo label={esSpeedx ? t('Rate por paquete ($)') : t('Rate individual ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
-              {!esSpeedx && <Campo label={t('Rate doble ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>}
+              <Campo label={t('Rate individual ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
+              <Campo label={t('Rate doble ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioDoble} onChange={(e) => setModalForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
               <Campo label={t('Activo')}>
                 <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={modalForm.activo} onChange={(e) => setModalForm((f) => ({ ...f, activo: e.target.checked }))} /> {modalForm.activo ? t('Sí') : t('No')}</label>
               </Campo>

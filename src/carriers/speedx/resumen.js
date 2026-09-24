@@ -3,12 +3,15 @@
 // el resumen de Gofo (construirResumen de utils/excel), para que Dashboard,
 // Financiero, Pagos, Performance, Rutas, perfiles, etc. funcionen SIN CAMBIOS.
 //
-// Diferencias de SpeedX (aditivas, no rompen nada):
-//   · individuales = paquetes <1 lb (primera entrega de la parada)
-//   · dobles       = paquetes ≥1 lb (primera entrega de la parada)
-//   · stopAdicionales = paquetes ADICIONALES de una misma parada (tarifa stop)
-//   · temu         = marcador informativo (no cambia tarifas)
-// En Gofo esos campos extra no existen y todo suma 0 (compatibilidad total).
+// Clasificación (MISMO concepto que Gofo, confirmado por el dueño):
+//   · individuales = primer paquete de cada parada (entrega normal)
+//   · dobles       = paquete ADICIONAL de la misma parada (SpeedX lo paga a
+//                    la tarifa de stop, ~$0.45; en la factura viene con el
+//                    ajuste "Pay per stop adj." negativo)
+//   · menor1Lb / mayor1Lb = conteo POR PESO (informativo: es como FACTURA
+//     SpeedX y como reporta su "Driver Summary"; no cambia el pago del chofer)
+//   · temu = marcador informativo (no cambia tarifas)
+// En Gofo los campos extra no existen y todo suma 0 (compatibilidad total).
 // ============================================================================
 import { nombreCiudad } from '../../constants'
 
@@ -26,45 +29,46 @@ export function construirResumenSpeedX(p, nombreMap = null) {
   let totalPaquetes = 0
   let totalIndividuales = 0
   let totalDobles = 0
-  let totalStopAdicionales = 0
+  let totalMenor1Lb = 0
+  let totalMayor1Lb = 0
   let totalTemu = 0
   let ingresoTotal = 0
 
   for (const d of p.detalles) {
-    // Clasificación de pago: stop adicional > peso. TEMU es solo marcador.
-    const tipo = d.esStopAdicional ? 'stop' : d.esMenor1Lb ? 'ind' : 'dob'
+    // DOBLE = paquete adicional de la misma parada (ajuste de stop negativo).
+    const esDoble = d.esStopAdicional
     totalPaquetes += 1
     ingresoTotal += d.monto
-    if (tipo === 'ind') totalIndividuales += 1
-    else if (tipo === 'dob') totalDobles += 1
-    else totalStopAdicionales += 1
+    if (esDoble) totalDobles += 1
+    else totalIndividuales += 1
+    if (d.esMenor1Lb) totalMenor1Lb += 1
+    else totalMayor1Lb += 1
     if (d.temu) totalTemu += 1
 
     const ck = `${d.courier}||${d.ciudad}`
-    if (!porChofer[ck]) porChofer[ck] = { nombre: d.courier, ciudad: d.ciudad, individuales: 0, dobles: 0, stopAdicionales: 0, temu: 0, ingreso: 0, numClaims: 0 }
+    if (!porChofer[ck]) porChofer[ck] = { nombre: d.courier, ciudad: d.ciudad, individuales: 0, dobles: 0, menor1Lb: 0, mayor1Lb: 0, temu: 0, ingreso: 0, numClaims: 0 }
     const c = porChofer[ck]
     c.ingreso += d.monto
-    if (tipo === 'ind') c.individuales += 1
-    else if (tipo === 'dob') c.dobles += 1
-    else c.stopAdicionales += 1
+    if (esDoble) c.dobles += 1
+    else c.individuales += 1
+    if (d.esMenor1Lb) c.menor1Lb += 1
+    else c.mayor1Lb += 1
     if (d.temu) c.temu += 1
 
     const crk = `${d.courier}||${d.ruta}`
-    if (!porChoferRuta[crk]) porChoferRuta[crk] = { nombre: d.courier, ruta: d.ruta, ciudad: d.ciudad, individuales: 0, dobles: 0, stopAdicionales: 0, ingreso: 0 }
+    if (!porChoferRuta[crk]) porChoferRuta[crk] = { nombre: d.courier, ruta: d.ruta, ciudad: d.ciudad, individuales: 0, dobles: 0, ingreso: 0 }
     const cr = porChoferRuta[crk]
     cr.ingreso += d.monto
-    if (tipo === 'ind') cr.individuales += 1
-    else if (tipo === 'dob') cr.dobles += 1
-    else cr.stopAdicionales += 1
+    if (esDoble) cr.dobles += 1
+    else cr.individuales += 1
 
-    if (!porRuta[d.ruta]) porRuta[d.ruta] = { ruta: d.ruta, ciudad: d.ciudad, paquetes: 0, individuales: 0, dobles: 0, stopAdicionales: 0, ingreso: 0, pesoTotalLb: 0 }
+    if (!porRuta[d.ruta]) porRuta[d.ruta] = { ruta: d.ruta, ciudad: d.ciudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, pesoTotalLb: 0 }
     const r = porRuta[d.ruta]
     r.paquetes += 1
     r.ingreso += d.monto
     r.pesoTotalLb += d.peso || 0
-    if (tipo === 'ind') r.individuales += 1
-    else if (tipo === 'dob') r.dobles += 1
-    else r.stopAdicionales += 1
+    if (esDoble) r.dobles += 1
+    else r.individuales += 1
 
     if (!porCiudad[d.ciudad]) porCiudad[d.ciudad] = { ubicacion: d.ciudad, paquetes: 0, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, _choferes: new Set(), _rutas: new Set() }
     const ci = porCiudad[d.ciudad]
@@ -72,8 +76,8 @@ export function construirResumenSpeedX(p, nombreMap = null) {
     ci.ingreso += d.monto
     ci._choferes.add(d.courier)
     ci._rutas.add(d.ruta)
-    if (tipo === 'dob') ci.dobles += 1
-    else ci.individuales += 1 // en la vista por ciudad los stops cuentan como paquete sencillo
+    if (esDoble) ci.dobles += 1
+    else ci.individuales += 1
   }
 
   // Claims por chofer / ciudad (los claims de SpeedX vienen con courier + ciudad).
@@ -87,18 +91,28 @@ export function construirResumenSpeedX(p, nombreMap = null) {
     if (porCiudad[c.ciudad]) porCiudad[c.ciudad].numClaims += 1
   }
 
-  // VERIFICACIÓN chofer a chofer contra el "Driver Summary" de SpeedX: si la
-  // compensación calculada del detalle no coincide con la del resumen oficial,
-  // se avisa (no se bloquea: la fuente de verdad es el PLD que SpeedX facturó).
+  // VERIFICACIÓN chofer a chofer contra el "Driver Summary" de SpeedX:
+  // compensación total Y conteos por peso (SpeedX reporta <1/≥1 lb con los
+  // stops incluidos en su rango). Si algo no coincide, se avisa (no bloquea:
+  // la fuente de verdad es el PLD que SpeedX facturó).
   const avisos = []
   const norm = (n) => (n || '').trim().toLowerCase()
-  const compCalc = {}
-  for (const c of Object.values(porChofer)) compCalc[norm(c.nombre)] = r2((compCalc[norm(c.nombre)] || 0) + c.ingreso)
+  const acum = {}
+  for (const c of Object.values(porChofer)) {
+    const k = norm(c.nombre)
+    acum[k] = acum[k] || { ingreso: 0, men1: 0, may1: 0 }
+    acum[k].ingreso = r2(acum[k].ingreso + c.ingreso)
+    acum[k].men1 += c.menor1Lb
+    acum[k].may1 += c.mayor1Lb
+  }
   for (const ds of p.driverSummary || []) {
-    const calc = compCalc[norm(ds.courier)]
-    if (calc === undefined) { avisos.push(`El chofer "${ds.courier}" aparece en el Driver Summary pero no en el detalle PLD.`); continue }
-    if (Math.abs(calc - r2(ds.compensacionCarrier)) >= 0.01) {
-      avisos.push(`Compensación de "${ds.courier}" no cuadra con el Driver Summary: detalle $${calc.toFixed(2)} vs resumen $${r2(ds.compensacionCarrier).toFixed(2)}.`)
+    const a = acum[norm(ds.courier)]
+    if (!a) { avisos.push(`El chofer "${ds.courier}" aparece en el Driver Summary pero no en el detalle PLD.`); continue }
+    if (Math.abs(a.ingreso - r2(ds.compensacionCarrier)) >= 0.01) {
+      avisos.push(`Compensación de "${ds.courier}" no cuadra con el Driver Summary: detalle $${a.ingreso.toFixed(2)} vs resumen $${r2(ds.compensacionCarrier).toFixed(2)}.`)
+    }
+    if ((Number.isFinite(ds.menor1) && a.men1 !== ds.menor1) || (Number.isFinite(ds.mayor1) && a.may1 !== ds.mayor1)) {
+      avisos.push(`Conteo por peso de "${ds.courier}" no cuadra con el Driver Summary: <1 lb ${a.men1} vs ${ds.menor1} · ≥1 lb ${a.may1} vs ${ds.mayor1}.`)
     }
   }
 
@@ -155,7 +169,8 @@ export function construirResumenSpeedX(p, nombreMap = null) {
     totalPaquetes,
     totalIndividuales,
     totalDobles,
-    totalStopAdicionales,
+    totalMenor1Lb,
+    totalMayor1Lb,
     totalTemu,
     ingresoTotal: r2(ingresoTotal),
     numChoferes: new Set(p.detalles.map((d) => d.courier)).size,

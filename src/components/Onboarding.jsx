@@ -28,7 +28,7 @@ export default function Onboarding() {
     ...(conCiudades ? [{ hecho: paso1, icon: MapPin, titulo: t('Agrega tus ciudades'), desc: t('Registra las ciudades donde operas (ej. Dallas · DFW01).'), boton: t('Agregar ciudades'), ir: () => navigate('/configuracion') }] : []),
     conCiudades
       ? { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura'), desc: t('Sube el Excel de Gofo. En la pantalla previa configuras tus choferes y tarifas.'), boton: t('Cargar factura'), ir: () => navigate('/facturas'), bloqueado: !paso1 }
-      : { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura de SpeedX'), desc: t('Sube el Excel semanal de SpeedX. La ciudad y los choferes se crean solos con la factura; tú solo pones la tarifa por paquete de cada chofer.'), boton: t('Cargar factura'), ir: () => navigate('/facturas') },
+      : { hecho: paso2, icon: Upload, titulo: t('Carga tu primera factura de SpeedX'), desc: t('Sube el Excel semanal de SpeedX. La ciudad y los choferes se crean solos con la factura; tú solo pones las tarifas (individual y doble) de cada chofer.'), boton: t('Cargar factura'), ir: () => navigate('/facturas') },
     { hecho: listos, icon: LayoutDashboard, titulo: t('Revisa tu dashboard'), desc: conCiudades ? t('Cuando tengas una factura, verás tus métricas y verificación con Gofo.') : t('Cuando tengas una factura, verás tus métricas y el cuadre con SpeedX.'), boton: t('Ir al dashboard'), ir: finalizar, bloqueado: !listos },
   ]
   const completados = pasos.filter((p) => p.hecho).length

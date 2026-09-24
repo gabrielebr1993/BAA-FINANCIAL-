@@ -61,7 +61,7 @@ export const CARRIERS = {
       construirResumen: construirResumenSpeedX,
     },
     // Etiquetas para las pantallas compartidas (mismos campos, otro significado).
-    etiquetas: { individuales: '<1 lb', dobles: '≥1 lb', stopAdicional: 'Stop adicional' },
+    etiquetas: { individuales: 'Individual (1º de la parada)', dobles: 'Doble (adicional de la parada)' },
     // Fondo: la semana se cobra 14 días (2 semanas exactas) después de su fecha
     // fin (ejemplo real del dueño: semana 28 ago–4 sep → se cobra el 18 sep).
     // La fecha queda editable por factura en «Cobros y fondo».

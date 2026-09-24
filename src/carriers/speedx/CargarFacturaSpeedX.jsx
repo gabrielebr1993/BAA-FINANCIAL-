@@ -60,8 +60,8 @@ export default function CargarFacturaSpeedX() {
   const [proc, setProc] = useState(null) // { ...parser, resumen }
   const [errores, setErrores] = useState([])
   const [avisos, setAvisos] = useState([])
-  const [tarifas, setTarifas] = useState({}) // key → { rate } (tarifa FIJA por paquete)
-  const [bulk, setBulk] = useState({ rate: '' })
+  const [tarifas, setTarifas] = useState({}) // key → { ind, dob } (individual · doble/stop)
+  const [bulk, setBulk] = useState({ ind: '', dob: '' })
   const [fechaCobro, setFechaCobro] = useState('') // ISO editable (fondo)
   const [confirmarDuplicado, setConfirmarDuplicado] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -99,13 +99,16 @@ export default function CargarFacturaSpeedX() {
       const resumen = construirResumenSpeedX(p)
       setProc({ ...p, resumen })
       setAvisos([...(p.avisos || []), ...(resumen.avisos || [])])
-      // Tarifas: precargar la del perfil de cada chofer. En SpeedX es UNA sola
-      // tarifa fija por paquete (se guarda en los 3 campos de precio del perfil
-      // con el mismo valor, para reutilizar el motor de pagos sin cambios).
+      // Tarifas: precargar las del perfil de cada chofer. MISMOS campos que
+      // Gofo: individual = primer paquete de la parada · doble = paquete
+      // adicional de la misma parada (si pagas igual, escribe el mismo número).
       const tf = {}
       for (const ch of resumen.resumenChoferes) {
         const d = buscarDriver(drivers, ch.nombre)
-        tf[keyDe(ch.nombre)] = { rate: d && Number(d.precioIndividual) > 0 ? String(d.precioIndividual) : '' }
+        tf[keyDe(ch.nombre)] = {
+          ind: d && Number(d.precioIndividual) > 0 ? String(d.precioIndividual) : '',
+          dob: d && Number(d.precioDoble) > 0 ? String(d.precioDoble) : '',
+        }
       }
       setTarifas(tf)
       // Fondo: fecha esperada de cobro = fin de semana + días de fondo (editable).
@@ -133,10 +136,16 @@ export default function CargarFacturaSpeedX() {
   // ── 2) Tarifas y estimación de pago ──────────────────────────────────────
   const setTarifa = (nombre, campo, valor) => setTarifas((tf) => ({ ...tf, [keyDe(nombre)]: { ...tf[keyDe(nombre)], [campo]: valor } }))
   const aplicarBulk = () => {
-    if (!proc || bulk.rate === '') return
+    if (!proc) return
     setTarifas((tf) => {
       const nx = { ...tf }
-      for (const ch of proc.resumen.resumenChoferes) nx[keyDe(ch.nombre)] = { rate: bulk.rate }
+      for (const ch of proc.resumen.resumenChoferes) {
+        const k = keyDe(ch.nombre)
+        nx[k] = {
+          ind: bulk.ind !== '' ? bulk.ind : nx[k]?.ind || '',
+          dob: bulk.dob !== '' ? bulk.dob : nx[k]?.dob || '',
+        }
+      }
       return nx
     })
   }
@@ -152,13 +161,15 @@ export default function CargarFacturaSpeedX() {
     if (!proc) return []
     return proc.resumen.resumenChoferes.map((ch) => {
       const k = keyDe(ch.nombre)
-      // Tarifa FIJA por paquete: todos los paquetes del chofer valen lo mismo.
-      const rate = Number(tarifas[k]?.rate) || 0
-      const paquetes = ch.individuales + ch.dobles + ch.stopAdicionales
-      const pago = paquetes * rate
+      // individual = primer paquete de la parada · doble = paquete adicional
+      // de la misma parada. El peso NO cambia lo que le pagas al chofer.
+      const tInd = Number(tarifas[k]?.ind) || 0
+      const tDob = Number(tarifas[k]?.dob) || 0
+      const paquetes = ch.individuales + ch.dobles
+      const pago = ch.individuales * tInd + ch.dobles * tDob
       const claims = claimsPorChofer[k] || 0
       const existente = buscarDriver(drivers, ch.nombre)
-      return { ...ch, _key: k, rate, paquetes, pago: r2(pago), claimsMonto: r2(claims), total: r2(pago - claims), nuevo: !existente, listo: rate > 0 }
+      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), total: r2(pago - claims), nuevo: !existente, listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.ingreso - a.ingreso)
   }, [proc, tarifas, claimsPorChofer, drivers])
 
@@ -174,7 +185,7 @@ export default function CargarFacturaSpeedX() {
     if (!activeCompanyId) return t('No hay una empresa activa.')
     if (!semana) return t('No se pudo detectar la semana de la factura (columna NOTE).')
     if (duplicada && !confirmarDuplicado) return t('Esta semana ya fue importada en SpeedX (candado anti-duplicados).')
-    if (choferesSinTarifa.length) return `${t('Faltan')} ${choferesSinTarifa.length} ${t('chofer(es) con su tarifa por paquete (> 0)')}: ${choferesSinTarifa.slice(0, 4).map((f) => f.nombre).join(', ')}${choferesSinTarifa.length > 4 ? '…' : ''}.`
+    if (choferesSinTarifa.length) return `${t('Faltan')} ${choferesSinTarifa.length} ${t('chofer(es) con tarifa (individual y doble > 0)')}: ${choferesSinTarifa.slice(0, 4).map((f) => f.nombre).join(', ')}${choferesSinTarifa.length > 4 ? '…' : ''}.`
     return null
   })()
 
@@ -187,23 +198,21 @@ export default function CargarFacturaSpeedX() {
       const { resumen } = proc
 
       // a) Choferes: crear los nuevos (con carrier) y actualizar tarifas de los
-      // existentes. La tarifa de SpeedX es FIJA por paquete: se guarda el MISMO
-      // valor en los 3 campos de precio (individual/doble/stop) para que el
-      // motor de pagos de siempre dé paquetes × tarifa sin cambios.
+      // existentes. MISMOS campos que Gofo: precioIndividual (primer paquete
+      // de la parada) y precioDoble (paquete adicional de la misma parada).
       const nuevosPayload = []
       const updates = {}
       for (const f of filas) {
         const d = buscarDriver(drivers, f.nombre)
         if (d) {
-          if (Number(d.precioIndividual) !== f.rate || Number(d.precioDoble) !== f.rate || (Number(d.precioStopAdicional) || 0) !== f.rate || d.activo === false) {
-            updates[d.id] = { precioIndividual: f.rate, precioDoble: f.rate, precioStopAdicional: f.rate, activo: true }
+          if (Number(d.precioIndividual) !== f.tInd || Number(d.precioDoble) !== f.tDob || d.activo === false) {
+            updates[d.id] = { precioIndividual: f.tInd, precioDoble: f.tDob, activo: true }
           }
         } else {
           nuevosPayload.push({
             nombre: f.nombre,
-            precioIndividual: f.rate,
-            precioDoble: f.rate,
-            precioStopAdicional: f.rate,
+            precioIndividual: f.tInd,
+            precioDoble: f.tDob,
             activo: true,
             companyId: activeCompanyId,
             carrier: 'speedx',
@@ -361,11 +370,11 @@ export default function CargarFacturaSpeedX() {
       // (calcularPagos ya suma stops × tarifaStop) + calificación vs. la flota.
       const driversFinal = drivers.map((d) => {
         const f = filas.find((x) => keyDe(x.nombre) === keyDe(d.nombre))
-        return f ? { ...d, precioIndividual: f.rate, precioDoble: f.rate, precioStopAdicional: f.rate } : d
+        return f ? { ...d, precioIndividual: f.tInd, precioDoble: f.tDob } : d
       })
       for (const f of filas) {
         if (!buscarDriver(driversFinal, f.nombre)) {
-          driversFinal.push({ id: `nuevo_${f._key}`, nombre: f.nombre, precioIndividual: f.rate, precioDoble: f.rate, precioStopAdicional: f.rate, activo: true })
+          driversFinal.push({ id: `nuevo_${f._key}`, nombre: f.nombre, precioIndividual: f.tInd, precioDoble: f.tDob, activo: true })
         }
       }
       const claimsCalc = claimDocsEmbed.map((c) => ({ ...c }))
@@ -373,14 +382,14 @@ export default function CargarFacturaSpeedX() {
       const pagosFinal = calcularPagos(invCalc, claimsCalc, driversFinal, TODAS)
       const prom = promediosFlota(pagosFinal)
       const fechaInicioISO = periodoIni ? periodoIni.toISOString() : ''
-      const stopsPorChofer = {}
-      for (const ch of resumen.resumenChoferes) stopsPorChofer[keyDe(ch.nombre)] = { stops: ch.stopAdicionales || 0, temu: ch.temu || 0 }
+      const infoPorChofer = {}
+      for (const ch of resumen.resumenChoferes) infoPorChofer[keyDe(ch.nombre)] = { men1: ch.menor1Lb || 0, may1: ch.mayor1Lb || 0, temu: ch.temu || 0 }
       for (let i = 0; i < pagosFinal.length; i += chunk) {
         const batch = writeBatch(db)
         for (const p of pagosFinal.slice(i, i + chunk)) {
           const key = keyDe(p.nombre)
-          const extra = stopsPorChofer[key] || { stops: 0, temu: 0 }
-          const paquetes = (p.individuales || 0) + (p.dobles || 0) + extra.stops
+          const extra = infoPorChofer[key] || { men1: 0, may1: 0, temu: 0 }
+          const paquetes = (p.individuales || 0) + (p.dobles || 0)
           const calif = calificarChofer({ ...p, paquetes }, prom)
           const sref = doc(db, 'driverStats', `${ref.id}__${key.replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`)
           batch.set(sref, {
@@ -394,14 +403,14 @@ export default function CargarFacturaSpeedX() {
             ciudad: p.ciudad || '',
             individuales: p.individuales,
             dobles: p.dobles,
-            stopAdicionales: extra.stops,
+            menor1Lb: extra.men1,
+            mayor1Lb: extra.may1,
             temu: extra.temu,
             paquetes,
             fallidos: 0,
             ingreso: p.ingreso,
             tarifaInd: p.tarifaInd,
             tarifaDoble: p.tarifaDoble,
-            tarifaStop: p.tarifaStop || 0,
             claimsTotales: p.claimsTotales,
             claimsActivos: p.claimsActivos,
             claimsPerdonados: p.claimsPerdonados,
@@ -483,21 +492,21 @@ export default function CargarFacturaSpeedX() {
                 <Boton variant="ghost" onClick={() => { setProc(null); setErrores([]); setAvisos([]) }}><X size={15} /> {t('Descartar')}</Boton>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
               <KPI label={t('Paquetes')} value={num(res.totalPaquetes)} icon={Package} />
-              <KPI label="<1 lb" value={num(res.totalIndividuales)} icon={Package} sub={t('primera entrega')} />
-              <KPI label="≥1 lb" value={num(res.totalDobles)} icon={Package} sub={t('primera entrega')} />
-              <KPI label={t('Stops adicionales')} value={num(res.totalStopAdicionales)} icon={Layers} sub={t('misma parada')} />
+              <KPI label={t('Individuales')} value={num(res.totalIndividuales)} icon={Package} sub={t('primer paquete de la parada')} />
+              <KPI label={t('Dobles')} value={num(res.totalDobles)} icon={Layers} sub={t('paquete extra en la misma parada')} />
               <KPI label={t('Ingreso (CONFIRM RATE)')} value={money(res.ingresoTotal)} icon={DollarSign} accent="gold" />
               <KPI label={`${t('Claims')} (${res.totalClaims})`} value={money(res.totalDescuentoGofo)} icon={AlertTriangle} accent="red" />
             </div>
-            {v?.gofo?.disponible && (
-              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
-                <span className="text-slate-500 dark:text-slate-400">{t('Total oficial de SpeedX (DSP Summary):')}</span>{' '}
-                <b className="text-brand-navy dark:text-slate-100">{money(v.gofo.totalGofo)}</b>
-                <span className="text-slate-400"> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
-              </div>
-            )}
+            <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+              <span className="text-slate-500 dark:text-slate-400">{t('Por peso (así te factura SpeedX; no cambia tu pago al chofer):')}</span>{' '}
+              <b className="text-brand-navy dark:text-slate-100">{num(res.totalMenor1Lb)}</b> <span className="text-slate-400">&lt;1 lb ·</span>{' '}
+              <b className="text-brand-navy dark:text-slate-100">{num(res.totalMayor1Lb)}</b> <span className="text-slate-400">≥1 lb · {num(res.totalTemu)} TEMU</span>
+              {v?.gofo?.disponible && (
+                <span className="text-slate-400"> | {t('Total oficial de SpeedX (DSP Summary):')} <b className="text-brand-navy dark:text-slate-100">{money(v.gofo.totalGofo)}</b> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
+              )}
+            </div>
           </Card>
 
           {/* 3) FONDO: cuándo nos paga SpeedX esta semana (editable) */}
@@ -538,23 +547,24 @@ export default function CargarFacturaSpeedX() {
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-slate-500 dark:text-slate-400">{t('Rellenar a todos:')}</span>
-                <Input type="number" step="0.01" min="0" placeholder={t('$ por paquete')} className="w-32" value={bulk.rate} onChange={(e) => setBulk({ rate: e.target.value })} />
+                <Input type="number" step="0.01" min="0" placeholder={t('Individual')} className="w-28" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
+                <Input type="number" step="0.01" min="0" placeholder={t('Doble')} className="w-28" value={bulk.dob} onChange={(e) => setBulk((b) => ({ ...b, dob: e.target.value }))} />
                 <Boton variant="ghost" onClick={aplicarBulk}>{t('Aplicar')}</Boton>
               </div>
             </div>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              {t('Lo que TÚ le pagas a cada chofer: una tarifa FIJA por paquete (todos sus paquetes valen lo mismo, sin importar peso ni stops). Lo que SpeedX TE paga a ti sale solo de la factura (columna «SpeedX te paga»). Los claims se descuentan con el método M2: al chofer se le cobra exactamente lo que SpeedX te descontó.')}
+              {t('Igual que en Gofo: INDIVIDUAL = primer paquete de cada parada · DOBLE = paquete adicional en la misma parada (SpeedX te lo paga a ~$0.45). El peso NO cambia lo que le pagas al chofer; si pagas igual el doble, escribe la misma tarifa en ambas. Los claims se descuentan con el método M2: al chofer se le cobra exactamente lo que SpeedX te descontó.')}
             </p>
             <Tabla
               minWidth="min-w-[900px]"
               columns={[
                 { key: 'nombre', label: t('Chofer') },
                 { key: 'paquetes', label: t('Paquetes'), align: 'right' },
-                { key: 'individuales', label: '<1 lb', align: 'right' },
-                { key: 'dobles', label: '≥1 lb', align: 'right' },
-                { key: 'stopAdicionales', label: t('Stops'), align: 'right' },
+                { key: 'individuales', label: t('Individuales'), align: 'right' },
+                { key: 'dobles', label: t('Dobles'), align: 'right' },
                 { key: 'ingreso', label: t('SpeedX te paga'), align: 'right' },
-                { key: 'rate', label: t('Tarifa por paquete'), align: 'center' },
+                { key: 'ind', label: t('Tarifa individual'), align: 'center' },
+                { key: 'dob', label: t('Tarifa doble'), align: 'center' },
                 { key: 'claimsMonto', label: t('Claims (M2)'), align: 'right' },
                 { key: 'total', label: t('Pago estimado'), align: 'right' },
               ]}
@@ -562,11 +572,11 @@ export default function CargarFacturaSpeedX() {
               renderCell={(row, key) => {
                 if (key === 'nombre') return <span className="font-semibold text-brand-navy dark:text-slate-100">{row.nombre} {row.nuevo && <Badge color="gold">{t('nuevo')}</Badge>}</span>
                 if (key === 'paquetes') return <b>{num(row.paquetes)}</b>
-                if (key === 'individuales' || key === 'dobles' || key === 'stopAdicionales') return num(row[key])
+                if (key === 'individuales' || key === 'dobles') return num(row[key] || 0)
                 if (key === 'ingreso') return money(row.ingreso)
-                if (key === 'rate') {
-                  const val = tarifas[row._key]?.rate ?? ''
-                  return <Input type="number" step="0.01" min="0" className={`w-24 text-right ${!(Number(val) > 0) ? 'border-rose-400' : ''}`} value={val} onChange={(e) => setTarifa(row.nombre, 'rate', e.target.value)} />
+                if (key === 'ind' || key === 'dob') {
+                  const val = tarifas[row._key]?.[key] ?? ''
+                  return <Input type="number" step="0.01" min="0" className={`w-24 text-right ${!(Number(val) > 0) ? 'border-rose-400' : ''}`} value={val} onChange={(e) => setTarifa(row.nombre, key, e.target.value)} />
                 }
                 if (key === 'claimsMonto') return row.claimsMonto ? <span className="text-rose-600 dark:text-rose-400">−{money(row.claimsMonto)}</span> : '—'
                 if (key === 'total') return <b className={row.total >= 0 ? 'text-brand-navy dark:text-slate-100' : 'text-rose-600'}>{money(row.total)}</b>
