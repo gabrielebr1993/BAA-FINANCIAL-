@@ -10,6 +10,7 @@ import { useLang } from '../i18n'
 import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, METODOS_CLAIM, METODO_CLAIM_DEFAULT } from '../constants'
 import { guardarReglasEmpresa } from '../utils/empresaSettings'
 import { Card, Boton, Input, Select, Aviso, Spinner } from './ui'
+import { conCarrier } from '../utils/carrierTexto'
 
 const CATS = CATEGORIAS_CLAIM // [{key,label}]
 
@@ -75,7 +76,7 @@ export default function ReglasCalculo() {
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
         {t('Configuración')} <b>{t('manual por ciudad')}</b>. {t('Por cada')} <b>{t('categoría de claim')}</b> {t('(se detecta sola desde la factura) eliges el')} <b>{t('método')}</b> {t('de cobro al chofer:')}
-        {' '}<b>{t('Manual')}</b> {t('= le cobras el monto que tú pones (ganancia = monto − Gofo) ·')} <b>{t('Lo que Gofo cobra')}</b> {t('= al chofer se le descuenta lo mismo que Gofo (ganancia $0) ·')} <b>{t('Perdón')}</b> {t('= no cobras, tú lo asumes (absorbes lo de Gofo).')}
+        {' '}<b>{t('Manual')}</b> {conCarrier(t('= le cobras el monto que tú pones (ganancia = monto − Gofo) ·'))} <b>{conCarrier(t('Lo que Gofo cobra'))}</b> {conCarrier(t('= al chofer se le descuenta lo mismo que Gofo (ganancia $0) ·'))} <b>{t('Perdón')}</b> {conCarrier(t('= no cobras, tú lo asumes (absorbes lo de Gofo).'))}
       </p>
       <p className="mb-3 rounded-lg bg-brand-gold/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
         <b>{t('Ojo:')}</b> {t('aquí NO se pone lo que le')} <b>{t('pagas')}</b> {t('al chofer (eso va por chofer en')} <b>{t('Choferes')}</b> {t('o al subir la factura). Cuando eliges el método')} <b>{t('Manual')}</b> {t('en una categoría, aparece un campo para poner el')} <b>{t('monto que le cobras')}</b> {t('por ese claim. El')} <b>{t('Monto doble')}</b> {t('solo sirve para')} <b>{t('detectar')}</b> {t('los dobles (no es pago). Puedes cambiar el método de un claim puntual desde su detalle en')} <b>Claims</b>.

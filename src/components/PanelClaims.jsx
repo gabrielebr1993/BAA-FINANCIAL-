@@ -9,6 +9,7 @@ import { money, num } from '../utils/format'
 import { Card } from './ui'
 import { Handshake } from 'lucide-react'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 export default function PanelClaims({ claims, inv, compacto = false }) {
   const { t } = useLang()
@@ -35,7 +36,7 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
           <span className={`font-semibold ${pm.M1.ganancia >= 0 ? '' : 'text-rose-600 dark:text-rose-400'}`}>{g(pm.M1.ganancia)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">{t('Lo que Gofo cobra')} ({num(pm.M2.n)} claim(s)) <span className="text-xs text-slate-400">{t('· se lo cobras al chofer')}</span></span>
+          <span className="text-slate-600 dark:text-slate-300">{conCarrier(t('Lo que Gofo cobra'))} ({num(pm.M2.n)} claim(s)) <span className="text-xs text-slate-400">{t('· se lo cobras al chofer')}</span></span>
           <span className="font-semibold text-slate-700 dark:text-slate-200">{money(pm.M2.gofo)}</span>
         </div>
         <div className="flex items-center justify-between">
@@ -45,7 +46,7 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
 
         {/* Lo que Gofo te descontó en total (el dinero que Gofo te cobra por claims). */}
         <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
-          <span className="text-slate-600 dark:text-slate-300">{t('Lo que Gofo te descontó (total)')}</span>
+          <span className="text-slate-600 dark:text-slate-300">{conCarrier(t('Lo que Gofo te descontó (total)'))}</span>
           <span className="font-semibold text-rose-600 dark:text-rose-400">−{money(e.descontadoGofo)}</span>
         </div>
         <div className="flex items-center justify-between">
@@ -63,7 +64,7 @@ export default function PanelClaims({ claims, inv, compacto = false }) {
 
       {!compacto && (
         <p className="mt-3 text-xs text-slate-400">
-          {t('Cada claim se cobra según el')} <b>{t('método configurado para su ciudad y tipo')}</b> {t('(M1/M2/M3). El descuento de Gofo ya está en el neto verificado; en M3 (perdón) tu único costo es el monto que Gofo te descontó por ese claim.')}
+          {t('Cada claim se cobra según el')} <b>{t('método configurado para su ciudad y tipo')}</b> {conCarrier(t('(M1/M2/M3). El descuento de Gofo ya está en el neto verificado; en M3 (perdón) tu único costo es el monto que Gofo te descontó por ese claim.'))}
         </p>
       )}
     </Card>

@@ -10,6 +10,7 @@ import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Input, Boton, Badge, Aviso, Spinner, Cargando, EstadoVacio } from '../components/ui'
 import Simulador from './Simulador'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 const RANGOS_ORD = ['0-1lb', '1-5lb', '5-10lb', '10-20lb', '20-30lb', '30-40lb', '40+lb']
 
@@ -100,14 +101,14 @@ export default function Rutas() {
   const exportarE = () =>
     exportarExcel(nombreExp, [{ nombre: 'Rutas', rows: rows.map((r) => ({
       Ruta: r.ruta, Ciudad: r.nombreCiudad, Paquetes: r.paquetes, Individuales: r.individuales, Dobles: r.dobles,
-      Ingreso: Math.round(r.ingreso), '$/paq (paga Gofo)': Number((r.precioPorPaquete || 0).toFixed(2)), '$/lb': Number((r.precioPorLb || 0).toFixed(3)),
+      Ingreso: Math.round(r.ingreso), [conCarrier('$/paq (paga Gofo)')]: Number((r.precioPorPaquete || 0).toFixed(2)), '$/lb': Number((r.precioPorLb || 0).toFixed(3)),
       'Costo choferes': Math.round(r.costoChoferes), Ganancia: Math.round(r.ganancia), 'Ganancia/paquete': Number((r.gananciaPorPaquete || 0).toFixed(2)), Claims: r.numClaims || 0,
       'Calidad (%)': r.calidad != null ? Number((r.calidad * 100).toFixed(1)) : '',
     })) }])
   const exportarP = () =>
     exportarPDF(nombreExp, 'Rutas', inv?.semana || '', [{
       titulo: `Rutas (${rows.length})`,
-      head: ['Ruta', 'Ciudad', 'Paq.', 'Ind.', 'Dobles', 'Ingreso', '$/paq Gofo', '$/lb', 'Costo chof.', 'Ganancia', 'Gan/paq', 'Claims', 'Calidad'],
+      head: ['Ruta', 'Ciudad', 'Paq.', 'Ind.', 'Dobles', 'Ingreso', conCarrier('$/paq Gofo'), '$/lb', 'Costo chof.', 'Ganancia', 'Gan/paq', 'Claims', 'Calidad'],
       body: rows.map((r) => [r.ruta, r.nombreCiudad, num(r.paquetes), num(r.individuales), num(r.dobles), money(r.ingreso), money(r.precioPorPaquete), `$${(r.precioPorLb || 0).toFixed(3)}`, money(r.costoChoferes), money(r.ganancia), money(r.gananciaPorPaquete), num(r.numClaims || 0), pct(r.calidad, 1)]),
     }])
 
@@ -117,7 +118,7 @@ export default function Rutas() {
     { k: 'individuales', label: 'Ind.' },
     { k: 'dobles', label: 'Dobles' },
     { k: 'ingreso', label: 'Ingreso' },
-    { k: 'precioPorPaquete', label: '$/paq Gofo' },
+    { k: 'precioPorPaquete', label: conCarrier('$/paq Gofo') },
     { k: 'precioPorLb', label: '$/lb' },
     { k: 'costoChoferes', label: 'Costo choferes' },
     { k: 'ganancia', label: 'Ganancia' },
@@ -191,7 +192,7 @@ export default function Rutas() {
             <div className="mb-1 flex items-center gap-2">
               <DollarSign size={18} strokeWidth={1.8} className="text-brand-gold" />
               <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Precio real por peso')}</h3>
-              <span className="ml-auto text-xs text-slate-400">{preciosPeso.rutas.length} {t('ruta(s) · lo que paga Gofo por paquete según el peso')}</span>
+              <span className="ml-auto text-xs text-slate-400">{preciosPeso.rutas.length} {conCarrier(t('ruta(s) · lo que paga Gofo por paquete según el peso'))}</span>
             </div>
             <p className="mb-3 text-xs text-slate-400">{t('Cada celda:')} <b>{t('precio por paquete')}</b> {t('(grande) y cantidad de paquetes en ese tramo de peso. Los dobles (envío al mismo domicilio) pagan $0.50 fijo.')}</p>
             <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
@@ -326,7 +327,7 @@ export default function Rutas() {
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-xs text-slate-400">{t('Ganancia = ingreso (lo que paga Gofo) − costo estimado de choferes. En rojo, rutas no rentables. Haz clic en una ruta para ver su detalle e historial.')}</p>
+            <p className="mt-2 text-xs text-slate-400">{conCarrier(t('Ganancia = ingreso (lo que paga Gofo) − costo estimado de choferes. En rojo, rutas no rentables. Haz clic en una ruta para ver su detalle e historial.'))}</p>
           </Card>
         </>
       )}

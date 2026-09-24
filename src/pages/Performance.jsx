@@ -14,6 +14,7 @@ import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 const TH = 'px-2.5 py-2.5 cursor-pointer whitespace-nowrap font-semibold'
 
@@ -109,7 +110,7 @@ export default function Performance() {
     { key: 'claimsTotales', label: t('Claims') },
     { key: 'fallidos', label: t('Fallidos') },
     { key: 'descuentoClaims', label: t('Desc. al chofer') },
-    { key: 'descontadoGofo', label: t('Descontado Gofo') },
+    { key: 'descontadoGofo', label: conCarrier(t('Descontado Gofo')) },
     { key: 'gananciaClaims', label: t('Ganancia claims') },
   ]
 
@@ -243,7 +244,7 @@ export default function Performance() {
       ) : (
         <>
           <Aviso tipo="info">
-            {t('Nota: los')} <b>{t('paquetes fallidos')}</b> {t('(“Failed delivery”) salen del reporte de fallidos y ahora')} <b>{t('cuentan en la calificación')}</b> {t('de desempeño (calidad = 70% claims + 30% fallidos) y en el ranking de ciudades.')} <b>{t('No')}</b> {t('afectan el pago ni el neto de Gofo.')}
+            {t('Nota: los')} <b>{t('paquetes fallidos')}</b> {t('(“Failed delivery”) salen del reporte de fallidos y ahora')} <b>{t('cuentan en la calificación')}</b> {t('de desempeño (calidad = 70% claims + 30% fallidos) y en el ranking de ciudades.')} <b>{t('No')}</b> {conCarrier(t('afectan el pago ni el neto de Gofo.'))}
           </Aviso>
 
           {/* ==== Indicadores (sección nueva; respeta ciudad + fechas globales) ==== */}
@@ -265,7 +266,7 @@ export default function Performance() {
               icon={Handshake} accent="green" label={t('Ganancia por claims')}
               value={money(indic.gananciaClaims)}
               valueColor={indic.gananciaClaims >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}
-              sub={t('Cobrado a choferes − descontado Gofo')}
+              sub={conCarrier(t('Cobrado a choferes − descontado Gofo'))}
               spark={serie.map((s) => s.gananciaClaims)} trend={trendDe('gananciaClaims')}
               onClick={() => navigate('/claims')}
             />
@@ -431,11 +432,11 @@ export default function Performance() {
               <div className="mt-3 flex flex-wrap items-center justify-end gap-4 text-sm">
                 <span className="text-slate-500 dark:text-slate-400">{t('Totales de claims')} ({ordenados.length} {ordenados.length === 1 ? t('chofer') : t('choferes')}):</span>
                 <span>{t('Desc. al chofer')} <b className="text-brand-navy dark:text-slate-100">{money(ordenados.reduce((a, p) => a + p.descuentoClaims, 0))}</b></span>
-                <span>{t('Descontado Gofo')} <b className="text-rose-600 dark:text-rose-400">{money(ordenados.reduce((a, p) => a + p.descontadoGofo, 0))}</b></span>
+                <span>{conCarrier(t('Descontado Gofo'))} <b className="text-rose-600 dark:text-rose-400">{money(ordenados.reduce((a, p) => a + p.descontadoGofo, 0))}</b></span>
                 <span>{t('Ganancia por claims')} <b className="text-emerald-600 dark:text-emerald-400">{money(ordenados.reduce((a, p) => a + p.gananciaClaims, 0))}</b></span>
               </div>
             )}
-            <p className="mt-2 text-xs text-slate-400">{t('“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.')}</p>
+            <p className="mt-2 text-xs text-slate-400">{conCarrier(t('“Desc. al chofer” = claims válidos no perdonados × $100. “Descontado Gofo” = lo que Gofo te quitó por esos claims. Ganancia por claims = la diferencia.'))}</p>
           </Card>
 
           <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Ranking general de choferes (calificación)')}</h2>

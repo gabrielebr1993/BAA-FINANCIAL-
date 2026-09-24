@@ -2,6 +2,7 @@
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 import { money } from '../utils/format'
 import { Card, Aviso, Badge, Tabla } from './ui'
+import { conCarrier } from '../utils/carrierTexto'
 
 // Monto con negativos en rojo suave.
 function Monto({ v, fuerte }) {
@@ -19,7 +20,7 @@ export default function Verificacion({ v, compacto }) {
       {/* --- Desglose BRUTO → NETO --- */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
-          <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">Desglose del pago de Gofo</h3>
+          <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">{conCarrier('Desglose del pago de Gofo')}</h3>
           <ul className="space-y-1.5 text-sm">
             <li className="flex items-center justify-between">
               <span className="text-slate-600 dark:text-slate-300">Entregas <Badge color="slate">bruto</Badge></span>
@@ -30,7 +31,7 @@ export default function Verificacion({ v, compacto }) {
               <Monto v={v.sumaOffset} />
             </li>
             <li className="flex items-center justify-between">
-              <span className="text-slate-600 dark:text-slate-300">Claims (Gofo)</span>
+              <span className="text-slate-600 dark:text-slate-300">{conCarrier('Claims (Gofo)')}</span>
               <Monto v={v.sumaClaims} />
             </li>
             <li className="flex items-center justify-between">
@@ -50,7 +51,7 @@ export default function Verificacion({ v, compacto }) {
             <>
               <div className="mb-2 flex items-center gap-2">
                 {v.cuadra ? <CheckCircle2 size={18} className="text-emerald-500" /> : <AlertTriangle size={18} className="text-rose-500" />}
-                {v.cuadra ? <Badge color="green">Cuadra con Gofo</Badge> : <Badge color="red">No cuadra: {money(v.diferencia)}</Badge>}
+                {v.cuadra ? <Badge color="green">{conCarrier('Cuadra con Gofo')}</Badge> : <Badge color="red">No cuadra: {money(v.diferencia)}</Badge>}
               </div>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Nuestro neto</span><span className="font-semibold">{money(v.netoCalculado)}</span></div>
@@ -71,7 +72,7 @@ export default function Verificacion({ v, compacto }) {
           columns={[
             { key: 'linea', label: 'Línea' },
             { key: 'nuestro', label: 'Nuestro cálculo', align: 'right' },
-            { key: 'gofo', label: 'Gofo (DSP Summary)', align: 'right' },
+            { key: 'gofo', label: conCarrier('Gofo (DSP Summary)'), align: 'right' },
           ]}
           rows={[
             { _key: 'e', linea: 'Entregas (bruto)', nuestro: v.sumaEntregas, gofo: null },
@@ -96,7 +97,7 @@ export default function Verificacion({ v, compacto }) {
             columns={[
               { key: 'semana', label: 'Semana' },
               { key: 'neto', label: 'Nuestro neto', align: 'right' },
-              { key: 'gofo', label: 'Gofo', align: 'right' },
+              { key: 'gofo', label: conCarrier('Gofo'), align: 'right' },
               { key: 'estado', label: 'Estado', align: 'center' },
             ]}
             rows={v.porFactura.map((f, i) => ({ _key: i, semana: f.semana, vv: f.v }))}

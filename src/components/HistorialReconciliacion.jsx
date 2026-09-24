@@ -6,6 +6,7 @@ import { money } from '../utils/format'
 import { Card, Badge } from './ui'
 import { CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 export default function HistorialReconciliacion() {
   const { t } = useLang()
@@ -32,7 +33,7 @@ export default function HistorialReconciliacion() {
   const noCuadran = filas.filter((f) => f.cuadra === false).length
 
   const Estado = ({ f }) => {
-    if (f.cuadra === null) return <span className="inline-flex items-center gap-1 text-slate-400"><MinusCircle size={15} strokeWidth={1.9} /> {t('Sin total Gofo')}</span>
+    if (f.cuadra === null) return <span className="inline-flex items-center gap-1 text-slate-400"><MinusCircle size={15} strokeWidth={1.9} /> {conCarrier(t('Sin total Gofo'))}</span>
     if (f.cuadra) return <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={15} strokeWidth={1.9} /> {t('Cuadra')}</span>
     return <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400"><AlertTriangle size={15} strokeWidth={1.9} /> {t('No cuadra')}</span>
   }
@@ -40,7 +41,7 @@ export default function HistorialReconciliacion() {
   return (
     <Card className="mb-4 p-4">
       <div className="mb-3 flex items-center gap-2">
-        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Historial de reconciliación con Gofo')}</h3>
+        <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{conCarrier(t('Historial de reconciliación con Gofo'))}</h3>
         {noCuadran > 0
           ? <Badge color="red">{noCuadran} {t('no cuadra(n)')}</Badge>
           : <Badge color="green">{t('Todo cuadra')}</Badge>}
@@ -53,7 +54,7 @@ export default function HistorialReconciliacion() {
               <th className="px-3 py-2.5 text-left font-semibold">{t('Ciudad')}</th>
               <th className="px-3 py-2.5 text-left font-semibold">{t('Semana')}</th>
               <th className="px-3 py-2.5 text-right font-semibold">{t('Nuestro neto')}</th>
-              <th className="px-3 py-2.5 text-right font-semibold">{t('Total Gofo')}</th>
+              <th className="px-3 py-2.5 text-right font-semibold">{conCarrier(t('Total Gofo'))}</th>
               <th className="px-3 py-2.5 text-right font-semibold">{t('Diferencia')}</th>
               <th className="px-3 py-2.5 text-left font-semibold">{t('Estado')}</th>
             </tr>
@@ -72,7 +73,7 @@ export default function HistorialReconciliacion() {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-slate-400">{t('Cada factura es una ciudad-semana. "No cuadra" = nuestro neto calculado difiere del total oficial que pagó Gofo — revisa esa carga.')}</p>
+      <p className="mt-2 text-xs text-slate-400">{conCarrier(t('Cada factura es una ciudad-semana. "No cuadra" = nuestro neto calculado difiere del total oficial que pagó Gofo — revisa esa carga.'))}</p>
     </Card>
   )
 }

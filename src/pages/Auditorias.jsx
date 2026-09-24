@@ -17,6 +17,7 @@ import { Card, KPI, PageTitle, Boton, Badge, Aviso, EstadoVacio, Spinner } from 
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
 import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText, FileSpreadsheet } from 'lucide-react'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 // Lee un extracto (Excel o CSV) a matriz de filas. Usa SheetJS y, si el CSV no se
 // interpreta, cae a un parseo de texto simple (comillas + comas).
@@ -343,7 +344,7 @@ function TabDatos() {
     <div>
       <div className="mb-4 flex flex-wrap gap-3">
         <KPI label={t('Alertas activas')} value={String(alertas.length)} icon={AlertTriangle} accent={graves.length ? 'red' : 'slate'} sub={graves.length ? `${graves.length} ${t('graves')}` : t('sin alertas graves')} />
-        <KPI label={t('Facturas que no cuadran con Gofo')} value={String(noCuadran.length)} icon={Landmark} accent={noCuadran.length ? 'red' : 'green'} sub={t('neto MilePay vs total Gofo')} />
+        <KPI label={conCarrier(t('Facturas que no cuadran con Gofo'))} value={String(noCuadran.length)} icon={Landmark} accent={noCuadran.length ? 'red' : 'green'} sub={conCarrier(t('neto MilePay vs total Gofo'))} />
         <KPI label={t('Choferes en pérdida')} value={String(enPerdida.length)} icon={TrendingDown} accent={enPerdida.length ? 'red' : 'green'} sub={t('pago negativo (te deben)')} />
       </div>
 
@@ -378,7 +379,7 @@ function TabDatos() {
         )}
       </Card>
 
-      <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{t('Reconciliación con Gofo (por factura)')}</div>
+      <div className="mb-2 font-semibold text-brand-navy dark:text-slate-100">{conCarrier(t('Reconciliación con Gofo (por factura)'))}</div>
       <HistorialReconciliacion />
     </div>
   )

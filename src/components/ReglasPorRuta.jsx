@@ -9,6 +9,7 @@ import { useLang } from '../i18n'
 import { CLAIM_FEE, DOBLE_MONTO, CATEGORIAS_CLAIM, METODOS_CLAIM, METODO_CLAIM_DEFAULT } from '../constants'
 import { guardarReglasRuta } from '../utils/empresaSettings'
 import { Card, Boton, Input, Select, Aviso, Spinner, Badge } from './ui'
+import { conCarrier } from '../utils/carrierTexto'
 
 const CATS = [...CATEGORIAS_CLAIM, { key: 'otro', label: 'Otro' }]
 const nuevaRegla = () => ({ nombre: '', tarifaInd: '', tarifaDoble: '', dobleMonto: '', claimFee: '', metodos: {}, montos: {} })
@@ -74,14 +75,14 @@ export default function ReglasPorRuta() {
         <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Reglas por ruta')}</h3>
       </div>
       <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-        {t('Cada ruta define sus')} <b>{t('tarifas')}</b> {t('(individual/doble) y el')} <b>{t('método')}</b> {t('de cobro por categoría de claim (M1 cobra la multa · M2 cobra lo de Gofo · M3 perdón).')}
+        {t('Cada ruta define sus')} <b>{t('tarifas')}</b> {t('(individual/doble) y el')} <b>{t('método')}</b> {conCarrier(t('de cobro por categoría de claim (M1 cobra la multa · M2 cobra lo de Gofo · M3 perdón).'))}
         {' '}{t('Asigna cada ruta a su')} <b>{t('ciudad')}</b>{t(': así, al cargar una factura y detectar la ciudad automáticamente, solo verás las rutas y los choferes de esa ciudad.')}
         {' '}{t('Al cargar la factura asignarás manualmente qué choferes van a cada ruta y se les pagará con estas reglas.')}
       </p>
       <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
         <Info size={14} strokeWidth={1.8} className="mt-0.5 flex-shrink-0" />
         <span>
-          <b>{t('“Monto de doble ($)”')}</b> {t('= el valor que')} <b>{t('Gofo te PAGA en la factura')}</b> {t('por una entrega doble (columna del monto de la entrega en el Excel de Gofo). El sistema marca como')} <b>{t('doble')}</b> {t('toda entrega cuyo monto sea')} <b>{t('exactamente')}</b> {t('ese. Ej.: si tus dobles se pagan')} <b>$1</b>, {t('pon')} <b>1</b> {t('aquí. Todo lo demás cuenta como')} <b>{t('individual')}</b>. {t('(No confundir con la')} <b>{t('tarifa doble')}</b>{t(', que es lo que TÚ le pagas al chofer por ese doble.)')}
+          <b>{t('“Monto de doble ($)”')}</b> {t('= el valor que')} <b>{conCarrier(t('Gofo te PAGA en la factura'))}</b> {conCarrier(t('por una entrega doble (columna del monto de la entrega en el Excel de Gofo). El sistema marca como'))} <b>{t('doble')}</b> {t('toda entrega cuyo monto sea')} <b>{t('exactamente')}</b> {t('ese. Ej.: si tus dobles se pagan')} <b>$1</b>, {t('pon')} <b>1</b> {t('aquí. Todo lo demás cuenta como')} <b>{t('individual')}</b>. {t('(No confundir con la')} <b>{t('tarifa doble')}</b>{t(', que es lo que TÚ le pagas al chofer por ese doble.)')}
         </span>
       </div>
       {ok && <Aviso tipo="ok">{ok}</Aviso>}

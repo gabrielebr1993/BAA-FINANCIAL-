@@ -10,6 +10,7 @@ import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X, FileSpreadsheet, FileText } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 export default function Claims() {
   const { t } = useLang()
@@ -206,7 +207,7 @@ export default function Claims() {
             <KPI label={t('Perdonados')} value={num(perdonados)} icon={Handshake} accent="green" />
             <KPI label={t('Activos')} value={num(activos)} icon={Ban} accent="red" />
             {!ocultarGofo && <KPI label={t('Descuento a choferes')} value={money(descuentoChoferes)} icon={Percent} accent="gold" sub={`${num(activos)} ${t('claim(s) activo(s)')}`} />}
-            {!ocultarGofo && <KPI label={t('Te descontó Gofo')} value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
+            {!ocultarGofo && <KPI label={conCarrier(t('Te descontó Gofo'))} value={money(descuentoGofo)} icon={TrendingDown} accent="red" />}
           </div>
 
           {trackingDuplicados.length > 0 && (
@@ -251,7 +252,7 @@ export default function Claims() {
                 <Badge color="gold">{pendientesRepetidos.length}</Badge>
               </div>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                {t('Un mismo tracking aparece más de una vez (claim + reversión). Aprobar cuenta el claim y cobra $100 al chofer; anular no cuenta ni cobra. El neto de Gofo no cambia.')}
+                {conCarrier(t('Un mismo tracking aparece más de una vez (claim + reversión). Aprobar cuenta el claim y cobra $100 al chofer; anular no cuenta ni cobra. El neto de Gofo no cambia.'))}
               </p>
               <div className="space-y-3">
                 {pendientesRepetidos.map((caso) => (
@@ -338,7 +339,7 @@ export default function Claims() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Input autoFocus className="w-64" placeholder={t('Motivo del perdón (uno para todos)…')} value={motivoLote} onChange={(e) => setMotivoLote(e.target.value)} />
                       <span className="text-sm text-slate-600 dark:text-slate-300">
-                        {t('Vas a perdonar')} <b>{selPorPerdonar.length}</b> {t('claim(s)')}{motivoLote ? <> {t('con el motivo:')} “{motivoLote}”</> : null}. {t('Cada uno absorbe su propio monto de Gofo.')}
+                        {t('Vas a perdonar')} <b>{selPorPerdonar.length}</b> {t('claim(s)')}{motivoLote ? <> {t('con el motivo:')} “{motivoLote}”</> : null}. {conCarrier(t('Cada uno absorbe su propio monto de Gofo.'))}
                       </span>
                       <div className="ml-auto flex gap-2">
                         <Boton variant="success" disabled={ocupado} onClick={confirmarLote} className="px-3 py-1.5 text-xs">{t('Confirmar')}</Boton>
@@ -358,7 +359,7 @@ export default function Claims() {
                   { key: 'claimType', label: t('Tipo') },
                   !ocultarGofo && { key: 'metodo', label: t('Categoría · Método'), align: 'center' },
                   { key: 'ciudad', label: t('Ciudad') },
-                  !ocultarGofo && { key: 'montoGofo', label: t('Monto Gofo'), align: 'right' },
+                  !ocultarGofo && { key: 'montoGofo', label: conCarrier(t('Monto Gofo')), align: 'right' },
                   { key: 'revision', label: t('Revisión'), align: 'center' },
                   { key: 'estado', label: t('Estado'), align: 'center' },
                   { key: 'acciones', label: t('Acción'), align: 'right' },
@@ -380,7 +381,7 @@ export default function Claims() {
                         <Select className="w-40 py-1 text-xs" value={manual ? row.metodo : 'auto'} disabled={ocupado} onChange={(e) => cambiarMetodo(row, e.target.value)}>
                           <option value="auto">{t('Auto')} ({auto === 'M1' ? t('Manual') : auto === 'M2' ? 'Gofo' : t('Perdón')})</option>
                           <option value="M1">{t('Manual')}</option>
-                          <option value="M2">{t('Lo que Gofo cobra')}</option>
+                          <option value="M2">{conCarrier(t('Lo que Gofo cobra'))}</option>
                           <option value="M3">{t('Perdón')}</option>
                         </Select>
                         {manual && <span className="text-[10px] font-semibold text-brand-gold">{t('manual')}</span>}
@@ -410,7 +411,7 @@ export default function Claims() {
                       <div className="flex items-center justify-end gap-1.5">
                         {row.motivo && <span className="self-center text-xs text-slate-400" title={row.motivo}>“{row.motivo.slice(0, 18)}”</span>}
                         {!ocultarGofo && (
-                          <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title={t('Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)')}>
+                          <span className="self-center text-xs font-semibold text-rose-600 dark:text-rose-400" title={conCarrier(t('Solo lo que Gofo te descontó por ESTE claim (los $100 son una multa que dejas de cobrar, no una pérdida)'))}>
                             {t('te costó')} {money(Math.abs(Number(row.montoGofo) || 0))}
                           </span>
                         )}

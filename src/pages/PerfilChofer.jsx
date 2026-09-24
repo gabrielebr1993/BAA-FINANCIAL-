@@ -15,6 +15,7 @@ import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
 import FotoPerfil from '../components/FotoPerfil'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 const COLOR_NIVEL = { bueno: '#22c55e', regular: '#f59e0b', malo: '#ef4444' }
 
@@ -303,7 +304,7 @@ export default function PerfilChofer() {
               </div>
             </div>
             <p className="mb-3 text-[11px] text-slate-400">
-              {t('El export usa el ')}<b>{t('rango de fechas de la barra de arriba')}</b>{t(' (elige “Todo” para todo su historial). El recibo ')}<b>{t('solo muestra lo que TÚ le cobraste')}</b>{t(' al chofer (nunca lo que Gofo te cobra a ti).')}
+              {t('El export usa el ')}<b>{t('rango de fechas de la barra de arriba')}</b>{t(' (elige “Todo” para todo su historial). El recibo ')}<b>{t('solo muestra lo que TÚ le cobraste')}</b>{conCarrier(t(' al chofer (nunca lo que Gofo te cobra a ti).'))}
             </p>
             <Tabla
               columns={[
@@ -341,14 +342,14 @@ export default function PerfilChofer() {
                 {verMontosClaim ? t('Ocultar montos') : t('Ver montos')}
               </button>
             </div>
-            <p className="mb-3 text-xs text-slate-400">{t('“Te cobré” = lo que le descontaste al chofer por ese claim · “Descontó Gofo” = lo que Gofo te quitó a ti. Haz clic en un claim para abrir la ficha del tracking.')}</p>
+            <p className="mb-3 text-xs text-slate-400">{conCarrier(t('“Te cobré” = lo que le descontaste al chofer por ese claim · “Descontó Gofo” = lo que Gofo te quitó a ti. Haz clic en un claim para abrir la ficha del tracking.'))}</p>
             <Tabla
               columns={[
                 { key: 'waybill', label: t('Waybill') },
                 { key: 'date', label: t('Fecha') },
                 { key: 'claimType', label: t('Tipo') },
                 { key: 'miDescuento', label: t('Te cobré'), align: 'right' },
-                { key: 'montoGofo', label: t('Descontó Gofo'), align: 'right' },
+                { key: 'montoGofo', label: conCarrier(t('Descontó Gofo')), align: 'right' },
                 { key: 'estadoRevision', label: t('Revisión'), align: 'center' },
                 { key: 'estado', label: t('Estado'), align: 'center' },
               ]}

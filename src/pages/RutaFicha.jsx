@@ -9,6 +9,7 @@ import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Aviso, Cargando, EstadoVacio } from '../components/ui'
 import { TrendCard } from '../components/charts'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 const tms = (d) => (d instanceof Date ? d.getTime() : 0)
 
@@ -70,7 +71,7 @@ export default function RutaFicha() {
         { Métrica: t('Ruta'), Valor: decoded },
         { Métrica: t('Paquetes'), Valor: rutaActual.paquetes },
         { Métrica: t('Ingreso'), Valor: Math.round(rutaActual.ingreso) },
-        { Métrica: t('$/paquete (paga Gofo)'), Valor: Number((rutaActual.precioPorPaquete || 0).toFixed(2)) },
+        { Métrica: conCarrier(t('$/paquete (paga Gofo)')), Valor: Number((rutaActual.precioPorPaquete || 0).toFixed(2)) },
         { Métrica: t('Costo choferes'), Valor: Math.round(rutaActual.costoChoferes) },
         { Métrica: t('Ganancia'), Valor: Math.round(rutaActual.ganancia) },
         { Métrica: t('Ganancia/paquete'), Valor: Number((rutaActual.gananciaPorPaquete || 0).toFixed(2)) },
@@ -82,7 +83,7 @@ export default function RutaFicha() {
   const exportarP = () =>
     exportarPDF(nombreExp, `${t('Ruta')} ${decoded}`, inv?.semana || '', [
       ...(rutaActual ? [{ titulo: t('Resumen de la ruta'), head: [t('Métrica'), t('Valor')], body: [
-        [t('Paquetes'), num(rutaActual.paquetes)], [t('Ingreso (Gofo)'), money(rutaActual.ingreso)], [t('$/paquete (paga Gofo)'), money(rutaActual.precioPorPaquete)],
+        [t('Paquetes'), num(rutaActual.paquetes)], [conCarrier(t('Ingreso (Gofo)')), money(rutaActual.ingreso)], [conCarrier(t('$/paquete (paga Gofo)')), money(rutaActual.precioPorPaquete)],
         [t('Costo choferes'), money(rutaActual.costoChoferes)], [t('Ganancia'), money(rutaActual.ganancia)], [t('Ganancia/paquete'), money(rutaActual.gananciaPorPaquete)], [t('Claims'), num(rutaActual.numClaims || 0)],
       ] }] : []),
       ...(choferesRuta.length ? [{ titulo: `${t('Choferes de la ruta')} (${choferesRuta.length})`, head: [t('Chofer'), t('Paq.'), t('Ingreso'), t('Pago'), t('Ganancia'), t('Claims')], body: choferesRuta.map((p) => [p.nombre, num(p.paquetes), money(p.ingreso), money(p.totalPagar), money(p.ganancia), num(p.claimsTotales)]) }] : []),
@@ -115,10 +116,10 @@ export default function RutaFicha() {
           {alertaPrecio && (
             <Aviso tipo="warn">
               <span className="inline-flex flex-wrap items-center gap-1.5">
-                <AlertTriangle size={15} strokeWidth={1.8} /> {t('Gofo cambió el precio de esta ruta vs. la semana anterior:')}
+                <AlertTriangle size={15} strokeWidth={1.8} /> {conCarrier(t('Gofo cambió el precio de esta ruta vs. la semana anterior:'))}
                 $/paq {money(alertaPrecio.antesPq)} → {money(alertaPrecio.ahoraPq)} ({alertaPrecio.dPq >= 0 ? '+' : ''}{pct(alertaPrecio.dPq)}) ·
                 $/lb ${(alertaPrecio.antesLb || 0).toFixed(3)} → ${(alertaPrecio.ahoraLb || 0).toFixed(3)} ({alertaPrecio.dLb >= 0 ? '+' : ''}{pct(alertaPrecio.dLb)}).
-                {t('Útil para reclamar a Gofo.')}
+                {conCarrier(t('Útil para reclamar a Gofo.'))}
               </span>
             </Aviso>
           )}
@@ -127,8 +128,8 @@ export default function RutaFicha() {
           {rutaActual && (
             <div className="mb-4 flex flex-wrap gap-3">
               <KPI label={t('Paquetes')} value={num(rutaActual.paquetes)} icon={Package} accent="navy" sub={`${num(rutaActual.individuales)} ${t('ind')} · ${num(rutaActual.dobles)} ${t('dob')}`} />
-              <KPI label={t('Ingreso (Gofo)')} value={money(rutaActual.ingreso)} icon={DollarSign} accent="green" />
-              <KPI label={t('$/paquete (te paga Gofo)')} value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" sub={t('ingreso por paquete')} />
+              <KPI label={conCarrier(t('Ingreso (Gofo)'))} value={money(rutaActual.ingreso)} icon={DollarSign} accent="green" />
+              <KPI label={conCarrier(t('$/paquete (te paga Gofo)'))} value={money(rutaActual.precioPorPaquete)} icon={DollarSign} accent="gold" sub={t('ingreso por paquete')} />
               <KPI label="$/lb" value={`$${(rutaActual.precioPorLb || 0).toFixed(3)}`} icon={Scale} accent="steel" />
               <KPI label={t('Costo choferes')} value={money(rutaActual.costoChoferes)} icon={Users} accent="navy" />
               <KPI label={t('Ganancia')} value={money(rutaActual.ganancia)} icon={TrendingUp} accent={rutaActual.ganancia >= 0 ? 'gold' : 'red'} valueColor={rutaActual.ganancia >= 0 ? undefined : 'text-rose-600'} sub={pct(rutaActual.margen)} />
@@ -223,7 +224,7 @@ export default function RutaFicha() {
                 { key: 'waybill', label: 'Waybill' },
                 { key: 'courier', label: t('Chofer') },
                 { key: 'claimType', label: t('Tipo') },
-                { key: 'montoGofo', label: t('Monto Gofo'), align: 'right' },
+                { key: 'montoGofo', label: conCarrier(t('Monto Gofo')), align: 'right' },
                 { key: 'estado', label: t('Estado'), align: 'center' },
               ]}
               rows={claimsRuta.map((c) => ({ ...c, _key: c.id }))}

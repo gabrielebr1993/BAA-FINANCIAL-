@@ -22,6 +22,7 @@ import RankingClaimsTipo from '../components/RankingClaimsTipo'
 import RankingCiudades from '../components/RankingCiudades'
 import RankingCalificacion from '../components/RankingCalificacion'
 import Onboarding from '../components/Onboarding'
+import { conCarrier } from '../utils/carrierTexto'
 
 export default function Dashboard() {
   const { facturaRango: inv, invoicesRango, numSemanas, invoices, claims, drivers, managers, ajustes, ajustesPorChofer, selectedCity, setSelectedCity, verificacionCiudad, vista, cargando } = useData()
@@ -162,7 +163,7 @@ export default function Dashboard() {
           {(selectedCity === TODAS || est.paquetes > 0) && <RecomendacionesJarvis />}
           {alertas.length > 0 && (
             <Aviso tipo="warn">
-              <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> Gofo cambió el precio (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
+              <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> {conCarrier('Gofo cambió el precio')} (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
               <ul className="mt-2 list-disc pl-5">
                 {alertas.slice(0, 6).map((a) => (
                   <li key={a.ruta}><b>{a.ruta}</b> ({a.nombreCiudad}): ${a.antesLb.toFixed(3)}/lb → ${a.ahoraLb.toFixed(3)}/lb ({a.cambioLb >= 0 ? '+' : ''}{pct(a.cambioLb)})</li>
@@ -229,7 +230,7 @@ export default function Dashboard() {
                   </ClickWrap>
                 ) : (
                   <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                    {t('No hay desglose de pago de Gofo para esta ciudad en este período.')}
+                    {conCarrier(t('No hay desglose de pago de Gofo para esta ciudad en este período.'))}
                   </div>
                 )}
                 <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>

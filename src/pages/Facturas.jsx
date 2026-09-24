@@ -19,6 +19,7 @@ import { registrarAuditoria } from '../utils/auditoria'
 import { exportarExcel } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { Card, PageTitle, Boton, Badge, Aviso, Spinner, KPI, EstadoVacio, Cargando } from '../components/ui'
+import { conCarrier } from '../utils/carrierTexto'
 
 // ── Helpers de presentación ────────────────────────────────────────────────
 const PALETA = ['bg-brand-navy', 'bg-brand-steel', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-violet-500']
@@ -160,7 +161,7 @@ export default function Facturas() {
       for (const f of files) procs.push(procesarArchivo(await f.arrayBuffer(), f.name, inv.modoConfig || 'estandar'))
       const comb = combinarArchivos(procs)
       const rp = comb.simuladorDesglose || comb.resumenRutaPeso || []
-      if (!rp.length) { setReproMsg({ tipo: 'error', txt: t('El archivo no trae desglose por peso (o no es una factura válida de Gofo).') }); return }
+      if (!rp.length) { setReproMsg({ tipo: 'error', txt: conCarrier(t('El archivo no trae desglose por peso (o no es una factura válida de Gofo).')) }); return }
       const ref = Number(inv.ingresoTotal) || 0
       const difPct = ref ? Math.abs(comb.ingresoTotal - ref) / ref : 0
       if (difPct > 0.02) {
@@ -328,7 +329,7 @@ export default function Facturas() {
         listaBase.length === 0 ? (
           <EstadoVacio
             titulo={t('Empieza a gestionar tus facturas')}
-            texto={t('Aún no hay facturas en este período. Sube tu primer archivo de Gofo para ver ingresos, ganancia y claims aquí.')}
+            texto={conCarrier(t('Aún no hay facturas en este período. Sube tu primer archivo de Gofo para ver ingresos, ganancia y claims aquí.'))}
           />
         ) : (
           <Card className="px-6 py-12 text-center">

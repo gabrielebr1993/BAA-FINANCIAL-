@@ -15,6 +15,7 @@ import { PLANTILLA_PAGO_DEFAULT, llenarPlantilla, nombreEmpresa, enviosChofer } 
 import { DollarSign, Receipt, TrendingUp, Clock, FileSpreadsheet, FileText, X, Eye, EyeOff, CreditCard, MessageSquare, MessageCircle, Mail, Wallet, Landmark, ShieldCheck } from 'lucide-react'
 import { nombreCiudad } from '../constants'
 import { Card, KPI, PageTitle, Boton, Badge, Input, Select, Aviso, Cargando, EstadoVacio, Spinner } from '../components/ui'
+import { conCarrier } from '../utils/carrierTexto'
 
 const TD = 'px-2.5 py-2.5 whitespace-nowrap'
 
@@ -373,7 +374,7 @@ export default function Pagos() {
           </div>
           {verGanancia ? (
             <p className="mb-5 text-xs text-slate-400">
-              <b>{t('Ganancia real')}</b> {t('= ingreso − pago a choferes − descuento de Gofo por claims −')} <b>{t('gastos fijos')}</b>{t('. Los')} <b>{t('Pendientes / Pagados')}</b> {t('incluyen choferes y gastos fijos. Si filtras o buscas, el total es solo de lo mostrado.')}
+              <b>{t('Ganancia real')}</b> {conCarrier(t('= ingreso − pago a choferes − descuento de Gofo por claims −'))} <b>{t('gastos fijos')}</b>{t('. Los')} <b>{t('Pendientes / Pagados')}</b> {t('incluyen choferes y gastos fijos. Si filtras o buscas, el total es solo de lo mostrado.')}
             </p>
           ) : (
             <p className="mb-5 text-xs text-slate-400">{t('Aquí registras los pagos a los choferes: marca cada uno como pagado y avísale. Total a pagar = entregas × tarifa − descuento por claims.')}</p>
@@ -402,7 +403,7 @@ export default function Pagos() {
                   </div>
                   {verIngreso && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label={t('Ingreso Gofo')} />
+                      <OjoToggle activo={!ocultarIngreso} onClick={() => setOcultarIngreso((v) => !v)} label={conCarrier(t('Ingreso Gofo'))} />
                       {verGanancia && <OjoToggle activo={!ocultarGanancia} onClick={() => setOcultarGanancia((v) => !v)} label={t('Ganancia')} />}
                     </div>
                   )}
@@ -441,7 +442,7 @@ export default function Pagos() {
                     <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {[
                         t('Chofer'), ...(esRuta ? [t('Ruta')] : []), t('Ind.'), t('Dobles'), t('Claims (act/tot)'),
-                        ...(verIngreso ? [lIngreso(t('Ingreso Gofo'))] : []),
+                        ...(verIngreso ? [lIngreso(conCarrier(t('Ingreso Gofo')))] : []),
                         t('T.Ind'), t('T.Doble'), t('Desc. Claims'), t('Total a Pagar'),
                         ...(verGanancia ? [lGanancia(t('Ganancia'))] : []),
                         t('Estado'), '',

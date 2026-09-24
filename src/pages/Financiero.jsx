@@ -13,6 +13,7 @@ import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
 import { useLang } from '../i18n'
+import { conCarrier } from '../utils/carrierTexto'
 
 export default function Financiero() {
   const { t } = useLang()
@@ -97,7 +98,7 @@ export default function Financiero() {
             <Verificacion v={verificacionCiudad} />
           ) : selectedInvoice && (
             <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-              {t('No hay desglose de pago de Gofo para esta ciudad en este período.')}
+              {conCarrier(t('No hay desglose de pago de Gofo para esta ciudad en este período.'))}
             </div>
           )}
           {selectedInvoice && <GananciaReal g={gReal} ciudadLabel={ciudadLabel} claims={claimEco} verGofo={verGofo} />}
@@ -128,7 +129,7 @@ export default function Financiero() {
                 <span className="text-slate-500 dark:text-slate-400">{t('TOTAL general:')}</span>
                 <span>{t('Gastos fijos')} <b className="text-brand-navy dark:text-slate-100">{money(sumaMgrCiudades)}</b></span>
                 {Math.abs(ajusteVerif) >= 0.5 && (
-                  <span title={t('Offset y ajustes de la verificación de Gofo que no se reparten por ciudad')}>{t('Ajustes verif.')} <b className={ajusteVerif >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{money(ajusteVerif)}</b></span>
+                  <span title={conCarrier(t('Offset y ajustes de la verificación de Gofo que no se reparten por ciudad'))}>{t('Ajustes verif.')} <b className={ajusteVerif >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>{money(ajusteVerif)}</b></span>
                 )}
                 <span>{t('Ganancia real')} <b className="text-brand-gold">{money(selectedCity === TODAS ? gananciaReal : sumaGanCiudades)}</b></span>
               </div>
@@ -138,7 +139,7 @@ export default function Financiero() {
           {selectedInvoice && verGofo && <PanelClaims claims={claimsDeCiudad(claims, selectedCity, selectedInvoice)} inv={selectedInvoice} />}
 
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <KPI label={t('Ingreso neto (Gofo)')} value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
+            <KPI label={conCarrier(t('Ingreso neto (Gofo)'))} value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
             <KPI label={t('− Pago choferes')} value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
             <KPI label={t('− Gastos fijos')} value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
             {(gReal.gastosTemporales || 0) > 0 && <KPI label={t('− Gastos temporales')} value={money(gReal.gastosTemporales)} icon={AlertTriangle} accent="red" sub={t('solo de esta factura')} />}

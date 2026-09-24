@@ -11,6 +11,7 @@ import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { Card, PageTitle, Boton, Badge, Input, Cargando, EstadoVacio } from '../components/ui'
 import { useLang } from '../i18n'
+import { conCarrier, nombreCarrierActivo } from '../utils/carrierTexto'
 
 export default function TrackingFicha() {
   const { t } = useLang()
@@ -108,10 +109,10 @@ export default function TrackingFicha() {
               <Dato icon={MapPin} label={t('Código postal')} valor={paquete?.postalCode || '—'} />
               <Dato icon={Scale} label={t('Peso (lb)')} valor={paquete?.peso != null ? num(paquete.peso, 1) : '—'} />
               <Dato icon={Scale} label={t('Rango de peso')} valor={paquete?.rangoPeso || '—'} />
-              <Dato icon={DollarSign} label={t('Monto de entrega (Gofo)')} valor={paquete?.montoEntrega != null ? money(paquete.montoEntrega) : '—'} />
+              <Dato icon={DollarSign} label={conCarrier(t('Monto de entrega (Gofo)'))} valor={paquete?.montoEntrega != null ? money(paquete.montoEntrega) : '—'} />
               <Dato icon={Calendar} label={t('Fecha')} valor={paquete?.date || '—'} />
             </div>
-            <p className="mt-3 text-xs text-slate-400">{t('La ciudad de destino y el tipo de firma no vienen en la factura de Gofo, por eso no se muestran.')}</p>
+            <p className="mt-3 text-xs text-slate-400">{conCarrier(t('La ciudad de destino y el tipo de firma no vienen en la factura de Gofo, por eso no se muestran.'))}</p>
           </Card>
 
           {/* Historial / incidencias */}
@@ -125,7 +126,7 @@ export default function TrackingFicha() {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="font-semibold text-brand-navy dark:text-slate-100">{etiquetaTipoClaim(c.claimType)}</span>
                       <span className="text-sm text-slate-500 dark:text-slate-400">{c.date || t('sin fecha')}</span>
-                      <span className={`text-sm font-semibold ${Number(c.montoGofo) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>Gofo: {money(c.montoGofo)}</span>
+                      <span className={`text-sm font-semibold ${Number(c.montoGofo) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{nombreCarrierActivo()}: {money(c.montoGofo)}</span>
                       <Badge color={estado.color}>{estado.txt}</Badge>
                       {c.perdonado && c.motivo && <span className="text-xs text-slate-400" title={c.motivo}>“{c.motivo}”</span>}
                       <div className="ml-auto">
@@ -146,7 +147,7 @@ export default function TrackingFicha() {
                     </div>
                     {c.perdonado && (
                       <div className="mt-1.5 inline-flex items-center gap-1 text-xs text-rose-600 dark:text-rose-400">
-                        <CheckCircle2 size={12} strokeWidth={2} /> {t('Perdonado: absorbes')} {money(Math.abs(Number(c.montoGofo) || 0))} {t('(solo lo de Gofo; los $100 son una multa que dejas de cobrar).')}
+                        <CheckCircle2 size={12} strokeWidth={2} /> {t('Perdonado: absorbes')} {money(Math.abs(Number(c.montoGofo) || 0))} {conCarrier(t('(solo lo de Gofo; los $100 son una multa que dejas de cobrar).'))}
                       </div>
                     )}
                   </div>

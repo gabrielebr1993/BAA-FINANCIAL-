@@ -1,6 +1,7 @@
 // Panel de ganancia real: ingresoNeto − costoChoferes − costoManagers.
 import { money, pct } from '../utils/format'
 import { Card } from './ui'
+import { conCarrier, nombreCarrierActivo } from '../utils/carrierTexto'
 
 export default function GananciaReal({ g, ciudadLabel, claims, oculto = false, verGofo = true }) {
   if (!g) return null
@@ -12,7 +13,7 @@ export default function GananciaReal({ g, ciudadLabel, claims, oculto = false, v
       <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">Ganancia real</h3>
       <div className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between">
-          <span className="text-slate-600 dark:text-slate-300">Ingreso neto (Gofo)</span>
+          <span className="text-slate-600 dark:text-slate-300">{conCarrier('Ingreso neto (Gofo)')}</span>
           <span className="font-semibold">{m(g.ingresoNeto)}</span>
         </div>
         <div className="flex items-center justify-between">
@@ -43,7 +44,7 @@ export default function GananciaReal({ g, ciudadLabel, claims, oculto = false, v
           <span className="text-slate-500 dark:text-slate-400">Incluye neto de claims (ya contado)</span>
           <span className={`font-semibold ${neto >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
             {neto >= 0 ? '+' : '−'}{money(Math.abs(neto))}
-            <span className="ml-1 font-normal text-slate-400">(cobrado {money(claims.cobradoChoferes)} − Gofo {money(claims.descontadoGofo)})</span>
+            <span className="ml-1 font-normal text-slate-400">(cobrado {money(claims.cobradoChoferes)} − {nombreCarrierActivo()} {money(claims.descontadoGofo)})</span>
           </span>
         </div>
       )}
