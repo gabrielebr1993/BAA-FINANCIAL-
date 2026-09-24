@@ -62,9 +62,10 @@ export const CARRIERS = {
     },
     // Etiquetas para las pantallas compartidas (mismos campos, otro significado).
     etiquetas: { individuales: '<1 lb', dobles: '≥1 lb', stopAdicional: 'Stop adicional' },
-    // Fondo: la semana (corte sábado) se cobra ~19 días después de su fecha fin
-    // (ejemplo real: semana 01–06 sep → se cobra el 25 sep). Editable por factura.
-    diasFondo: 19,
+    // Fondo: la semana se cobra 14 días (2 semanas exactas) después de su fecha
+    // fin (ejemplo real del dueño: semana 28 ago–4 sep → se cobra el 18 sep).
+    // La fecha queda editable por factura en «Cobros y fondo».
+    diasFondo: 14,
   },
 }
 
