@@ -1983,6 +1983,8 @@ export const EN_EXTRA = {
   "paquete extra en la misma parada": "extra package on the same stop",
   "Por peso (así te factura SpeedX; no cambia tu pago al chofer):": "By weight (how SpeedX bills you; it doesn't change what you pay the driver):",
   "Igual que en Gofo: INDIVIDUAL = primer paquete de cada parada · DOBLE = paquete adicional en la misma parada (SpeedX te lo paga a ~$0.45). El peso NO cambia lo que le pagas al chofer; si pagas igual el doble, escribe la misma tarifa en ambas. Los claims se descuentan con el método M2: al chofer se le cobra exactamente lo que SpeedX te descontó.": "Same as Gofo: INDIVIDUAL = first package of each stop · DOUBLE = additional package on the same stop (SpeedX pays you ~$0.45 for it). Weight does NOT change what you pay the driver; if you pay the same for doubles, enter the same rate in both. Claims are deducted with method M2: the driver is charged exactly what SpeedX deducted from you.",
+  "dobles": "doubles",
+  "individuales": "singles",
   "Compañías con acceso": "Companies with access",
   "Compañías": "Companies",
   "Igual con las compañías: elige Gofo, SpeedX o ambas; sin ninguna seleccionada = acceso a ambas. Con UNA sola, el usuario entra directo a esa compañía sin pasar por el selector.": "Same with companies: choose Gofo, SpeedX or both; none selected = access to both. With just ONE, the user goes straight into that company without the selector.",

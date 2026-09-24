@@ -112,6 +112,7 @@ export default function Dashboard() {
         { Métrica: 'Ganancia', Valor: Math.round(gananciaTotal) },
         { Métrica: 'Margen', Valor: pct(margen) },
         { Métrica: 'Paquetes', Valor: tot.paquetes },
+        { Métrica: 'Dobles', Valor: tot.dobles },
         { Métrica: '% Dobles', Valor: pct(tot.pctDobles) },
         { Métrica: 'Claims', Valor: numClaims },
       ] },
@@ -126,6 +127,7 @@ export default function Dashboard() {
         ['Ganancia', money(gananciaTotal)],
         ['Margen', pct(margen)],
         ['Paquetes', num(tot.paquetes)],
+        ['Dobles', num(tot.dobles)],
         ['% Dobles', pct(tot.pctDobles)],
         ['Claims', num(numClaims)],
       ] },
@@ -179,7 +181,7 @@ export default function Dashboard() {
             <KPI label={t('Ganancia')} value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
             <KPI label={t('Margen')} value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
             <KPI label={t('Paquetes')} value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
-            <KPI label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} />
+            <KPI label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} sub={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
             <KPI label={t('Claims')} value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
           </div>
 
@@ -246,7 +248,7 @@ export default function Dashboard() {
 
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <GaugeCard title={t('Margen de ganancia')} value={margen} color="#c9a24b" />
-                <GaugeCard title={t('% de dobles')} value={tot.pctDobles} color="#3d5a80" />
+                <GaugeCard title={t('% de dobles')} value={tot.pctDobles} color="#3d5a80" subtitle={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
                 <GaugeCard title={t('Calidad (entregas sin claim)')} value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
               </div>
 

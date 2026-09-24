@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
-import { calcularPagos, porCiudad, claimsDeCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, TODAS } from '../utils/calc'
+import { calcularPagos, porCiudad, claimsDeCiudad, gananciaRealDe, desgloseGananciaCiudades, economiaClaims, nombreCiudadDe, totalesFiltrados, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
@@ -23,6 +23,8 @@ export default function Financiero() {
   // línea "Gofo descontado" de la ganancia real). El manager no.
   const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const semanas = numSemanas
+  // Conteos de paquetes (para el KPI de dobles: número + porcentaje).
+  const totPaq = useMemo(() => totalesFiltrados(selectedInvoice, selectedCity), [selectedInvoice, selectedCity])
   const gReal = useMemo(
     () => gananciaRealDe(selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer),
     [selectedInvoice, claims, drivers, managers, selectedCity, semanas, ajustesPorChofer]
@@ -142,6 +144,7 @@ export default function Financiero() {
             <KPI label={conCarrier(t('Ingreso neto (Gofo)'))} value={money(ingresoNetoT)} icon={DollarSign} accent="green" />
             <KPI label={t('− Pago choferes')} value={money(pagoChoferesT)} icon={Receipt} accent="navy" />
             <KPI label={t('− Gastos fijos')} value={money(gastosFijosT)} icon={AlertTriangle} accent="red" />
+            <KPI label={t('Dobles')} value={num(totPaq.dobles)} icon={Receipt} accent="navy" sub={`${pct(totPaq.pctDobles)} ${t('de')} ${num(totPaq.paquetes)} ${t('paquetes')}`} />
             {(gReal.gastosTemporales || 0) > 0 && <KPI label={t('− Gastos temporales')} value={money(gReal.gastosTemporales)} icon={AlertTriangle} accent="red" sub={t('solo de esta factura')} />}
             <KPI label={t('Ganancia real')} value={money(gananciaReal)} icon={TrendingUp} accent="gold" />
             <KPI label={t('Margen')} value={pct(margen)} icon={Target} accent="blue" />
