@@ -102,8 +102,8 @@ function FondoAlmacen() {
       <div className="absolute inset-0" style={{ background: 'linear-gradient(170deg, #46362a 0%, #2c2015 55%, #17100a 100%)' }} />
       {/* luz cálida entrando por arriba a la izquierda */}
       <div className="absolute inset-0" style={{ background: 'radial-gradient(70% 55% at 22% 0%, rgba(255,206,134,0.35), transparent 60%)' }} />
-      {/* pared de cajas con leve desenfoque fotográfico */}
-      <div className="absolute -inset-8" style={{ filter: 'blur(3px) saturate(1.05)' }}>
+      {/* pared de cajas con leve desenfoque fotográfico y deriva de cámara */}
+      <div className="mp-anim absolute -inset-10" style={{ filter: 'blur(3px) saturate(1.05)', animation: 'mppan 70s ease-in-out infinite alternate' }}>
         {FILAS_ALMACEN.map((f, fi) => (
           <div key={fi} className="absolute inset-x-0" style={{ top: f.top, filter: `brightness(${f.brillo})` }}>
             {Array.from({ length: f.n }).map((_, i) => (
@@ -120,6 +120,9 @@ function FondoAlmacen() {
   )
 }
 
+// Color de marca para el hover de cada tarjeta (rojo GOFO · azul SpeedX).
+const ACENTO_MARCA = { gofo: '#E8391D', speedx: '#2F80ED' }
+
 function SelectorCompania() {
   const { t } = useLang()
   const { user, perfil, cerrarSesion } = useAuth()
@@ -128,6 +131,13 @@ function SelectorCompania() {
   const carriers = listaCarriers()
   return (
     <div className="relative flex min-h-screen w-full flex-col text-white">
+      {/* Animaciones: deriva de cámara, entrada de la tarjeta y barrido de luz */}
+      <style>{`
+        @keyframes mppan{0%{transform:translate3d(0,0,0) scale(1.04)}100%{transform:translate3d(-2.2%,-1.2%,0) scale(1.09)}}
+        @keyframes mpin{0%{opacity:0;transform:translateY(26px) scale(0.985)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes mpsweep{0%,55%{transform:translateX(-160%) skewX(-18deg)}85%,100%{transform:translateX(320%) skewX(-18deg)}}
+        @media (prefers-reduced-motion: reduce){.mp-anim{animation:none!important}}
+      `}</style>
       <FondoAlmacen />
 
       {/* Barra superior sobre la foto */}
@@ -138,9 +148,11 @@ function SelectorCompania() {
         </button>
       </header>
 
-      {/* Tarjeta de VIDRIO centrada */}
+      {/* Tarjeta de VIDRIO centrada (entra con animación) */}
       <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12 md:px-6">
-        <div className="w-full max-w-2xl rounded-[30px] border border-white/25 bg-white/10 p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl md:p-10">
+        <div className="mp-anim relative w-full max-w-2xl overflow-hidden rounded-[30px] border border-white/25 bg-white/10 p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl md:p-10" style={{ animation: 'mpin 0.8s cubic-bezier(0.22,1,0.36,1) both' }}>
+          {/* barrido de luz sobre el vidrio, cada pocos segundos */}
+          <div className="mp-anim pointer-events-none absolute inset-y-0 w-1/3" style={{ background: 'linear-gradient(105deg, transparent, rgba(255,255,255,0.14), transparent)', animation: 'mpsweep 7.5s ease-in-out 1.2s infinite' }} />
           <div className="text-center">
             <div className="text-3xl font-black tracking-tight md:text-4xl">MilePay<span className="text-brand-gold">.</span></div>
             <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/55">{t('Plataforma de gestión last-mile')}</div>
@@ -148,25 +160,33 @@ function SelectorCompania() {
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {carriers.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setCarrier(c.id)}
-                className="group rounded-2xl border border-white/25 bg-white/10 p-4 text-left backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/40 hover:bg-white/15 hover:shadow-2xl md:p-5"
-              >
-                <div className="grid h-20 place-items-center rounded-xl bg-white shadow-md transition-transform duration-300 group-hover:scale-[1.03] md:h-24">
-                  <LogoMarca id={c.id} nombre={c.nombre} />
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/50">{c.nombre}</div>
-                    <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-white transition-all duration-300 group-hover:gap-2.5">{t('Entrar')} <ArrowRight size={15} strokeWidth={2.4} /></div>
+            {carriers.map((c, i) => {
+              const acc = ACENTO_MARCA[c.id] || '#ffffff'
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setCarrier(c.id)}
+                  style={{ '--acc': acc, animation: `mpin 0.7s cubic-bezier(0.22,1,0.36,1) ${0.18 + i * 0.14}s both` }}
+                  className="group mp-anim rounded-2xl border border-white/25 bg-white/10 p-4 text-left backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-[color:var(--acc)] hover:bg-white/15 hover:shadow-[0_22px_50px_-14px_var(--acc)] md:p-5"
+                >
+                  <div className="grid h-20 place-items-center rounded-xl bg-white shadow-md transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-[0_10px_30px_-8px_var(--acc)] md:h-24">
+                    <LogoMarca id={c.id} nombre={c.nombre} />
                   </div>
-                  {!c.listo && <span className="rounded-full bg-amber-400/25 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">{t('En preparación')}</span>}
-                </div>
-              </button>
-            ))}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/50">{c.nombre}</div>
+                      <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-white transition-all duration-300 group-hover:gap-2.5">
+                        {t('Entrar')} <ArrowRight size={15} strokeWidth={2.4} className="transition-colors duration-300 group-hover:text-[color:var(--acc)]" />
+                      </div>
+                      {/* subrayado con el color de la marca */}
+                      <div className="mt-1 h-0.5 w-0 rounded-full transition-all duration-300 group-hover:w-14" style={{ background: acc }} />
+                    </div>
+                    {!c.listo && <span className="rounded-full bg-amber-400/25 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">{t('En preparación')}</span>}
+                  </div>
+                </button>
+              )
+            })}
           </div>
 
           <p className="mt-5 text-center text-[11px] leading-relaxed text-white/45">
