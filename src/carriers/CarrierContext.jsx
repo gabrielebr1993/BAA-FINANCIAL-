@@ -10,11 +10,25 @@
 //
 // Los CHOFERES (role=driver) no eligen: van directo a su portal (Gofo).
 // ============================================================================
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import { Zap, ArrowLeftRight, LogOut, ArrowRight } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
 import { useLang, LangToggle } from '../i18n'
+
+// Compañías PERMITIDAS para el usuario actual (igual que las ciudades por
+// usuario): en su ficha (users/{uid}) el campo `carriers` = ['gofo','speedx'].
+// Vacío o ausente = TODAS (compatibilidad total con los usuarios existentes).
+// El dueño y el súper-admin siempre ven todas.
+export function useCarriersPermitidos() {
+  const { perfil, esSuperAdmin } = useAuth()
+  const libre = esSuperAdmin || perfil?.role === 'owner'
+  const clave = (Array.isArray(perfil?.carriers) ? perfil.carriers : []).join('|')
+  return useMemo(() => {
+    const lista = clave.split('|').filter((c) => CARRIERS[c])
+    return !libre && lista.length ? lista : Object.keys(CARRIERS)
+  }, [clave, libre])
+}
 
 const LS_KEY = 'mp_carrier'
 const CarrierContext = createContext({ carrier: null, setCarrier: () => {}, cambiarCarrier: () => {} })
@@ -128,7 +142,9 @@ function SelectorCompania() {
   const { user, perfil, cerrarSesion } = useAuth()
   const { setCarrier } = useCarrier()
   const nombre = perfil?.nombre || user?.email || ''
-  const carriers = listaCarriers()
+  // Solo se ofrecen las compañías a las que ESTE usuario tiene acceso.
+  const permitidos = useCarriersPermitidos()
+  const carriers = listaCarriers().filter((c) => permitidos.includes(c.id))
   return (
     <div className="relative flex min-h-screen w-full flex-col text-white">
       {/* Animaciones: deriva de cámara, entrada de la tarjeta y barrido de luz */}
@@ -235,9 +251,20 @@ function CarrierEnPreparacion({ id }) {
 // aislamiento y el algoritmo cambian por debajo (DataContext + parsers).
 export function CarrierGate({ children }) {
   const { user, cargando, esDriver } = useAuth()
-  const { carrier } = useCarrier()
-  if (cargando || !user || esDriver) return children
-  if (!carrier) return <SelectorCompania />
+  const { carrier, setCarrier, cambiarCarrier } = useCarrier()
+  const permitidos = useCarriersPermitidos()
+  const activo = !cargando && !!user && !esDriver
+  // ACCESO POR USUARIO: si la compañía elegida (p. ej. quedó guardada en este
+  // navegador por otro usuario) NO está permitida para esta cuenta, se limpia;
+  // y si el usuario solo tiene UNA compañía permitida, entra directo sin selector.
+  useEffect(() => {
+    if (!activo) return
+    if (carrier && !permitidos.includes(carrier)) cambiarCarrier()
+    else if (!carrier && permitidos.length === 1) setCarrier(permitidos[0])
+  }, [activo, carrier, permitidos, setCarrier, cambiarCarrier])
+  if (!activo) return children
+  if (!carrier) return permitidos.length === 1 ? null : <SelectorCompania />
+  if (!permitidos.includes(carrier)) return null
   if (!CARRIERS[carrier]?.listo) return <CarrierEnPreparacion id={carrier} />
   return children
 }

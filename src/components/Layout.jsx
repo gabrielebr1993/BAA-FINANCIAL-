@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal, LayoutGrid, ArrowLeftRight } from 'lucide-react'
-import { useCarrier } from '../carriers/CarrierContext'
+import { useCarrier, useCarriersPermitidos } from '../carriers/CarrierContext'
 import { CARRIERS } from '../carriers'
 import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
@@ -162,6 +162,7 @@ function MenuIA({ onNavigate, esSuperAdmin }) {
 function SidebarContent({ onNavigate }) {
   const { perfil, puede, cerrarSesion, esSuperAdmin } = useAuth()
   const { carrier, cambiarCarrier } = useCarrier() // compañía activa (Multi-Company)
+  const carriersPermitidos = useCarriersPermitidos() // acceso por usuario
   const { numAlertas } = useData()
   const { t } = useLang()
   const location = useLocation()
@@ -205,10 +206,13 @@ function SidebarContent({ onNavigate }) {
           <div className="font-semibold text-slate-700 dark:text-slate-200">{perfil?.nombre || t('Usuario')}</div>
           <div className="truncate text-xs text-slate-400">{perfil?.role || 'usuario'} · {perfil?.email}</div>
         </div>
-        {/* Multi-Company: volver al selector de compañía (Gofo / SpeedX). */}
-        <button onClick={cambiarCarrier} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
-          <ArrowLeftRight size={16} strokeWidth={1.8} /> {t('Compañía')}: {CARRIERS[carrier]?.nombre || 'Gofo'}
-        </button>
+        {/* Multi-Company: volver al selector — solo si el usuario tiene acceso
+            a más de una compañía (si solo tiene una, no hay nada que cambiar). */}
+        {carriersPermitidos.length > 1 && (
+          <button onClick={cambiarCarrier} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
+            <ArrowLeftRight size={16} strokeWidth={1.8} /> {t('Compañía')}: {CARRIERS[carrier]?.nombre || 'Gofo'}
+          </button>
+        )}
         <button onClick={() => navigate('/elegir')} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
           <LayoutGrid size={16} strokeWidth={1.8} /> {t('Cambiar módulo')}
         </button>

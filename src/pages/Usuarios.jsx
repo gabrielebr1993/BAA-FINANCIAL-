@@ -4,6 +4,7 @@ import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { PERMISOS, ROLES, SECCIONES } from '../constants'
+import { listaCarriers, CARRIERS } from '../carriers'
 import { crearUsuarioApi } from '../utils/api'
 import { cerrarTodasLasSesiones, cerrarSesionUsuario } from '../data/sesiones'
 import CambiarClave from '../components/CambiarClave'
@@ -16,7 +17,7 @@ function permisosVacios() {
   PERMISOS.forEach((p) => (o[p.key] = false))
   return o
 }
-const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudades: [], permissions: permisosVacios() }
+const formVacio = { uid: '', nombre: '', email: '', password: '', role: 'manager', driverId: '', ciudades: [], carriers: [], permissions: permisosVacios() }
 
 export default function Usuarios() {
   const { t } = useLang()
@@ -44,6 +45,11 @@ export default function Usuarios() {
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const togglePermiso = (k) => setForm((f) => ({ ...f, permissions: { ...f.permissions, [k]: !f.permissions[k] } }))
+  // Compañías permitidas del usuario (Gofo/SpeedX). [] = todas.
+  const toggleCarrier = (id) => setForm((f) => {
+    const has = (f.carriers || []).includes(id)
+    return { ...f, carriers: has ? f.carriers.filter((c) => c !== id) : [...(f.carriers || []), id] }
+  })
   const toggleCiudad = (code) => setForm((f) => {
     const has = (f.ciudades || []).includes(code)
     return { ...f, ciudades: has ? f.ciudades.filter((c) => c !== code) : [...(f.ciudades || []), code] }
@@ -57,7 +63,7 @@ export default function Usuarios() {
   }
   const editar = (u) => {
     setEditId(u.id)
-    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', ciudades: (Array.isArray(u.ciudades) && u.ciudades.length) ? u.ciudades : (u.ciudad ? [u.ciudad] : []), permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
+    setForm({ uid: u.id, nombre: u.nombre || '', email: u.email || '', role: u.role || 'manager', driverId: u.driverId || '', ciudades: (Array.isArray(u.ciudades) && u.ciudades.length) ? u.ciudades : (u.ciudad ? [u.ciudad] : []), carriers: Array.isArray(u.carriers) ? u.carriers.filter((c) => CARRIERS[c]) : [], permissions: { ...permisosVacios(), ...(u.permissions || {}) } })
     setError('')
     setOk('')
   }
@@ -106,18 +112,22 @@ export default function Usuarios() {
     const asignaCiudad = form.role !== 'owner' && form.role !== 'driver'
     const ciudadesAsignadas = asignaCiudad ? [...new Set((form.ciudades || []).filter(Boolean))] : []
     const campoCiudades = { ciudades: ciudadesAsignadas, ciudad: ciudadesAsignadas[0] || '' }
+    // Compañías permitidas (Multi-Company): [] = todas. Owner siempre todas;
+    // el chofer no elige compañía (su portal no depende de esto).
+    const carriersAsignados = asignaCiudad ? [...new Set((form.carriers || []).filter((c) => CARRIERS[c]))] : []
+    const campoCarriers = { carriers: carriersAsignados }
     setGuardando(true)
     try {
       if (editId) {
         // editar: solo actualiza el documento (permisos/rol), no toca Auth
-        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...extraDriver })
+        await updateDoc(doc(db, 'users', editId), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...campoCarriers, ...extraDriver })
         await cargar()
         setOk(t('Usuario actualizado.'))
         nuevo()
       } else if (modoManual) {
         // respaldo: crear con UID manual (el acceso en Auth se crea aparte)
         if (!form.uid.trim()) return setError(t('Indica el UID de Firebase Auth del usuario.'))
-        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...extraDriver })
+        await setDoc(doc(db, 'users', form.uid.trim()), { nombre: form.nombre.trim(), email: form.email.trim(), role: form.role, permissions: permisos, companyId: activeCompanyId, ...campoCiudades, ...campoCarriers, ...extraDriver })
         await cargar()
         setOk(t('Usuario creado (modo manual).'))
         nuevo()
@@ -129,6 +139,11 @@ export default function Usuarios() {
         if (!data.ok) {
           setError(data.error || t('No se pudo crear el usuario.'))
           return
+        }
+        // Compañías permitidas: la función serverless no conoce este campo,
+        // se escribe directo en la ficha recién creada.
+        if (data.uid && carriersAsignados.length) {
+          try { await updateDoc(doc(db, 'users', data.uid), campoCarriers) } catch { /* editable después */ }
         }
         await cargar()
         setOk(t('Usuario creado con acceso (correo y contraseña).'))
@@ -262,10 +277,25 @@ export default function Usuarios() {
               </div>
             </Campo>
           )}
+          {form.role !== 'owner' && form.role !== 'driver' && (
+            <Campo label={t('Compañías con acceso')}>
+              <div className="flex flex-wrap gap-1.5">
+                {listaCarriers().map((c) => {
+                  const on = (form.carriers || []).includes(c.id)
+                  return (
+                    <button type="button" key={c.id} onClick={() => toggleCarrier(c.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${on ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                      {on ? '✓ ' : ''}{c.nombre}
+                    </button>
+                  )
+                })}
+              </div>
+            </Campo>
+          )}
         </div>
         {form.role !== 'owner' && form.role !== 'driver' && (
           <p className="-mt-2 mb-4 text-xs text-slate-400">
-            {t('Elige')} <b>{t('una o más ciudades')}</b>{t(': este usuario')} <b>{t('solo verá los datos de esas ciudades')}</b> {t('(según sus permisos) y podrá alternar entre ellas.')} <b>{t('Sin ninguna seleccionada')}</b> {t('= ve')} <b>{t('todas')}</b> {t('las ciudades.')}
+            {t('Elige')} <b>{t('una o más ciudades')}</b>{t(': este usuario')} <b>{t('solo verá los datos de esas ciudades')}</b> {t('(según sus permisos) y podrá alternar entre ellas.')} <b>{t('Sin ninguna seleccionada')}</b> {t('= ve')} <b>{t('todas')}</b> {t('las ciudades.')} {t('Igual con las compañías: elige Gofo, SpeedX o ambas; sin ninguna seleccionada = acceso a ambas. Con UNA sola, el usuario entra directo a esa compañía sin pasar por el selector.')}
           </p>
         )}
 
@@ -321,6 +351,7 @@ export default function Usuarios() {
           { key: 'email', label: t('Email') },
           { key: 'role', label: t('Rol') },
           { key: 'ciudades', label: t('Ciudades') },
+          { key: 'carriers', label: t('Compañías') },
           { key: 'permisos', label: t('Permisos'), wrap: true },
           { key: 'acciones', label: '', align: 'right' },
         ]}
@@ -334,6 +365,12 @@ export default function Usuarios() {
             if (!cs.length) return <span className="text-slate-400">{t('Todas')}</span>
             const nom = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || code
             return <div className="flex flex-wrap gap-1">{cs.map((c) => <Badge key={c}>{nom(c)}</Badge>)}</div>
+          }
+          if (key === 'carriers') {
+            if (row.role === 'owner' || row.role === 'driver') return <span className="text-slate-400">—</span>
+            const cs = (Array.isArray(row.carriers) ? row.carriers : []).filter((c) => CARRIERS[c])
+            if (!cs.length) return <span className="text-slate-400">{t('Todas')}</span>
+            return <div className="flex flex-wrap gap-1">{cs.map((c) => <Badge key={c} color={c === 'gofo' ? 'gold' : 'blue'}>{CARRIERS[c].nombre}</Badge>)}</div>
           }
           if (key === 'permisos') {
             if (row.role === 'owner') return <Badge color="gold">{t('Todo (owner)')}</Badge>
