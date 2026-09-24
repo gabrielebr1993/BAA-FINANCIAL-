@@ -73,6 +73,18 @@ export function DataProvider({ children }) {
   useEffect(() => { try { localStorage.setItem('milepay_selectedCities', JSON.stringify(selectedCities)) } catch { /* noop */ } }, [selectedCities])
   const selectedCitiesKey = [...selectedCities].sort().join('|')
   const subsetActivo = selectedCities.length >= 2
+  // CAMBIO DE COMPAÑÍA: las ciudades (y choferes) de Gofo no tienen nada que
+  // ver con las de SpeedX, así que al cambiar de compañía se LIMPIAN los
+  // filtros persistidos (ciudad, multiselección y chofer) para no arrastrar
+  // una ciudad de la otra compañía en el filtro.
+  const carrierFiltroRef = useRef(carrierActivo)
+  useEffect(() => {
+    if (carrierFiltroRef.current === carrierActivo) return
+    carrierFiltroRef.current = carrierActivo
+    setSelectedCity(TODAS)
+    setSelectedCities([])
+    setSelectedDriver(TODOS)
+  }, [carrierActivo])
   // Ciudad EFECTIVA que consumen las páginas y las funciones de cálculo: en modo
   // subconjunto es TODAS (se combina sobre las facturas ya filtradas al subconjunto).
   const selectedCityEff = subsetActivo ? TODAS : selectedCity
@@ -386,7 +398,10 @@ export function DataProvider({ children }) {
       ...invoicesCarrier.flatMap((i) => (i.resumenCiudades || []).map((c) => c.ubicacion)),
     ])
     if (disponibles.size > 0 && !disponibles.has(selectedCity)) setSelectedCity(TODAS)
-  }, [activeCompanyId, ciudadesEmpresaCarrier, invoicesCarrier, selectedCity, ciudadBloqueada])
+    // Compañía SIN ciudades todavía (p. ej. SpeedX recién estrenado) y una
+    // ciudad de la otra compañía persistida en el navegador → a "Todas".
+    if (!cargando && disponibles.size === 0) setSelectedCity(TODAS)
+  }, [activeCompanyId, ciudadesEmpresaCarrier, invoicesCarrier, selectedCity, ciudadBloqueada, cargando])
 
   // Usuario asignado a una ciudad (ej. manager por ciudad): su vista queda fija en
   // su ciudad; no puede ver ni cambiar a otras.
