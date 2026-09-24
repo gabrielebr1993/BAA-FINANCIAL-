@@ -11,7 +11,7 @@
 // Los CHOFERES (role=driver) no eligen: van directo a su portal (Gofo).
 // ============================================================================
 import { createContext, useContext, useState, useCallback } from 'react'
-import { FileText, Zap, ArrowLeftRight, LogOut, ArrowRight, Package } from 'lucide-react'
+import { Zap, ArrowLeftRight, LogOut, ArrowRight } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
 import { useLang, LangToggle } from '../i18n'
@@ -36,31 +36,27 @@ export function CarrierProvider({ children }) {
   }, [])
   return <CarrierContext.Provider value={{ carrier, setCarrier, cambiarCarrier }}>{children}</CarrierContext.Provider>
 }
-
 // ── Pantalla: Login → SELECCIONA COMPAÑÍA → módulo ──────────────────────────
-// Pantalla COMPLETA (de punta a punta): un panel gigante por compañía, con
-// paquetes/camiones decorativos de fondo y su color de marca. En escritorio
-// los paneles van lado a lado; en el teléfono, apilados a toda altura.
-// Caja de cartón REALISTA (isométrica, con cinta y etiqueta) para el fondo.
+// Estilo "foto real": un almacén lleno de cajas de cartón (escena con luz
+// cálida y desenfoque fotográfico) y, al centro, una tarjeta de VIDRIO
+// esmerilado con las dos compañías como tarjetas blancas de logo + «Entrar».
 function Caja({ size = 100, opacity = 1, flip = false, style }) {
   return (
     <svg viewBox="0 0 100 104" width={size} height={size * 1.04} style={{ opacity, transform: flip ? 'scaleX(-1)' : undefined, ...style }} aria-hidden="true">
       {/* tapa */}
       <polygon points="50,6 93,29 50,52 7,29" fill="#c9a273" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
-      {/* solapa marcada en la tapa */}
       <polygon points="50,6 93,29 50,52" fill="#000" opacity="0.05" />
-      {/* cara izquierda */}
+      {/* caras */}
       <polygon points="7,29 50,52 50,100 7,77" fill="#a87f4f" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
-      {/* cara derecha (más oscura) */}
       <polygon points="93,29 50,52 50,100 93,77" fill="#8a663c" stroke="#6e5432" strokeWidth="0.8" strokeLinejoin="round" />
-      {/* cinta de embalar: cruza la tapa y baja por la arista frontal */}
+      {/* cinta de embalar */}
       <polygon points="45.5,8.5 54.5,8.5 54.5,49.5 45.5,49.5" fill="#e8dcc0" opacity="0.9" />
       <polygon points="45.5,50 54.5,50 54.5,74 45.5,74" fill="#e8dcc0" opacity="0.55" />
-      {/* etiqueta de envío en la cara izquierda */}
+      {/* etiqueta de envío */}
       <polygon points="15,44 34,54 34,70 15,60" fill="#f4efe3" stroke="#6e5432" strokeWidth="0.5" />
       <line x1="18" y1="50.5" x2="31" y2="57.5" stroke="#8a8172" strokeWidth="1.4" />
       <line x1="18" y1="54" x2="28" y2="59.4" stroke="#b3aa99" strokeWidth="1.1" />
-      {/* código de barras en la cara derecha */}
+      {/* código de barras */}
       <g opacity="0.6">
         {[60, 63, 65.5, 69, 71.5, 75].map((x, i) => (
           <line key={i} x1={x} y1={62 - (x - 60) * 0.53} x2={x} y2={74 - (x - 60) * 0.53} stroke="#4c3a20" strokeWidth={i % 2 ? 1 : 1.8} />
@@ -69,128 +65,115 @@ function Caja({ size = 100, opacity = 1, flip = false, style }) {
     </svg>
   )
 }
-// Cajas flotando al fondo del panel (posición, tamaño, opacidad, retardo).
-const CAJAS = [
-  { l: '6%', t: '12%', s: 84, o: 0.16, d: 0.4, flip: false },
-  { l: '82%', t: '10%', s: 64, o: 0.13, d: 1.6, flip: true },
-  { l: '13%', t: '48%', s: 56, o: 0.12, d: 2.3, flip: false },
-  { l: '86%', t: '44%', s: 48, o: 0.11, d: 0.9, flip: false },
-]
-// Pila de cajas "en el piso" del panel (recortada por el borde inferior).
-const PILA = [
-  { l: '-3%', b: -34, s: 150, o: 0.32, flip: false },
-  { l: '13%', b: -50, s: 180, o: 0.38, flip: true },
-  { l: '34%', b: -30, s: 130, o: 0.3, flip: false },
-  { l: '55%', b: -54, s: 195, o: 0.4, flip: false },
-  { l: '76%', b: -36, s: 155, o: 0.33, flip: true },
-]
-// El nombre tratado como LOGOTIPO (hasta tener los archivos oficiales).
-function NombreLogo({ c }) {
-  if (c.id === 'gofo') {
-    return <span className="bg-gradient-to-b from-[#f2d896] via-[#dcb964] to-[#b8903f] bg-clip-text text-5xl font-black tracking-tight text-transparent md:text-7xl">GOFO</span>
+
+// Marca de cada compañía RECREADA fiel a la real (GOFO rojo en cursiva ·
+// SpeedX "Speed" negro + "X" azul). Cuando lleguen los archivos oficiales,
+// solo hay que cambiar este componente por las imágenes.
+function LogoMarca({ id, nombre }) {
+  if (id === 'gofo') {
+    return (
+      <svg viewBox="0 0 180 44" className="h-9 w-auto md:h-11" aria-label="GOFO">
+        <text x="90" y="34" textAnchor="middle" fontFamily="Inter, 'Arial Black', sans-serif" fontStyle="italic" fontWeight="900" fontSize="37" letterSpacing="1" fill="#E8391D">GOFO</text>
+      </svg>
+    )
   }
-  if (c.id === 'speedx') {
-    return <span className="text-5xl font-black italic tracking-tight md:text-7xl">Speed<span className="text-[#8fb1f5]">X</span></span>
+  if (id === 'speedx') {
+    return (
+      <svg viewBox="0 0 190 44" className="h-9 w-auto md:h-11" aria-label="SpeedX">
+        <text x="95" y="33" textAnchor="middle" fontFamily="Inter, Arial, sans-serif" fontWeight="800" fontSize="33">
+          <tspan fill="#101418">Speed</tspan><tspan fill="#2F80ED" fontWeight="900">X</tspan>
+        </text>
+      </svg>
+    )
   }
-  return <span className="text-4xl font-black tracking-tight md:text-6xl">{c.nombre}</span>
+  return <span className="text-2xl font-black text-slate-800">{nombre}</span>
 }
+
+// Pared de cajas del "almacén" (tres filas con profundidad; el desenfoque de
+// abajo la hace ver fotográfica detrás del vidrio).
+const FILAS_ALMACEN = [
+  { top: '2%', size: 150, brillo: 0.5, n: 8 },
+  { top: '24%', size: 205, brillo: 0.68, n: 7 },
+  { top: '50%', size: 270, brillo: 0.88, n: 6 },
+]
+function FondoAlmacen() {
+  return (
+    <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(170deg, #46362a 0%, #2c2015 55%, #17100a 100%)' }} />
+      {/* luz cálida entrando por arriba a la izquierda */}
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(70% 55% at 22% 0%, rgba(255,206,134,0.35), transparent 60%)' }} />
+      {/* pared de cajas con leve desenfoque fotográfico */}
+      <div className="absolute -inset-8" style={{ filter: 'blur(3px) saturate(1.05)' }}>
+        {FILAS_ALMACEN.map((f, fi) => (
+          <div key={fi} className="absolute inset-x-0" style={{ top: f.top, filter: `brightness(${f.brillo})` }}>
+            {Array.from({ length: f.n }).map((_, i) => (
+              <div key={i} className="absolute" style={{ left: `${(i / f.n) * 108 - 5 + (fi % 2) * 5}%`, top: (i % 2) * 22 }}>
+                <Caja size={f.size} flip={(i + fi) % 2 === 1} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* viñeta para centrar la mirada en la tarjeta */}
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(80% 70% at 50% 45%, transparent 40%, rgba(10,6,3,0.72) 100%)' }} />
+    </div>
+  )
+}
+
 function SelectorCompania() {
   const { t } = useLang()
   const { user, perfil, cerrarSesion } = useAuth()
   const { setCarrier } = useCarrier()
   const nombre = perfil?.nombre || user?.email || ''
-  const ICONO = { gofo: FileText, speedx: Zap }
   const carriers = listaCarriers()
   return (
-    <div
-      className="flex min-h-screen w-full flex-col bg-[#0d1526] text-white"
-      style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px)', backgroundSize: '28px 28px' }}
-    >
-      {/* Animación de flotado de los paquetes decorativos */}
-      <style>{'@keyframes mpflot{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}'}</style>
-      {/* Barra superior */}
-      <header className="flex items-center justify-between px-5 py-4 md:px-10">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-navy shadow-lg ring-1 ring-white/10">
-            <Package size={20} strokeWidth={1.9} className="text-brand-gold" />
-          </div>
-          <div>
-            <div className="text-lg font-extrabold leading-none">MilePay</div>
-            <div className="mt-0.5 text-[9px] font-semibold tracking-[0.2em] text-white/40">{t('GESTIÓN DE FACTURAS DE REPARTO')}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <LangToggle />
-          <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-sm font-medium text-white/70 transition hover:bg-white/10 hover:text-white">
-            <LogOut size={15} strokeWidth={1.9} /> {t('Salir')}
-          </button>
-        </div>
+    <div className="relative flex min-h-screen w-full flex-col text-white">
+      <FondoAlmacen />
+
+      {/* Barra superior sobre la foto */}
+      <header className="relative z-10 flex items-center justify-end gap-3 px-5 py-4 md:px-8">
+        <LangToggle />
+        <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm transition hover:bg-black/40 hover:text-white">
+          <LogOut size={15} strokeWidth={1.9} /> {t('Salir')}
+        </button>
       </header>
 
-      {/* Saludo + título */}
-      <div className="px-6 pb-6 pt-2 text-center md:pb-8">
-        <div className="text-sm font-semibold text-brand-gold">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋</div>
-        <h1 className="mt-1 text-3xl font-black leading-tight md:text-5xl">{t('¿Con qué compañía quieres trabajar hoy?')}</h1>
-        <div className="mx-auto mt-3 h-1 w-16 rounded-full bg-brand-gold/80" />
-        <p className="mx-auto mt-3 max-w-xl text-sm text-white/50 md:text-base">{t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')}</p>
-      </div>
+      {/* Tarjeta de VIDRIO centrada */}
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12 md:px-6">
+        <div className="w-full max-w-2xl rounded-[30px] border border-white/25 bg-white/10 p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl md:p-10">
+          <div className="text-center">
+            <div className="text-3xl font-black tracking-tight md:text-4xl">MilePay<span className="text-brand-gold">.</span></div>
+            <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/55">{t('Plataforma de gestión last-mile')}</div>
+            <div className="mt-6 text-sm font-semibold text-white/85 md:text-base">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋 · {t('¿Con qué compañía vas a trabajar?')}</div>
+          </div>
 
-      {/* Paneles gigantes, de punta a punta */}
-      <div className="grid w-full flex-1 grid-cols-1 md:grid-cols-2">
-        {carriers.map((c, idx) => {
-          const Icon = ICONO[c.id] || Package
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setCarrier(c.id)}
-              className={`group relative flex min-h-[38vh] flex-col items-center justify-center overflow-hidden px-8 py-12 text-center transition-all duration-300 hover:brightness-125 md:min-h-0 ${idx > 0 ? 'border-t border-white/10 md:border-l md:border-t-0' : ''}`}
-            >
-              {/* Fondo con el color de la compañía (el halo crece al pasar el mouse) */}
-              <div
-                className="absolute inset-0 transition-opacity duration-300"
-                style={{ background: `radial-gradient(120% 90% at 50% 115%, ${c.color}66, transparent 62%), linear-gradient(165deg, #131f38 0%, #0d1526 70%)` }}
-              />
-              <div
-                className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                style={{ background: `radial-gradient(130% 100% at 50% 115%, ${c.color}99, transparent 65%)`, boxShadow: `inset 0 0 0 3px ${c.color}55` }}
-              />
-              {/* Cajas de cartón flotando suave */}
-              {CAJAS.map((d, i) => (
-                <div key={i} className="pointer-events-none absolute" style={{ left: d.l, top: d.t, animation: `mpflot ${8 + i}s ease-in-out ${d.d}s infinite` }}>
-                  <Caja size={d.s} opacity={d.o} flip={d.flip} />
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {carriers.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCarrier(c.id)}
+                className="group rounded-2xl border border-white/25 bg-white/10 p-4 text-left backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-white/40 hover:bg-white/15 hover:shadow-2xl md:p-5"
+              >
+                <div className="grid h-20 place-items-center rounded-xl bg-white shadow-md transition-transform duration-300 group-hover:scale-[1.03] md:h-24">
+                  <LogoMarca id={c.id} nombre={c.nombre} />
                 </div>
-              ))}
-              {/* Pila de paquetes en el piso del panel */}
-              {PILA.map((d, i) => (
-                <div key={`p${i}`} className="pointer-events-none absolute transition-transform duration-700 group-hover:-translate-y-1.5" style={{ left: d.l, bottom: d.b }}>
-                  <Caja size={d.s} opacity={d.o} flip={d.flip} />
+                <div className="mt-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/50">{c.nombre}</div>
+                    <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-white transition-all duration-300 group-hover:gap-2.5">{t('Entrar')} <ArrowRight size={15} strokeWidth={2.4} /></div>
+                  </div>
+                  {!c.listo && <span className="rounded-full bg-amber-400/25 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">{t('En preparación')}</span>}
                 </div>
-              ))}
-              {/* Sombra del piso para asentar las cajas */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)' }} />
-              {/* Contenido */}
-              <div className="relative z-10 flex flex-col items-center gap-4 md:gap-5">
-                <span
-                  className="grid h-20 w-20 place-items-center rounded-3xl text-white ring-1 ring-white/25 transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110 md:h-24 md:w-24"
-                  style={{ background: `linear-gradient(160deg, ${c.color}, ${c.color}cc)`, boxShadow: `0 18px 50px -12px ${c.color}aa` }}
-                >
-                  <Icon size={40} strokeWidth={1.8} />
-                </span>
-                <div className="flex items-center gap-3">
-                  <NombreLogo c={c} />
-                  {!c.listo && <span className="rounded-full bg-amber-400/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">{t('En preparación')}</span>}
-                </div>
-                <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-base font-bold text-[#0d1526] shadow-lg transition-all duration-300 group-hover:-translate-y-0.5 group-hover:gap-3.5 group-hover:shadow-2xl">
-                  {t('Entrar')} <ArrowRight size={17} strokeWidth={2.2} />
-                </span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+              </button>
+            ))}
+          </div>
 
-      <p className="px-6 py-4 text-center text-[11px] text-white/35">{t('Podrás cambiar de compañía en cualquier momento desde el menú.')}</p>
+          <p className="mt-5 text-center text-[11px] leading-relaxed text-white/45">
+            {t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')} {t('Podrás cambiar de compañía en cualquier momento desde el menú.')}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

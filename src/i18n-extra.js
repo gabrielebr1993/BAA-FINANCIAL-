@@ -2037,6 +2037,8 @@ export const EN_EXTRA = {
   "Rate stop adicional ($)": "Additional stop rate ($)",
   "chofer(es) con su tarifa por paquete (> 0)": "driver(s) with their per-package rate (> 0)",
   "Entrar": "Enter",
+  "Plataforma de gestión last-mile": "Last-mile management platform",
+  "¿Con qué compañía vas a trabajar?": "Which company are you working with?",
   "Carga tu primera factura de SpeedX": "Upload your first SpeedX invoice",
   "Sube el Excel semanal de SpeedX. La ciudad y los choferes se crean solos con la factura; tú solo pones la tarifa por paquete de cada chofer.": "Upload the weekly SpeedX Excel. The city and drivers are created automatically from the invoice; you only set each driver's per-package rate.",
   "Cuando tengas una factura, verás tus métricas y el cuadre con SpeedX.": "Once you have an invoice, you'll see your metrics and the SpeedX reconciliation.",
