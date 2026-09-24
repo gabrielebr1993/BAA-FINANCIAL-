@@ -66,6 +66,16 @@ function CargarFacturaGofo() {
   const inputFallidosRef = useRef(null)
   const inputPreciosRef = useRef(null)
 
+  // GUARDIA DE ARRASTRE: si un Excel se suelta fuera de un recuadro de carga,
+  // el navegador lo abriría en otra pestaña. Aquí se bloquea esa navegación
+  // (cada recuadro sigue procesando su archivo como siempre).
+  useEffect(() => {
+    const g = (e) => e.preventDefault()
+    window.addEventListener('dragover', g)
+    window.addEventListener('drop', g)
+    return () => { window.removeEventListener('dragover', g); window.removeEventListener('drop', g) }
+  }, [])
+
   const reset = () => {
     setProcesados([])
     setCiudadPorArchivo([])

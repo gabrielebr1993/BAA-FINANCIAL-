@@ -13,7 +13,7 @@
 // drivers, driverStats) con `carrier: 'speedx'`, así todas las pantallas
 // (Dashboard, Financiero, Pagos, portal del chofer…) funcionan sin cambios.
 // ============================================================================
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, serverTimestamp, writeBatch, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../../firebase'
@@ -69,6 +69,21 @@ export default function CargarFacturaSpeedX() {
 
   const diasFondo = CARRIERS.speedx?.diasFondo || 19
 
+  // GUARDIA DE ARRASTRE: si el archivo se suelta fuera del recuadro, el
+  // navegador lo ABRE en otra pestaña. En esta pantalla, soltar el .xlsx en
+  // CUALQUIER parte lo procesa, y nunca navega fuera.
+  const manejarRef = useRef(null)
+  useEffect(() => {
+    const over = (e) => e.preventDefault()
+    const drop = (e) => {
+      e.preventDefault()
+      if (e.dataTransfer?.files?.length) manejarRef.current?.(e.dataTransfer.files)
+    }
+    window.addEventListener('dragover', over)
+    window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragover', over); window.removeEventListener('drop', drop) }
+  }, [])
+
   // ── 1) Procesar el archivo ────────────────────────────────────────────────
   const manejarArchivo = async (fileList) => {
     const f = Array.from(fileList || []).find((x) => /\.xlsx?$/i.test(x.name))
@@ -104,6 +119,8 @@ export default function CargarFacturaSpeedX() {
       setProcesando(false)
     }
   }
+  // La guardia global usa siempre la versión vigente de manejarArchivo.
+  manejarRef.current = manejarArchivo
 
   const semana = proc ? semanaGofo(proc.fechaInicioISO, proc.fechaFinISO) || proc.semana : ''
   // CANDADO anti-doble procesamiento: misma semana ya importada en SpeedX
