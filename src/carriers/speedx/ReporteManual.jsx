@@ -138,9 +138,14 @@ export default function ReporteManual() {
   // Semanas SÁBADO→VIERNES presentes en el reporte (el corte del dueño), con
   // su conteo de paquetes, para elegir cuál pagar de un clic.
   const semanasDetectadas = useMemo(() => {
-    if (!proc) return []
+    // Días disponibles: del archivo procesado o del desglose por día guardado
+    // en el provisional (así el selector de periodo también funciona al reabrir).
+    const dias = proc
+      ? proc.detalles.map((d) => ({ fecha: d.fecha, n: 1 }))
+      : (provEdit?.porDia || []).map((r) => ({ fecha: r.f, n: (r.i || 0) + (r.d || 0) }))
+    if (!dias.length) return []
     const buckets = {}
-    for (const d of proc.detalles) {
+    for (const d of dias) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) continue
       const dt = deISO(d.fecha)
       const desdeSab = (dt.getDay() + 1) % 7 // sábado=0
@@ -149,10 +154,10 @@ export default function ReporteManual() {
       const aI = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
       const k = aI(ini)
       buckets[k] = buckets[k] || { ini: aI(ini), fin: aI(fin), n: 0 }
-      buckets[k].n++
+      buckets[k].n += d.n
     }
     return Object.values(buckets).sort((a, b) => (a.ini < b.ini ? -1 : 1))
-  }, [proc])
+  }, [proc, provEdit])
 
   // Resumen SOLO de los días elegidos (los dobles ya vienen calculados por
   // parada y las rutas son de un día, así que filtrar por fecha es exacto).
@@ -174,9 +179,24 @@ export default function ReporteManual() {
   const filas = useMemo(() => {
     // Base: el archivo procesado o, en modo edición, las filas GUARDADAS del
     // provisional (conteos fijos; tarifas y descuentos editables).
+    const clGuardados = Object.fromEntries(((provEdit?.claimsCh) || []).map((c) => [keyDe(c.n), c.m || 0]))
     const base = proc
       ? (res?.resumenChoferes || [])
-      : (provEdit?.filas || []).map((f) => ({ nombre: f.nombre, individuales: f.individuales || 0, dobles: f.dobles || 0, _claims: f.claims || 0 }))
+      : (provEdit?.porDia || []).length
+        ? (() => {
+            // Con desglose por día guardado: recontar según el rango elegido.
+            const acc = {}
+            for (const r of provEdit.porDia) {
+              if (rango?.ini && r.f < rango.ini) continue
+              if (rango?.fin && r.f > rango.fin) continue
+              const k = keyDe(r.n)
+              acc[k] = acc[k] || { nombre: r.n, individuales: 0, dobles: 0 }
+              acc[k].individuales += r.i || 0
+              acc[k].dobles += r.d || 0
+            }
+            return Object.values(acc).map((x) => ({ ...x, _claims: clGuardados[keyDe(x.nombre)] || 0 }))
+          })()
+        : (provEdit?.filas || []).map((f) => ({ nombre: f.nombre, individuales: f.individuales || 0, dobles: f.dobles || 0, _claims: f.claims || 0 }))
     if (!base.length) return []
     return base.map((ch) => {
       const k = keyDe(ch.nombre)
@@ -188,7 +208,7 @@ export default function ReporteManual() {
       const desc = Number(descuentos[k]) || 0
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), total: r2(pago - claims - desc), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [proc, res, provEdit, tarifas, claimsPorChofer, descuentos])
+  }, [proc, res, provEdit, rango, tarifas, claimsPorChofer, descuentos])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const spxInd = Number(pagoSpx.ind) || 0
@@ -277,6 +297,21 @@ export default function ReporteManual() {
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         creadoPor: perfil?.email || perfil?.nombre || '',
         filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
+        // Desglose por DÍA y chofer de TODO el reporte (compacto): permite
+        // reabrir el pendiente y volver a elegir el periodo.
+        porDia: (() => {
+          const acc = {}
+          for (const d of proc.detalles) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) continue
+            const k = `${d.fecha}||${keyDe(d.courier)}`
+            acc[k] = acc[k] || { f: d.fecha, n: d.courier, i: 0, d: 0 }
+            if (d.esStopAdicional) acc[k].d++
+            else acc[k].i++
+          }
+          return Object.values(acc)
+        })(),
+        claimsCh: Object.entries(claimsPorChofer).map(([k, m]) => ({ n: k, m: r2(m) })),
+        fechasReporte: { ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' },
       })
       await reloadInvoices()
       setOkMsg(t('Provisional guardado como PENDIENTE. Cuando subas la factura oficial de esa semana, lo comparo automáticamente y te muestro las diferencias.'))
@@ -301,6 +336,14 @@ export default function ReporteManual() {
       tf[keyDe(f.nombre)] = { ind: f.tInd ? String(f.tInd) : '', dob: f.tDob ? String(f.tDob) : '' }
       if (f.descuento) ds[keyDe(f.nombre)] = String(f.descuento)
     }
+    // Choferes que pueden entrar al ampliar el periodo: tarifa del perfil.
+    for (const r of pr.porDia || []) {
+      const k = keyDe(r.n)
+      if (!tf[k]) {
+        const d = buscarDriver(drivers, r.n)
+        tf[k] = { ind: d && Number(d.precioIndividual) > 0 ? String(d.precioIndividual) : '', dob: d && Number(d.precioDoble) > 0 ? String(d.precioDoble) : '' }
+      }
+    }
     setTarifas(tf)
     setDescuentos(ds)
     setPagoSpx(pr.pagoSpeedX ? { ind: String(pr.pagoSpeedX.ind || ''), dob: String(pr.pagoSpeedX.dob || '') } : { ind: '', dob: '' })
@@ -314,9 +357,27 @@ export default function ReporteManual() {
       await updateDoc(doc(db, 'invoices', provEdit.id), {
         ciudad: (ciudadSel || provEdit.ciudad || '').trim().toUpperCase(),
         totalPagar,
+        semana: semanaSel || provEdit.semana || '',
+        ...(rango?.ini ? { fechaInicio: deISO(rango.ini), fechaFin: deISO(rango.fin) } : {}),
+        totalPaquetes: filas.reduce((a, f) => a + f.paquetes, 0),
         actualizadoEn: new Date().toISOString(),
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
+        // Desglose por DÍA y chofer de TODO el reporte (compacto): permite
+        // reabrir el pendiente y volver a elegir el periodo.
+        porDia: (() => {
+          const acc = {}
+          for (const d of proc.detalles) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) continue
+            const k = `${d.fecha}||${keyDe(d.courier)}`
+            acc[k] = acc[k] || { f: d.fecha, n: d.courier, i: 0, d: 0 }
+            if (d.esStopAdicional) acc[k].d++
+            else acc[k].i++
+          }
+          return Object.values(acc)
+        })(),
+        claimsCh: Object.entries(claimsPorChofer).map(([k, m]) => ({ n: k, m: r2(m) })),
+        fechasReporte: { ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' },
       })
       await reloadInvoices()
       setOkMsg(t('Cambios guardados en el provisional pendiente.'))
@@ -511,17 +572,29 @@ export default function ReporteManual() {
             )}
           </Card>
 
+          </>
+          )}
+
           {/* ¿QUÉ DÍAS SE PAGAN? El reporte puede mezclar semanas (el corte es
-              sábado→viernes): elige una semana de un clic o marca un rango a mano
-              (p. ej. solo los días que ya pagaste). */}
+              sábado→viernes): elige una semana de un clic o marca un rango a mano.
+              También al REABRIR un pendiente (usa el desglose por día guardado). */}
+          {(proc || (provEdit?.porDia || []).length > 0) && (
           <Card className="mb-4">
             <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">{t('¿Qué días vas a pagar?')}</div>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Tu semana va de sábado a viernes. El reporte puede traer días de dos semanas: elige la semana correcta o marca solo los días que vas a pagar, y el cálculo usa únicamente esos días.')}</p>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => setRango({ ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' })}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${rango?.ini === (proc.fechaInicioISO || '') && rango?.fin === (proc.fechaFinISO || '') ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-                {t('Todo el reporte')}
-              </button>
+              {(() => {
+                const todo = proc
+                  ? { ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' }
+                  : { ini: provEdit?.fechasReporte?.ini || '', fin: provEdit?.fechasReporte?.fin || '' }
+                const on = rango?.ini === todo.ini && rango?.fin === todo.fin
+                return (
+                  <button type="button" onClick={() => setRango(todo)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${on ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    {t('Todo el reporte')}
+                  </button>
+                )
+              })()}
               {semanasDetectadas.map((w) => {
                 const on = rango?.ini === w.ini && rango?.fin === w.fin
                 return (
@@ -535,11 +608,9 @@ export default function ReporteManual() {
               <span className="text-xs text-slate-500 dark:text-slate-400">{t('A mano:')}</span>
               <Input type="date" className="w-40" value={rango?.ini || ''} onChange={(e) => setRango((r) => ({ ...r, ini: e.target.value }))} />
               <Input type="date" className="w-40" value={rango?.fin || ''} onChange={(e) => setRango((r) => ({ ...r, fin: e.target.value }))} />
-              <Badge color="navy">{num(res.totalPaquetes)} {t('paquetes en el rango')}</Badge>
+              <Badge color="navy">{num(proc ? res.totalPaquetes : filas.reduce((a, f) => a + f.paquetes, 0))} {t('paquetes en el rango')}</Badge>
             </div>
           </Card>
-
-          </>
           )}
 
           <Card className="mb-4">
