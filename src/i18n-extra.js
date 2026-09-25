@@ -1998,6 +1998,7 @@ export const EN_EXTRA = {
   "TOTAL a pagar": "TOTAL to pay",
   "Descuento": "Deduction",
   "Abrir": "Open",
+  "No hay provisionales de esa ciudad.": "No provisionals for that city.",
   "EDITANDO PENDIENTE": "EDITING PENDING",
   "Guardar cambios": "Save changes",
   "Cancelar": "Cancel",

@@ -63,6 +63,7 @@ export default function ReporteManual() {
   // total a pagar de este cálculo. Solo viven aquí (y en el provisional).
   const [descuentos, setDescuentos] = useState({})
   const [provEdit, setProvEdit] = useState(null) // provisional PENDIENTE abierto para editar
+  const [filtroCiudad, setFiltroCiudad] = useState('') // filtro de la lista ('' = todas)
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -331,7 +332,10 @@ export default function ReporteManual() {
     await deleteDoc(doc(db, 'invoices', pr.id))
     await reloadInvoices()
   }
-  const provisionalesOrdenados = [...(provisionales || [])].sort((a, b) => (b.fechaCarga?.seconds || 0) - (a.fechaCarga?.seconds || 0))
+  const provisionalesOrdenados = [...(provisionales || [])]
+    .filter((pr) => !filtroCiudad || (pr.ciudad || '') === filtroCiudad)
+    .sort((a, b) => (b.fechaCarga?.seconds || 0) - (a.fechaCarga?.seconds || 0))
+  const ciudadesProv = [...new Set((provisionales || []).map((pr) => pr.ciudad || '').filter(Boolean))].sort()
 
   return (
     <div>
@@ -351,9 +355,26 @@ export default function ReporteManual() {
       {avisos.map((a, i) => <Aviso key={`a${i}`} tipo="warn" className="mb-3">{a}</Aviso>)}
 
       {/* Provisionales guardados: pendientes de verificar y ya verificados */}
-      {provisionalesOrdenados.length > 0 && (
+      {(provisionalesOrdenados.length > 0 || filtroCiudad) && (
         <Card className="mb-4">
-          <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">{t('Provisionales guardados')}</h3>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h3 className="m-0 text-base font-bold text-brand-navy dark:text-slate-100">{t('Provisionales guardados')}</h3>
+            {ciudadesProv.length > 1 && (
+              <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={() => setFiltroCiudad('')}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${!filtroCiudad ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                  {t('Todas')}
+                </button>
+                {ciudadesProv.map((c) => (
+                  <button type="button" key={c} onClick={() => setFiltroCiudad(c)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${filtroCiudad === c ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    {c}
+                  </button>
+                ))}
+              </span>
+            )}
+          </div>
+          {provisionalesOrdenados.length === 0 && <p className="py-2 text-sm text-slate-400">{t('No hay provisionales de esa ciudad.')}</p>}
           <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {provisionalesOrdenados.map((pr) => {
               const verificado = pr.estado === 'verificado'
