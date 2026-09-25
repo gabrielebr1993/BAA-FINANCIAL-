@@ -12,22 +12,36 @@
 // Factura» como siempre y ahí queda todo registrado UNA sola vez.
 // ============================================================================
 import { useState, useRef, useMemo, useEffect } from 'react'
+import { collection, addDoc, serverTimestamp, doc, deleteDoc } from 'firebase/firestore'
+import { db } from '../../firebase'
+import { useAuth } from '../../AuthContext'
 import { useData } from '../../DataContext'
-import { procesarArchivoSpeedX } from './parser'
+import { procesarArchivoSpeedX, procesarReporteRutasSpeedX } from './parser'
 import { construirResumenSpeedX } from './resumen'
 import { buscarDriver } from '../../utils/calc'
 import { exportarExcel, exportarPDF } from '../../utils/exportar'
 import { money, num } from '../../utils/format'
-import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers } from 'lucide-react'
+import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers, CheckCircle2, Trash2, ChevronDown, ChevronUp, Save } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
 const keyDe = (n) => (n || '').trim().toLowerCase()
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
+const deISO = (iso) => {
+  if (!iso) return null
+  const [y, mm, dd] = String(iso).split('-').map(Number)
+  return new Date(y, (mm || 1) - 1, dd || 1, 12)
+}
+const fmtF = (d) => {
+  const dt = d?.toDate ? d.toDate() : d instanceof Date ? d : null
+  return dt ? dt.toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '—'
+}
+
 export default function ReporteManual() {
   const { t } = useLang()
-  const { drivers, empresaActiva } = useData()
+  const { perfil } = useAuth()
+  const { drivers, empresaActiva, activeCompanyId, provisionales, reloadInvoices } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [proc, setProc] = useState(null)
@@ -36,6 +50,9 @@ export default function ReporteManual() {
   const [tarifas, setTarifas] = useState({}) // key → { ind, dob } (solo local, no se guarda)
   const [bulk, setBulk] = useState({ ind: '', dob: '' })
   const [dragOver, setDragOver] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [okMsg, setOkMsg] = useState('')
+  const [abierto, setAbierto] = useState(null) // provisional expandido en la lista
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -59,11 +76,15 @@ export default function ReporteManual() {
     setAvisos([])
     try {
       const buf = await f.arrayBuffer()
-      const p = procesarArchivoSpeedX(buf, f.name)
+      // Acepta DOS formatos: la factura semanal (hoja PLD) o el reporte de
+      // rutas descargable (route_parcel_info, hoja "result").
+      let p
+      try { p = procesarArchivoSpeedX(buf, f.name) }
+      catch { p = procesarReporteRutasSpeedX(buf, f.name) }
       const resumen = construirResumenSpeedX(p)
       setProc({ ...p, resumen })
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
-      setAvisos([...(p.avisos || []), ...(resumen.avisos || [])].filter((a) => !a.includes('DSP Summary')))
+      setAvisos([...(p.avisos || []), ...(resumen.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
       const tf = {}
       for (const ch of resumen.resumenChoferes) {
         const d = buscarDriver(drivers, ch.nombre)
@@ -161,6 +182,44 @@ export default function ReporteManual() {
     )
   }
 
+  // Guarda el cálculo como PROVISIONAL PENDIENTE: cuando se suba la factura
+  // oficial de la misma semana/ciudad, el sistema los compara chofer a chofer.
+  const guardarProvisional = async () => {
+    if (!proc || guardando) return
+    setGuardando(true)
+    setOkMsg('')
+    try {
+      await addDoc(collection(db, 'invoices'), {
+        companyId: activeCompanyId,
+        carrier: 'speedx',
+        provisional: true,
+        estado: 'pendiente',
+        semana: proc.semana || '',
+        ciudad: proc.ciudad || '',
+        archivoNombre: proc.nombreArchivo || '',
+        fechaCarga: serverTimestamp(),
+        fechaInicio: deISO(proc.fechaInicioISO),
+        fechaFin: deISO(proc.fechaFinISO),
+        totalPagar,
+        totalPaquetes: res.totalPaquetes,
+        creadoPor: perfil?.email || perfil?.nombre || '',
+        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, total: f.total })),
+      })
+      await reloadInvoices()
+      setOkMsg(t('Provisional guardado como PENDIENTE. Cuando subas la factura oficial de esa semana, lo comparo automáticamente y te muestro las diferencias.'))
+    } catch (e) {
+      setErrores([t('Error al guardar:') + ' ' + e.message])
+    } finally {
+      setGuardando(false)
+    }
+  }
+  const borrarProvisional = async (pr) => {
+    if (!window.confirm(`${t('¿Eliminar el provisional de la semana')} ${pr.semana}?`)) return
+    await deleteDoc(doc(db, 'invoices', pr.id))
+    await reloadInvoices()
+  }
+  const provisionalesOrdenados = [...(provisionales || [])].sort((a, b) => (b.fechaCarga?.seconds || 0) - (a.fechaCarga?.seconds || 0))
+
   return (
     <div>
       <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>
@@ -175,7 +234,67 @@ export default function ReporteManual() {
       </Aviso>
 
       {errores.map((e, i) => <Aviso key={i} tipo="error" className="mb-3">{e}</Aviso>)}
+      {okMsg && <Aviso tipo="ok" className="mb-3"><span className="inline-flex items-center gap-1.5"><CheckCircle2 size={15} /> {okMsg}</span></Aviso>}
       {avisos.map((a, i) => <Aviso key={`a${i}`} tipo="warn" className="mb-3">{a}</Aviso>)}
+
+      {/* Provisionales guardados: pendientes de verificar y ya verificados */}
+      {provisionalesOrdenados.length > 0 && (
+        <Card className="mb-4">
+          <h3 className="m-0 mb-2 text-base font-bold text-brand-navy dark:text-slate-100">{t('Provisionales guardados')}</h3>
+          <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+            {provisionalesOrdenados.map((pr) => {
+              const verificado = pr.estado === 'verificado'
+              const comp = pr.comparacion
+              const abiertoEste = abierto === pr.id
+              return (
+                <div key={pr.id} className="py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge color={verificado ? 'green' : 'gold'}>{verificado ? t('VERIFICADO') : t('PENDIENTE')}</Badge>
+                    <span className="font-semibold text-brand-navy dark:text-slate-100">{pr.ciudad} · {t('Semana')} {pr.semana}</span>
+                    <span className="text-xs text-slate-400">{fmtF(pr.fechaInicio)} – {fmtF(pr.fechaFin)} · {num(pr.totalPaquetes || 0)} {t('paquetes')}</span>
+                    <span className="ml-auto font-bold text-brand-navy dark:text-slate-100">{money(pr.totalPagar || 0)}</span>
+                    {verificado && comp && (
+                      <button onClick={() => setAbierto(abiertoEste ? null : pr.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy dark:text-slate-200">
+                        {t('Diferencias')} {abiertoEste ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    )}
+                    <button onClick={() => borrarProvisional(pr)} className="text-slate-400 transition hover:text-rose-500" title={t('Eliminar')}><Trash2 size={15} /></button>
+                  </div>
+                  {verificado && comp && (
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t('Pagaste (provisional)')} <b>{money(comp.totalProvisional)}</b> · {t('lo correcto (factura oficial)')} <b>{money(comp.totalOficial)}</b> · {t('diferencia')}{' '}
+                      <b className={comp.diferencia > 0 ? 'text-amber-600' : comp.diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                        {comp.diferencia > 0 ? '+' : ''}{money(comp.diferencia)}
+                      </b>{' '}
+                      {comp.diferencia > 0 ? t('(pagaste de más: descuéntalo en la próxima semana)') : comp.diferencia < 0 ? t('(pagaste de menos: debes la diferencia)') : t('(cuadró exacto)')}
+                    </div>
+                  )}
+                  {verificado && comp && abiertoEste && (
+                    <div className="mt-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                      <table className="w-full text-xs">
+                        <thead><tr className="text-left text-slate-400"><th className="py-1">{t('Chofer')}</th><th className="text-right">{t('Provisional')}</th><th className="text-right">{t('Oficial')}</th><th className="text-right">{t('Diferencia')}</th></tr></thead>
+                        <tbody>
+                          {(comp.porChofer || []).filter((c) => Math.abs(c.diferencia) >= 0.01).map((c, i) => (
+                            <tr key={i} className="border-t border-slate-200 dark:border-slate-700/60">
+                              <td className="py-1 font-medium">{c.nombre}</td>
+                              <td className="text-right">{money(c.provisional)}</td>
+                              <td className="text-right">{money(c.oficial)}</td>
+                              <td className={`text-right font-bold ${c.diferencia > 0 ? 'text-amber-600' : 'text-rose-600'}`}>{c.diferencia > 0 ? '+' : ''}{money(c.diferencia)}</td>
+                            </tr>
+                          ))}
+                          {(comp.porChofer || []).every((c) => Math.abs(c.diferencia) < 0.01) && (
+                            <tr><td colSpan={4} className="py-1 text-emerald-600">{t('Todos los choferes cuadraron exacto.')}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       {!proc && (
         <Card className="mb-4">
@@ -266,9 +385,12 @@ export default function ReporteManual() {
                 {t('Total a pagar a choferes')}: <b className="text-brand-navy dark:text-slate-100">{money(totalPagar)}</b>
                 {sinTarifa.length > 0 && <span className="ml-2 text-xs font-semibold text-amber-600">({sinTarifa.length} {t('chofer(es) sin tarifa no suman')})</span>}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} /> {t('Descargar Excel')}</Boton>
-                <Boton onClick={descargarPDF}><FileText size={16} /> {t('Descargar PDF')}</Boton>
+                <Boton variant="ghost" onClick={descargarPDF}><FileText size={16} /> {t('Descargar PDF')}</Boton>
+                <Boton onClick={guardarProvisional} disabled={guardando || sinTarifa.length > 0}>
+                  {guardando ? <Spinner /> : <Save size={16} />} {t('Guardar como pendiente')}
+                </Boton>
               </div>
             </div>
           </Card>

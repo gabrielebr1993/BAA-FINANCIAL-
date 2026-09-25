@@ -52,7 +52,7 @@ export default function CargarFacturaSpeedX() {
   const { t } = useLang()
   const { perfil } = useAuth()
   const navigate = useNavigate()
-  const { invoices, drivers, activeCompanyId, empresaActiva, ciudadesEmpresa, reloadInvoices, reloadDrivers, reloadClaims, reloadAjustes, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, activeCompanyId, empresaActiva, ciudadesEmpresa, provisionales, reloadInvoices, reloadDrivers, reloadClaims, reloadAjustes, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -64,6 +64,7 @@ export default function CargarFacturaSpeedX() {
   const [bulk, setBulk] = useState({ ind: '', dob: '' })
   const [fechaCobro, setFechaCobro] = useState('') // ISO editable (fondo)
   const [confirmarDuplicado, setConfirmarDuplicado] = useState(false)
+  const [verifProv, setVerifProv] = useState(null) // resultado de conciliar un provisional
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef(null)
 
@@ -424,6 +425,49 @@ export default function CargarFacturaSpeedX() {
         await batch.commit()
       }
 
+      // e) CONCILIACIÓN con un pago PROVISIONAL pendiente (Reporte manual):
+      // misma ciudad y fechas que se tocan → comparar chofer a chofer lo que
+      // se pagó provisionalmente vs lo que salió en la factura oficial.
+      try {
+        const aDate = (x) => (x?.toDate ? x.toDate() : x instanceof Date ? x : null)
+        const prov = (provisionales || []).find((pr) => {
+          if (pr.estado === 'verificado' || pr.companyId !== activeCompanyId) return false
+          if ((pr.ciudad || '') !== (proc.ciudad || '')) return false
+          const pi = aDate(pr.fechaInicio), pf = aDate(pr.fechaFin)
+          if (!pi || !pf || !periodoIni || !periodoFin) return false
+          return pi <= periodoFin && pf >= periodoIni // rangos que se tocan
+        })
+        if (prov) {
+          const ofiPorCh = {}
+          for (const pg of pagosFinal) {
+            const k = keyDe(pg.nombre)
+            ofiPorCh[k] = { nombre: pg.nombre, total: r2((ofiPorCh[k]?.total || 0) + pg.totalPagar) }
+          }
+          const nombres = new Set([...(prov.filas || []).map((f) => keyDe(f.nombre)), ...Object.keys(ofiPorCh)])
+          const porChofer = [...nombres].map((k) => {
+            const pf2 = (prov.filas || []).find((f) => keyDe(f.nombre) === k)
+            const provTot = r2(pf2?.total || 0)
+            const ofi = r2(ofiPorCh[k]?.total || 0)
+            return { nombre: pf2?.nombre || ofiPorCh[k]?.nombre || k, provisional: provTot, oficial: ofi, diferencia: r2(provTot - ofi) }
+          }).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+          const comparacion = {
+            totalProvisional: r2(porChofer.reduce((a, c) => a + c.provisional, 0)),
+            totalOficial: r2(porChofer.reduce((a, c) => a + c.oficial, 0)),
+            diferencia: r2(porChofer.reduce((a, c) => a + c.diferencia, 0)),
+            porChofer,
+          }
+          await updateDoc(doc(db, 'invoices', prov.id), {
+            estado: 'verificado',
+            invoiceOficialId: ref.id,
+            verificadoEn: new Date().toISOString(),
+            comparacion,
+          })
+          setVerifProv({ semana: prov.semana, ...comparacion })
+        } else {
+          setVerifProv(null)
+        }
+      } catch { /* la conciliación nunca bloquea el guardado */ }
+
       await reloadInvoices()
       await reloadClaims()
       setSelectedInvoiceId(ref.id)
@@ -449,6 +493,17 @@ export default function CargarFacturaSpeedX() {
       </PageTitle>
 
       {errores.map((e, i) => <Aviso key={i} tipo="error" className="mb-3">{e}</Aviso>)}
+      {guardado && verifProv && (
+        <Aviso tipo={Math.abs(verifProv.diferencia) < 0.01 ? 'ok' : 'warn'} className="mb-3">
+          <div>
+            <b>{t('Conciliación del pago provisional')} ({t('Semana')} {verifProv.semana}):</b>{' '}
+            {t('pagaste')} <b>{money(verifProv.totalProvisional)}</b> · {t('lo correcto (factura oficial)')} <b>{money(verifProv.totalOficial)}</b> · {t('diferencia')}{' '}
+            <b>{verifProv.diferencia > 0 ? '+' : ''}{money(verifProv.diferencia)}</b>{' '}
+            {verifProv.diferencia > 0.009 ? t('(pagaste de más: descuéntalo en la próxima semana)') : verifProv.diferencia < -0.009 ? t('(pagaste de menos: debes la diferencia)') : t('(cuadró exacto)')}
+            {' '}{t('El detalle por chofer quedó guardado en «Reporte manual».')}
+          </div>
+        </Aviso>
+      )}
       {guardado && (
         <Aviso tipo="ok" className="mb-3">
           <span className="inline-flex flex-wrap items-center gap-2">

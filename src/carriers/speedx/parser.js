@@ -295,3 +295,104 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
     verificacion, avisos,
   }
 }
+
+// ── Parser del REPORTE MANUAL (route_parcel_info) ───────────────────────────
+// El reporte que el dueño puede descargar cuando la factura oficial tarda:
+// UNA hoja ("result") con un paquete por fila (POE, Route, Sequence, Address,
+// TrackingNo, Status/FinalStatus, Weight, FleeName, DriverName, fechas…).
+// NO trae tarifas, ni "Pay per stop adj.", ni claims. Los DOBLES se derivan
+// agrupando por RUTA + DIRECCIÓN (la ruta ya trae el día): el primer paquete
+// de la parada es individual y los demás son dobles — regla VERIFICADA contra
+// la factura oficial real (97% de coincidencia paquete a paquete; la
+// conciliación con la factura oficial ajusta después cualquier diferencia).
+// Solo los paquetes ENTREGADOS (DELIVERED) cuentan para el pago provisional.
+export function procesarReporteRutasSpeedX(arrayBuffer, nombreArchivo = '') {
+  const wb = XLSX.read(arrayBuffer, { type: 'array', raw: true })
+  const ws = wb.Sheets[wb.SheetNames.find((s) => norm(s) === 'result')] || wb.Sheets[wb.SheetNames[0]]
+  const m = filasMatriz(ws)
+  const H = (m[0] || []).map((h) => String(h ?? ''))
+  const col = (n) => H.findIndex((h) => norm(h) === norm(n))
+  const i = {
+    poe: col('POE'), ruta: col('Route'), seq: col('Sequence'), dir: col('Address'), unit: col('Unit'),
+    zip: col('ZipCode'), track: col('TrackingNo'), status: col('FinalStatus'), status2: col('Status'),
+    completado: col('CompleteTime'), peso: col('Weight'), fleet: col('FleeName'), driver: col('DriverName'),
+    cuenta: col('customerAccountCode'), plan: col('planDeliveryDate'),
+  }
+  if (i.track < 0 || i.driver < 0 || i.ruta < 0 || i.dir < 0) {
+    throw new Error('Este archivo no parece el reporte de rutas de SpeedX (faltan las columnas TrackingNo / DriverName / Route / Address).')
+  }
+  const avisos = []
+  const normD = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const vistos = new Set()
+  const grupos = new Set() // ruta||dirección ya vista → los siguientes son DOBLES
+  const detalles = []
+  const excluidos = {}
+  let duplicados = 0
+  for (let r = 1; r < m.length; r++) {
+    const f = m[r]
+    if (!f || !f[i.track]) continue
+    const track = String(f[i.track]).trim()
+    if (vistos.has(track)) { duplicados++; continue }
+    vistos.add(track)
+    const estado = String(f[i.status] ?? f[i.status2] ?? '').trim()
+    // Solo lo ENTREGADO se paga en el provisional (lo demás se cuenta y avisa).
+    if (norm(estado) !== 'delivered') {
+      const k = estado || 'SIN ESTADO'
+      excluidos[k] = (excluidos[k] || 0) + 1
+      continue
+    }
+    const peso = toNum(f[i.peso])
+    const kParada = `${f[i.ruta]}||${normD(f[i.dir])}${normD(f[i.unit])}`
+    const esDoble = grupos.has(kParada)
+    grupos.add(kParada)
+    detalles.push({
+      waybill: track,
+      courier: String(f[i.driver] ?? '').trim().replace(/\s+/g, ' '),
+      ruta: String(f[i.ruta] ?? '').trim() || 'Sin ruta',
+      ciudad: '', // se fija abajo (código del fleet)
+      zip: String(f[i.zip] ?? '').trim(),
+      peso,
+      rangoPeso: peso < 1 ? '<1 lbs' : '1-10 lbs',
+      esMenor1Lb: peso < 1,
+      temu: /^temu/i.test(String(f[i.cuenta] ?? '')),
+      rate: 0, adj: 0, monto: 0,
+      esStopAdicional: esDoble,
+      fecha: String(f[i.plan] ?? f[i.completado] ?? '').slice(0, 10),
+      nota: '',
+      estado,
+    })
+  }
+  if (!detalles.length) throw new Error('El reporte no trae paquetes ENTREGADOS (DELIVERED).')
+  if (duplicados) avisos.push(`${duplicados} tracking(s) repetidos: se contaron una sola vez.`)
+  const nExcl = Object.values(excluidos).reduce((a, n) => a + n, 0)
+  if (nExcl) avisos.push(`${nExcl} paquete(s) NO entregados quedan fuera del pago provisional: ${Object.entries(excluidos).map(([k, n]) => `${k} (${n})`).join(', ')}.`)
+
+  // Ciudad = código del fleet ("CHS - B&J Investment…" → CHS); respaldo: POE.
+  const fleet = String((m[1] || [])[i.fleet] ?? '').trim()
+  const ciudad = (fleet.split('-')[0] || '').trim() || String((m[1] || [])[i.poe] ?? '').trim() || 'SPX'
+  for (const d of detalles) d.ciudad = ciudad
+
+  // Periodo = rango de fechas del contenido (el reporte puede cubrir varios días).
+  const fechas = [...new Set(detalles.map((d) => d.fecha).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort()
+  const fechaInicioISO = fechas[0] || null
+  const fechaFinISO = fechas[fechas.length - 1] || null
+  const mmdd = (iso) => (iso ? iso.slice(5, 7) + iso.slice(8, 10) : '')
+  const semana = fechaInicioISO ? `${mmdd(fechaInicioISO)}-${mmdd(fechaFinISO)}` : ''
+
+  const sumaDetalle = 0
+  return {
+    carrier: 'speedx',
+    esReporteRutas: true,
+    nombreArchivo,
+    fleet,
+    ciudad,
+    semana, fechaInicioISO, fechaFinISO,
+    detalles,
+    claims: [],
+    driverSummary: [],
+    oficial: null,
+    verificacion: { paquetes: detalles.length, sumaDetalle, sumaClaims: 0, totalCalculado: 0, speedx: null, difPaquetes: null, difMonto: null, cuadra: null },
+    avisos,
+    excluidos,
+  }
+}

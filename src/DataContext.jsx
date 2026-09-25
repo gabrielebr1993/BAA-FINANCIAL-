@@ -39,7 +39,12 @@ export function DataProvider({ children }) {
   // total de facturas, choferes, claims y gastos fijos sin tocar las pantallas.
   const { carrier } = useCarrier()
   const carrierActivo = CARRIERS[carrier] ? carrier : 'gofo'
-  const invoicesCarrier = useMemo(() => invoices.filter((x) => carrierDe(x) === carrierActivo), [invoices, carrierActivo])
+  // Los PROVISIONALES (pagos calculados con el "Reporte manual" de SpeedX)
+  // viven en la misma colección con provisional:true, pero NO cuentan como
+  // facturas: se excluyen de todo (dashboard, cobros, candado de duplicados…)
+  // y se exponen aparte para la pantalla de Reporte manual.
+  const invoicesCarrier = useMemo(() => invoices.filter((x) => carrierDe(x) === carrierActivo && !x.provisional), [invoices, carrierActivo])
+  const provisionalesCarrier = useMemo(() => invoices.filter((x) => carrierDe(x) === carrierActivo && x.provisional === true), [invoices, carrierActivo])
   const driversCarrier = useMemo(() => drivers.filter((x) => carrierDe(x) === carrierActivo), [drivers, carrierActivo])
   const managersCarrier = useMemo(() => managers.filter((x) => carrierDe(x) === carrierActivo), [managers, carrierActivo])
   const claimsCarrier = useMemo(() => claims.filter((x) => carrierDe(x) === carrierActivo), [claims, carrierActivo])
@@ -536,6 +541,7 @@ export function DataProvider({ children }) {
     reloadCompanies: cargarCompanies,
     // datos
     invoices: invoicesVisibles,
+    provisionales: provisionalesCarrier,
     drivers: driversCarrier,
     managers: managersCarrier,
     claims: claimsFiltrados,
