@@ -1996,6 +1996,7 @@ export const EN_EXTRA = {
   "Ciudad:": "City:",
   "SpeedX te pagará (estimado)": "SpeedX will pay you (estimated)",
   "TOTAL a pagar": "TOTAL to pay",
+  "Descuento": "Deduction",
   "TEMPORAL": "TEMPORARY",
   "ind.": "single",
   "doble": "double",

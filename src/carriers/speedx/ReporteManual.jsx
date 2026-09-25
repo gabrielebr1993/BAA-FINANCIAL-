@@ -59,6 +59,9 @@ export default function ReporteManual() {
   // Opcional — sirve para estimar tu ingreso y margen antes de la factura.
   // Se recuerda por ciudad en este navegador.
   const [pagoSpx, setPagoSpx] = useState({ ind: '', dob: '' })
+  // Descuentos MANUALES por chofer (adelantos, préstamos, etc.): se restan del
+  // total a pagar de este cálculo. Solo viven aquí (y en el provisional).
+  const [descuentos, setDescuentos] = useState({})
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -94,6 +97,7 @@ export default function ReporteManual() {
       // Ciudad DETECTADA del nombre del fleet (p. ej. "CHS - B&J…" → CHS);
       // editable por si el reporte viene raro o quieres otro código.
       setCiudadSel(p.ciudad || '')
+      setDescuentos({})
       try { setPagoSpx(JSON.parse(localStorage.getItem(`mp_spx_paga_${p.ciudad || ''}`) || '{"ind":"","dob":""}')) } catch { setPagoSpx({ ind: '', dob: '' }) }
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
       setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
@@ -173,9 +177,10 @@ export default function ReporteManual() {
       const paquetes = ch.individuales + ch.dobles
       const pago = ch.individuales * tInd + ch.dobles * tDob
       const claims = claimsPorChofer[k] || 0
-      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), total: r2(pago - claims), listo: tInd > 0 && tDob > 0 }
+      const desc = Number(descuentos[k]) || 0
+      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), total: r2(pago - claims - desc), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [res, tarifas, claimsPorChofer])
+  }, [res, tarifas, claimsPorChofer, descuentos])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const spxInd = Number(pagoSpx.ind) || 0
@@ -198,6 +203,7 @@ export default function ReporteManual() {
       [t('Tarifa individual')]: f.tInd,
       [t('Tarifa doble')]: f.tDob,
       [t('Claims (M2)')]: -f.claimsMonto,
+      [t('Descuento')]: -f.desc,
       [t('Total a pagar')]: f.total,
     })),
     {
@@ -208,6 +214,7 @@ export default function ReporteManual() {
       [t('Tarifa individual')]: '',
       [t('Tarifa doble')]: '',
       [t('Claims (M2)')]: -r2(filas.reduce((a, f) => a + f.claimsMonto, 0)),
+      [t('Descuento')]: -r2(filas.reduce((a, f) => a + f.desc, 0)),
       [t('Total a pagar')]: totalPagar,
     },
     ...(ingresoEst > 0 ? [
@@ -226,13 +233,13 @@ export default function ReporteManual() {
       `${t('Pagos PROVISIONALES a choferes (reporte manual SpeedX)')} · ${t('Semana')} ${semanaSel}`,
       [{
         titulo: t('Pagos por chofer'),
-        head: [t('Chofer'), t('Paquetes'), t('Individuales'), t('Dobles'), t('Tarifa individual'), t('Tarifa doble'), t('Claims (M2)'), t('Total a pagar')],
+        head: [t('Chofer'), t('Paquetes'), t('Individuales'), t('Dobles'), t('Tarifa individual'), t('Tarifa doble'), t('Claims (M2)'), t('Descuento'), t('Total a pagar')],
         body: [
-          ...filas.map((f) => [f.nombre, num(f.paquetes), num(f.individuales), num(f.dobles), money(f.tInd), money(f.tDob), f.claimsMonto ? `−${money(f.claimsMonto)}` : '—', money(f.total)]),
-          ['TOTAL', num(filas.reduce((a, f) => a + f.paquetes, 0)), '', '', '', '', '', money(totalPagar)],
+          ...filas.map((f) => [f.nombre, num(f.paquetes), num(f.individuales), num(f.dobles), money(f.tInd), money(f.tDob), f.claimsMonto ? `−${money(f.claimsMonto)}` : '—', f.desc ? `−${money(f.desc)}` : '—', money(f.total)]),
+          ['TOTAL', num(filas.reduce((a, f) => a + f.paquetes, 0)), '', '', '', '', '', `−${money(r2(filas.reduce((a, f) => a + f.desc, 0)))}`, money(totalPagar)],
           ...(ingresoEst > 0 ? [
-            [t('SpeedX te pagará (estimado)'), '', '', '', '', '', '', money(ingresoEst)],
-            [t('Margen estimado'), '', '', '', '', '', '', money(r2(ingresoEst - totalPagar))],
+            [t('SpeedX te pagará (estimado)'), '', '', '', '', '', '', '', money(ingresoEst)],
+            [t('Margen estimado'), '', '', '', '', '', '', '', money(r2(ingresoEst - totalPagar))],
           ] : []),
         ],
       }]
@@ -261,7 +268,7 @@ export default function ReporteManual() {
         totalPaquetes: res.totalPaquetes,
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         creadoPor: perfil?.email || perfil?.nombre || '',
-        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, total: f.total })),
+        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
       })
       await reloadInvoices()
       setOkMsg(t('Provisional guardado como PENDIENTE. Cuando subas la factura oficial de esa semana, lo comparo automáticamente y te muestro las diferencias.'))
@@ -465,6 +472,7 @@ export default function ReporteManual() {
                 { key: 'ind', label: t('Tarifa individual'), align: 'center' },
                 { key: 'dob', label: t('Tarifa doble'), align: 'center' },
                 { key: 'claimsMonto', label: t('Claims (M2)'), align: 'right' },
+                { key: 'desc', label: t('Descuento'), align: 'center' },
                 { key: 'total', label: t('Total a pagar'), align: 'right' },
               ]}
               rows={filas}
@@ -477,6 +485,9 @@ export default function ReporteManual() {
                   return <Input type="number" step="0.01" min="0" className={`w-24 text-right ${!(Number(val) > 0) ? 'border-rose-400' : ''}`} value={val} onChange={(e) => setTarifa(row.nombre, key, e.target.value)} />
                 }
                 if (key === 'claimsMonto') return row.claimsMonto ? <span className="text-rose-600 dark:text-rose-400">−{money(row.claimsMonto)}</span> : '—'
+                if (key === 'desc') {
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={descuentos[row._key] ?? ''} onChange={(e) => setDescuentos((d) => ({ ...d, [row._key]: e.target.value }))} />
+                }
                 if (key === 'total') return <b className="text-brand-navy dark:text-slate-100">{money(row.total)}</b>
                 return row[key]
               }}
