@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
-  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank, FileClock,
 } from 'lucide-react'
 
 // Marca de color
@@ -127,6 +127,7 @@ export const SECCIONES = [
   { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign },
   // `soloCarrier`: la sección solo aparece con esa compañía activa (Multi-Company).
   { path: '/cobros', label: 'Cobros y fondo', permiso: 'verFinanzas', icon: PiggyBank, soloCarrier: 'speedx' },
+  { path: '/reporte-manual', label: 'Reporte manual', permiso: 'subirFacturas', icon: FileClock, soloCarrier: 'speedx' },
   { path: '/reclamos', label: 'Reclamos a Gofo', permiso: 'verFinanzas', icon: Scale, soloCarrier: 'gofo' },
   { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: AlertTriangle },
   { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: Truck },
