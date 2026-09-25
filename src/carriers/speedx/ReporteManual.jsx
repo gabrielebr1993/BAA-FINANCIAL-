@@ -64,6 +64,7 @@ export default function ReporteManual() {
   const [descuentos, setDescuentos] = useState({})
   // Bonus MANUALES por chofer: se SUMAN al total a pagar de este cálculo.
   const [bonos, setBonos] = useState({})
+  const [busqueda, setBusqueda] = useState('') // buscador de chofer (solo filtra la vista)
   const [provEdit, setProvEdit] = useState(null) // provisional PENDIENTE abierto para editar
   const [filtroCiudad, setFiltroCiudad] = useState('') // filtro de la lista ('' = todas)
   const inputRef = useRef(null)
@@ -104,6 +105,7 @@ export default function ReporteManual() {
       setCiudadSel(p.ciudad || '')
       setDescuentos({})
       setBonos({})
+      setBusqueda('')
       try { setPagoSpx(JSON.parse(localStorage.getItem(`mp_spx_paga_${p.ciudad || ''}`) || '{"ind":"","dob":""}')) } catch { setPagoSpx({ ind: '', dob: '' }) }
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
       setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
@@ -214,6 +216,13 @@ export default function ReporteManual() {
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
   }, [proc, res, provEdit, rango, tarifas, claimsPorChofer, descuentos, bonos])
+
+  // El buscador filtra SOLO la tabla; totales, descargas y guardado usan todos.
+  const filasVisibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return filas
+    return filas.filter((f) => (f.nombre || '').toLowerCase().includes(q))
+  }, [filas, busqueda])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const spxInd = Number(pagoSpx.ind) || 0
@@ -612,10 +621,11 @@ export default function ReporteManual() {
           <Card className="mb-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
-                {t('Pagos por chofer')} <Badge color="slate">{filas.length}</Badge>
+                {t('Pagos por chofer')} <Badge color="slate">{busqueda.trim() ? `${filasVisibles.length} ${t('de')} ${filas.length}` : filas.length}</Badge>
                 {sinTarifa.length > 0 && <Badge color="red">{sinTarifa.length} {t('sin tarifa')}</Badge>}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Input placeholder={t('Buscar chofer…')} className="w-44" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <span className="text-slate-500 dark:text-slate-400">{t('Rellenar a todos:')}</span>
                 <Input type="number" step="0.01" min="0" placeholder={t('Individual')} className="w-28" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
                 <Input type="number" step="0.01" min="0" placeholder={t('Doble')} className="w-28" value={bulk.dob} onChange={(e) => setBulk((b) => ({ ...b, dob: e.target.value }))} />
@@ -639,7 +649,7 @@ export default function ReporteManual() {
                 { key: 'bono', label: t('Bonus'), align: 'center' },
                 { key: 'total', label: t('Total a pagar'), align: 'right' },
               ]}
-              rows={filas}
+              rows={filasVisibles}
               renderCell={(row, key) => {
                 if (key === 'nombre') return <span className="font-semibold text-brand-navy dark:text-slate-100">{row.nombre}</span>
                 if (key === 'paquetes') return <b>{num(row.paquetes)}</b>
