@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Trash2, AlertTriangle, Scale, Upload, Search, X, FileText, DollarSign, Package,
   Truck, Route as RouteIcon, TrendingUp, Download, Filter, Layers, Users, MapPin,
-  ExternalLink, Receipt, CheckCircle2, CalendarDays, ArrowUpDown, Percent,
+  ExternalLink, Receipt, CheckCircle2, CalendarDays, ArrowUpDown, Percent, RefreshCw,
 } from 'lucide-react'
 import { db } from '../firebase'
 import { useData } from '../DataContext'
@@ -15,6 +15,7 @@ import {
 } from '../utils/calc'
 import { procesarArchivo, combinarArchivos } from '../utils/excel'
 import { eliminarFacturaCascada } from '../utils/borrado'
+import { regenerarDriverStats } from '../utils/regenerarStats'
 import { registrarAuditoria } from '../utils/auditoria'
 import { exportarExcel } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
@@ -183,6 +184,23 @@ export default function Facturas() {
   const [eliminando, setEliminando] = useState(false)
   const [progreso, setProgreso] = useState(null)
   const [error, setError] = useState('')
+  // Recalcula la "foto" del portal del chofer (driverStats) de una factura con
+  // las TARIFAS ACTUALES de los perfiles. Útil tras cambiar precios en
+  // «Choferes y Tarifas» (Pagos/Financiero ya se actualizan solos).
+    const [recalcId, setRecalcId] = useState('')
+  const recalcular = async (inv) => {
+    if (recalcId) return
+    setRecalcId(inv.id)
+    try {
+      const n = await regenerarDriverStats(inv, claims, drivers, activeCompanyId)
+      window.alert(`${t('Listo: se recalcularon')} ${n} ${t('chofer(es) de la semana')} ${inv.semana} ${t('con las tarifas actuales. El portal del chofer ya muestra los números nuevos.')}`)
+    } catch (e) {
+      window.alert(t('Error al recalcular:') + ' ' + e.message)
+    } finally {
+      setRecalcId('')
+    }
+  }
+
   const eliminar = async () => {
     if (!porEliminar) return
     setEliminando(true); setProgreso({ hechos: 0, total: 0 }); setError('')
@@ -388,6 +406,7 @@ export default function Facturas() {
                         {reproId === inv.id ? <Spinner /> : <Scale size={15} />}
                       </button>
                     )}
+                    <button onClick={() => recalcular(inv)} disabled={!!recalcId} title={t('Recalcular pagos del portal con las tarifas actuales')} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700">{recalcId === inv.id ? <Spinner /> : <RefreshCw size={15} />}</button>
                     <button onClick={() => setDetalle(inv)} title={t('Ver detalle')} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700"><ExternalLink size={15} /></button>
                     <button onClick={() => setPorEliminar(inv)} title={t('Eliminar')} className="grid h-8 w-8 place-items-center rounded-lg text-rose-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><Trash2 size={15} /></button>
                   </div>

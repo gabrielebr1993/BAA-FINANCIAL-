@@ -363,22 +363,9 @@ export default function ReporteManual() {
         totalPaquetes: filas.reduce((a, f) => a + f.paquetes, 0),
         actualizadoEn: new Date().toISOString(),
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
+        // El desglose por día (porDia), claimsCh y fechasReporte YA están en el
+        // documento y no cambian al editar: no se tocan.
         filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
-        // Desglose por DÍA y chofer de TODO el reporte (compacto): permite
-        // reabrir el pendiente y volver a elegir el periodo.
-        porDia: (() => {
-          const acc = {}
-          for (const d of proc.detalles) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) continue
-            const k = `${d.fecha}||${keyDe(d.courier)}`
-            acc[k] = acc[k] || { f: d.fecha, n: d.courier, i: 0, d: 0 }
-            if (d.esStopAdicional) acc[k].d++
-            else acc[k].i++
-          }
-          return Object.values(acc)
-        })(),
-        claimsCh: Object.entries(claimsPorChofer).map(([k, m]) => ({ n: k, m: r2(m) })),
-        fechasReporte: { ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' },
       })
       await reloadInvoices()
       setOkMsg(t('Cambios guardados en el provisional pendiente.'))
