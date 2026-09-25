@@ -53,6 +53,7 @@ export default function ReporteManual() {
   const [guardando, setGuardando] = useState(false)
   const [okMsg, setOkMsg] = useState('')
   const [abierto, setAbierto] = useState(null) // provisional expandido en la lista
+  const [rango, setRango] = useState(null) // { ini, fin } ISO — días del reporte que se PAGAN
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -81,14 +82,16 @@ export default function ReporteManual() {
       let p
       try { p = procesarArchivoSpeedX(buf, f.name) }
       catch { p = procesarReporteRutasSpeedX(buf, f.name) }
-      const resumen = construirResumenSpeedX(p)
-      setProc({ ...p, resumen })
+      setProc(p)
+      // Por defecto se paga TODO el reporte; abajo se puede acotar por semana
+      // (sábado a viernes) o por un rango de días a mano.
+      setRango({ ini: p.fechaInicioISO || '', fin: p.fechaFinISO || '' })
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
-      setAvisos([...(p.avisos || []), ...(resumen.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
+      setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
       const tf = {}
-      for (const ch of resumen.resumenChoferes) {
-        const d = buscarDriver(drivers, ch.nombre)
-        tf[keyDe(ch.nombre)] = {
+      for (const nombre of [...new Set(p.detalles.map((d) => d.courier))]) {
+        const d = buscarDriver(drivers, nombre)
+        tf[keyDe(nombre)] = {
           ind: d && Number(d.precioIndividual) > 0 ? String(d.precioIndividual) : '',
           dob: d && Number(d.precioDoble) > 0 ? String(d.precioDoble) : '',
         }
@@ -108,13 +111,43 @@ export default function ReporteManual() {
     if (!proc) return
     setTarifas((tf) => {
       const nx = { ...tf }
-      for (const ch of proc.resumen.resumenChoferes) {
+      for (const ch of res?.resumenChoferes || []) {
         const k = keyDe(ch.nombre)
         nx[k] = { ind: bulk.ind !== '' ? bulk.ind : nx[k]?.ind || '', dob: bulk.dob !== '' ? bulk.dob : nx[k]?.dob || '' }
       }
       return nx
     })
   }
+
+  // Semanas SÁBADO→VIERNES presentes en el reporte (el corte del dueño), con
+  // su conteo de paquetes, para elegir cuál pagar de un clic.
+  const semanasDetectadas = useMemo(() => {
+    if (!proc) return []
+    const buckets = {}
+    for (const d of proc.detalles) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.fecha)) continue
+      const dt = deISO(d.fecha)
+      const desdeSab = (dt.getDay() + 1) % 7 // sábado=0
+      const ini = new Date(dt); ini.setDate(ini.getDate() - desdeSab)
+      const fin = new Date(ini); fin.setDate(fin.getDate() + 6)
+      const aI = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+      const k = aI(ini)
+      buckets[k] = buckets[k] || { ini: aI(ini), fin: aI(fin), n: 0 }
+      buckets[k].n++
+    }
+    return Object.values(buckets).sort((a, b) => (a.ini < b.ini ? -1 : 1))
+  }, [proc])
+
+  // Resumen SOLO de los días elegidos (los dobles ya vienen calculados por
+  // parada y las rutas son de un día, así que filtrar por fecha es exacto).
+  const res = useMemo(() => {
+    if (!proc) return null
+    const del = proc.detalles.filter((d) => (!rango?.ini || d.fecha >= rango.ini) && (!rango?.fin || d.fecha <= rango.fin))
+    if (!del.length) return construirResumenSpeedX({ ...proc, detalles: proc.detalles.slice(0, 1), claims: [] })
+    return construirResumenSpeedX({ ...proc, detalles: del })
+  }, [proc, rango])
+  const mmdd = (iso) => (iso ? String(iso).slice(5, 7) + String(iso).slice(8, 10) : '')
+  const semanaSel = rango?.ini ? `${mmdd(rango.ini)}-${mmdd(rango.fin)}` : proc?.semana || ''
 
   const claimsPorChofer = useMemo(() => {
     const m = {}
@@ -123,8 +156,8 @@ export default function ReporteManual() {
   }, [proc])
 
   const filas = useMemo(() => {
-    if (!proc) return []
-    return proc.resumen.resumenChoferes.map((ch) => {
+    if (!res) return []
+    return res.resumenChoferes.map((ch) => {
       const k = keyDe(ch.nombre)
       const tInd = Number(tarifas[k]?.ind) || 0
       const tDob = Number(tarifas[k]?.dob) || 0
@@ -133,12 +166,11 @@ export default function ReporteManual() {
       const claims = claimsPorChofer[k] || 0
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), total: r2(pago - claims), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [proc, tarifas, claimsPorChofer])
+  }, [res, tarifas, claimsPorChofer])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const sinTarifa = filas.filter((f) => !f.listo)
   const hayClaims = (proc?.claims || []).length > 0
-  const res = proc?.resumen
 
   const filasExport = () => ([
     ...filas.map((f) => ({
@@ -164,13 +196,13 @@ export default function ReporteManual() {
   ])
 
   const descargarExcel = () => {
-    exportarExcel(`pagos_provisionales_speedx_${proc?.semana || 'semana'}`, [{ nombre: 'Pagos', rows: filasExport() }])
+    exportarExcel(`pagos_provisionales_speedx_${semanaSel || 'semana'}`, [{ nombre: 'Pagos', rows: filasExport() }])
   }
   const descargarPDF = async () => {
     await exportarPDF(
-      `pagos_provisionales_speedx_${proc?.semana || 'semana'}`,
+      `pagos_provisionales_speedx_${semanaSel || 'semana'}`,
       empresaActiva?.nombre || 'MilePay',
-      `${t('Pagos PROVISIONALES a choferes (reporte manual SpeedX)')} · ${t('Semana')} ${proc?.semana || ''}`,
+      `${t('Pagos PROVISIONALES a choferes (reporte manual SpeedX)')} · ${t('Semana')} ${semanaSel}`,
       [{
         titulo: t('Pagos por chofer'),
         head: [t('Chofer'), t('Paquetes'), t('Individuales'), t('Dobles'), t('Tarifa individual'), t('Tarifa doble'), t('Claims (M2)'), t('Total a pagar')],
@@ -194,12 +226,12 @@ export default function ReporteManual() {
         carrier: 'speedx',
         provisional: true,
         estado: 'pendiente',
-        semana: proc.semana || '',
+        semana: semanaSel,
         ciudad: proc.ciudad || '',
         archivoNombre: proc.nombreArchivo || '',
         fechaCarga: serverTimestamp(),
-        fechaInicio: deISO(proc.fechaInicioISO),
-        fechaFin: deISO(proc.fechaFinISO),
+        fechaInicio: deISO(rango?.ini || proc.fechaInicioISO),
+        fechaFin: deISO(rango?.fin || proc.fechaFinISO),
         totalPagar,
         totalPaquetes: res.totalPaquetes,
         creadoPor: perfil?.email || perfil?.nombre || '',
@@ -319,7 +351,7 @@ export default function ReporteManual() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
                 <FileSpreadsheet size={17} /> {proc.nombreArchivo}
-                <Badge color="slate">{t('Semana')} {proc.semana}</Badge>
+                <Badge color="slate">{t('Días pagados')}: {rango?.ini ? `${fmtF(deISO(rango.ini))} – ${fmtF(deISO(rango.fin))}` : proc.semana}</Badge>
                 <Badge color="gold">{t('PROVISIONAL — no se guarda')}</Badge>
               </div>
               <Boton variant="ghost" onClick={() => { setProc(null); setErrores([]); setAvisos([]) }}><X size={15} /> {t('Descartar')}</Boton>
@@ -336,6 +368,34 @@ export default function ReporteManual() {
                 {t('Este reporte no trae claims: el pago provisional sale sin descuentos. Los claims se descontarán cuando subas la factura oficial de la semana.')}
               </p>
             )}
+          </Card>
+
+          {/* ¿QUÉ DÍAS SE PAGAN? El reporte puede mezclar semanas (el corte es
+              sábado→viernes): elige una semana de un clic o marca un rango a mano
+              (p. ej. solo los días que ya pagaste). */}
+          <Card className="mb-4">
+            <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">{t('¿Qué días vas a pagar?')}</div>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Tu semana va de sábado a viernes. El reporte puede traer días de dos semanas: elige la semana correcta o marca solo los días que vas a pagar, y el cálculo usa únicamente esos días.')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setRango({ ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' })}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${rango?.ini === (proc.fechaInicioISO || '') && rango?.fin === (proc.fechaFinISO || '') ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                {t('Todo el reporte')}
+              </button>
+              {semanasDetectadas.map((w) => {
+                const on = rango?.ini === w.ini && rango?.fin === w.fin
+                return (
+                  <button key={w.ini} type="button" onClick={() => setRango({ ini: w.ini, fin: w.fin })}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${on ? 'border-brand-navy bg-brand-navy text-white dark:border-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    {t('Semana')} {fmtF(deISO(w.ini))} – {fmtF(deISO(w.fin))} · {num(w.n)} {t('paq.')}
+                  </button>
+                )
+              })}
+              <span className="mx-1 hidden text-slate-300 sm:inline">|</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{t('A mano:')}</span>
+              <Input type="date" className="w-40" value={rango?.ini || ''} onChange={(e) => setRango((r) => ({ ...r, ini: e.target.value }))} />
+              <Input type="date" className="w-40" value={rango?.fin || ''} onChange={(e) => setRango((r) => ({ ...r, fin: e.target.value }))} />
+              <Badge color="navy">{num(res.totalPaquetes)} {t('paquetes en el rango')}</Badge>
+            </div>
           </Card>
 
           <Card className="mb-4">
