@@ -12,7 +12,7 @@
 // Factura» como siempre y ahí queda todo registrado UNA sola vez.
 // ============================================================================
 import { useState, useRef, useMemo, useEffect } from 'react'
-import { collection, addDoc, serverTimestamp, doc, deleteDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { useAuth } from '../../AuthContext'
 import { useData } from '../../DataContext'
@@ -62,6 +62,7 @@ export default function ReporteManual() {
   // Descuentos MANUALES por chofer (adelantos, préstamos, etc.): se restan del
   // total a pagar de este cálculo. Solo viven aquí (y en el provisional).
   const [descuentos, setDescuentos] = useState({})
+  const [provEdit, setProvEdit] = useState(null) // provisional PENDIENTE abierto para editar
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -91,6 +92,7 @@ export default function ReporteManual() {
       try { p = procesarArchivoSpeedX(buf, f.name) }
       catch { p = procesarReporteRutasSpeedX(buf, f.name) }
       setProc(p)
+      setProvEdit(null)
       // Por defecto se paga TODO el reporte; abajo se puede acotar por semana
       // (sábado a viernes) o por un rango de días a mano.
       setRango({ ini: p.fechaInicioISO || '', fin: p.fechaFinISO || '' })
@@ -169,23 +171,28 @@ export default function ReporteManual() {
   }, [proc])
 
   const filas = useMemo(() => {
-    if (!res) return []
-    return res.resumenChoferes.map((ch) => {
+    // Base: el archivo procesado o, en modo edición, las filas GUARDADAS del
+    // provisional (conteos fijos; tarifas y descuentos editables).
+    const base = proc
+      ? (res?.resumenChoferes || [])
+      : (provEdit?.filas || []).map((f) => ({ nombre: f.nombre, individuales: f.individuales || 0, dobles: f.dobles || 0, _claims: f.claims || 0 }))
+    if (!base.length) return []
+    return base.map((ch) => {
       const k = keyDe(ch.nombre)
       const tInd = Number(tarifas[k]?.ind) || 0
       const tDob = Number(tarifas[k]?.dob) || 0
       const paquetes = ch.individuales + ch.dobles
       const pago = ch.individuales * tInd + ch.dobles * tDob
-      const claims = claimsPorChofer[k] || 0
+      const claims = proc ? (claimsPorChofer[k] || 0) : (ch._claims || 0)
       const desc = Number(descuentos[k]) || 0
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), total: r2(pago - claims - desc), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [res, tarifas, claimsPorChofer, descuentos])
+  }, [proc, res, provEdit, tarifas, claimsPorChofer, descuentos])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const spxInd = Number(pagoSpx.ind) || 0
   const spxDob = Number(pagoSpx.dob) || 0
-  const ingresoEst = res ? r2(res.totalIndividuales * spxInd + res.totalDobles * spxDob) : 0
+  const ingresoEst = r2(filas.reduce((a, f) => a + f.individuales, 0) * spxInd + filas.reduce((a, f) => a + f.dobles, 0) * spxDob)
   const setPagoSpxCampo = (campo, valor) => setPagoSpx((x) => {
     const nx = { ...x, [campo]: valor }
     try { localStorage.setItem(`mp_spx_paga_${(ciudadSel || '').trim().toUpperCase()}`, JSON.stringify(nx)) } catch { /* noop */ }
@@ -278,6 +285,47 @@ export default function ReporteManual() {
       setGuardando(false)
     }
   }
+  const aISOx = (d) => {
+    const dt = d?.toDate ? d.toDate() : d instanceof Date ? d : null
+    return dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` : ''
+  }
+  // Reabre un provisional PENDIENTE para ajustar tarifas/descuentos y volver a guardar.
+  const abrirProvisional = (pr) => {
+    setProc(null); setErrores([]); setAvisos([]); setOkMsg('')
+    setProvEdit(pr)
+    setCiudadSel(pr.ciudad || '')
+    setRango({ ini: aISOx(pr.fechaInicio), fin: aISOx(pr.fechaFin) })
+    const tf = {}, ds = {}
+    for (const f of pr.filas || []) {
+      tf[keyDe(f.nombre)] = { ind: f.tInd ? String(f.tInd) : '', dob: f.tDob ? String(f.tDob) : '' }
+      if (f.descuento) ds[keyDe(f.nombre)] = String(f.descuento)
+    }
+    setTarifas(tf)
+    setDescuentos(ds)
+    setPagoSpx(pr.pagoSpeedX ? { ind: String(pr.pagoSpeedX.ind || ''), dob: String(pr.pagoSpeedX.dob || '') } : { ind: '', dob: '' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  const guardarCambiosProvisional = async () => {
+    if (!provEdit || guardando) return
+    setGuardando(true)
+    setOkMsg('')
+    try {
+      await updateDoc(doc(db, 'invoices', provEdit.id), {
+        ciudad: (ciudadSel || provEdit.ciudad || '').trim().toUpperCase(),
+        totalPagar,
+        actualizadoEn: new Date().toISOString(),
+        ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
+        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
+      })
+      await reloadInvoices()
+      setOkMsg(t('Cambios guardados en el provisional pendiente.'))
+      setProvEdit(null)
+    } catch (e) {
+      setErrores([t('Error al guardar:') + ' ' + e.message])
+    } finally {
+      setGuardando(false)
+    }
+  }
   const borrarProvisional = async (pr) => {
     if (!window.confirm(`${t('¿Eliminar el provisional de la semana')} ${pr.semana}?`)) return
     await deleteDoc(doc(db, 'invoices', pr.id))
@@ -323,6 +371,9 @@ export default function ReporteManual() {
                         {t('Diferencias')} {abiertoEste ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     )}
+                    {!verificado && (
+                      <button onClick={() => abrirProvisional(pr)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-brand-navy transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700/40">{t('Abrir')}</button>
+                    )}
                     <button onClick={() => borrarProvisional(pr)} className="text-slate-400 transition hover:text-rose-500" title={t('Eliminar')}><Trash2 size={15} /></button>
                   </div>
                   {verificado && comp && (
@@ -361,7 +412,7 @@ export default function ReporteManual() {
         </Card>
       )}
 
-      {!proc && (
+      {!proc && !provEdit && (
         <Card className="mb-4">
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -378,8 +429,29 @@ export default function ReporteManual() {
         </Card>
       )}
 
-      {proc && (
+      {(proc || provEdit) && (
         <>
+          {provEdit && (
+            <Card className="mb-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color="gold">{t('EDITANDO PENDIENTE')}</Badge>
+                <span className="font-bold text-brand-navy dark:text-slate-100">{provEdit.ciudad} · {t('Semana')} {provEdit.semana}</span>
+                <span className="text-xs text-slate-400">{fmtF(provEdit.fechaInicio)} – {fmtF(provEdit.fechaFin)} · {provEdit.archivoNombre}</span>
+                <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                  <MapPin size={14} className="text-brand-gold" /> {t('Ciudad:')}
+                  <Input className="w-20 uppercase" value={ciudadSel} onChange={(e) => setCiudadSel(e.target.value)} />
+                </span>
+                <span className="ml-auto inline-flex items-center gap-2 text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">{t('Por paquete:')}</span>
+                  <Input type="number" step="0.01" min="0" className="w-24" placeholder="$" value={pagoSpx.ind} onChange={(e) => setPagoSpxCampo('ind', e.target.value)} />
+                  <span className="text-slate-500 dark:text-slate-400">{t('Por doble:')}</span>
+                  <Input type="number" step="0.01" min="0" className="w-24" placeholder="$" value={pagoSpx.dob} onChange={(e) => setPagoSpxCampo('dob', e.target.value)} />
+                </span>
+              </div>
+            </Card>
+          )}
+          {proc && (
+          <>
           <Card className="mb-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
@@ -446,6 +518,9 @@ export default function ReporteManual() {
             </div>
           </Card>
 
+          </>
+          )}
+
           <Card className="mb-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
@@ -503,9 +578,18 @@ export default function ReporteManual() {
               <div className="flex flex-wrap items-center gap-2">
                 <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} /> {t('Descargar Excel')}</Boton>
                 <Boton variant="ghost" onClick={descargarPDF}><FileText size={16} /> {t('Descargar PDF')}</Boton>
-                <Boton onClick={guardarProvisional} disabled={guardando || sinTarifa.length > 0}>
-                  {guardando ? <Spinner /> : <Save size={16} />} {t('Guardar como pendiente')}
-                </Boton>
+                {provEdit ? (
+                  <>
+                    <Boton variant="ghost" onClick={() => setProvEdit(null)}>{t('Cancelar')}</Boton>
+                    <Boton onClick={guardarCambiosProvisional} disabled={guardando || sinTarifa.length > 0}>
+                      {guardando ? <Spinner /> : <Save size={16} />} {t('Guardar cambios')}
+                    </Boton>
+                  </>
+                ) : (
+                  <Boton onClick={guardarProvisional} disabled={guardando || sinTarifa.length > 0}>
+                    {guardando ? <Spinner /> : <Save size={16} />} {t('Guardar como pendiente')}
+                  </Boton>
+                )}
               </div>
             </div>
           </Card>
