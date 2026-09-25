@@ -625,12 +625,14 @@ export default function ReporteManual() {
                 {sinTarifa.length > 0 && <Badge color="red">{sinTarifa.length} {t('sin tarifa')}</Badge>}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Input placeholder={t('Buscar chofer…')} className="w-44" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
                 <span className="text-slate-500 dark:text-slate-400">{t('Rellenar a todos:')}</span>
                 <Input type="number" step="0.01" min="0" placeholder={t('Individual')} className="w-28" value={bulk.ind} onChange={(e) => setBulk((b) => ({ ...b, ind: e.target.value }))} />
                 <Input type="number" step="0.01" min="0" placeholder={t('Doble')} className="w-28" value={bulk.dob} onChange={(e) => setBulk((b) => ({ ...b, dob: e.target.value }))} />
                 <Boton variant="ghost" onClick={aplicarBulk}>{t('Aplicar')}</Boton>
               </div>
+            </div>
+            <div className="mb-3">
+              <Input placeholder={t('Buscar chofer…')} className="w-full sm:w-72" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             </div>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
               {t('Las tarifas vienen precargadas del perfil de cada chofer; puedes ajustarlas SOLO para este cálculo (aquí no se guardan). Los choferes nuevos aparecen sin tarifa: escríbela para incluirlos.')}
