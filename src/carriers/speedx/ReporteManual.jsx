@@ -124,11 +124,12 @@ export default function ReporteManual() {
 
   const setTarifa = (nombre, campo, valor) => setTarifas((tf) => ({ ...tf, [keyDe(nombre)]: { ...tf[keyDe(nombre)], [campo]: valor } }))
   const aplicarBulk = () => {
-    if (!proc) return
+    // Aplica sobre las filas VISIBLES: funciona igual con un archivo recién
+    // subido que al reabrir un provisional guardado.
     setTarifas((tf) => {
       const nx = { ...tf }
-      for (const ch of res?.resumenChoferes || []) {
-        const k = keyDe(ch.nombre)
+      for (const f of filas) {
+        const k = f._key
         nx[k] = { ind: bulk.ind !== '' ? bulk.ind : nx[k]?.ind || '', dob: bulk.dob !== '' ? bulk.dob : nx[k]?.dob || '' }
       }
       return nx
