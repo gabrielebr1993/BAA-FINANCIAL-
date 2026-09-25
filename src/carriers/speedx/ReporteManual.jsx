@@ -21,7 +21,7 @@ import { construirResumenSpeedX } from './resumen'
 import { buscarDriver } from '../../utils/calc'
 import { exportarExcel, exportarPDF } from '../../utils/exportar'
 import { money, num } from '../../utils/format'
-import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers, CheckCircle2, Trash2, ChevronDown, ChevronUp, Save } from 'lucide-react'
+import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers, CheckCircle2, Trash2, ChevronDown, ChevronUp, Save, MapPin } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -54,6 +54,7 @@ export default function ReporteManual() {
   const [okMsg, setOkMsg] = useState('')
   const [abierto, setAbierto] = useState(null) // provisional expandido en la lista
   const [rango, setRango] = useState(null) // { ini, fin } ISO — días del reporte que se PAGAN
+  const [ciudadSel, setCiudadSel] = useState('') // ciudad detectada del reporte (editable)
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -86,6 +87,9 @@ export default function ReporteManual() {
       // Por defecto se paga TODO el reporte; abajo se puede acotar por semana
       // (sábado a viernes) o por un rango de días a mano.
       setRango({ ini: p.fechaInicioISO || '', fin: p.fechaFinISO || '' })
+      // Ciudad DETECTADA del nombre del fleet (p. ej. "CHS - B&J…" → CHS);
+      // editable por si el reporte viene raro o quieres otro código.
+      setCiudadSel(p.ciudad || '')
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
       setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
       const tf = {}
@@ -227,7 +231,7 @@ export default function ReporteManual() {
         provisional: true,
         estado: 'pendiente',
         semana: semanaSel,
-        ciudad: proc.ciudad || '',
+        ciudad: (ciudadSel || proc.ciudad || '').trim().toUpperCase(),
         archivoNombre: proc.nombreArchivo || '',
         fechaCarga: serverTimestamp(),
         fechaInicio: deISO(rango?.ini || proc.fechaInicioISO),
@@ -352,6 +356,10 @@ export default function ReporteManual() {
               <div className="inline-flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
                 <FileSpreadsheet size={17} /> {proc.nombreArchivo}
                 <Badge color="slate">{t('Días pagados')}: {rango?.ini ? `${fmtF(deISO(rango.ini))} – ${fmtF(deISO(rango.fin))}` : proc.semana}</Badge>
+                <span className="inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400" title={t('Detectada del nombre del fleet en el reporte; puedes corregirla')}>
+                  <MapPin size={14} className="text-brand-gold" /> {t('Ciudad:')}
+                  <Input className="w-20 uppercase" value={ciudadSel} onChange={(e) => setCiudadSel(e.target.value)} />
+                </span>
                 <Badge color="gold">{t('PROVISIONAL — no se guarda')}</Badge>
               </div>
               <Boton variant="ghost" onClick={() => { setProc(null); setErrores([]); setAvisos([]) }}><X size={15} /> {t('Descartar')}</Boton>

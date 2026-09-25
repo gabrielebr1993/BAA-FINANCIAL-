@@ -1993,6 +1993,8 @@ export const EN_EXTRA = {
   "A mano:": "Custom:",
   "paquetes en el rango": "packages in range",
   "Días pagados": "Days paid",
+  "Ciudad:": "City:",
+  "Detectada del nombre del fleet en el reporte; puedes corregirla": "Detected from the fleet name in the report; you can correct it",
   "VERIFICADO": "VERIFIED",
   "PENDIENTE": "PENDING",
   "Diferencias": "Differences",

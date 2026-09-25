@@ -432,7 +432,10 @@ export default function CargarFacturaSpeedX() {
         const aDate = (x) => (x?.toDate ? x.toDate() : x instanceof Date ? x : null)
         const prov = (provisionales || []).find((pr) => {
           if (pr.estado === 'verificado' || pr.companyId !== activeCompanyId) return false
-          if ((pr.ciudad || '') !== (proc.ciudad || '')) return false
+          const normC = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+          const cProv = normC(pr.ciudad)
+          const coincideCiudad = cProv && (cProv === normC(proc.ciudad) || normC(proc.fleet || '').startsWith(cProv) || normC(proc.fleet || '').includes(cProv))
+          if (!coincideCiudad) return false
           const pi = aDate(pr.fechaInicio), pf = aDate(pr.fechaFin)
           if (!pi || !pf || !periodoIni || !periodoFin) return false
           return pi <= periodoFin && pf >= periodoIni // rangos que se tocan
