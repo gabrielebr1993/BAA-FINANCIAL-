@@ -55,6 +55,10 @@ export default function ReporteManual() {
   const [abierto, setAbierto] = useState(null) // provisional expandido en la lista
   const [rango, setRango] = useState(null) // { ini, fin } ISO — días del reporte que se PAGAN
   const [ciudadSel, setCiudadSel] = useState('') // ciudad detectada del reporte (editable)
+  // Lo que SPEEDX TE PAGA (estimado): por paquete individual y por doble.
+  // Opcional — sirve para estimar tu ingreso y margen antes de la factura.
+  // Se recuerda por ciudad en este navegador.
+  const [pagoSpx, setPagoSpx] = useState({ ind: '', dob: '' })
   const inputRef = useRef(null)
 
   // Soltar el archivo en cualquier parte de la página (sin abrir otra pestaña).
@@ -90,6 +94,7 @@ export default function ReporteManual() {
       // Ciudad DETECTADA del nombre del fleet (p. ej. "CHS - B&J…" → CHS);
       // editable por si el reporte viene raro o quieres otro código.
       setCiudadSel(p.ciudad || '')
+      try { setPagoSpx(JSON.parse(localStorage.getItem(`mp_spx_paga_${p.ciudad || ''}`) || '{"ind":"","dob":""}')) } catch { setPagoSpx({ ind: '', dob: '' }) }
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
       setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
       const tf = {}
@@ -173,6 +178,14 @@ export default function ReporteManual() {
   }, [res, tarifas, claimsPorChofer])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
+  const spxInd = Number(pagoSpx.ind) || 0
+  const spxDob = Number(pagoSpx.dob) || 0
+  const ingresoEst = res ? r2(res.totalIndividuales * spxInd + res.totalDobles * spxDob) : 0
+  const setPagoSpxCampo = (campo, valor) => setPagoSpx((x) => {
+    const nx = { ...x, [campo]: valor }
+    try { localStorage.setItem(`mp_spx_paga_${(ciudadSel || '').trim().toUpperCase()}`, JSON.stringify(nx)) } catch { /* noop */ }
+    return nx
+  })
   const sinTarifa = filas.filter((f) => !f.listo)
   const hayClaims = (proc?.claims || []).length > 0
 
@@ -238,6 +251,7 @@ export default function ReporteManual() {
         fechaFin: deISO(rango?.fin || proc.fechaFinISO),
         totalPagar,
         totalPaquetes: res.totalPaquetes,
+        ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         creadoPor: perfil?.email || perfil?.nombre || '',
         filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, total: f.total })),
       })
@@ -370,6 +384,17 @@ export default function ReporteManual() {
               <KPI label={t('Dobles')} value={num(res.totalDobles)} icon={Layers} sub={t('paquete extra en la misma parada')} />
               <KPI label={`${t('Claims')} (${res.totalClaims})`} value={money(res.totalDescuentoGofo)} icon={AlertTriangle} accent="red" sub={hayClaims ? undefined : t('este reporte no trae claims')} />
               <KPI label={t('Total a pagar a choferes')} value={money(totalPagar)} icon={DollarSign} accent="gold" />
+              {ingresoEst > 0 && <KPI label={t('SpeedX te pagará (estimado)')} value={money(ingresoEst)} icon={DollarSign} accent="green" sub={`${money(spxInd)} ${t('ind.')} · ${money(spxDob)} ${t('doble')}`} />}
+              {ingresoEst > 0 && <KPI label={t('Margen estimado')} value={money(r2(ingresoEst - totalPagar))} icon={DollarSign} accent={ingresoEst - totalPagar >= 0 ? 'gold' : 'red'} sub={t('ingreso est. − pago a choferes')} />}
+            </div>
+            {/* Lo que SpeedX te paga (para el estimado de ingreso/margen) */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+              <span className="font-semibold text-brand-navy dark:text-slate-200">{t('¿Cuánto te paga SpeedX?')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{t('(opcional — estima tu ingreso y margen antes de la factura)')}</span>
+              <span className="ml-1 text-slate-500 dark:text-slate-400">{t('Por paquete:')}</span>
+              <Input type="number" step="0.01" min="0" className="w-24" placeholder="$" value={pagoSpx.ind} onChange={(e) => setPagoSpxCampo('ind', e.target.value)} />
+              <span className="text-slate-500 dark:text-slate-400">{t('Por doble:')}</span>
+              <Input type="number" step="0.01" min="0" className="w-24" placeholder="$" value={pagoSpx.dob} onChange={(e) => setPagoSpxCampo('dob', e.target.value)} />
             </div>
             {!hayClaims && (
               <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
