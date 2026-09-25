@@ -62,6 +62,8 @@ export default function ReporteManual() {
   // Descuentos MANUALES por chofer (adelantos, préstamos, etc.): se restan del
   // total a pagar de este cálculo. Solo viven aquí (y en el provisional).
   const [descuentos, setDescuentos] = useState({})
+  // Bonus MANUALES por chofer: se SUMAN al total a pagar de este cálculo.
+  const [bonos, setBonos] = useState({})
   const [provEdit, setProvEdit] = useState(null) // provisional PENDIENTE abierto para editar
   const [filtroCiudad, setFiltroCiudad] = useState('') // filtro de la lista ('' = todas)
   const inputRef = useRef(null)
@@ -101,6 +103,7 @@ export default function ReporteManual() {
       // editable por si el reporte viene raro o quieres otro código.
       setCiudadSel(p.ciudad || '')
       setDescuentos({})
+      setBonos({})
       try { setPagoSpx(JSON.parse(localStorage.getItem(`mp_spx_paga_${p.ciudad || ''}`) || '{"ind":"","dob":""}')) } catch { setPagoSpx({ ind: '', dob: '' }) }
       // En un reporte provisional es NORMAL que falten hojas: se avisa suave.
       setAvisos([...(p.avisos || [])].filter((a) => !a.includes('DSP Summary') && !a.includes('hoja "Claims"')))
@@ -207,9 +210,10 @@ export default function ReporteManual() {
       const pago = ch.individuales * tInd + ch.dobles * tDob
       const claims = proc ? (claimsPorChofer[k] || 0) : (ch._claims || 0)
       const desc = Number(descuentos[k]) || 0
-      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), total: r2(pago - claims - desc), listo: tInd > 0 && tDob > 0 }
+      const bono = Number(bonos[k]) || 0
+      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [proc, res, provEdit, rango, tarifas, claimsPorChofer, descuentos])
+  }, [proc, res, provEdit, rango, tarifas, claimsPorChofer, descuentos, bonos])
 
   const totalPagar = r2(filas.reduce((a, f) => a + f.total, 0))
   const spxInd = Number(pagoSpx.ind) || 0
@@ -233,6 +237,7 @@ export default function ReporteManual() {
       [t('Tarifa doble')]: f.tDob,
       [t('Claims (M2)')]: -f.claimsMonto,
       [t('Descuento')]: -f.desc,
+      [t('Bonus')]: f.bono,
       [t('Total a pagar')]: f.total,
     })),
     {
@@ -244,6 +249,7 @@ export default function ReporteManual() {
       [t('Tarifa doble')]: '',
       [t('Claims (M2)')]: -r2(filas.reduce((a, f) => a + f.claimsMonto, 0)),
       [t('Descuento')]: -r2(filas.reduce((a, f) => a + f.desc, 0)),
+      [t('Bonus')]: r2(filas.reduce((a, f) => a + f.bono, 0)),
       [t('Total a pagar')]: totalPagar,
     },
     ...(ingresoEst > 0 ? [
@@ -262,13 +268,13 @@ export default function ReporteManual() {
       `${t('Pagos PROVISIONALES a choferes (reporte manual SpeedX)')} · ${t('Semana')} ${semanaSel}`,
       [{
         titulo: t('Pagos por chofer'),
-        head: [t('Chofer'), t('Paquetes'), t('Individuales'), t('Dobles'), t('Tarifa individual'), t('Tarifa doble'), t('Claims (M2)'), t('Descuento'), t('Total a pagar')],
+        head: [t('Chofer'), t('Paquetes'), t('Individuales'), t('Dobles'), t('Tarifa individual'), t('Tarifa doble'), t('Claims (M2)'), t('Descuento'), t('Bonus'), t('Total a pagar')],
         body: [
-          ...filas.map((f) => [f.nombre, num(f.paquetes), num(f.individuales), num(f.dobles), money(f.tInd), money(f.tDob), f.claimsMonto ? `−${money(f.claimsMonto)}` : '—', f.desc ? `−${money(f.desc)}` : '—', money(f.total)]),
-          ['TOTAL', num(filas.reduce((a, f) => a + f.paquetes, 0)), '', '', '', '', '', `−${money(r2(filas.reduce((a, f) => a + f.desc, 0)))}`, money(totalPagar)],
+          ...filas.map((f) => [f.nombre, num(f.paquetes), num(f.individuales), num(f.dobles), money(f.tInd), money(f.tDob), f.claimsMonto ? `−${money(f.claimsMonto)}` : '—', f.desc ? `−${money(f.desc)}` : '—', f.bono ? `+${money(f.bono)}` : '—', money(f.total)]),
+          ['TOTAL', num(filas.reduce((a, f) => a + f.paquetes, 0)), '', '', '', '', '', `−${money(r2(filas.reduce((a, f) => a + f.desc, 0)))}`, `+${money(r2(filas.reduce((a, f) => a + f.bono, 0)))}`, money(totalPagar)],
           ...(ingresoEst > 0 ? [
-            [t('SpeedX te pagará (estimado)'), '', '', '', '', '', '', '', money(ingresoEst)],
-            [t('Margen estimado'), '', '', '', '', '', '', '', money(r2(ingresoEst - totalPagar))],
+            [t('SpeedX te pagará (estimado)'), '', '', '', '', '', '', '', '', money(ingresoEst)],
+            [t('Margen estimado'), '', '', '', '', '', '', '', '', money(r2(ingresoEst - totalPagar))],
           ] : []),
         ],
       }]
@@ -297,7 +303,7 @@ export default function ReporteManual() {
         totalPaquetes: res.totalPaquetes,
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         creadoPor: perfil?.email || perfil?.nombre || '',
-        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
+        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, bono: f.bono, total: f.total })),
         // Desglose por DÍA y chofer de TODO el reporte (compacto): permite
         // reabrir el pendiente y volver a elegir el periodo.
         porDia: (() => {
@@ -332,10 +338,11 @@ export default function ReporteManual() {
     setProvEdit(pr)
     setCiudadSel(pr.ciudad || '')
     setRango({ ini: aISOx(pr.fechaInicio), fin: aISOx(pr.fechaFin) })
-    const tf = {}, ds = {}
+    const tf = {}, ds = {}, bn = {}
     for (const f of pr.filas || []) {
       tf[keyDe(f.nombre)] = { ind: f.tInd ? String(f.tInd) : '', dob: f.tDob ? String(f.tDob) : '' }
       if (f.descuento) ds[keyDe(f.nombre)] = String(f.descuento)
+      if (f.bono) bn[keyDe(f.nombre)] = String(f.bono)
     }
     // Choferes que pueden entrar al ampliar el periodo: tarifa del perfil.
     for (const r of pr.porDia || []) {
@@ -347,6 +354,7 @@ export default function ReporteManual() {
     }
     setTarifas(tf)
     setDescuentos(ds)
+    setBonos(bn)
     setPagoSpx(pr.pagoSpeedX ? { ind: String(pr.pagoSpeedX.ind || ''), dob: String(pr.pagoSpeedX.dob || '') } : { ind: '', dob: '' })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -365,7 +373,7 @@ export default function ReporteManual() {
         ...(ingresoEst > 0 ? { ingresoEstimado: ingresoEst, pagoSpeedX: { ind: spxInd, dob: spxDob } } : {}),
         // El desglose por día (porDia), claimsCh y fechasReporte YA están en el
         // documento y no cambian al editar: no se tocan.
-        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, total: f.total })),
+        filas: filas.map((f) => ({ nombre: f.nombre, paquetes: f.paquetes, individuales: f.individuales, dobles: f.dobles, tInd: f.tInd, tDob: f.tDob, claims: f.claimsMonto, descuento: f.desc, bono: f.bono, total: f.total })),
       })
       await reloadInvoices()
       setOkMsg(t('Cambios guardados en el provisional pendiente.'))
@@ -628,6 +636,7 @@ export default function ReporteManual() {
                 { key: 'dob', label: t('Tarifa doble'), align: 'center' },
                 { key: 'claimsMonto', label: t('Claims (M2)'), align: 'right' },
                 { key: 'desc', label: t('Descuento'), align: 'center' },
+                { key: 'bono', label: t('Bonus'), align: 'center' },
                 { key: 'total', label: t('Total a pagar'), align: 'right' },
               ]}
               rows={filas}
@@ -642,6 +651,9 @@ export default function ReporteManual() {
                 if (key === 'claimsMonto') return row.claimsMonto ? <span className="text-rose-600 dark:text-rose-400">−{money(row.claimsMonto)}</span> : '—'
                 if (key === 'desc') {
                   return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={descuentos[row._key] ?? ''} onChange={(e) => setDescuentos((d) => ({ ...d, [row._key]: e.target.value }))} />
+                }
+                if (key === 'bono') {
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={bonos[row._key] ?? ''} onChange={(e) => setBonos((d) => ({ ...d, [row._key]: e.target.value }))} />
                 }
                 if (key === 'total') return <b className="text-brand-navy dark:text-slate-100">{money(row.total)}</b>
                 return row[key]

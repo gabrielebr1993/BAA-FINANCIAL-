@@ -1997,6 +1997,7 @@ export const EN_EXTRA = {
   "SpeedX te pagará (estimado)": "SpeedX will pay you (estimated)",
   "TOTAL a pagar": "TOTAL to pay",
   "Descuento": "Deduction",
+  "Bonus": "Bonus",
   "Abrir": "Open",
   "No hay provisionales de esa ciudad.": "No provisionals for that city.",
   "EDITANDO PENDIENTE": "EDITING PENDING",
