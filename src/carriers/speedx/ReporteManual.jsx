@@ -210,6 +210,10 @@ export default function ReporteManual() {
       [t('Claims (M2)')]: -r2(filas.reduce((a, f) => a + f.claimsMonto, 0)),
       [t('Total a pagar')]: totalPagar,
     },
+    ...(ingresoEst > 0 ? [
+      { [t('Chofer')]: t('SpeedX te pagará (estimado)'), [t('Total a pagar')]: ingresoEst },
+      { [t('Chofer')]: t('Margen estimado'), [t('Total a pagar')]: r2(ingresoEst - totalPagar) },
+    ] : []),
   ])
 
   const descargarExcel = () => {
@@ -226,6 +230,10 @@ export default function ReporteManual() {
         body: [
           ...filas.map((f) => [f.nombre, num(f.paquetes), num(f.individuales), num(f.dobles), money(f.tInd), money(f.tDob), f.claimsMonto ? `−${money(f.claimsMonto)}` : '—', money(f.total)]),
           ['TOTAL', num(filas.reduce((a, f) => a + f.paquetes, 0)), '', '', '', '', '', money(totalPagar)],
+          ...(ingresoEst > 0 ? [
+            [t('SpeedX te pagará (estimado)'), '', '', '', '', '', '', money(ingresoEst)],
+            [t('Margen estimado'), '', '', '', '', '', '', money(r2(ingresoEst - totalPagar))],
+          ] : []),
         ],
       }]
     )
@@ -474,9 +482,12 @@ export default function ReporteManual() {
               }}
             />
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
-              <span className="text-slate-500 dark:text-slate-400">
-                {t('Total a pagar a choferes')}: <b className="text-brand-navy dark:text-slate-100">{money(totalPagar)}</b>
-                {sinTarifa.length > 0 && <span className="ml-2 text-xs font-semibold text-amber-600">({sinTarifa.length} {t('chofer(es) sin tarifa no suman')})</span>}
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-600 dark:text-slate-300">
+                <span className="text-base font-extrabold text-brand-navy dark:text-slate-100">{t('TOTAL a pagar')}: {money(totalPagar)}</span>
+                {ingresoEst > 0 && <span>{t('SpeedX te pagará (estimado)')}: <b className="text-emerald-600 dark:text-emerald-400">{money(ingresoEst)}</b></span>}
+                {ingresoEst > 0 && <span>{t('Margen estimado')}: <b className={ingresoEst - totalPagar >= 0 ? 'text-brand-gold' : 'text-rose-600'}>{money(r2(ingresoEst - totalPagar))}</b></span>}
+                <Badge color="gold">{t('TEMPORAL')}</Badge>
+                {sinTarifa.length > 0 && <span className="text-xs font-semibold text-amber-600">({sinTarifa.length} {t('chofer(es) sin tarifa no suman')})</span>}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 <Boton variant="ghost" onClick={descargarExcel}><FileSpreadsheet size={16} /> {t('Descargar Excel')}</Boton>

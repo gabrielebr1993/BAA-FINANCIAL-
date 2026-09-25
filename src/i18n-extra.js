@@ -1995,6 +1995,8 @@ export const EN_EXTRA = {
   "Días pagados": "Days paid",
   "Ciudad:": "City:",
   "SpeedX te pagará (estimado)": "SpeedX will pay you (estimated)",
+  "TOTAL a pagar": "TOTAL to pay",
+  "TEMPORAL": "TEMPORARY",
   "ind.": "single",
   "doble": "double",
   "ingreso est. − pago a choferes": "est. revenue − driver pay",

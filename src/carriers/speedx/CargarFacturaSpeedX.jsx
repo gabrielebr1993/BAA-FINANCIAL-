@@ -557,14 +557,13 @@ export default function CargarFacturaSpeedX() {
               <KPI label={t('Ingreso (CONFIRM RATE)')} value={money(res.ingresoTotal)} icon={DollarSign} accent="gold" />
               <KPI label={`${t('Claims')} (${res.totalClaims})`} value={money(res.totalDescuentoGofo)} icon={AlertTriangle} accent="red" />
             </div>
-            <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
-              <span className="text-slate-500 dark:text-slate-400">{t('Por peso (así te factura SpeedX; no cambia tu pago al chofer):')}</span>{' '}
-              <b className="text-brand-navy dark:text-slate-100">{num(res.totalMenor1Lb)}</b> <span className="text-slate-400">&lt;1 lb ·</span>{' '}
-              <b className="text-brand-navy dark:text-slate-100">{num(res.totalMayor1Lb)}</b> <span className="text-slate-400">≥1 lb · {num(res.totalTemu)} TEMU</span>
-              {v?.gofo?.disponible && (
-                <span className="text-slate-400"> | {t('Total oficial de SpeedX (DSP Summary):')} <b className="text-brand-navy dark:text-slate-100">{money(v.gofo.totalGofo)}</b> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
-              )}
-            </div>
+            {v?.gofo?.disponible && (
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+                <span className="text-slate-500 dark:text-slate-400">{t('Total oficial de SpeedX (DSP Summary):')}</span>{' '}
+                <b className="text-brand-navy dark:text-slate-100">{money(v.gofo.totalGofo)}</b>
+                <span className="text-slate-400"> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
+              </div>
+            )}
           </Card>
 
           {/* 3) FONDO: cuándo nos paga SpeedX esta semana (editable) */}
