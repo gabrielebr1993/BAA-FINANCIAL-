@@ -174,6 +174,10 @@ export default function ReporteManual() {
     return construirResumenSpeedX({ ...proc, detalles: del })
   }, [proc, rango])
   const mmdd = (iso) => (iso ? String(iso).slice(5, 7) + String(iso).slice(8, 10) : '')
+  // Los DESCUENTOS y BONUS pertenecen a UN periodo: se guardan con la clave del
+  // rango activo, así el de una semana no se arrastra a las demás (y al volver
+  // a esa semana reaparece).
+  const claveRango = `${rango?.ini || ''}~${rango?.fin || ''}`
   const semanaSel = rango?.ini ? `${mmdd(rango.ini)}-${mmdd(rango.fin)}` : proc?.semana || ''
 
   const claimsPorChofer = useMemo(() => {
@@ -211,11 +215,11 @@ export default function ReporteManual() {
       const paquetes = ch.individuales + ch.dobles
       const pago = ch.individuales * tInd + ch.dobles * tDob
       const claims = proc ? (claimsPorChofer[k] || 0) : (ch._claims || 0)
-      const desc = Number(descuentos[k]) || 0
-      const bono = Number(bonos[k]) || 0
+      const desc = Number(descuentos[`${claveRango}::${k}`]) || 0
+      const bono = Number(bonos[`${claveRango}::${k}`]) || 0
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [proc, res, provEdit, rango, tarifas, claimsPorChofer, descuentos, bonos])
+  }, [proc, res, provEdit, rango, claveRango, tarifas, claimsPorChofer, descuentos, bonos])
 
   // El buscador filtra SOLO la tabla; totales, descargas y guardado usan todos.
   const filasVisibles = useMemo(() => {
@@ -347,11 +351,12 @@ export default function ReporteManual() {
     setProvEdit(pr)
     setCiudadSel(pr.ciudad || '')
     setRango({ ini: aISOx(pr.fechaInicio), fin: aISOx(pr.fechaFin) })
+    const rk = `${aISOx(pr.fechaInicio)}~${aISOx(pr.fechaFin)}`
     const tf = {}, ds = {}, bn = {}
     for (const f of pr.filas || []) {
       tf[keyDe(f.nombre)] = { ind: f.tInd ? String(f.tInd) : '', dob: f.tDob ? String(f.tDob) : '' }
-      if (f.descuento) ds[keyDe(f.nombre)] = String(f.descuento)
-      if (f.bono) bn[keyDe(f.nombre)] = String(f.bono)
+      if (f.descuento) ds[`${rk}::${keyDe(f.nombre)}`] = String(f.descuento)
+      if (f.bono) bn[`${rk}::${keyDe(f.nombre)}`] = String(f.bono)
     }
     // Choferes que pueden entrar al ampliar el periodo: tarifa del perfil.
     for (const r of pr.porDia || []) {
@@ -662,10 +667,12 @@ export default function ReporteManual() {
                 }
                 if (key === 'claimsMonto') return row.claimsMonto ? <span className="text-rose-600 dark:text-rose-400">−{money(row.claimsMonto)}</span> : '—'
                 if (key === 'desc') {
-                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={descuentos[row._key] ?? ''} onChange={(e) => setDescuentos((d) => ({ ...d, [row._key]: e.target.value }))} />
+                  const ck = `${claveRango}::${row._key}`
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={descuentos[ck] ?? ''} onChange={(e) => setDescuentos((d) => ({ ...d, [ck]: e.target.value }))} />
                 }
                 if (key === 'bono') {
-                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={bonos[row._key] ?? ''} onChange={(e) => setBonos((d) => ({ ...d, [row._key]: e.target.value }))} />
+                  const ck = `${claveRango}::${row._key}`
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={bonos[ck] ?? ''} onChange={(e) => setBonos((d) => ({ ...d, [ck]: e.target.value }))} />
                 }
                 if (key === 'total') return <b className="text-brand-navy dark:text-slate-100">{money(row.total)}</b>
                 return row[key]
