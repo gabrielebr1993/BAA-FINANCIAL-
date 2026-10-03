@@ -27,6 +27,11 @@ import { filasMatriz, toNum } from '../../utils/excel'
 // Encabezado normalizado (mismo criterio que el parser de Gofo).
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// Código de CIUDAD a partir del nombre del fleet ("CHS - B&J Investment…" → "CHS",
+// "MYR - …" → "MYR"). El fleet trae la ciudad REAL de reparto; POE es el hub de
+// entrada (p. ej. ATL) y es el mismo para todo, por eso NO sirve para la ciudad.
+const codigoFleet = (s) => (String(s ?? '').split('-')[0] || '').trim().toUpperCase()
+
 // Busca una hoja por nombre normalizado (tolera espacios/mayúsculas).
 function hoja(wb, nombre) {
   const n = norm(nombre)
@@ -126,7 +131,7 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
       waybill: track,
       courier: String(f[iP.driver] ?? '').trim().replace(/\s+/g, ' '),
       ruta: String(f[iP.ruta] ?? '').trim() || 'Sin ruta',
-      ciudad: String(f[iP.poe] ?? '').trim() || 'SPX',
+      ciudad: codigoFleet(f[iP.fleet]) || String(f[iP.poe] ?? '').trim().toUpperCase() || 'SPX',
       zip: String(f[iP.zip] ?? '').trim(),
       peso: toNum(f[iP.peso]),
       rangoPeso: catRaw || (toNum(f[iP.peso]) < 1 ? '<1 lbs' : '1-10 lbs'),
@@ -152,7 +157,21 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
   const { semana, fechaInicioISO, fechaFinISO } = semanaDeNota(notaTop, detalles.map((d) => d.fecha))
   if (Object.keys(notas).length > 1) avisos.push(`El PLD mezcla ${Object.keys(notas).length} periodos (NOTE); se usa el más frecuente: ${notaTop}.`)
 
-  const ciudad = detalles[0]?.ciudad || 'SPX'
+  // Ciudad REPRESENTATIVA de la factura = la que más paquetes tiene (una factura
+  // puede traer varias ciudades, p. ej. CHS y MYR). Y mapa chofer → su ciudad para
+  // atribuir cada claim a la ciudad correcta (los claims no traen fleet).
+  const conteoCiudad = {}, porChoferCiudad = {}
+  for (const d of detalles) {
+    conteoCiudad[d.ciudad] = (conteoCiudad[d.ciudad] || 0) + 1
+    const k = norm(d.courier)
+    porChoferCiudad[k] = porChoferCiudad[k] || {}
+    porChoferCiudad[k][d.ciudad] = (porChoferCiudad[k][d.ciudad] || 0) + 1
+  }
+  const ciudadDeCourier = {}
+  for (const k of Object.keys(porChoferCiudad)) {
+    ciudadDeCourier[k] = Object.keys(porChoferCiudad[k]).sort((a, b) => porChoferCiudad[k][b] - porChoferCiudad[k][a])[0]
+  }
+  const ciudad = Object.keys(conteoCiudad).sort((a, b) => conteoCiudad[b] - conteoCiudad[a])[0] || 'SPX'
   const fleet = String((mPld[1] || [])[iP.fleet] ?? '').trim()
 
   // ── 2) Claims ────────────────────────────────────────────────────────────
@@ -176,9 +195,10 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
       if (!f || !f[iC.track]) continue
       const total = toNum(f[iC.total]) || (toNum(f[iC.valor]) + toNum(f[iC.delFee]))
       const tipo = String(f[iC.tipo] ?? '').trim()
+      const courierClaim = String(f[iC.driver] ?? '').trim().replace(/\s+/g, ' ')
       claims.push({
         waybill: String(f[iC.track]).trim(),
-        courier: String(f[iC.driver] ?? '').trim().replace(/\s+/g, ' '),
+        courier: courierClaim,
         date: String(f[iC.periodo] ?? '').trim(),
         postalCode: String(f[iC.zip] ?? '').trim(),
         claimType: tipo,
@@ -188,7 +208,8 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
         valor: toNum(f[iC.valor]),
         delFee: toNum(f[iC.delFee]),
         ruta: String(f[iC.ruta] ?? '').trim(),
-        ciudad,
+        // Ciudad del claim = la del chofer que lo generó (fallback: la principal).
+        ciudad: ciudadDeCourier[norm(courierClaim)] || ciudad,
       })
     }
   } else avisos.push('El archivo no trae hoja "Claims": se asume semana sin claims.')
@@ -349,7 +370,7 @@ export function procesarReporteRutasSpeedX(arrayBuffer, nombreArchivo = '') {
       waybill: track,
       courier: String(f[i.driver] ?? '').trim().replace(/\s+/g, ' '),
       ruta: String(f[i.ruta] ?? '').trim() || 'Sin ruta',
-      ciudad: '', // se fija abajo (código del fleet)
+      ciudad: codigoFleet(f[i.fleet]) || String(f[i.poe] ?? '').trim().toUpperCase() || 'SPX',
       zip: String(f[i.zip] ?? '').trim(),
       peso,
       rangoPeso: peso < 1 ? '<1 lbs' : '1-10 lbs',
@@ -367,10 +388,12 @@ export function procesarReporteRutasSpeedX(arrayBuffer, nombreArchivo = '') {
   const nExcl = Object.values(excluidos).reduce((a, n) => a + n, 0)
   if (nExcl) avisos.push(`${nExcl} paquete(s) NO entregados quedan fuera del pago provisional: ${Object.entries(excluidos).map(([k, n]) => `${k} (${n})`).join(', ')}.`)
 
-  // Ciudad = código del fleet ("CHS - B&J Investment…" → CHS); respaldo: POE.
+  // Ciudad REPRESENTATIVA del reporte = la que más paquetes tiene (cada paquete
+  // ya quedó con la ciudad de SU fleet, así un reporte puede traer CHS y MYR).
+  const conteoCiudad = {}
+  for (const d of detalles) conteoCiudad[d.ciudad] = (conteoCiudad[d.ciudad] || 0) + 1
+  const ciudad = Object.keys(conteoCiudad).sort((a, b) => conteoCiudad[b] - conteoCiudad[a])[0] || 'SPX'
   const fleet = String((m[1] || [])[i.fleet] ?? '').trim()
-  const ciudad = (fleet.split('-')[0] || '').trim() || String((m[1] || [])[i.poe] ?? '').trim() || 'SPX'
-  for (const d of detalles) d.ciudad = ciudad
 
   // Periodo = rango de fechas del contenido (el reporte puede cubrir varios días).
   const fechas = [...new Set(detalles.map((d) => d.fecha).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort()
