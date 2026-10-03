@@ -20,7 +20,8 @@ import { useData } from '../DataContext'
 import { registrarAuditoria } from '../utils/auditoria'
 import { money, num } from '../utils/format'
 import { conFechas } from '../utils/rango'
-import { PiggyBank, CalendarClock, CheckCircle2, Undo2, Plus, Trash2, ChevronDown, ChevronUp, DollarSign, Receipt, AlertTriangle } from 'lucide-react'
+import { CARRIERS } from '../carriers'
+import { PiggyBank, CalendarClock, CheckCircle2, Undo2, Plus, Trash2, ChevronDown, ChevronUp, DollarSign, Receipt, AlertTriangle, Search } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Aviso, Badge, Input } from '../components/ui'
 import { useLang } from '../i18n'
 
@@ -60,6 +61,52 @@ export default function Cobros() {
       })
       .sort((a, b) => (b._fechaFin?.getTime() || 0) - (a._fechaFin?.getTime() || 0))
   }, [invoices, activeCompanyId])
+
+  // ── ANALIZADOR DE PAGOS ────────────────────────────────────────────────────
+  // "SpeedX me depositó $X el día D: ¿a qué corresponde?" Busca la combinación
+  // de facturas cargadas cuya suma dé el monto (con tolerancia de centavos) y,
+  // si no la hay, explica qué semana tocaba cobrar ese día según el fondo.
+  const [anMonto, setAnMonto] = useState('')
+  const [anFecha, setAnFecha] = useState('')
+  const [anResultado, setAnResultado] = useState(null)
+  const analizarPago = () => {
+    const objetivo = r2(anMonto)
+    if (!(objetivo > 0)) return
+    const lista = facturas.map((f) => ({ id: f.id, etiqueta: `${f.ciudad || ''} ${f.semanaSpeedX || f.semana}`, monto: f._monto, esperada: f.fechaEsperadaCobro, cobrada: (f.estadoCobro || 'pendiente') === 'cobrada' }))
+      .filter((x) => x.monto > 0)
+      .sort((a, b) => b.monto - a.monto)
+    // Búsqueda de combinación exacta (±5 centavos), hasta 6 facturas por combo.
+    const combos = []
+    const buscar = (idx, resto, usadas) => {
+      if (combos.length >= 3) return
+      if (Math.abs(resto) <= 0.05 && usadas.length) { combos.push([...usadas]); return }
+      if (resto < -0.05 || idx >= lista.length || usadas.length >= 6) return
+      for (let i = idx; i < lista.length; i++) {
+        if (lista[i].monto > resto + 0.05) continue
+        usadas.push(lista[i])
+        buscar(i + 1, r2(resto - lista[i].monto), usadas)
+        usadas.pop()
+        if (combos.length >= 3) return
+      }
+    }
+    buscar(0, objetivo, [])
+    // ¿Qué semana TOCABA cobrar en la fecha del depósito? (fondo: fin + diasFondo)
+    let semanaEsperada = null
+    if (anFecha) {
+      const fPago = deISO(anFecha)
+      const fin = new Date(fPago); fin.setDate(fin.getDate() - (CARRIERS.speedx?.diasFondo || 14))
+      const desdeSab = (fin.getDay() + 1) % 7
+      const ini = new Date(fin); ini.setDate(ini.getDate() - desdeSab)
+      const fin2 = new Date(ini); fin2.setDate(fin2.getDate() + 6)
+      semanaEsperada = { ini, fin: fin2 }
+      // facturas cargadas de esa semana
+      semanaEsperada.cargadas = facturas.filter((f) => {
+        const fi = f.fechaInicio?.toDate ? f.fechaInicio.toDate() : f.fechaInicio
+        return fi && fi >= new Date(ini.getTime() - 86400000) && fi <= new Date(fin2.getTime() + 86400000)
+      })
+    }
+    setAnResultado({ objetivo, combos, semanaEsperada })
+  }
 
   const pendientes = facturas.filter((f) => (f.estadoCobro || 'pendiente') !== 'cobrada')
   const cobradas = facturas.filter((f) => (f.estadoCobro || 'pendiente') === 'cobrada')
@@ -149,6 +196,46 @@ export default function Cobros() {
         <KPI label={t('Cobrado (histórico)')} value={money(totalCobrado)} icon={DollarSign} accent="green" sub={`${cobradas.length} ${t('semana(s)')}`} />
         <KPI label={t('Cobros atrasados')} value={num(atrasadas.length)} icon={AlertTriangle} accent={atrasadas.length ? 'red' : 'navy'} sub={atrasadas.length ? t('pasó la fecha esperada') : t('todo al día')} />
       </div>
+
+      {/* ANALIZADOR: ¿a qué corresponde un depósito de SpeedX? */}
+      <Card className="mb-4">
+        <div className="mb-2 flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100">
+          <Search size={17} /> {t('Analizar un pago recibido')}
+        </div>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('Escribe cuánto te depositó SpeedX y cuándo: te digo a qué semanas y ciudades corresponde (recuerda el fondo: lo que llega hoy es la semana que cerró hace ~2 semanas).')}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input type="number" step="0.01" min="0" className="w-36" placeholder={t('Monto ($)')} value={anMonto} onChange={(e) => setAnMonto(e.target.value)} />
+          <Input type="date" className="w-40" value={anFecha} onChange={(e) => setAnFecha(e.target.value)} />
+          <Boton onClick={analizarPago}><Search size={15} /> {t('Analizar')}</Boton>
+        </div>
+        {anResultado && (
+          <div className="mt-3 space-y-2 text-sm">
+            {anResultado.combos.length > 0 ? (
+              <Aviso tipo="ok">
+                <b>{t('¡Cuadra!')}</b> {money(anResultado.objetivo)} {t('corresponde exactamente a:')}{' '}
+                {anResultado.combos[0].map((c) => `${c.etiqueta} (${money(c.monto)})`).join(' + ')}.
+                {' '}{t('Márcalas como cobradas con el botón de cada una.')}
+              </Aviso>
+            ) : (
+              <Aviso tipo="warn">
+                <div className="space-y-1">
+                  <div><b>{money(anResultado.objetivo)}</b> {t('no coincide con ninguna combinación de las facturas cargadas.')}</div>
+                  {anResultado.semanaEsperada && (
+                    <div>
+                      {t('Por el fondo de')} {CARRIERS.speedx?.diasFondo || 14} {t('días, un pago de esa fecha corresponde a la semana del')}{' '}
+                      <b>{fmt(anResultado.semanaEsperada.ini)} – {fmt(anResultado.semanaEsperada.fin)}</b>.
+                      {anResultado.semanaEsperada.cargadas.length === 0
+                        ? <> {t('Esa semana AÚN NO está cargada en el sistema: descarga sus facturas de SpeedX (una por ciudad), súbelas en «Cargar Factura» y vuelve a analizar.')}</>
+                        : <> {t('De esa semana tienes cargadas:')} {anResultado.semanaEsperada.cargadas.map((f) => `${f.ciudad} (${money(f._monto)})`).join(' + ')} = {money(r2(anResultado.semanaEsperada.cargadas.reduce((a, f) => a + f._monto, 0)))} · {t('diferencia con el pago:')} <b>{money(r2(anResultado.objetivo - anResultado.semanaEsperada.cargadas.reduce((a, f) => a + f._monto, 0)))}</b> {t('(¿falta subir una ciudad de esa semana?)')}</>}
+                    </div>
+                  )}
+                  {!anResultado.semanaEsperada && <div>{t('Pon también la fecha del depósito para decirte qué semana tocaba cobrar ese día.')}</div>}
+                </div>
+              </Aviso>
+            )}
+          </div>
+        )}
+      </Card>
 
       {atrasadas.length > 0 && (
         <Aviso tipo="warn" className="mb-4">
