@@ -111,6 +111,29 @@ export default function CargarFacturaSpeedX() {
           dob: d && Number(d.precioDoble) > 0 ? String(d.precioDoble) : '',
         }
       }
+      // REPORTE MANUAL PENDIENTE de la misma ciudad/fechas: SUS tarifas mandan
+      // (son las que YA se usaron para pagar); el perfil queda de respaldo.
+      const provPend = (provisionales || []).find((pr) => {
+        if (pr.estado === 'verificado' || pr.companyId !== activeCompanyId) return false
+        const normC = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const cProv = normC(pr.ciudad)
+        const okCiudad = cProv && (cProv === normC(p.ciudad) || normC(p.fleet || '').startsWith(cProv) || normC(p.fleet || '').includes(cProv))
+        if (!okCiudad) return false
+        const aD = (x) => (x?.toDate ? x.toDate() : x instanceof Date ? x : null)
+        const pi = aD(pr.fechaInicio), pf = aD(pr.fechaFin)
+        const ii = deISO(p.fechaInicioISO), ff = deISO(p.fechaFinISO)
+        if (!pi || !pf || !ii || !ff) return false
+        return pi <= ff && pf >= ii
+      })
+      if (provPend) {
+        for (const f of provPend.filas || []) {
+          const k = keyDe(f.nombre)
+          if (!tf[k]) continue
+          if (Number(f.tInd) > 0) tf[k].ind = String(f.tInd)
+          if (Number(f.tDob) > 0) tf[k].dob = String(f.tDob)
+        }
+        setAvisos((a) => [...a, `${t('Encontré el reporte manual PENDIENTE de esta ciudad y fechas (semana')} ${provPend.semana}): ${t('usé sus tarifas tal cual. Al guardar, la comparación también respetará sus descuentos y bonus (lo ya pagado se queda como está).')}`])
+      }
       setTarifas(tf)
       // Fondo: fecha esperada de cobro = fin de semana + días de fondo (editable).
       const fin = deISO(p.fechaFinISO)
@@ -450,8 +473,12 @@ export default function CargarFacturaSpeedX() {
           const porChofer = [...nombres].map((k) => {
             const pf2 = (prov.filas || []).find((f) => keyDe(f.nombre) === k)
             const provTot = r2(pf2?.total || 0)
-            const ofi = r2(ofiPorCh[k]?.total || 0)
-            return { nombre: pf2?.nombre || ofiPorCh[k]?.nombre || k, provisional: provTot, oficial: ofi, diferencia: r2(provTot - ofi) }
+            const descu = r2(pf2?.descuento || 0)
+            const bono = r2(pf2?.bono || 0)
+            // Lo "correcto" respeta lo YA aplicado al pagar: los mismos
+            // descuentos y bonus del reporte manual sobre el pago oficial.
+            const ofi = r2((ofiPorCh[k]?.total || 0) - descu + bono)
+            return { nombre: pf2?.nombre || ofiPorCh[k]?.nombre || k, provisional: provTot, oficial: ofi, descuento: descu, bono, diferencia: r2(provTot - ofi) }
           }).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
           const comparacion = {
             totalProvisional: r2(porChofer.reduce((a, c) => a + c.provisional, 0)),
@@ -503,7 +530,7 @@ export default function CargarFacturaSpeedX() {
             {t('pagaste')} <b>{money(verifProv.totalProvisional)}</b> · {t('lo correcto (factura oficial)')} <b>{money(verifProv.totalOficial)}</b> · {t('diferencia')}{' '}
             <b>{verifProv.diferencia > 0 ? '+' : ''}{money(verifProv.diferencia)}</b>{' '}
             {verifProv.diferencia > 0.009 ? t('(pagaste de más: descuéntalo en la próxima semana)') : verifProv.diferencia < -0.009 ? t('(pagaste de menos: debes la diferencia)') : t('(cuadró exacto)')}
-            {' '}{t('El detalle por chofer quedó guardado en «Reporte manual».')}
+            {' '}{t('La comparación ya respeta los descuentos y bonus que aplicaste en el reporte manual.')} {t('El detalle por chofer quedó guardado en «Reporte manual».')}
           </div>
         </Aviso>
       )}
