@@ -529,7 +529,7 @@ export default function CargarFacturaSpeedX() {
             <b>{t('Conciliación del pago provisional')} ({t('Semana')} {verifProv.semana}):</b>{' '}
             {t('pagaste')} <b>{money(verifProv.totalProvisional)}</b> · {t('lo correcto (factura oficial)')} <b>{money(verifProv.totalOficial)}</b> · {t('diferencia')}{' '}
             <b>{verifProv.diferencia > 0 ? '+' : ''}{money(verifProv.diferencia)}</b>{' '}
-            {verifProv.diferencia > 0.009 ? t('(pagaste de más: descuéntalo en la próxima semana)') : verifProv.diferencia < -0.009 ? t('(pagaste de menos: debes la diferencia)') : t('(cuadró exacto)')}
+            {verifProv.diferencia > 0.009 ? t('(pagaste un poco de más — solo aviso: lo ya pagado se queda como está)') : verifProv.diferencia < -0.009 ? t('(pagaste un poco de menos — solo aviso: lo ya pagado se queda como está)') : t('(cuadró exacto)')}
             {' '}{t('La comparación ya respeta los descuentos y bonus que aplicaste en el reporte manual.')} {t('El detalle por chofer quedó guardado en «Reporte manual».')}
           </div>
         </Aviso>

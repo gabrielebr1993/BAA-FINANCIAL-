@@ -474,7 +474,7 @@ export default function ReporteManual() {
                       <b className={comp.diferencia > 0 ? 'text-amber-600' : comp.diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}>
                         {comp.diferencia > 0 ? '+' : ''}{money(comp.diferencia)}
                       </b>{' '}
-                      {comp.diferencia > 0 ? t('(pagaste de más: descuéntalo en la próxima semana)') : comp.diferencia < 0 ? t('(pagaste de menos: debes la diferencia)') : t('(cuadró exacto)')}
+                      {comp.diferencia > 0 ? t('(pagaste un poco de más — solo aviso: lo ya pagado se queda como está)') : comp.diferencia < 0 ? t('(pagaste un poco de menos — solo aviso: lo ya pagado se queda como está)') : t('(cuadró exacto)')}
                     </div>
                   )}
                   {verificado && comp && abiertoEste && (

@@ -2022,6 +2022,8 @@ export const EN_EXTRA = {
   "(pagaste de más: descuéntalo en la próxima semana)": "(you overpaid: deduct it next week)",
   "(pagaste de menos: debes la diferencia)": "(you underpaid: you owe the difference)",
   "(cuadró exacto)": "(matched exactly)",
+  "(pagaste un poco de más — solo aviso: lo ya pagado se queda como está)": "(you paid slightly more — just a heads-up: what you already paid stays as is)",
+  "(pagaste un poco de menos — solo aviso: lo ya pagado se queda como está)": "(you paid slightly less — just a heads-up: what you already paid stays as is)",
   "Provisional": "Provisional",
   "Oficial": "Official",
   "Todos los choferes cuadraron exacto.": "All drivers matched exactly.",
