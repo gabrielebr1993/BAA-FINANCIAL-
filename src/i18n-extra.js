@@ -2115,6 +2115,8 @@ export const EN_EXTRA = {
   "días, un pago de esa fecha corresponde a la semana del": "days, a payment on that date corresponds to the week of",
   "Esa semana AÚN NO está cargada en el sistema: descarga sus facturas de SpeedX (una por ciudad), súbelas en «Cargar Factura» y vuelve a analizar.": "That week is NOT uploaded yet: download its SpeedX invoices (one per city), upload them in “Upload Invoice” and analyze again.",
   "De esa semana tienes cargadas:": "From that week you have uploaded:",
+  "De esa semana solo tienes REPORTES MANUALES": "From that week you only have MANUAL REPORTS",
+  "eso es lo que TÚ les pagaste a los CHOFERES (tus tarifas) y NUNCA va a coincidir con el depósito de SpeedX (sus tarifas). La diferencia entre ambos es tu ganancia bruta. Para cuadrar el depósito al centavo, sube las facturas OFICIALES de esa semana.": "that is what YOU paid the DRIVERS (your rates) and it will NEVER match SpeedX's deposit (their rates). The difference between them is your gross profit. To match the deposit to the cent, upload that week's OFFICIAL invoices.",
   "diferencia con el pago:": "difference vs the payment:",
   "(¿falta subir una ciudad de esa semana?)": "(missing a city from that week?)",
   "Pon también la fecha del depósito para decirte qué semana tocaba cobrar ese día.": "Also enter the deposit date so I can tell you which week was due that day.",

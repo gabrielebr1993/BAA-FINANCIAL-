@@ -43,7 +43,7 @@ const fmt = (d) => {
 export default function Cobros() {
   const { t } = useLang()
   const { perfil } = useAuth()
-  const { invoices, activeCompanyId, reloadInvoices } = useData()
+  const { invoices, provisionales, activeCompanyId, reloadInvoices } = useData()
   const [abierta, setAbierta] = useState(null) // invoiceId expandida (gastos temporales)
   const [gasto, setGasto] = useState({ concepto: '', monto: '' })
   const [cobro, setCobro] = useState({}) // invoiceId → { fecha, monto } del formulario "marcar cobrada"
@@ -102,6 +102,12 @@ export default function Cobros() {
       // facturas cargadas de esa semana
       semanaEsperada.cargadas = facturas.filter((f) => {
         const fi = f.fechaInicio?.toDate ? f.fechaInicio.toDate() : f.fechaInicio
+        return fi && fi >= new Date(ini.getTime() - 86400000) && fi <= new Date(fin2.getTime() + 86400000)
+      })
+      // Reportes manuales de esa semana (pago a CHOFERES: no se compara con el
+      // depósito de SpeedX — son tarifas distintas).
+      semanaEsperada.provisionales = (provisionales || []).filter((pr) => {
+        const fi = pr.fechaInicio?.toDate ? pr.fechaInicio.toDate() : pr.fechaInicio
         return fi && fi >= new Date(ini.getTime() - 86400000) && fi <= new Date(fin2.getTime() + 86400000)
       })
     }
@@ -224,7 +230,10 @@ export default function Cobros() {
                     <div>
                       {t('Por el fondo de')} {CARRIERS.speedx?.diasFondo || 14} {t('días, un pago de esa fecha corresponde a la semana del')}{' '}
                       <b>{fmt(anResultado.semanaEsperada.ini)} – {fmt(anResultado.semanaEsperada.fin)}</b>.
-                      {anResultado.semanaEsperada.cargadas.length === 0
+                      {anResultado.semanaEsperada.cargadas.length === 0 && (anResultado.semanaEsperada.provisionales || []).length > 0 && (
+                        <> {t('De esa semana solo tienes REPORTES MANUALES')} ({anResultado.semanaEsperada.provisionales.map((pr) => `${pr.ciudad} ${money(pr.totalPagar || 0)}`).join(' + ')} = {money(r2(anResultado.semanaEsperada.provisionales.reduce((a, pr) => a + (pr.totalPagar || 0), 0)))}): {t('eso es lo que TÚ les pagaste a los CHOFERES (tus tarifas) y NUNCA va a coincidir con el depósito de SpeedX (sus tarifas). La diferencia entre ambos es tu ganancia bruta. Para cuadrar el depósito al centavo, sube las facturas OFICIALES de esa semana.')}</>
+                      )}
+                      {anResultado.semanaEsperada.cargadas.length === 0 && (anResultado.semanaEsperada.provisionales || []).length === 0
                         ? <> {t('Esa semana AÚN NO está cargada en el sistema: descarga sus facturas de SpeedX (una por ciudad), súbelas en «Cargar Factura» y vuelve a analizar.')}</>
                         : <> {t('De esa semana tienes cargadas:')} {anResultado.semanaEsperada.cargadas.map((f) => `${f.ciudad} (${money(f._monto)})`).join(' + ')} = {money(r2(anResultado.semanaEsperada.cargadas.reduce((a, f) => a + f._monto, 0)))} · {t('diferencia con el pago:')} <b>{money(r2(anResultado.objetivo - anResultado.semanaEsperada.cargadas.reduce((a, f) => a + f._monto, 0)))}</b> {t('(¿falta subir una ciudad de esa semana?)')}</>}
                     </div>
