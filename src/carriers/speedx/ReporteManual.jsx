@@ -408,6 +408,20 @@ export default function ReporteManual() {
     .sort((a, b) => (b.fechaCarga?.seconds || 0) - (a.fechaCarga?.seconds || 0))
   const ciudadesProv = [...new Set((provisionales || []).map((pr) => pr.ciudad || '').filter(Boolean))].sort()
 
+  // CUÁNTO TE DEPOSITA SPEEDX por ese provisional: usa el ingreso estimado que
+  // quedó guardado; si no lo tiene (no se puso la tarifa al crearlo), lo calcula
+  // con la tarifa por paquete que tengas guardada para esa ciudad en este navegador.
+  const depositoSpeedX = (pr) => {
+    if (Number(pr.ingresoEstimado) > 0) return r2(pr.ingresoEstimado)
+    let rate = null
+    try { rate = JSON.parse(localStorage.getItem(`mp_spx_paga_${(pr.ciudad || '').trim().toUpperCase()}`) || 'null') } catch { rate = null }
+    const ri = Number(rate?.ind) || 0, rd = Number(rate?.dob) || 0
+    if (!ri && !rd) return 0
+    const ind = (pr.filas || []).reduce((a, f) => a + (f.individuales || 0), 0)
+    const dob = (pr.filas || []).reduce((a, f) => a + (f.dobles || 0), 0)
+    return r2(ind * ri + dob * rd)
+  }
+
   return (
     <div>
       <PageTitle right={empresaActiva && <span className="text-sm text-slate-500 dark:text-slate-400">{t('Empresa:')} <b className="text-brand-navy dark:text-slate-200">{empresaActiva.nombre}</b></span>}>
@@ -451,13 +465,29 @@ export default function ReporteManual() {
               const verificado = pr.estado === 'verificado'
               const comp = pr.comparacion
               const abiertoEste = abierto === pr.id
+              const deposito = depositoSpeedX(pr)
+              const margen = r2(deposito - (pr.totalPagar || 0))
               return (
                 <div key={pr.id} className="py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge color={verificado ? 'green' : 'gold'}>{verificado ? t('VERIFICADO') : t('PENDIENTE')}</Badge>
                     <span className="font-semibold text-brand-navy dark:text-slate-100">{pr.ciudad} · {t('Semana')} {pr.semana}</span>
                     <span className="text-xs text-slate-400">{fmtF(pr.fechaInicio)} – {fmtF(pr.fechaFin)} · {num(pr.totalPaquetes || 0)} {t('paquetes')}</span>
-                    <span className="ml-auto font-bold text-brand-navy dark:text-slate-100">{money(pr.totalPagar || 0)}</span>
+                    <span className="ml-auto text-right leading-tight">
+                      {deposito > 0 ? (
+                        <>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{t('SpeedX te deposita')} {money(deposito)}</span>
+                          <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                            {t('a choferes')} {money(pr.totalPagar || 0)} · {t('margen')} <b className={margen >= 0 ? 'text-brand-gold' : 'text-rose-600'}>{money(margen)}</b>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold text-brand-navy dark:text-slate-100">{money(pr.totalPagar || 0)} <span className="text-[11px] font-normal text-slate-400">{t('a choferes')}</span></span>
+                          {!verificado && <span className="block text-[11px] text-slate-400">{t('Abre y pon «¿Cuánto te paga SpeedX?» para ver el depósito')}</span>}
+                        </>
+                      )}
+                    </span>
                     {verificado && comp && (
                       <button onClick={() => setAbierto(abiertoEste ? null : pr.id)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy dark:text-slate-200">
                         {t('Diferencias')} {abiertoEste ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
