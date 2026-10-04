@@ -43,11 +43,13 @@ export function necesitaCorreccion(inv, drivers) {
 export async function corregirCiudadesSpeedX(companyId, invoices, drivers, onProgreso) {
   const speedx = (invoices || []).filter((i) => i.carrier === 'speedx' && !i.provisional)
   let revisadas = 0, corregidas = 0, sinDato = 0
+  const ciudadesAsignadas = new Set()
   for (const inv of speedx) {
     revisadas++
     onProgreso?.(revisadas, speedx.length)
     const code = ciudadDestino(inv, drivers)
     if (!code) { sinDato++; continue }
+    ciudadesAsignadas.add(code)
     if (String(inv.ciudad || '').toUpperCase() === code) continue // ya está bien
 
     const nombre = nombreCiudad(code)
@@ -94,5 +96,5 @@ export async function corregirCiudadesSpeedX(companyId, invoices, drivers, onPro
     }
     corregidas++
   }
-  return { revisadas, corregidas, sinDato }
+  return { revisadas, corregidas, sinDato, ciudades: [...ciudadesAsignadas] }
 }

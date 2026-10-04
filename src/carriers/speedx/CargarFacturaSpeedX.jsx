@@ -53,7 +53,7 @@ export default function CargarFacturaSpeedX() {
   const { t } = useLang()
   const { perfil } = useAuth()
   const navigate = useNavigate()
-  const { invoices, drivers, activeCompanyId, empresaActiva, ciudadesEmpresa, provisionales, reloadInvoices, reloadDrivers, reloadClaims, reloadAjustes, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, activeCompanyId, empresaActiva, ciudadesEmpresa, provisionales, reloadInvoices, reloadDrivers, reloadClaims, reloadAjustes, setSelectedInvoiceId, setSelectedCity } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -535,8 +535,19 @@ export default function CargarFacturaSpeedX() {
     setProgresoCorr({ hechas: 0, total: porCorregir.length })
     try {
       const r = await corregirCiudadesSpeedX(activeCompanyId, invoices, drivers, (hechas, total) => setProgresoCorr({ hechas, total }))
+      // Registrar las ciudades corregidas en el catálogo de la empresa (SpeedX)
+      // para que aparezcan en el selector de ciudad y no queden "ocultas".
+      try {
+        const faltantes = (r.ciudades || []).filter((cod) => !(ciudadesEmpresa || []).some((c) => String(c.codigo || '').toUpperCase() === cod))
+        if (faltantes.length) {
+          await guardarCiudadesEmpresa(activeCompanyId, [...(ciudadesEmpresa || []), ...faltantes.map((cod) => ({ codigo: cod, nombre: cod }))], 'speedx')
+        }
+      } catch { /* si falla el registro de ciudad no se bloquea */ }
       await reloadInvoices()
       await reloadClaims?.()
+      // Dejar el filtro en TODAS para que las facturas re-etiquetadas SE VEAN
+      // (si el filtro estaba en ATL, ya no coincide con nada).
+      setSelectedCity?.(TODAS)
       setResCorr(r)
     } catch (e) {
       setErrores([t('No se pudieron corregir las ciudades:') + ' ' + e.message])
