@@ -635,6 +635,20 @@ function CargarFacturaGofo() {
       }
       if (choferesNuevos.length > 0 || upIds.length) await reloadDrivers()
 
+      // AUDITORÍA de uniones de nombres: cada «es el mismo que…» queda
+      // registrado (quién lo hizo, cuándo, qué nombres), revisable en Auditorías.
+      const uniones = Object.entries(aliasPorCanonico).filter(([, a]) => a.length)
+      if (uniones.length) {
+        registrarAuditoria(activeCompanyId, {
+          accion: 'choferes_unidos',
+          usuario: perfil?.email || perfil?.nombre || 'usuario',
+          rol: perfil?.role || '',
+          entidad: `${uniones.length} unión(es) de nombres`,
+          detalle: uniones.map(([c, a]) => `"${a.join('", "')}" → ${c}`).join(' · '),
+          semana: semana.trim(),
+        })
+      }
+
       const { detalles, claims, ...resumen } = combinado
       // Se filtran ciudades con código vacío: Firestore no permite claves de mapa vacías.
       const ciudadesMap = Object.fromEntries(combinado.resumenCiudades.filter((c) => c.ubicacion).map((c) => [c.ubicacion, c.nombreCiudad]))

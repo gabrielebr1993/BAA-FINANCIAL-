@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp, writeBatch, arrayRemove } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
@@ -413,6 +413,41 @@ export default function Choferes() {
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
         </div>
       </Card>
+
+      {/* AUDITORÍA DE NOMBRES UNIDOS: choferes cuya ficha ABSORBIÓ otros nombres
+          (al subir una factura y responder "es el mismo que…"). Permite ver
+          quién fue combinado con quién y deshacer una unión equivocada. */}
+      {(() => {
+        const unidos = driversAll.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
+        if (!unidos.length) return null
+        const quitarAlias = async (d, a) => {
+          if (!window.confirm(`${t('¿Quitar la unión')} "${a}" → ${d.nombre}?`)) return
+          await updateDoc(doc(db, 'drivers', d.id), { alias: arrayRemove(a) })
+          await reloadDrivers()
+        }
+        return (
+          <Card className="mb-4 p-4">
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nombres unidos (auditoría)')} <Badge color="gold">{unidos.length}</Badge></h3>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              {t('Al subir una factura, cuando el sistema preguntó «¿es la misma persona?», estos nombres quedaron UNIDOS a una sola ficha (sus paquetes se suman juntos). Si una unión fue un error: 1) quítala aquí con la ✕, 2) borra la factura de esa semana en «Facturas», y 3) vuélvela a subir respondiendo que es un chofer NUEVO — así sus paquetes vuelven a separarse.')}
+            </p>
+            <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+              {unidos.map((d) => (
+                <div key={d.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <b className="text-brand-navy dark:text-slate-100">{d.nombre}</b>
+                  <span className="text-xs text-slate-400">{t('absorbió:')}</span>
+                  {d.alias.map((a) => (
+                    <span key={a} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      {a}
+                      <button onClick={() => quitarAlias(d, a)} title={t('Quitar esta unión')} className="text-amber-500 transition hover:text-rose-600">✕</button>
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* Barra de búsqueda + contador */}
       <div className="mb-2 flex flex-wrap items-center gap-3">

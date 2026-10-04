@@ -18,6 +18,7 @@ export const ACCIONES = {
   gasto_marcado: { label: 'Gasto fijo pagado', color: 'green' },
   gasto_desmarcado: { label: 'Gasto fijo pendiente', color: 'slate' },
   factura_subida: { label: 'Factura cargada', color: 'green' },
+  choferes_unidos: { label: 'Nombres de choferes unidos', color: 'yellow' },
   factura_borrada: { label: 'Factura borrada', color: 'red' },
   pago_stripe: { label: 'Pago por Stripe', color: 'green' },
 }
