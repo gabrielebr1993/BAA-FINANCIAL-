@@ -21,7 +21,7 @@ import { useAuth } from '../../AuthContext'
 import { useData } from '../../DataContext'
 import { procesarArchivoSpeedX } from './parser'
 import { construirResumenSpeedX } from './resumen'
-import { corregirCiudadesSpeedX } from './corregirCiudades'
+import { corregirCiudadesSpeedX, necesitaCorreccion } from './corregirCiudades'
 import { CARRIERS } from '../index'
 import { buscarDriver, calcularPagos, promediosFlota, calificarChofer, TODAS } from '../../utils/calc'
 import { registrarAuditoria } from '../../utils/auditoria'
@@ -521,21 +521,20 @@ export default function CargarFacturaSpeedX() {
   const v = proc?.verificacion
   const res = proc?.resumen
 
-  // Facturas SpeedX guardadas cuya ciudad NO coincide con su fleet (p. ej. ATL
-  // del hub en vez de CHS/MYR). Es lo que se puede corregir sin volver a subir.
-  const codFleet = (s) => (String(s ?? '').split('-')[0] || '').trim().toUpperCase()
-  const porCorregir = (invoices || []).filter((i) => {
-    if (i.carrier !== 'speedx' || i.provisional) return false
-    const code = codFleet(i.fleet)
-    return code && String(i.ciudad || '').toUpperCase() !== code
-  })
+  // Facturas SpeedX guardadas cuya ciudad NO coincide con su ciudad real (del
+  // fleet o, si falta, de la ciudad registrada de sus choferes).
+  const porCorregir = (invoices || []).filter((i) => necesitaCorreccion(i, drivers))
+  // Facturas SpeedX que siguen en un hub (ATL/SPX) pero SIN forma de deducir la
+  // ciudad real: habría que volver a subirlas.
+  const speedxTotal = (invoices || []).filter((i) => i.carrier === 'speedx' && !i.provisional)
+  const enHubSinDato = speedxTotal.filter((i) => ['ATL', 'SPX', ''].includes(String(i.ciudad || '').toUpperCase()) && !porCorregir.includes(i))
 
   const corregirCiudades = async () => {
     if (corrigiendo) return
     setCorrigiendo(true); setResCorr(null); setErrores([])
     setProgresoCorr({ hechas: 0, total: porCorregir.length })
     try {
-      const r = await corregirCiudadesSpeedX(activeCompanyId, invoices, (hechas, total) => setProgresoCorr({ hechas, total }))
+      const r = await corregirCiudadesSpeedX(activeCompanyId, invoices, drivers, (hechas, total) => setProgresoCorr({ hechas, total }))
       await reloadInvoices()
       await reloadClaims?.()
       setResCorr(r)
@@ -574,7 +573,7 @@ export default function CargarFacturaSpeedX() {
       {avisos.map((a, i) => <Aviso key={`a${i}`} tipo="warn" className="mb-3">{a}</Aviso>)}
 
       {/* Corregir ciudad de facturas viejas: ATL (hub) → ciudad real del fleet */}
-      {(porCorregir.length > 0 || resCorr) && !proc && (
+      {(porCorregir.length > 0 || enHubSinDato.length > 0 || resCorr) && !proc && (
         <Card className="mb-4 border border-amber-200 dark:border-amber-500/30">
           <div className="flex flex-wrap items-center gap-3">
             <MapPin size={18} className="text-brand-gold" />
@@ -582,19 +581,24 @@ export default function CargarFacturaSpeedX() {
               <div className="font-bold text-brand-navy dark:text-slate-100">{t('Corregir ciudad de facturas SpeedX')}</div>
               {resCorr ? (
                 <div className="text-sm text-emerald-600 dark:text-emerald-400">
-                  {t('Listo:')} {resCorr.corregidas} {t('factura(s) corregida(s)')}{resCorr.sinFleet > 0 ? ` · ${resCorr.sinFleet} ${t('sin fleet (vuelve a subirlas)')}` : ''}.
+                  {t('Listo:')} {resCorr.corregidas} {t('factura(s) corregida(s)')}{resCorr.sinDato > 0 ? ` · ${resCorr.sinDato} ${t('sin forma de deducir la ciudad (vuelve a subirlas)')}` : ''}.
                 </div>
               ) : (
                 <div className="text-sm text-slate-500 dark:text-slate-400">
-                  {porCorregir.length} {t('factura(s) tienen la ciudad del hub (p. ej. ATL) en vez de la real (CHS/MYR…). Las corrijo usando el fleet guardado — sin volver a subir nada.')}
+                  {porCorregir.length > 0
+                    ? `${porCorregir.length} ${t('factura(s) tienen la ciudad del hub (p. ej. ATL) en vez de la real (CHS/MYR…). Las corrijo usando el fleet o la ciudad de sus choferes — sin volver a subir nada.')}`
+                    : t('No pude deducir la ciudad real de estas facturas (no guardaron el fleet y sus choferes no tienen ciudad registrada). Dale ciudad a los choferes en Choferes, o vuelve a subir esas facturas.')}
                 </div>
+              )}
+              {!resCorr && porCorregir.length === 0 && enHubSinDato.length > 0 && (
+                <div className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{enHubSinDato.length} {t('factura(s) en ATL sin dato de ciudad.')}</div>
               )}
               {corrigiendo && progresoCorr && (
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('Corrigiendo…')} {progresoCorr.hechas}/{progresoCorr.total}</div>
               )}
             </div>
-            {!resCorr && (
-              <Boton onClick={corregirCiudades} disabled={corrigiendo || porCorregir.length === 0}>
+            {!resCorr && porCorregir.length > 0 && (
+              <Boton onClick={corregirCiudades} disabled={corrigiendo}>
                 {corrigiendo ? <Spinner /> : <MapPin size={16} />} {t('Corregir ahora')}
               </Boton>
             )}
