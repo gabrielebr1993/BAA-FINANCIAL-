@@ -5,6 +5,7 @@ import { db, auth } from '../firebase'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { calcularPagos, buscarDriver, TODAS } from '../utils/calc'
+import { normNombre } from '../utils/fallidos'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { crearUsuarioApi } from '../utils/api'
@@ -420,6 +421,22 @@ export default function Choferes() {
       {(() => {
         const unidos = driversAll.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
         if (!unidos.length) return null
+        // ¿CUÁNDO se vio cada nombre absorbido por ÚLTIMA VEZ como chofer
+        // APARTE? Se rastrea en los resúmenes de todas las facturas cargadas:
+        // si "X" aparecía solo hasta la semana pasada y en la última ya no
+        // está, la unión ocurrió en esa carga.
+        const ultimaVez = {}
+        for (const inv of invoices || []) {
+          const fi = inv.fechaInicio?.toDate ? inv.fechaInicio.toDate() : inv.fechaInicio instanceof Date ? inv.fechaInicio : null
+          for (const ch of inv.resumenChoferes || []) {
+            const k = normNombre(ch.nombre)
+            const paq = (ch.individuales || 0) + (ch.dobles || 0)
+            const prev = ultimaVez[k]
+            if (!prev || (fi && prev.fecha && fi > prev.fecha) || (fi && !prev.fecha)) {
+              ultimaVez[k] = { semana: inv.semana, ciudad: inv.ciudadNombre || inv.ciudad || '', paq, fecha: fi }
+            } else if (!prev.fecha && !fi) { /* sin fechas: se queda el primero */ }
+          }
+        }
         const quitarAlias = async (d, a) => {
           if (!window.confirm(`${t('¿Quitar la unión')} "${a}" → ${d.nombre}?`)) return
           await updateDoc(doc(db, 'drivers', d.id), { alias: arrayRemove(a) })
@@ -436,12 +453,18 @@ export default function Choferes() {
                 <div key={d.id} className="flex flex-wrap items-center gap-2 py-2">
                   <b className="text-brand-navy dark:text-slate-100">{d.nombre}</b>
                   <span className="text-xs text-slate-400">{t('absorbió:')}</span>
-                  {d.alias.map((a) => (
-                    <span key={a} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                      {a}
-                      <button onClick={() => quitarAlias(d, a)} title={t('Quitar esta unión')} className="text-amber-500 transition hover:text-rose-600">✕</button>
-                    </span>
-                  ))}
+                  {d.alias.map((a) => {
+                    const u = ultimaVez[normNombre(a)]
+                    return (
+                      <span key={a} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        {a}
+                        {u
+                          ? <span className="font-normal text-amber-600/80 dark:text-amber-300/70">· {t('aparecía APARTE hasta la semana')} {u.semana} ({u.ciudad} · {u.paq} {t('paq.')})</span>
+                          : <span className="font-normal text-amber-600/80 dark:text-amber-300/70">· {t('nunca apareció aparte (variación del mismo nombre)')}</span>}
+                        <button onClick={() => quitarAlias(d, a)} title={t('Quitar esta unión')} className="text-amber-500 transition hover:text-rose-600">✕</button>
+                      </span>
+                    )
+                  })}
                 </div>
               ))}
             </div>

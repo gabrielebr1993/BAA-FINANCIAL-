@@ -2107,6 +2107,8 @@ export const EN_EXTRA = {
   "Nombres unidos (auditoría)": "Merged names (audit)",
   "Al subir una factura, cuando el sistema preguntó «¿es la misma persona?», estos nombres quedaron UNIDOS a una sola ficha (sus paquetes se suman juntos). Si una unión fue un error: 1) quítala aquí con la ✕, 2) borra la factura de esa semana en «Facturas», y 3) vuélvela a subir respondiendo que es un chofer NUEVO — así sus paquetes vuelven a separarse.": "When uploading an invoice, where the system asked “is this the same person?”, these names were MERGED into one profile (their packages are added together). If a merge was a mistake: 1) remove it here with the ✕, 2) delete that week's invoice in “Invoices”, and 3) upload it again answering that it is a NEW driver — their packages will be separated again.",
   "absorbió:": "absorbed:",
+  "aparecía APARTE hasta la semana": "appeared SEPARATELY until week",
+  "nunca apareció aparte (variación del mismo nombre)": "never appeared separately (variation of the same name)",
   "¿Quitar la unión": "Remove the merge",
   "Quitar esta unión": "Remove this merge",
   "Escribe cuánto te depositó SpeedX y cuándo: te digo a qué semanas y ciudades corresponde (recuerda el fondo: lo que llega hoy es la semana que cerró hace ~2 semanas).": "Type how much SpeedX deposited and when: I tell you which weeks and cities it corresponds to (remember the float: what arrives today is the week that closed ~2 weeks ago).",
