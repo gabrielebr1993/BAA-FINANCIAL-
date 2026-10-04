@@ -545,6 +545,7 @@ export default function CargarFacturaSpeedX() {
       } catch { /* si falla el registro de ciudad no se bloquea */ }
       await reloadInvoices()
       await reloadClaims?.()
+      await reloadAjustes?.()
       // Dejar el filtro en TODAS para que las facturas re-etiquetadas SE VEAN
       // (si el filtro estaba en ATL, ya no coincide con nada).
       setSelectedCity?.(TODAS)

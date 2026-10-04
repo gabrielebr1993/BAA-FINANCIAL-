@@ -18,7 +18,7 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 export default function ManagersPanel() {
   const navigate = useNavigate()
   const { t } = useLang()
-  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, numSemanas, selectedCity, selectedCities } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, ciudadesDisponibles, numSemanas, selectedCity, selectedCities } = useData()
   const { ciudadBloqueada, ciudadesUsuario } = useAuth()
   // Multi-Company: el gasto fijo nace en la compañía activa (sin campo = Gofo),
   // así los gastos de SpeedX no se mezclan con los de Gofo y viceversa.
@@ -36,9 +36,15 @@ export default function ManagersPanel() {
     if (misCiudades) return misCiudades.has(c)
     return true
   })
+  // Ciudades para el formulario/menú de gastos fijos = catálogo de la empresa +
+  // las DETECTADAS en las facturas (ciudadesDisponibles). Así aparecen aunque el
+  // catálogo esté vacío (p. ej. CHS/MYR de SpeedX que vienen en las facturas).
+  const nombreCat = (code) => (ciudadesEmpresa || []).find((x) => x.codigo === code)?.nombre || nombreCiudad(code)
+  const codigosTodos = [...new Set([...(ciudadesEmpresa || []).map((c) => c.codigo), ...(ciudadesDisponibles || [])])].filter(Boolean)
+  const ciudadesTodas = codigosTodos.map((code) => ({ codigo: code, nombre: nombreCat(code) }))
   const ciudadesForm = ciudadBloqueada
-    ? (ciudadesEmpresa || []).filter((c) => c.codigo && (ciudadesUsuario || []).includes(c.codigo))
-    : (ciudadesEmpresa || []).filter((c) => c.codigo)
+    ? ciudadesTodas.filter((c) => (ciudadesUsuario || []).includes(c.codigo))
+    : ciudadesTodas
   const exportarBancarios = () => exportarDatosBancarios(managers.map((m) => ({ nombre: m.nombre, verificacion: m.verificacion })), `datos-bancarios-gastos-fijos_${new Date().toISOString().slice(0, 10)}`)
   const [form, setForm] = useState(vacio)
   const [editId, setEditId] = useState(null)
@@ -58,7 +64,7 @@ export default function ManagersPanel() {
 
   // Grupos por ciudad (códigos presentes en managers + ciudades de la empresa).
   const grupos = useMemo(() => {
-    const codes = new Set([...(ciudadesEmpresa || []).map((c) => c.codigo).filter(Boolean), ...managers.map((m) => m.ciudad || '')])
+    const codes = new Set([...codigosTodos, ...managers.map((m) => m.ciudad || '')])
     return [...codes].sort((a, b) => nombreDe(a).localeCompare(nombreDe(b))).map((code) => {
       const items = managers.filter((m) => (m.ciudad || '') === code).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
       const activos = items.filter((m) => m.activo !== false)
@@ -71,9 +77,9 @@ export default function ManagersPanel() {
 
   // Managers cuya ciudad NO está entre las ciudades de la empresa (vacía o código
   // que no existe): su costo NO aparece al filtrar por ciudad, solo en "Todas".
-  const codigosEmpresa = new Set((ciudadesEmpresa || []).map((c) => c.codigo).filter(Boolean))
+  const codigosEmpresa = new Set(codigosTodos)
   const sinCiudad = managersAll.filter((m) => !codigosEmpresa.has(m.ciudad || ''))
-  const ciudadesConCodigo = (ciudadesEmpresa || []).filter((c) => c.codigo)
+  const ciudadesConCodigo = ciudadesTodas
   const [reasignando, setReasignando] = useState(false)
 
   // Asigna TODOS los managers sin ciudad válida a una ciudad (útil con 1 sola ciudad).
@@ -131,7 +137,7 @@ export default function ManagersPanel() {
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? t('Editar gasto fijo') : t('Agregar gasto fijo')}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
-        {(ciudadesEmpresa || []).length === 0 && (
+        {ciudadesTodas.length === 0 && (
           <Aviso tipo="warn">{t('Primero agrega ciudades en')} <b>{t('Configuración → Mis ciudades')}</b>{t(': cada gasto fijo pertenece a una ciudad.')}</Aviso>
         )}
         <div className="flex flex-wrap items-end gap-3">
