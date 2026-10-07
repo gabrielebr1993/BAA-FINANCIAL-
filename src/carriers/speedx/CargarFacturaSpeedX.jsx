@@ -666,6 +666,25 @@ export default function CargarFacturaSpeedX() {
                 <span className="text-slate-400"> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
               </div>
             )}
+            {/* DIAGNÓSTICO cuando NO cuadra: el desglose exacto de la diferencia
+                y las causas típicas, para no quedarse con el misterio. */}
+            {v?.cuadra === false && (
+              <Aviso tipo="error" className="mt-3">
+                <div className="space-y-1">
+                  <div><b>{t('¿Por qué no cuadra?')}</b></div>
+                  <div>
+                    {t('Mi cálculo:')} {money(v.sumaEntregas)} {t('entregas')} − {money(Math.abs(v.sumaClaims || 0))} {t('claims')} + {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))} {t('ajustes previos')} = <b>{money(v.netoCalculado)}</b>
+                    {' '}· {t('Total oficial:')} <b>{money(v.gofo?.totalGofo || 0)}</b> · {t('Diferencia:')} <b>{money(v.diferencia || 0)}</b>
+                  </div>
+                  <div>
+                    {t('Paquetes del detalle:')} {num(res.totalPaquetes)} · {t('PCS del archivo:')} {num(v.gofo?.numDeliveries || 0)}
+                  </div>
+                  <div className="text-xs opacity-90">
+                    {t('Causas típicas: (1) el archivo trae la columna de claims con monto pero NO la hoja «Claims» — la diferencia suele ser exactamente ese monto; (2) el PCS/TOTAL del archivo es del DEPÓSITO combinado de varias ciudades (el sistema ya detecta este caso solo); (3) trackings repetidos en el PLD. Si no logras ver la causa, mándale el archivo a tu asistente para revisarlo.')}
+                  </div>
+                </div>
+              </Aviso>
+            )}
           </Card>
 
           {/* 3) FONDO: cuándo nos paga SpeedX esta semana (editable) */}
