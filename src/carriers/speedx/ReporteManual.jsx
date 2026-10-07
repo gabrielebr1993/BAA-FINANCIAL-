@@ -302,10 +302,18 @@ export default function ReporteManual() {
     ] : []),
   ])
 
+  const avisarArrastresSinGuardar = () => {
+    if (proc && (ajustesPrevios.fuentes || []).length) {
+      const msg = t('OJO: este cálculo incluye diferencias arrastradas. Toca «Guardar como pendiente» para que queden APLICADAS; si solo descargas sin guardar, volverán a aparecer la próxima semana (riesgo de descontarlas dos veces).')
+      setAvisos((a) => (a.includes(msg) ? a : [...a, msg]))
+    }
+  }
   const descargarExcel = () => {
+    avisarArrastresSinGuardar()
     exportarExcel(`pagos_provisionales_speedx_${semanaSel || 'semana'}`, [{ nombre: 'Pagos', rows: filasExport() }])
   }
   const descargarPDF = async () => {
+    avisarArrastresSinGuardar()
     await exportarPDF(
       `pagos_provisionales_speedx_${semanaSel || 'semana'}`,
       empresaActiva?.nombre || 'MilePay',
@@ -369,6 +377,24 @@ export default function ReporteManual() {
       for (const fid of ajustesPrevios.fuentes || []) {
         try { await updateDoc(doc(db, 'invoices', fid), { ajustesAplicados: true, ajustesAplicadosEn: new Date().toISOString(), ajustesAplicadosProv: refProv.id }) } catch { /* no bloquea */ }
       }
+      // Los arrastres quedan FIJADOS como descuentos/bonus de este cálculo
+      // (la tabla no cambia tras guardar) y se limpia el estado de arrastre.
+      setDescuentos((d) => {
+        const nx = { ...d }
+        for (const [k, v] of Object.entries(ajustesPrevios.desc || {})) {
+          const ck = `${claveRango}::${k}`
+          if (nx[ck] === undefined || nx[ck] === '') nx[ck] = String(v)
+        }
+        return nx
+      })
+      setBonos((d) => {
+        const nx = { ...d }
+        for (const [k, v] of Object.entries(ajustesPrevios.bono || {})) {
+          const ck = `${claveRango}::${k}`
+          if (nx[ck] === undefined || nx[ck] === '') nx[ck] = String(v)
+        }
+        return nx
+      })
       setAjustesPrevios({ desc: {}, bono: {}, fuentes: [], detalle: [] })
       await reloadInvoices()
       setOkMsg(t('Provisional guardado como PENDIENTE. Cuando subas la factura oficial de esa semana, lo comparo automáticamente y te muestro las diferencias.'))
@@ -437,6 +463,12 @@ export default function ReporteManual() {
   }
   const borrarProvisional = async (pr) => {
     if (!window.confirm(`${t('¿Eliminar el provisional de la semana')} ${pr.semana}?`)) return
+    // Si ESTE provisional fue el que aplicó diferencias arrastradas, se
+    // LIBERAN sus fuentes: esas diferencias vuelven a quedar pendientes para
+    // el próximo reporte (así no se pierden ni se cobran dos veces).
+    for (const f of (provisionales || []).filter((x) => x.ajustesAplicadosProv === pr.id)) {
+      try { await updateDoc(doc(db, 'invoices', f.id), { ajustesAplicados: false, ajustesAplicadosProv: null, ajustesAplicadosEn: null }) } catch { /* noop */ }
+    }
     await deleteDoc(doc(db, 'invoices', pr.id))
     await reloadInvoices()
   }

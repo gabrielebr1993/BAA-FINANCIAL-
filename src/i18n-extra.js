@@ -1989,6 +1989,7 @@ export const EN_EXTRA = {
   "Diferencias pendientes de semanas anteriores precargadas (pagado de más → descuento · de menos → bonus):": "Pending differences from previous weeks preloaded (overpaid → deduction · underpaid → bonus):",
   "Puedes ajustarlas en la tabla; al guardar este provisional quedan aplicadas y no se repetirán.": "You can adjust them in the table; when you save this provisional they are applied and will not repeat.",
   "Arrastrado de semanas anteriores (editable)": "Carried over from previous weeks (editable)",
+  "OJO: este cálculo incluye diferencias arrastradas. Toca «Guardar como pendiente» para que queden APLICADAS; si solo descargas sin guardar, volverán a aparecer la próxima semana (riesgo de descontarlas dos veces).": "HEADS UP: this calculation includes carried-over differences. Tap “Save as pending” so they are APPLIED; if you only download without saving, they will appear again next week (risk of deducting them twice).",
   "¿Qué días vas a pagar?": "Which days are you paying?",
   "Tu semana va de sábado a viernes. El reporte puede traer días de dos semanas: elige la semana correcta o marca solo los días que vas a pagar, y el cálculo usa únicamente esos días.": "Your week runs Saturday to Friday. The report may include days from two weeks: pick the right week or select only the days you're paying, and the calculation uses only those days.",
   "Todo el reporte": "Whole report",
