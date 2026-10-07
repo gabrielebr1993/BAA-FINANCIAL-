@@ -280,13 +280,17 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
       const ajustePrevio = iO.pmtAdjPrev >= 0 ? toNum(fila[iO.pmtAdjPrev]) : 0
       const claimPrevio = iO.claimPrev >= 0 ? toNum(fila[iO.claimPrev]) : 0
       const claimCol = toNum(fila[iO.claim])
-      const totalArchivo = iO.total >= 0 ? toNum(fila[iO.total]) : 0
+      // La fila puede venir TRUNCADA (encabezado de 7 columnas pero la fila
+      // trae 5): un TOTAL PAYMENT vacío NO es cero — simplemente no viene.
+      const celdaTotal = iO.total >= 0 ? fila[iO.total] : undefined
+      const tieneTotal = celdaTotal !== undefined && celdaTotal !== null && celdaTotal !== ''
+      const totalArchivo = tieneTotal ? toNum(celdaTotal) : 0
       // TOTAL propio de ESTA ciudad según sus columnas.
       const rr = (n) => Math.round(n * 100) / 100
       const totalCiudad = rr(confirmRate - Math.abs(claimCol) + ajustePrevio + claimPrevio)
       // PAGO COMBINADO: en algunos archivos el "TOTAL PAYMENT" (y el PCS) son
       // del DEPÓSITO COMPLETO (varias ciudades juntas), no de esta ciudad.
-      const pagoCombinado = totalArchivo > 0 && totalArchivo - totalCiudad > 0.01
+      const pagoCombinado = tieneTotal && totalArchivo - totalCiudad > 0.01
       oficial = {
         brn: String(fila[iO.brn] ?? '').trim(),
         fleet: String(fila[iO.fleet] ?? '').trim(),
@@ -298,13 +302,20 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
         claim: claimCol,
         // Para todo el sistema (cuadre, Cobros, conciliación) manda el total
         // de ESTA ciudad; el total del depósito queda aparte como referencia.
-        totalPago: pagoCombinado ? totalCiudad : (iO.total >= 0 ? totalArchivo : totalCiudad),
+        totalPago: pagoCombinado || !tieneTotal ? totalCiudad : totalArchivo,
         pagoCombinado,
         totalDeposito: pagoCombinado ? totalArchivo : null,
         referenciaPago: String(fila[(iO.total >= 0 ? iO.total : iO.claim) + 1] ?? '').trim() || '',
       }
       if (pagoCombinado) {
         avisos.push(`El TOTAL PAYMENT del archivo ($${totalArchivo.toFixed(2)}${oficial.referenciaPago ? `, ref ${oficial.referenciaPago}` : ''}) es el PAGO COMBINADO de varias ciudades. Para ESTA ciudad se usa su total propio: $${totalCiudad.toFixed(2)}. En «Cobros y fondo» verás el total de la ciudad; el analizador de pagos te cuadra el depósito completo sumando las ciudades.`)
+      }
+      if (!tieneTotal) {
+        avisos.push(`El DSP Summary viene incompleto (sin TOTAL PAYMENT): se usa el total propio de la ciudad, $${totalCiudad.toFixed(2)} (CONFIRM RATE − claims + ajustes).`)
+      }
+      if (oficial.pcs > detalles.length) {
+        oficial.pcsDeposito = true
+        avisos.push(`El PCS del archivo (${oficial.pcs}) abarca el depósito de varias ciudades; esta ciudad trae ${detalles.length} paquetes.`)
       }
     }
   }
@@ -324,10 +335,10 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
       pcs: oficial.pcs, confirmRate: oficial.confirmRate, claim: oficial.claim,
       ajustePrevio: oficial.ajustePrevio, claimPrevio: oficial.claimPrevio, totalOficial: oficial.totalPago,
     } : null,
-    difPaquetes: oficial ? (oficial.pagoCombinado ? null : detalles.length - oficial.pcs) : null,
+    difPaquetes: oficial ? (oficial.pagoCombinado || oficial.pcsDeposito ? null : detalles.length - oficial.pcs) : null,
     difMonto: oficial ? r2(totalCalculado - oficial.totalPago) : null,
     cuadra: oficial
-      ? (Math.abs(totalCalculado - oficial.totalPago) < 0.01 && (oficial.pagoCombinado || Math.abs(detalles.length - oficial.pcs) === 0))
+      ? (Math.abs(totalCalculado - oficial.totalPago) < 0.01 && (oficial.pagoCombinado || oficial.pcsDeposito || Math.abs(detalles.length - oficial.pcs) === 0))
       : false,
   }
 

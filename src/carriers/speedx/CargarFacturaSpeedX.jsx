@@ -159,7 +159,12 @@ export default function CargarFacturaSpeedX() {
   // (las `invoices` de useData ya vienen filtradas al carrier activo).
   const duplicada = useMemo(() => {
     if (!proc || !semana) return null
-    return (invoices || []).find((inv) => inv.companyId === activeCompanyId && (inv.semana === semana || (proc.semana && inv.semanaSpeedX === proc.semana))) || null
+    const normC = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    return (invoices || []).find((inv) =>
+      inv.companyId === activeCompanyId &&
+      normC(inv.ciudad) === normC(proc.ciudad) &&
+      (inv.semana === semana || (proc.semana && inv.semanaSpeedX === proc.semana))
+    ) || null
   }, [invoices, proc, semana, activeCompanyId])
 
   // ── 2) Tarifas y estimación de pago ──────────────────────────────────────
@@ -659,11 +664,11 @@ export default function CargarFacturaSpeedX() {
               <KPI label={t('Ingreso (CONFIRM RATE)')} value={money(res.ingresoTotal)} icon={DollarSign} accent="gold" />
               <KPI label={`${t('Claims')} (${res.totalClaims})`} value={money(res.totalDescuentoGofo)} icon={AlertTriangle} accent="red" />
             </div>
-            {v?.gofo?.disponible && (
+            {v?.speedx && (
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
                 <span className="text-slate-500 dark:text-slate-400">{t('Total oficial de SpeedX (DSP Summary):')}</span>{' '}
-                <b className="text-brand-navy dark:text-slate-100">{money(v.gofo.totalGofo)}</b>
-                <span className="text-slate-400"> · {t('calculado')}: {money(v.netoCalculado)} · {t('ajustes de la semana previa')}: {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))}</span>
+                <b className="text-brand-navy dark:text-slate-100">{money(v.speedx.totalOficial)}</b>
+                <span className="text-slate-400"> · {t('calculado')}: {money(v.totalCalculado)} · {t('ajustes de la semana previa')}: {money((v.speedx.ajustePrevio || 0) + (v.speedx.claimPrevio || 0))}</span>
               </div>
             )}
             {/* DIAGNÓSTICO cuando NO cuadra: el desglose exacto de la diferencia
@@ -673,11 +678,11 @@ export default function CargarFacturaSpeedX() {
                 <div className="space-y-1">
                   <div><b>{t('¿Por qué no cuadra?')}</b></div>
                   <div>
-                    {t('Mi cálculo:')} {money(v.sumaEntregas)} {t('entregas')} − {money(Math.abs(v.sumaClaims || 0))} {t('claims')} + {money((v.sumaAjustes || 0) + (v.sumaOffset || 0))} {t('ajustes previos')} = <b>{money(v.netoCalculado)}</b>
-                    {' '}· {t('Total oficial:')} <b>{money(v.gofo?.totalGofo || 0)}</b> · {t('Diferencia:')} <b>{money(v.diferencia || 0)}</b>
+                    {t('Mi cálculo:')} {money(v.sumaDetalle)} {t('entregas')} − {money(Math.abs(v.sumaClaims || 0))} {t('claims')} + {money((v.speedx?.ajustePrevio || 0) + (v.speedx?.claimPrevio || 0))} {t('ajustes previos')} = <b>{money(v.totalCalculado)}</b>
+                    {' '}· {t('Total oficial:')} <b>{money(v.speedx?.totalOficial || 0)}</b> · {t('Diferencia:')} <b>{money(v.difMonto || 0)}</b>
                   </div>
                   <div>
-                    {t('Paquetes del detalle:')} {num(res.totalPaquetes)} · {t('PCS del archivo:')} {num(v.gofo?.numDeliveries || 0)}
+                    {t('Paquetes del detalle:')} {num(res.totalPaquetes)} · {t('PCS del archivo:')} {num(v.speedx?.pcs || 0)}
                   </div>
                   <div className="text-xs opacity-90">
                     {t('Causas típicas: (1) el archivo trae la columna de claims con monto pero NO la hoja «Claims» — la diferencia suele ser exactamente ese monto; (2) el PCS/TOTAL del archivo es del DEPÓSITO combinado de varias ciudades (el sistema ya detecta este caso solo); (3) trackings repetidos en el PLD. Si no logras ver la causa, mándale el archivo a tu asistente para revisarlo.')}
