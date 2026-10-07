@@ -65,6 +65,11 @@ export default function ReporteManual() {
   // Bonus MANUALES por chofer: se SUMAN al total a pagar de este cálculo.
   const [bonos, setBonos] = useState({})
   const [busqueda, setBusqueda] = useState('') // buscador de chofer (solo filtra la vista)
+  // AJUSTES ARRASTRADOS de semanas anteriores: diferencias de la conciliación
+  // (pagado de más → DESCUENTO · pagado de menos → BONUS) que quedan pendientes
+  // y se precargan en el SIGUIENTE reporte manual de la misma ciudad. Una vez
+  // guardado ese reporte, las fuentes se marcan como aplicadas (no se repiten).
+  const [ajustesPrevios, setAjustesPrevios] = useState({ desc: {}, bono: {}, fuentes: [], detalle: [] })
   const [provEdit, setProvEdit] = useState(null) // provisional PENDIENTE abierto para editar
   const [filtroCiudad, setFiltroCiudad] = useState('') // filtro de la lista ('' = todas)
   const inputRef = useRef(null)
@@ -103,6 +108,29 @@ export default function ReporteManual() {
       // Ciudad DETECTADA del nombre del fleet (p. ej. "CHS - B&J…" → CHS);
       // editable por si el reporte viene raro o quieres otro código.
       setCiudadSel(p.ciudad || '')
+      // Diferencias PENDIENTES de semanas anteriores (misma ciudad): de los
+      // provisionales VERIFICADOS cuya comparación aún no se aplicó.
+      {
+        const normC = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const cRep = normC(p.ciudad)
+        const fuentes = (provisionales || []).filter((pr) =>
+          pr.estado === 'verificado' && pr.comparacion && !pr.ajustesAplicados &&
+          cRep && normC(pr.ciudad) === cRep
+        )
+        const desc = {}, bono = {}, detalle = []
+        for (const pr of fuentes) {
+          for (const c of pr.comparacion.porChofer || []) {
+            const k = keyDe(c.nombre)
+            const dif = Number(c.diferencia) || 0
+            if (dif > 0.009) { desc[k] = r2((desc[k] || 0) + dif); detalle.push(`${c.nombre}: −${dif.toFixed(2)} (sem ${pr.semana})`) }
+            else if (dif < -0.009) { bono[k] = r2((bono[k] || 0) - dif); detalle.push(`${c.nombre}: +${(-dif).toFixed(2)} (sem ${pr.semana})`) }
+          }
+        }
+        setAjustesPrevios({ desc, bono, fuentes: fuentes.map((f) => f.id), detalle })
+        if (detalle.length) {
+          setAvisos((a) => [...a, `${t('Diferencias pendientes de semanas anteriores precargadas (pagado de más → descuento · de menos → bonus):')} ${detalle.join(' · ')}. ${t('Puedes ajustarlas en la tabla; al guardar este provisional quedan aplicadas y no se repetirán.')}`])
+        }
+      }
       setDescuentos({})
       setBonos({})
       setBusqueda('')
@@ -215,11 +243,14 @@ export default function ReporteManual() {
       const paquetes = ch.individuales + ch.dobles
       const pago = ch.individuales * tInd + ch.dobles * tDob
       const claims = proc ? (claimsPorChofer[k] || 0) : (ch._claims || 0)
-      const desc = Number(descuentos[`${claveRango}::${k}`]) || 0
-      const bono = Number(bonos[`${claveRango}::${k}`]) || 0
+      const descManual = descuentos[`${claveRango}::${k}`]
+      const bonoManual = bonos[`${claveRango}::${k}`]
+      // Sin edición manual, aplica el ajuste arrastrado de semanas anteriores.
+      const desc = descManual !== undefined && descManual !== '' ? Number(descManual) || 0 : (proc ? (ajustesPrevios.desc[k] || 0) : 0)
+      const bono = bonoManual !== undefined && bonoManual !== '' ? Number(bonoManual) || 0 : (proc ? (ajustesPrevios.bono[k] || 0) : 0)
       return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo: tInd > 0 && tDob > 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [proc, res, provEdit, rango, claveRango, tarifas, claimsPorChofer, descuentos, bonos])
+  }, [proc, res, provEdit, rango, claveRango, tarifas, claimsPorChofer, descuentos, bonos, ajustesPrevios])
 
   // El buscador filtra SOLO la tabla; totales, descargas y guardado usan todos.
   const filasVisibles = useMemo(() => {
@@ -301,7 +332,7 @@ export default function ReporteManual() {
     setGuardando(true)
     setOkMsg('')
     try {
-      await addDoc(collection(db, 'invoices'), {
+      const refProv = await addDoc(collection(db, 'invoices'), {
         companyId: activeCompanyId,
         carrier: 'speedx',
         provisional: true,
@@ -333,6 +364,12 @@ export default function ReporteManual() {
         claimsCh: Object.entries(claimsPorChofer).map(([k, m]) => ({ n: k, m: r2(m) })),
         fechasReporte: { ini: proc.fechaInicioISO || '', fin: proc.fechaFinISO || '' },
       })
+      // Las diferencias arrastradas quedan APLICADAS en este pago: se marcan
+      // sus fuentes para que NO se vuelvan a cobrar la próxima semana.
+      for (const fid of ajustesPrevios.fuentes || []) {
+        try { await updateDoc(doc(db, 'invoices', fid), { ajustesAplicados: true, ajustesAplicadosEn: new Date().toISOString(), ajustesAplicadosProv: refProv.id }) } catch { /* no bloquea */ }
+      }
+      setAjustesPrevios({ desc: {}, bono: {}, fuentes: [], detalle: [] })
       await reloadInvoices()
       setOkMsg(t('Provisional guardado como PENDIENTE. Cuando subas la factura oficial de esa semana, lo comparo automáticamente y te muestro las diferencias.'))
     } catch (e) {
@@ -698,11 +735,15 @@ export default function ReporteManual() {
                 if (key === 'claimsMonto') return row.claimsMonto ? <span className="text-rose-600 dark:text-rose-400">−{money(row.claimsMonto)}</span> : '—'
                 if (key === 'desc') {
                   const ck = `${claveRango}::${row._key}`
-                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={descuentos[ck] ?? ''} onChange={(e) => setDescuentos((d) => ({ ...d, [ck]: e.target.value }))} />
+                  const arr = proc ? ajustesPrevios.desc[row._key] : undefined
+                  const val = descuentos[ck] !== undefined ? descuentos[ck] : (arr ? String(arr) : '')
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className={`w-24 text-right ${arr && descuentos[ck] === undefined ? 'border-amber-400' : ''}`} title={arr && descuentos[ck] === undefined ? t('Arrastrado de semanas anteriores (editable)') : undefined} value={val} onChange={(e) => setDescuentos((d) => ({ ...d, [ck]: e.target.value }))} />
                 }
                 if (key === 'bono') {
                   const ck = `${claveRango}::${row._key}`
-                  return <Input type="number" step="0.01" min="0" placeholder="$" className="w-24 text-right" value={bonos[ck] ?? ''} onChange={(e) => setBonos((d) => ({ ...d, [ck]: e.target.value }))} />
+                  const arr = proc ? ajustesPrevios.bono[row._key] : undefined
+                  const val = bonos[ck] !== undefined ? bonos[ck] : (arr ? String(arr) : '')
+                  return <Input type="number" step="0.01" min="0" placeholder="$" className={`w-24 text-right ${arr && bonos[ck] === undefined ? 'border-amber-400' : ''}`} title={arr && bonos[ck] === undefined ? t('Arrastrado de semanas anteriores (editable)') : undefined} value={val} onChange={(e) => setBonos((d) => ({ ...d, [ck]: e.target.value }))} />
                 }
                 if (key === 'total') return <b className="text-brand-navy dark:text-slate-100">{money(row.total)}</b>
                 return row[key]
