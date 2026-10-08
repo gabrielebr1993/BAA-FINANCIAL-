@@ -179,21 +179,31 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
   const claims = []
   if (wsCl) {
     const mCl = filasMatriz(wsCl)
+    // OJO: hay DOS formatos de hoja Claims. El viejo trae Value + Del. Fee +
+    // "Total Claim (Value,Del)"; el nuevo (DFW TTC 19) trae solo "Claim Value ($)"
+    // y en la posición 6 tiene el ZIP CODE. Por eso los montos se buscan SOLO por
+    // encabezado (-1), nunca por posición: el fallback posicional sumaba zips
+    // como si fueran dólares (126 claims ≈ $9.4 millones).
     const iC = indices(mCl[0], [
       ['track', ['Tracking Number', 'TrackingNo'], 2],
-      ['valor', ['Value'], 4],
-      ['delFee', ['Del. Fee', 'Del Fee'], 5],
-      ['total', ['Total Claim (Value,Del)', 'Total Claim'], 6],
+      ['valor', ['Claim Value ($)', 'Claim Value', 'Value'], -1],
+      ['delFee', ['Del. Fee', 'Del Fee'], -1],
+      ['total', ['Total Claim (Value,Del)', 'Total Claim'], -1],
       ['driver', ['Last delivery driver', 'Driver'], 8],
-      ['periodo', ['Claim Period'], 9],
+      ['periodo', ['Claim Period', 'Week Filed'], -1],
       ['ruta', ['Last Physical Delivery Route', 'Route'], 10],
       ['zip', ['Zip Code', 'ZipCode'], 11],
       ['tipo', ['Claim Type'], 12],
     ])
+    if (iC.valor < 0 && iC.total < 0) {
+      avisos.push('No se encontró la columna del MONTO en la hoja "Claims" (ni "Claim Value" ni "Total Claim"): los claims se importan en $0. Mándale el archivo a tu asistente.')
+    }
+    const nCl = (k) => (iC[k] >= 0 ? (f) => toNum(f[iC[k]]) : () => 0)
+    const vValor = nCl('valor'), vDelFee = nCl('delFee'), vTotal = nCl('total')
     for (let r = 1; r < mCl.length; r++) {
       const f = mCl[r]
       if (!f || !f[iC.track]) continue
-      const total = toNum(f[iC.total]) || (toNum(f[iC.valor]) + toNum(f[iC.delFee]))
+      const total = vTotal(f) || (vValor(f) + vDelFee(f))
       const tipo = String(f[iC.tipo] ?? '').trim()
       const courierClaim = String(f[iC.driver] ?? '').trim().replace(/\s+/g, ' ')
       claims.push({
@@ -205,8 +215,8 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
         categoria: categoriaClaimSpeedX(tipo),
         // NEGATIVO para reutilizar el motor M1/M2/M3 tal cual (M2 = |montoGofo|).
         montoGofo: -Math.abs(total),
-        valor: toNum(f[iC.valor]),
-        delFee: toNum(f[iC.delFee]),
+        valor: vValor(f) || total,
+        delFee: vDelFee(f),
         ruta: String(f[iC.ruta] ?? '').trim(),
         // Ciudad del claim = la del chofer que lo generó (fallback: la principal).
         ciudad: ciudadDeCourier[norm(courierClaim)] || ciudad,
