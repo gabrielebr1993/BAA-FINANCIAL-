@@ -25,9 +25,10 @@ import { corregirCiudadesSpeedX, necesitaCorreccion } from './corregirCiudades'
 import { CARRIERS } from '../index'
 import { buscarDriver, calcularPagos, promediosFlota, calificarChofer, TODAS } from '../../utils/calc'
 import { registrarAuditoria } from '../../utils/auditoria'
+import { eliminarFacturaCascada } from '../../utils/borrado'
 import { guardarCiudadesEmpresa } from '../../utils/empresaSettings'
 import { money, num } from '../../utils/format'
-import { Upload, Zap, Package, DollarSign, Truck, AlertTriangle, Save, CheckCircle2, X, PiggyBank, CalendarClock, FileSpreadsheet, Layers, MapPin } from 'lucide-react'
+import { Upload, Zap, Package, DollarSign, Truck, AlertTriangle, Save, CheckCircle2, X, PiggyBank, CalendarClock, FileSpreadsheet, Layers, MapPin, Trash2 } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -64,7 +65,7 @@ export default function CargarFacturaSpeedX() {
   const [tarifas, setTarifas] = useState({}) // key → { ind, dob } (individual · doble/stop)
   const [bulk, setBulk] = useState({ ind: '', dob: '' })
   const [fechaCobro, setFechaCobro] = useState('') // ISO editable (fondo)
-  const [confirmarDuplicado, setConfirmarDuplicado] = useState(false)
+  const [reemplazando, setReemplazando] = useState(false)
   const [verifProv, setVerifProv] = useState(null) // resultado de conciliar un provisional
   const [dragOver, setDragOver] = useState(false)
   // Corrección de ciudad en facturas ya guardadas (ATL del hub → ciudad real del fleet).
@@ -218,10 +219,43 @@ export default function CargarFacturaSpeedX() {
     if (guardando) return t('Guardando…')
     if (!activeCompanyId) return t('No hay una empresa activa.')
     if (!semana) return t('No se pudo detectar la semana de la factura (columna NOTE).')
-    if (duplicada && !confirmarDuplicado) return t('Esta semana ya fue importada en SpeedX (candado anti-duplicados).')
+    if (duplicada) return t('Esta semana ya existe en SpeedX: usa «Reemplazar la anterior» o «Rechazar» (candado anti-duplicados).')
+    if (reemplazando) return t('Eliminando la factura anterior…')
     if (choferesSinTarifa.length) return `${t('Faltan')} ${choferesSinTarifa.length} ${t('chofer(es) con tarifa (individual y doble > 0)')}: ${choferesSinTarifa.slice(0, 4).map((f) => f.nombre).join(', ')}${choferesSinTarifa.length > 4 ? '…' : ''}.`
     return null
   })()
+
+  // REEMPLAZAR la factura anterior: la borra en cascada (claims, pagos, stats;
+  // si había conciliado un reporte manual, ese provisional vuelve a pendiente)
+  // y deja el candado abierto para guardar la nueva. Es la ÚNICA forma de
+  // guardar sobre una semana ya importada: o reemplazas, o rechazas.
+  const reemplazarAnterior = async () => {
+    if (!duplicada || reemplazando) return
+    if (!window.confirm(`${t('¿Eliminar la factura anterior')} (${duplicada.archivoNombre || duplicada.semana}) ${t('y quedarte con esta? Se borran también sus claims y pagos asociados. Esta acción no se puede deshacer.')}`)) return
+    setReemplazando(true)
+    setErrores([])
+    try {
+      const borrada = duplicada
+      await eliminarFacturaCascada(activeCompanyId, borrada.id)
+      registrarAuditoria(activeCompanyId, {
+        accion: 'factura_borrada',
+        usuario: perfil?.email || perfil?.nombre || 'usuario',
+        rol: perfil?.role || '',
+        entidad: `SpeedX · ${borrada.ciudadNombre || borrada.ciudad || ''}`,
+        detalle: `Factura ${borrada.archivoNombre || borrada.semana || ''} reemplazada al re-subir la semana`,
+        ciudad: borrada.ciudad || '',
+        semana: borrada.semana || '',
+        monto: Number(borrada.ingresoTotal) || 0,
+      })
+      await reloadInvoices()
+      await reloadClaims()
+      setAvisos((a) => [...a, t('Factura anterior eliminada. Ya puedes guardar esta sin duplicar nada.')])
+    } catch (e) {
+      setErrores([t('No se pudo eliminar la factura anterior:') + ' ' + e.message])
+    } finally {
+      setReemplazando(false)
+    }
+  }
 
   const guardar = async () => {
     if (motivoBloqueo) return
@@ -708,15 +742,21 @@ export default function CargarFacturaSpeedX() {
             </div>
           </Card>
 
-          {/* Candado anti-duplicados */}
+          {/* Candado anti-duplicados: NO se puede guardar una semana repetida.
+              Las únicas salidas son REEMPLAZAR la anterior o RECHAZAR esta. */}
           {duplicada && (
             <Aviso tipo="error" className="mb-4">
-              <div className="flex flex-col gap-2">
-                <span><b>{t('Candado anti-duplicados:')}</b> {t('la semana')} <b>{proc.semana}</b> {t('ya fue importada en SpeedX')} ({duplicada.archivoNombre || t('factura previa')}). {t('Si la vuelves a guardar, los paquetes y claims se contarían DOS veces.')}</span>
-                <label className="inline-flex items-center gap-2 text-sm font-semibold">
-                  <input type="checkbox" checked={confirmarDuplicado} onChange={(e) => setConfirmarDuplicado(e.target.checked)} />
-                  {t('Entiendo el riesgo y quiero guardarla de todos modos (por ejemplo, porque borré la anterior).')}
-                </label>
+              <div className="flex flex-col gap-3">
+                <span><b>{t('Candado anti-duplicados:')}</b> {t('la semana')} <b>{proc.semana}</b> {t('ya fue importada en SpeedX')} ({duplicada.archivoNombre || t('factura previa')}). {t('Guardarla dos veces contaría los paquetes y claims DOBLE, así que el sistema no lo permite. Elige qué hacer:')}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Boton variant="danger" disabled={reemplazando} onClick={reemplazarAnterior}>
+                    {reemplazando ? <Spinner /> : <Trash2 size={15} />} {reemplazando ? t('Eliminando la anterior…') : t('Reemplazar la anterior (borrarla y quedarme con esta)')}
+                  </Boton>
+                  <Boton variant="ghost" disabled={reemplazando} onClick={() => { setProc(null); setErrores([]); setAvisos([]) }}>
+                    <X size={15} /> {t('Rechazar esta factura (no guardar nada)')}
+                  </Boton>
+                </div>
+                <span className="text-xs opacity-80">{t('«Reemplazar» borra la factura vieja con sus claims y pagos; si había conciliado un reporte manual, ese reporte vuelve a PENDIENTE y se concilia de nuevo al guardar esta. Tus reportes manuales no se tocan.')}</span>
               </div>
             </Aviso>
           )}

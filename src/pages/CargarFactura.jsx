@@ -8,10 +8,11 @@ import { buscarDriver, nombreCiudadDe, detectarClaimsRepetidos, contarClaimsVali
 import { asociarFallidos, normNombre, tokensNombre, resolverNombre } from '../utils/fallidos'
 import { guardarCiudadesEmpresa, guardarReglasRuta } from '../utils/empresaSettings'
 import { registrarAuditoria } from '../utils/auditoria'
+import { eliminarFacturaCascada } from '../utils/borrado'
 import { parsearPeriodo } from '../utils/rango'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
-import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning, FileSpreadsheet } from 'lucide-react'
+import { Upload, FolderOpen, Package, Layers, DollarSign, Truck, AlertTriangle, Save, Copy, Check, X, CheckCircle2, MapPin, Users, ChevronDown, Route as RouteIcon, PackageX, FileWarning, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import Combobox from '../components/Combobox'
 import Verificacion from '../components/Verificacion'
@@ -40,7 +41,7 @@ function CargarFacturaGofo() {
   const [ciudadesExtra, setCiudadesExtra] = useState([]) // [{codigo, nombre}] añadidas por el usuario
   const [semana, setSemana] = useState('')
   const [avisos, setAvisos] = useState([])
-  const [confirmarDuplicado, setConfirmarDuplicado] = useState(false)
+  const [reemplazando, setReemplazando] = useState(false) // borrando factura(s) previa(s) para reemplazar
   const [errores, setErrores] = useState([])
   const [guardado, setGuardado] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -561,6 +562,39 @@ function CargarFacturaGofo() {
       (inv.resumenCiudades || []).some((c) => cities.has(c.ubicacion))
     )
   }, [invoices, activeCompanyId, semana, combinado])
+
+  // REEMPLAZAR la(s) factura(s) anteriores de esta semana+ciudad: se borran en
+  // cascada (claims, pagos, stats) y el candado queda abierto para guardar la
+  // nueva. Es la única forma de volver a guardar una semana ya importada.
+  const reemplazarAnteriores = async () => {
+    if (!facturasDuplicadas.length || reemplazando) return
+    const cual = facturasDuplicadas.map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')
+    if (!window.confirm(`${t('¿Eliminar la(s) factura(s) anterior(es)')} (${cual}) ${t('y quedarte con esta? Se borran también sus claims y pagos asociados. Esta acción no se puede deshacer.')}`)) return
+    setReemplazando(true)
+    setErrores([])
+    try {
+      for (const f of facturasDuplicadas) {
+        await eliminarFacturaCascada(activeCompanyId, f.id)
+        registrarAuditoria(activeCompanyId, {
+          accion: 'factura_borrada',
+          usuario: perfil?.email || perfil?.nombre || 'usuario',
+          rol: perfil?.role || '',
+          entidad: f.ciudadNombre || f.ciudad || '',
+          detalle: `Factura ${f.ciudadNombre || f.ciudad || ''} ${f.semana || ''} reemplazada al re-subir la semana`,
+          ciudad: f.ciudad || '',
+          semana: f.semana || '',
+          monto: Number(f.ingresoTotal) || 0,
+        })
+      }
+      await reloadInvoices()
+      setAvisos((a) => [...a, t('Factura(s) anterior(es) eliminada(s). Ya puedes guardar esta sin duplicar nada.')])
+    } catch (e) {
+      setErrores([t('No se pudo eliminar la factura anterior:') + ' ' + e.message])
+    } finally {
+      setReemplazando(false)
+    }
+  }
+
   // Validación: ¿el neto NO cuadra con Gofo? (diferencia significativa).
   const noCuadra = combinado?.verificacion?.cuadra === false
 
@@ -569,10 +603,11 @@ function CargarFacturaGofo() {
     if (!activeCompanyId) return setErrores(['No hay una empresa activa seleccionada. Selecciona una empresa antes de guardar.'])
     if (!semana.trim()) return setErrores(['Debes indicar la semana antes de guardar.'])
     if (!todasCiudadesAsignadas) return setErrores(['Asigna una ciudad a cada archivo antes de guardar.'])
-    // Anti-duplicados: si ya existe factura de esa semana+ciudad, exige confirmación.
-    if (facturasDuplicadas.length > 0 && !confirmarDuplicado) {
+    // Anti-duplicados: una semana+ciudad ya cargada NO se puede guardar otra
+    // vez. Las únicas salidas son REEMPLAZAR la anterior o RECHAZAR esta.
+    if (facturasDuplicadas.length > 0) {
       const cual = facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')
-      return setErrores([`Ya existe una carga para esta semana y ciudad (${cual}). Si continúas se creará una factura NUEVA (no reemplaza la anterior) y los números se DUPLICARÁN. Marca la casilla "Guardar de todos modos" si de verdad quieres cargarla otra vez.`])
+      return setErrores([`Ya existe una carga para esta semana y ciudad (${cual}). Para no duplicar los números, usa los botones del aviso rojo: «Reemplazar la anterior» o «Rechazar esta factura».`])
     }
     if (!fallidosProc) return setErrores(['Falta el segundo archivo obligatorio: el Reporte de fallidos (GOFO).'])
     if (!modoRuta && choferesNuevos.length > 0 && !todosConPrecio) return setErrores(['Falta asignar precio individual y doble (>0) a todos los choferes nuevos.'])
@@ -1540,11 +1575,18 @@ function CargarFacturaGofo() {
             )}
             {facturasDuplicadas.length > 0 && (
               <Aviso tipo="error" className="mb-3">
-                <b>{t('Posible duplicado.')}</b> {t('Ya existe una carga para')} <b>{facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')}</b>{t('. Guardar de nuevo crea una factura aparte y')} <b>{t('duplica')}</b> {t('los números.')}
-                <label className="mt-2 flex items-center gap-2 text-sm font-medium">
-                  <input type="checkbox" checked={confirmarDuplicado} onChange={(e) => setConfirmarDuplicado(e.target.checked)} />
-                  {t('Guardar de todos modos (sé que se duplicará)')}
-                </label>
+                <div className="flex flex-col gap-3">
+                  <span><b>{t('Candado anti-duplicados:')}</b> {t('ya existe una carga para')} <b>{facturasDuplicadas.slice(0, 3).map((f) => `${f.ciudadNombre || f.ciudad || '—'} · ${f.semana}`).join(' · ')}</b>. {t('Guardarla dos veces contaría los números DOBLE, así que el sistema no lo permite. Elige qué hacer:')}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Boton variant="danger" disabled={reemplazando} onClick={reemplazarAnteriores}>
+                      {reemplazando ? <Spinner /> : <Trash2 size={15} />} {reemplazando ? t('Eliminando la anterior…') : t('Reemplazar la anterior (borrarla y quedarme con esta)')}
+                    </Boton>
+                    <Boton variant="ghost" disabled={reemplazando} onClick={() => { reset(); setFallidosProc(null); setRatesList([]); setPreciosResumen(null) }}>
+                      <X size={15} /> {t('Rechazar esta factura (no guardar nada)')}
+                    </Boton>
+                  </div>
+                  <span className="text-xs opacity-80">{t('«Reemplazar» borra la factura vieja con sus claims y pagos asociados; luego guardas esta normalmente.')}</span>
+                </div>
               </Aviso>
             )}
             <div className="flex flex-wrap items-center gap-3">
