@@ -17,7 +17,7 @@
 // Todas las queries acotan por companyId + invoiceId (eficiencia + reglas de
 // seguridad: una query de lista debe estar acotada por empresa).
 // ---------------------------------------------------------------------------
-import { collection, getDocs, getCountFromServer, query, where, limit, doc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, getCountFromServer, query, where, limit, doc, writeBatch, deleteField } from 'firebase/firestore'
 import { db } from '../firebase'
 
 const CHUNK = 450 // máx. 500 por batch de Firestore; dejamos margen
@@ -88,7 +88,30 @@ export async function eliminarFacturaCascada(companyId, invoiceId, onProgress) {
     )
   )
 
-  // 3) Borrar el documento de la factura.
+  // 3) Si esta factura OFICIAL verificó un pago provisional (reporte manual de
+  // SpeedX), ese provisional vuelve a PENDIENTE: su comparación apuntaba a una
+  // factura que ya no existe. NO se tocan sus filas, descuentos ni bonus, y el
+  // marcador ajustesAplicados se conserva tal cual para que una diferencia ya
+  // arrastrada a otro reporte no pueda descontarse dos veces.
+  try {
+    const snapProv = await getDocs(
+      query(collection(db, 'invoices'), where('companyId', '==', companyId), where('invoiceOficialId', '==', invoiceId))
+    )
+    if (!snapProv.empty) {
+      const batchProv = writeBatch(db)
+      snapProv.docs.forEach((d) =>
+        batchProv.update(d.ref, {
+          estado: 'pendiente',
+          invoiceOficialId: deleteField(),
+          verificadoEn: deleteField(),
+          comparacion: deleteField(),
+        })
+      )
+      await batchProv.commit()
+    }
+  } catch { /* nunca bloquea el borrado de la factura */ }
+
+  // 4) Borrar el documento de la factura.
   const batch = writeBatch(db)
   batch.delete(doc(db, 'invoices', invoiceId))
   await batch.commit()
