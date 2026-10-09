@@ -1,18 +1,59 @@
 // Primitivos de interfaz en Tailwind (claros/oscuros, navy/dorado).
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import Ilustracion from './Ilustracion'
 
 // --- Card -------------------------------------------------------------------
+// `mp-card` es un gancho estable para estilos por pantalla (p. ej. el vestido
+// "Cloud Motion" del Dashboard en cloudmotion.css); no aplica estilos por sí solo.
 export function Card({ children, className = '', ...rest }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200/80 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
+      className={`mp-card rounded-2xl border border-slate-200/80 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
       {...rest}
     >
       {children}
     </div>
   )
+}
+
+// --- Número animado ----------------------------------------------------------
+// Cuenta hacia el valor cuando cambia. Recibe el texto YA formateado
+// ("$19,927.95", "23.4%", "15,258"): anima solo la parte numérica conservando
+// prefijo/sufijo y decimales. Con "reducir movimiento" activo, muestra directo.
+function useValorAnimado(value, activo) {
+  const [texto, setTexto] = useState(value)
+  const prevRef = useRef(0)
+  useEffect(() => {
+    if (!activo) return
+    const s = String(value ?? '')
+    const m = /-?[\d,]+(?:\.\d+)?/.exec(s)
+    let reducir = false
+    try { reducir = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* sin matchMedia */ }
+    if (!m) { setTexto(s); prevRef.current = 0; return }
+    const fin = parseFloat(m[0].replace(/,/g, ''))
+    if (!isFinite(fin)) { setTexto(s); return }
+    const dec = (m[0].split('.')[1] || '').length
+    const pre = s.slice(0, m.index)
+    const post = s.slice(m.index + m[0].length)
+    const ini = prevRef.current
+    prevRef.current = fin
+    if (reducir || fin === ini) { setTexto(s); return }
+    const t0 = performance.now()
+    const dur = 900
+    let raf
+    const paso = (t) => {
+      const p = Math.min(1, (t - t0) / dur)
+      const e = 1 - Math.pow(1 - p, 3) // ease-out cúbico
+      const n = ini + (fin - ini) * e
+      setTexto(pre + n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + post)
+      if (p < 1) raf = requestAnimationFrame(paso)
+    }
+    raf = requestAnimationFrame(paso)
+    return () => cancelAnimationFrame(raf)
+  }, [value, activo])
+  return activo ? texto : value
 }
 
 // --- KPI / tarjeta de métrica (estilo Power BI) -----------------------------
@@ -25,8 +66,10 @@ const ACCENTS = {
   slate: { bar: 'bg-slate-400', text: 'text-slate-700 dark:text-slate-200', chip: 'bg-slate-400/10 text-slate-600 dark:text-slate-300' },
 }
 
-export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick }) {
+export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick, animado = false }) {
   const a = ACCENTS[accent] || ACCENTS.navy
+  // `animado` (Dashboard): el número cuenta hacia arriba al cargar/cambiar.
+  const valorMostrado = useValorAnimado(value, animado && (typeof value === 'string' || typeof value === 'number'))
   const tendencia =
     trend == null || !isFinite(trend) ? null : (
       <span className={`text-xs font-semibold ${trend >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
@@ -41,7 +84,7 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick }
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
-      className={`flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${
+      className={`mp-card flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${
         clickable ? 'cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold' : ''
       }`}
     >
@@ -53,7 +96,7 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick }
           </span>
         )}
       </div>
-      <div className={`mt-2 text-[22px] font-bold leading-tight tracking-tight tabular-nums break-words ${a.text}`}>{value}</div>
+      <div className={`mt-2 text-[22px] font-bold leading-tight tracking-tight tabular-nums break-words ${a.text}`}>{valorMostrado}</div>
       <div className="mt-2 flex items-center gap-2">
         {tendencia}
         {sub != null && <span className="text-xs text-slate-400">{sub}</span>}

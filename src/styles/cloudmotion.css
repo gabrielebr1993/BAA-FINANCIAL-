@@ -1,0 +1,102 @@
+/* ============================================================================
+   CLOUD MOTION — vestido visual del Dashboard (solo estética, cero lógica).
+   Se activa envolviendo la pantalla en `.cm-scope` (hoy: Dashboard.jsx).
+
+   Piezas:
+   · .cm-nubes      → 3 manchas de color (dorado/navy/teal) desenfocadas que
+                      flotan lentísimo detrás de todo (fixed, sin eventos).
+   · .mp-card       → las tarjetas (Card/KPI de ui.jsx) se vuelven "vidrio":
+                      fondo translúcido + backdrop-blur + brillo al pasar el
+                      mouse + levantamiento suave.
+   · .cm-stagger    → los hijos entran escalonados al montar la pantalla.
+   Respeta modo oscuro (darkMode: 'class') y `prefers-reduced-motion`.
+   ========================================================================== */
+
+/* ── Nubes de fondo ── */
+.cm-nubes {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cm-nubes span {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.30;
+  will-change: transform;
+}
+.dark .cm-nubes span { opacity: 0.18; }
+.cm-n1 { width: 54vw; height: 54vw; background: #c9a24b; top: -20vw; left: -14vw; animation: cm-flota1 26s ease-in-out infinite alternate; }
+.cm-n2 { width: 48vw; height: 48vw; background: #3d5a80; bottom: -18vw; right: -12vw; animation: cm-flota2 32s ease-in-out infinite alternate; }
+.cm-n3 { width: 36vw; height: 36vw; background: #4a9c8c; top: 32%; left: 56%; animation: cm-flota3 38s ease-in-out infinite alternate; }
+@keyframes cm-flota1 { to { transform: translate(9vw, 7vh) scale(1.12); } }
+@keyframes cm-flota2 { to { transform: translate(-8vw, -6vh) scale(1.08); } }
+@keyframes cm-flota3 { to { transform: translate(-10vw, 8vh) scale(0.92); } }
+
+/* El contenido de la pantalla queda por encima de las nubes. */
+.cm-scope { position: relative; }
+.cm-scope > :not(.cm-nubes) { position: relative; z-index: 1; }
+
+/* ── Tarjetas de vidrio ── */
+.cm-scope .mp-card {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.dark .cm-scope .mp-card {
+  background: rgba(21, 34, 58, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.cm-scope .mp-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(19, 35, 63, 0.18);
+}
+.dark .cm-scope .mp-card:hover { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); }
+
+/* Brillo que cruza la tarjeta al pasar el mouse (sin overflow:hidden para no
+   recortar tooltips de las gráficas: el barrido vive en un ::after propio que
+   anima background-position, siempre dentro de la tarjeta). */
+.cm-scope .mp-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.30) 50%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 200% 0;
+  transition: background-position 0.9s ease;
+}
+.dark .cm-scope .mp-card::after {
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.10) 50%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 200% 0;
+}
+.cm-scope .mp-card:hover::after { background-position: -100% 0; }
+
+/* ── Entrada escalonada (fila de KPIs) ── */
+.cm-stagger > * { animation: cm-entra 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.cm-stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.cm-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.cm-stagger > *:nth-child(4) { animation-delay: 0.18s; }
+.cm-stagger > *:nth-child(5) { animation-delay: 0.24s; }
+.cm-stagger > *:nth-child(6) { animation-delay: 0.30s; }
+.cm-stagger > *:nth-child(7) { animation-delay: 0.36s; }
+.cm-stagger > *:nth-child(n + 8) { animation-delay: 0.42s; }
+@keyframes cm-entra {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Accesibilidad: sin movimiento si el usuario lo pide ── */
+@media (prefers-reduced-motion: reduce) {
+  .cm-nubes span,
+  .cm-stagger > * { animation: none !important; }
+  .cm-scope .mp-card { transition: none; }
+  .cm-scope .mp-card:hover { transform: none; }
+  .cm-scope .mp-card::after { display: none; }
+}

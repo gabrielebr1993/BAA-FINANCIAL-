@@ -13,6 +13,7 @@ import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
+import '../styles/cloudmotion.css'
 import RecomendacionesJarvis from '../components/RecomendacionesJarvis'
 import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
@@ -141,7 +142,9 @@ export default function Dashboard() {
   const onbAbierto = !!ajustes && (ajustes.onboardingCompleto === false || (ajustes.onboardingCompleto === undefined && invoices.length === 0))
 
   return (
-    <div>
+    <div className="cm-scope">
+      {/* Cloud Motion: nubes de color flotando detrás de las tarjetas de vidrio. */}
+      <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
       <PageTitle right={
         inv && !cargando && (
           <>
@@ -175,14 +178,14 @@ export default function Dashboard() {
             </Aviso>
           )}
 
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI label={t('Ingreso total')} value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
-            <KPI label={t('Costo total')} value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
-            <KPI label={t('Ganancia')} value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
-            <KPI label={t('Margen')} value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
-            <KPI label={t('Paquetes')} value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
-            <KPI label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} sub={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
-            <KPI label={t('Claims')} value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
+          <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            <KPI animado label={t('Ingreso total')} value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
+            <KPI animado label={t('Costo total')} value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
+            <KPI animado label={t('Ganancia')} value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
+            <KPI animado label={t('Margen')} value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
+            <KPI animado label={t('Paquetes')} value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
+            <KPI animado label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} sub={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
+            <KPI animado label={t('Claims')} value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
           </div>
 
           {!inv ? (
