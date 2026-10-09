@@ -99,7 +99,6 @@ export default function CargarFacturaSpeedX() {
     setErrores([])
     setAvisos([])
     setGuardado(false)
-    setConfirmarDuplicado(false)
     try {
       const buf = await f.arrayBuffer()
       const p = procesarArchivoSpeedX(buf, f.name)
