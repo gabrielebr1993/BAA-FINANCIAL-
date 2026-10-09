@@ -335,11 +335,29 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
   const r2 = (n) => Math.round(n * 100) / 100
   const sumaDetalle = r2(detalles.reduce((a, d) => a + d.monto, 0))
   const sumaClaims = r2(claims.reduce((a, c) => a + Math.abs(c.montoGofo), 0))
-  const totalCalculado = r2(sumaDetalle - sumaClaims + (oficial?.ajustePrevio || 0) + (oficial?.claimPrevio || 0))
+  // CLAIMS SIN DETALLE: el DSP descuenta claims pero el archivo no trae la
+  // hoja "Claims" (o trae menos detalle que lo descontado). El descuento es
+  // real y oficial, así que el cuadre lo usa; lo que falta es el reparto por
+  // chofer, y eso se avisa claro (nadie aparece asociado porque SpeedX no
+  // mandó el detalle, no porque la app lo haya perdido).
+  const claimOficial = r2(Math.abs(oficial?.claim || 0))
+  let claimsSinDetalle = 0
+  if (claimOficial > 0.009 && claims.length === 0) {
+    claimsSinDetalle = claimOficial
+    // El aviso genérico de "sin claims" se sustituye por este, más preciso.
+    const iAviso = avisos.indexOf('El archivo no trae hoja "Claims": se asume semana sin claims.')
+    if (iAviso >= 0) avisos.splice(iAviso, 1)
+    avisos.push(`SpeedX descontó $${claimOficial.toFixed(2)} de claims esta semana (columna CLAIMS del resumen), pero el archivo NO trae la hoja "Claims" con el detalle por chofer: ese monto queda SIN asociar a ningún chofer. El total a cobrar ya lo descuenta. Si quieres repartirlo entre los choferes, pídele a SpeedX el reporte con la hoja "Claims" y vuelve a subirlo.`)
+  } else if (claimOficial > 0.009 && r2(claimOficial - sumaClaims) > 0.009) {
+    claimsSinDetalle = r2(claimOficial - sumaClaims)
+    avisos.push(`SpeedX descontó $${claimOficial.toFixed(2)} de claims, pero la hoja "Claims" solo detalla $${sumaClaims.toFixed(2)}: hay $${claimsSinDetalle.toFixed(2)} SIN detalle por chofer (ese resto no se asocia a nadie; el total a cobrar ya lo descuenta).`)
+  }
+  const totalCalculado = r2(sumaDetalle - sumaClaims - claimsSinDetalle + (oficial?.ajustePrevio || 0) + (oficial?.claimPrevio || 0))
   const verificacion = {
     paquetes: detalles.length,
     sumaDetalle,
     sumaClaims,
+    claimsSinDetalle,
     totalCalculado,
     speedx: oficial ? {
       pcs: oficial.pcs, confirmRate: oficial.confirmRate, claim: oficial.claim,
