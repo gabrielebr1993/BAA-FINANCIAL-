@@ -396,10 +396,11 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     st.rotation.y = -Math.PI / 2 + (i ? 0.06 : -0.04)
     st.position.set(tx2, 0, -12)
   })
-  // Tractocamión completo estacionado en paralelo (dentro del patio, lejos
-  // de los carriles de la vía)
+  // Tractocamión completo estacionado en paralelo, bien adentro del patio:
+  // lejos de los carriles Y de la esquina del cruce, para que ni de lejos
+  // parezca atravesado en la vía.
   const semiParqueado = trailerNuevo(true)
-  semiParqueado.position.set(14, 0, -18.5)
+  semiParqueado.position.set(27, 0, -19.5)
   // Van estacionada en el patio
   const vanParqueada = vanNueva(COL.gold)
   vanParqueada.rotation.y = Math.PI / 2
