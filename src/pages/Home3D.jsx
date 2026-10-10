@@ -18,14 +18,14 @@ import { montarEscenaMilePay } from './home3d/escenaMilePay'
 import { useLang, LangToggle } from '../i18n'
 
 const CSS = `
-.h3d{--bg:#eef1f6;--fg:#13233f;--muted:#5b6a84;--gold:#c9a24b;--navy:#13233f;--verde:#149d80;--card:rgba(255,255,255,.72);--card-borde:rgba(255,255,255,.9);--panel:#ffffff;
+.h3d{--bg:#f7f1e6;--fg:#13233f;--muted:#5b6a84;--gold:#c9a24b;--navy:#13233f;--verde:#149d80;--card:rgba(255,252,245,.76);--card-borde:rgba(255,255,255,.92);--panel:#fffdf7;
   background:var(--bg);color:var(--fg);min-height:100vh;font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;position:relative;overflow-x:hidden}
 /* Aurora de color detrás de todas las secciones: nada queda plano ni vacío. */
 .h3d .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.h3d .aurora span{position:absolute;border-radius:50%;filter:blur(110px);opacity:.26;will-change:transform}
+.h3d .aurora span{position:absolute;border-radius:50%;filter:blur(110px);opacity:.3;will-change:transform}
 .h3d .au1{width:48vw;height:48vw;background:#c9a24b;top:38%;left:-16vw;animation:h3dflota 30s ease-in-out infinite alternate}
-.h3d .au2{width:44vw;height:44vw;background:#3d5a80;bottom:-14vw;right:-12vw;animation:h3dflota 36s ease-in-out infinite alternate-reverse}
-.h3d .au3{width:34vw;height:34vw;background:#149d80;top:66%;left:52%;animation:h3dflota 42s ease-in-out infinite alternate}
+.h3d .au2{width:44vw;height:44vw;background:#c47f5a;bottom:-14vw;right:-12vw;animation:h3dflota 36s ease-in-out infinite alternate-reverse}
+.h3d .au3{width:34vw;height:34vw;background:#d98943;top:66%;left:52%;animation:h3dflota 42s ease-in-out infinite alternate}
 @keyframes h3dflota{to{transform:translate(7vw,-5vh) scale(1.12)}}
 .h3d>section,.h3d>footer{position:relative;z-index:1}
 @media (prefers-color-scheme: dark){
@@ -126,7 +126,7 @@ const CSS = `
 .h3d .pronto{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:#ffd666;color:#5c4400;border-radius:999px;padding:4px 11px;margin-left:8px;vertical-align:middle}
 .h3d .btn-eco{background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.45)}
 /* Cinta de color entre secciones */
-.h3d .cinta{overflow:hidden;padding:14px 0;background:linear-gradient(90deg,#13233f,#3d5a80 40%,#149d80 75%,#c9a24b);position:relative;z-index:1}
+.h3d .cinta{overflow:hidden;padding:14px 0;background:linear-gradient(90deg,#13233f,#7a4e2d 35%,#c47f5a 60%,#c9a24b);position:relative;z-index:1}
 .h3d .cinta .riel{display:flex;gap:44px;white-space:nowrap;animation:h3dcinta 26s linear infinite;width:max-content}
 .h3d .cinta span{color:#fff;font-weight:800;font-size:13px;letter-spacing:.06em;opacity:.95}
 @keyframes h3dcinta{to{transform:translateX(-50%)}}
@@ -310,7 +310,7 @@ export default function Home3D() {
                 <li><span className="ic">📥</span> {t('Inbound y outbound gestionados: recepción, verificación y despacho')}</li>
                 <li><span className="ic">🏗️</span> {t('Almacenaje y cross-dock con control de entradas y salidas')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
+              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 {t('En construcción')}</button></div>
             </div>
           </div>
         </div>

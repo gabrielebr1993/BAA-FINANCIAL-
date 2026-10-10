@@ -39,7 +39,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     camara.updateProjectionMatrix()
   }
   window.addEventListener('resize', ajustar)
-  escena.fog = new THREE.Fog(oscuro ? 0x0d1730 : 0xf2ddbe, 120, 280)
+  escena.fog = new THREE.Fog(oscuro ? 0x0d1730 : 0xf3dcb4, 120, 280)
 
   // ── Texturas procedurales ─────────────────────────────────────────────────
   function lienzo(w, h, pintar) {
@@ -78,7 +78,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   })
   texAsfalto.repeat.set(40, 3)
   const texConcreto = lienzo(256, 256, (cx, w, h) => {
-    ruido(cx, w, h, oscuro ? '#20304e' : '#c9ccd4', 2000, 0.05)
+    ruido(cx, w, h, oscuro ? '#20304e' : '#d2cbbb', 2000, 0.05)
     cx.strokeStyle = 'rgba(0,0,0,.12)'; cx.lineWidth = 2
     cx.strokeRect(0, 0, w, h)
     cx.beginPath(); cx.moveTo(w / 2, 0); cx.lineTo(w / 2, h); cx.moveTo(0, h / 2); cx.lineTo(w, h / 2); cx.stroke()
@@ -115,7 +115,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   })
   const texGrava = lienzo(128, 128, (cx, w, h) => { ruido(cx, w, h, '#7e8795', 2400, 0.16) })
   const texArena = lienzo(128, 128, (cx, w, h) => { ruido(cx, w, h, '#c2a06b', 2000, 0.10) })
-  const texPiso = lienzo(256, 256, (cx, w, h) => { ruido(cx, w, h, oscuro ? '#243655' : '#cdd2db', 1400, 0.045) })
+  const texPiso = lienzo(256, 256, (cx, w, h) => { ruido(cx, w, h, oscuro ? '#243655' : '#d8d1c2', 1400, 0.045) })
   texPiso.repeat.set(8, 6)
   const texTrailer = lienzo(256, 128, (cx, w, h) => {
     cx.fillStyle = '#e8eaee'; cx.fillRect(0, 0, w, h)

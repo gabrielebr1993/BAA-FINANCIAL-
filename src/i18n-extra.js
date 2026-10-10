@@ -2259,4 +2259,6 @@ export const EN_EXTRA = {
   "Por qué MilePay (Freight)": "Why MilePay (Freight)",
   "Compras internacionales, entregadas por nosotros.": "International shopping, delivered by us.",
   "Clasificación, staffing e inbound/outbound.": "Sorting, staffing and inbound/outbound.",
+  "En construcción": "Under construction",
+  "Compras internacionales, entregadas por nosotros.": "International shopping, delivered by us.",
 }

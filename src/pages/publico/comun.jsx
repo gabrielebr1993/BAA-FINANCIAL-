@@ -42,12 +42,12 @@ export const PAGINAS = [
 // Estilos base compartidos (fuentes de marca + reset mínimo). Se inyectan como
 // <style> dentro de cada página pública; no afectan a la landing ni a la app.
 export const CSS_PUB = `
-  .pub{font-family:'Inter',sans-serif;color:${NAVY};background:#f0f2f7;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .pub{font-family:'Inter',sans-serif;color:${NAVY};background:linear-gradient(180deg,#f8f3e9,#f3ead9);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   .aurora-pub{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
   .aurora-pub span{position:absolute;border-radius:50%;filter:blur(110px);opacity:.17;will-change:transform}
-  .ap1{width:46vw;height:46vw;background:#c9a24b;top:32%;left:-14vw;animation:apFlota 32s ease-in-out infinite alternate}
-  .ap2{width:40vw;height:40vw;background:#3d5a80;bottom:-12vw;right:-10vw;animation:apFlota 38s ease-in-out infinite alternate-reverse}
-  .ap3{width:30vw;height:30vw;background:#149d80;top:64%;left:56%;animation:apFlota 44s ease-in-out infinite alternate}
+  .ap1{width:46vw;height:46vw;background:#c9a24b;top:30%;left:-14vw;opacity:.22;animation:apFlota 32s ease-in-out infinite alternate}
+  .ap2{width:40vw;height:40vw;background:#c47f5a;bottom:-12vw;right:-10vw;opacity:.2;animation:apFlota 38s ease-in-out infinite alternate-reverse}
+  .ap3{width:30vw;height:30vw;background:#d98943;top:62%;left:54%;opacity:.16;animation:apFlota 44s ease-in-out infinite alternate}
   @keyframes apFlota{to{transform:translate(6vw,-4vh) scale(1.1)}}
   .pub>*{position:relative;z-index:1}
   .pub h1,.pub h2,.pub h3,.pub h4,.f-display{font-family:'Space Grotesk',sans-serif;font-weight:600;line-height:1.08;letter-spacing:-.02em}
@@ -142,8 +142,8 @@ export function FooterPub({ tx }) {
 export function BandaCTA({ tx }) {
   return (
     <section className="wrap-pub py-16">
-      <div className="relative overflow-hidden rounded-[28px] px-7 py-14 text-center sm:px-14" style={{ background: `linear-gradient(155deg,${NAVY},${NAVY_DEEP})`, color: CREAM }}>
-        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(600px 300px at 50% 0%,rgba(201,162,75,.16),transparent 60%)' }} />
+      <div className="relative overflow-hidden rounded-[28px] px-7 py-14 text-center sm:px-14" style={{ background: `linear-gradient(150deg,${NAVY} 20%,#2c2414 85%)`, color: CREAM }}>
+        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(600px 300px at 50% 0%,rgba(201,162,75,.28),transparent 60%),radial-gradient(400px 260px at 85% 100%,rgba(196,127,90,.2),transparent 60%)' }} />
         <h2 className="relative mb-4 text-[clamp(28px,3.6vw,42px)] font-bold">{tx('Míralo funcionando con tu operación', 'See it running on your operation')}</h2>
         <p className="relative mx-auto mb-8 max-w-[520px] text-[17px]" style={{ color: 'rgba(248,243,235,.75)' }}>{tx('Agenda una demo: cargamos tus plantas, materiales y camiones de ejemplo y despachas una orden en vivo.', 'Book a demo: we load your plants, materials and sample trucks and you dispatch a live order.')}</p>
         <a href="/freight#demo" className="relative inline-flex items-center gap-2 rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')} <ArrowRight size={16} /></a>
@@ -157,7 +157,7 @@ export function BandaCTA({ tx }) {
 export function HeroFuncion({ tx, migas, icono: Icono, titulo, sub, visual }) {
   return (
     <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ background: NAVY_DEEP, color: CREAM }}>
-      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.16),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(61,90,128,.28),transparent 55%),radial-gradient(500px 400px at 50% 110%,rgba(20,157,128,.14),transparent 60%)' }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.22),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(196,127,90,.22),transparent 55%),radial-gradient(500px 400px at 50% 110%,rgba(217,137,67,.14),transparent 60%)' }} />
       <div className="wrap-pub relative grid items-center gap-[clamp(40px,5vw,90px)] lg:grid-cols-[1.02fr_1.1fr]">
         <div className="rev min-w-0">
           <div className="f-mono mb-5 text-[12.5px] uppercase tracking-[.14em]" style={{ color: 'rgba(248,243,235,.5)' }}>
@@ -185,7 +185,7 @@ export function Pasos({ tx, titulo, pasos }) {
       <h2 className="mb-12 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{titulo}</h2>
       <div className="grid gap-5 md:grid-cols-3">
         {pasos.map((p, i) => (
-          <div key={i} className="rounded-2xl border p-7 transition-transform hover:-translate-y-1" style={{ borderColor: 'rgba(255,255,255,.9)', background: 'rgba(255,255,255,.78)', backdropFilter: 'blur(10px)', boxShadow: '0 14px 40px rgba(19,35,63,.08)' }}>
+          <div key={i} className="rounded-2xl border p-7 transition-transform hover:-translate-y-1" style={{ borderColor: 'rgba(255,255,255,.9)', background: 'rgba(255,252,245,.82)', backdropFilter: 'blur(10px)', boxShadow: '0 14px 40px rgba(19,35,63,.08)' }}>
             <div className="mb-4 flex items-center gap-3">
               <span className="f-mono grid h-9 w-9 place-items-center rounded-xl text-[14px] font-semibold" style={{ background: NAVY, color: GOLD }}>{i + 1}</span>
               <span className="grid h-11 w-11 place-items-center rounded-xl" style={{ background: CREAM }}><p.icono size={21} style={{ color: NAVY }} /></span>
@@ -202,7 +202,7 @@ export function Pasos({ tx, titulo, pasos }) {
 // "Lo que ganas": métricas de beneficio con barra.
 export function Metricas({ tx, items }) {
   return (
-    <section className="border-y py-16" style={{ background: NAVY, borderColor: 'rgba(201,162,75,.14)' }}>
+    <section className="border-y py-16" style={{ background: `linear-gradient(150deg,${NAVY} 30%,#39301a)`, borderColor: 'rgba(201,162,75,.2)' }}>
       <div className="wrap-pub">
         <div className="f-mono mb-8 text-[12.5px] font-medium uppercase tracking-[.14em]" style={{ color: GOLD }}>{tx('Lo que ganas', 'What you gain')}</div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
