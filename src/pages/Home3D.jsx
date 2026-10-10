@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { montarEscenaMilePay } from './home3d/escenaMilePay'
+import { useLang, LangToggle } from '../i18n'
 
 const CSS = `
 .h3d{--bg:#eef1f6;--fg:#13233f;--muted:#5b6a84;--gold:#c9a24b;--navy:#13233f;--verde:#149d80;--card:rgba(255,255,255,.72);--card-borde:rgba(255,255,255,.9);--panel:#ffffff;
@@ -151,6 +152,7 @@ const CSS = `
 
 export default function Home3D() {
   const navigate = useNavigate()
+  const { t } = useLang()
   const escenaRef = useRef(null)
   const apiRef = useRef(null)
   const [dentro, setDentro] = useState(false)
@@ -199,39 +201,39 @@ export default function Home3D() {
 
         <div className="nav">
           <span className="logo" onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
-          <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Módulos</a>
+          <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Módulos')}</a>
           <a onClick={() => navigate('/freight')}>Freight</a>
-          <span className="sep"><button className="btn btn-oro" onClick={entrar}>Entrar</button></span>
+          <span className="sep"><LangToggle /><button className="btn btn-oro" onClick={entrar}>{t('Entrar')}</button></span>
         </div>
 
         <div className="vidrio">
-          <h1>Freight y última milla, <em>bajo control</em>.</h1>
+          <h1>{t('Freight y última milla,')} <em>{t('bajo control')}</em>.</h1>
           <div className="migas">
-            <span className="miga">📦 Última milla</span>
+            <span className="miga">📦 {t('Última milla')}</span>
             <span className="miga oro">🚛 Freight</span>
-            <span className="miga" style={{ color: '#7dffd9' }}>🛒 Ecommerce · muy pronto</span>
-            <span className="miga" style={{ color: '#cfc3ff' }}>🏭 Warehouse · muy pronto</span>
+            <span className="miga" style={{ color: '#7dffd9' }}>🛒 Ecommerce · {t('muy pronto')}</span>
+            <span className="miga" style={{ color: '#cfc3ff' }}>🏭 Warehouse · {t('muy pronto')}</span>
           </div>
-          <p>Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.</p>
+          <p>{t('Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.')}</p>
           <div className="ctas">
-            <button className="btn btn-oro" onClick={entrar}>Entrar a MilePay</button>
-            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Conocer los 4 módulos ↓</button>
+            <button className="btn btn-oro" onClick={entrar}>{t('Entrar a MilePay')}</button>
+            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Conocer los 4 módulos')} ↓</button>
           </div>
         </div>
 
-        <div className="flota ext f1"><small>Paquetería</small><span className="punto-ok">✓</span> Facturas que cuadran al centavo</div>
-        <div className="flota ext f2"><small>Freight</small><span className="punto-oro">▸</span> Volteos despachados en vivo</div>
-        <div className="flota int"><small>Dentro del almacén</small><span className="punto-ok">✓</span> Escaneo y cuadre en vivo</div>
+        <div className="flota ext f1"><small>{t('Paquetería')}</small><span className="punto-ok">✓</span> {t('Facturas que cuadran al centavo')}</div>
+        <div className="flota ext f2"><small>Freight</small><span className="punto-oro">▸</span> {t('Volteos despachados en vivo')}</div>
+        <div className="flota int"><small>{t('Dentro del almacén')}</small><span className="punto-ok">✓</span> {t('Escaneo y cuadre en vivo')}</div>
 
         <div className="controles">
           <button className="ctl" aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
           <button className="ctl" aria-label="Alejar" onClick={() => apiRef.current && apiRef.current.zoomMenos()}>−</button>
           <button className="ctl" aria-label="Centrar" title="Centrar" onClick={() => apiRef.current && apiRef.current.centrar()}>⌂</button>
           <button className="ctl ctl-ancho ctl-oro" disabled={transicion} onClick={() => apiRef.current && apiRef.current.alternarAlmacen()}>
-            {dentro ? '← Salir del almacén' : '🏭 Entrar al almacén'}
+            {dentro ? '← ' + t('Salir del almacén') : '🏭 ' + t('Entrar al almacén')}
           </button>
         </div>
-        <div className="pista">arrastra para girar · rueda para acercar · entra al almacén</div>
+        <div className="pista">{t('arrastra para girar · rueda para acercar · entra al almacén')}</div>
         <button className="baja" aria-label="Bajar" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>⌄</button>
       </div>
 
@@ -240,7 +242,7 @@ export default function Home3D() {
         <div className="riel">
           {[0, 1].map((k) => (
             <span key={k}>
-              <span>📦 FACTURAS AL CENTAVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🚛 DESPACHO DE VOLTEOS EN VIVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🛒 COMPRAS INTERNACIONALES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🗺️ GPS Y GEOCERCAS</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>💵 PAGOS A CHOFERES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏦 CADA DEPÓSITO EXPLICADO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏭 WAREHOUSE: INBOUND · OUTBOUND · STAFF</span>&nbsp;&nbsp;&nbsp;&nbsp;
+              <span>📦 {t('FACTURAS AL CENTAVO')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🚛 {t('DESPACHO DE VOLTEOS EN VIVO')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🛒 {t('COMPRAS INTERNACIONALES')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🗺️ {t('GPS Y GEOCERCAS')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>💵 {t('PAGOS A CHOFERES')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏦 {t('CADA DEPÓSITO EXPLICADO')}</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏭 WAREHOUSE: INBOUND · OUTBOUND · STAFF</span>&nbsp;&nbsp;&nbsp;&nbsp;
             </span>
           ))}
         </div>
@@ -250,63 +252,63 @@ export default function Home3D() {
       <section id="negocios" className="negocios">
         <div className="marco">
           <div className="encabezado">
-            <h2>Cuatro negocios. Cuatro módulos. Cero confusión.</h2>
-            <p>Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.</p>
+            <h2>{t('Cuatro negocios. Cuatro módulos. Cero confusión.')}</h2>
+            <p>{t('Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.')}</p>
           </div>
           <div className="dos">
             {/* 📦 PAQUETERÍA */}
             <div className="bloque b-paq">
               <span className="icono-fondo" aria-hidden="true">📦</span>
-              <span className="sello">Módulo 1 · Paquetería</span>
-              <h3>Última milla de paquetes</h3>
-              <span className="para">¿Repartes paquetes puerta a puerta? Esto es lo tuyo.</span>
+              <span className="sello">{t('Módulo')} 1 · {t('Paquetería')}</span>
+              <h3>{t('Última milla de paquetes')}</h3>
+              <span className="para">{t('¿Repartes paquetes puerta a puerta? Esto es lo tuyo.')}</span>
               <ul>
-                <li><span className="ic">✅</span> Facturas semanales que cuadran al centavo, con verificación automática</li>
-                <li><span className="ic">💵</span> Pagos a choferes con tarifas por paquete, claims y bonos</li>
-                <li><span className="ic">🏦</span> Cobros y fondo: cada depósito explicado</li>
-                <li><span className="ic">📊</span> Dashboard, performance por chofer y reportes</li>
+                <li><span className="ic">✅</span> {t('Facturas semanales que cuadran al centavo, con verificación automática')}</li>
+                <li><span className="ic">💵</span> {t('Pagos a choferes con tarifas por paquete, claims y bonos')}</li>
+                <li><span className="ic">🏦</span> {t('Cobros y fondo: cada depósito explicado')}</li>
+                <li><span className="ic">📊</span> {t('Dashboard, performance por chofer y reportes')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-oro" onClick={entrar}>Entrar a Paquetería</button></div>
+              <div className="cta-zona"><button className="btn btn-oro" onClick={entrar}>{t('Entrar a Paquetería')}</button></div>
             </div>
             {/* 🚛 FREIGHT */}
             <div className="bloque b-frg">
               <span className="icono-fondo" aria-hidden="true">🚛</span>
-              <span className="sello">Módulo 2 · MilePay Freight</span>
-              <h3>Materiales a granel</h3>
-              <span className="para">¿Mueves arena, grava o agregados en volteos? Esto es Freight.</span>
+              <span className="sello">{t('Módulo')} 2 · MilePay Freight</span>
+              <h3>{t('Materiales a granel')}</h3>
+              <span className="para">{t('¿Mueves arena, grava o agregados en volteos? Esto es Freight.')}</span>
               <ul>
-                <li><span className="ic">🛻</span> Órdenes y despacho de volteos en vivo, viaje por viaje</li>
-                <li><span className="ic">🗺️</span> GPS, geocercas y prueba de entrega en obra</li>
-                <li><span className="ic">👷</span> Portales para cliente, chofer, transportista y despachador</li>
-                <li><span className="ic">🧾</span> Facturación por viaje y conciliación de toneladas</li>
+                <li><span className="ic">🛻</span> {t('Órdenes y despacho de volteos en vivo, viaje por viaje')}</li>
+                <li><span className="ic">🗺️</span> {t('GPS, geocercas y prueba de entrega en obra')}</li>
+                <li><span className="ic">👷</span> {t('Portales para cliente, chofer, transportista y despachador')}</li>
+                <li><span className="ic">🧾</span> {t('Facturación por viaje y conciliación de toneladas')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-navy" onClick={() => navigate('/freight')}>Conocer Freight</button></div>
+              <div className="cta-zona"><button className="btn btn-navy" onClick={() => navigate('/freight')}>{t('Conocer Freight')}</button></div>
             </div>
             {/* 🛒 ECOMMERCE (en construcción) */}
             <div className="bloque b-eco">
               <span className="icono-fondo" aria-hidden="true">🛒</span>
-              <span className="sello">Módulo 3 · Ecommerce<span className="pronto">Muy pronto</span></span>
-              <h3>Compras internacionales</h3>
-              <span className="para">¿Quieres productos de afuera sin dolores de cabeza? Nosotros lo traemos.</span>
+              <span className="sello">{t('Módulo')} 3 · Ecommerce<span className="pronto">{t('Muy pronto')}</span></span>
+              <h3>{t('Compras internacionales')}</h3>
+              <span className="para">{t('¿Quieres productos de afuera sin dolores de cabeza? Nosotros lo traemos.')}</span>
               <ul>
-                <li><span className="ic">🛍️</span> Catálogo con precio final: producto, importación y entrega incluidos</li>
-                <li><span className="ic">🌎</span> Compramos al proveedor internacional por ti</li>
-                <li><span className="ic">🛃</span> Aduana e importación gestionadas por nuestra empresa</li>
-                <li><span className="ic">🚪</span> Entrega en tu puerta con seguimiento completo</li>
+                <li><span className="ic">🛍️</span> {t('Catálogo con precio final: producto, importación y entrega incluidos')}</li>
+                <li><span className="ic">🌎</span> {t('Compramos al proveedor internacional por ti')}</li>
+                <li><span className="ic">🛃</span> {t('Aduana e importación gestionadas por nuestra empresa')}</li>
+                <li><span className="ic">🚪</span> {t('Entrega en tu puerta con seguimiento completo')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
+              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 {t('En construcción')}</button></div>
             </div>
             {/* 🏭 WAREHOUSE (en construcción) */}
             <div className="bloque b-wh">
               <span className="icono-fondo" aria-hidden="true">🏭</span>
-              <span className="sello">Módulo 4 · Warehouse<span className="pronto">Muy pronto</span></span>
-              <h3>Servicios de almacén</h3>
-              <span className="para">¿Necesitas manos y espacio para tu operación? Nuestro almacén trabaja por ti.</span>
+              <span className="sello">{t('Módulo')} 4 · Warehouse<span className="pronto">{t('Muy pronto')}</span></span>
+              <h3>{t('Servicios de almacén')}</h3>
+              <span className="para">{t('¿Necesitas manos y espacio para tu operación? Nuestro almacén trabaja por ti.')}</span>
               <ul>
-                <li><span className="ic">🔀</span> Clasificación y sorteo de paquetes por ruta, zona o cliente</li>
-                <li><span className="ic">👷</span> Staffing: clasificadores, empacadores, montacarguistas y supervisores</li>
-                <li><span className="ic">📥</span> Inbound y outbound gestionados: recepción, verificación y despacho</li>
-                <li><span className="ic">🏗️</span> Almacenaje y cross-dock con control de entradas y salidas</li>
+                <li><span className="ic">🔀</span> {t('Clasificación y sorteo de paquetes por ruta, zona o cliente')}</li>
+                <li><span className="ic">👷</span> {t('Staffing: clasificadores, empacadores, montacarguistas y supervisores')}</li>
+                <li><span className="ic">📥</span> {t('Inbound y outbound gestionados: recepción, verificación y despacho')}</li>
+                <li><span className="ic">🏗️</span> {t('Almacenaje y cross-dock con control de entradas y salidas')}</li>
               </ul>
               <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
             </div>
@@ -318,13 +320,13 @@ export default function Home3D() {
       <section className="pasos">
         <div className="marco">
           <div className="encabezado">
-            <h2>Así de simple</h2>
-            <p>La misma filosofía en los cuatro módulos: datos reales, cuadre exacto y cero sorpresas.</p>
+            <h2>{t('Así de simple')}</h2>
+            <p>{t('La misma filosofía en los cuatro módulos: datos reales, cuadre exacto y cero sorpresas.')}</p>
           </div>
           <div className="tres">
-            <div className="paso"><span className="num">1</span><b>Carga tu operación</b><p>Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.</p></div>
-            <div className="paso"><span className="num">2</span><b>MilePay cuadra y controla</b><p>Verificación al centavo, pagos de choferes, claims, GPS y prueba de entrega — todo automático.</p></div>
-            <div className="paso"><span className="num">3</span><b>Cobra con claridad</b><p>Cada depósito explicado, cada viaje facturado y la utilidad de tu semana a la vista.</p></div>
+            <div className="paso"><span className="num">1</span><b>{t('Carga tu operación')}</b><p>{t('Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.')}</p></div>
+            <div className="paso"><span className="num">2</span><b>{t('MilePay cuadra y controla')}</b><p>{t('Verificación al centavo, pagos de choferes, claims, GPS y prueba de entrega — todo automático.')}</p></div>
+            <div className="paso"><span className="num">3</span><b>{t('Cobra con claridad')}</b><p>{t('Cada depósito explicado, cada viaje facturado y la utilidad de tu semana a la vista.')}</p></div>
           </div>
         </div>
       </section>
@@ -334,10 +336,10 @@ export default function Home3D() {
         <div className="marco">
           <div className="fila">
             <span className="logo" style={{ color: 'var(--fg)', textShadow: 'none' }} onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
-            <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Módulos</a>
-            <a onClick={() => navigate('/freight')}>Sitio de Freight</a>
-            <a onClick={() => navigate('/por-que-milepay')}>Por qué MilePay (Freight)</a>
-            <a onClick={entrar}>Iniciar sesión</a>
+            <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Módulos')}</a>
+            <a onClick={() => navigate('/freight')}>{t('Sitio de Freight')}</a>
+            <a onClick={() => navigate('/por-que-milepay')}>{t('Por qué MilePay (Freight)')}</a>
+            <a onClick={entrar}>{t('Iniciar sesión')}</a>
             <span className="cr">© {new Date().getFullYear()} MilePay</span>
           </div>
         </div>
