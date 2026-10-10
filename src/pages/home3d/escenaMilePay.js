@@ -28,8 +28,15 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const enfoque = opciones.enfoque === 'freight' ? 'freight' : 'hub'
 
   // ── Renderer ──────────────────────────────────────────────────────────────
+  // En pantallas táctiles la escena se comporta como un VIDEO: se anima sola
+  // pero no captura el dedo, así el scroll de la página siempre funciona.
+  let tactil = false
+  try { tactil = window.matchMedia('(pointer: coarse)').matches } catch { /* noop */ }
+
   const escena = new THREE.Scene()
-  const camara = new THREE.PerspectiveCamera(42, 980 / 660, 0.1, 700)
+  // near=1 (y no 0.1): multiplica x10 la precisión del z-buffer y elimina el
+  // titileo (z-fighting) de los pavimentos y las rayas vistos de lejos.
+  const camara = new THREE.PerspectiveCamera(42, 980 / 660, 1, 700)
   const renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.outputEncoding = THREE.sRGBEncoding
@@ -198,29 +205,31 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   viaX.rotation.x = -Math.PI / 2; viaX.position.y = 0.045; viaX.receiveShadow = true
   escena.add(viaX)
   const texAsf2 = texAsfalto.clone(); texAsf2.needsUpdate = true; texAsf2.repeat.set(3, 40)
+  // La vía Z va un poco más alta que la vía X: si quedaran a la misma altura,
+  // el cruce entero titila (z-fighting) porque los dos planos se solapan.
   const viaZ = new THREE.Mesh(new THREE.PlaneGeometry(10.5, 470), mat(0xffffff, { map: texAsf2, roughness: 0.98 }))
-  viaZ.rotation.x = -Math.PI / 2; viaZ.position.y = 0.045; viaZ.receiveShadow = true
+  viaZ.rotation.x = -Math.PI / 2; viaZ.position.y = 0.075; viaZ.receiveShadow = true
   escena.add(viaZ)
   const matRaya = mat(0xd9b35e, { emissive: 0xd9b35e, emissiveIntensity: oscuro ? 0.5 : 0.1, roughness: 0.6 })
   const matBorde = mat(0xd8dce2, { roughness: 0.6, emissive: 0xd8dce2, emissiveIntensity: oscuro ? 0.12 : 0 })
   for (let r = -230; r < 230; r += 8) {
     const r1 = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.32), matRaya)
-    r1.rotation.x = -Math.PI / 2; r1.position.set(r, 0.055, 0); escena.add(r1)
+    r1.rotation.x = -Math.PI / 2; r1.position.set(r, 0.058, 0); escena.add(r1)
     const r2 = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 3.4), matRaya)
-    r2.rotation.x = -Math.PI / 2; r2.position.set(0, 0.055, r + 4); escena.add(r2)
+    r2.rotation.x = -Math.PI / 2; r2.position.set(0, 0.09, r + 4); escena.add(r2)
   }
   ;[-5.05, 5.05].forEach((off) => {
     const b1 = new THREE.Mesh(new THREE.PlaneGeometry(470, 0.22), matBorde)
-    b1.rotation.x = -Math.PI / 2; b1.position.set(0, 0.052, off); escena.add(b1)
+    b1.rotation.x = -Math.PI / 2; b1.position.set(0, 0.058, off); escena.add(b1)
     const b2 = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 470), matBorde)
-    b2.rotation.x = -Math.PI / 2; b2.position.set(off, 0.052, 0); escena.add(b2)
+    b2.rotation.x = -Math.PI / 2; b2.position.set(off, 0.09, 0); escena.add(b2)
   })
   const matCebra = mat(0xe8eaee, { roughness: 0.55 })
   for (let c = -3.9; c <= 3.9; c += 1.3) {
     const c1 = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 2.2), matCebra)
-    c1.rotation.x = -Math.PI / 2; c1.position.set(c, 0.06, 7.4); escena.add(c1)
+    c1.rotation.x = -Math.PI / 2; c1.position.set(c, 0.1, 7.4); escena.add(c1)
     const c2 = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.7), matCebra)
-    c2.rotation.x = -Math.PI / 2; c2.position.set(7.4, 0.06, c); escena.add(c2)
+    c2.rotation.x = -Math.PI / 2; c2.position.set(7.4, 0.1, c); escena.add(c2)
   }
 
   // ── ALMACÉN estilo fulfillment (patio profundo + muelles) ────────────────
@@ -860,9 +869,15 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   }
 
   // ── Cámara + modos ────────────────────────────────────────────────────────
+  // En /freight la cámara mira SOLO la planta de agregados (desde el noreste,
+  // de espaldas al almacén de paquetería) y los límites de giro/zoom impiden
+  // que el almacén entre al cuadro: Freight no se mezcla con última milla.
   const CASA = enfoque === 'freight'
-    ? { th: 0.75, ph: 0.72, r: 72, tgt: new THREE.Vector3(-44, 2, 36) }
+    ? { th: -0.5, ph: 0.8, r: 54, tgt: new THREE.Vector3(-47, 3, 40) }
     : { th: 0.66, ph: 0.58, r: 92, tgt: new THREE.Vector3(-26, 2, -14) }
+  const LIM = enfoque === 'freight'
+    ? { thMin: CASA.th - 0.5, thMax: CASA.th + 0.5, rMin: 24, rMax: 95 }
+    : { thMin: -Infinity, thMax: Infinity, rMin: 18, rMax: 150 }
   const T0 = CASA.tgt
   const TI = new THREE.Vector3(-41, 3.5, -34)
   const orb = { th: CASA.th, ph: CASA.ph, r: CASA.r, tgt: T0.clone() }
@@ -910,17 +925,16 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       })
     }
   }
-  const zoomMas = () => { meta.r = clamp(meta.r * 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
-  const zoomMenos = () => { meta.r = clamp(meta.r / 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
+  const zoomMas = () => { meta.r = clamp(meta.r * 0.78, modo === 'dentro' ? 7 : LIM.rMin, modo === 'dentro' ? 26 : LIM.rMax) }
+  const zoomMenos = () => { meta.r = clamp(meta.r / 0.78, modo === 'dentro' ? 7 : LIM.rMin, modo === 'dentro' ? 26 : LIM.rMax) }
   const centrar = () => {
     if (modo === 'dentro') { meta.r = 15 } else { meta.th = CASA.th; meta.ph = CASA.ph; meta.r = CASA.r }
   }
   function alRueda(e) {
     e.preventDefault()
-    meta.r = clamp(meta.r * (e.deltaY > 0 ? 1.09 : 1 / 1.09), modo === 'dentro' ? 7 : 16, modo === 'dentro' ? 22 : 120)
+    meta.r = clamp(meta.r * (e.deltaY > 0 ? 1.09 : 1 / 1.09), modo === 'dentro' ? 7 : LIM.rMin, modo === 'dentro' ? 22 : Math.min(LIM.rMax, 120))
   }
-  renderer.domElement.addEventListener('wheel', alRueda, { passive: false })
-  let drag = null, ultimaInteraccion = 0
+  let drag = null, ultimaInteraccion = 0, dirRot = 1
   function alBajar(e) {
     drag = { x: e.clientX, y: e.clientY }
     cont.classList.add('arrastrando')
@@ -929,15 +943,21 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   function alMover(e) {
     if (!drag) return
     ultimaInteraccion = performance.now()
-    meta.th += (e.clientX - drag.x) * 0.0062
+    meta.th = clamp(meta.th + (e.clientX - drag.x) * 0.0062, LIM.thMin, LIM.thMax)
     meta.ph = clamp(meta.ph - (e.clientY - drag.y) * 0.0045, modo === 'dentro' ? 0.85 : 0.3, modo === 'dentro' ? 1.5 : 1.25)
     drag = { x: e.clientX, y: e.clientY }
   }
   function soltar() { drag = null; cont.classList.remove('arrastrando') }
-  renderer.domElement.addEventListener('pointerdown', alBajar)
-  renderer.domElement.addEventListener('pointermove', alMover)
-  renderer.domElement.addEventListener('pointerup', soltar)
-  renderer.domElement.addEventListener('pointercancel', soltar)
+  // En táctil NO se registran gestos: la escena corre como video (los botones
+  // de la página siguen funcionando) y el dedo hace scroll normal.
+  renderer.domElement.style.touchAction = tactil ? 'pan-y' : 'none'
+  if (!tactil) {
+    renderer.domElement.addEventListener('wheel', alRueda, { passive: false })
+    renderer.domElement.addEventListener('pointerdown', alBajar)
+    renderer.domElement.addEventListener('pointermove', alMover)
+    renderer.domElement.addEventListener('pointerup', soltar)
+    renderer.domElement.addEventListener('pointercancel', soltar)
+  }
 
   // ── Rutas con waypoints (vehículos que entran/salen y montacargas) ───────
   function prepararRuta(pts) {
@@ -1047,7 +1067,10 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       caminante.position.x = -30 + Math.sin(s * 0.5) * 7
       caminante.rotation.y = Math.cos(s * 0.5) > 0 ? Math.PI / 2 : -Math.PI / 2
       operadores.forEach((op, i) => { op.rotation.y = Math.PI + Math.sin(s * 1.6 + i) * 0.18 })
-      if (modo === 'fuera' && !anim && t - ultimaInteraccion > 4000) meta.th += 0.00045
+      if (modo === 'fuera' && !anim && t - ultimaInteraccion > 4000) {
+        meta.th += 0.00045 * dirRot
+        if (meta.th > LIM.thMax || meta.th < LIM.thMin) { dirRot *= -1; meta.th = clamp(meta.th, LIM.thMin, LIM.thMax) }
+      }
     } else {
       volteo1.position.set(-24, 0, 2.3); volteo2.position.set(30, 0, -2.3)
       trailerVia.position.set(56, 0, 2.3)

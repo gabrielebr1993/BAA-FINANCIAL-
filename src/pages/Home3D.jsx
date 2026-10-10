@@ -2,9 +2,11 @@
 // HOME PÚBLICO de MilePay (portada del sitio en www.milepay.io).
 //
 // Estructura (pedida por el dueño):
-//  1) HERO INMERSIVO a pantalla completa: la escena 3D ocupa todo el ancho y
-//     el texto flota encima en una tarjeta de vidrio. Cámara libre + visita
-//     al almacén (ver home3d/escenaMilePay.js). En modo oscuro es nocturna.
+//  1) HERO con el texto arriba y la escena 3D en una VENTANA DE VIDEO más
+//     pequeña (ya no a pantalla completa): en táctil corre como video y no
+//     captura el dedo, así el scroll siempre funciona. Cámara libre + visita
+//     al almacén en escritorio (ver home3d/escenaMilePay.js). De noche,
+//     nocturna.
 //  2) DOS SECCIONES SEPARADAS y claramente diferenciadas para que no se
 //     confundan los negocios: 📦 Paquetería última milla (navy) y
 //     🚛 MilePay Freight / materiales a granel (dorado).
@@ -35,12 +37,13 @@ const CSS = `
 .h3d *{box-sizing:border-box}
 .h3d .marco{max-width:1220px;margin:0 auto;padding-inline:16px}
 
-/* ── Nav flotante sobre el héroe ── */
-.h3d .nav{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:18px;padding:16px 20px;flex-wrap:wrap}
-.h3d .logo{font-size:20px;font-weight:800;letter-spacing:-.02em;cursor:pointer;color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.25)}
+/* ── Nav (ya no flota sobre el canvas: va arriba, en el flujo normal) ── */
+.h3d .nav{position:relative;z-index:5;display:flex;align-items:center;gap:18px;padding:16px 20px;flex-wrap:wrap}
+.h3d .logo{font-size:20px;font-weight:800;letter-spacing:-.02em;cursor:pointer;color:var(--fg)}
 .h3d .logo b{color:var(--gold)}
-.h3d .nav a{color:rgba(255,255,255,.85);text-decoration:none;font-weight:600;font-size:13.5px;cursor:pointer;text-shadow:0 1px 8px rgba(0,0,0,.3)}
-.h3d .nav a:hover{color:#fff}
+.h3d .nav a{color:var(--muted);text-decoration:none;font-weight:600;font-size:13.5px;cursor:pointer}
+.h3d .nav a:hover{color:var(--fg)}
+.h3d .heroe2{position:relative;z-index:1;padding-bottom:30px}
 .h3d .sep{margin-left:auto;display:flex;gap:10px;align-items:center}
 .h3d .btn{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:11px 18px;font-weight:700;font-size:14px;text-decoration:none;transition:transform .2s;border:0;cursor:pointer;font-family:inherit}
 .h3d .btn:hover{transform:translateY(-2px)}
@@ -49,49 +52,42 @@ const CSS = `
 .h3d .btn-navy{background:var(--navy);color:#fff;box-shadow:0 8px 20px rgba(19,35,63,.3)}
 .h3d .btn-linea{border:1.5px solid var(--muted);color:var(--fg);background:transparent}
 
-/* ── HERO inmersivo a pantalla completa ── */
-.h3d .heroe{position:relative;height:100svh;min-height:580px;overflow:hidden;z-index:1}
-.h3d .heroe canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab;touch-action:none}
-.h3d .heroe.arrastrando canvas{cursor:grabbing}
-.h3d .velo{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(10,18,34,.55) 0%,rgba(10,18,34,.22) 38%,transparent 60%)}
-.h3d .velo-abajo{position:absolute;left:0;right:0;bottom:0;height:120px;pointer-events:none;background:linear-gradient(180deg,transparent,var(--bg))}
-.h3d .vidrio{position:absolute;left:4%;top:50%;transform:translateY(-50%);z-index:4;max-width:520px;
-  background:rgba(13,22,40,.55);border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:28px;
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 24px 70px rgba(0,0,0,.35);color:#fff}
-.h3d .vidrio h1{font-size:clamp(28px,3.6vw,44px);line-height:1.07;letter-spacing:-.03em;margin:0 0 12px;text-wrap:balance}
-.h3d .vidrio h1 em{font-style:normal;color:var(--gold)}
-.h3d .vidrio p{color:rgba(255,255,255,.82);margin:0 0 16px;font-size:14.5px}
-.h3d .migas{display:flex;gap:8px;margin:0 0 18px;flex-wrap:wrap}
-.h3d .miga{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18)}
+/* ── HERO: texto arriba y la escena 3D en una VENTANA DE VIDEO más pequeña.
+   El canvas no captura el dedo en táctil, así el scroll siempre funciona. ── */
+.h3d .cabeza{padding:14px 0 20px;text-align:center;max-width:780px;margin:0 auto}
+.h3d .cabeza h1{font-size:clamp(30px,4.6vw,50px);line-height:1.06;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
+.h3d .cabeza h1 em{font-style:normal;color:var(--gold)}
+.h3d .cabeza p{color:var(--muted);margin:0 auto 18px;font-size:15px;max-width:640px}
+.h3d .migas{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap;justify-content:center}
+.h3d .miga{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--card-borde);color:var(--fg)}
 .h3d .miga.oro{color:var(--gold)}
-.h3d .ctas{display:flex;gap:10px;flex-wrap:wrap}
-@media (max-width:900px){
-  .h3d .heroe{height:78vh;min-height:520px}
-  .h3d .vidrio{left:16px;right:16px;top:auto;bottom:86px;transform:none;max-width:none;padding:20px}
-}
+.h3d .ctas{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.h3d .video{position:relative;height:clamp(300px,56vh,560px);border-radius:24px;overflow:hidden;z-index:1;
+  border:1px solid var(--card-borde);box-shadow:0 30px 80px rgba(19,35,63,.28);background:#13233f}
+.h3d .video canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab}
+.h3d .video.arrastrando canvas{cursor:grabbing}
+@media (max-width:900px){.h3d .video{height:clamp(240px,42vh,420px);border-radius:18px}}
 .h3d .flota{position:absolute;z-index:3;background:var(--card);border:1px solid var(--card-borde);border-radius:14px;padding:9px 13px;
   font-size:12px;font-weight:700;backdrop-filter:blur(10px);box-shadow:0 10px 26px rgba(19,35,63,.2);
   animation:h3dsube 4.5s ease-in-out infinite alternate;transition:opacity .5s;pointer-events:none}
 .h3d .flota small{display:block;font-weight:600;color:var(--muted);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
-.h3d .f1{top:14%;right:22%}
-.h3d .f2{bottom:22%;right:6%;animation-delay:1.4s}
-.h3d .heroe.dentro .flota.ext{opacity:0}
-.h3d .flota.int{opacity:0;top:14%;right:6%}
-.h3d .heroe.dentro .flota.int{opacity:1}
-@media (max-width:900px){.h3d .f1,.h3d .f2{display:none}}
+.h3d .f1{top:14px;left:14px}
+.h3d .f2{top:14px;right:14px;animation-delay:1.4s}
+.h3d .video.dentro .flota.ext{opacity:0}
+.h3d .flota.int{opacity:0;top:14px;right:14px}
+.h3d .video.dentro .flota.int{opacity:1}
+@media (max-width:900px){.h3d .f1,.h3d .f2,.h3d .flota.int{display:none}}
 @keyframes h3dsube{to{transform:translateY(-9px)}}
 .h3d .punto-ok{color:#4a9c8c}.h3d .punto-oro{color:var(--gold)}
-.h3d .controles{position:absolute;right:16px;bottom:16px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-@media (max-width:900px){.h3d .controles{left:16px;right:auto;bottom:16px}}
-.h3d .ctl{appearance:none;border:1px solid rgba(255,255,255,.3);background:rgba(13,22,40,.5);color:#fff;backdrop-filter:blur(10px);
+.h3d .controles{position:absolute;right:14px;bottom:14px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (max-width:900px){.h3d .controles{left:14px;right:auto}}
+.h3d .ctl{appearance:none;border:1px solid rgba(255,255,255,.3);background:rgba(13,22,40,.55);color:#fff;backdrop-filter:blur(10px);
   border-radius:12px;cursor:pointer;font:700 15px/1 inherit;width:38px;height:38px;display:grid;place-items:center;transition:transform .15s;font-family:inherit}
 .h3d .ctl:hover{transform:translateY(-2px)}
 .h3d .ctl-ancho{width:auto;padding:0 16px;font-size:13px}
 .h3d .ctl-oro{background:var(--gold);color:#13233f;border-color:transparent}
-.h3d .baja{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:3;color:#fff;font-size:22px;opacity:.85;animation:h3dbaja 1.6s ease-in-out infinite;cursor:pointer;background:none;border:0}
-@keyframes h3dbaja{50%{transform:translate(-50%,8px)}}
-.h3d .pista{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:3;font-size:11px;color:rgba(255,255,255,.75);
-  background:rgba(13,22,40,.45);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:6px 14px;backdrop-filter:blur(8px)}
+.h3d .pista{position:absolute;left:14px;bottom:14px;z-index:3;font-size:11px;color:rgba(255,255,255,.78);
+  background:rgba(13,22,40,.5);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:6px 14px;backdrop-filter:blur(8px)}
 @media (max-width:900px){.h3d .pista{display:none}}
 
 /* ── Secciones de negocio: separación clara ── */
@@ -194,11 +190,8 @@ export default function Home3D() {
       <style>{CSS}</style>
       <div className="aurora" aria-hidden="true"><span className="au1" /><span className="au2" /><span className="au3" /></div>
 
-      {/* ═══ HERO INMERSIVO: la escena 3D llena la pantalla ═══ */}
-      <div ref={escenaRef} className={`heroe${dentro ? ' dentro' : ''}`}>
-        <div className="velo" aria-hidden="true" />
-        <div className="velo-abajo" aria-hidden="true" />
-
+      {/* ═══ HERO: texto arriba + escena 3D en ventana de video ═══ */}
+      <section className="heroe2">
         <div className="nav">
           <span className="logo" onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
           <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Módulos')}</a>
@@ -206,36 +199,38 @@ export default function Home3D() {
           <span className="sep"><LangToggle /><button className="btn btn-oro" onClick={entrar}>{t('Entrar')}</button></span>
         </div>
 
-        <div className="vidrio">
-          <h1>{t('Freight y última milla,')} <em>{t('bajo control')}</em>.</h1>
-          <div className="migas">
-            <span className="miga">📦 {t('Última milla')}</span>
-            <span className="miga oro">🚛 Freight</span>
-            <span className="miga" style={{ color: '#7dffd9' }}>🛒 Ecommerce · {t('muy pronto')}</span>
-            <span className="miga" style={{ color: '#cfc3ff' }}>🏭 Warehouse · {t('muy pronto')}</span>
+        <div className="marco">
+          <div className="cabeza">
+            <h1>{t('Freight y última milla,')} <em>{t('bajo control')}</em>.</h1>
+            <div className="migas">
+              <span className="miga">📦 {t('Última milla')}</span>
+              <span className="miga oro">🚛 Freight</span>
+              <span className="miga" style={{ color: 'var(--verde)' }}>🛒 Ecommerce · {t('muy pronto')}</span>
+              <span className="miga" style={{ color: '#8d79e8' }}>🏭 Warehouse · {t('muy pronto')}</span>
+            </div>
+            <p>{t('Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.')}</p>
+            <div className="ctas">
+              <button className="btn btn-oro" onClick={entrar}>{t('Entrar a MilePay')}</button>
+              <button className="btn btn-linea" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Conocer los 4 módulos')} ↓</button>
+            </div>
           </div>
-          <p>{t('Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.')}</p>
-          <div className="ctas">
-            <button className="btn btn-oro" onClick={entrar}>{t('Entrar a MilePay')}</button>
-            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Conocer los 4 módulos')} ↓</button>
+
+          <div ref={escenaRef} className={`video${dentro ? ' dentro' : ''}`}>
+            <div className="flota ext f1"><small>{t('Paquetería')}</small><span className="punto-ok">✓</span> {t('Facturas que cuadran al centavo')}</div>
+            <div className="flota ext f2"><small>Freight</small><span className="punto-oro">▸</span> {t('Volteos despachados en vivo')}</div>
+            <div className="flota int"><small>{t('Dentro del almacén')}</small><span className="punto-ok">✓</span> {t('Escaneo y cuadre en vivo')}</div>
+            <div className="controles">
+              <button className="ctl" aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
+              <button className="ctl" aria-label="Alejar" onClick={() => apiRef.current && apiRef.current.zoomMenos()}>−</button>
+              <button className="ctl" aria-label="Centrar" title="Centrar" onClick={() => apiRef.current && apiRef.current.centrar()}>⌂</button>
+              <button className="ctl ctl-ancho ctl-oro" disabled={transicion} onClick={() => apiRef.current && apiRef.current.alternarAlmacen()}>
+                {dentro ? '← ' + t('Salir del almacén') : '🏭 ' + t('Entrar al almacén')}
+              </button>
+            </div>
+            <div className="pista">{t('arrastra para girar · rueda para acercar · entra al almacén')}</div>
           </div>
         </div>
-
-        <div className="flota ext f1"><small>{t('Paquetería')}</small><span className="punto-ok">✓</span> {t('Facturas que cuadran al centavo')}</div>
-        <div className="flota ext f2"><small>Freight</small><span className="punto-oro">▸</span> {t('Volteos despachados en vivo')}</div>
-        <div className="flota int"><small>{t('Dentro del almacén')}</small><span className="punto-ok">✓</span> {t('Escaneo y cuadre en vivo')}</div>
-
-        <div className="controles">
-          <button className="ctl" aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
-          <button className="ctl" aria-label="Alejar" onClick={() => apiRef.current && apiRef.current.zoomMenos()}>−</button>
-          <button className="ctl" aria-label="Centrar" title="Centrar" onClick={() => apiRef.current && apiRef.current.centrar()}>⌂</button>
-          <button className="ctl ctl-ancho ctl-oro" disabled={transicion} onClick={() => apiRef.current && apiRef.current.alternarAlmacen()}>
-            {dentro ? '← ' + t('Salir del almacén') : '🏭 ' + t('Entrar al almacén')}
-          </button>
-        </div>
-        <div className="pista">{t('arrastra para girar · rueda para acercar · entra al almacén')}</div>
-        <button className="baja" aria-label="Bajar" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>⌄</button>
-      </div>
+      </section>
 
       {/* Cinta de color con lo que hace la plataforma */}
       <div className="cinta" aria-hidden="true">
