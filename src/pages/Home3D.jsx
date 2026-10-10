@@ -17,8 +17,16 @@ import { useNavigate } from 'react-router-dom'
 import { montarEscenaMilePay } from './home3d/escenaMilePay'
 
 const CSS = `
-.h3d{--bg:#eef1f6;--fg:#13233f;--muted:#5b6a84;--gold:#c9a24b;--navy:#13233f;--card:rgba(255,255,255,.72);--card-borde:rgba(255,255,255,.9);--panel:#ffffff;
-  background:var(--bg);color:var(--fg);min-height:100vh;font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.h3d{--bg:#eef1f6;--fg:#13233f;--muted:#5b6a84;--gold:#c9a24b;--navy:#13233f;--verde:#149d80;--card:rgba(255,255,255,.72);--card-borde:rgba(255,255,255,.9);--panel:#ffffff;
+  background:var(--bg);color:var(--fg);min-height:100vh;font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;position:relative;overflow-x:hidden}
+/* Aurora de color detrás de todas las secciones: nada queda plano ni vacío. */
+.h3d .aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.h3d .aurora span{position:absolute;border-radius:50%;filter:blur(110px);opacity:.26;will-change:transform}
+.h3d .au1{width:48vw;height:48vw;background:#c9a24b;top:38%;left:-16vw;animation:h3dflota 30s ease-in-out infinite alternate}
+.h3d .au2{width:44vw;height:44vw;background:#3d5a80;bottom:-14vw;right:-12vw;animation:h3dflota 36s ease-in-out infinite alternate-reverse}
+.h3d .au3{width:34vw;height:34vw;background:#149d80;top:66%;left:52%;animation:h3dflota 42s ease-in-out infinite alternate}
+@keyframes h3dflota{to{transform:translate(7vw,-5vh) scale(1.12)}}
+.h3d>section,.h3d>footer{position:relative;z-index:1}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .h3d{--bg:#0b1322;--fg:#e8edf6;--muted:#9aa8c0;--card:rgba(21,34,58,.66);--card-borde:rgba(255,255,255,.08);--panel:#121e35}
 }
@@ -41,7 +49,7 @@ const CSS = `
 .h3d .btn-linea{border:1.5px solid var(--muted);color:var(--fg);background:transparent}
 
 /* ── HERO inmersivo a pantalla completa ── */
-.h3d .heroe{position:relative;height:min(86vh,860px);min-height:560px;overflow:hidden}
+.h3d .heroe{position:relative;height:100svh;min-height:580px;overflow:hidden;z-index:1}
 .h3d .heroe canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab;touch-action:none}
 .h3d .heroe.arrastrando canvas{cursor:grabbing}
 .h3d .velo{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(10,18,34,.55) 0%,rgba(10,18,34,.22) 38%,transparent 60%)}
@@ -79,6 +87,8 @@ const CSS = `
 .h3d .ctl:hover{transform:translateY(-2px)}
 .h3d .ctl-ancho{width:auto;padding:0 16px;font-size:13px}
 .h3d .ctl-oro{background:var(--gold);color:#13233f;border-color:transparent}
+.h3d .baja{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:3;color:#fff;font-size:22px;opacity:.85;animation:h3dbaja 1.6s ease-in-out infinite;cursor:pointer;background:none;border:0}
+@keyframes h3dbaja{50%{transform:translate(-50%,8px)}}
 .h3d .pista{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:3;font-size:11px;color:rgba(255,255,255,.75);
   background:rgba(13,22,40,.45);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:6px 14px;backdrop-filter:blur(8px)}
 @media (max-width:900px){.h3d .pista{display:none}}
@@ -88,9 +98,9 @@ const CSS = `
 .h3d .encabezado{max-width:640px;margin:0 auto 30px;text-align:center}
 .h3d .encabezado h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
 .h3d .encabezado p{color:var(--muted);margin:0}
-.h3d .dos{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media (max-width:900px){.h3d .dos{grid-template-columns:1fr}}
-.h3d .bloque{border-radius:24px;padding:30px;position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(19,35,63,.12)}
+.h3d .dos{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media (max-width:1020px){.h3d .dos{grid-template-columns:1fr}}
+.h3d .bloque{border-radius:24px;padding:26px;transition:transform .25s,box-shadow .25s;position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(19,35,63,.12)}
 .h3d .bloque .sello{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .h3d .bloque h3{font-size:clamp(22px,2.4vw,30px);margin:6px 0 8px;letter-spacing:-.02em}
 .h3d .bloque .para{font-size:13px;font-weight:700;border-radius:10px;padding:8px 12px;margin:0 0 14px;display:inline-block}
@@ -104,7 +114,19 @@ const CSS = `
 .h3d .b-frg .para{background:rgba(19,35,63,.12);color:#13233f}
 .h3d .b-frg li{color:#2a2715}
 .h3d .bloque .icono-fondo{position:absolute;right:-22px;bottom:-28px;font-size:150px;opacity:.1;pointer-events:none;line-height:1}
+.h3d .bloque:hover{transform:translateY(-5px);box-shadow:0 26px 60px rgba(19,35,63,.2)}
 .h3d .bloque .cta-zona{margin-top:auto}
+.h3d .b-eco{background:linear-gradient(145deg,#0d5c4a,#149d80);color:#fff}
+.h3d .b-eco .para{background:rgba(255,255,255,.12);color:#d8fff4}
+.h3d .b-eco li{color:rgba(255,255,255,.9)}
+.h3d .pronto{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:#ffd666;color:#5c4400;border-radius:999px;padding:4px 11px;margin-left:8px;vertical-align:middle}
+.h3d .btn-eco{background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.45)}
+/* Cinta de color entre secciones */
+.h3d .cinta{overflow:hidden;padding:14px 0;background:linear-gradient(90deg,#13233f,#3d5a80 40%,#149d80 75%,#c9a24b);position:relative;z-index:1}
+.h3d .cinta .riel{display:flex;gap:44px;white-space:nowrap;animation:h3dcinta 26s linear infinite;width:max-content}
+.h3d .cinta span{color:#fff;font-weight:800;font-size:13px;letter-spacing:.06em;opacity:.95}
+@keyframes h3dcinta{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion: reduce){.h3d .cinta .riel,.h3d .aurora span,.h3d .baja{animation:none}}
 
 /* ── Cómo funciona ── */
 .h3d .pasos{padding:52px 0}
@@ -165,6 +187,7 @@ export default function Home3D() {
   return (
     <div className="h3d">
       <style>{CSS}</style>
+      <div className="aurora" aria-hidden="true"><span className="au1" /><span className="au2" /><span className="au3" /></div>
 
       {/* ═══ HERO INMERSIVO: la escena 3D llena la pantalla ═══ */}
       <div ref={escenaRef} className={`heroe${dentro ? ' dentro' : ''}`}>
@@ -183,13 +206,14 @@ export default function Home3D() {
         <div className="vidrio">
           <h1>Freight y última milla, <em>bajo control</em>.</h1>
           <div className="migas">
-            <span className="miga">📦 Paquetería última milla</span>
-            <span className="miga oro">🚛 MilePay Freight</span>
+            <span className="miga">📦 Última milla</span>
+            <span className="miga oro">🚛 Freight</span>
+            <span className="miga" style={{ color: '#7dffd9' }}>🛒 Ecommerce · muy pronto</span>
           </div>
-          <p>Dos operaciones distintas, una sola plataforma: reparto de paquetes puerta a puerta y despacho de materiales a granel — cada una con sus propias herramientas, sin mezclarse.</p>
+          <p>Una plataforma, tres negocios: reparto de paquetes puerta a puerta, despacho de materiales a granel y — muy pronto — compras internacionales entregadas por nosotros. Cada uno con su propio módulo, sin mezclarse.</p>
           <div className="ctas">
             <button className="btn btn-oro" onClick={entrar}>Entrar a MilePay</button>
-            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Conocer cada operación ↓</button>
+            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Conocer los 3 módulos ↓</button>
           </div>
         </div>
 
@@ -206,14 +230,26 @@ export default function Home3D() {
           </button>
         </div>
         <div className="pista">arrastra para girar · rueda para acercar · entra al almacén</div>
+        <button className="baja" aria-label="Bajar" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>⌄</button>
+      </div>
+
+      {/* Cinta de color con lo que hace la plataforma */}
+      <div className="cinta" aria-hidden="true">
+        <div className="riel">
+          {[0, 1].map((k) => (
+            <span key={k}>
+              <span>📦 FACTURAS AL CENTAVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🚛 DESPACHO DE VOLTEOS EN VIVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🛒 COMPRAS INTERNACIONALES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🗺️ GPS Y GEOCERCAS</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>💵 PAGOS A CHOFERES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏦 CADA DEPÓSITO EXPLICADO</span>&nbsp;&nbsp;&nbsp;&nbsp;
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* ═══ DOS NEGOCIOS, CLARAMENTE SEPARADOS ═══ */}
       <section id="negocios" className="negocios">
         <div className="marco">
           <div className="encabezado">
-            <h2>Dos operaciones distintas. Cero confusión.</h2>
-            <p>Elige la tuya: cada una tiene su propio módulo, sus pantallas y sus números.</p>
+            <h2>Tres negocios. Tres módulos. Cero confusión.</h2>
+            <p>Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.</p>
           </div>
           <div className="dos">
             {/* 📦 PAQUETERÍA */}
@@ -244,6 +280,20 @@ export default function Home3D() {
               </ul>
               <div className="cta-zona"><button className="btn btn-navy" onClick={() => navigate('/freight')}>Conocer Freight</button></div>
             </div>
+            {/* 🛒 ECOMMERCE (en construcción) */}
+            <div className="bloque b-eco">
+              <span className="icono-fondo" aria-hidden="true">🛒</span>
+              <span className="sello">Módulo 3 · Ecommerce<span className="pronto">Muy pronto</span></span>
+              <h3>Compras internacionales</h3>
+              <span className="para">¿Quieres productos de afuera sin dolores de cabeza? Nosotros lo traemos.</span>
+              <ul>
+                <li><span className="ic">🛍️</span> Catálogo con precio final: producto, importación y entrega incluidos</li>
+                <li><span className="ic">🌎</span> Compramos al proveedor internacional por ti</li>
+                <li><span className="ic">🛃</span> Aduana e importación gestionadas por nuestra empresa</li>
+                <li><span className="ic">🚪</span> Entrega en tu puerta con seguimiento completo</li>
+              </ul>
+              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
+            </div>
           </div>
         </div>
       </section>
@@ -253,7 +303,7 @@ export default function Home3D() {
         <div className="marco">
           <div className="encabezado">
             <h2>Así de simple</h2>
-            <p>La misma filosofía en ambos módulos: datos reales, cuadre exacto y cero sorpresas.</p>
+            <p>La misma filosofía en los tres módulos: datos reales, cuadre exacto y cero sorpresas.</p>
           </div>
           <div className="tres">
             <div className="paso"><span className="num">1</span><b>Carga tu operación</b><p>Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.</p></div>
