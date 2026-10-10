@@ -1,13 +1,11 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
-// El tercer módulo, Ecommerce (en construcción), SOLO aparece si la sesión de
-// Firebase pertenece al dueño (correo verificado) — nadie más lo ve ni entra.
-import { useEffect, useState } from 'react'
+// El tercer módulo, Ecommerce (en construcción), se ANUNCIA a todos aquí, pero
+// el acceso real lo decide /shop: pide iniciar sesión y solo el correo del
+// dueño pasa (los demás ven la pantalla de bloqueo); mismo candado en las
+// reglas de Firestore.
 import { useNavigate } from 'react-router-dom'
-import { onAuthStateChanged } from 'firebase/auth'
 import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart } from 'lucide-react'
-import { auth } from './firebase'
-import { esDuenoEcom } from './ecommerce/datos'
 import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
@@ -47,9 +45,6 @@ export default function ModuleSelector() {
   const navigate = useNavigate()
   const { t } = useLang()
   const elegir = (m) => { setModulo(m); navigate(m === 'bulk' ? '/bulk' : '/dashboard', { replace: true }) }
-  // Ecommerce (en construcción): la tarjeta solo existe para el DUEÑO logueado.
-  const [verEcom, setVerEcom] = useState(false)
-  useEffect(() => onAuthStateChanged(auth, (u) => setVerEcom(esDuenoEcom(u?.email))), [])
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-4">
@@ -97,12 +92,10 @@ export default function ModuleSelector() {
             onClick={() => elegir('bulk')} icon={Truck} acento="bg-amber-500" glow="bg-amber-500"
             titulo="Freight" desc={t('Fletes de materiales, en vivo.')}
           />
-          {verEcom && (
-            <OpcionCard
-              onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
-              titulo="Ecommerce" subtitulo={t('En construcción')} desc={t('Compras internacionales, entregadas por nosotros.')}
-            />
-          )}
+          <OpcionCard
+            onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
+            titulo="Ecommerce" subtitulo={t('En construcción')} desc={t('Compras internacionales, entregadas por nosotros.')}
+          />
         </div>
 
         <p className="ms-in ms-in-3 mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} MilePay · {t('Puedes cambiar de módulo en cualquier momento.')}</p>
