@@ -1,170 +1,158 @@
-// Landing PÚBLICA de MilePay Freight (marketing). Reproduce 1:1 la maqueta
-// docs/milepay-freight-landing.html: el CSS y el HTML del cuerpo se importan como
-// texto crudo (?raw) y el script (i18n ES/EN, tablero de despacho vivo, scroll reveal,
-// menú móvil) se porta a un efecto de React. Los botones [data-login] se conectan a la
-// ruta REAL de login/selección de módulo (/elegir). No requiere autenticación.
-import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+// ============================================================================
+// LANDING PÚBLICA de MilePay Freight (/freight) — v2, estilo nuevo del sitio.
+//
+// Reconstruida con los componentes compartidos del sitio público (comun.jsx):
+// aurora de color de fondo, tarjetas de vidrio, hero navy con brillos de la
+// paleta nueva y un TABLERO DE DESPACHO en vivo (simulado, rotando órdenes)
+// como visual del hero. Conserva la esencia de la landing anterior: mover
+// material sin planillas, asignación, GPS, app del chofer, roles, facturación,
+// y la sección #demo. Botones de entrar → /elegir. ES/EN con useLangPub.
+// ============================================================================
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Truck, MapPin, Smartphone, ReceiptText, Users, Workflow, ArrowRight } from 'lucide-react'
 import { useTemaColor } from '../hooks/useTemaColor'
-import landingCss from './landing/landing.css?raw'
-import landingHtml from './landing/landing-body.html?raw'
+import {
+  NAVY, NAVY_DEEP, GOLD, CREAM, STEEL, CSS_PUB,
+  useLangPub, NavPub, FooterPub, BandaCTA, Metricas, Pasos,
+} from './publico/comun'
+
+// Tablero de despacho "en vivo" (demo visual, órdenes rotando).
+const ORDENES = [
+  { id: 'ORD-2314', mat: 'Arena lavada', dest: 'Obra Norte', estado: 'En ruta', pct: 72 },
+  { id: 'ORD-2315', mat: 'Grava 3/4"', dest: 'Planta Este', estado: 'Cargando', pct: 28 },
+  { id: 'ORD-2316', mat: 'Base granular', dest: 'Vialidad km 12', estado: 'Asignada', pct: 10 },
+  { id: 'ORD-2317', mat: 'Arena sílica', dest: 'Obra Centro', estado: 'Ticket listo', pct: 100 },
+  { id: 'ORD-2318', mat: 'Piedra #57', dest: 'Patio Sur', estado: 'En ruta', pct: 55 },
+]
+function TableroDespacho({ tx }) {
+  const [paso, setPaso] = useState(0)
+  useEffect(() => {
+    let reduce = false
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* noop */ }
+    if (reduce) return undefined
+    const id = setInterval(() => setPaso((p) => p + 1), 2400)
+    return () => clearInterval(id)
+  }, [])
+  const visibles = [0, 1, 2, 3].map((i) => ORDENES[(paso + i) % ORDENES.length])
+  const colorEstado = (e) => (e === 'En ruta' ? '#4a9c8c' : e === 'Cargando' ? GOLD : e === 'Ticket listo' ? '#37d67a' : '#8fa3c0')
+  return (
+    <div className="rounded-[22px] border p-5" style={{ background: 'rgba(13,26,48,.6)', borderColor: 'rgba(201,162,75,.25)', backdropFilter: 'blur(12px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)' }}>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="f-mono text-[11.5px] uppercase tracking-[.14em]" style={{ color: 'rgba(248,243,235,.55)' }}>{tx('Despacho en vivo · demo', 'Live dispatch · demo')}</span>
+        <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold" style={{ color: '#37d67a' }}><span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ background: '#37d67a' }} /> {tx('EN VIVO', 'LIVE')}</span>
+      </div>
+      <div className="space-y-2.5">
+        {visibles.map((o) => (
+          <div key={o.id} className="rounded-xl border p-3.5" style={{ background: 'rgba(255,255,255,.05)', borderColor: 'rgba(255,255,255,.1)' }}>
+            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="f-mono font-semibold" style={{ color: CREAM }}>{o.id}</span>
+              <span style={{ color: 'rgba(248,243,235,.65)' }}>{o.mat} → {o.dest}</span>
+              <span className="ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ background: `${colorEstado(o.estado)}22`, color: colorEstado(o.estado) }}>{o.estado}</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,.08)' }}>
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${o.pct}%`, background: `linear-gradient(90deg,${GOLD},#4a9c8c)` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 text-center text-[11.5px]" style={{ color: 'rgba(248,243,235,.45)' }}>{tx('Así se ve tu operación: cada orden, camión y ticket en tiempo real.', 'This is your operation: every order, truck and ticket in real time.')}</div>
+    </div>
+  )
+}
 
 export default function LandingFreight() {
   const navigate = useNavigate()
-  const rootRef = useRef(null)
-
-  // Pantalla NAVY: fondo del documento + theme-color a juego mientras está
-  // montada (la franja bajo la Dynamic Island queda del color del nav); al
-  // navegar a la app se restaura el crema.
+  const { lang, fijar, tx } = useLangPub()
   useTemaColor('#0d1a30')
-
-  // SEO básico (título + descripción); se restaura al desmontar.
   useEffect(() => {
-    const tituloPrev = document.title
+    const prev = document.title
     document.title = 'MilePay Freight — Despacho para transporte de materiales a granel'
-    let meta = document.querySelector('meta[name="description"]')
-    const creada = !meta
-    if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'description'); document.head.appendChild(meta) }
-    const descPrev = meta.getAttribute('content')
-    meta.setAttribute('content', 'MilePay Freight recibe cada orden y la empareja con el chofer correcto por tipo de camión, disponibilidad y trabajo. Despacho, mapa en vivo, app del chofer y facturación en un solo sistema.')
-    return () => {
-      document.title = tituloPrev
-      if (creada && meta.parentNode) meta.parentNode.removeChild(meta)
-      else if (meta && descPrev != null) meta.setAttribute('content', descPrev)
-    }
+    window.scrollTo(0, 0)
+    return () => { document.title = prev }
   }, [])
 
-  // Porta el script de la maqueta, acotado al contenedor de la landing.
-  useEffect(() => {
-    const root = rootRef.current
-    if (!root) return
-    const timers = []
-    const setT = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id }
-    let running = true
-
-    // ── i18n (ES por defecto; EN vía data-en) ──────────────────────────────
-    const nodes = [...root.querySelectorAll('[data-en]')]
-    nodes.forEach((n) => { n._es = n.innerHTML })
-    const board = {
-      matchBy: { es: 'Emparejando por tipo de camión…', en: 'Matching by truck type…' },
-      matching: { es: 'Emparejando ', en: 'Matching ' },
-      ellipsis: '…',
-      accepted: { es: (id) => 'Orden ' + id + ' aceptada', en: (id) => 'Order ' + id + ' accepted' },
-      trucks: { dump: { es: 'Dump Truck', en: 'Dump Truck' }, mixer: { es: 'Concrete Mixer', en: 'Concrete Mixer' }, enddump: { es: 'End Dump', en: 'End Dump' } },
-    }
-    let lang = 'es'
-    const L = () => lang
-    const setLang = (lg) => {
-      lang = lg
-      document.documentElement.lang = lg
-      nodes.forEach((n) => { n.innerHTML = lg === 'en' ? n.getAttribute('data-en') : n._es })
-      root.querySelectorAll('.lang-toggle button').forEach((b) => b.classList.toggle('active', b.dataset.lang === lg))
-      const mt = root.querySelector('#matchText')
-      if (mt && !mt.dataset.dyn) mt.textContent = board.matchBy[lg]
-    }
-    const langHandlers = [...root.querySelectorAll('.lang-toggle button')].map((b) => {
-      const h = () => setLang(b.dataset.lang); b.addEventListener('click', h); return [b, h]
-    })
-
-    // ── Scroll reveal (robusto: NUNCA deja una sección en blanco) ───────────
-    // Un umbral fijo (0.14) puede no dispararse en secciones altas o en algunos
-    // navegadores → la sección se quedaba invisible (huecos en blanco). Ahora:
-    //  1) lo que ya está a la vista al cargar se muestra de inmediato,
-    //  2) lo de más abajo se anima al entrar (umbral 0, con margen),
-    //  3) una red de seguridad revela todo por si el observador falla.
-    const revealEls = [...root.querySelectorAll('.reveal')]
-    const revelar = (el) => el && el.classList.add('in')
-    let io = null
-    if ('IntersectionObserver' in window) {
-      io = new IntersectionObserver((es) => es.forEach((e) => {
-        if (e.isIntersecting) { revelar(e.target); io.unobserve(e.target) }
-      }), { threshold: 0, rootMargin: '0px 0px -6% 0px' })
-    }
-    revealEls.forEach((el) => {
-      const top = el.getBoundingClientRect().top
-      if (!io || top < window.innerHeight * 0.95) revelar(el) // ya visible o sin soporte
-      else io.observe(el)
-    })
-    // Red de seguridad: si algo quedó sin revelar, se muestra tras un momento.
-    setT(() => revealEls.forEach(revelar), 2200)
-
-    // ── Menú móvil ─────────────────────────────────────────────────────────
-    const navToggle = root.querySelector('#navToggle')
-    const navLinks = root.querySelector('#navLinks')
-    const navToggleH = () => navLinks && navLinks.classList.toggle('open')
-    if (navToggle) navToggle.addEventListener('click', navToggleH)
-    const navLinkHandlers = []
-    if (navLinks) navLinks.querySelectorAll('a').forEach((a) => { const h = () => navLinks.classList.remove('open'); a.addEventListener('click', h); navLinkHandlers.push([a, h]) })
-
-    // ── Login: [data-login] → ruta real (/elegir) ──────────────────────────
-    const loginHandlers = []
-    root.querySelectorAll('[data-login]').forEach((a) => {
-      a.setAttribute('href', '/elegir')
-      const h = (e) => { e.preventDefault(); navigate('/elegir') }
-      a.addEventListener('click', h); loginHandlers.push([a, h])
-    })
-
-    // ── Tablero de despacho vivo (respeta prefers-reduced-motion) ──────────
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!reduce) {
-      const orders = root.querySelector('#ordersStack')
-      const drivers = root.querySelector('#driversStack')
-      const matchText = root.querySelector('#matchText')
-      const qCount = root.querySelector('#qCount')
-      const dCount = root.querySelector('#dCount')
-      if (orders && drivers && matchText && qCount && dCount) {
-        const cycle = () => {
-          if (!running) return
-          const oCards = [...orders.querySelectorAll('.card:not(.done)')]
-          const dCards = [...drivers.querySelectorAll('.card:not(.done)')]
-          if (!oCards.length || !dCards.length) { setT(reset, 1400); return }
-          const o = oCards[0]; const type = o.dataset.truck
-          const d = dCards.find((c) => c.dataset.truck === type) || dCards[0]
-          matchText.dataset.dyn = '1'
-          matchText.textContent = board.matching[L()] + (board.trucks[type] ? board.trucks[type][L()] : '') + board.ellipsis
-          o.classList.add('matching'); d.classList.add('matching')
-          setT(() => {
-            o.classList.remove('matching'); d.classList.remove('matching')
-            matchText.textContent = board.accepted[L()](o.querySelector('.card-id').textContent)
-            o.classList.add('done'); d.classList.add('done')
-            setT(() => {
-              qCount.textContent = orders.querySelectorAll('.card:not(.done)').length
-              dCount.textContent = drivers.querySelectorAll('.card:not(.done)').length
-              if (running) cycle()
-            }, 700)
-          }, 1900)
-        }
-        const reset = () => {
-          orders.querySelectorAll('.card').forEach((c) => c.classList.remove('done', 'matching'))
-          drivers.querySelectorAll('.card').forEach((c) => c.classList.remove('done', 'matching'))
-          qCount.textContent = orders.querySelectorAll('.card').length
-          dCount.textContent = drivers.querySelectorAll('.card').length
-          matchText.dataset.dyn = ''
-          matchText.textContent = board.matchBy[L()]
-          setT(cycle, 1200)
-        }
-        setT(cycle, 1400)
-      }
-    }
-
-    setLang('es') // idioma por defecto
-
-    return () => {
-      running = false
-      timers.forEach(clearTimeout)
-      io?.disconnect()
-      langHandlers.forEach(([b, h]) => b.removeEventListener('click', h))
-      if (navToggle) navToggle.removeEventListener('click', navToggleH)
-      navLinkHandlers.forEach(([a, h]) => a.removeEventListener('click', h))
-      loginHandlers.forEach(([a, h]) => a.removeEventListener('click', h))
-    }
-  }, [navigate])
+  const FUNCIONES = [
+    { icono: Workflow, path: '/asignacion', t: tx('Asignación automática', 'Automatic assignment'), d: tx('Un trabajo, varios transportistas, cero cuellos de botella: la orden encuentra sola a su camión.', 'One job, multiple carriers, zero bottlenecks: the order finds its truck on its own.') },
+    { icono: MapPin, path: '/gps', t: tx('GPS y geocercas', 'GPS & geofences'), d: tx('Sabes dónde está cada camión sin preguntar; llegadas y salidas se registran solas.', 'You know where every truck is without asking; arrivals and departures log themselves.') },
+    { icono: Smartphone, path: '/app-chofer', t: tx('App del chofer', 'Driver app'), d: tx('Cualquier chofer la entiende en un minuto: viaje, ticket, foto y listo.', 'Any driver gets it in a minute: trip, ticket, photo, done.') },
+    { icono: ReceiptText, path: '/facturacion', t: tx('Facturación y tickets', 'Billing & tickets'), d: tx('Del ticket con foto a la factura del cliente sin volver a escribir nada.', 'From photo ticket to customer invoice without retyping anything.') },
+    { icono: Users, path: '/roles', t: tx('Roles y portales', 'Roles & portals'), d: tx('Cliente, despachador, transportista y chofer: cada quien ve exactamente lo suyo.', 'Customer, dispatcher, carrier and driver: everyone sees exactly their part.') },
+    { icono: Truck, path: '/sistema', t: tx('El sistema completo', 'The full system'), d: tx('De la orden a la factura en un solo lugar, sin planillas de por medio.', 'From order to invoice in one place, with no spreadsheets in between.') },
+  ]
 
   return (
-    <>
-      {/* CSS de la maqueta, montado solo mientras se ve la landing (se retira al salir). */}
-      <style dangerouslySetInnerHTML={{ __html: landingCss }} />
-      <div ref={rootRef} dangerouslySetInnerHTML={{ __html: landingHtml }} />
-    </>
+    <div className="pub min-h-screen">
+      <style>{CSS_PUB}</style>
+      <div className="aurora-pub" aria-hidden="true"><span className="ap1" /><span className="ap2" /><span className="ap3" /></div>
+      <NavPub lang={lang} fijar={fijar} tx={tx} activo="" />
+
+      {/* HERO */}
+      <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ background: NAVY_DEEP, color: CREAM }}>
+        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.16),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(61,90,128,.28),transparent 55%),radial-gradient(500px 400px at 50% 110%,rgba(20,157,128,.14),transparent 60%)' }} />
+        <div className="wrap-pub relative grid items-center gap-[clamp(40px,5vw,90px)] lg:grid-cols-[1.05fr_1fr]">
+          <div className="rev min-w-0">
+            <div className="f-mono mb-5 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] uppercase tracking-[.14em]" style={{ borderColor: 'rgba(201,162,75,.35)', color: GOLD }}>
+              <Truck size={13} /> {tx('Módulo Freight · materiales a granel', 'Freight module · bulk materials')}
+            </div>
+            <h1 className="mb-5 text-[clamp(34px,4.6vw,56px)] font-bold">{tx('Un sistema hecho para mover material, no para llenar planillas.', 'A system built to move material, not to fill out spreadsheets.')}</h1>
+            <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: 'rgba(248,243,235,.78)' }}>
+              {tx('Despacho de volteos en vivo: la orden se asigna sola, el GPS cuenta la historia, el chofer manda su ticket con foto y la factura sale en un clic.', 'Live dump-truck dispatch: orders assign themselves, GPS tells the story, drivers send photo tickets and the invoice is one click away.')}
+            </p>
+            <div className="flex flex-wrap items-center gap-3.5">
+              <a href="#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
+              <button onClick={() => navigate('/elegir')} className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.24)', background: 'transparent', cursor: 'pointer' }}>{tx('Iniciar sesión', 'Log in')} <ArrowRight size={15} /></button>
+            </div>
+          </div>
+          <div className="rev min-w-0" style={{ animationDelay: '.15s' }}><TableroDespacho tx={tx} /></div>
+        </div>
+      </header>
+
+      {/* FUNCIONES */}
+      <section className="wrap-pub py-20" id="producto">
+        <div className="f-mono mb-3 text-[12.5px] font-medium uppercase tracking-[.14em]" style={{ color: GOLD }}>{tx('Lo que hace', 'What it does')}</div>
+        <h2 className="mb-12 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{tx('Todo el despacho, de la orden a la factura.', 'The whole dispatch, from order to invoice.')}</h2>
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {FUNCIONES.map((f) => (
+            <Link key={f.path} to={f.path} className="group rounded-2xl border p-7 transition-transform hover:-translate-y-1"
+              style={{ borderColor: 'rgba(255,255,255,.9)', background: 'rgba(255,255,255,.78)', backdropFilter: 'blur(10px)', boxShadow: '0 14px 40px rgba(19,35,63,.08)' }}>
+              <span className="mb-4 grid h-12 w-12 place-items-center rounded-xl" style={{ background: `linear-gradient(135deg,${GOLD},#a9863a)` }}><f.icono size={22} style={{ color: NAVY_DEEP }} /></span>
+              <h3 className="mb-2 text-[18px]" style={{ color: NAVY }}>{f.t}</h3>
+              <p className="text-[14.5px] leading-relaxed" style={{ color: STEEL }}>{f.d}</p>
+              <span className="mt-3 inline-flex items-center gap-1.5 text-[13.5px] font-bold" style={{ color: GOLD }}>{tx('Ver cómo funciona', 'See how it works')} <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" /></span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* CÓMO FUNCIONA */}
+      <Pasos
+        tx={tx}
+        titulo={tx('Tres pasos y el material está en la obra.', 'Three steps and the material is on site.')}
+        pasos={[
+          { icono: Workflow, t: tx('Entra la orden', 'The order comes in'), d: tx('Tu cliente pide material desde su portal (o tu despachador la crea en segundos).', 'Your customer requests material from their portal (or your dispatcher creates it in seconds).') },
+          { icono: Truck, t: tx('Se asigna y se mueve', 'It gets assigned and moves'), d: tx('El sistema la empareja con el camión correcto; el GPS y las geocercas registran todo el viaje.', 'The system pairs it with the right truck; GPS and geofences log the whole trip.') },
+          { icono: ReceiptText, t: tx('Ticket y factura', 'Ticket and invoice'), d: tx('El chofer sube el ticket con foto y la factura del viaje queda lista para cobrar.', 'The driver uploads the photo ticket and the trip invoice is ready to bill.') },
+        ]}
+      />
+
+      {/* LO QUE GANAS */}
+      <Metricas
+        tx={tx}
+        items={[
+          { n: '1', t: tx('despachador para toda la flota', 'dispatcher for the whole fleet'), d: tx('La asignación automática hace el trabajo pesado.', 'Automatic assignment does the heavy lifting.'), pct: 90 },
+          { n: '0', t: tx('llamadas de "¿dónde vas?"', '"where are you?" calls'), d: tx('El GPS responde antes de que pregunten.', 'GPS answers before anyone asks.'), pct: 100 },
+          { n: '100%', t: tx('viajes con ticket y foto', 'trips with ticket and photo'), d: tx('Prueba de entrega en cada viaje, sin excepciones.', 'Proof of delivery on every trip, no exceptions.'), pct: 100 },
+          { n: '1 clic', t: tx('de la orden a la factura', 'from order to invoice'), d: tx('Sin volver a capturar nada en planillas.', 'Without retyping anything into spreadsheets.'), pct: 95 },
+        ]}
+      />
+
+      {/* DEMO */}
+      <section id="demo">
+        <BandaCTA tx={tx} />
+      </section>
+
+      <FooterPub tx={tx} />
+    </div>
   )
 }

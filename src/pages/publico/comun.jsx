@@ -75,7 +75,7 @@ export function NavPub({ lang, fijar, tx, activo }) {
         <Link to="/" className="flex items-center gap-[11px]" style={{ color: CREAM }}>
           {logoSvg}
           <span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span>
-          <span className="hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider sm:inline" style={{ background: 'rgba(201,162,75,.15)', color: GOLD }}>Páginas del módulo Freight</span>
+          <span className="hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider xl:inline" style={{ background: 'rgba(201,162,75,.15)', color: GOLD }}>Páginas del módulo Freight</span>
         </Link>
         <div className="flex items-center gap-4">
           <div className={`${abierto ? 'absolute left-0 right-0 top-[68px] flex flex-col gap-4 border-b px-7 py-5' : 'hidden'} lg:static lg:flex lg:flex-row lg:items-center lg:gap-6 lg:border-0 lg:p-0`} style={abierto ? { background: NAVY_DEEP, borderColor: 'rgba(201,162,75,.2)' } : undefined}>
@@ -90,7 +90,7 @@ export function NavPub({ lang, fijar, tx, activo }) {
               {tx('← Todos los módulos', '← All modules')}
             </Link>
           </div>
-          <a href="/#demo" className="hidden rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold sm:block" style={{ background: GOLD, color: NAVY_DEEP }}>{tx('Solicitar demo', 'Request demo')}</a>
+          <a href="/freight#demo" className="hidden rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold sm:block" style={{ background: GOLD, color: NAVY_DEEP }}>{tx('Solicitar demo', 'Request demo')}</a>
           <Link to="/elegir" className="hidden items-center gap-2 whitespace-nowrap rounded-[9px] border px-4 py-2 text-[14px] font-semibold sm:inline-flex" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.28)' }}><LogIn size={15} /> {tx('Iniciar sesión', 'Log in')}</Link>
           <span className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: 'rgba(201,162,75,.32)' }}>
             {['es', 'en'].map((lg) => (
@@ -121,7 +121,7 @@ export function FooterPub({ tx }) {
           <div>
             <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: CREAM }}>{tx('Empresa', 'Company')}</h5>
             <Link to="/por-que-milepay" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Por qué MilePay', 'Why MilePay')}</Link>
-            <a href="/#demo" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Solicitar demo', 'Request demo')}</a>
+            <a href="/freight#demo" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Solicitar demo', 'Request demo')}</a>
             <Link to="/elegir" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Iniciar sesión', 'Log in')}</Link>
           </div>
           <div>
@@ -146,7 +146,7 @@ export function BandaCTA({ tx }) {
         <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(600px 300px at 50% 0%,rgba(201,162,75,.16),transparent 60%)' }} />
         <h2 className="relative mb-4 text-[clamp(28px,3.6vw,42px)] font-bold">{tx('Míralo funcionando con tu operación', 'See it running on your operation')}</h2>
         <p className="relative mx-auto mb-8 max-w-[520px] text-[17px]" style={{ color: 'rgba(248,243,235,.75)' }}>{tx('Agenda una demo: cargamos tus plantas, materiales y camiones de ejemplo y despachas una orden en vivo.', 'Book a demo: we load your plants, materials and sample trucks and you dispatch a live order.')}</p>
-        <a href="/#demo" className="relative inline-flex items-center gap-2 rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')} <ArrowRight size={16} /></a>
+        <a href="/freight#demo" className="relative inline-flex items-center gap-2 rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')} <ArrowRight size={16} /></a>
       </div>
     </section>
   )
@@ -167,7 +167,7 @@ export function HeroFuncion({ tx, migas, icono: Icono, titulo, sub, visual }) {
           <h1 className="mb-5 text-[clamp(34px,4.4vw,54px)] font-bold">{titulo}</h1>
           <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: 'rgba(248,243,235,.78)' }}>{sub}</p>
           <div className="flex flex-wrap items-center gap-3.5">
-            <a href="/#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
+            <a href="/freight#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
             <Link to="/sistema" className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.24)' }}>{tx('Ver el sistema completo', 'See the full system')} <ArrowRight size={15} /></Link>
           </div>
         </div>
