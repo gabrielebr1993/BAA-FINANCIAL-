@@ -19,6 +19,9 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const oscuro = !!opciones.oscuro
   const reduce = !!opciones.reduce
   const alCambiarModo = opciones.alCambiarModo || (() => {})
+  // Encuadre inicial: 'hub' (centro de distribución) o 'freight' (zona de
+  // materiales a granel: pilas, tolva y volteos pasando por la vía).
+  const enfoque = opciones.enfoque === 'freight' ? 'freight' : 'hub'
 
   // ── Renderer ──────────────────────────────────────────────────────────────
   const escena = new THREE.Scene()
@@ -657,10 +660,13 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   }
 
   // ── Cámara + modos ────────────────────────────────────────────────────────
-  const T0 = new THREE.Vector3(-26, 2, -14)
+  const CASA = enfoque === 'freight'
+    ? { th: 0.8, ph: 0.62, r: 56, tgt: new THREE.Vector3(-18, 2, 20) }
+    : { th: 0.66, ph: 0.58, r: 92, tgt: new THREE.Vector3(-26, 2, -14) }
+  const T0 = CASA.tgt
   const TI = new THREE.Vector3(-41, 3.5, -34)
-  const orb = { th: 0.66, ph: 0.58, r: 92, tgt: T0.clone() }
-  const meta = { th: 0.66, ph: 0.58, r: 92 }
+  const orb = { th: CASA.th, ph: CASA.ph, r: CASA.r, tgt: T0.clone() }
+  const meta = { th: CASA.th, ph: CASA.ph, r: CASA.r }
   let modo = 'fuera'
   let anim = null
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -698,7 +704,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     } else if (modo === 'dentro') {
       modo = 'saliendo'; alCambiarModo('saliendo')
       volar(new THREE.Vector3(ALM.puertaX, 3.6, ALM.z2 + 8), new THREE.Vector3(ALM.puertaX, 3.5, ALM.z2 + 22), 1500, () => {
-        orb.tgt.copy(T0); orb.th = 0.66; orb.ph = 0.58; orb.r = 92
+        orb.tgt.copy(T0); orb.th = CASA.th; orb.ph = CASA.ph; orb.r = CASA.r
         meta.th = orb.th; meta.ph = orb.ph; meta.r = orb.r
         volar(posOrbita(orb, T0), T0, 1600, () => { modo = 'fuera'; alCambiarModo('fuera') })
       })
@@ -707,7 +713,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const zoomMas = () => { meta.r = clamp(meta.r * 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
   const zoomMenos = () => { meta.r = clamp(meta.r / 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
   const centrar = () => {
-    if (modo === 'dentro') { meta.r = 15 } else { meta.th = 0.66; meta.ph = 0.58; meta.r = 92 }
+    if (modo === 'dentro') { meta.r = 15 } else { meta.th = CASA.th; meta.ph = CASA.ph; meta.r = CASA.r }
   }
   function alRueda(e) {
     e.preventDefault()

@@ -8,10 +8,11 @@
 // material sin planillas, asignación, GPS, app del chofer, roles, facturación,
 // y la sección #demo. Botones de entrar → /elegir. ES/EN con useLangPub.
 // ============================================================================
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Truck, MapPin, Smartphone, ReceiptText, Users, Workflow, ArrowRight } from 'lucide-react'
 import { useTemaColor } from '../hooks/useTemaColor'
+import { montarEscenaMilePay } from './home3d/escenaMilePay'
 import {
   NAVY, NAVY_DEEP, GOLD, CREAM, STEEL, CSS_PUB,
   useLangPub, NavPub, FooterPub, BandaCTA, Metricas, Pasos,
@@ -64,12 +65,23 @@ function TableroDespacho({ tx }) {
 export default function LandingFreight() {
   const navigate = useNavigate()
   const { lang, fijar, tx } = useLangPub()
+  const escenaRef = useRef(null)
+  const apiRef = useRef(null)
   useTemaColor('#f8f3eb')
   useEffect(() => {
     const prev = document.title
     document.title = 'MilePay Freight — Despacho para transporte de materiales a granel'
     window.scrollTo(0, 0)
-    return () => { document.title = prev }
+    let oscuro = false
+    try { oscuro = window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.getAttribute('data-theme') !== 'light' } catch { /* noop */ }
+    let reduce = false
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* noop */ }
+    let api = null
+    try {
+      api = montarEscenaMilePay(escenaRef.current, { oscuro, reduce, enfoque: 'freight' })
+    } catch { /* sin WebGL: el héroe sigue con el texto */ }
+    apiRef.current = api
+    return () => { document.title = prev; if (api) api.destruir() }
   }, [])
 
   const FUNCIONES = [
@@ -83,28 +95,45 @@ export default function LandingFreight() {
 
   return (
     <div className="pub min-h-screen">
-      <style>{CSS_PUB}</style>
+      <style>{CSS_PUB + `
+  .lf-heroe{position:relative;height:min(88vh,880px);min-height:560px;overflow:hidden}
+  .lf-heroe canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab;touch-action:none}
+  .lf-velo{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(10,18,34,.5) 0%,rgba(10,18,34,.18) 40%,transparent 62%)}
+  .lf-velo-abajo{position:absolute;left:0;right:0;bottom:0;height:120px;pointer-events:none;background:linear-gradient(180deg,transparent,#f8f3e9)}
+  .lf-vidrio{position:absolute;left:4%;top:52%;transform:translateY(-50%);z-index:4;max-width:540px;background:rgba(13,22,40,.58);border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:28px;backdrop-filter:blur(14px);box-shadow:0 24px 70px rgba(0,0,0,.35);color:#f8f3eb}
+  .lf-tablero{position:absolute;right:3%;bottom:8%;z-index:4;width:min(420px,38vw)}
+  @media (max-width:1100px){.lf-tablero{display:none}}
+  @media (max-width:900px){.lf-heroe{height:80vh}.lf-vidrio{left:16px;right:16px;top:auto;bottom:24px;transform:none;max-width:none;padding:20px}}
+  .lf-ctl{position:absolute;right:16px;top:84px;z-index:4;display:flex;gap:8px}
+  .lf-ctl button{appearance:none;border:1px solid rgba(255,255,255,.3);background:rgba(13,22,40,.5);color:#fff;backdrop-filter:blur(10px);border-radius:12px;cursor:pointer;font:700 15px/1 inherit;width:38px;height:38px;display:grid;place-items:center}
+`}</style>
       <div className="aurora-pub" aria-hidden="true"><span className="ap1" /><span className="ap2" /><span className="ap3" /></div>
       <NavPub lang={lang} fijar={fijar} tx={tx} activo="" />
 
-      {/* HERO */}
-      <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ color: NAVY }}>
-        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.2),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(196,127,90,.14),transparent 55%)' }} />
-        <div className="wrap-pub relative grid items-center gap-[clamp(40px,5vw,90px)] lg:grid-cols-[1.05fr_1fr]">
-          <div className="rev min-w-0">
-            <div className="f-mono mb-5 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] uppercase tracking-[.14em]" style={{ borderColor: 'rgba(201,162,75,.35)', color: GOLD }}>
-              <Truck size={13} /> {tx('Módulo Freight · materiales a granel', 'Freight module · bulk materials')}
-            </div>
-            <h1 className="mb-5 text-[clamp(34px,4.6vw,56px)] font-bold">{tx('Un sistema hecho para mover material, no para llenar planillas.', 'A system built to move material, not to fill out spreadsheets.')}</h1>
-            <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: STEEL }}>
-              {tx('Despacho de volteos en vivo: la orden se asigna sola, el GPS cuenta la historia, el chofer manda su ticket con foto y la factura sale en un clic.', 'Live dump-truck dispatch: orders assign themselves, GPS tells the story, drivers send photo tickets and the invoice is one click away.')}
-            </p>
-            <div className="flex flex-wrap items-center gap-3.5">
-              <a href="#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
-              <button onClick={() => navigate('/elegir')} className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: NAVY, borderColor: 'rgba(19,35,63,.25)', background: 'transparent', cursor: 'pointer' }}>{tx('Iniciar sesión', 'Log in')} <ArrowRight size={15} /></button>
-            </div>
+      {/* HERO INMERSIVO: la misma escena 3D, con la cámara sobre la zona Freight */}
+      <header className="lf-heroe" ref={null} id="top">
+        <div ref={(el) => { escenaRef.current = el }} className="absolute inset-0">
+          <div className="lf-velo" aria-hidden="true" />
+          <div className="lf-velo-abajo" aria-hidden="true" />
+        </div>
+        <div className="lf-vidrio rev">
+          <div className="f-mono mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] uppercase tracking-[.14em]" style={{ borderColor: 'rgba(201,162,75,.45)', color: GOLD }}>
+            <Truck size={13} /> {tx('Módulo Freight · materiales a granel', 'Freight module · bulk materials')}
           </div>
-          <div className="rev min-w-0" style={{ animationDelay: '.15s' }}><TableroDespacho tx={tx} /></div>
+          <h1 className="mb-4 text-[clamp(28px,3.6vw,44px)] font-bold" style={{ color: '#fff' }}>{tx('Un sistema hecho para mover material, no para llenar planillas.', 'A system built to move material, not to fill out spreadsheets.')}</h1>
+          <p className="mb-6 max-w-[520px] text-[15.5px] leading-relaxed" style={{ color: 'rgba(248,243,235,.82)' }}>
+            {tx('Despacho de volteos en vivo: la orden se asigna sola, el GPS cuenta la historia, el chofer manda su ticket con foto y la factura sale en un clic.', 'Live dump-truck dispatch: orders assign themselves, GPS tells the story, drivers send photo tickets and the invoice is one click away.')}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <a href="#demo" className="rounded-[11px] px-7 py-[14px] text-[15px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.6)' }}>{tx('Solicitar demo', 'Request demo')}</a>
+            <button onClick={() => navigate('/elegir')} className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[14px] text-[15px] font-semibold" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)', background: 'rgba(255,255,255,.1)', cursor: 'pointer', backdropFilter: 'blur(8px)' }}>{tx('Iniciar sesión', 'Log in')} <ArrowRight size={15} /></button>
+          </div>
+        </div>
+        <div className="lf-tablero rev" style={{ animationDelay: '.15s' }}><TableroDespacho tx={tx} /></div>
+        <div className="lf-ctl">
+          <button aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
+          <button aria-label="Alejar" onClick={() => apiRef.current && apiRef.current.zoomMenos()}>−</button>
+          <button aria-label="Centrar" onClick={() => apiRef.current && apiRef.current.centrar()}>⌂</button>
         </div>
       </header>
 
