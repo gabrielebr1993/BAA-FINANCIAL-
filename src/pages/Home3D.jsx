@@ -153,14 +153,72 @@ const CSS = `
 .h3d .paso b{display:block;margin-bottom:4px;font-size:15.5px}
 .h3d .paso p{margin:0;color:var(--muted);font-size:clamp(13px,.85vw,15.5px)}
 
+/* ── Aparición al hacer scroll ── */
+.h3d .reva{opacity:0;transform:translateY(20px);transition:opacity .65s ease,transform .65s ease}
+.h3d .reva.vis{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.h3d .reva{opacity:1;transform:none;transition:none}}
+
+/* ── Etiqueta de sección ── */
+.h3d .kicker{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+
+/* ── Borde dorado del video ── */
+.h3d .video::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.5px;z-index:5;pointer-events:none;
+  background:linear-gradient(140deg,rgba(201,162,75,.7),rgba(255,255,255,.14) 40%,rgba(201,162,75,.3));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+
+/* ── Preguntas frecuentes ── */
+.h3d .faq{padding:10px 0 40px}
+.h3d .faq .lista{max-width:860px;margin:0 auto;display:grid;gap:10px}
+.h3d .faq details{background:var(--panel);border:1px solid var(--card-borde);border-radius:16px;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(19,35,63,.06)}
+.h3d .faq summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;padding:16px 18px;font-weight:700;font-size:clamp(14px,.95vw,16.5px)}
+.h3d .faq summary::-webkit-details-marker{display:none}
+.h3d .faq summary::after{content:'+';margin-left:auto;font-size:20px;color:var(--gold);font-weight:800;transition:transform .25s}
+.h3d .faq details[open] summary::after{transform:rotate(45deg)}
+.h3d .faq .resp{padding:0 18px 16px 18px;color:var(--muted);font-size:clamp(13.5px,.9vw,15.5px);line-height:1.6}
+
+/* ── Banda CTA final ── */
+.h3d .ctaf{margin:4px 0 0;padding:0 0 42px}
+.h3d .ctaf .caja{position:relative;overflow:hidden;border-radius:28px;padding:clamp(30px,4vw,56px);text-align:center;color:#fff;
+  background:linear-gradient(140deg,#13233f 15%,#2a2a18 70%,#5c4a1d);box-shadow:0 30px 80px rgba(19,35,63,.3)}
+.h3d .ctaf .caja::after{content:'';position:absolute;width:52vw;height:52vw;border-radius:50%;filter:blur(90px);opacity:.3;background:#c9a24b;right:-18vw;bottom:-32vw;pointer-events:none}
+.h3d .ctaf h2{font-size:clamp(24px,2.6vw,40px);letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance;position:relative;z-index:1}
+.h3d .ctaf p{color:rgba(255,255,255,.78);margin:0 auto 20px;max-width:56ch;font-size:clamp(14px,1vw,17px);position:relative;z-index:1}
+.h3d .ctaf .ctas{justify-content:center;position:relative;z-index:1}
+.h3d .btn-borde{border:1.5px solid rgba(255,255,255,.45);color:#fff;background:rgba(255,255,255,.08)}
+
 /* ── Pie ── */
-.h3d footer{border-top:1px solid var(--card-borde);padding:20px 0 26px;margin-top:8px}
-.h3d footer .fila{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.h3d footer{border-top:1px solid var(--card-borde);padding:26px 0 24px;margin-top:0}
+.h3d footer .cols{display:grid;grid-template-columns:2fr 1fr 1fr;gap:26px;margin-bottom:18px}
+@media (max-width:800px){.h3d footer .cols{grid-template-columns:1fr;gap:16px}}
+.h3d footer .col b{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg);margin-bottom:9px}
+.h3d footer .col .logo b{display:inline;font-size:inherit;letter-spacing:inherit;text-transform:none;color:var(--gold);margin:0}
+.h3d footer .col a{display:block;color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:600;cursor:pointer;margin-bottom:7px}
+.h3d footer .col a:hover{color:var(--fg)}
+.h3d footer .col p{color:var(--muted);font-size:13.5px;margin:8px 0 0;max-width:34ch}
+.h3d footer .fila{display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-top:1px solid var(--card-borde);padding-top:16px}
 .h3d footer a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;cursor:pointer}
 .h3d footer a:hover{color:var(--fg)}
 .h3d footer .cr{margin-left:auto;color:var(--muted);font-size:12px}
 @media (prefers-reduced-motion: reduce){.h3d .flota{animation:none}}
 `
+
+// Aparece suave cuando la sección entra a la pantalla (respeta reduced-motion)
+function Rev({ children, delay }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return undefined
+    let reduce = false
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { /* noop */ }
+    if (reduce || typeof IntersectionObserver === 'undefined') { el.classList.add('vis'); return undefined }
+    const io = new IntersectionObserver((entradas) => {
+      entradas.forEach((en2) => { if (en2.isIntersecting) { el.classList.add('vis'); io.disconnect() } })
+    }, { threshold: 0.12 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return <div className="reva" ref={ref} style={delay ? { transitionDelay: delay } : undefined}>{children}</div>
+}
 
 export default function Home3D() {
   const navigate = useNavigate()
@@ -267,10 +325,14 @@ export default function Home3D() {
       {/* ═══ DOS NEGOCIOS, CLARAMENTE SEPARADOS ═══ */}
       <section id="negocios" className="negocios">
         <div className="marco">
-          <div className="encabezado">
-            <h2>{t('Cuatro negocios. Cuatro módulos. Cero confusión.')}</h2>
-            <p>{t('Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.')}</p>
-          </div>
+          <Rev>
+            <div className="encabezado">
+              <span className="kicker">{t('Módulos')}</span>
+              <h2>{t('Cuatro negocios. Cuatro módulos. Cero confusión.')}</h2>
+              <p>{t('Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.')}</p>
+            </div>
+          </Rev>
+          <Rev delay=".08s">
           <div className="dos">
             {/* 📦 PAQUETERÍA */}
             <div className="bloque b-paq">
@@ -329,32 +391,102 @@ export default function Home3D() {
               <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 {t('En construcción')}</button></div>
             </div>
           </div>
+          </Rev>
         </div>
       </section>
 
       {/* ═══ CÓMO FUNCIONA ═══ */}
       <section className="pasos">
         <div className="marco">
-          <div className="encabezado">
-            <h2>{t('Así de simple')}</h2>
-            <p>{t('La misma filosofía en los cuatro módulos: datos reales, cuadre exacto y cero sorpresas.')}</p>
-          </div>
-          <div className="tres">
-            <div className="paso"><span className="num">1</span><b>{t('Carga tu operación')}</b><p>{t('Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.')}</p></div>
-            <div className="paso"><span className="num">2</span><b>{t('MilePay cuadra y controla')}</b><p>{t('Verificación al centavo, pagos de choferes, claims, GPS y prueba de entrega — todo automático.')}</p></div>
-            <div className="paso"><span className="num">3</span><b>{t('Cobra con claridad')}</b><p>{t('Cada depósito explicado, cada viaje facturado y la utilidad de tu semana a la vista.')}</p></div>
-          </div>
+          <Rev>
+            <div className="encabezado">
+              <span className="kicker">{t('Cómo funciona')}</span>
+              <h2>{t('Así de simple')}</h2>
+              <p>{t('La misma filosofía en los cuatro módulos: datos reales, cuadre exacto y cero sorpresas.')}</p>
+            </div>
+          </Rev>
+          <Rev delay=".08s">
+            <div className="tres">
+              <div className="paso"><span className="num">1</span><b>{t('Carga tu operación')}</b><p>{t('Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.')}</p></div>
+              <div className="paso"><span className="num">2</span><b>{t('MilePay cuadra y controla')}</b><p>{t('Verificación al centavo, pagos de choferes, claims, GPS y prueba de entrega — todo automático.')}</p></div>
+              <div className="paso"><span className="num">3</span><b>{t('Cobra con claridad')}</b><p>{t('Cada depósito explicado, cada viaje facturado y la utilidad de tu semana a la vista.')}</p></div>
+            </div>
+          </Rev>
+        </div>
+      </section>
+
+      {/* ═══ PREGUNTAS FRECUENTES ═══ */}
+      <section className="faq">
+        <div className="marco">
+          <Rev>
+            <div className="encabezado">
+              <span className="kicker">{t('Preguntas frecuentes')}</span>
+              <h2>{t('Lo que todos preguntan antes de empezar')}</h2>
+            </div>
+          </Rev>
+          <Rev delay=".08s">
+            <div className="lista">
+              <details>
+                <summary>{t('¿Puedo usar un solo módulo?')}</summary>
+                <div className="resp">{t('Sí. Cada negocio vive en su propio módulo: puedes operar solo Paquetería, solo Freight, o los dos, y activar Ecommerce y Warehouse cuando salgan.')}</div>
+              </details>
+              <details>
+                <summary>{t('¿Funciona en el teléfono y la tablet?')}</summary>
+                <div className="resp">{t('Sí. Todo el sistema está hecho para usarse desde el teléfono: choferes, despachadores y dueños ven lo suyo desde cualquier equipo.')}</div>
+              </details>
+              <details>
+                <summary>{t('¿Qué tan seguros están mis datos?')}</summary>
+                <div className="resp">{t('Cada módulo tiene su propio candado: inicio de sesión, roles por persona y reglas de acceso en el servidor. Nadie ve lo que no le toca.')}</div>
+              </details>
+              <details>
+                <summary>{t('¿Cómo empiezo?')}</summary>
+                <div className="resp">{t('Pide una demo del módulo que te interese o entra si ya tienes cuenta. En una semana estás operando con tus números reales.')}</div>
+              </details>
+            </div>
+          </Rev>
+        </div>
+      </section>
+
+      {/* ═══ CTA FINAL ═══ */}
+      <section className="ctaf">
+        <div className="marco">
+          <Rev>
+            <div className="caja">
+              <h2>{t('¿Listo para poner tu operación en orden?')}</h2>
+              <p>{t('Facturas que cuadran, GPS en vivo, pagos sin sorpresas y cada depósito explicado — todo en un solo lugar.')}</p>
+              <div className="ctas">
+                <button className="btn btn-oro" onClick={entrar}>{t('Entrar a MilePay')}</button>
+                <button className="btn btn-borde" onClick={() => navigate('/freight')}>{t('Solicitar demo')}</button>
+              </div>
+            </div>
+          </Rev>
         </div>
       </section>
 
       {/* ═══ PIE ═══ */}
       <footer>
         <div className="marco">
+          <div className="cols">
+            <div className="col">
+              <span className="logo" style={{ color: 'var(--fg)', textShadow: 'none' }} onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
+              <p>{t('Hecho para operaciones reales de logística.')}</p>
+            </div>
+            <div className="col">
+              <b>{t('Módulos')}</b>
+              <a onClick={entrar}>{t('Paquetería')}</a>
+              <a onClick={() => navigate('/freight')}>Freight</a>
+              <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Ecommerce · {t('Muy pronto')}</a>
+              <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Warehouse · {t('Muy pronto')}</a>
+            </div>
+            <div className="col">
+              <b>{t('La plataforma')}</b>
+              <a onClick={() => navigate('/freight')}>{t('Sitio de Freight')}</a>
+              <a onClick={() => navigate('/por-que-milepay')}>{t('Por qué MilePay (Freight)')}</a>
+              <a onClick={entrar}>{t('Iniciar sesión')}</a>
+            </div>
+          </div>
           <div className="fila">
-            <span className="logo" style={{ color: 'var(--fg)', textShadow: 'none' }} onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
             <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Módulos')}</a>
-            <a onClick={() => navigate('/freight')}>{t('Sitio de Freight')}</a>
-            <a onClick={() => navigate('/por-que-milepay')}>{t('Por qué MilePay (Freight)')}</a>
             <a onClick={entrar}>{t('Iniciar sesión')}</a>
             <span className="cr">© {new Date().getFullYear()} MilePay</span>
           </div>
