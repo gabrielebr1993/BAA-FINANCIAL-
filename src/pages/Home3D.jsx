@@ -35,7 +35,7 @@ const CSS = `
 }
 :root[data-theme="dark"] .h3d{--bg:#0b1322;--fg:#e8edf6;--muted:#9aa8c0;--card:rgba(21,34,58,.66);--card-borde:rgba(255,255,255,.08);--panel:#121e35}
 .h3d *{box-sizing:border-box}
-.h3d .marco{max-width:1480px;margin:0 auto;padding-inline:clamp(16px,2.5vw,44px)}
+.h3d .marco{max-width:min(1820px,96.5vw);margin:0 auto;padding-inline:clamp(16px,2.5vw,48px)}
 
 /* ── Nav (ya no flota sobre el canvas: va arriba, en el flujo normal) ── */
 .h3d .nav{position:relative;z-index:5;display:flex;align-items:center;gap:18px;padding:16px 20px;flex-wrap:wrap}
@@ -45,7 +45,7 @@ const CSS = `
 .h3d .nav a:hover{color:var(--fg)}
 .h3d .heroe2{position:relative;z-index:1;padding-bottom:30px}
 .h3d .sep{margin-left:auto;display:flex;gap:10px;align-items:center}
-.h3d .btn{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:11px 18px;font-weight:700;font-size:14px;text-decoration:none;transition:transform .2s;border:0;cursor:pointer;font-family:inherit}
+.h3d .btn{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:clamp(10px,.85vw,14px) clamp(16px,1.3vw,24px);font-weight:700;font-size:clamp(13.5px,.95vw,17px);text-decoration:none;transition:transform .2s;border:0;cursor:pointer;font-family:inherit}
 .h3d .btn:hover{transform:translateY(-2px)}
 .h3d .btn-oro{background:var(--gold);color:#13233f;box-shadow:0 8px 20px rgba(201,162,75,.4)}
 .h3d .btn-blanco{background:rgba(255,255,255,.14);color:#fff;border:1.5px solid rgba(255,255,255,.4);backdrop-filter:blur(8px)}
@@ -56,27 +56,28 @@ const CSS = `
    El canvas no captura el dedo en táctil, así el scroll siempre funciona. ── */
 /* Héroe HORIZONTAL: texto a la izquierda, video a la derecha (sin espacios
    muertos). En pantallas angostas se apila y el texto vuelve a centrarse. */
-.h3d .heroya{display:grid;grid-template-columns:minmax(330px,5fr) 7fr;gap:30px;align-items:center;padding-top:4px}
+.h3d .heroya{display:grid;grid-template-columns:minmax(330px,5fr) 7fr;gap:clamp(22px,2.4vw,46px);align-items:center;padding-top:4px}
+@media (min-width:1001px){.h3d .heroya{min-height:calc(100svh - 96px)}}
 @media (max-width:1000px){.h3d .heroya{grid-template-columns:1fr;gap:16px}}
 .h3d .cabeza{padding:0;text-align:left}
-.h3d .cabeza h1{font-size:clamp(28px,3.4vw,52px);line-height:1.07;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
+.h3d .cabeza h1{font-size:clamp(28px,3.3vw,62px);line-height:1.07;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
 .h3d .cabeza h1 em{font-style:normal;color:var(--gold)}
-.h3d .cabeza p{color:var(--muted);margin:0 0 18px;font-size:15.5px;max-width:580px}
+.h3d .cabeza p{color:var(--muted);margin:0 0 18px;font-size:clamp(14.5px,1vw,19px);max-width:58ch}
 .h3d .migas{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
-.h3d .miga{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--card-borde);color:var(--fg)}
+.h3d .miga{font-size:clamp(11px,.8vw,14px);font-weight:800;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--card-borde);color:var(--fg)}
 .h3d .miga.oro{color:var(--gold)}
 .h3d .ctas{display:flex;gap:10px;flex-wrap:wrap}
 .h3d .minis{display:flex;gap:30px;margin-top:28px;flex-wrap:wrap}
-.h3d .mini b{font-size:clamp(22px,2vw,30px);letter-spacing:-.02em}
+.h3d .mini b{font-size:clamp(22px,2vw,38px);letter-spacing:-.02em}
 .h3d .mini b em{font-style:normal;color:var(--gold)}
-.h3d .mini span{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.h3d .mini span{display:block;font-size:clamp(11.5px,.8vw,14.5px);color:var(--muted);font-weight:600;margin-top:2px}
 @media (max-width:1000px){
   .h3d .cabeza{text-align:center;padding:8px 0 2px}
   .h3d .cabeza p{margin-inline:auto}
   .h3d .migas,.h3d .ctas,.h3d .minis{justify-content:center}
   .h3d .minis{margin-top:18px}
 }
-.h3d .video{position:relative;height:clamp(360px,66vh,660px);border-radius:24px;overflow:hidden;z-index:1;
+.h3d .video{position:relative;height:clamp(360px,66vh,940px);border-radius:24px;overflow:hidden;z-index:1;
   border:1px solid var(--card-borde);box-shadow:0 30px 80px rgba(19,35,63,.28);background:#13233f}
 .h3d .video canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab}
 .h3d .video.arrastrando canvas{cursor:grabbing}
@@ -106,17 +107,18 @@ const CSS = `
 
 /* ── Secciones de negocio: separación clara ── */
 .h3d .negocios{padding:36px 0 6px}
-.h3d .encabezado{max-width:640px;margin:0 auto 20px;text-align:center}
+.h3d .encabezado{max-width:760px;margin:0 auto 20px;text-align:center}
 .h3d .encabezado h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
-.h3d .encabezado p{color:var(--muted);margin:0}
+.h3d .encabezado p{color:var(--muted);margin:0;font-size:clamp(14px,.95vw,17px)}
 .h3d .dos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
 @media (max-width:900px){.h3d .dos{grid-template-columns:1fr}}
+@media (min-width:1500px){.h3d .dos{grid-template-columns:repeat(4,1fr)}}
 .h3d .bloque{border-radius:24px;padding:26px;transition:transform .25s,box-shadow .25s;position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(19,35,63,.12)}
 .h3d .bloque .sello{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .h3d .bloque h3{font-size:clamp(22px,2.4vw,30px);margin:6px 0 8px;letter-spacing:-.02em}
 .h3d .bloque .para{font-size:13px;font-weight:700;border-radius:10px;padding:8px 12px;margin:0 0 14px;display:inline-block}
 .h3d .bloque ul{margin:0 0 20px;padding:0;list-style:none}
-.h3d .bloque li{display:flex;gap:9px;align-items:flex-start;font-size:14px;margin-bottom:9px}
+.h3d .bloque li{display:flex;gap:9px;align-items:flex-start;font-size:clamp(13.5px,.85vw,16px);margin-bottom:9px}
 .h3d .bloque li span.ic{flex:none;margin-top:1px}
 .h3d .b-paq{background:linear-gradient(145deg,#13233f,#1d3356);color:#fff}
 .h3d .b-paq .para{background:rgba(255,255,255,.1);color:#cfe0f5}
@@ -149,7 +151,7 @@ const CSS = `
 .h3d .paso{background:var(--panel);border:1px solid var(--card-borde);border-radius:20px;padding:22px;box-shadow:0 10px 30px rgba(19,35,63,.07)}
 .h3d .paso .num{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:12px;background:var(--gold);color:#13233f;font-weight:900;margin-bottom:10px}
 .h3d .paso b{display:block;margin-bottom:4px;font-size:15.5px}
-.h3d .paso p{margin:0;color:var(--muted);font-size:13.5px}
+.h3d .paso p{margin:0;color:var(--muted);font-size:clamp(13px,.85vw,15.5px)}
 
 /* ── Pie ── */
 .h3d footer{border-top:1px solid var(--card-borde);padding:20px 0 26px;margin-top:8px}

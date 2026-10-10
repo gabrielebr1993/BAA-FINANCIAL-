@@ -52,7 +52,7 @@ export const CSS_PUB = `
   .pub>*{position:relative;z-index:1}
   .pub h1,.pub h2,.pub h3,.pub h4,.f-display{font-family:'Space Grotesk',sans-serif;font-weight:600;line-height:1.08;letter-spacing:-.02em}
   .f-mono{font-family:'JetBrains Mono',monospace}
-  .wrap-pub{padding-inline:clamp(20px,3vw,56px)}
+  .wrap-pub{padding-inline:clamp(20px,3.2vw,84px)}
   .pub a{text-decoration:none;color:inherit}
   @keyframes pulsoPub{0%{box-shadow:0 0 0 0 rgba(201,162,75,.55)}70%{box-shadow:0 0 0 9px rgba(201,162,75,0)}100%{box-shadow:0 0 0 0 rgba(201,162,75,0)}}
   @keyframes blinkPub{50%{opacity:.35}}
