@@ -5,7 +5,7 @@
 // dueño pasa (los demás ven la pantalla de bloqueo); mismo candado en las
 // reglas de Firestore.
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart } from 'lucide-react'
+import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart, Warehouse } from 'lucide-react'
 import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
@@ -62,7 +62,7 @@ export default function ModuleSelector() {
         <div className="absolute bottom-0 right-1/4 h-96 w-96 translate-x-1/2 rounded-full bg-amber-500/20 blur-[120px]" />
       </div>
 
-      <div className="relative w-full max-w-4xl">
+      <div className="relative w-full max-w-6xl">
         <div className="ms-in mb-7 flex flex-col items-center">
           <button onClick={() => navigate('/')} className="flex items-center gap-2.5 transition-opacity hover:opacity-80" aria-label={t('Inicio')}>
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-900 shadow-lg shadow-amber-500/25">
@@ -95,6 +95,10 @@ export default function ModuleSelector() {
           <OpcionCard
             onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
             titulo="Ecommerce" subtitulo={t('En construcción')} desc={t('Compras internacionales, entregadas por nosotros.')}
+          />
+          <OpcionCard
+            onClick={() => navigate('/wh')} icon={Warehouse} acento="bg-violet-600" glow="bg-violet-500"
+            titulo="Warehouse" subtitulo={t('En construcción')} desc={t('Clasificación, staffing e inbound/outbound.')}
           />
         </div>
 

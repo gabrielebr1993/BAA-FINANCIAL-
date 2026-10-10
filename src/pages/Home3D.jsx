@@ -98,8 +98,8 @@ const CSS = `
 .h3d .encabezado{max-width:640px;margin:0 auto 30px;text-align:center}
 .h3d .encabezado h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
 .h3d .encabezado p{color:var(--muted);margin:0}
-.h3d .dos{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-@media (max-width:1020px){.h3d .dos{grid-template-columns:1fr}}
+.h3d .dos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+@media (max-width:900px){.h3d .dos{grid-template-columns:1fr}}
 .h3d .bloque{border-radius:24px;padding:26px;transition:transform .25s,box-shadow .25s;position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(19,35,63,.12)}
 .h3d .bloque .sello{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
 .h3d .bloque h3{font-size:clamp(22px,2.4vw,30px);margin:6px 0 8px;letter-spacing:-.02em}
@@ -117,6 +117,9 @@ const CSS = `
 .h3d .bloque:hover{transform:translateY(-5px);box-shadow:0 26px 60px rgba(19,35,63,.2)}
 .h3d .bloque .cta-zona{margin-top:auto}
 .h3d .b-eco{background:linear-gradient(145deg,#0d5c4a,#149d80);color:#fff}
+.h3d .b-wh{background:linear-gradient(145deg,#3b2d6e,#6d5bd0);color:#fff}
+.h3d .b-wh .para{background:rgba(255,255,255,.12);color:#e4dcff}
+.h3d .b-wh li{color:rgba(255,255,255,.9)}
 .h3d .b-eco .para{background:rgba(255,255,255,.12);color:#d8fff4}
 .h3d .b-eco li{color:rgba(255,255,255,.9)}
 .h3d .pronto{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:#ffd666;color:#5c4400;border-radius:999px;padding:4px 11px;margin-left:8px;vertical-align:middle}
@@ -196,10 +199,8 @@ export default function Home3D() {
 
         <div className="nav">
           <span className="logo" onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
-          <a onClick={() => navigate('/por-que-milepay')}>Por qué MilePay</a>
+          <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Módulos</a>
           <a onClick={() => navigate('/freight')}>Freight</a>
-          <a onClick={() => navigate('/facturacion')}>Facturación</a>
-          <a onClick={() => navigate('/gps')}>GPS</a>
           <span className="sep"><button className="btn btn-oro" onClick={entrar}>Entrar</button></span>
         </div>
 
@@ -209,11 +210,12 @@ export default function Home3D() {
             <span className="miga">📦 Última milla</span>
             <span className="miga oro">🚛 Freight</span>
             <span className="miga" style={{ color: '#7dffd9' }}>🛒 Ecommerce · muy pronto</span>
+            <span className="miga" style={{ color: '#cfc3ff' }}>🏭 Warehouse · muy pronto</span>
           </div>
-          <p>Una plataforma, tres negocios: reparto de paquetes puerta a puerta, despacho de materiales a granel y — muy pronto — compras internacionales entregadas por nosotros. Cada uno con su propio módulo, sin mezclarse.</p>
+          <p>Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.</p>
           <div className="ctas">
             <button className="btn btn-oro" onClick={entrar}>Entrar a MilePay</button>
-            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Conocer los 3 módulos ↓</button>
+            <button className="btn btn-blanco" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Conocer los 4 módulos ↓</button>
           </div>
         </div>
 
@@ -238,7 +240,7 @@ export default function Home3D() {
         <div className="riel">
           {[0, 1].map((k) => (
             <span key={k}>
-              <span>📦 FACTURAS AL CENTAVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🚛 DESPACHO DE VOLTEOS EN VIVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🛒 COMPRAS INTERNACIONALES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🗺️ GPS Y GEOCERCAS</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>💵 PAGOS A CHOFERES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏦 CADA DEPÓSITO EXPLICADO</span>&nbsp;&nbsp;&nbsp;&nbsp;
+              <span>📦 FACTURAS AL CENTAVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🚛 DESPACHO DE VOLTEOS EN VIVO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🛒 COMPRAS INTERNACIONALES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🗺️ GPS Y GEOCERCAS</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>💵 PAGOS A CHOFERES</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏦 CADA DEPÓSITO EXPLICADO</span>&nbsp;&nbsp;&nbsp;&nbsp;<span>🏭 WAREHOUSE: INBOUND · OUTBOUND · STAFF</span>&nbsp;&nbsp;&nbsp;&nbsp;
             </span>
           ))}
         </div>
@@ -248,7 +250,7 @@ export default function Home3D() {
       <section id="negocios" className="negocios">
         <div className="marco">
           <div className="encabezado">
-            <h2>Tres negocios. Tres módulos. Cero confusión.</h2>
+            <h2>Cuatro negocios. Cuatro módulos. Cero confusión.</h2>
             <p>Cada operación tiene su propio módulo, sus pantallas y sus números — elige la tuya.</p>
           </div>
           <div className="dos">
@@ -294,6 +296,20 @@ export default function Home3D() {
               </ul>
               <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
             </div>
+            {/* 🏭 WAREHOUSE (en construcción) */}
+            <div className="bloque b-wh">
+              <span className="icono-fondo" aria-hidden="true">🏭</span>
+              <span className="sello">Módulo 4 · Warehouse<span className="pronto">Muy pronto</span></span>
+              <h3>Servicios de almacén</h3>
+              <span className="para">¿Necesitas manos y espacio para tu operación? Nuestro almacén trabaja por ti.</span>
+              <ul>
+                <li><span className="ic">🔀</span> Clasificación y sorteo de paquetes por ruta, zona o cliente</li>
+                <li><span className="ic">👷</span> Staffing: clasificadores, empacadores, montacarguistas y supervisores</li>
+                <li><span className="ic">📥</span> Inbound y outbound gestionados: recepción, verificación y despacho</li>
+                <li><span className="ic">🏗️</span> Almacenaje y cross-dock con control de entradas y salidas</li>
+              </ul>
+              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 En construcción</button></div>
+            </div>
           </div>
         </div>
       </section>
@@ -303,7 +319,7 @@ export default function Home3D() {
         <div className="marco">
           <div className="encabezado">
             <h2>Así de simple</h2>
-            <p>La misma filosofía en los tres módulos: datos reales, cuadre exacto y cero sorpresas.</p>
+            <p>La misma filosofía en los cuatro módulos: datos reales, cuadre exacto y cero sorpresas.</p>
           </div>
           <div className="tres">
             <div className="paso"><span className="num">1</span><b>Carga tu operación</b><p>Sube la factura semanal de paquetería o registra las órdenes de material de tus clientes.</p></div>
@@ -318,10 +334,9 @@ export default function Home3D() {
         <div className="marco">
           <div className="fila">
             <span className="logo" style={{ color: 'var(--fg)', textShadow: 'none' }} onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
-            <a onClick={() => navigate('/por-que-milepay')}>Por qué MilePay</a>
-            <a onClick={() => navigate('/freight')}>Freight</a>
-            <a onClick={() => navigate('/facturacion')}>Facturación</a>
-            <a onClick={() => navigate('/gps')}>GPS</a>
+            <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Módulos</a>
+            <a onClick={() => navigate('/freight')}>Sitio de Freight</a>
+            <a onClick={() => navigate('/por-que-milepay')}>Por qué MilePay (Freight)</a>
             <a onClick={entrar}>Iniciar sesión</a>
             <span className="cr">© {new Date().getFullYear()} MilePay</span>
           </div>

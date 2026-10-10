@@ -68,6 +68,7 @@ export function NavPub({ lang, fijar, tx, activo }) {
         <Link to="/" className="flex items-center gap-[11px]" style={{ color: CREAM }}>
           {logoSvg}
           <span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span>
+          <span className="hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider sm:inline" style={{ background: 'rgba(201,162,75,.15)', color: GOLD }}>Páginas del módulo Freight</span>
         </Link>
         <div className="flex items-center gap-4">
           <div className={`${abierto ? 'absolute left-0 right-0 top-[68px] flex flex-col gap-4 border-b px-7 py-5' : 'hidden'} lg:static lg:flex lg:flex-row lg:items-center lg:gap-6 lg:border-0 lg:p-0`} style={abierto ? { background: NAVY_DEEP, borderColor: 'rgba(201,162,75,.2)' } : undefined}>
@@ -78,6 +79,9 @@ export function NavPub({ lang, fijar, tx, activo }) {
                 {tx(p.es, p.en)}
               </Link>
             ))}
+            <Link to="/" onClick={() => setAbierto(false)} className="text-[14px] font-bold transition-colors" style={{ color: 'rgba(248,243,235,.9)' }}>
+              {tx('← Todos los módulos', '← All modules')}
+            </Link>
           </div>
           <a href="/#demo" className="hidden rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold sm:block" style={{ background: GOLD, color: NAVY_DEEP }}>{tx('Solicitar demo', 'Request demo')}</a>
           <Link to="/elegir" className="hidden items-center gap-2 whitespace-nowrap rounded-[9px] border px-4 py-2 text-[14px] font-semibold sm:inline-flex" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.28)' }}><LogIn size={15} /> {tx('Iniciar sesión', 'Log in')}</Link>

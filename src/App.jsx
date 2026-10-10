@@ -24,6 +24,8 @@ const Home3D = lazy(() => import('./pages/Home3D'))
 // Módulo ECOMMERCE (en construcción): compras internacionales. PRIVADO —
 // solo el dueño (correo verificado) puede entrar; ver src/ecommerce/EcomApp.jsx.
 const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
+// Módulo WAREHOUSE (en construcción): servicios de almacén. Mismo candado privado.
+const WhApp = lazy(() => import('./warehouse/WhApp'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
 // nuevas, independientes de la landing (que queda intacta) y de la app.
@@ -180,6 +182,9 @@ function TopBranch() {
   // Ecommerce (en construcción): módulo independiente bajo /shop.
   if (pathname === '/shop' || pathname.startsWith('/shop/')) {
     return <Suspense fallback={<Cargando texto="Cargando Ecommerce…" />}><EcomApp /></Suspense>
+  }
+  if (pathname === '/wh' || pathname.startsWith('/wh/')) {
+    return <Suspense fallback={<Cargando texto="Cargando Warehouse…" />}><WhApp /></Suspense>
   }
   // Páginas informativas del sitio público (una por función + Por qué MilePay).
   if (RUTAS_PUBLICAS.includes(pathname)) {

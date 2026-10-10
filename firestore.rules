@@ -753,5 +753,11 @@ service cloud.firestore {
     match /ecom_internos/{id}  { allow read, write: if esDuenoEcom(); }
     // Auditoría del módulo: el dueño lee y crea; nadie edita ni borra.
     match /ecom_audit/{id}     { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
+
+    // MÓDULO WAREHOUSE (EN CONSTRUCCIÓN) — colecciones wh_*: mismo candado.
+    match /wh_inbound/{id}  { allow read, write: if esDuenoEcom(); }
+    match /wh_outbound/{id} { allow read, write: if esDuenoEcom(); }
+    match /wh_staff/{id}    { allow read, write: if esDuenoEcom(); }
+    match /wh_audit/{id}    { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
   }
 }
