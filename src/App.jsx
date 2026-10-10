@@ -16,9 +16,11 @@ import { CarrierProvider, CarrierGate } from './carriers/CarrierContext'
 
 // Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
 const BulkApp = lazy(() => import('./bulk/BulkApp'))
-// Landing PÚBLICA de Freight (marketing, sin autenticación). Se muestra en la raíz a
-// los visitantes que aún no han elegido módulo (clientes potenciales).
+// Landing PÚBLICA de Freight (marketing, sin autenticación). Vive en /freight;
+// la PORTADA del sitio es el home 3D (Home3D) en la raíz.
 const LandingFreight = lazy(() => import('./pages/LandingFreight'))
+// Portada del sitio: hero con la escena 3D de la operación (aprobada por el dueño).
+const Home3D = lazy(() => import('./pages/Home3D'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
 // nuevas, independientes de la landing (que queda intacta) y de la app.
@@ -162,12 +164,15 @@ function TopBranch() {
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />
-  // Landing PÚBLICA de marketing en la raíz: la portada del sitio es SIEMPRE la landing
-  // (como cualquier web de empresa). Para entrar a la app se usa «Iniciar sesión» → /elegir.
-  // /inicio queda como alias equivalente (link compartible). La app de Package vive bajo
-  // /dashboard y sus rutas propias; Freight bajo /bulk. Nada de eso cambia por dentro.
+  // PORTADA del sitio en la raíz: el home 3D de MilePay (escena de la operación
+  // con visita al almacén). Para entrar a la app: «Entrar» → /elegir. /inicio
+  // queda como alias compartible. La landing de marketing de Freight sigue viva
+  // en /freight. La app de Package vive bajo /dashboard; Freight bajo /bulk.
   if (pathname === '/' || pathname === '/inicio') {
-    return <Suspense fallback={<Cargando texto="Cargando…" />}><LandingFreight /></Suspense>
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><Home3D /></Suspense>
+  }
+  if (pathname === '/freight') {
+    return <Suspense fallback={<Cargando texto="Cargando Freight…" />}><LandingFreight /></Suspense>
   }
   // Páginas informativas del sitio público (una por función + Por qué MilePay).
   if (RUTAS_PUBLICAS.includes(pathname)) {
