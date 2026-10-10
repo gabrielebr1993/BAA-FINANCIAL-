@@ -113,12 +113,8 @@ export default function Home3D() {
       <div className="marco">
         <div className="nav">
           <span className="logo" onClick={() => navigate('/')}>Mile<b>Pay</b>.</span>
-          <a onClick={() => navigate('/por-que-milepay')}>Por qué MilePay</a>
           <a onClick={() => navigate('/freight')}>Freight</a>
-          <a onClick={() => navigate('/facturacion')}>Facturación</a>
-          <a onClick={() => navigate('/gps')}>GPS</a>
           <span className="sep">
-            <button className="btn btn-linea" onClick={() => navigate('/freight')}>Ver demo</button>
             <button className="btn btn-oro" onClick={entrar}>Entrar</button>
           </span>
         </div>
@@ -126,22 +122,14 @@ export default function Home3D() {
         <div className="hero">
           <div>
             <h1>Freight y última milla, <em>bajo control</em>.</h1>
-            <p>Despacho de materiales a granel con <b>MilePay Freight</b> y reparto de paquetes de última milla: facturas que cuadran al centavo, pagos a choferes, claims y cobros — del volteo al paquete en la puerta.</p>
-            <div className="marcas">
-              <span className="marca" style={{ color: 'var(--gold)' }}>MilePay Freight</span>
-              <span className="marca">Paquetería última milla</span>
-              <span className="marca">Multi-ciudad · Multi-flota</span>
-            </div>
+            <p>Toda tu operación en un solo lugar.</p>
             <div className="ctas">
               <button className="btn btn-oro" onClick={entrar}>Entrar a MilePay</button>
-              <button className="btn btn-linea" onClick={() => navigate('/por-que-milepay')}>Ver cómo funciona</button>
             </div>
           </div>
 
           <div ref={escenaRef} className={`escena${dentro ? ' dentro' : ''}`}>
-            <div className="flota ext f1"><small>Operación semanal</small><span className="punto-ok">✓</span> Miles de paquetes entregados</div>
             <div className="flota ext f2"><small>Cuadre con la factura</small><span className="punto-ok">✓</span> Al centavo, siempre</div>
-            <div className="flota ext f3"><small>Cobros y fondo</small><span className="punto-oro">●</span> Cada depósito, explicado</div>
             <div className="flota int"><small>Dentro del almacén</small><span className="punto-ok">✓</span> Escaneo y cuadre en vivo</div>
             <div className="controles">
               <button className="ctl" aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
