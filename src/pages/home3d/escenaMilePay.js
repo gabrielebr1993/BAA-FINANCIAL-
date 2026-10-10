@@ -6,7 +6,11 @@
 // con vans que ENTRAN y SALEN por rutas reales, tráfico en las vías (volteos
 // de Freight, camionetas, un tráiler), y por dentro una MÁQUINA CLASIFICADORA
 // de paquetes: línea elevada con rampas de salida a contenedores, operadores
-// en cada rampa y montacargas patrullando junto a los racks.
+// en cada rampa y montacargas patrullando junto a los racks. Al sur de la vía,
+// una PLANTA DE AGREGADOS completa (zona Freight): báscula con caseta,
+// triturador primario con tolva y volantes girando, banda inclinada a la torre
+// de cribado, bandas apiladoras formando pilas por calibre, silos, cargador
+// frontal trabajando y volteos que entran a pesar y descargar.
 //
 // Acabado: tone mapping ACES, atardecer dorado, sombras suaves, texturas
 // procedurales en canvas (cero descargas). Modo oscuro = noche con luces.
@@ -19,8 +23,8 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const oscuro = !!opciones.oscuro
   const reduce = !!opciones.reduce
   const alCambiarModo = opciones.alCambiarModo || (() => {})
-  // Encuadre inicial: 'hub' (centro de distribución) o 'freight' (zona de
-  // materiales a granel: pilas, tolva y volteos pasando por la vía).
+  // Encuadre inicial: 'hub' (centro de distribución) o 'freight' (la planta
+  // de agregados: trituradora, criba, bandas, pilas y báscula).
   const enfoque = opciones.enfoque === 'freight' ? 'freight' : 'hub'
 
   // ── Renderer ──────────────────────────────────────────────────────────────
@@ -585,24 +589,205 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     escena.add(b4); cajasFeeder.push(b4)
   }
 
-  // ── Zona Freight + casas + árboles + faroles (contexto) ──────────────────
+  // ── PLANTA DE AGREGADOS (zona Freight) ───────────────────────────────────
+  // Flujo real: el volteo pesa en la BÁSCULA, descarga en la TOLVA del
+  // triturador primario, la banda inclinada sube el material a la TORRE DE
+  // CRIBADO y las bandas apiladoras forman las PILAS por calibre (grava,
+  // gravilla, arena). El cargador frontal alimenta piedra bruta y los silos
+  // guardan los finos.
+  const texPiedra = lienzo(128, 128, (cx7, w7, h7) => { ruido(cx7, w7, h7, '#5d6570', 2600, 0.18) })
+  const texGravilla = lienzo(128, 128, (cx7, w7, h7) => { ruido(cx7, w7, h7, '#9a9280', 2200, 0.14) })
+  // Patio de grava compactada con huellas de llantas
+  const texPad = lienzo(256, 256, (cx7, w7, h7) => {
+    ruido(cx7, w7, h7, oscuro ? '#2a3146' : '#8a8577', 2600, 0.12)
+    cx7.strokeStyle = 'rgba(0,0,0,.14)'; cx7.lineWidth = 3
+    for (let i = 0; i < 6; i++) { cx7.beginPath(); cx7.moveTo(0, 20 + i * 40); cx7.lineTo(w7, 26 + i * 40); cx7.stroke() }
+  })
+  texPad.repeat.set(9, 6)
+  const pad = new THREE.Mesh(new THREE.PlaneGeometry(88, 58), mat(0xffffff, { map: texPad, roughness: 1 }))
+  pad.rotation.x = -Math.PI / 2; pad.position.set(-56, 0.035, 40); pad.receiveShadow = true
+  escena.add(pad)
+  // Acceso desde la vía + BÁSCULA de camiones + caseta del pesador
+  const acceso = new THREE.Mesh(new THREE.PlaneGeometry(8, 9.5), mat(0x454e63, { roughness: 0.95 }))
+  acceso.rotation.x = -Math.PI / 2; acceso.position.set(-20, 0.04, 9.4); acceso.receiveShadow = true
+  escena.add(acceso)
+  en(caja(4.6, 0.14, 11, mat(0x39415a, { roughness: 0.5, metalness: 0.4 })), -20, 0.1, 20)
+  ;[-2.5, 2.5].forEach((bx5) => { en(caja(0.18, 0.3, 11, mat(COL.gold, { roughness: 0.4, metalness: 0.4 })), -20 + bx5, 0.2, 20) })
+  const caseta = new THREE.Group()
+  const casA = caja(2.6, 2.5, 2.6, mat(COL.blanco, { roughness: 0.85 })); casA.position.y = 1.25; caseta.add(casA)
+  const casB = caja(3.0, 0.2, 3.0, mat(COL.navy, { roughness: 0.6 })); casB.position.y = 2.6; caseta.add(casB)
+  const casV = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.9), matVentana); casV.rotation.y = Math.PI / 2; casV.position.set(1.31, 1.6, 0); caseta.add(casV)
+  caseta.position.set(-25.5, 0, 20); escena.add(caseta)
+  persona(-23.8, 22.6, Math.PI / 2)
+  // TRITURADOR primario: muro de contención + tolva con grizzly + volantes
+  const TRIT = { x: -33, z: 41 }
+  const matConcretoP = mat(0x9aa0ab, { map: texConcreto, roughness: 1 })
+  en(caja(8, 2.7, 0.8, matConcretoP), TRIT.x + 1.5, 1.35, TRIT.z + 3.6)
+  en(caja(0.8, 2.7, 5.2, matConcretoP), TRIT.x + 5.6, 1.35, TRIT.z + 1.4)
+  const matAcero = mat(COL.steel, { map: texCorrugado('#3d5a80', 'rgba(0,0,0,.3)', 'rgba(255,255,255,.12)'), roughness: 0.55, metalness: 0.35 })
+  const tolvaT = new THREE.Group()
+  const tvA = caja(5.2, 3.6, 5.2, matAcero); tvA.position.y = 5.1; tolvaT.add(tvA)
+  const tvB = new THREE.Mesh(new THREE.ConeGeometry(3.5, 2.8, 4), mat(0x2e4664, { roughness: 0.5, metalness: 0.4 }))
+  tvB.rotation.y = Math.PI / 4; tvB.rotation.x = Math.PI; tvB.position.y = 1.9; tvB.castShadow = true; tolvaT.add(tvB)
+  for (let gz5 = -2.2; gz5 <= 2.2; gz5 += 0.72) {
+    const barra5 = caja(5.4, 0.12, 0.14, mat(0x1f2a3d, { metalness: 0.5, roughness: 0.4 })); barra5.position.set(0, 6.98, gz5); tolvaT.add(barra5)
+  }
+  const bocaT = new THREE.Mesh(new THREE.ConeGeometry(2.1, 1.2, 4), mat(0xffffff, { map: texPiedra, roughness: 1 }))
+  bocaT.rotation.y = Math.PI / 4; bocaT.position.y = 7.35; tolvaT.add(bocaT)
+  ;[[-2.1, -2.1], [2.1, -2.1], [-2.1, 2.1], [2.1, 2.1]].forEach((pt5) => {
+    const pata5 = caja(0.4, 3.6, 0.4, mat(0x2b3850)); pata5.position.set(pt5[0], 1.8, pt5[1]); tolvaT.add(pata5)
+  })
+  tolvaT.position.set(TRIT.x + 2.2, 0, TRIT.z); escena.add(tolvaT)
+  const trit = new THREE.Group()
+  const trA = caja(3.4, 2.9, 3.0, mat(0xb9533f, { roughness: 0.5, metalness: 0.3 })); trA.position.y = 1.8; trit.add(trA)
+  const trB = caja(2.2, 1.0, 2.2, mat(0x2b3850, { roughness: 0.5, metalness: 0.4 })); trB.position.y = 3.6; trit.add(trB)
+  const volantes = []
+  ;[-1.62, 1.62].forEach((vz5) => {
+    const gv = new THREE.Group()
+    const disco5 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.18, 20), mat(0x222c3f, { metalness: 0.55, roughness: 0.3 }))
+    disco5.rotation.x = Math.PI / 2; disco5.castShadow = true; gv.add(disco5)
+    ;[0, Math.PI / 2].forEach((rr5) => {
+      const rayo5 = caja(1.7, 0.14, 0.06, mat(0x9aa3b2, { metalness: 0.6, roughness: 0.3 }))
+      rayo5.rotation.z = rr5; rayo5.position.z = vz5 > 0 ? 0.13 : -0.13; gv.add(rayo5)
+    })
+    gv.position.set(-0.4, 2.0, vz5); trit.add(gv); volantes.push(gv)
+  })
+  trit.position.set(TRIT.x - 2.6, 0, TRIT.z); escena.add(trit)
+  // BANDAS transportadoras (con caballetes y material subiendo)
+  const bandasAnim = []
+  function banda(a5, b5, ancho5, tex5, nTrozos5) {
+    const A5 = new THREE.Vector3(a5[0], a5[1], a5[2]), B5 = new THREE.Vector3(b5[0], b5[1], b5[2])
+    const dir5 = B5.clone().sub(A5); const len5 = dir5.length()
+    const g5 = new THREE.Group()
+    const cuerpo5 = caja(len5, 0.42, ancho5, mat(0x2b3850, { roughness: 0.55, metalness: 0.3 })); g5.add(cuerpo5)
+    const cinta5 = caja(len5 - 0.3, 0.1, ancho5 - 0.35, mat(0x10141d, { roughness: 0.3, metalness: 0.2 })); cinta5.position.y = 0.26; g5.add(cinta5)
+    ;[-ancho5 / 2, ancho5 / 2].forEach((gz6) => {
+      const guarda6 = caja(len5, 0.16, 0.07, mat(0x9aa3b2, { metalness: 0.6, roughness: 0.3 })); guarda6.position.set(0, 0.34, gz6); g5.add(guarda6)
+    })
+    ;[-len5 / 2, len5 / 2].forEach((px6) => {
+      const rodillo6 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, ancho5, 12), mat(0x47536b, { metalness: 0.5, roughness: 0.4 }))
+      rodillo6.rotation.x = Math.PI / 2; rodillo6.position.set(px6, 0, 0); g5.add(rodillo6)
+    })
+    g5.position.copy(A5.clone().add(B5).multiplyScalar(0.5))
+    g5.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir5.clone().normalize())
+    escena.add(g5)
+    const nAp5 = Math.max(2, Math.round(len5 / 7))
+    for (let ai5 = 1; ai5 <= nAp5; ai5++) {
+      const p9 = A5.clone().lerp(B5, ai5 / (nAp5 + 1))
+      if (p9.y < 1.1) continue
+      ;[-ancho5 / 4, ancho5 / 4].forEach((oz5) => {
+        const pataB5 = caja(0.26, p9.y - 0.2, 0.26, mat(0x47536b)); pataB5.position.set(p9.x, (p9.y - 0.2) / 2, p9.z + oz5); escena.add(pataB5)
+      })
+      const travB5 = caja(0.2, 0.2, ancho5 * 0.7, mat(0x47536b)); travB5.position.set(p9.x, p9.y - 0.55, p9.z); escena.add(travB5)
+    }
+    const trozos5 = []
+    for (let ti5 = 0; ti5 < nTrozos5; ti5++) {
+      const tr5 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3, 0), mat(0xffffff, { map: tex5, roughness: 1 }))
+      tr5.castShadow = true; escena.add(tr5); trozos5.push(tr5)
+    }
+    bandasAnim.push({ A: A5, B: B5, trozos: trozos5, vel: 0.05 + bandasAnim.length * 0.006 })
+  }
+  // TORRE DE CRIBADO (estructura, plataformas, caja vibratoria, escalera)
+  const CRIBA = { x: -50, z: 41 }
+  const torre = new THREE.Group()
+  ;[[-2.3, -2], [2.3, -2], [-2.3, 2], [2.3, 2]].forEach((pc5) => {
+    const col5 = caja(0.32, 9.2, 0.32, mat(0x2b3850, { metalness: 0.4, roughness: 0.5 })); col5.position.set(pc5[0], 4.6, pc5[1]); torre.add(col5)
+  })
+  ;[3.1, 6.1].forEach((py5) => {
+    const plat5 = caja(5.6, 0.22, 4.9, mat(0x47536b, { metalness: 0.4, roughness: 0.5 })); plat5.position.y = py5; torre.add(plat5)
+    ;[-2.45, 2.45].forEach((bz6) => {
+      const bar6 = caja(5.6, 0.08, 0.08, mat(COL.gold, { metalness: 0.5, roughness: 0.4 })); bar6.position.set(0, py5 + 1.0, bz6); torre.add(bar6)
+    })
+  })
+  const cribaCaja = caja(4.6, 1.7, 3.8, mat(0xc9a24b, { roughness: 0.45, metalness: 0.35 }))
+  cribaCaja.position.set(0, 7.6, 0); cribaCaja.rotation.z = 0.16; torre.add(cribaCaja)
+  const cribaMalla = caja(4.2, 0.1, 3.4, mat(0x1f2a3d, { metalness: 0.5, roughness: 0.35 }))
+  cribaMalla.position.set(0, 8.5, 0); cribaMalla.rotation.z = 0.16; torre.add(cribaMalla)
+  ;[-0.33, 0.33].forEach((lz6) => { const riel6 = caja(0.07, 9.0, 0.07, mat(0x9aa3b2)); riel6.position.set(2.62, 4.5, -2 + lz6); torre.add(riel6) })
+  for (let ey5 = 0.6; ey5 < 8.8; ey5 += 0.5) { const pel5 = caja(0.06, 0.05, 0.6, mat(0x9aa3b2)); pel5.position.set(2.62, ey5, -2); torre.add(pel5) }
+  torre.position.set(CRIBA.x, 0, CRIBA.z); escena.add(torre)
+  // PILAS por calibre + banda al triturador + bandas apiladoras
   function pila(x, z, rad, h, tx) {
     const p6 = new THREE.Mesh(new THREE.ConeGeometry(rad, h, 26, 1), mat(0xffffff, { map: tx, roughness: 1 }))
     p6.position.set(x, h / 2, z); p6.castShadow = true; p6.receiveShadow = true
     escena.add(p6)
   }
-  pila(-34, 26, 5.4, 3.4, texGrava)
-  pila(-24, 30, 4.2, 2.7, texArena)
-  pila(-36, 34, 3.4, 2.2, texGrava)
-  const tolva = new THREE.Group()
-  const tv1 = caja(4.6, 4.4, 4.6, mat(COL.steel, { map: texCorrugado('#3d5a80', 'rgba(0,0,0,.3)', 'rgba(255,255,255,.12)'), roughness: 0.55, metalness: 0.35 })); tv1.position.set(0, 4.6, 0); tolva.add(tv1)
-  const tv2 = new THREE.Mesh(new THREE.ConeGeometry(3.1, 2.6, 4), mat(0x2e4664, { roughness: 0.5, metalness: 0.4 }))
-  tv2.rotation.y = Math.PI / 4; tv2.rotation.x = Math.PI; tv2.position.set(0, 1.6, 0); tolva.add(tv2)
-  ;[[-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8], [1.8, 1.8]].forEach((pz4) => {
-    const pata2 = caja(0.34, 3.2, 0.34, mat(0x2b3850)); pata2.position.set(pz4[0], 1.6, pz4[1]); tolva.add(pata2)
+  pila(-66, 24, 7.5, 5.2, texGrava)
+  pila(-72, 42, 6.8, 4.6, texGravilla)
+  pila(-64, 58, 7.2, 5.0, texArena)
+  pila(-26, 55, 5.8, 3.8, texPiedra)
+  banda([-36.8, 1.5, 41], [-49.6, 8.8, 41], 1.7, texPiedra, 5)
+  banda([-51.5, 5.4, 39.4], [-66, 6.6, 25.6], 1.5, texGrava, 4)
+  banda([-52.2, 5.4, 41.8], [-71.4, 6.0, 42], 1.5, texGravilla, 4)
+  banda([-51.5, 5.4, 42.8], [-64, 6.4, 56.4], 1.5, texArena, 4)
+  // SILOS de finos
+  ;[[-86, 32], [-86, 44]].forEach((sp5, i5) => {
+    const silo5 = new THREE.Group()
+    const cil5 = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 7.5, 18), mat(i5 ? 0xd8dce2 : 0xcfd5de, { metalness: 0.45, roughness: 0.35 }))
+    cil5.position.y = 6.2; cil5.castShadow = true; silo5.add(cil5)
+    const fondo5 = new THREE.Mesh(new THREE.ConeGeometry(2.3, 2.2, 18), mat(0x9aa3b2, { metalness: 0.5, roughness: 0.4 }))
+    fondo5.rotation.x = Math.PI; fondo5.position.y = 1.4; silo5.add(fondo5)
+    const tapa5 = new THREE.Mesh(new THREE.SphereGeometry(2.3, 18, 8, 0, Math.PI * 2, 0, 1.0), mat(COL.navy, { metalness: 0.4, roughness: 0.45 }))
+    tapa5.position.y = 9.95; silo5.add(tapa5)
+    ;[[-1.7, -1.7], [1.7, -1.7], [-1.7, 1.7], [1.7, 1.7]].forEach((pl5) => {
+      const pataS5 = caja(0.3, 2.6, 0.3, mat(0x2b3850)); pataS5.position.set(pl5[0], 1.3, pl5[1]); silo5.add(pataS5)
+    })
+    const tubo5 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 9.5, 8), mat(0x9aa3b2, { metalness: 0.6, roughness: 0.3 }))
+    tubo5.position.set(2.5, 5.2, 0); silo5.add(tubo5)
+    silo5.position.set(sp5[0], 0, sp5[1]); escena.add(silo5)
   })
-  tolva.position.set(-16, 0, 28); escena.add(tolva)
-  ;[[-28, 21], [-20, 24], [-12, 22]].forEach((cc) => {
+  // Torre de luz de la planta + polvo del triturador
+  const torreLuz = new THREE.Group()
+  const posteL = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 11, 10), mat(0x2b3242, { metalness: 0.4, roughness: 0.5 }))
+  posteL.position.y = 5.5; posteL.castShadow = true; torreLuz.add(posteL)
+  ;[-0.5, 0.5].forEach((off5) => {
+    const focoL = caja(0.55, 0.3, 0.4, mat(0xf0e6c8, { emissive: 0xffe3ae, emissiveIntensity: oscuro ? 1.8 : 0.05 }))
+    focoL.position.set(off5, 10.6, 0.2); focoL.rotation.x = 0.5; torreLuz.add(focoL)
+  })
+  torreLuz.position.set(-42, 0, 26); escena.add(torreLuz)
+  if (oscuro) { const plPlanta = new THREE.PointLight(0xffe3ae, 0.7, 70, 2); plPlanta.position.set(-50, 14, 40); escena.add(plPlanta) }
+  const polvos = []
+  for (let dp5 = 0; dp5 < 3; dp5++) {
+    const spP = new THREE.Sprite(spriteSuave('rgba(190,184,170,0)', oscuro ? 'rgba(130,135,150,.25)' : 'rgba(208,200,186,.4)'))
+    spP.position.set(TRIT.x - 1 + dp5 * 1.6, 7.6 + dp5 * 0.7, TRIT.z + (dp5 % 2 ? 1.2 : -1))
+    spP.scale.set(3 + dp5, 2.2 + dp5 * 0.6, 1)
+    spP.material.opacity = 0.35
+    escena.add(spP); polvos.push(spP)
+  }
+  // CARGADOR FRONTAL que alimenta piedra bruta + volteo que entra a la planta
+  function cargadorNuevo() {
+    const g = new THREE.Group()
+    const atras7 = caja(2.3, 1.5, 2.1, mat(COL.gold, { roughness: 0.4, metalness: 0.3 })); atras7.position.set(-1.3, 1.35, 0); g.add(atras7)
+    const capo7 = caja(1.4, 1.0, 1.9, mat(COL.gold, { roughness: 0.4, metalness: 0.3 })); capo7.position.set(0.4, 1.1, 0); g.add(capo7)
+    const cab7 = caja(1.3, 1.3, 1.7, mat(0x2b3242, { roughness: 0.5 })); cab7.position.set(-1.1, 2.7, 0); g.add(cab7)
+    const vid7 = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 0.9), matVidrio); vid7.rotation.y = Math.PI / 2; vid7.position.set(-0.43, 2.75, 0); g.add(vid7)
+    ;[-0.8, 0.8].forEach((bz7) => {
+      const brazo7 = caja(2.3, 0.22, 0.18, mat(0x8d97a8, { metalness: 0.5, roughness: 0.4 }))
+      brazo7.position.set(1.6, 1.5, bz7); brazo7.rotation.z = -0.35; g.add(brazo7)
+    })
+    const cuch7 = caja(0.9, 1.0, 2.5, mat(0x47536b, { metalness: 0.45, roughness: 0.4 })); cuch7.position.set(2.8, 0.8, 0); g.add(cuch7)
+    const dien7 = caja(0.5, 0.12, 2.4, mat(0x9aa3b2, { metalness: 0.6, roughness: 0.3 })); dien7.position.set(3.3, 0.35, 0); g.add(dien7)
+    const carga7 = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.8, 4), mat(0xffffff, { map: texPiedra, roughness: 1 }))
+    carga7.rotation.y = Math.PI / 4; carga7.scale.set(1, 1, 2.2); carga7.position.set(2.8, 1.5, 0); g.add(carga7)
+    const bal7 = caja(0.14, 0.16, 0.14, mat(0xffb020, { emissive: 0xffb020, emissiveIntensity: 1.8 })); bal7.position.set(-1.1, 3.45, 0); g.add(bal7)
+    g.ruedas = [llanta(g, 0.9, 1.1, 0.72), llanta(g, 0.9, -1.1, 0.72), llanta(g, -1.9, 1.1, 0.72), llanta(g, -1.9, -1.1, 0.72)]
+    escena.add(g); return g
+  }
+  const cargador = cargadorNuevo()
+  const RUTA_CARG = [
+    { x: -26, z: 50 }, { x: -29, z: 46, pausa: 1.4 }, { x: -32.5, z: 44, pausa: 2.2 },
+    { x: -36, z: 48 }, { x: -32, z: 53 }, { x: -26, z: 50 },
+  ]
+  const volteoPlanta = volteoNuevo()
+  const RUTA_VOLTEO = [
+    { x: -150, z: 2.3 }, { x: -26, z: 2.3 }, { x: -20.5, z: 6 }, { x: -20, z: 14 },
+    { x: -20, z: 20, pausa: 1.6 }, { x: -20, z: 27 }, { x: -24, z: 34 },
+    { x: -28.5, z: 38.5, pausa: 2.4 }, { x: -34, z: 33 }, { x: -33, z: 22 },
+    { x: -28, z: 12 }, { x: -25.5, z: 5.5 }, { x: -32, z: -2.3 }, { x: -150, z: -2.3 },
+  ]
+
+  // ── Casas + árboles + faroles (contexto) ─────────────────────────────────
+  ;[[-23.4, 10], [-16.8, 11.5], [-22.6, 15.5]].forEach((cc) => {
     const cono = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.95, 14), mat(0xd96c3b, { roughness: 0.6 }))
     cono.position.set(cc[0], 0.48, cc[1]); cono.castShadow = true; escena.add(cono)
     const anillo = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.27, 0.14, 14), mat(0xf4f5f7, { emissive: 0xf4f5f7, emissiveIntensity: oscuro ? 0.4 : 0.05 }))
@@ -661,7 +846,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
 
   // ── Cámara + modos ────────────────────────────────────────────────────────
   const CASA = enfoque === 'freight'
-    ? { th: 0.8, ph: 0.62, r: 56, tgt: new THREE.Vector3(-18, 2, 20) }
+    ? { th: 0.75, ph: 0.72, r: 72, tgt: new THREE.Vector3(-44, 2, 36) }
     : { th: 0.66, ph: 0.58, r: 92, tgt: new THREE.Vector3(-26, 2, -14) }
   const T0 = CASA.tgt
   const TI = new THREE.Vector3(-41, 3.5, -34)
@@ -768,6 +953,8 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const rutaPatio = prepararRuta(RUTA_PATIO)
   const rutaM1 = prepararRuta(RUTA_M1)
   const rutaM2 = prepararRuta(RUTA_M2)
+  const rutaCarg = prepararRuta(RUTA_CARG)
+  const rutaVolteoPl = prepararRuta(RUTA_VOLTEO)
 
   // ── Bucle ─────────────────────────────────────────────────────────────────
   let vivo = true
@@ -822,6 +1009,27 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       // Montacargas patrullando
       seguirRuta(monta1, rutaM1, s * 3.2)
       seguirRuta(monta2, rutaM2, s * 2.6)
+      // PLANTA DE AGREGADOS: volteo que entra a pesar/descargar + cargador
+      seguirRuta(volteoPlanta, rutaVolteoPl, s * 7.5)
+      seguirRuta(cargador, rutaCarg, s * 2.4)
+      ;[volteoPlanta, cargador].forEach((v) => { v.ruedas.forEach((w6) => { w6.rotation.y += 0.16 }) })
+      // material subiendo por las bandas + criba vibrando + volantes + polvo
+      for (const bd of bandasAnim) {
+        bd.trozos.forEach((tr6, i6) => {
+          const f6 = (s * bd.vel + i6 / bd.trozos.length) % 1
+          tr6.position.lerpVectors(bd.A, bd.B, f6)
+          tr6.position.y += 0.45
+          tr6.rotation.y = f6 * 9 + i6
+        })
+      }
+      cribaCaja.position.y = 7.6 + Math.sin(s * 34) * 0.045
+      cribaMalla.position.y = 8.5 + Math.sin(s * 34 + 1) * 0.045
+      volantes.forEach((gv2) => { gv2.rotation.z += 0.1 })
+      polvos.forEach((sp7, i7) => {
+        const f7 = (s * 0.22 + i7 / 3) % 1
+        sp7.position.y = 7 + f7 * 3.2
+        sp7.material.opacity = (1 - f7) * 0.55
+      })
       // Caminante + operadores con leve vaivén (trabajando)
       caminante.position.x = -30 + Math.sin(s * 0.5) * 7
       caminante.rotation.y = Math.cos(s * 0.5) > 0 ? Math.PI / 2 : -Math.PI / 2
@@ -834,6 +1042,14 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       trailerVia.position.set(14, 0, 2.3)
       seguirRuta(vanPatio, rutaPatio, rutaPatio.total * 0.42)
       seguirRuta(monta1, rutaM1, 4); seguirRuta(monta2, rutaM2, 3)
+      seguirRuta(volteoPlanta, rutaVolteoPl, rutaVolteoPl.total * 0.55)
+      seguirRuta(cargador, rutaCarg, 2)
+      bandasAnim.forEach((bd) => {
+        bd.trozos.forEach((tr7, i7) => {
+          tr7.position.lerpVectors(bd.A, bd.B, (i7 + 0.5) / bd.trozos.length)
+          tr7.position.y += 0.45
+        })
+      })
       cajasLinea.forEach((b7, i) => { b7.position.set(SORTER.x1 + 3 + i * 4.4, SORTER.h + 0.95, SORTER.z) })
       cajasFeeder.forEach((b8, i) => { b8.position.set(SORTER.x1 + 1.2, 1.75, SORTER.z - 10 + i * 3.2) })
     }
