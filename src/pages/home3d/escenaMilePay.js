@@ -286,7 +286,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     escena.add(num)
   })
   // Bolardos frente al portón peatonal/vehicular
-  ;[-25, -22.6, -17.4, -15].forEach((bx) => {
+  ;[-26, -23.2, -16.8, -14].forEach((bx) => {
     const bol = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.05, 10), mat(COL.gold, { roughness: 0.4, metalness: 0.4, emissive: COL.gold, emissiveIntensity: oscuro ? 0.25 : 0 }))
     bol.position.set(bx, 0.52, ALM.z2 + 4.4); bol.castShadow = true
     escena.add(bol)
@@ -307,7 +307,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     escena.add(ry)
   }
   // Flota de vans estacionadas en sus cajones
-  ;[-12.8, -9.6, -6.4, 9.6].forEach((sx, i) => {
+  ;[-12.8, -9.6, -6.4, 6.4, 9.6].forEach((sx, i) => {
     const vp2 = vanNueva(i % 2 ? COL.steel : COL.gold)
     vp2.rotation.y = Math.PI / 2
     vp2.position.set(sx, 0, -11)
@@ -377,11 +377,12 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     }
     escena.add(g); return g
   }
-  // Tráfico de las vías
+  // Tráfico de las vías. Regla de oro: UN vehículo (o un convoy a la misma
+  // velocidad con media vuelta de separación) por carril, y las rutas de
+  // entrada/salida nunca pisan el carril de otro vehículo, así es imposible
+  // que se monten, se alcancen o vayan a contravía.
   const volteo1 = volteoNuevo(), volteo2 = volteoNuevo()
   volteo2.rotation.y = Math.PI
-  const van1 = vanNueva(COL.gold), van2 = vanNueva(COL.steel)
-  van2.rotation.y = Math.PI
   const trailerVia = trailerNuevo(true)
   // Tráilers ACOPLADOS a los muelles 1 y 3 (perpendiculares, cola a la cortina)
   ;[DOCKS[0], DOCKS[2], DOCKS[4]].forEach((dx2) => {
@@ -395,18 +396,23 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     st.rotation.y = -Math.PI / 2 + (i ? 0.06 : -0.04)
     st.position.set(tx2, 0, -12)
   })
-  // Tractocamión completo estacionado en paralelo
+  // Tractocamión completo estacionado en paralelo (dentro del patio, lejos
+  // de los carriles de la vía)
   const semiParqueado = trailerNuevo(true)
-  semiParqueado.position.set(4, 0, -16)
+  semiParqueado.position.set(14, 0, -18.5)
   // Van estacionada en el patio
   const vanParqueada = vanNueva(COL.gold)
   vanParqueada.rotation.y = Math.PI / 2
-  vanParqueada.position.set(-3, 0, -10.5)
-  // Van que ENTRA y SALE del patio (ruta con waypoints)
+  vanParqueada.position.set(-3, 0, -13)
+  // Van que ENTRA y SALE del patio: baja por su carril (x=-2.3, hacia el
+  // sur), gira a la derecha al portón sin cruzar ningún carril, da la vuelta
+  // en el patio y sale hacia el norte por el carril contrario (x=+2.3).
+  // Nunca cruza la vía X ni comparte carril con nadie.
   const vanPatio = vanNueva(COL.steel)
   const RUTA_PATIO = [
-    { x: 2.3, z: 40 }, { x: 2.3, z: 2.2 }, { x: -8, z: -6 }, { x: -14, z: -12 },
-    { x: -20, z: -15.5, pausa: 2.2 }, { x: -27, z: -11 }, { x: -14, z: -2.5 }, { x: 2.3, z: 2.3 }, { x: 2.3, z: 40 },
+    { x: -2.3, z: -140 }, { x: -2.3, z: -24 }, { x: -7, z: -17.5 }, { x: -16, z: -14 },
+    { x: -20, z: -15.5, pausa: 2.2 }, { x: -26.5, z: -11.5 }, { x: -16, z: -5.8 },
+    { x: -6, z: -6.2 }, { x: 2.3, z: -9 }, { x: 2.3, z: -140 },
   ]
 
   // ── INTERIOR: máquina clasificadora + racks + montacargas + personal ─────
@@ -611,6 +617,12 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const acceso = new THREE.Mesh(new THREE.PlaneGeometry(8, 9.5), mat(0x454e63, { roughness: 0.95 }))
   acceso.rotation.x = -Math.PI / 2; acceso.position.set(-20, 0.04, 9.4); acceso.receiveShadow = true
   escena.add(acceso)
+  // Vía interna de acarreo: los volteos de la planta entran y salen por el
+  // borde sur del mapa (como en una cantera real), sin tocar la autopista.
+  const texHaul = texPad.clone(); texHaul.repeat.set(2, 7); texHaul.needsUpdate = true
+  const haul = new THREE.Mesh(new THREE.PlaneGeometry(7, 30), mat(0xffffff, { map: texHaul, roughness: 1 }))
+  haul.rotation.x = -Math.PI / 2; haul.position.set(-16, 0.03, 83.5); haul.receiveShadow = true
+  escena.add(haul)
   en(caja(4.6, 0.14, 11, mat(0x39415a, { roughness: 0.5, metalness: 0.4 })), -20, 0.1, 20)
   ;[-2.5, 2.5].forEach((bx5) => { en(caja(0.18, 0.3, 11, mat(COL.gold, { roughness: 0.4, metalness: 0.4 })), -20 + bx5, 0.2, 20) })
   const caseta = new THREE.Group()
@@ -623,7 +635,6 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const TRIT = { x: -33, z: 41 }
   const matConcretoP = mat(0x9aa0ab, { map: texConcreto, roughness: 1 })
   en(caja(8, 2.7, 0.8, matConcretoP), TRIT.x + 1.5, 1.35, TRIT.z + 3.6)
-  en(caja(0.8, 2.7, 5.2, matConcretoP), TRIT.x + 5.6, 1.35, TRIT.z + 1.4)
   const matAcero = mat(COL.steel, { map: texCorrugado('#3d5a80', 'rgba(0,0,0,.3)', 'rgba(255,255,255,.12)'), roughness: 0.55, metalness: 0.35 })
   const tolvaT = new THREE.Group()
   const tvA = caja(5.2, 3.6, 5.2, matAcero); tvA.position.y = 5.1; tolvaT.add(tvA)
@@ -778,16 +789,19 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     { x: -26, z: 50 }, { x: -29, z: 46, pausa: 1.4 }, { x: -32.5, z: 44, pausa: 2.2 },
     { x: -36, z: 48 }, { x: -32, z: 53 }, { x: -26, z: 50 },
   ]
+  // Ciclo cerrado SOLO por la vía de acarreo y la planta (empieza y termina
+  // en el mismo punto: sin saltos): entra del sur → báscula → tolva del
+  // triturador → sale de vuelta al sur. Jamás pisa la autopista.
   const volteoPlanta = volteoNuevo()
   const RUTA_VOLTEO = [
-    { x: -150, z: 2.3 }, { x: -26, z: 2.3 }, { x: -20.5, z: 6 }, { x: -20, z: 14 },
-    { x: -20, z: 20, pausa: 1.6 }, { x: -20, z: 27 }, { x: -24, z: 34 },
-    { x: -28.5, z: 38.5, pausa: 2.4 }, { x: -34, z: 33 }, { x: -33, z: 22 },
-    { x: -28, z: 12 }, { x: -25.5, z: 5.5 }, { x: -32, z: -2.3 }, { x: -150, z: -2.3 },
+    { x: -16, z: 92 }, { x: -16, z: 34 }, { x: -18.5, z: 28 }, { x: -20, z: 25.5 },
+    { x: -20, z: 14.5, pausa: 1.6 }, { x: -23, z: 10.5 }, { x: -28, z: 13 },
+    { x: -32.5, z: 20 }, { x: -33.5, z: 30 }, { x: -29, z: 38.5, pausa: 2.4 },
+    { x: -23.5, z: 46 }, { x: -18, z: 57 }, { x: -16, z: 66 }, { x: -16, z: 92 },
   ]
 
   // ── Casas + árboles + faroles (contexto) ─────────────────────────────────
-  ;[[-23.4, 10], [-16.8, 11.5], [-22.6, 15.5]].forEach((cc) => {
+  ;[[-23.6, 6.2], [-16.4, 7.2], [-24.6, 13.5]].forEach((cc) => {
     const cono = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.95, 14), mat(0xd96c3b, { roughness: 0.6 }))
     cono.position.set(cc[0], 0.48, cc[1]); cono.castShadow = true; escena.add(cono)
     const anillo = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.27, 0.14, 14), mat(0xf4f5f7, { emissive: 0xf4f5f7, emissiveIntensity: oscuro ? 0.4 : 0.05 }))
@@ -966,16 +980,14 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     const t = performance.now()
     const s = reloj.getElapsedTime()
     if (!reduce) {
-      // Tráfico de las vías
-      const vx1 = -140 + ((s * 10) % 280); volteo1.position.set(vx1, 0, 2.3)
+      // Vía X: convoy hacia el este a la MISMA velocidad con media vuelta de
+      // separación (nunca se alcanzan) + un volteo hacia el oeste en su carril
+      const vx1 = -140 + ((s * 9.5) % 280); volteo1.position.set(vx1, 0, 2.3)
+      const vt = -140 + ((s * 9.5 + 140) % 280); trailerVia.position.set(vt, 0, 2.3)
       const vx2 = 140 - ((s * 9 + 90) % 280); volteo2.position.set(vx2, 0, -2.3)
-      const vz2 = 140 - ((s * 11 + 150) % 280); van2.position.set(-2.3, 0, vz2); van2.rotation.y = Math.PI / 2
-      const vt = -140 + ((s * 8.2 + 50) % 280); trailerVia.position.set(vt, 0, 2.3)
       // Van del patio: entra, pasa por el portón, da la vuelta y sale
       seguirRuta(vanPatio, rutaPatio, s * 6.5)
-      // Van exterior 1 circula por la vía Z
-      const vz1 = -140 + ((s * 12 + 60) % 280); van1.position.set(2.3, 0, vz1); van1.rotation.y = -Math.PI / 2
-      ;[volteo1, volteo2, van1, van2, trailerVia, vanPatio].forEach((v) => { v.ruedas.forEach((w5) => { w5.rotation.y += 0.18 }) })
+      ;[volteo1, volteo2, trailerVia, vanPatio].forEach((v) => { v.ruedas.forEach((w5) => { w5.rotation.y += 0.18 }) })
       // CLASIFICADORA: cajas avanzan y se desvían por su rampa
       for (const b6 of cajasLinea) {
         const ciclo = (s * 2.6 + b6.userData.offset) % (lineaL + 14)
@@ -1037,9 +1049,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       if (modo === 'fuera' && !anim && t - ultimaInteraccion > 4000) meta.th += 0.00045
     } else {
       volteo1.position.set(-24, 0, 2.3); volteo2.position.set(30, 0, -2.3)
-      van1.position.set(2.3, 0, 28); van1.rotation.y = -Math.PI / 2
-      van2.position.set(-2.3, 0, -20); van2.rotation.y = Math.PI / 2
-      trailerVia.position.set(14, 0, 2.3)
+      trailerVia.position.set(56, 0, 2.3)
       seguirRuta(vanPatio, rutaPatio, rutaPatio.total * 0.42)
       seguirRuta(monta1, rutaM1, 4); seguirRuta(monta2, rutaM2, 3)
       seguirRuta(volteoPlanta, rutaVolteoPl, rutaVolteoPl.total * 0.55)
