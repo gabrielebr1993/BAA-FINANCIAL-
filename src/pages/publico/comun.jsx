@@ -70,35 +70,35 @@ const logoSvg = (
 export function NavPub({ lang, fijar, tx, activo }) {
   const [abierto, setAbierto] = useState(false)
   return (
-    <nav className="fixed inset-x-0 top-0 z-[100] border-b" style={{ background: 'rgba(13,26,48,.85)', backdropFilter: 'blur(14px)', borderColor: 'rgba(201,162,75,.18)' }}>
+    <nav className="fixed inset-x-0 top-0 z-[100] border-b" style={{ background: 'rgba(248,243,235,.88)', backdropFilter: 'blur(14px)', borderColor: 'rgba(19,35,63,.08)', boxShadow: '0 8px 30px rgba(19,35,63,.06)' }}>
       <div className="wrap-pub flex h-[68px] items-center justify-between">
-        <Link to="/" className="flex items-center gap-[11px]" style={{ color: CREAM }}>
+        <Link to="/" className="flex items-center gap-[11px]" style={{ color: NAVY }}>
           {logoSvg}
           <span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span>
-          <span className="hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider xl:inline" style={{ background: 'rgba(201,162,75,.15)', color: GOLD }}>Páginas del módulo Freight</span>
+          <span className="hidden rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider xl:inline" style={{ background: 'rgba(201,162,75,.18)', color: '#8a6d33' }}>Páginas del módulo Freight</span>
         </Link>
         <div className="flex items-center gap-4">
-          <div className={`${abierto ? 'absolute left-0 right-0 top-[68px] flex flex-col gap-4 border-b px-7 py-5' : 'hidden'} lg:static lg:flex lg:flex-row lg:items-center lg:gap-6 lg:border-0 lg:p-0`} style={abierto ? { background: NAVY_DEEP, borderColor: 'rgba(201,162,75,.2)' } : undefined}>
+          <div className={`${abierto ? 'absolute left-0 right-0 top-[68px] flex flex-col gap-4 border-b px-7 py-5' : 'hidden'} lg:static lg:flex lg:flex-row lg:items-center lg:gap-6 lg:border-0 lg:p-0`} style={abierto ? { background: '#f8f3eb', borderColor: 'rgba(201,162,75,.3)' } : undefined}>
             {PAGINAS.map((p) => (
               <Link key={p.path} to={p.path} onClick={() => setAbierto(false)}
                 className="text-[14px] font-medium transition-colors"
-                style={{ color: activo === p.path ? GOLD : 'rgba(248,243,235,.72)', fontWeight: activo === p.path ? 700 : 500 }}>
+                style={{ color: activo === p.path ? '#8a6d33' : 'rgba(19,35,63,.68)', fontWeight: activo === p.path ? 700 : 500 }}>
                 {tx(p.es, p.en)}
               </Link>
             ))}
-            <Link to="/" onClick={() => setAbierto(false)} className="text-[14px] font-bold transition-colors" style={{ color: 'rgba(248,243,235,.9)' }}>
+            <Link to="/" onClick={() => setAbierto(false)} className="text-[14px] font-bold transition-colors" style={{ color: NAVY }}>
               {tx('← Todos los módulos', '← All modules')}
             </Link>
           </div>
           <a href="/freight#demo" className="hidden rounded-[9px] px-[18px] py-[9px] text-[14px] font-semibold sm:block" style={{ background: GOLD, color: NAVY_DEEP }}>{tx('Solicitar demo', 'Request demo')}</a>
-          <Link to="/elegir" className="hidden items-center gap-2 whitespace-nowrap rounded-[9px] border px-4 py-2 text-[14px] font-semibold sm:inline-flex" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.28)' }}><LogIn size={15} /> {tx('Iniciar sesión', 'Log in')}</Link>
+          <Link to="/elegir" className="hidden items-center gap-2 whitespace-nowrap rounded-[9px] border px-4 py-2 text-[14px] font-semibold sm:inline-flex" style={{ color: NAVY, borderColor: 'rgba(19,35,63,.25)' }}><LogIn size={15} /> {tx('Iniciar sesión', 'Log in')}</Link>
           <span className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: 'rgba(201,162,75,.32)' }}>
             {['es', 'en'].map((lg) => (
               <button key={lg} onClick={() => fijar(lg)} className="f-mono px-[11px] py-[7px] text-[12px] font-semibold uppercase tracking-wide"
-                style={lang === lg ? { background: GOLD, color: NAVY_DEEP } : { color: 'rgba(248,243,235,.6)' }}>{lg}</button>
+                style={lang === lg ? { background: GOLD, color: NAVY_DEEP } : { color: 'rgba(19,35,63,.5)' }}>{lg}</button>
             ))}
           </span>
-          <button onClick={() => setAbierto(!abierto)} className="lg:hidden" style={{ color: CREAM }} aria-label="menu">{abierto ? <X size={22} /> : <Menu size={22} />}</button>
+          <button onClick={() => setAbierto(!abierto)} className="lg:hidden" style={{ color: NAVY }} aria-label="menu">{abierto ? <X size={22} /> : <Menu size={22} />}</button>
         </div>
       </div>
     </nav>
@@ -107,30 +107,30 @@ export function NavPub({ lang, fijar, tx, activo }) {
 
 export function FooterPub({ tx }) {
   return (
-    <footer className="border-t pb-9 pt-[54px]" style={{ background: NAVY_DEEP, color: 'rgba(248,243,235,.6)', borderColor: 'rgba(201,162,75,.14)' }}>
+    <footer className="border-t pb-9 pt-[54px]" style={{ color: STEEL, borderColor: 'rgba(19,35,63,.1)' }}>
       <div className="wrap-pub">
         <div className="mb-10 grid grid-cols-2 gap-9 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <span className="flex items-center gap-[11px]" style={{ color: CREAM }}>{logoSvg}<span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span></span>
+            <span className="flex items-center gap-[11px]" style={{ color: NAVY }}>{logoSvg}<span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span></span>
             <p className="mt-3.5 max-w-[280px] text-[14px] leading-relaxed">{tx('Despacho, GPS, app del chofer y facturación para materiales a granel — en un solo sistema.', 'Dispatch, GPS, driver app and billing for bulk materials — one system.')}</p>
           </div>
           <div>
-            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: CREAM }}>{tx('Funciones', 'Features')}</h5>
+            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: NAVY }}>{tx('Funciones', 'Features')}</h5>
             {PAGINAS.slice(0, 6).map((p) => <Link key={p.path} to={p.path} className="mb-2.5 block text-[14px] transition-colors hover:text-[#c9a24b]">{tx(p.es, p.en)}</Link>)}
           </div>
           <div>
-            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: CREAM }}>{tx('Empresa', 'Company')}</h5>
+            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: NAVY }}>{tx('Empresa', 'Company')}</h5>
             <Link to="/por-que-milepay" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Por qué MilePay', 'Why MilePay')}</Link>
             <a href="/freight#demo" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Solicitar demo', 'Request demo')}</a>
             <Link to="/elegir" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Iniciar sesión', 'Log in')}</Link>
           </div>
           <div>
-            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: CREAM }}>{tx('Sitio', 'Site')}</h5>
+            <h5 className="f-display mb-4 text-[13px] font-semibold uppercase tracking-widest" style={{ color: NAVY }}>{tx('Sitio', 'Site')}</h5>
             <Link to="/" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('Inicio', 'Home')}</Link>
             <Link to="/sistema" className="mb-2.5 block text-[14px] hover:text-[#c9a24b]">{tx('El sistema completo', 'The full system')}</Link>
           </div>
         </div>
-        <div className="flex flex-wrap justify-between gap-3 border-t pt-6 text-[13px]" style={{ borderColor: 'rgba(255,255,255,.08)', color: 'rgba(248,243,235,.4)' }}>
+        <div className="flex flex-wrap justify-between gap-3 border-t pt-6 text-[13px]" style={{ borderColor: 'rgba(19,35,63,.1)', color: 'rgba(19,35,63,.45)' }}>
           <span>© {new Date().getFullYear()} MilePay Freight · milepay.io</span>
           <span>{tx('Hecho para materiales a granel', 'Built for bulk materials')}</span>
         </div>
@@ -156,19 +156,19 @@ export function BandaCTA({ tx }) {
 // CTAs + visual interactivo a la derecha.
 export function HeroFuncion({ tx, migas, icono: Icono, titulo, sub, visual }) {
   return (
-    <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ background: NAVY_DEEP, color: CREAM }}>
-      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.22),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(196,127,90,.22),transparent 55%),radial-gradient(500px 400px at 50% 110%,rgba(217,137,67,.14),transparent 60%)' }} />
+    <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ color: NAVY }}>
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.2),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(196,127,90,.14),transparent 55%)' }} />
       <div className="wrap-pub relative grid items-center gap-[clamp(40px,5vw,90px)] lg:grid-cols-[1.02fr_1.1fr]">
         <div className="rev min-w-0">
-          <div className="f-mono mb-5 text-[12.5px] uppercase tracking-[.14em]" style={{ color: 'rgba(248,243,235,.5)' }}>
+          <div className="f-mono mb-5 text-[12.5px] uppercase tracking-[.14em]" style={{ color: 'rgba(19,35,63,.5)' }}>
             <Link to="/sistema" className="hover:text-[#c9a24b]">{tx('Funciones', 'Features')}</Link> <span style={{ color: GOLD }}>/</span> {migas}
           </div>
           <span className="mb-6 grid h-14 w-14 place-items-center rounded-2xl" style={{ background: `linear-gradient(135deg,${GOLD},#a9863a)` }}><Icono size={28} style={{ color: NAVY_DEEP }} /></span>
           <h1 className="mb-5 text-[clamp(34px,4.4vw,54px)] font-bold">{titulo}</h1>
-          <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: 'rgba(248,243,235,.78)' }}>{sub}</p>
+          <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: STEEL }}>{sub}</p>
           <div className="flex flex-wrap items-center gap-3.5">
             <a href="/freight#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
-            <Link to="/sistema" className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.24)' }}>{tx('Ver el sistema completo', 'See the full system')} <ArrowRight size={15} /></Link>
+            <Link to="/sistema" className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: NAVY, borderColor: 'rgba(19,35,63,.25)' }}>{tx('Ver el sistema completo', 'See the full system')} <ArrowRight size={15} /></Link>
           </div>
         </div>
         <div className="rev min-w-0" style={{ animationDelay: '.15s' }}>{visual}</div>

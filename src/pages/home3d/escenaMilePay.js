@@ -39,7 +39,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     camara.updateProjectionMatrix()
   }
   window.addEventListener('resize', ajustar)
-  escena.fog = new THREE.Fog(oscuro ? 0x0d1730 : 0xf3dcb4, 120, 280)
+  escena.fog = new THREE.Fog(oscuro ? 0x0d1730 : 0xf3dcb4, 130, 320)
 
   // ── Texturas procedurales ─────────────────────────────────────────────────
   function lienzo(w, h, pintar) {
@@ -132,9 +132,9 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   sol.position.set(-58, 32, 44)
   sol.castShadow = true
   sol.shadow.mapSize.set(2048, 2048)
-  sol.shadow.camera.left = -95; sol.shadow.camera.right = 95
-  sol.shadow.camera.top = 95; sol.shadow.camera.bottom = -95
-  sol.shadow.camera.far = 260
+  sol.shadow.camera.left = -115; sol.shadow.camera.right = 115
+  sol.shadow.camera.top = 115; sol.shadow.camera.bottom = -115
+  sol.shadow.camera.far = 320
   sol.shadow.bias = -0.00035
   sol.shadow.radius = 5
   escena.add(sol)
@@ -184,8 +184,8 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const pasto = new THREE.Mesh(new THREE.PlaneGeometry(620, 620), mat(0xffffff, { map: texGrama, roughness: 1 }))
   pasto.rotation.x = -Math.PI / 2; pasto.receiveShadow = true
   escena.add(pasto)
-  const patio = new THREE.Mesh(new THREE.PlaneGeometry(190, 150), mat(0xffffff, { map: texConcreto, roughness: 0.95 }))
-  patio.rotation.x = -Math.PI / 2; patio.position.set(-16, 0.02, -8); patio.receiveShadow = true
+  const patio = new THREE.Mesh(new THREE.PlaneGeometry(260, 185), mat(0xffffff, { map: texConcreto, roughness: 0.95 }))
+  patio.rotation.x = -Math.PI / 2; patio.position.set(-28, 0.02, -12); patio.receiveShadow = true
   escena.add(patio)
   const viaX = new THREE.Mesh(new THREE.PlaneGeometry(470, 10.5), mat(0xffffff, { map: texAsfalto, roughness: 0.98 }))
   viaX.rotation.x = -Math.PI / 2; viaX.position.y = 0.045; viaX.receiveShadow = true
@@ -217,7 +217,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   }
 
   // ── ALMACÉN estilo fulfillment (patio profundo + muelles) ────────────────
-  const ALM = { x1: -56, x2: -10, z1: -44, z2: -16, alto: 14, puertaX: -20, puertaW: 8, puertaH: 8 }
+  const ALM = { x1: -70, x2: -10, z1: -52, z2: -20, alto: 16, puertaX: -20, puertaW: 8, puertaH: 8 }
   const cw = ALM.x2 - ALM.x1, cd = ALM.z2 - ALM.z1, cxm = (ALM.x1 + ALM.x2) / 2, czm = (ALM.z1 + ALM.z2) / 2
   const G = 0.55
   function muro(w, h, d, x, y, z, repX) {
@@ -236,7 +236,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   muro(ALM.puertaW, ALM.alto - ALM.puertaH, G, ALM.puertaX, ALM.puertaH + (ALM.alto - ALM.puertaH) / 2, ALM.z2, ALM.puertaW)
   en(caja(cw + 0.3, 1.1, 0.35, mat(0x9aa0ab, { roughness: 1 })), cxm, 0.55, ALM.z2 + 0.18)
   en(caja(cw + 1.4, 0.7, cd + 1.4, mat(0x44536b, { roughness: 0.6, metalness: 0.3 })), cxm, ALM.alto + 0.35, czm)
-  ;[[-48, -34], [-38, -22], [-26, -38], [-16, -24]].forEach((u, i) => {
+  ;[[-62, -40], [-50, -26], [-38, -46], [-26, -30], [-16, -44]].forEach((u, i) => {
     en(caja(3.2, 1.6, 2.4, mat(0x7d8798, { roughness: 0.5, metalness: 0.4 })), u[0], ALM.alto + 1.5, u[1])
     const tubo = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 2.2, 10), mat(0x9aa3b2, { metalness: 0.5, roughness: 0.4 }))
     tubo.position.set(u[0] + 2, ALM.alto + 1.8, u[1] + (i % 2 ? 1.4 : -1.4)); tubo.castShadow = true
@@ -253,7 +253,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     })
   }
   const letrero = new THREE.Mesh(new THREE.PlaneGeometry(13, 2.1), new THREE.MeshBasicMaterial({ map: texLetrero() }))
-  letrero.position.set(ALM.puertaX + 12, ALM.alto - 1.1, ALM.z2 + 0.36)
+  letrero.position.set(cxm + 10, ALM.alto - 1.1, ALM.z2 + 0.36)
   escena.add(letrero)
   en(caja(ALM.puertaW + 1.6, 0.28, 2.2, mat(COL.gold, { roughness: 0.4, metalness: 0.5 })), ALM.puertaX, ALM.puertaH + 0.6, ALM.z2 + 1.1)
   const puerta = caja(ALM.puertaW - 0.3, ALM.puertaH, 0.3, mat(0xc9a24b, { map: texRoller.clone(), roughness: 0.45, metalness: 0.5 }))
@@ -262,7 +262,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   const puertaCerradaY = ALM.puertaH / 2, puertaAbiertaY = ALM.puertaH * 1.42
 
   // MUELLES de carga (4): plataforma + cortina + topes + luz de muelle + número
-  const DOCKS = [-50, -43, -36, -29]
+  const DOCKS = [-66, -59, -52, -45, -38, -31]
   DOCKS.forEach((dx, i) => {
     en(caja(5.6, 1.25, 3.2, mat(0x9aa0ab, { map: texConcreto, roughness: 1 })), dx, 0.62, ALM.z2 + 1.6)
     const cortina = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 3.8), mat(0xffffff, { map: texRoller, roughness: 0.5, metalness: 0.45 }))
@@ -294,11 +294,17 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     escena.add(vn)
   }
   // Rayas de estacionamiento del patio
-  for (let px = -8; px <= 4; px += 3) {
-    const ry = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 5.5), matBorde)
-    ry.rotation.x = -Math.PI / 2; ry.position.set(px - 1.5, 0.05, -10.4)
+  for (let px = -14; px <= 12; px += 3.2) {
+    const ry = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 5.8), matBorde)
+    ry.rotation.x = -Math.PI / 2; ry.position.set(px - 1.6, 0.05, -11)
     escena.add(ry)
   }
+  // Flota de vans estacionadas en sus cajones
+  ;[-12.8, -9.6, -6.4, 9.6].forEach((sx, i) => {
+    const vp2 = vanNueva(i % 2 ? COL.steel : COL.gold)
+    vp2.rotation.y = Math.PI / 2
+    vp2.position.set(sx, 0, -11)
+  })
 
   // ── Vehículos ─────────────────────────────────────────────────────────────
   function llanta(g, x, z, r) {
@@ -371,12 +377,20 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   van2.rotation.y = Math.PI
   const trailerVia = trailerNuevo(true)
   // Tráilers ACOPLADOS a los muelles 1 y 3 (perpendiculares, cola a la cortina)
-  const dock1 = trailerNuevo(true)
-  dock1.rotation.y = -Math.PI / 2
-  dock1.position.set(DOCKS[0], 0, ALM.z2 + 3.4 + 4.6)
-  const dock3 = trailerNuevo(false)
-  dock3.rotation.y = -Math.PI / 2
-  dock3.position.set(DOCKS[2], 0, ALM.z2 + 3.4 + 4.6)
+  ;[DOCKS[0], DOCKS[2], DOCKS[4]].forEach((dx2) => {
+    const dk = trailerNuevo(false)
+    dk.rotation.y = -Math.PI / 2
+    dk.position.set(dx2, 0, ALM.z2 + 9.5)
+  })
+  // Tráilers sueltos en almacenamiento (zona oeste del patio)
+  ;[-80, -88].forEach((tx2, i) => {
+    const st = trailerNuevo(false)
+    st.rotation.y = -Math.PI / 2 + (i ? 0.06 : -0.04)
+    st.position.set(tx2, 0, -12)
+  })
+  // Tractocamión completo estacionado en paralelo
+  const semiParqueado = trailerNuevo(true)
+  semiParqueado.position.set(4, 0, -16)
   // Van estacionada en el patio
   const vanParqueada = vanNueva(COL.gold)
   vanParqueada.rotation.y = Math.PI / 2
@@ -384,8 +398,8 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   // Van que ENTRA y SALE del patio (ruta con waypoints)
   const vanPatio = vanNueva(COL.steel)
   const RUTA_PATIO = [
-    { x: 2.3, z: 40 }, { x: 2.3, z: 2.2 }, { x: -8, z: -6 }, { x: -14, z: -10.5 },
-    { x: -20, z: -11.5, pausa: 2.2 }, { x: -26, z: -8.5 }, { x: -14, z: -2.5 }, { x: 2.3, z: 2.3 }, { x: 2.3, z: 40 },
+    { x: 2.3, z: 40 }, { x: 2.3, z: 2.2 }, { x: -8, z: -6 }, { x: -14, z: -12 },
+    { x: -20, z: -15.5, pausa: 2.2 }, { x: -27, z: -11 }, { x: -14, z: -2.5 }, { x: 2.3, z: 2.3 }, { x: 2.3, z: 40 },
   ]
 
   // ── INTERIOR: máquina clasificadora + racks + montacargas + personal ─────
@@ -393,7 +407,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   pisoInt.rotation.x = -Math.PI / 2; pisoInt.position.set(cxm, 0.05, czm); pisoInt.receiveShadow = true
   escena.add(pisoInt)
   const matLinea = mat(0xd9b35e, { roughness: 0.5, emissive: 0xd9b35e, emissiveIntensity: 0.12 })
-  ;[-24, -36].forEach((lz) => {
+  ;[-28, -46].forEach((lz) => {
     const ln = new THREE.Mesh(new THREE.PlaneGeometry(cw - 6, 0.3), matLinea)
     ln.rotation.x = -Math.PI / 2; ln.position.set(cxm, 0.06, lz)
     escena.add(ln)
@@ -402,7 +416,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     en(caja(cw - 2, 0.45, 0.45, mat(0x27354f, { roughness: 0.6 })), cxm, ALM.alto - 0.8, vz)
   }
   const focos = []
-  ;[[-48, -26], [-40, -34], [-33, -22], [-26, -32], [-18, -26], [-40, -20]].forEach((f) => {
+  ;[[-62, -30], [-52, -42], [-44, -26], [-36, -38], [-28, -30], [-20, -42], [-56, -24], [-24, -24]].forEach((f) => {
     const pl = new THREE.PointLight(0xffe3ae, oscuro ? 0.85 : 0.55, 40, 2)
     pl.position.set(f[0], ALM.alto - 3, f[1])
     escena.add(pl); focos.push(pl)
@@ -422,7 +436,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   escena.add(letreroInt)
 
   // MÁQUINA CLASIFICADORA: línea elevada con guardas + 4 rampas a contenedores
-  const SORTER = { x1: -50, x2: -16, z: -28, h: 1.35 }
+  const SORTER = { x1: -64, x2: -18, z: -34, h: 1.35 }
   const lineaL = SORTER.x2 - SORTER.x1
   const cuerpoS = caja(lineaL, 0.9, 2.2, mat(0x2b3850, { roughness: 0.55, metalness: 0.3 }))
   en(cuerpoS, (SORTER.x1 + SORTER.x2) / 2, SORTER.h - 0.45 + 0.45, SORTER.z)
@@ -444,7 +458,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   portico.position.set(SORTER.x1 + 3.5, SORTER.h + 0.55, SORTER.z)
   escena.add(portico)
   // Rampas de salida (chutes) + contenedores + operadores
-  const CHUTES = [-44, -38, -32, -26]
+  const CHUTES = [-58, -50, -42, -34, -26]
   const binsPos = []
   CHUTES.forEach((chx, i) => {
     const rampa = caja(1.6, 0.12, 3.4, mat(0x8fd0bd + i * 0, { color: 0x9aa3b2, metalness: 0.5, roughness: 0.35 }))
@@ -459,7 +473,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     })
     const binZ = SORTER.z + 5.2
     binsPos.push({ x: chx, z: binZ })
-    const colores = [COL.gold, COL.teal, COL.steel, COL.rojo]
+    const colores = [COL.gold, COL.teal, COL.steel, COL.rojo, COL.navy]
     const matBin = mat(colores[i], { roughness: 0.6, metalness: 0.2 })
     ;[[-0.95, 0, 0.1, 1.1, 2.1], [0.95, 0, 0.1, 1.1, 2.1]].forEach((wdef) => {
       const w2 = caja(wdef[2], wdef[3], wdef[4], matBin); w2.position.set(chx + wdef[0], 0.6, binZ); escena.add(w2)
@@ -503,10 +517,10 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     g.position.set(x, 0, z); g.rotation.y = rotY || 0
     escena.add(g)
   }
-  rack(-46, -40, 0); rack(-33, -40, 0); rack(-20, -40, 0)
-  rack(-12.5, -30, Math.PI / 2)
+  rack(-62, -48, 0); rack(-48, -48, 0); rack(-34, -48, 0); rack(-20, -48, 0)
+  rack(-13, -34, Math.PI / 2)
   // Pallets sueltos + montacargas (2) + personal
-  ;[[-14, -20], [-16.5, -19], [-47, -20]].forEach((pp, i) => {
+  ;[[-15, -24], [-17.5, -23], [-61, -24]].forEach((pp, i) => {
     const pal = caja(1.3, 0.14, 1.3, mat(0x9a7648, { roughness: 1 })); en(pal, pp[0], 0.12, pp[1])
     const bx3 = caja(1.1, 0.95, 1.1, matCarton); en(bx3, pp[0], 0.7, pp[1])
     if (i % 2 === 0) { const bx4 = caja(0.9, 0.8, 0.9, matCarton); en(bx4, pp[0] + 0.05, 1.6, pp[1] - 0.04) }
@@ -533,8 +547,8 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   }
   const monta1 = montacargas()
   const monta2 = montacargas()
-  const RUTA_M1 = [{ x: -46, z: -35 }, { x: -20, z: -35 }, { x: -20, z: -32 }, { x: -46, z: -32 }, { x: -46, z: -35 }]
-  const RUTA_M2 = [{ x: -14, z: -24 }, { x: -14, z: -36, pausa: 1.2 }, { x: -17, z: -36 }, { x: -17, z: -24, pausa: 1 }, { x: -14, z: -24 }]
+  const RUTA_M1 = [{ x: -60, z: -44 }, { x: -24, z: -44 }, { x: -24, z: -41 }, { x: -60, z: -41 }, { x: -60, z: -44 }]
+  const RUTA_M2 = [{ x: -15, z: -28 }, { x: -15, z: -46, pausa: 1.2 }, { x: -18, z: -46 }, { x: -18, z: -28, pausa: 1 }, { x: -15, z: -28 }]
   function persona(x, z, rot) {
     const g = new THREE.Group()
     const piernas = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.8, 10), mat(0x25324b)); piernas.position.y = 0.4; g.add(piernas)
@@ -552,10 +566,10 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   // Un operador por rampa (mirando a la línea) + uno en el muelle + un caminante
   const operadores = binsPos.map((b2) => persona(b2.x + 1.3, b2.z - 0.4, Math.PI))
   persona(SORTER.x1 + 2.6, SORTER.z - 8.5, 0.4)
-  const caminante = persona(-24, -34, -0.6)
+  const caminante = persona(-30, -40, -0.6)
   // Cajas sobre la clasificadora: cada una con rampa destino
   const cajasLinea = []
-  for (let cb = 0; cb < 7; cb++) {
+  for (let cb = 0; cb < 9; cb++) {
     const b3 = caja(0.95, 0.85, 0.95, matCarton)
     b3.userData.offset = cb * 5.3
     b3.userData.chute = CHUTES[cb % CHUTES.length]
@@ -643,10 +657,10 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   }
 
   // ── Cámara + modos ────────────────────────────────────────────────────────
-  const T0 = new THREE.Vector3(-16, 2, -10)
-  const TI = new THREE.Vector3(-32, 3.5, -28)
-  const orb = { th: 0.66, ph: 0.58, r: 72, tgt: T0.clone() }
-  const meta = { th: 0.66, ph: 0.58, r: 72 }
+  const T0 = new THREE.Vector3(-26, 2, -14)
+  const TI = new THREE.Vector3(-41, 3.5, -34)
+  const orb = { th: 0.66, ph: 0.58, r: 92, tgt: T0.clone() }
+  const meta = { th: 0.66, ph: 0.58, r: 92 }
   let modo = 'fuera'
   let anim = null
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -666,7 +680,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       alTerminar
     }
   }
-  const puntoPuertaFuera = new THREE.Vector3(ALM.puertaX, 3.6, ALM.z2 + 17)
+  const puntoPuertaFuera = new THREE.Vector3(ALM.puertaX, 3.6, ALM.z2 + 13)
   const puntoDentro = new THREE.Vector3(ALM.puertaX - 2, 4.2, czm + 6)
   function alternarAlmacen() {
     if (modo === 'fuera') {
@@ -676,7 +690,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
           modo = 'dentro'; alCambiarModo('dentro')
           const rel = camara.position.clone().sub(TI)
           orb.tgt.copy(TI)
-          orb.r = 14; meta.r = 14
+          orb.r = 15; meta.r = 15
           orb.th = Math.atan2(rel.z, rel.x); meta.th = orb.th
           orb.ph = 1.08; meta.ph = 1.08
         })
@@ -684,16 +698,16 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     } else if (modo === 'dentro') {
       modo = 'saliendo'; alCambiarModo('saliendo')
       volar(new THREE.Vector3(ALM.puertaX, 3.6, ALM.z2 + 8), new THREE.Vector3(ALM.puertaX, 3.5, ALM.z2 + 22), 1500, () => {
-        orb.tgt.copy(T0); orb.th = 0.66; orb.ph = 0.58; orb.r = 72
+        orb.tgt.copy(T0); orb.th = 0.66; orb.ph = 0.58; orb.r = 92
         meta.th = orb.th; meta.ph = orb.ph; meta.r = orb.r
         volar(posOrbita(orb, T0), T0, 1600, () => { modo = 'fuera'; alCambiarModo('fuera') })
       })
     }
   }
-  const zoomMas = () => { meta.r = clamp(meta.r * 0.78, modo === 'dentro' ? 7 : 16, modo === 'dentro' ? 22 : 120) }
-  const zoomMenos = () => { meta.r = clamp(meta.r / 0.78, modo === 'dentro' ? 7 : 16, modo === 'dentro' ? 22 : 120) }
+  const zoomMas = () => { meta.r = clamp(meta.r * 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
+  const zoomMenos = () => { meta.r = clamp(meta.r / 0.78, modo === 'dentro' ? 7 : 18, modo === 'dentro' ? 26 : 150) }
   const centrar = () => {
-    if (modo === 'dentro') { meta.r = 14 } else { meta.th = 0.66; meta.ph = 0.58; meta.r = 72 }
+    if (modo === 'dentro') { meta.r = 15 } else { meta.th = 0.66; meta.ph = 0.58; meta.r = 92 }
   }
   function alRueda(e) {
     e.preventDefault()
@@ -803,7 +817,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
       seguirRuta(monta1, rutaM1, s * 3.2)
       seguirRuta(monta2, rutaM2, s * 2.6)
       // Caminante + operadores con leve vaivén (trabajando)
-      caminante.position.x = -24 + Math.sin(s * 0.5) * 5
+      caminante.position.x = -30 + Math.sin(s * 0.5) * 7
       caminante.rotation.y = Math.cos(s * 0.5) > 0 ? Math.PI / 2 : -Math.PI / 2
       operadores.forEach((op, i) => { op.rotation.y = Math.PI + Math.sin(s * 1.6 + i) * 0.18 })
       if (modo === 'fuera' && !anim && t - ultimaInteraccion > 4000) meta.th += 0.00045
@@ -837,7 +851,7 @@ export function montarEscenaMilePay(cont, opciones = {}) {
     renderer.render(escena, camara)
   }
   ajustar()
-  camara.position.set(85, 58, 105)
+  camara.position.set(105, 68, 125)
   volar(posOrbita(orb, T0), T0, reduce ? 1 : 2200)
   lazo()
 

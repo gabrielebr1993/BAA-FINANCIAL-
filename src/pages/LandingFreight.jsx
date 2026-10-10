@@ -37,7 +37,7 @@ function TableroDespacho({ tx }) {
   const visibles = [0, 1, 2, 3].map((i) => ORDENES[(paso + i) % ORDENES.length])
   const colorEstado = (e) => (e === 'En ruta' ? '#4a9c8c' : e === 'Cargando' ? GOLD : e === 'Ticket listo' ? '#37d67a' : '#8fa3c0')
   return (
-    <div className="rounded-[22px] border p-5" style={{ background: 'rgba(13,26,48,.6)', borderColor: 'rgba(201,162,75,.25)', backdropFilter: 'blur(12px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)' }}>
+    <div className="rounded-[22px] border p-5" style={{ background: 'rgba(13,26,48,.94)', borderColor: 'rgba(201,162,75,.35)', backdropFilter: 'blur(12px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)' }}>
       <div className="mb-3 flex items-center justify-between">
         <span className="f-mono text-[11.5px] uppercase tracking-[.14em]" style={{ color: 'rgba(248,243,235,.55)' }}>{tx('Despacho en vivo · demo', 'Live dispatch · demo')}</span>
         <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold" style={{ color: '#37d67a' }}><span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ background: '#37d67a' }} /> {tx('EN VIVO', 'LIVE')}</span>
@@ -64,7 +64,7 @@ function TableroDespacho({ tx }) {
 export default function LandingFreight() {
   const navigate = useNavigate()
   const { lang, fijar, tx } = useLangPub()
-  useTemaColor('#0d1a30')
+  useTemaColor('#f8f3eb')
   useEffect(() => {
     const prev = document.title
     document.title = 'MilePay Freight — Despacho para transporte de materiales a granel'
@@ -88,20 +88,20 @@ export default function LandingFreight() {
       <NavPub lang={lang} fijar={fijar} tx={tx} activo="" />
 
       {/* HERO */}
-      <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ background: NAVY_DEEP, color: CREAM }}>
-        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.16),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(61,90,128,.28),transparent 55%),radial-gradient(500px 400px at 50% 110%,rgba(20,157,128,.14),transparent 60%)' }} />
+      <header className="relative overflow-hidden pb-16 pt-[116px]" style={{ color: NAVY }}>
+        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(900px 500px at 82% 8%,rgba(201,162,75,.2),transparent 60%),radial-gradient(700px 600px at 5% 90%,rgba(196,127,90,.14),transparent 55%)' }} />
         <div className="wrap-pub relative grid items-center gap-[clamp(40px,5vw,90px)] lg:grid-cols-[1.05fr_1fr]">
           <div className="rev min-w-0">
             <div className="f-mono mb-5 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] uppercase tracking-[.14em]" style={{ borderColor: 'rgba(201,162,75,.35)', color: GOLD }}>
               <Truck size={13} /> {tx('Módulo Freight · materiales a granel', 'Freight module · bulk materials')}
             </div>
             <h1 className="mb-5 text-[clamp(34px,4.6vw,56px)] font-bold">{tx('Un sistema hecho para mover material, no para llenar planillas.', 'A system built to move material, not to fill out spreadsheets.')}</h1>
-            <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: 'rgba(248,243,235,.78)' }}>
+            <p className="mb-8 max-w-[560px] text-[18px] leading-relaxed" style={{ color: STEEL }}>
               {tx('Despacho de volteos en vivo: la orden se asigna sola, el GPS cuenta la historia, el chofer manda su ticket con foto y la factura sale en un clic.', 'Live dump-truck dispatch: orders assign themselves, GPS tells the story, drivers send photo tickets and the invoice is one click away.')}
             </p>
             <div className="flex flex-wrap items-center gap-3.5">
               <a href="#demo" className="rounded-[11px] px-7 py-[15px] text-[15.5px] font-semibold" style={{ background: GOLD, color: NAVY_DEEP, boxShadow: '0 10px 30px -10px rgba(201,162,75,.5)' }}>{tx('Solicitar demo', 'Request demo')}</a>
-              <button onClick={() => navigate('/elegir')} className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: CREAM, borderColor: 'rgba(248,243,235,.24)', background: 'transparent', cursor: 'pointer' }}>{tx('Iniciar sesión', 'Log in')} <ArrowRight size={15} /></button>
+              <button onClick={() => navigate('/elegir')} className="inline-flex items-center gap-2 rounded-[11px] border px-6 py-[15px] text-[15.5px] font-semibold" style={{ color: NAVY, borderColor: 'rgba(19,35,63,.25)', background: 'transparent', cursor: 'pointer' }}>{tx('Iniciar sesión', 'Log in')} <ArrowRight size={15} /></button>
             </div>
           </div>
           <div className="rev min-w-0" style={{ animationDelay: '.15s' }}><TableroDespacho tx={tx} /></div>
