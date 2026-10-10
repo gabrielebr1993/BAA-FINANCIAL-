@@ -35,7 +35,7 @@ const CSS = `
 }
 :root[data-theme="dark"] .h3d{--bg:#0b1322;--fg:#e8edf6;--muted:#9aa8c0;--card:rgba(21,34,58,.66);--card-borde:rgba(255,255,255,.08);--panel:#121e35}
 .h3d *{box-sizing:border-box}
-.h3d .marco{max-width:1220px;margin:0 auto;padding-inline:16px}
+.h3d .marco{max-width:1480px;margin:0 auto;padding-inline:clamp(16px,2.5vw,44px)}
 
 /* ── Nav (ya no flota sobre el canvas: va arriba, en el flujo normal) ── */
 .h3d .nav{position:relative;z-index:5;display:flex;align-items:center;gap:18px;padding:16px 20px;flex-wrap:wrap}
@@ -59,19 +59,24 @@ const CSS = `
 .h3d .heroya{display:grid;grid-template-columns:minmax(330px,5fr) 7fr;gap:30px;align-items:center;padding-top:4px}
 @media (max-width:1000px){.h3d .heroya{grid-template-columns:1fr;gap:16px}}
 .h3d .cabeza{padding:0;text-align:left}
-.h3d .cabeza h1{font-size:clamp(28px,3.2vw,42px);line-height:1.07;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
+.h3d .cabeza h1{font-size:clamp(28px,3.4vw,52px);line-height:1.07;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
 .h3d .cabeza h1 em{font-style:normal;color:var(--gold)}
-.h3d .cabeza p{color:var(--muted);margin:0 0 18px;font-size:15px;max-width:560px}
+.h3d .cabeza p{color:var(--muted);margin:0 0 18px;font-size:15.5px;max-width:580px}
 .h3d .migas{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
 .h3d .miga{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--card-borde);color:var(--fg)}
 .h3d .miga.oro{color:var(--gold)}
 .h3d .ctas{display:flex;gap:10px;flex-wrap:wrap}
+.h3d .minis{display:flex;gap:30px;margin-top:28px;flex-wrap:wrap}
+.h3d .mini b{font-size:clamp(22px,2vw,30px);letter-spacing:-.02em}
+.h3d .mini b em{font-style:normal;color:var(--gold)}
+.h3d .mini span{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
 @media (max-width:1000px){
   .h3d .cabeza{text-align:center;padding:8px 0 2px}
   .h3d .cabeza p{margin-inline:auto}
-  .h3d .migas,.h3d .ctas{justify-content:center}
+  .h3d .migas,.h3d .ctas,.h3d .minis{justify-content:center}
+  .h3d .minis{margin-top:18px}
 }
-.h3d .video{position:relative;height:clamp(340px,62vh,620px);border-radius:24px;overflow:hidden;z-index:1;
+.h3d .video{position:relative;height:clamp(360px,66vh,660px);border-radius:24px;overflow:hidden;z-index:1;
   border:1px solid var(--card-borde);box-shadow:0 30px 80px rgba(19,35,63,.28);background:#13233f}
 .h3d .video canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab}
 .h3d .video.arrastrando canvas{cursor:grabbing}
@@ -100,8 +105,8 @@ const CSS = `
 @media (max-width:900px){.h3d .pista{display:none}}
 
 /* ── Secciones de negocio: separación clara ── */
-.h3d .negocios{padding:56px 0 8px}
-.h3d .encabezado{max-width:640px;margin:0 auto 30px;text-align:center}
+.h3d .negocios{padding:36px 0 6px}
+.h3d .encabezado{max-width:640px;margin:0 auto 20px;text-align:center}
 .h3d .encabezado h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
 .h3d .encabezado p{color:var(--muted);margin:0}
 .h3d .dos{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
@@ -138,7 +143,7 @@ const CSS = `
 @media (prefers-reduced-motion: reduce){.h3d .cinta .riel,.h3d .aurora span,.h3d .baja{animation:none}}
 
 /* ── Cómo funciona ── */
-.h3d .pasos{padding:52px 0}
+.h3d .pasos{padding:36px 0}
 .h3d .tres{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media (max-width:900px){.h3d .tres{grid-template-columns:1fr}}
 .h3d .paso{background:var(--panel);border:1px solid var(--card-borde);border-radius:20px;padding:22px;box-shadow:0 10px 30px rgba(19,35,63,.07)}
@@ -147,7 +152,7 @@ const CSS = `
 .h3d .paso p{margin:0;color:var(--muted);font-size:13.5px}
 
 /* ── Pie ── */
-.h3d footer{border-top:1px solid var(--card-borde);padding:26px 0 34px;margin-top:10px}
+.h3d footer{border-top:1px solid var(--card-borde);padding:20px 0 26px;margin-top:8px}
 .h3d footer .fila{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .h3d footer a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;cursor:pointer}
 .h3d footer a:hover{color:var(--fg)}
@@ -221,6 +226,11 @@ export default function Home3D() {
             <div className="ctas">
               <button className="btn btn-oro" onClick={entrar}>{t('Entrar a MilePay')}</button>
               <button className="btn btn-linea" onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>{t('Conocer los 4 módulos')} ↓</button>
+            </div>
+            <div className="minis">
+              <div className="mini"><b><em>4</em></b><span>{t('módulos en una plataforma')}</span></div>
+              <div className="mini"><b>100<em>%</em></b><span>{t('viajes con ticket y foto')}</span></div>
+              <div className="mini"><b>24/7</b><span>{t('operación en vivo')}</span></div>
             </div>
           </div>
 

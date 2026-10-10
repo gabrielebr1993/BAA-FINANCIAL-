@@ -109,7 +109,7 @@ export function FooterPub({ tx }) {
   return (
     <footer className="border-t pb-9 pt-[54px]" style={{ color: STEEL, borderColor: 'rgba(19,35,63,.1)' }}>
       <div className="wrap-pub">
-        <div className="mb-10 grid grid-cols-2 gap-9 md:grid-cols-4">
+        <div className="mb-8 grid grid-cols-2 gap-9 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
             <span className="flex items-center gap-[11px]" style={{ color: NAVY }}>{logoSvg}<span className="f-display text-[19px] font-bold">MilePay <span style={{ color: GOLD }}>Freight</span></span></span>
             <p className="mt-3.5 max-w-[280px] text-[14px] leading-relaxed">{tx('Despacho, GPS, app del chofer y facturación para materiales a granel — en un solo sistema.', 'Dispatch, GPS, driver app and billing for bulk materials — one system.')}</p>
@@ -141,8 +141,8 @@ export function FooterPub({ tx }) {
 
 export function BandaCTA({ tx }) {
   return (
-    <section className="wrap-pub py-16">
-      <div className="relative overflow-hidden rounded-[28px] px-7 py-14 text-center sm:px-14" style={{ background: `linear-gradient(150deg,${NAVY} 20%,#2c2414 85%)`, color: CREAM }}>
+    <section className="wrap-pub py-12">
+      <div className="relative overflow-hidden rounded-[28px] px-7 py-12 text-center sm:px-14" style={{ background: `linear-gradient(150deg,${NAVY} 20%,#2c2414 85%)`, color: CREAM }}>
         <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(600px 300px at 50% 0%,rgba(201,162,75,.28),transparent 60%),radial-gradient(400px 260px at 85% 100%,rgba(196,127,90,.2),transparent 60%)' }} />
         <h2 className="relative mb-4 text-[clamp(28px,3.6vw,42px)] font-bold">{tx('Míralo funcionando con tu operación', 'See it running on your operation')}</h2>
         <p className="relative mx-auto mb-8 max-w-[520px] text-[17px]" style={{ color: 'rgba(248,243,235,.75)' }}>{tx('Agenda una demo: cargamos tus plantas, materiales y camiones de ejemplo y despachas una orden en vivo.', 'Book a demo: we load your plants, materials and sample trucks and you dispatch a live order.')}</p>
@@ -180,9 +180,9 @@ export function HeroFuncion({ tx, migas, icono: Icono, titulo, sub, visual }) {
 // "Cómo funciona": 3 pasos numerados con íconos.
 export function Pasos({ tx, titulo, pasos }) {
   return (
-    <section className="wrap-pub py-20">
+    <section className="wrap-pub py-12">
       <div className="f-mono mb-3 text-[12.5px] font-medium uppercase tracking-[.14em]" style={{ color: GOLD }}>{tx('Cómo funciona', 'How it works')}</div>
-      <h2 className="mb-12 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{titulo}</h2>
+      <h2 className="mb-8 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{titulo}</h2>
       <div className="grid gap-5 md:grid-cols-3">
         {pasos.map((p, i) => (
           <div key={i} className="rounded-2xl border p-7 transition-transform hover:-translate-y-1" style={{ borderColor: 'rgba(255,255,255,.9)', background: 'rgba(255,252,245,.82)', backdropFilter: 'blur(10px)', boxShadow: '0 14px 40px rgba(19,35,63,.08)' }}>
@@ -202,7 +202,7 @@ export function Pasos({ tx, titulo, pasos }) {
 // "Lo que ganas": métricas de beneficio con barra.
 export function Metricas({ tx, items }) {
   return (
-    <section className="border-y py-16" style={{ background: `linear-gradient(150deg,${NAVY} 30%,#39301a)`, borderColor: 'rgba(201,162,75,.2)' }}>
+    <section className="border-y py-12" style={{ background: `linear-gradient(150deg,${NAVY} 30%,#39301a)`, borderColor: 'rgba(201,162,75,.2)' }}>
       <div className="wrap-pub">
         <div className="f-mono mb-8 text-[12.5px] font-medium uppercase tracking-[.14em]" style={{ color: GOLD }}>{tx('Lo que ganas', 'What you gain')}</div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">

@@ -115,13 +115,13 @@ export default function LandingFreight() {
       {/* HERO: texto arriba + la PLANTA DE AGREGADOS en una ventana de video
           (cámara limitada a la planta: Freight no se mezcla con última milla;
           en táctil corre como video y el scroll funciona normal) */}
-      <header id="top" className="wrap-pub pt-8 md:pt-10">
-        <div className="rev mx-auto mb-7 max-w-[820px] text-center">
+      <header id="top" className="wrap-pub pt-5 md:pt-6">
+        <div className="rev mx-auto mb-5 max-w-[820px] text-center">
           <div className="f-mono mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12px] uppercase tracking-[.14em]" style={{ borderColor: 'rgba(201,162,75,.5)', color: '#8a6d2a', background: 'rgba(255,252,245,.7)' }}>
             <Truck size={13} /> {tx('Módulo Freight · materiales a granel', 'Freight module · bulk materials')}
           </div>
           <h1 className="mb-4 text-[clamp(28px,4.2vw,46px)] font-bold" style={{ color: NAVY }}>{tx('Un sistema hecho para mover material, no para llenar planillas.', 'A system built to move material, not to fill out spreadsheets.')}</h1>
-          <p className="mx-auto mb-6 max-w-[620px] text-[15.5px] leading-relaxed" style={{ color: STEEL }}>
+          <p className="mx-auto mb-5 max-w-[620px] text-[15.5px] leading-relaxed" style={{ color: STEEL }}>
             {tx('Despacho de volteos en vivo: la orden se asigna sola, el GPS cuenta la historia, el chofer manda su ticket con foto y la factura sale en un clic.', 'Live dump-truck dispatch: orders assign themselves, GPS tells the story, drivers send photo tickets and the invoice is one click away.')}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -141,9 +141,9 @@ export default function LandingFreight() {
       </header>
 
       {/* FUNCIONES */}
-      <section className="wrap-pub py-20" id="producto">
+      <section className="wrap-pub py-12" id="producto">
         <div className="f-mono mb-3 text-[12.5px] font-medium uppercase tracking-[.14em]" style={{ color: GOLD }}>{tx('Lo que hace', 'What it does')}</div>
-        <h2 className="mb-12 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{tx('Todo el despacho, de la orden a la factura.', 'The whole dispatch, from order to invoice.')}</h2>
+        <h2 className="mb-8 max-w-[680px] text-[clamp(26px,3.2vw,38px)]" style={{ color: NAVY }}>{tx('Todo el despacho, de la orden a la factura.', 'The whole dispatch, from order to invoice.')}</h2>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {FUNCIONES.map((f) => (
             <Link key={f.path} to={f.path} className="group rounded-2xl border p-7 transition-transform hover:-translate-y-1"
