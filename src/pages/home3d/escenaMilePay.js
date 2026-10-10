@@ -872,12 +872,15 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   // En /freight la cámara mira SOLO la planta de agregados (desde el noreste,
   // de espaldas al almacén de paquetería) y los límites de giro/zoom impiden
   // que el almacén entre al cuadro: Freight no se mezcla con última milla.
+  // Y al revés: la portada (last mile) mira SOLO el centro de distribución
+  // de paquetería desde el sur — la planta de construcción queda a espaldas
+  // de la cámara y los límites impiden que entre al cuadro.
   const CASA = enfoque === 'freight'
     ? { th: -0.5, ph: 0.8, r: 54, tgt: new THREE.Vector3(-47, 3, 40) }
-    : { th: 0.66, ph: 0.58, r: 92, tgt: new THREE.Vector3(-26, 2, -14) }
+    : { th: 1.05, ph: 0.62, r: 78, tgt: new THREE.Vector3(-38, 4, -20) }
   const LIM = enfoque === 'freight'
     ? { thMin: CASA.th - 0.5, thMax: CASA.th + 0.5, rMin: 24, rMax: 95 }
-    : { thMin: -Infinity, thMax: Infinity, rMin: 18, rMax: 150 }
+    : { thMin: 0.85, thMax: 1.6, rMin: 24, rMax: 95 }
   const T0 = CASA.tgt
   const TI = new THREE.Vector3(-41, 3.5, -34)
   const orb = { th: CASA.th, ph: CASA.ph, r: CASA.r, tgt: T0.clone() }
@@ -943,7 +946,11 @@ export function montarEscenaMilePay(cont, opciones = {}) {
   function alMover(e) {
     if (!drag) return
     ultimaInteraccion = performance.now()
-    meta.th = clamp(meta.th + (e.clientX - drag.x) * 0.0062, LIM.thMin, LIM.thMax)
+    // Dentro del almacén el giro es libre; afuera respeta los límites del
+    // encuadre (cada módulo ve solo su mundo).
+    meta.th = modo === 'dentro'
+      ? meta.th + (e.clientX - drag.x) * 0.0062
+      : clamp(meta.th + (e.clientX - drag.x) * 0.0062, LIM.thMin, LIM.thMax)
     meta.ph = clamp(meta.ph - (e.clientY - drag.y) * 0.0045, modo === 'dentro' ? 0.85 : 0.3, modo === 'dentro' ? 1.5 : 1.25)
     drag = { x: e.clientX, y: e.clientY }
   }

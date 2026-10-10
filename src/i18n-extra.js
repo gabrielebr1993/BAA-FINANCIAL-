@@ -2205,6 +2205,8 @@ export const EN_EXTRA = {
   "Módulos": "Modules",
   "Facturas que cuadran al centavo": "Invoices that balance to the cent",
   "Volteos despachados en vivo": "Dump trucks dispatched live",
+  "Flota": "Fleet",
+  "Vans despachadas en vivo": "Vans dispatched live",
   "Dentro del almacén": "Inside the warehouse",
   "Escaneo y cuadre en vivo": "Live scanning and reconciliation",
   "Salir del almacén": "Leave the warehouse",

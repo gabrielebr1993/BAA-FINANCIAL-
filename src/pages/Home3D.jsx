@@ -54,15 +54,24 @@ const CSS = `
 
 /* ── HERO: texto arriba y la escena 3D en una VENTANA DE VIDEO más pequeña.
    El canvas no captura el dedo en táctil, así el scroll siempre funciona. ── */
-.h3d .cabeza{padding:14px 0 20px;text-align:center;max-width:780px;margin:0 auto}
-.h3d .cabeza h1{font-size:clamp(30px,4.6vw,50px);line-height:1.06;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
+/* Héroe HORIZONTAL: texto a la izquierda, video a la derecha (sin espacios
+   muertos). En pantallas angostas se apila y el texto vuelve a centrarse. */
+.h3d .heroya{display:grid;grid-template-columns:minmax(330px,5fr) 7fr;gap:30px;align-items:center;padding-top:4px}
+@media (max-width:1000px){.h3d .heroya{grid-template-columns:1fr;gap:16px}}
+.h3d .cabeza{padding:0;text-align:left}
+.h3d .cabeza h1{font-size:clamp(28px,3.2vw,42px);line-height:1.07;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
 .h3d .cabeza h1 em{font-style:normal;color:var(--gold)}
-.h3d .cabeza p{color:var(--muted);margin:0 auto 18px;font-size:15px;max-width:640px}
-.h3d .migas{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap;justify-content:center}
+.h3d .cabeza p{color:var(--muted);margin:0 0 18px;font-size:15px;max-width:560px}
+.h3d .migas{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
 .h3d .miga{font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--card-borde);color:var(--fg)}
 .h3d .miga.oro{color:var(--gold)}
-.h3d .ctas{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-.h3d .video{position:relative;height:clamp(300px,56vh,560px);border-radius:24px;overflow:hidden;z-index:1;
+.h3d .ctas{display:flex;gap:10px;flex-wrap:wrap}
+@media (max-width:1000px){
+  .h3d .cabeza{text-align:center;padding:8px 0 2px}
+  .h3d .cabeza p{margin-inline:auto}
+  .h3d .migas,.h3d .ctas{justify-content:center}
+}
+.h3d .video{position:relative;height:clamp(340px,62vh,620px);border-radius:24px;overflow:hidden;z-index:1;
   border:1px solid var(--card-borde);box-shadow:0 30px 80px rgba(19,35,63,.28);background:#13233f}
 .h3d .video canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;cursor:grab}
 .h3d .video.arrastrando canvas{cursor:grabbing}
@@ -199,7 +208,7 @@ export default function Home3D() {
           <span className="sep"><LangToggle /><button className="btn btn-oro" onClick={entrar}>{t('Entrar')}</button></span>
         </div>
 
-        <div className="marco">
+        <div className="marco heroya">
           <div className="cabeza">
             <h1>{t('Freight y última milla,')} <em>{t('bajo control')}</em>.</h1>
             <div className="migas">
@@ -217,7 +226,7 @@ export default function Home3D() {
 
           <div ref={escenaRef} className={`video${dentro ? ' dentro' : ''}`}>
             <div className="flota ext f1"><small>{t('Paquetería')}</small><span className="punto-ok">✓</span> {t('Facturas que cuadran al centavo')}</div>
-            <div className="flota ext f2"><small>Freight</small><span className="punto-oro">▸</span> {t('Volteos despachados en vivo')}</div>
+            <div className="flota ext f2"><small>{t('Flota')}</small><span className="punto-oro">▸</span> {t('Vans despachadas en vivo')}</div>
             <div className="flota int"><small>{t('Dentro del almacén')}</small><span className="punto-ok">✓</span> {t('Escaneo y cuadre en vivo')}</div>
             <div className="controles">
               <button className="ctl" aria-label="Acercar" onClick={() => apiRef.current && apiRef.current.zoomMas()}>+</button>
