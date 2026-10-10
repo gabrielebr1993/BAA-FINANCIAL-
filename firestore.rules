@@ -732,5 +732,26 @@ service cloud.firestore {
 
     // Auditoría: se crea por cualquier miembro; solo admin lee; no se edita/borra.
     match /bulk_audit/{id} { allow read: if bAdmin(resource.data.tenantId); allow create: if bSame(request.resource.data.tenantId); allow update, delete: if false; }
+
+    // ════════════════════════════════════════════════════════════════════
+    // MÓDULO ECOMMERCE (EN CONSTRUCCIÓN) — colecciones ecom_*.
+    // PRIVADO: mientras se construye, SOLO el dueño (isSuperEmail: correo
+    // verificado, NO cualquier admin) puede leer y escribir. Cuando el dueño
+    // autorice publicar, aquí se abrirá: lectura pública de ecom_products
+    // (si settings.catalogoPublico), clientes leyendo SOLO sus pedidos, y
+    // los roles internos de ecom_internos con sus permisos.
+    // ════════════════════════════════════════════════════════════════════
+    function esDuenoEcom() {
+      return isSuperEmail();
+    }
+    match /ecom_settings/{id}  { allow read, write: if esDuenoEcom(); }
+    match /ecom_products/{id}  { allow read, write: if esDuenoEcom(); }
+    match /ecom_orders/{id}    { allow read, write: if esDuenoEcom(); }
+    match /ecom_purchases/{id} { allow read, write: if esDuenoEcom(); }
+    match /ecom_quotes/{id}    { allow read, write: if esDuenoEcom(); }
+    match /ecom_tickets/{id}   { allow read, write: if esDuenoEcom(); }
+    match /ecom_internos/{id}  { allow read, write: if esDuenoEcom(); }
+    // Auditoría del módulo: el dueño lee y crea; nadie edita ni borra.
+    match /ecom_audit/{id}     { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
   }
 }

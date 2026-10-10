@@ -1,13 +1,19 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
+// El tercer módulo, Ecommerce (en construcción), SOLO aparece si la sesión de
+// Firebase pertenece al dueño (correo verificado) — nadie más lo ve ni entra.
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight, Route, ArrowLeft } from 'lucide-react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart } from 'lucide-react'
+import { auth } from './firebase'
+import { esDuenoEcom } from './ecommerce/datos'
 import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
 export function getModulo() { try { return localStorage.getItem('mp_module') } catch { return null } }
 
-const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow }) => {
+const OpcionCard = ({ onClick, icon: Icon, titulo, subtitulo, desc, features, acento, glow }) => {
   const { t } = useLang()
   return (
   <button
@@ -19,6 +25,7 @@ const OpcionCard = ({ onClick, icon: Icon, titulo, desc, features, acento, glow 
       <Icon size={26} strokeWidth={2} />
     </div>
     <div className="relative mt-4 text-2xl font-black text-white">{titulo}</div>
+    {subtitulo && <div className="relative mt-0.5 inline-flex"><span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-400">{subtitulo}</span></div>}
     <div className="relative mt-1 text-sm leading-relaxed text-slate-300">{desc}</div>
     {features?.length > 0 && (
       <ul className="relative mt-4 space-y-1.5">
@@ -40,6 +47,9 @@ export default function ModuleSelector() {
   const navigate = useNavigate()
   const { t } = useLang()
   const elegir = (m) => { setModulo(m); navigate(m === 'bulk' ? '/bulk' : '/dashboard', { replace: true }) }
+  // Ecommerce (en construcción): la tarjeta solo existe para el DUEÑO logueado.
+  const [verEcom, setVerEcom] = useState(false)
+  useEffect(() => onAuthStateChanged(auth, (u) => setVerEcom(esDuenoEcom(u?.email))), [])
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden bg-slate-950 p-4">
@@ -87,6 +97,12 @@ export default function ModuleSelector() {
             onClick={() => elegir('bulk')} icon={Truck} acento="bg-amber-500" glow="bg-amber-500"
             titulo="Freight" desc={t('Fletes de materiales, en vivo.')}
           />
+          {verEcom && (
+            <OpcionCard
+              onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
+              titulo="Ecommerce" subtitulo={t('En construcción')} desc={t('Compras internacionales, entregadas por nosotros.')}
+            />
+          )}
         </div>
 
         <p className="ms-in ms-in-3 mt-10 text-center text-xs text-slate-500">© {new Date().getFullYear()} MilePay · {t('Puedes cambiar de módulo en cualquier momento.')}</p>
