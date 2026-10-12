@@ -175,7 +175,7 @@ function SidebarContent({ onNavigate }) {
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
 
   return (
-    <aside className="pt-safe flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
+    <aside className="pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
       <div className="flex items-center gap-3 px-1 pb-4 pt-1">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
         <div>
