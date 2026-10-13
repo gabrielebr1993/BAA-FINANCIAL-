@@ -353,10 +353,37 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
 function PcRegistro({ bd, user, recargar, irAImprimir }) {
   const [filtro, setFiltro] = useState('todos')
   const [buscar, setBuscar] = useState('')
+  const [cuentaId, setCuentaId] = useState('')
+  const [rango, setRango] = useState({ desde: '', hasta: '' })
+  const q = buscar.trim().toLowerCase()
   const lista = bd.cheques
-    .filter((c) => filtro === 'todos' || c.estado === filtro)
-    .filter((c) => !buscar || String(c.numeroRaw).includes(buscar) || String(c.beneficiario || '').toLowerCase().includes(buscar.toLowerCase()))
+    .filter((c) => filtro === 'todos' || (c.estado || 'emitido') === filtro)
+    .filter((c) => !cuentaId || c.cuentaId === cuentaId)
+    .filter((c) => !rango.desde || (c.fecha || '') >= rango.desde)
+    .filter((c) => !rango.hasta || (c.fecha || '') <= rango.hasta)
+    .filter((c) => !q
+      || String(c.numeroRaw || c.numeroNorm || '').toLowerCase().includes(q)
+      || String(c.beneficiario || '').toLowerCase().includes(q)
+      || String(c.memo || '').toLowerCase().includes(q)
+      || String(c.loteId || '').toLowerCase().includes(q)
+      || Number(c.importe || 0).toFixed(2).includes(q))
     .sort((a, b) => Number(b.numeroRaw || 0) - Number(a.numeroRaw || 0))
+
+  // abre el cheque TAL COMO SE IMPRIMIÓ (regenerado con sus datos guardados)
+  const verCheque = (c) => {
+    const cuenta = bd.cuentas.find((x) => x.id === c.cuentaId) || { banco: c.banco || '', routing: '', numero: c.cuenta || '' }
+    const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
+    const html = htmlLote({ cheques: [c], cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: false })
+      .replace(/<script>[\s\S]*?<\/script>/, '')
+      .replace('</body>', `<div style="position:fixed;top:10px;right:10px;z-index:9;display:flex;gap:8px">
+        <button onclick="window.print()" style="background:#13233f;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Imprimir</button>
+        <button onclick="window.close()" style="background:#e2e8f0;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Cerrar</button>
+      </div></body>`)
+    const win = window.open('', '_blank', 'width=900,height=1000')
+    if (!win) { window.alert('Permite las ventanas emergentes para ver el cheque.'); return }
+    win.document.write(html)
+    win.document.close()
+  }
   const anular = async (c) => {
     const motivo = window.prompt(`¿Anular el cheque #${c.numeroRaw} de ${c.beneficiario}? Escribe el motivo:`)
     if (!motivo) return
@@ -368,11 +395,22 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
     <div>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Select className="w-44" value={filtro} onChange={(e) => setFiltro(e.target.value)}>
+          <Input className="w-64" placeholder="Buscar: nombre, número, importe, memo, lote…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <Select className="w-40" value={filtro} onChange={(e) => setFiltro(e.target.value)}>
             <option value="todos">Todos los estados</option><option value="emitido">Emitidos</option>
             <option value="cobrado">Cobrados</option><option value="cancelado">Anulados</option>
           </Select>
-          <Input className="w-56" placeholder="Buscar número o beneficiario…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <Select className="w-52" value={cuentaId} onChange={(e) => setCuentaId(e.target.value)}>
+            <option value="">Todas las cuentas</option>
+            {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
+          </Select>
+          <span className="text-slate-500">Del</span>
+          <Input type="date" className="w-36" value={rango.desde} onChange={(e) => setRango({ ...rango, desde: e.target.value })} />
+          <span className="text-slate-500">al</span>
+          <Input type="date" className="w-36" value={rango.hasta} onChange={(e) => setRango({ ...rango, hasta: e.target.value })} />
+          {(q || filtro !== 'todos' || cuentaId || rango.desde || rango.hasta) && (
+            <Boton variant="ghost" onClick={() => { setBuscar(''); setFiltro('todos'); setCuentaId(''); setRango({ desde: '', hasta: '' }) }}>Limpiar</Boton>
+          )}
           <span className="ml-auto text-slate-400">{lista.length} cheques · {dinero(r2(lista.reduce((s, c) => s + (c.importe || 0), 0)))}</span>
         </div>
       </Card>
@@ -386,6 +424,9 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
               <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
               <span className="text-slate-400">{c.fecha || ''} {c.banco ? `· ${c.banco}` : ''} {c.loteId ? `· ${c.loteId}` : ''}</span>
               <b className="ml-auto">{dinero(c.importe)}</b>
+              {c.origen === 'printcheck' && (
+                <Boton variant="ghost" onClick={() => verCheque(c)}>Ver cheque</Boton>
+              )}
               {c.origen === 'printcheck' && c.estado !== 'cancelado' && (
                 <Boton variant="ghost" onClick={async () => { await auditarStaff('pc_reimpresion', `#${c.numeroRaw} ${c.beneficiario}`); irAImprimir('', c.id) }}><Printer size={13} /> Reimprimir</Boton>
               )}
