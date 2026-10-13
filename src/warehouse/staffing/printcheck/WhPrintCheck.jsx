@@ -171,6 +171,8 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
   const [trabajando, setTrabajando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
   const [verPagadas, setVerPagadas] = useState(false)
+  const [hist, setHist] = useState(null) // panel "ya pagadas fuera del sistema": {sel:{}}
+  const [histTrabajando, setHistTrabajando] = useState(false)
   const cuenta = bd.cuentas.find((c) => c.id === cuentaId)
 
   // Semanas con pagos PENDIENTES de cheque: por defecto solo se listan esas.
@@ -206,6 +208,55 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
   const total = r2(seleccion.reduce((s, f) => s + f.neto, 0))
   const desde = Number(cuenta?.siguiente) || 1
   const hasta = desde + Math.max(0, seleccion.length - 1)
+
+  // ── Semanas ya pagadas FUERA del sistema (con el software anterior):
+  // crea registros históricos (estado cobrado, sin imprimir) para que la
+  // semana salga de la lista de pendientes y el trabajador quede "pagado".
+  const abrirHist = () => {
+    const pendientes = bd.periodos.filter((p) => { const n = pendientesDe(p); return n === null || n > 0 })
+    if (!pendientes.length) { setMensaje({ tipo: 'ok', texto: 'No hay semanas pendientes.' }); return }
+    const masReciente = pendientes.reduce((m, p) => (String(p.inicio) > String(m.inicio) ? p : m), pendientes[0])
+    // preseleccionadas TODAS menos la más reciente (esa es la que vas a imprimir)
+    setHist({ sel: Object.fromEntries(pendientes.filter((p) => p.id !== masReciente.id).map((p) => [p.id, true])), masReciente: masReciente.id })
+  }
+  const marcarHistoricas = async () => {
+    const ids = Object.keys(hist.sel).filter((k) => hist.sel[k])
+    if (!ids.length) return
+    if (!window.confirm(`¿Marcar ${ids.length} semana(s) como YA PAGADAS fuera del sistema?\n\nSe registran como cheques históricos COBRADOS (sin imprimir nada). Las semanas saldrán de la lista de pendientes y cada trabajador quedará "pagado" en esas semanas.`)) return
+    setHistTrabajando(true)
+    try {
+      let total = 0
+      for (const pid of ids) {
+        const [registros, ajustes] = await Promise.all([
+          cargarPor(COL.registros, 'periodoId', pid), cargarPor(COL.ajustes, 'periodoAplicaId', pid),
+        ])
+        const plan = planearLote({ periodoId: pid, registros, ajustes, cheques: bd.cheques, workers: bd.workers })
+        const elegibles = plan.filter((f) => f.elegible)
+        const ahora = new Date().toISOString()
+        const ops = elegibles.map((f) => ({
+          ref: refDoc(COL.cheques, `hist_${pid}_${(f.workerId || f.nombre).replace(/[^a-zA-Z0-9_]/g, '_')}`),
+          merge: true,
+          data: {
+            numeroRaw: 'HIST', numeroNorm: `hist_${pid}`.slice(0, 40),
+            workerId: f.workerId, beneficiario: f.nombre, importe: f.neto,
+            fecha: pid.split('_')[2] || null, memo: 'Pago histórico (software anterior)',
+            estado: 'cobrado', origen: 'historico', loteId: null,
+            distribucion: [{ periodoId: pid, importe: f.neto }], idEmpleado: f.idEmpleado || null,
+            creadoEn: serverTimestamp(), creadoPor: user.email,
+            historial: [{ accion: 'creado', fecha: ahora, por: user.email, nota: 'Registrado como pagado fuera del sistema' }],
+          },
+        }))
+        if (ops.length) await escribirEnLotes(ops)
+        await auditarStaff('pc_semana_historica', `${pid}: ${ops.length} pagos marcados como históricos (cobrados, sin imprimir)`)
+        total += ops.length
+      }
+      setMensaje({ tipo: 'ok', texto: `Listo: ${ids.length} semana(s) marcadas como pagadas (${total} pagos históricos). En la lista solo quedan las semanas por imprimir.` })
+      setHist(null)
+      await recargar()
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'No se completó (reintentar es seguro): ' + (e.message || e) })
+    } finally { setHistTrabajando(false) }
+  }
 
   const generar = async () => {
     if (!cuenta || !seleccion.length) return
@@ -261,7 +312,10 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
             <label className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate-400">
               <input type="checkbox" checked={verPagadas} onChange={(e) => setVerPagadas(e.target.checked)} />
               mostrar también semanas ya pagadas por completo
-            </label></div>
+            </label>
+            <button className="mt-1 block text-[11px] font-semibold text-brand-gold hover:underline" onClick={abrirHist}>
+              ¿Semanas viejas ya pagadas con tu software anterior? Márcalas aquí →
+            </button></div>
           <div><div className="mb-1 font-bold text-slate-500">Cuenta bancaria emisora</div>
             <Select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)}>
               {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
@@ -273,6 +327,37 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
         </div>
       </Card>
       {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}
+
+      {hist && (
+        <Card className="mb-4 p-4">
+          <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Marcar semanas como YA pagadas (fuera del sistema)</div>
+          <p className="mb-3 text-xs text-slate-500">
+            Para las semanas que pagaste con tu software anterior: se registran como <b>pagos históricos cobrados</b> (no se imprime nada, no se usa numeración).
+            Esas semanas salen de la lista de pendientes y cada trabajador queda "pagado". La semana más reciente viene <b>desmarcada</b> — esa es la que vas a imprimir.
+          </p>
+          <div className="space-y-1.5">
+            {bd.periodos.filter((p) => { const n = pendientesDe(p); return n === null || n > 0 }).map((p) => {
+              const pend = pendientesDe(p)
+              return (
+                <label key={p.id} className="flex flex-wrap items-center gap-2 text-xs">
+                  <input type="checkbox" checked={!!hist.sel[p.id]} onChange={(e) => setHist({ ...hist, sel: { ...hist.sel, [p.id]: e.target.checked } })} />
+                  <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
+                  <span className="text-slate-400">{pend !== null ? `${pend} pagos pendientes` : ''}</span>
+                  {p.id === hist.masReciente && <Badge color="gold">esta la imprimes tú — queda fuera</Badge>}
+                </label>
+              )
+            })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Boton variant="gold" disabled={histTrabajando || !Object.values(hist.sel).some(Boolean)} onClick={marcarHistoricas}>
+              {histTrabajando ? <Spinner /> : `Marcar ${Object.values(hist.sel).filter(Boolean).length} semana(s) como pagadas`}
+            </Boton>
+            <Boton variant="ghost" onClick={() => setHist(null)}>Cancelar</Boton>
+            <span className="text-[11px] text-slate-400">Reversible: en Registro puedes borrar los pagos históricos (busca "HIST").</span>
+          </div>
+        </Card>
+      )}
+
       {plan && (
         <Card className="p-4">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
@@ -451,13 +536,13 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
   // Borrar = eliminarlo del historial (solo errores ANTES de entregar el
   // papel; un cheque cobrado jamás se borra; uno entregado se ANULA).
   const borrar = async (c) => {
-    if (c.estado === 'cobrado') return
+    if (c.estado === 'cobrado' && c.origen !== 'historico') return
     if (!window.confirm(`¿BORRAR el cheque #${c.numeroRaw || c.numeroNorm} de ${c.beneficiario || '—'} (${dinero(c.importe)})?\n\nBorrar lo elimina del historial: es para cheques generados por error que NUNCA se entregaron. Si el cheque ya salió a la calle, usa "anular".`)) return
     await escribirEnLotes([{ ref: refDoc(COL.cheques, c.id), borrar: true }])
     await auditarStaff('pc_cheque_borrado', `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)} [${c.estado || 'emitido'}]`)
     recargar()
   }
-  const seleccionables = lista.filter((c) => c.estado !== 'cobrado')
+  const seleccionables = lista.filter((c) => c.estado !== 'cobrado' || c.origen === 'historico')
   const seleccionados = seleccionables.filter((c) => sel[c.id])
   const borrarSeleccionados = async () => {
     if (!seleccionados.length) return
@@ -511,11 +596,12 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
         {lista.map((c) => (
           <Card key={c.id} className="p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              {c.estado !== 'cobrado' && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
+              {(c.estado !== 'cobrado' || c.origen === 'historico') && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
               <button className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700" title="Ver ficha completa" onClick={() => setFichaId(c.id)}><Eye size={15} /></button>
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
               <span className="font-semibold">{c.beneficiario || '—'}</span>
               <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
+              {c.origen === 'historico' && <Badge color="slate">histórico</Badge>}
               <span className="text-slate-400">{c.fecha || ''} {c.banco ? `· ${c.banco}` : ''} {c.loteId ? `· ${c.loteId}` : ''}</span>
               <b className="ml-auto">{dinero(c.importe)}</b>
               {c.origen === 'printcheck' && (
@@ -525,7 +611,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
                 <Boton variant="ghost" onClick={async () => { await auditarStaff('pc_reimpresion', `#${c.numeroRaw} ${c.beneficiario}`); irAImprimir('', c.id) }}><Printer size={13} /> Reimprimir</Boton>
               )}
               {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <button className="text-rose-400 hover:text-rose-600" onClick={() => anular(c)}>anular</button>}
-              {c.estado !== 'cobrado' && <button className="text-rose-300 hover:text-rose-600" onClick={() => borrar(c)}>borrar</button>}
+              {(c.estado !== 'cobrado' || c.origen === 'historico') && <button className="text-rose-300 hover:text-rose-600" onClick={() => borrar(c)}>borrar</button>}
             </div>
             {c.motivoCancelacion && <div className="mt-1 text-[11px] text-rose-400">Anulado: {c.motivoCancelacion}</div>}
           </Card>
@@ -601,7 +687,7 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
             <Boton variant="ghost" onClick={verCheque}><Printer size={13} /> Imprimir</Boton>
             {c.estado !== 'cancelado' && <Boton variant="ghost" onClick={clonar}><Copy size={13} /> Clonar</Boton>}
             {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <Boton variant="ghost" onClick={anular}>Anular</Boton>}
-            {c.estado !== 'cobrado' && <button className="rounded-xl px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={borrar}>Borrar</button>}
+            {(c.estado !== 'cobrado' || c.origen === 'historico') && <button className="rounded-xl px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={borrar}>Borrar</button>}
             <button className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700" onClick={cerrar}><X size={17} /></button>
           </span>
         </div>
