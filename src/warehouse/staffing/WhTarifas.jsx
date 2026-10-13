@@ -21,10 +21,10 @@ export default function WhTarifas({ user }) {
   const [tarifas, setTarifas] = useState(null)
   const [config, setConfig] = useState(null)
   const [grupos, setGrupos] = useState([])
-  const [nueva, setNueva] = useState({ posicion: '', reg: '', ot: '', desde: '' })
+  const [nueva, setNueva] = useState({ posicion: '', reg: '', ot: '', desde: '', otFlat: false })
   const [guardando, setGuardando] = useState('')
   const [nuevoMapeo, setNuevoMapeo] = useState({ de: '', a: '' })
-  const [escal, setEscal] = useState({ posicion: '', filas: [{ minDias: '', reg: '', ot: '' }] })
+  const [escal, setEscal] = useState({ posicion: '', filas: [{ minDias: '', reg: '', ot: '', otFlat: false }] })
   const [nuevoGrupo, setNuevoGrupo] = useState({ nombre: '', reglaOT: '', umbralSemanal: '', tarifas: '' })
   const recargar = async () => {
     const [t, c, g] = await Promise.all([cargar(COL.tarifas), cargar(COL.config), cargar(COL.grupos)])
@@ -40,7 +40,8 @@ export default function WhTarifas({ user }) {
 
   const guardarTarifa = async () => {
     const pos = nueva.posicion.trim()
-    if (!pos || !nueva.reg || !nueva.ot) return
+    if (!pos || !nueva.reg || (!nueva.otFlat && !nueva.ot)) return
+    const otGuardar = nueva.otFlat ? 0 : Number(nueva.ot)
     setGuardando('tarifa')
     try {
       const existente = tarifas.find((t) => t.id === pos)
@@ -48,12 +49,12 @@ export default function WhTarifas({ user }) {
         ? [...(existente.historial || []), { reg: existente.reg, ot: existente.ot, desde: existente.vigenteDesde || '0000-00-00', hasta: nueva.desde || new Date().toISOString().slice(0, 10), por: existente.actualizadoPor || '' }]
         : []
       await setDoc(refDoc(COL.tarifas, pos), {
-        posicion: pos, reg: Number(nueva.reg), ot: Number(nueva.ot),
+        posicion: pos, reg: Number(nueva.reg), ot: otGuardar,
         vigenteDesde: nueva.desde || new Date().toISOString().slice(0, 10),
         historial, actualizadoPor: user.email, actualizadoEn: new Date().toISOString(),
       })
-      await auditarStaff(existente ? 'tarifa_actualizada' : 'tarifa_creada', `${pos}: $${nueva.reg}/h reg · $${nueva.ot}/h OT desde ${nueva.desde || 'hoy'}`)
-      setNueva({ posicion: '', reg: '', ot: '', desde: '' })
+      await auditarStaff(existente ? 'tarifa_actualizada' : 'tarifa_creada', `${pos}: $${nueva.reg}/h reg · ${nueva.otFlat ? 'OT flat (= regular)' : `$${nueva.ot}/h OT`} desde ${nueva.desde || 'hoy'}`)
+      setNueva({ posicion: '', reg: '', ot: '', desde: '', otFlat: false })
       recargar()
     } finally { setGuardando('') }
   }
@@ -61,9 +62,9 @@ export default function WhTarifas({ user }) {
   const guardarEscalones = async () => {
     const pos = escal.posicion.trim()
     if (!pos) return
-    // OT en 0 o vacía = FLAT RATE (las horas extra se pagan a la regular)
+    // Flat rate (casilla o OT en 0/vacía) = las horas extra se pagan a la regular
     const lista = escal.filas
-      .map((f) => ({ minDias: Number(f.minDias) || 0, reg: Number(f.reg), ot: f.ot === '' || f.ot === null || f.ot === undefined ? 0 : Number(f.ot) }))
+      .map((f) => ({ minDias: Number(f.minDias) || 0, reg: Number(f.reg), ot: f.otFlat || f.ot === '' || f.ot === null || f.ot === undefined ? 0 : Number(f.ot) }))
       .filter((f) => Number.isFinite(f.reg) && f.reg > 0 && Number.isFinite(f.ot) && f.ot >= 0)
       .sort((a, b) => b.minDias - a.minDias)
     setGuardando('escalones')
@@ -76,7 +77,7 @@ export default function WhTarifas({ user }) {
         actualizadoPor: user.email, actualizadoEn: new Date().toISOString(),
       }, { merge: true })
       await auditarStaff('tarifa_escalones', `${pos}: ${lista.length ? lista.map((e) => `≥${e.minDias} días $${e.reg}/${e.ot > 0 ? `$${e.ot}` : 'flat'}`).join(' · ') : 'regla por días eliminada'}`)
-      setEscal({ posicion: '', filas: [{ minDias: '', reg: '', ot: '' }] })
+      setEscal({ posicion: '', filas: [{ minDias: '', reg: '', ot: '', otFlat: false }] })
       recargar()
     } finally { setGuardando('') }
   }
@@ -182,7 +183,11 @@ export default function WhTarifas({ user }) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Posición (p. ej. Sorter)" className="w-44" value={nueva.posicion} onChange={(e) => setNueva({ ...nueva, posicion: e.target.value })} />
           <Input type="number" step="0.25" placeholder="$ regular/h" className="w-28" value={nueva.reg} onChange={(e) => setNueva({ ...nueva, reg: e.target.value })} />
-          <Input type="number" step="0.25" placeholder="$ OT/h (0 = flat)" className="w-32" value={nueva.ot} onChange={(e) => setNueva({ ...nueva, ot: e.target.value })} />
+          {!nueva.otFlat && <Input type="number" step="0.25" placeholder="$ OT/h" className="w-28" value={nueva.ot} onChange={(e) => setNueva({ ...nueva, ot: e.target.value })} />}
+          <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+            <input type="checkbox" checked={nueva.otFlat} onChange={(e) => setNueva({ ...nueva, otFlat: e.target.checked, ot: '' })} />
+            Flat rate (sin OT: toda hora se paga a la regular)
+          </label>
           <Input type="date" className="w-40" value={nueva.desde} onChange={(e) => setNueva({ ...nueva, desde: e.target.value })} />
           <Boton variant="gold" disabled={guardando === 'tarifa'} onClick={guardarTarifa}>{guardando === 'tarifa' ? <Spinner /> : 'Guardar tarifa'}</Boton>
         </div>
@@ -204,7 +209,7 @@ export default function WhTarifas({ user }) {
             <Badge color="navy">{etiquetaPosicion(t.posicion, config.posiciones)}</Badge>
             {t.escalones.map((e, i) => <span key={i} className="text-slate-600 dark:text-slate-300">desde {e.minDias} días: {dinero(e.reg)} / {Number(e.ot) > 0 ? `${dinero(e.ot)} OT` : 'flat (OT = regular)'}</span>)}
             <button className="ml-auto text-xs font-semibold text-brand-navy hover:underline dark:text-slate-200"
-              onClick={() => setEscal({ posicion: t.posicion, filas: t.escalones.map((e) => ({ minDias: String(e.minDias), reg: String(e.reg), ot: String(e.ot) })) })}>editar</button>
+              onClick={() => setEscal({ posicion: t.posicion, filas: t.escalones.map((e) => ({ minDias: String(e.minDias), reg: String(e.reg), ot: Number(e.ot) > 0 ? String(e.ot) : '', otFlat: !(Number(e.ot) > 0) })) })}>editar</button>
             <button className="text-rose-400 hover:text-rose-600" onClick={() => quitarEscalones(t)}>quitar</button>
           </div>
         ))}
@@ -216,12 +221,16 @@ export default function WhTarifas({ user }) {
               <Input type="number" min="0" className="w-16" placeholder="días" value={f.minDias} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, minDias: e.target.value } : x) })} />
               <span>días →</span>
               <Input type="number" step="0.25" className="w-24" placeholder="$ regular/h" value={f.reg} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, reg: e.target.value } : x) })} />
-              <Input type="number" step="0.25" className="w-28" placeholder="$ OT/h (0 = flat)" value={f.ot} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, ot: e.target.value } : x) })} />
+              {!f.otFlat && <Input type="number" step="0.25" className="w-24" placeholder="$ OT/h" value={f.ot} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, ot: e.target.value } : x) })} />}
+              <label className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                <input type="checkbox" checked={!!f.otFlat} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, otFlat: e.target.checked, ot: '' } : x) })} />
+                flat rate
+              </label>
               <button className="text-rose-400 hover:text-rose-600" onClick={() => setEscal({ ...escal, filas: escal.filas.filter((_, j) => j !== i) })}>quitar</button>
             </div>
           ))}
           <div className="flex flex-wrap items-center gap-2">
-            <Boton variant="ghost" onClick={() => setEscal({ ...escal, filas: [...escal.filas, { minDias: '', reg: '', ot: '' }] })}>+ agregar escalón</Boton>
+            <Boton variant="ghost" onClick={() => setEscal({ ...escal, filas: [...escal.filas, { minDias: '', reg: '', ot: '', otFlat: false }] })}>+ agregar escalón</Boton>
             <Boton variant="gold" disabled={guardando === 'escalones' || !escal.posicion.trim()} onClick={guardarEscalones}>{guardando === 'escalones' ? <Spinner /> : 'Guardar regla por días'}</Boton>
             <span className="text-[11px] text-slate-400">Guardar sin escalones elimina la regla y vuelve a la tarifa fija.</span>
           </div>

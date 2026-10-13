@@ -417,15 +417,15 @@ function FaltaTarifa({ posiciones, onGuardada, user }) {
   const [guardando, setGuardando] = useState('')
   const guardar = async (pos) => {
     const v = valores[pos] || {}
-    if (!v.reg || !v.ot) return
+    if (!v.reg || (!v.otFlat && !v.ot)) return
     setGuardando(pos)
     try {
       await setDoc(refDoc(COL.tarifas, pos), {
-        posicion: pos, reg: Number(v.reg), ot: Number(v.ot),
+        posicion: pos, reg: Number(v.reg), ot: v.otFlat ? 0 : Number(v.ot),
         vigenteDesde: v.desde || new Date().toISOString().slice(0, 10),
         actualizadoPor: user.email, actualizadoEn: new Date().toISOString(),
       }, { merge: true })
-      await auditarStaff('tarifa_creada', `${pos}: $${v.reg}/h reg · $${v.ot}/h OT`)
+      await auditarStaff('tarifa_creada', `${pos}: $${v.reg}/h reg · ${v.otFlat ? 'OT flat (= regular)' : `$${v.ot}/h OT`}`)
       onGuardada()
     } finally { setGuardando('') }
   }
@@ -437,9 +437,13 @@ function FaltaTarifa({ posiciones, onGuardada, user }) {
           <div key={pos} className="flex flex-wrap items-center gap-2">
             <Badge color="navy">{pos}</Badge>
             <Input type="number" step="0.25" placeholder="$ regular/h" className="w-28" value={valores[pos]?.reg || ''} onChange={(e) => setValores({ ...valores, [pos]: { ...valores[pos], reg: e.target.value } })} />
-            <Input type="number" step="0.25" placeholder="$ OT/h" className="w-28" value={valores[pos]?.ot || ''} onChange={(e) => setValores({ ...valores, [pos]: { ...valores[pos], ot: e.target.value } })} />
+            {!valores[pos]?.otFlat && <Input type="number" step="0.25" placeholder="$ OT/h" className="w-28" value={valores[pos]?.ot || ''} onChange={(e) => setValores({ ...valores, [pos]: { ...valores[pos], ot: e.target.value } })} />}
+            <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+              <input type="checkbox" checked={!!valores[pos]?.otFlat} onChange={(e) => setValores({ ...valores, [pos]: { ...valores[pos], otFlat: e.target.checked, ot: '' } })} />
+              flat rate
+            </label>
             <Input type="date" className="w-40" value={valores[pos]?.desde || ''} onChange={(e) => setValores({ ...valores, [pos]: { ...valores[pos], desde: e.target.value } })} />
-            <Boton variant="gold" disabled={guardando === pos || !valores[pos]?.reg || !valores[pos]?.ot} onClick={() => guardar(pos)}>{guardando === pos ? <Spinner /> : 'Guardar'}</Boton>
+            <Boton variant="gold" disabled={guardando === pos || !valores[pos]?.reg || (!valores[pos]?.otFlat && !valores[pos]?.ot)} onClick={() => guardar(pos)}>{guardando === pos ? <Spinner /> : 'Guardar'}</Boton>
           </div>
         ))}
       </div>
