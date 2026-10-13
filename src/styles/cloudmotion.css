@@ -29,7 +29,7 @@
 }
 .dark .cm-nubes span { opacity: 0.18; }
 /* La dorada va más suave: saturaba de amarillo la esquina del menú. */
-.cm-n1 { width: 54vw; height: 54vw; background: #c9a24b; top: -20vw; left: -14vw; opacity: 0.2; animation: cm-flota1 26s ease-in-out infinite alternate; }
+.cm-n1 { width: 54vw; height: 54vw; background: #c9a24b; top: -20vw; left: -14vw; opacity: 0.14; animation: cm-flota1 26s ease-in-out infinite alternate; }
 .cm-n2 { width: 48vw; height: 48vw; background: #3d5a80; bottom: -18vw; right: -12vw; animation: cm-flota2 32s ease-in-out infinite alternate; }
 .cm-n3 { width: 36vw; height: 36vw; background: #4a9c8c; top: 32%; left: 56%; animation: cm-flota3 38s ease-in-out infinite alternate; }
 @keyframes cm-flota1 { to { transform: translate(9vw, 7vh) scale(1.12); } }

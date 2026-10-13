@@ -2517,7 +2517,7 @@ export function LangToggle({ className = '' }) {
         <button
           key={l}
           onClick={() => setLang(l)}
-          className={`px-2.5 py-1 uppercase transition ${lang === l ? 'bg-amber-500 text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'}`}
+          className={`px-2.5 py-1 uppercase transition ${lang === l ? 'bg-brand-navy text-white dark:bg-white/25' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'}`}
         >
           {l}
         </button>

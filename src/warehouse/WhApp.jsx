@@ -138,7 +138,7 @@ function WhShell({ user }) {
               <button key={tdef.id} onClick={() => setTab(tdef.id)}
                 className={`group relative flex items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
                   activo
-                    ? 'border-brand-gold bg-brand-gold/10 font-semibold text-brand-navy dark:bg-brand-gold/15 dark:text-white'
+                    ? 'border-brand-gold bg-slate-100/80 font-semibold text-brand-navy dark:bg-slate-700/40 dark:text-white'
                     : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
                 }`}>
                 <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
