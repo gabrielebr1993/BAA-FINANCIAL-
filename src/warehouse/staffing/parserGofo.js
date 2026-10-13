@@ -69,7 +69,12 @@ export const POSICIONES_BASE = {
 // solo se quita la última palabra cuando es una etiqueta de posición conocida
 // y queda al menos una palabra de nombre. La migración en Trabajadores
 // conserva el nombre viejo como alias para que nada se duplique.
-const RX_SUFIJO_POSICION = /^(叉车工?|分拣工?|清洁工?)$/
+// Regla general: si el resto del nombre tiene letras latinas, CUALQUIER
+// palabra escrita solo en chino al final es una etiqueta del archivo y se
+// quita (叉车, 分拣工, 夜班, el almacén, lo que sea). Un nombre totalmente
+// chino (persona china real) nunca se toca.
+const RX_CJK = /^[㐀-䶿一-鿿豈-﫿]+$/
+const RX_LATINO = /[A-Za-zÀ-ÿ]/
 export function limpiarNombrePersona(raw) {
   let s = String(raw || '').trim()
   let antes
@@ -77,7 +82,9 @@ export function limpiarNombrePersona(raw) {
     antes = s
     s = s.replace(/\s+#?\d{1,3}$/, '').trim()
     const partes = s.split(/\s+/)
-    if (partes.length > 1 && RX_SUFIJO_POSICION.test(partes[partes.length - 1])) {
+    const ultimo = (partes[partes.length - 1] || '').replace(/^[([【（]+|[)\]】）]+$/g, '')
+    const restoConLatino = partes.slice(0, -1).some((p) => RX_LATINO.test(p))
+    if (partes.length > 1 && restoConLatino && RX_CJK.test(ultimo)) {
       s = partes.slice(0, -1).join(' ')
     }
   } while (s !== antes)

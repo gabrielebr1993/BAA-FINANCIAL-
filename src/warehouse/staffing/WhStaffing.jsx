@@ -220,6 +220,37 @@ export default function WhStaffing({ user }) {
     } finally { setTrabajando('') }
   }
 
+  // ELIMINAR un período importado por completo: registros + ajustes + el doc
+  // del período. Bloqueado si tiene cheques vinculados (primero se borran o
+  // anulan en Print Check / Cheques). Los perfiles de trabajadores se quedan.
+  const eliminarPeriodo = async (pd) => {
+    setTrabajando('del_' + pd.id)
+    try {
+      const cheques = await cargar(COL.cheques)
+      const vinculados = cheques.filter((c) => c.estado !== 'cancelado' && (c.distribucion || []).some((d) => d.periodoId === pd.id))
+      if (vinculados.length) {
+        setMensaje({ tipo: 'error', texto: `No se puede eliminar ${pd.inicio} → ${pd.fin}: tiene ${vinculados.length} cheque(s) vinculados (${vinculados.slice(0, 5).map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')}${vinculados.length > 5 ? '…' : ''}). Bórralos o anúlalos primero en Print Check → Registro.` })
+        return
+      }
+      if (!window.confirm(`¿ELIMINAR el período ${pd.inicio} → ${pd.fin} por completo?\n\nSe borran sus registros de horas/pagos y sus ajustes. Los perfiles de trabajadores se conservan. Podrás volver a importarlo del archivo cuando quieras.`)) return
+      const [regs, ajs] = await Promise.all([
+        cargarPor(COL.registros, 'periodoId', pd.id),
+        cargarPor(COL.ajustes, 'periodoAplicaId', pd.id),
+      ])
+      const ops = [
+        ...regs.map((r) => ({ ref: refDoc(COL.registros, r.id), borrar: true })),
+        ...ajs.map((a) => ({ ref: refDoc(COL.ajustes, a.id), borrar: true })),
+        { ref: refDoc(COL.periodos, pd.id), borrar: true },
+      ]
+      await escribirEnLotes(ops)
+      await auditarStaff('staffing_periodo_eliminado', `${pd.id}: ${regs.length} registros y ${ajs.length} ajustes borrados (${pd.archivo || ''})`)
+      setMensaje({ tipo: 'ok', texto: `Período ${pd.inicio} → ${pd.fin} eliminado (${regs.length} registros, ${ajs.length} ajustes). Puedes reimportarlo del archivo cuando quieras.` })
+      await recargarBd()
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'No se pudo eliminar: ' + (e.message || e) })
+    } finally { setTrabajando('') }
+  }
+
   // RECALCULAR un período ya importado con las tarifas/grupos/reglas ACTUALES
   // (acción explícita y auditada: cambiar una tarifa nunca recalcula solo).
   const recalcularPeriodo = async (pd) => {
@@ -331,6 +362,10 @@ export default function WhStaffing({ user }) {
               <button className="font-semibold text-brand-gold hover:underline" disabled={trabajando === 're_' + pd.id}
                 onClick={() => recalcularPeriodo(pd)} title="Recalcular MI pago con las tarifas, grupos y reglas de hoy (no toca los datos de Gofo)">
                 {trabajando === 're_' + pd.id ? 'recalculando…' : 'recalcular pagos'}
+              </button>
+              <button className="font-semibold text-rose-400 hover:text-rose-600" disabled={trabajando === 'del_' + pd.id}
+                onClick={() => eliminarPeriodo(pd)} title="Borra el período completo (registros y ajustes). Bloqueado si tiene cheques vinculados.">
+                {trabajando === 'del_' + pd.id ? 'eliminando…' : 'eliminar'}
               </button>
             </div>
           ))}
