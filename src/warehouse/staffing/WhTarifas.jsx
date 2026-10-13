@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner } from '../../components/ui'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
+import { etiquetaPosicion } from './calculosStaff'
 import { POSICIONES_BASE } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toFixed(2)}`)
@@ -60,9 +61,10 @@ export default function WhTarifas({ user }) {
   const guardarEscalones = async () => {
     const pos = escal.posicion.trim()
     if (!pos) return
+    // OT en 0 o vacía = FLAT RATE (las horas extra se pagan a la regular)
     const lista = escal.filas
-      .map((f) => ({ minDias: Number(f.minDias) || 0, reg: Number(f.reg), ot: Number(f.ot) }))
-      .filter((f) => Number.isFinite(f.reg) && f.reg > 0 && Number.isFinite(f.ot) && f.ot > 0)
+      .map((f) => ({ minDias: Number(f.minDias) || 0, reg: Number(f.reg), ot: f.ot === '' || f.ot === null || f.ot === undefined ? 0 : Number(f.ot) }))
+      .filter((f) => Number.isFinite(f.reg) && f.reg > 0 && Number.isFinite(f.ot) && f.ot >= 0)
       .sort((a, b) => b.minDias - a.minDias)
     setGuardando('escalones')
     try {
@@ -73,7 +75,7 @@ export default function WhTarifas({ user }) {
         escalones: lista,
         actualizadoPor: user.email, actualizadoEn: new Date().toISOString(),
       }, { merge: true })
-      await auditarStaff('tarifa_escalones', `${pos}: ${lista.length ? lista.map((e) => `≥${e.minDias} días $${e.reg}/$${e.ot}`).join(' · ') : 'regla por días eliminada'}`)
+      await auditarStaff('tarifa_escalones', `${pos}: ${lista.length ? lista.map((e) => `≥${e.minDias} días $${e.reg}/${e.ot > 0 ? `$${e.ot}` : 'flat'}`).join(' · ') : 'regla por días eliminada'}`)
       setEscal({ posicion: '', filas: [{ minDias: '', reg: '', ot: '' }] })
       recargar()
     } finally { setGuardando('') }
@@ -164,11 +166,11 @@ export default function WhTarifas({ user }) {
               {tarifas.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100 text-xs dark:border-slate-800">
                   <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">
-                    {t.posicion}
+                    {etiquetaPosicion(t.posicion, config.posiciones)}
                     {(t.escalones || []).length > 0 && <div className="mt-0.5 text-[10px] font-normal text-amber-600 dark:text-amber-400">por días: {t.escalones.map((e) => `≥${e.minDias}d ${dinero(e.reg)}`).join(' · ')}</div>}
                   </td>
                   <td className="pr-2 text-right">{dinero(t.reg)}</td>
-                  <td className="pr-2 text-right">{dinero(t.ot)}</td>
+                  <td className="pr-2 text-right">{Number(t.ot) > 0 ? dinero(t.ot) : <span className="text-slate-400">flat</span>}</td>
                   <td className="pr-2">{t.vigenteDesde}</td>
                   <td className="pr-2 text-slate-400">{(t.historial || []).map((h, i) => <div key={i}>{dinero(h.reg)}/{dinero(h.ot)} ({h.desde} → {h.hasta})</div>)}</td>
                 </tr>
@@ -180,7 +182,7 @@ export default function WhTarifas({ user }) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Input placeholder="Posición (p. ej. Sorter)" className="w-44" value={nueva.posicion} onChange={(e) => setNueva({ ...nueva, posicion: e.target.value })} />
           <Input type="number" step="0.25" placeholder="$ regular/h" className="w-28" value={nueva.reg} onChange={(e) => setNueva({ ...nueva, reg: e.target.value })} />
-          <Input type="number" step="0.25" placeholder="$ OT/h" className="w-28" value={nueva.ot} onChange={(e) => setNueva({ ...nueva, ot: e.target.value })} />
+          <Input type="number" step="0.25" placeholder="$ OT/h (0 = flat)" className="w-32" value={nueva.ot} onChange={(e) => setNueva({ ...nueva, ot: e.target.value })} />
           <Input type="date" className="w-40" value={nueva.desde} onChange={(e) => setNueva({ ...nueva, desde: e.target.value })} />
           <Boton variant="gold" disabled={guardando === 'tarifa'} onClick={guardarTarifa}>{guardando === 'tarifa' ? <Spinner /> : 'Guardar tarifa'}</Boton>
         </div>
@@ -194,11 +196,13 @@ export default function WhTarifas({ user }) {
           Se escribe como: desde 6 días $15, desde 5 días $14, desde 0 días $13.
           Se cuentan los días con horas de la persona en toda la semana. La excepción individual
           y la tarifa de grupo siguen mandando sobre esta regla.
+          <b> ¿Posición flat rate (sin OT)?</b> Deja la OT en 0 o vacía: las horas extra se pagan
+          a la misma tarifa regular del escalón, nunca a $0.
         </p>
         {tarifas.filter((t) => (t.escalones || []).length).map((t) => (
           <div key={t.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
-            <Badge color="navy">{t.posicion}</Badge>
-            {t.escalones.map((e, i) => <span key={i} className="text-slate-600 dark:text-slate-300">desde {e.minDias} días: {dinero(e.reg)} / {dinero(e.ot)} OT</span>)}
+            <Badge color="navy">{etiquetaPosicion(t.posicion, config.posiciones)}</Badge>
+            {t.escalones.map((e, i) => <span key={i} className="text-slate-600 dark:text-slate-300">desde {e.minDias} días: {dinero(e.reg)} / {Number(e.ot) > 0 ? `${dinero(e.ot)} OT` : 'flat (OT = regular)'}</span>)}
             <button className="ml-auto text-xs font-semibold text-brand-navy hover:underline dark:text-slate-200"
               onClick={() => setEscal({ posicion: t.posicion, filas: t.escalones.map((e) => ({ minDias: String(e.minDias), reg: String(e.reg), ot: String(e.ot) })) })}>editar</button>
             <button className="text-rose-400 hover:text-rose-600" onClick={() => quitarEscalones(t)}>quitar</button>
@@ -212,7 +216,7 @@ export default function WhTarifas({ user }) {
               <Input type="number" min="0" className="w-16" placeholder="días" value={f.minDias} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, minDias: e.target.value } : x) })} />
               <span>días →</span>
               <Input type="number" step="0.25" className="w-24" placeholder="$ regular/h" value={f.reg} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, reg: e.target.value } : x) })} />
-              <Input type="number" step="0.25" className="w-24" placeholder="$ OT/h" value={f.ot} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, ot: e.target.value } : x) })} />
+              <Input type="number" step="0.25" className="w-28" placeholder="$ OT/h (0 = flat)" value={f.ot} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, ot: e.target.value } : x) })} />
               <button className="text-rose-400 hover:text-rose-600" onClick={() => setEscal({ ...escal, filas: escal.filas.filter((_, j) => j !== i) })}>quitar</button>
             </div>
           ))}

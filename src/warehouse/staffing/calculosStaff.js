@@ -39,14 +39,44 @@ export function escalonVigente(tarifaDoc, diasTrabajados) {
     .sort((a, b) => (Number(b.minDias) || 0) - (Number(a.minDias) || 0))
   if (!aplicables.length) return null
   const e = aplicables[0]
-  // OT del escalón; si no se definió, cae a la OT base de la posición
-  const ot = Number.isFinite(Number(e.ot)) ? Number(e.ot) : Number(tarifaDoc.ot)
+  // OT del escalón: >0 se usa tal cual; 0 explícito = FLAT RATE (las horas
+  // extra se pagan a la tarifa regular); sin definir = OT base de la posición
+  // (o flat si la base tampoco tiene OT).
+  const otE = Number(e.ot)
+  const ot = otE > 0
+    ? otE
+    : (e.ot === 0 || e.ot === '0')
+      ? Number(e.reg)
+      : (Number(tarifaDoc.ot) > 0 ? Number(tarifaDoc.ot) : Number(e.reg))
   return { reg: Number(e.reg), ot, minDias: Number(e.minDias) || 0 }
 }
 
 // Días trabajados de una fila: fechas del detalle con horas > 0.
 export function diasDeFila(fila) {
   return Object.values(fila.dias || {}).filter((h) => (Number(h) || 0) > 0).length
+}
+
+// Diccionario de tarifas con ALIAS del mapeo de posiciones: si la tarifa se
+// guardó con el nombre del archivo (分拣工) y los registros vienen mapeados
+// (Sorter) — o al revés — ambas escrituras encuentran el mismo documento.
+// Solo agrega alias en memoria; no crea documentos nuevos.
+export function expandirTarifas(dict, posMap) {
+  const out = { ...(dict || {}) }
+  for (const [de, a] of Object.entries(posMap || {})) {
+    if (out[de] && !out[a]) out[a] = out[de]
+    if (out[a] && !out[de]) out[de] = out[a]
+  }
+  return out
+}
+
+// Nombre para MOSTRAR una posición: si es un texto del archivo con mapeo
+// (p. ej. 分拣工 → Sorter) devuelve "分拣工 · Sorter". Solo visual: no cambia
+// ids ni documentos.
+export function etiquetaPosicion(posicion, posMap) {
+  const pos = String(posicion || '')
+  const m = posMap || {}
+  if (m[pos] && m[pos] !== pos) return `${pos} · ${m[pos]}`
+  return pos
 }
 
 // Excepción individual vigente (worker.tarifas = [{posicion|'' , reg, ot, desde}]).
@@ -111,17 +141,20 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupo
       horasReg = fila.horasReg != null ? fila.horasReg : Math.max(0, (fila.horasTotal || 0) - (fila.horasOT || 0))
       horasOT = fila.horasOT || 0
     }
-    if (!tarifa || !Number.isFinite(Number(tarifa.reg)) || !Number.isFinite(Number(tarifa.ot))) {
+    if (!tarifa || !Number.isFinite(Number(tarifa.reg)) || Number(tarifa.reg) <= 0) {
       resultados.push({ ...fila, miHorasReg: horasReg, miHorasOT: horasOT, miTarifaReg: null, miTarifaOT: null, miPago: null, pendienteTarifa: true, origenTarifa: null })
       continue
     }
-    const pago = Math.round((horasReg * Number(tarifa.reg) + horasOT * Number(tarifa.ot)) * 100) / 100
+    // OT en 0 o sin definir = FLAT RATE: las horas extra se pagan a la regular
+    const tarifaReg = Number(tarifa.reg)
+    const tarifaOT = Number(tarifa.ot) > 0 ? Number(tarifa.ot) : tarifaReg
+    const pago = Math.round((horasReg * tarifaReg + horasOT * tarifaOT) * 100) / 100
     resultados.push({
       ...fila,
       miHorasReg: horasReg,
       miHorasOT: horasOT,
-      miTarifaReg: Number(tarifa.reg),
-      miTarifaOT: Number(tarifa.ot),
+      miTarifaReg: tarifaReg,
+      miTarifaOT: tarifaOT,
       miPago: pago,
       pendienteTarifa: false,
       origenTarifa: exc ? 'excepción individual' : deGrupo ? `grupo ${grupo.nombre || worker.grupoId}` : escal ? `por días trabajados (${diasPersona} días)` : 'tarifa de posición',

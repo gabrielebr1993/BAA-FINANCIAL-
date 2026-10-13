@@ -14,7 +14,7 @@ import * as XLSX from 'xlsx'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { Upload, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { analizarLibro, POSICIONES_BASE, normalizarNombre } from './parserGofo'
-import { calcularPagos } from './calculosStaff'
+import { calcularPagos, expandirTarifas } from './calculosStaff'
 import {
   COL, cargar, cargarPor, auditarStaff, escribirEnLotes, refDoc, resolverWorker, idRegistro, serverTimestamp, setDoc,
 } from './datosStaff'
@@ -36,7 +36,8 @@ export default function WhStaffing({ user }) {
     const reglas = configs.find((c) => c.id === 'reglas') || { reglaOT: 'gofo', umbralSemanal: 40 }
     setBd({
       periodos: Object.fromEntries(periodos.map((p) => [p.id, p])),
-      tarifas: Object.fromEntries(tarifas.map((t) => [t.id, t])),
+      // con alias del mapeo: tarifa guardada como 分拣工 sirve para Sorter y viceversa
+      tarifas: expandirTarifas(Object.fromEntries(tarifas.map((t) => [t.id, t])), posiciones),
       workers,
       posiciones,
       reglas,
