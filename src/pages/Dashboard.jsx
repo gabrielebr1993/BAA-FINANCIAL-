@@ -142,9 +142,8 @@ export default function Dashboard() {
   const onbAbierto = !!ajustes && (ajustes.onboardingCompleto === false || (ajustes.onboardingCompleto === undefined && invoices.length === 0))
 
   return (
-    <div className="cm-scope">
-      {/* Cloud Motion: nubes de color flotando detrás de las tarjetas de vidrio. */}
-      <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
+    <div>
+      {/* Cloud Motion ahora vive en Layout (todas las páginas del módulo). */}
       <PageTitle right={
         inv && !cargando && (
           <>

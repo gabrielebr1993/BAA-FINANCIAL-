@@ -247,7 +247,10 @@ export default function Layout({ children }) {
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="cm-scope flex min-w-0 flex-1 flex-col">
+          {/* Cloud Motion en TODAS las páginas del módulo (nunca en el menú
+              lateral): nubes pastel muy suaves detrás del contenido. */}
+          <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
           {/* Header global: fila superior (menú/campana) + barra de filtros fija
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
           <header className="pt-safe sticky top-0 z-20 bg-white/90 shadow-[0_1px_0_rgba(15,23,42,.06)] backdrop-blur dark:bg-surface-dark-card/90 dark:shadow-[0_1px_0_rgba(255,255,255,.05)]">
