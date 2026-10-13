@@ -82,6 +82,16 @@ export default function WhTarifas({ user }) {
     } finally { setGuardando('') }
   }
 
+  const eliminarTarifa = async (t) => {
+    if (!window.confirm(`¿Eliminar la tarifa de "${t.posicion}" (incluye su historial y su regla por días)?\n\nLas semanas ya importadas NO cambian. Si vuelves a importar y la posición no tiene tarifa, el sistema te la preguntará de nuevo.`)) return
+    setGuardando('tarifa')
+    try {
+      await escribirEnLotes([{ ref: refDoc(COL.tarifas, t.id), borrar: true }])
+      await auditarStaff('tarifa_eliminada', `${t.posicion} (reg ${t.reg ?? '—'}, OT ${t.ot ?? '—'})`)
+      recargar()
+    } finally { setGuardando('') }
+  }
+
   const quitarEscalones = async (t) => {
     if (!window.confirm(`¿Quitar la regla por días de "${t.posicion}"? Volverá a usar su tarifa fija.`)) return
     setGuardando('escalones')
@@ -161,7 +171,7 @@ export default function WhTarifas({ user }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-              <th className="py-1.5 pr-2">Posición</th><th className="pr-2 text-right">Regular/h</th><th className="pr-2 text-right">OT/h</th><th className="pr-2">Vigente desde</th><th className="pr-2">Historial</th>
+              <th className="py-1.5 pr-2">Posición</th><th className="pr-2 text-right">Regular/h</th><th className="pr-2 text-right">OT/h</th><th className="pr-2">Vigente desde</th><th className="pr-2">Historial</th><th className="pr-2"></th>
             </tr></thead>
             <tbody>
               {tarifas.map((t) => (
@@ -174,9 +184,10 @@ export default function WhTarifas({ user }) {
                   <td className="pr-2 text-right">{Number(t.ot) > 0 ? dinero(t.ot) : <span className="text-slate-400">flat</span>}</td>
                   <td className="pr-2">{t.vigenteDesde}</td>
                   <td className="pr-2 text-slate-400">{(t.historial || []).map((h, i) => <div key={i}>{dinero(h.reg)}/{dinero(h.ot)} ({h.desde} → {h.hasta})</div>)}</td>
+                  <td className="pr-2 text-right"><button className="text-rose-400 hover:text-rose-600" onClick={() => eliminarTarifa(t)}>eliminar</button></td>
                 </tr>
               ))}
-              {tarifas.length === 0 && <tr><td colSpan={5} className="py-3 text-center text-xs text-slate-400">Sin tarifas: al importar, el sistema te preguntará cuánto quieres pagar por cada posición.</td></tr>}
+              {tarifas.length === 0 && <tr><td colSpan={6} className="py-3 text-center text-xs text-slate-400">Sin tarifas: al importar, el sistema te preguntará cuánto quieres pagar por cada posición.</td></tr>}
             </tbody>
           </table>
         </div>
