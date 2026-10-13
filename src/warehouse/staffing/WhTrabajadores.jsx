@@ -42,9 +42,17 @@ export default function WhTrabajadores({ user }) {
   const lista = activos
     .map((w) => {
       const regs = datos.registros.filter((r) => r.workerId === w.id)
-      const calc = regs.reduce((s, r) => s + (r.miPago || 0), 0)
-      const cobradoCheques = datos.cheques.filter((c) => c.workerId === w.id && c.estado === 'cobrado').reduce((s, c) => s + (c.importe || 0), 0)
-      return { w, periodos: new Set(regs.map((r) => r.periodoId)).size, horas: regs.reduce((s, r) => s + (r.horasTotal || 0), 0), calc, cobradoCheques }
+      const aj = datos.ajustes.filter((a) => a.workerId === w.id && a.estado !== 'revision').reduce((s, a) => s + (a.importe || 0), 0)
+      const calc = regs.reduce((s, r) => s + (r.miPago || 0), 0) + aj
+      const chequesW = datos.cheques.filter((c) => c.workerId === w.id && c.estado !== 'cancelado')
+      const emitido = chequesW.reduce((s, c) => s + (c.importe || 0), 0)
+      const cobradoCheques = chequesW.filter((c) => c.estado === 'cobrado').reduce((s, c) => s + (c.importe || 0), 0)
+      // estado de pago derivado de sus cheques: pagado / en tránsito / por pagar
+      const estadoPago = calc <= 0.01 ? null
+        : cobradoCheques >= calc - 0.01 ? { color: 'green', texto: 'pagado' }
+        : emitido >= calc - 0.01 ? { color: 'gold', texto: 'cheque en tránsito' }
+        : { color: 'red', texto: `por pagar $${(Math.round((calc - emitido) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
+      return { w, periodos: new Set(regs.map((r) => r.periodoId)).size, horas: regs.reduce((s, r) => s + (r.horasTotal || 0), 0), calc, cobradoCheques, estadoPago }
     })
     .filter((x) => !buscar || x.w.nombreNorm.includes(normalizarNombre(buscar)))
     .sort((a, b) => b.horas - a.horas)
@@ -72,11 +80,12 @@ export default function WhTrabajadores({ user }) {
       <Card className="mb-3 p-3"><Input placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} /></Card>
       {lista.length === 0 && <EstadoVacio icono={Users} titulo="Sin trabajadores todavía" texto="Importa un período de Gofo en la pestaña Staffing Gofo y los perfiles se crean solos." mostrarBoton={false} />}
       <div className="grid gap-2">
-        {lista.map(({ w, periodos, horas, calc, cobradoCheques }) => (
+        {lista.map(({ w, periodos, horas, calc, cobradoCheques, estadoPago }) => (
           <Card key={w.id} className="cursor-pointer p-3 hover:shadow-md" onClick={() => setSel(w.id)}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-bold text-brand-navy dark:text-slate-100">{w.nombre}</span>
               {w.idEmpleado && <Badge color="navy">{w.idEmpleado}</Badge>}
+              {estadoPago && <Badge color={estadoPago.color}>{estadoPago.texto}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
               <span className="ml-auto text-xs text-slate-400">{periodos} semanas · {Math.round(horas * 100) / 100} h · calculado {dinero(calc)} · cobrado {dinero(cobradoCheques)}</span>
             </div>
@@ -360,6 +369,14 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
           <Card key={pid} className="mb-3 p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
+              {(() => {
+                // estado de pago de la semana derivado de sus cheques
+                const activos = chP.filter((c) => c.estado !== 'cancelado')
+                if (activos.some((c) => c.estado === 'cobrado')) return <Badge color="green">pagada · cheque cobrado</Badge>
+                if (activos.length) return <Badge color="gold">cheque #{activos[0].numeroRaw || activos[0].numeroNorm} en tránsito</Badge>
+                if (chP.length) return <Badge color="red">cheque anulado · reemitir</Badge>
+                return <Badge color="slate">sin cheque emitido</Badge>
+              })()}
               <span className="ml-auto text-xs text-slate-400">{Math.round(tot.h * 100) / 100} h · Gofo {dinero(tot.g)} · mi pago {dinero(tot.m)}</span>
               <Boton variant="ghost" onClick={() => paystub(pid, p)}><Printer size={13} /> Paystub</Boton>
             </div>
