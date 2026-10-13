@@ -62,12 +62,26 @@ export const POSICIONES_BASE = {
   '叉车工': 'Forklift',
   '清洁工': 'Cleaner',
 }
-// El reporte de Gofo agrega sufijos numéricos al nombre ("Alberto Leon 3"):
-// son artefactos del archivo (turno/almacén), no parte del nombre. Se quitan
-// SIEMPRE al importar; la migración en Trabajadores conserva el nombre viejo
-// como alias para que nada se duplique.
+// El reporte de Gofo agrega sufijos al nombre que NO son parte del nombre:
+// números de turno/almacén ("Alberto Leon 3") y etiquetas de posición en
+// chino ("Adrian Chacoa 叉车"). Se quitan SIEMPRE al importar, en bucle por
+// si vienen combinados ("Nombre 叉车 3"). Un nombre chino REAL no se toca:
+// solo se quita la última palabra cuando es una etiqueta de posición conocida
+// y queda al menos una palabra de nombre. La migración en Trabajadores
+// conserva el nombre viejo como alias para que nada se duplique.
+const RX_SUFIJO_POSICION = /^(叉车工?|分拣工?|清洁工?)$/
 export function limpiarNombrePersona(raw) {
-  return String(raw || '').trim().replace(/\s+#?\d{1,3}$/, '').trim()
+  let s = String(raw || '').trim()
+  let antes
+  do {
+    antes = s
+    s = s.replace(/\s+#?\d{1,3}$/, '').trim()
+    const partes = s.split(/\s+/)
+    if (partes.length > 1 && RX_SUFIJO_POSICION.test(partes[partes.length - 1])) {
+      s = partes.slice(0, -1).join(' ')
+    }
+  } while (s !== antes)
+  return s
 }
 
 export function mapearPosicion(raw, mapa) {
