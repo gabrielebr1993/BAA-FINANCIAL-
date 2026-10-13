@@ -1,11 +1,11 @@
 // ============================================================================
-// WAREHOUSE · Módulo independiente de servicios de almacén (EN CONSTRUCCIÓN).
+// WAREHOUSE · Módulo independiente de servicios de almacén (PRIVADO, real).
 //
 // Servicios que ofrece la empresa: clasificación/sorteo de paquetes, personal
 // (staffing), manejo INBOUND (recepción) y OUTBOUND (despacho), almacenaje y
 // cross-dock. Mismo patrón que Ecommerce: módulo separado, colecciones con
 // prefijo wh_, acceso PRIVADO del dueño (correo verificado, también en
-// firestore.rules) y datos de DEMOSTRACIÓN marcados — nada real todavía.
+// firestore.rules). Módulo REAL: staffing con Gofo, tarifas, finanzas y cheques.
 // ============================================================================
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -14,13 +14,14 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Sparkles, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
 import WhTrabajadores from './staffing/WhTrabajadores'
 import WhTarifas from './staffing/WhTarifas'
 import WhFinanzasStaff from './staffing/WhFinanzasStaff'
 import WhCheques from './staffing/WhCheques'
+import '../styles/cloudmotion.css'
 
 async function auditarWh(accion, detalle) {
   try {
@@ -36,20 +37,6 @@ const ESTADOS_IN = ['programado', 'recibido', 'clasificado', 'almacenado']
 const ESTADOS_OUT = ['preparando', 'listo', 'despachado', 'entregado']
 const ROLES_STAFF = ['Clasificador', 'Empacador', 'Montacarguista', 'Supervisor', 'Inventario']
 
-const DEMO_IN = [
-  { ref: 'IN-1001', cliente: 'Marca de ropa (demo)', tipo: 'Cajas', unidades: 420, estado: 'recibido', notas: 'Llegó completo' },
-  { ref: 'IN-1002', cliente: 'Electrónica LATAM (demo)', tipo: 'Pallets', unidades: 12, estado: 'clasificado', notas: '2 pallets frágiles' },
-  { ref: 'IN-1003', cliente: 'Ecommerce MilePay (demo)', tipo: 'Paquetes', unidades: 260, estado: 'programado', notas: 'Cita martes 9am' },
-]
-const DEMO_OUT = [
-  { ref: 'OUT-2001', destino: 'Tienda Centro (demo)', transportista: 'Flota propia', unidades: 180, estado: 'listo' },
-  { ref: 'OUT-2002', destino: 'Cliente mayorista (demo)', transportista: 'Courier aliado', unidades: 36, estado: 'despachado' },
-]
-const DEMO_STAFF = [
-  { nombre: 'Operador Demo 1', rol: 'Clasificador', turno: 'AM', activo: true },
-  { nombre: 'Operador Demo 2', rol: 'Montacarguista', turno: 'PM', activo: true },
-  { nombre: 'Supervisor Demo', rol: 'Supervisor', turno: 'AM', activo: true },
-]
 
 const SERVICIOS = [
   { icono: '🔀', nombre: 'Clasificación y sorteo', desc: 'Sorting de paquetes por ruta, zona o cliente, con escaneo y conteo verificado.', estado: 'Incluido' },
@@ -87,8 +74,8 @@ export default function WhApp() {
       <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
         <Card className="w-full max-w-md p-8 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-slate-200 text-slate-500 dark:bg-slate-700"><Lock size={24} /></div>
-          <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo en construcción</div>
-          <p className="mt-2 text-sm text-slate-500">Warehouse todavía no está disponible. Muy pronto: clasificación, staffing e inbound/outbound gestionados por MilePay.</p>
+          <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo privado</div>
+          <p className="mt-2 text-sm text-slate-500">El módulo Warehouse es privado del dueño de la cuenta. Si necesitas acceso, contáctalo.</p>
           <Boton variant="ghost" className="mt-5" onClick={() => navigate('/elegir')}><ArrowLeft size={15} /> Volver</Boton>
         </Card>
       </div>
@@ -110,7 +97,7 @@ function WhLogin({ onVolver }) {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-1 flex items-center gap-2 text-xl font-black text-brand-navy dark:text-slate-100"><Warehouse size={20} /> Warehouse</div>
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-violet-500">En construcción · acceso privado</div>
+        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-violet-500">Acceso privado</div>
         <form onSubmit={entrar} className="space-y-3">
           <Input type="email" placeholder="Correo" value={correo} onChange={(e) => setCorreo(e.target.value)} />
           <Input type="password" placeholder="Contraseña" value={clave} onChange={(e) => setClave(e.target.value)} />
@@ -139,7 +126,6 @@ function WhShell({ user }) {
           </div>
         </div>
         <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-          <Badge color="gold">En construcción</Badge>
           <Badge color="slate">Privado</Badge>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
@@ -171,7 +157,10 @@ function WhShell({ user }) {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="cm-scope min-w-0 flex-1">
+        {/* Cloud Motion igual que en el módulo de paquetería: nubes pastel muy
+            suaves detrás del contenido, nunca sobre el menú lateral. */}
+        <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
         {/* Barra superior con pestañas SOLO en móvil (en escritorio manda el
             menú lateral) */}
         <div className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur md:hidden dark:border-slate-700/60 dark:bg-slate-900/80">
@@ -179,7 +168,7 @@ function WhShell({ user }) {
             <button onClick={() => navigate('/elegir')} className="mr-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Cambiar de módulo"><ArrowLeft size={16} /></button>
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-black text-brand-navy dark:text-slate-100">Warehouse</span>
-              <Badge color="gold">En construcción</Badge>
+              <Badge color="slate">Privado</Badge>
             </div>
             <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
               <button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button>
@@ -206,9 +195,9 @@ function WhShell({ user }) {
         {tab === 'finanzas' && <WhFinanzasStaff user={user} />}
         {tab === 'cheques' && <WhCheques user={user} />}
         {tab === 'servicios' && <WhServicios />}
-        {tab === 'inbound' && <WhTabla col="wh_inbound" titulo="Inbound (recepciones)" estados={ESTADOS_IN} demo={DEMO_IN}
+        {tab === 'inbound' && <WhTabla col="wh_inbound" titulo="Inbound (recepciones)" estados={ESTADOS_IN}
           campos={[['ref', 'Referencia'], ['cliente', 'Cliente / marca'], ['tipo', 'Tipo (cajas/pallets/paquetes)'], ['unidades', 'Unidades'], ['notas', 'Notas']]} />}
-        {tab === 'outbound' && <WhTabla col="wh_outbound" titulo="Outbound (despachos)" estados={ESTADOS_OUT} demo={DEMO_OUT}
+        {tab === 'outbound' && <WhTabla col="wh_outbound" titulo="Outbound (despachos)" estados={ESTADOS_OUT}
           campos={[['ref', 'Referencia'], ['destino', 'Destino'], ['transportista', 'Transportista'], ['unidades', 'Unidades']]} />}
         {tab === 'personal' && <WhPersonal />}
         </div>
@@ -305,8 +294,8 @@ function WhServicios() {
   )
 }
 
-// Tabla genérica para Inbound/Outbound: crear, avanzar estado, borrar, sembrar demo.
-function WhTabla({ col, titulo, estados, demo, campos }) {
+// Tabla genérica para Inbound/Outbound: crear, avanzar estado y borrar.
+function WhTabla({ col, titulo, estados, campos }) {
   const [filas, setFilas] = useState(null)
   const [form, setForm] = useState(null)
   const [trabajando, setTrabajando] = useState(false)
@@ -322,7 +311,7 @@ function WhTabla({ col, titulo, estados, demo, campos }) {
   }
   const crear = async () => {
     if (!form.ref?.trim()) return window.alert('Ponle una referencia.')
-    await addDoc(collection(db, col), { ...form, unidades: Number(form.unidades) || 0, estado: estados[0], demo: true, creadoEn: serverTimestamp() })
+    await addDoc(collection(db, col), { ...form, unidades: Number(form.unidades) || 0, estado: estados[0], creadoEn: serverTimestamp() })
     auditarWh('registro_creado', `${col} · ${form.ref}`)
     setForm(null); await recargar()
   }
@@ -343,7 +332,6 @@ function WhTabla({ col, titulo, estados, demo, campos }) {
     <div>
       <PageTitle right={
         <>
-          {filas.length === 0 && <Boton variant="ghost" onClick={sembrar} disabled={trabajando}>{trabajando ? <Spinner /> : <Sparkles size={15} />} Sembrar demo</Boton>}
           <Boton variant="gold" onClick={() => setForm(Object.fromEntries(campos.map(([k]) => [k, ''])))}><Plus size={15} /> Nuevo</Boton>
         </>
       }>{titulo}</PageTitle>
@@ -408,7 +396,7 @@ function WhPersonal() {
   }
   const crear = async () => {
     if (!form.nombre?.trim()) return
-    await addDoc(collection(db, 'wh_staff'), { ...form, activo: true, demo: true, creadoEn: serverTimestamp() })
+    await addDoc(collection(db, 'wh_staff'), { ...form, activo: true, creadoEn: serverTimestamp() })
     auditarWh('staff_creado', form.nombre)
     setForm(null); await recargar()
   }
@@ -419,7 +407,6 @@ function WhPersonal() {
     <div>
       <PageTitle right={
         <>
-          {filas.length === 0 && <Boton variant="ghost" onClick={sembrar} disabled={trabajando}>{trabajando ? <Spinner /> : <Sparkles size={15} />} Sembrar demo</Boton>}
           <Boton variant="gold" onClick={() => setForm({ nombre: '', rol: ROLES_STAFF[0], turno: 'AM' })}><Plus size={15} /> Agregar persona</Boton>
         </>
       }>Personal del almacén (staffing)</PageTitle>

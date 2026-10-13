@@ -279,8 +279,8 @@ export default function Home3D() {
             <div className="migas">
               <span className="miga">📦 {t('Última milla')}</span>
               <span className="miga oro">🚛 Freight</span>
-              <span className="miga" style={{ color: 'var(--verde)' }}>🛒 Ecommerce · {t('muy pronto')}</span>
-              <span className="miga" style={{ color: '#8d79e8' }}>🏭 Warehouse · {t('muy pronto')}</span>
+              <span className="miga" style={{ color: 'var(--verde)' }}>🛒 Ecommerce</span>
+              <span className="miga" style={{ color: '#8d79e8' }}>🏭 Warehouse</span>
             </div>
             <p>{t('Una plataforma, cuatro negocios: última milla de paquetes, materiales a granel, compras internacionales y servicios de almacén. Cada uno con su propio módulo, sin mezclarse.')}</p>
             <div className="ctas">
@@ -362,10 +362,10 @@ export default function Home3D() {
               </ul>
               <div className="cta-zona"><button className="btn btn-navy" onClick={() => navigate('/freight')}>{t('Conocer Freight')}</button></div>
             </div>
-            {/* 🛒 ECOMMERCE (en construcción) */}
+            {/* 🛒 ECOMMERCE */}
             <div className="bloque b-eco">
               <span className="icono-fondo" aria-hidden="true">🛒</span>
-              <span className="sello">{t('Módulo')} 3 · Ecommerce<span className="pronto">{t('Muy pronto')}</span></span>
+              <span className="sello">{t('Módulo')} 3 · Ecommerce</span>
               <h3>{t('Compras internacionales')}</h3>
               <span className="para">{t('¿Quieres productos de afuera sin dolores de cabeza? Nosotros lo traemos.')}</span>
               <ul>
@@ -374,12 +374,12 @@ export default function Home3D() {
                 <li><span className="ic">🛃</span> {t('Aduana e importación gestionadas por nuestra empresa')}</li>
                 <li><span className="ic">🚪</span> {t('Entrega en tu puerta con seguimiento completo')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 {t('En construcción')}</button></div>
+              <div className="cta-zona"><button className="btn btn-eco" onClick={() => navigate('/shop')}>{t('Entrar a Ecommerce')}</button></div>
             </div>
-            {/* 🏭 WAREHOUSE (en construcción) */}
+            {/* 🏭 WAREHOUSE */}
             <div className="bloque b-wh">
               <span className="icono-fondo" aria-hidden="true">🏭</span>
-              <span className="sello">{t('Módulo')} 4 · Warehouse<span className="pronto">{t('Muy pronto')}</span></span>
+              <span className="sello">{t('Módulo')} 4 · Warehouse</span>
               <h3>{t('Servicios de almacén')}</h3>
               <span className="para">{t('¿Necesitas manos y espacio para tu operación? Nuestro almacén trabaja por ti.')}</span>
               <ul>
@@ -388,7 +388,7 @@ export default function Home3D() {
                 <li><span className="ic">📥</span> {t('Inbound y outbound gestionados: recepción, verificación y despacho')}</li>
                 <li><span className="ic">🏗️</span> {t('Almacenaje y cross-dock con control de entradas y salidas')}</li>
               </ul>
-              <div className="cta-zona"><button className="btn btn-eco" disabled style={{ cursor: 'default', opacity: .85 }}>🔒 {t('En construcción')}</button></div>
+              <div className="cta-zona"><button className="btn btn-eco" onClick={() => navigate('/wh')}>{t('Entrar a Warehouse')}</button></div>
             </div>
           </div>
           </Rev>
@@ -475,8 +475,8 @@ export default function Home3D() {
               <b>{t('Módulos')}</b>
               <a onClick={entrar}>{t('Paquetería')}</a>
               <a onClick={() => navigate('/freight')}>Freight</a>
-              <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Ecommerce · {t('Muy pronto')}</a>
-              <a onClick={() => document.getElementById('negocios')?.scrollIntoView({ behavior: 'smooth' })}>Warehouse · {t('Muy pronto')}</a>
+              <a onClick={() => navigate('/shop')}>Ecommerce</a>
+              <a onClick={() => navigate('/wh')}>Warehouse</a>
             </div>
             <div className="col">
               <b>{t('La plataforma')}</b>

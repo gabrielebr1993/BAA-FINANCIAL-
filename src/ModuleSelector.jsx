@@ -1,6 +1,6 @@
 // Pantalla de inicio: elegir entre Package (MyPay, el sistema actual) y Freight
 // (la nueva plataforma de fletes). Guarda la elección para no volver a preguntar.
-// El tercer módulo, Ecommerce (en construcción), se ANUNCIA a todos aquí, pero
+// Los módulos Ecommerce y Warehouse se anuncian a todos aquí, pero
 // el acceso real lo decide /shop: pide iniciar sesión y solo el correo del
 // dueño pasa (los demás ven la pantalla de bloqueo); mismo candado en las
 // reglas de Firestore.
@@ -94,11 +94,11 @@ export default function ModuleSelector() {
           />
           <OpcionCard
             onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
-            titulo="Ecommerce" subtitulo={t('En construcción')} desc={t('Compras internacionales, entregadas por nosotros.')}
+            titulo="Ecommerce" subtitulo={t('Privado')} desc={t('Compras internacionales, entregadas por nosotros.')}
           />
           <OpcionCard
             onClick={() => navigate('/wh')} icon={Warehouse} acento="bg-violet-600" glow="bg-violet-500"
-            titulo="Warehouse" subtitulo={t('En construcción')} desc={t('Clasificación, staffing e inbound/outbound.')}
+            titulo="Warehouse" subtitulo={t('Privado')} desc={t('Clasificación, staffing e inbound/outbound.')}
           />
         </div>
 

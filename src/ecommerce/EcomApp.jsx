@@ -1,7 +1,7 @@
 // ============================================================================
 // ECOMMERCE · Módulo independiente de compras internacionales (EN CONSTRUCCIÓN).
 //
-// ACCESO PRIVADO: mientras está en construcción, SOLO el dueño (correo en
+// ACCESO PRIVADO: SOLO el dueño (correo en
 // ECOM_DUENOS, verificado contra el login real de Firebase) puede ver y usar
 // el módulo. No basta ser admin/superAdmin de Package o Freight. La misma
 // restricción vive en firestore.rules (colecciones ecom_*), así que ni la
@@ -26,6 +26,7 @@ import EcomCatalogo, { EcomPrecios } from './EcomCatalogo'
 import EcomTienda from './EcomTienda'
 import { EcomPedidos, EcomCompras, EcomFinanzas, EcomTickets } from './EcomOperacion'
 import { EcomEquipo, EcomIntegraciones } from './EcomEquipo'
+import '../styles/cloudmotion.css'
 
 // Auditoría del módulo: cada acción importante del dueño/equipo queda escrita.
 export async function auditarEcom(accion, detalle) {
@@ -78,7 +79,7 @@ function EcomLogin() {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-1 text-xl font-black text-brand-navy dark:text-slate-100">Ecommerce</div>
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-amber-600">En construcción · acceso privado</div>
+        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-amber-600">Acceso privado</div>
         <form onSubmit={entrar} className="space-y-3">
           <Input type="email" placeholder="Correo" value={correo} onChange={(e) => setCorreo(e.target.value)} />
           <Input type="password" placeholder="Contraseña" value={clave} onChange={(e) => setClave(e.target.value)} />
@@ -97,7 +98,7 @@ function EcomPrivado({ onSalir }) {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-md p-8 text-center">
         <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-slate-200 text-slate-500 dark:bg-slate-700"><Lock size={24} /></div>
-        <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo en construcción</div>
+        <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo privado</div>
         <p className="mt-2 text-sm text-slate-500">El módulo Ecommerce todavía no está disponible. Cuando se publique, podrás ver el catálogo y comprar desde aquí.</p>
         <Boton variant="ghost" className="mt-5" onClick={onSalir}><ArrowLeft size={15} /> Volver</Boton>
       </Card>
@@ -142,7 +143,6 @@ function EcomShell({ user }) {
           </div>
         </div>
         <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-          <Badge color="gold">En construcción</Badge>
           <Badge color="slate">Privado</Badge>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
@@ -174,14 +174,17 @@ function EcomShell({ user }) {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="cm-scope min-w-0 flex-1">
+        {/* Cloud Motion igual que en el módulo de paquetería: nubes pastel muy
+            suaves detrás del contenido, nunca sobre el menú lateral. */}
+        <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
         {/* Barra superior con pestañas SOLO en móvil */}
         <div className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur md:hidden dark:border-slate-700/60 dark:bg-slate-900/80">
           <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
             <button onClick={() => navigate('/elegir')} className="mr-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Cambiar de módulo"><ArrowLeft size={16} /></button>
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-black text-brand-navy dark:text-slate-100">Ecommerce</span>
-              <Badge color="gold">En construcción</Badge>
+              <Badge color="slate">Privado</Badge>
             </div>
             <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
               <button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button>
@@ -255,7 +258,7 @@ function EcomResumen({ ctx, irA }) {
         </Card>
       </div>
       <Card className="p-5">
-        <div className="mb-3 font-bold text-brand-navy dark:text-slate-100">Estado de construcción</div>
+        <div className="mb-3 font-bold text-brand-navy dark:text-slate-100">Estado del módulo</div>
         <ul className="space-y-2">
           {pasos.map((p, i) => (
             <li key={i} className="flex items-start gap-2 text-sm">
