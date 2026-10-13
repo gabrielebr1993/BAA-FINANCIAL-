@@ -13,6 +13,9 @@ import { numeroEnPalabras } from './logicaPrint'
 export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba }) {
   const offX = (Number(impresion.offX) || 0) * 72
   const offY = (Number(impresion.offY) || 0) * 72
+  // papel 'blanco' (EZ Checks en blanco: se imprime TODO, incluida la MICR)
+  // o 'preimpreso' (el papel ya trae membrete/banco/número/MICR: solo datos)
+  const preimpreso = impresion.papel === 'preimpreso'
   const fFecha = (iso) => { const [a, m, d] = String(iso || '').split('-'); return m ? `${m}/${d}/${a}` : iso || '' }
   const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   const importeNum = (ch) => '**' + Number(ch.importe).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -28,11 +31,12 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     return `
     <div class="pagina">
       ${prueba ? '<div class="muestra">SAMPLE — NON-NEGOTIABLE</div>' : ''}
+      ${preimpreso ? '' : `
       <div class="el b" style="left:31pt;top:20pt;font-size:11.5pt">${esc(empresa.nombre)}</div>
       <div class="el b" style="left:262pt;top:21pt;font-size:10pt">${esc(cuenta.banco)}</div>
       <div class="el b" style="left:490pt;top:25pt;font-size:10.5pt;width:80pt;text-align:right">${esc(num)}</div>
       <div class="el" style="left:32pt;top:35pt;font-size:9.5pt">${esc(empresa.direccion1)}</div>
-      <div class="el" style="left:32pt;top:48pt;font-size:9.5pt">${esc(empresa.direccion2)}</div>
+      <div class="el" style="left:32pt;top:48pt;font-size:9.5pt">${esc(empresa.direccion2)}</div>`}
       <div class="el b" style="left:462pt;top:60pt;font-size:10.5pt">DATE:</div>
       <div class="el" style="left:500pt;top:61pt;font-size:10pt">${esc(fFecha(ch.fecha))}</div>
       <div class="el b" style="left:33pt;top:99pt;font-size:10.5pt">Amount :</div>
@@ -45,7 +49,7 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
       ${firma ? `<img class="el" src="${firma.imagen}" style="left:433pt;top:160pt;height:36pt" alt="" />` : ''}
       <div class="el" style="left:443pt;top:201pt;font-size:8pt;color:#555;letter-spacing:.5px">AUTHORIZED SIGNATURE</div>
       <div class="el linea" style="left:0;top:215pt;width:612pt"></div>
-      ${impresion.mostrarMICR ? `
+      ${impresion.mostrarMICR && !preimpreso ? `
       <div class="el micr" style="left:94pt;top:226pt">(${esc(num)})&nbsp;&nbsp;&nbsp;&amp;${esc(cuenta.routing)}&amp;&nbsp;&nbsp;${esc(cuenta.numero)})</div>` : ''}
       <div class="el linea" style="left:0;top:251pt;width:612pt"></div>
       <div class="el" style="left:26pt;top:273pt;font-size:10pt">${esc(fFecha(ch.fecha))}</div>
@@ -62,7 +66,13 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
       <div class="el linea" style="left:0;top:515pt;width:612pt"></div>
     </div>`
   }
+  // fuente MICR: la subida por el dueño (Ajustes) manda; si no, se intenta la
+  // instalada en el equipo (el software anterior instala una llamada "MICR")
+  const fontFace = impresion.fuenteMICR
+    ? `@font-face{font-family:'MICRCustom';src:url(${impresion.fuenteMICR})}`
+    : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>Checks</title><style>
+    ${fontFace}
     @page{size:8.5in 11in;margin:0}
     body{margin:0;font-family:'Courier New',Courier,monospace;color:#111}
     .pagina{position:relative;width:612pt;height:792pt;page-break-after:always;overflow:hidden}
@@ -72,7 +82,7 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     .det{font-size:8pt;color:#333}
     .cajafirma{border:1.5pt solid #111}
     .linea{border-top:0.8pt solid #444;height:0}
-    .micr{font-family:'MICR E13B','MICR','Courier New',monospace;font-size:12pt;font-weight:700;letter-spacing:1px}
+    .micr{font-family:'MICRCustom','MICR','MICR E13B','MICR Encoding','MICRe13b','E-13B','Courier New',monospace;font-size:12pt;font-weight:700;letter-spacing:1px}
     .muestra{position:absolute;top:220pt;left:60pt;font-size:52px;font-weight:900;color:rgba(200,30,30,.25);transform:rotate(-18deg);letter-spacing:4px;z-index:5}
   </style></head><body>${cheques.map(uno).join('')}
   <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`

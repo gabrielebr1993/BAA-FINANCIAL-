@@ -42,7 +42,7 @@ export default function WhPrintCheck({ user }) {
       periodos: periodos.sort((a, b) => String(b.inicio).localeCompare(a.inicio)),
       // valores iniciales tomados del membrete real del software anterior
       empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', marca: 'NEXSEND', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
-      impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true },
+      impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true, papel: 'blanco' },
     })
   }
   useEffect(() => { recargar() }, [])
@@ -371,6 +371,17 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
 }
 
 // ── CUENTAS BANCARIAS ──────────────────────────────────────────────────────
+// Bancos principales de EE. UU. para autocompletar (se puede escribir otro).
+const BANCOS_US = [
+  'JPMORGAN CHASE BANK NA', 'BANK OF AMERICA NA', 'WELLS FARGO BANK NA', 'CITIBANK NA',
+  'U.S. BANK NA', 'PNC BANK NA', 'TRUIST BANK', 'CAPITAL ONE NA', 'TD BANK NA',
+  'FIFTH THIRD BANK', 'CITIZENS BANK NA', 'REGIONS BANK', 'M&T BANK', 'KEYBANK NA',
+  'HUNTINGTON NATIONAL BANK', 'BMO BANK NA', 'COMERICA BANK', 'ZIONS BANCORPORATION',
+  'FIRST CITIZENS BANK', 'ALLY BANK', 'AMERICAN EXPRESS NATIONAL BANK', 'DISCOVER BANK',
+  'SYNCHRONY BANK', 'NAVY FEDERAL CREDIT UNION', 'FROST BANK', 'TEXAS CAPITAL BANK',
+  'PROSPERITY BANK', 'WOODFOREST NATIONAL BANK', 'AMEGY BANK', 'BOK FINANCIAL',
+  'EAST WEST BANK', 'CATHAY BANK', 'SANTANDER BANK NA', 'HSBC BANK USA NA',
+]
 function PcCuentas({ bd, user, recargar }) {
   const VACIA = { banco: '', titular: '', routing: '', numero: '', tipo: 'Checking', direccionBanco: '', siguiente: '1001', firmaId: '' }
   const [form, setForm] = useState(VACIA)
@@ -422,7 +433,8 @@ function PcCuentas({ bd, user, recargar }) {
       <Card className="p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Agregar cuenta bancaria</div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <Input placeholder="Banco (Bank of America…)" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} />
+          <Input placeholder="Banco (elige o escribe)" list="pc-bancos-us" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} />
+          <datalist id="pc-bancos-us">{BANCOS_US.map((b) => <option key={b} value={b} />)}</datalist>
           <Input placeholder="Titular (B&A American Group LLC)" value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} />
           <Input placeholder="Routing number" value={form.routing} onChange={(e) => setForm({ ...form, routing: e.target.value })} />
           <Input placeholder="Número de cuenta" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} />
@@ -509,8 +521,21 @@ function PcAjustes({ bd, user, recargar }) {
   const guardarImp = async () => {
     setGuardando('imp')
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { offX: Number(imp.offX) || 0, offY: Number(imp.offY) || 0, mostrarMICR: !!imp.mostrarMICR, actualizadoPor: user.email }, { merge: true })
-      await auditarStaff('pc_calibracion', `offset ${imp.offX}/${imp.offY} in · MICR ${imp.mostrarMICR ? 'sí' : 'no'}`)
+      await setDoc(refDoc(COLP.config, 'impresion'), { offX: Number(imp.offX) || 0, offY: Number(imp.offY) || 0, mostrarMICR: !!imp.mostrarMICR, papel: imp.papel || 'blanco', actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_calibracion', `papel ${imp.papel || 'blanco'} · offset ${imp.offX}/${imp.offY} in · MICR ${imp.mostrarMICR ? 'sí' : 'no'}`)
+      recargar()
+    } finally { setGuardando('') }
+  }
+  const subirFuente = async (e) => {
+    const f = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!f) return
+    if (f.size > 400 * 1024) { window.alert('La fuente es muy grande (máx 400 KB). Usa el archivo .ttf de la fuente MICR.'); return }
+    setGuardando('fuente')
+    try {
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
+      await setDoc(refDoc(COLP.config, 'impresion'), { fuenteMICR: url, fuenteMICRNombre: f.name, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_fuente_micr', f.name)
       recargar()
     } finally { setGuardando('') }
   }
@@ -527,8 +552,13 @@ function PcAjustes({ bd, user, recargar }) {
         </div>
       </Card>
       <Card className="p-4">
-        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Calibración de impresión</div>
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Papel y calibración de impresión</div>
         <div className="grid gap-2 text-xs">
+          <label className="flex items-center gap-2">Tipo de papel
+            <Select className="w-72" value={imp.papel || 'blanco'} onChange={(e) => setImp({ ...imp, papel: e.target.value })}>
+              <option value="blanco">EZ Checks EN BLANCO (se imprime todo, incluida la MICR)</option>
+              <option value="preimpreso">Preimpreso (el papel ya trae membrete, número y MICR)</option>
+            </Select></label>
           <label className="flex items-center gap-2">Desplazamiento horizontal (pulgadas)
             <Input type="number" step="0.05" className="w-24" value={imp.offX} onChange={(e) => setImp({ ...imp, offX: e.target.value })} /></label>
           <label className="flex items-center gap-2">Desplazamiento vertical (pulgadas)
@@ -538,7 +568,19 @@ function PcAjustes({ bd, user, recargar }) {
             Imprimir línea MICR (apágala si usas papel preimpreso del banco)
           </label>
           <Boton variant="gold" disabled={guardando === 'imp'} onClick={guardarImp}>{guardando === 'imp' ? <Spinner /> : 'Guardar calibración'}</Boton>
-          <div className="text-[11px] text-slate-400">Usa "Impresión de PRUEBA" en la pestaña Imprimir y ajusta los desplazamientos hasta que el texto caiga exacto sobre tu papel.</div>
+          <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-700/60">
+            <div className="mb-1 font-bold text-slate-500">Fuente MICR (para papel en blanco)</div>
+            <div className="text-[11px] text-slate-400">
+              {bd.impresion.fuenteMICRNombre
+                ? <>Fuente cargada: <b>{bd.impresion.fuenteMICRNombre}</b> — se usa al imprimir la línea MICR.</>
+                : 'Si tu computadora ya tiene instalada la fuente "MICR" de tu software anterior, se usa sola. Si imprimes desde otro equipo, sube aquí el archivo .ttf de la fuente E-13B.'}
+            </div>
+            <label className="mt-1.5 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+              {guardando === 'fuente' ? <Spinner /> : 'Subir fuente MICR (.ttf/.otf)'}
+              <input type="file" accept=".ttf,.otf,font/ttf,font/otf" className="hidden" onChange={subirFuente} disabled={guardando === 'fuente'} />
+            </label>
+          </div>
+          <div className="text-[11px] text-slate-400">Usa "Impresión de PRUEBA" en la pestaña Imprimir y ajusta los desplazamientos hasta que el texto caiga exacto sobre tu papel EZ Checks (cheque arriba).</div>
         </div>
       </Card>
     </div>
