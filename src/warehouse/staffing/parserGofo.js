@@ -72,35 +72,39 @@ export function mapearPosicion(raw, mapa) {
   return texto // posición ya legible (p. ej. "Sorter"); se conserva tal cual
 }
 
-// ── Mini-motor de fórmulas (SUM, ROUND, IF, MAX, MIN, aritmética, refs) ────
+// ── Mini-motor de fórmulas ──────────────────────────────────────────────────
+// Soporta: SUM, ROUND, IF, IFS, MAX, MIN, ABS, aritmética, comparaciones
+// (también de TEXTO: F2="分拣工", como en las fórmulas reales de Gofo),
+// cadenas entre comillas, TRUE/FALSE, referencias y rangos.
+// Devuelve número o cadena; el llamador decide qué necesita.
 export function evaluarFormula(hoja, formula, visitados) {
   const vis = visitados || new Set()
-  const src = String(formula).replace(/^=/, '')
+  const src = String(formula).replace(/^=/, '').replace(/_xlfn\./g, '')
   let i = 0
   const err = (m) => { const e = new Error(m); e.formula = formula; throw e }
+  const num = (v) => {
+    if (typeof v === 'number') return v
+    if (typeof v === 'boolean') return v ? 1 : 0
+    const n = parseFloat(String(v).replace(/[$,%\s]/g, ''))
+    if (!Number.isFinite(n)) err('se esperaba un número y hay "' + v + '"')
+    return n
+  }
   const valorCelda = (ref) => {
     const limpio = ref.replace(/\$/g, '')
     if (vis.has(limpio)) err('referencia circular: ' + limpio)
     const cel = hoja[limpio]
-    if (!cel) return 0 // celda vacía en aritmética = 0 (igual que Excel)
+    if (!cel) return 0 // celda vacía = 0 (igual que Excel)
     // stub (t:'z'): fórmula SIN resultado guardado — su v es un relleno falso,
     // NUNCA se interpreta como cero: se evalúa la fórmula.
-    if (cel.t === 'z' && cel.f) {
+    if (cel.f && (cel.t === 'z' || cel.v === undefined || cel.v === null)) {
       vis.add(limpio)
       const r0 = evaluarFormula(hoja, cel.f, vis)
       vis.delete(limpio)
       return r0
     }
     if (cel.v !== undefined && cel.v !== null) {
-      if (typeof cel.v === 'number') return cel.v
-      const n = parseFloat(String(cel.v).replace(/[$,%\s]/g, ''))
-      return Number.isFinite(n) ? n : 0
-    }
-    if (cel.f) {
-      vis.add(limpio)
-      const r = evaluarFormula(hoja, cel.f, vis)
-      vis.delete(limpio)
-      return r
+      if (typeof cel.v === 'number' || typeof cel.v === 'boolean') return cel.v
+      return String(cel.v) // texto crudo: las comparaciones lo necesitan
     }
     return 0
   }
@@ -109,31 +113,45 @@ export function evaluarFormula(hoja, formula, visitados) {
     const mb = b.replace(/\$/g, '').match(/^([A-Z]+)(\d+)$/)
     if (!ma || !mb) err('rango inválido')
     const c1 = letraCol(ma[1]), f1 = +ma[2], c2 = letraCol(mb[1]), f2 = +mb[2]
+    if ((Math.abs(c2 - c1) + 1) * (Math.abs(f2 - f1) + 1) > 5000) err('rango demasiado grande')
     const vals = []
     for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
       for (let f = Math.min(f1, f2); f <= Math.max(f1, f2); f++) {
         const cel = hoja[colLetra(c) + f]
         if (!cel) continue
-        if (cel.t === 'z' && cel.f) { vals.push(valorCelda(colLetra(c) + f)); continue }
+        if (cel.f && (cel.t === 'z' || cel.v === undefined || cel.v === null)) {
+          const r0 = valorCelda(colLetra(c) + f)
+          if (typeof r0 === 'number') vals.push(r0)
+          continue
+        }
         if (cel.v !== undefined && cel.v !== null && cel.v !== '') {
           const n = typeof cel.v === 'number' ? cel.v : parseFloat(String(cel.v).replace(/[$,%\s]/g, ''))
           if (Number.isFinite(n)) vals.push(n)
-        } else if (cel.f) vals.push(valorCelda(colLetra(c) + f))
+        }
       }
     }
     return vals
   }
-  const saltar = () => { while (i < src.length && src[i] === ' ') i++ }
+  const saltar = () => { while (i < src.length && (src[i] === ' ' || src[i] === '\n')) i++ }
+  const iguales = (a, b) => {
+    if (typeof a === 'string' || typeof b === 'string') return String(a).trim().toLowerCase() === String(b).trim().toLowerCase()
+    return num(a) === num(b)
+  }
   function expr() {
     let v = term()
     for (;;) {
       saltar()
-      // comparaciones (para IF)
       const dos = src.slice(i, i + 2)
-      if (dos === '>=' || dos === '<=' || dos === '<>') { i += 2; const b = term(); v = dos === '>=' ? (v >= b ? 1 : 0) : dos === '<=' ? (v <= b ? 1 : 0) : (v !== b ? 1 : 0); continue }
+      if (dos === '>=' || dos === '<=' || dos === '<>') {
+        i += 2; const b = term()
+        v = dos === '>=' ? (num(v) >= num(b)) : dos === '<=' ? (num(v) <= num(b)) : !iguales(v, b)
+        continue
+      }
       const c = src[i]
-      if (c === '+' || c === '-') { i++; const b = term(); v = c === '+' ? v + b : v - b }
-      else if (c === '>' || c === '<' || c === '=') { i++; const b = term(); v = c === '>' ? (v > b ? 1 : 0) : c === '<' ? (v < b ? 1 : 0) : (v === b ? 1 : 0) }
+      if (c === '+' || c === '-') { i++; const b = term(); v = c === '+' ? num(v) + num(b) : num(v) - num(b) }
+      else if (c === '=') { i++; const b = term(); v = iguales(v, b) }
+      else if (c === '>' || c === '<') { i++; const b = term(); v = c === '>' ? num(v) > num(b) : num(v) < num(b) }
+      else if (c === '&') { i++; const b = term(); v = String(v) + String(b) }
       else break
     }
     return v
@@ -143,7 +161,7 @@ export function evaluarFormula(hoja, formula, visitados) {
     for (;;) {
       saltar()
       const c = src[i]
-      if (c === '*' || c === '/') { i++; const b = factor(); v = c === '*' ? v * b : v / b }
+      if (c === '*' || c === '/') { i++; const b = factor(); v = c === '*' ? num(v) * num(b) : num(v) / num(b) }
       else break
     }
     return v
@@ -152,19 +170,26 @@ export function evaluarFormula(hoja, formula, visitados) {
     saltar()
     const c = src[i]
     if (c === '(') { i++; const v = expr(); saltar(); if (src[i] !== ')') err('falta )'); i++; return v }
-    if (c === '-') { i++; return -factor() }
-    if (c === '+') { i++; return factor() }
-    // número
+    if (c === '-') { i++; return -num(factor()) }
+    if (c === '+') { i++; return num(factor()) }
+    if (c === '"') { // cadena literal
+      let j = i + 1, s = ''
+      while (j < src.length && src[j] !== '"') { s += src[j]; j++ }
+      if (src[j] !== '"') err('cadena sin cerrar')
+      i = j + 1
+      return s
+    }
     const mNum = src.slice(i).match(/^\d+(\.\d+)?/)
     const mFun = src.slice(i).match(/^([A-Za-z]+)\(/)
     const mRef = src.slice(i).match(/^\$?[A-Z]+\$?\d+/)
-    if (mFun && ['SUM', 'ROUND', 'IF', 'MAX', 'MIN', 'ABS'].includes(mFun[1].toUpperCase())) {
+    const mBool = src.slice(i).match(/^(TRUE|FALSE)\b/i)
+    if (mFun && ['SUM', 'ROUND', 'IF', 'IFS', 'MAX', 'MIN', 'ABS'].includes(mFun[1].toUpperCase())) {
       const fn = mFun[1].toUpperCase()
       i += mFun[0].length
       const args = []
       for (;;) {
         saltar()
-        // ¿argumento de rango?
+        if (src[i] === ')') { i++; break } // función sin argumentos restantes
         const mRango = src.slice(i).match(/^(\$?[A-Z]+\$?\d+):(\$?[A-Z]+\$?\d+)/)
         if (mRango) { args.push({ rango: rango(mRango[1], mRango[2]) }); i += mRango[0].length } else args.push({ valor: expr() })
         saltar()
@@ -173,23 +198,29 @@ export function evaluarFormula(hoja, formula, visitados) {
         err('argumentos inválidos en ' + fn)
       }
       const planos = args.flatMap((a) => (a.rango ? a.rango : [a.valor]))
-      if (fn === 'SUM') return planos.reduce((s, x) => s + x, 0)
-      if (fn === 'MAX') return Math.max(...planos)
-      if (fn === 'MIN') return Math.min(...planos)
-      if (fn === 'ABS') return Math.abs(planos[0])
-      if (fn === 'ROUND') { const p = 10 ** (planos[1] || 0); return Math.round(planos[0] * p) / p }
-      if (fn === 'IF') return planos[0] ? planos[1] : (planos.length > 2 ? planos[2] : 0)
+      const verdad = (x) => (typeof x === 'boolean' ? x : typeof x === 'number' ? x !== 0 : String(x).toLowerCase() === 'true')
+      if (fn === 'SUM') return planos.reduce((s, x) => s + num(x), 0)
+      if (fn === 'MAX') return Math.max(...planos.map(num))
+      if (fn === 'MIN') return Math.min(...planos.map(num))
+      if (fn === 'ABS') return Math.abs(num(planos[0]))
+      if (fn === 'ROUND') { const p = 10 ** (num(planos[1] || 0)); return Math.round(num(planos[0]) * p) / p }
+      if (fn === 'IF') return verdad(planos[0]) ? planos[1] : (planos.length > 2 ? planos[2] : 0)
+      if (fn === 'IFS') {
+        for (let k = 0; k + 1 < planos.length; k += 2) if (verdad(planos[k])) return planos[k + 1]
+        err('IFS sin condición verdadera')
+      }
     }
     if (mRef) { i += mRef[0].length; return valorCelda(mRef[0]) }
     if (mNum) { i += mNum[0].length; return parseFloat(mNum[0]) }
+    if (mBool) { i += mBool[0].length; return mBool[0].toUpperCase() === 'TRUE' }
     err('no entiendo la fórmula cerca de "' + src.slice(i, i + 12) + '"')
     return 0
   }
   const v = expr()
   saltar()
   if (i < src.length) err('sobra texto en la fórmula')
-  if (!Number.isFinite(v)) err('resultado no numérico')
-  return v
+  if (typeof v === 'number' && !Number.isFinite(v)) err('resultado no numérico')
+  return typeof v === 'boolean' ? (v ? 1 : 0) : v
 }
 
 // Lee un valor numérico de una celda: valor guardado → fórmula evaluada → null.
@@ -197,25 +228,38 @@ export function evaluarFormula(hoja, formula, visitados) {
 export function valorNumerico(hoja, c, f) {
   const cel = celda(hoja, c, f)
   if (!cel) return { valor: null }
+  const evaluar = () => {
+    try {
+      const r = evaluarFormula(hoja, cel.f)
+      if (typeof r === 'number') return { valor: r, deFormula: true }
+      const n = parseFloat(String(r).replace(/[$,%\s]/g, ''))
+      return Number.isFinite(n) ? { valor: n, deFormula: true } : { valor: null, texto: String(r) }
+    } catch (e) { return { valor: null, error: 'fórmula sin resultado: =' + cel.f } }
+  }
   // celda stub (t:'z' con fórmula): la copia no guardó el resultado — se
   // evalúa la fórmula; su v de relleno jamás se toma como cero.
-  if (cel.t === 'z' && cel.f) {
-    try { return { valor: evaluarFormula(hoja, cel.f), deFormula: true } } catch (e) { return { valor: null, error: 'fórmula sin resultado: =' + cel.f } }
-  }
+  if (cel.f && (cel.t === 'z' || cel.v === undefined || cel.v === null || cel.v === '')) return evaluar()
   if (cel.v !== undefined && cel.v !== null && cel.v !== '') {
     if (typeof cel.v === 'number') return { valor: cel.v }
     const n = parseFloat(String(cel.v).replace(/[$,%\s]/g, ''))
     return Number.isFinite(n) ? { valor: n } : { valor: null, texto: String(cel.v) }
-  }
-  if (cel.f) {
-    try { return { valor: evaluarFormula(hoja, cel.f), deFormula: true } } catch (e) { return { valor: null, error: 'fórmula sin resultado: =' + cel.f } }
   }
   return { valor: null }
 }
 function textoCelda(hoja, c, f) {
   const cel = celda(hoja, c, f)
   if (!cel || cel.v === undefined || cel.v === null) return ''
+  if (cel.t === 'z') return '' // stub de fórmula: su v es relleno, no texto
   return String(cel.v).trim()
+}
+// Busca el primer valor numérico a la derecha de una etiqueta (los reportes
+// reales ponen el número 1-4 columnas después, p. ej. etiqueta en U y valor en X).
+function valorCercano(hoja, f, c, maxCol) {
+  for (let cc = c + 1; cc <= Math.min(c + 4, maxCol); cc++) {
+    const v = valorNumerico(hoja, cc, f)
+    if (v.valor !== null) return v.valor
+  }
+  return null
 }
 
 // ── Fechas ──────────────────────────────────────────────────────────────────
@@ -273,9 +317,13 @@ function detectarEncabezados(hoja, maxFila, maxCol, anoPista) {
       if (fecha && c > cPay) cols.dias.push({ col: c, fecha })
       if (/total\s*(hour|hrs|hora)/.test(t) && cols.totalHoras === undefined) cols.totalHoras = c
       if (/(^|\s)ot\s*(hour|hrs|hora)|overtime\s*hour/.test(t) && cols.otHoras === undefined) cols.otHoras = c
-      if (/(regular).*(amount|pay|salary|importe|wage)|(amount|pay).*(regular)/.test(t) && cols.importeReg === undefined) cols.importeReg = c
-      if (/(ot|overtime).*(amount|pay|salary|importe|wage)/.test(t) && !/rate/.test(t) && cols.importeOT === undefined) cols.importeOT = c
-      if (/total.*(amount|pay|salary|importe|wage)|grand\s*total/.test(t) && cols.importeTotal === undefined) cols.importeTotal = c
+      // importes: acepta Amount/Pay/Salary/Wage/Cost (el real usa "Total RE
+      // Cost" / "Total OT Cost" / "Total Cost")
+      const esReg = /(regular|(^|\s)re)\s*(cost|amount|pay|salary|wage)/.test(t) || /(amount|pay)\s.*regular/.test(t)
+      const esOT = /(ot|overtime)\s*(cost|amount|pay|salary|wage)/.test(t) && !/rate/.test(t)
+      if (esReg && cols.importeReg === undefined) cols.importeReg = c
+      if (esOT && cols.importeOT === undefined) cols.importeOT = c
+      if (!esReg && !esOT && /(total|grand)\s*(cost|amount|pay|salary|importe|wage)/.test(t) && cols.importeTotal === undefined) cols.importeTotal = c
     }
     if (cols.nombre === undefined) cols.nombre = 0 // el nombre va antes del Pay Rate
     // respaldo con el layout documentado (A..S) si faltó algo por texto
@@ -315,8 +363,34 @@ function buscarAno(hoja, maxCol) {
   return null
 }
 
+// ── Fórmulas COMPARTIDAS de Excel ───────────────────────────────────────────
+// El archivo real de Gofo guarda la fórmula solo en la celda base de cada
+// columna (<f t="shared">); las demás quedan vacías y SheetJS las entrega como
+// stubs sin fórmula. Aquí se materializan: a cada stub se le asigna la fórmula
+// base de SU columna desplazada por filas (las referencias con $ no se mueven).
+function desplazarFilas(formula, delta) {
+  return String(formula).replace(/(\$?[A-Z]+)(\$?)(\d+)/g, (m, col, abs, fila) => (abs === '$' ? m : col + (parseInt(fila, 10) + delta)))
+}
+export function expandirFormulasCompartidas(hoja) {
+  const { c2, f2 } = rangoHoja(hoja)
+  for (let c = 0; c <= c2; c++) {
+    let base = null
+    for (let f = 0; f <= f2; f++) {
+      const cel = hoja[colLetra(c) + (f + 1)]
+      if (!cel) continue
+      if (cel.f) { base = { fila: f, f: cel.f }; continue }
+      if (cel.t === 'z' && base && f - base.fila < 400) {
+        cel.f = desplazarFilas(base.f, f - base.fila)
+      } else if (cel.v !== undefined && cel.v !== null && cel.v !== '' && cel.t !== 'z') {
+        // una celda con valor propio corta la cadena de la fórmula compartida
+        base = null
+      }
+    }
+  }
+}
+
 const RX_CONTROL = /^(total|subtotal|sum|totales|合计|总计|小计)\b/i
-const RX_AJUSTE = /(adjust|ajuste|deduct|deducci|descuento|bonus|bono|penalt|reimburs|reembolso|correcci)/i
+const RX_AJUSTE = /(adjust|ajust|deduct|deducci|descuento|bonus|bono|penalt|reimburs|reembolso|correcci|make\s*up|makeup)/i
 
 // ── Análisis de UNA pestaña ────────────────────────────────────────────────
 export function analizarHoja(hoja, nombre, opciones) {
@@ -325,6 +399,7 @@ export function analizarHoja(hoja, nombre, opciones) {
   if (esNombreProvisional(nombre)) return { tipo: 'omitida', hoja: nombre, motivo: 'provisional (Shift/Sheet + número): Gofo aún no cierra este período' }
   const { c2, f2 } = rangoHoja(hoja)
   if (c2 < 0) return { tipo: 'omitida', hoja: nombre, motivo: 'pestaña vacía' }
+  expandirFormulasCompartidas(hoja)
   const anoPista = buscarAno(hoja, c2)
   const enc = detectarEncabezados(hoja, f2, c2, anoPista)
   if (!enc) return { tipo: 'omitida', hoja: nombre, motivo: 'no es un reporte de facturación (sin encabezados Pay Rate / OT Rate)' }
@@ -357,11 +432,45 @@ export function analizarHoja(hoja, nombre, opciones) {
   const ajustes = []
   const controles = []
   let filasIncompletas = 0
+  // Bloques de conciliación al pie del reporte real ("Paid / HOURS / Correct
+  // Payment / OVERPAID" por semana anterior): son AJUSTES, no trabajadores.
+  let bloqueOverpaid = null
   for (let f = enc.fila + 1; f <= f2; f++) {
     const nombreRaw = textoCelda(hoja, cols.nombre, f)
     const tienePay = valorNumerico(hoja, cols.payRate, f).valor !== null
     // ¿encabezado repetido?
     if (/pay\s*rate/i.test(textoCelda(hoja, cols.payRate, f))) continue
+    // ¿arranca un bloque OVERPAID? (B="Paid", D~"Correct", E~"OVERPAID")
+    const tB = textoCelda(hoja, 1, f).toLowerCase()
+    const tD = textoCelda(hoja, 3, f).toLowerCase()
+    const tE = textoCelda(hoja, 4, f).toLowerCase()
+    if (/^paid\b/.test(tB) && (/overpaid/.test(tE) || /correct/.test(tD))) {
+      bloqueOverpaid = { periodo: nombreRaw || '(sin período)' }
+      continue
+    }
+    if (bloqueOverpaid) {
+      const posEnBloque = textoCelda(hoja, cols.posicion, f)
+      if (posEnBloque) {
+        bloqueOverpaid = null // volvió la tabla normal: procesar abajo
+      } else {
+        if (!nombreRaw || /^total/i.test(nombreRaw) || /^total/i.test(tD)) continue
+        const pagado = valorNumerico(hoja, 1, f).valor
+        const horasB = valorNumerico(hoja, 2, f).valor
+        const correcto = valorNumerico(hoja, 3, f).valor
+        const sobre = valorNumerico(hoja, 4, f).valor
+        if (sobre !== null && Math.abs(sobre) > 0.004) {
+          ajustes.push({
+            concepto: `OVERPAID ${bloqueOverpaid.periodo}: pagado $${pagado ?? '?'} vs correcto $${correcto ?? '?'} (${horasB ?? '?'} h)`,
+            importe: -Math.abs(sobre), // lo sobrepagado se descuenta del ingreso
+            personaRaw: nombreRaw,
+            tipo: 'overpaid',
+            periodoOrigenTexto: bloqueOverpaid.periodo,
+            origen: { hoja: nombre, fila: f + 1 },
+          })
+        }
+        continue
+      }
+    }
     // ¿fila de control/total?
     if (RX_CONTROL.test(nombreRaw) || (!nombreRaw && !tienePay)) {
       const tot = cols.importeTotal !== undefined ? valorNumerico(hoja, cols.importeTotal, f) : { valor: null }
@@ -375,10 +484,23 @@ export function analizarHoja(hoja, nombre, opciones) {
       continue
     }
     if (!nombreRaw) continue
-    // ¿la "fila de trabajador" es en realidad un ajuste?
-    if (RX_AJUSTE.test(nombreRaw) && !tienePay) {
-      const imp = buscarImporteEnFila(hoja, f, c2)
-      if (imp !== null) ajustes.push(ajusteDesdeFila(nombreRaw, imp, nombre, f))
+    // ¿la "fila de trabajador" es en realidad un AJUSTE de un período anterior?
+    // (el archivo real los mete como filas con tarifa negativa y nombres tipo
+    //  "Heaven Anderson 3 0803-0809 adjustment" / "0806 makeup")
+    if (RX_AJUSTE.test(nombreRaw)) {
+      const impAj = cols.importeTotal !== undefined ? valorNumerico(hoja, cols.importeTotal, f) : { valor: null }
+      const imp = impAj.valor !== null ? impAj.valor : buscarImporteEnFila(hoja, f, c2)
+      if (imp !== null) {
+        const aj = ajusteDesdeFila(nombreRaw, imp, nombre, f)
+        // nombre de la persona SIN el sufijo del ajuste ("0803-0809 adjustment")
+        // para que enlace con su perfil; el concepto conserva el texto completo
+        const personaLimpia = nombreRaw
+          .replace(/(\d{1,2}[._/]\d{1,2}\s*[-\u2013\u2014]\s*\d{1,2}[._/]\d{1,2})|(\b\d{4}\s*[-\u2013\u2014]\s*\d{4}\b)|(\b\d{4}\b)/g, ' ')
+          .replace(/\S*(adjust|ajust|deduct|deducci|descuento|bonus|bono|penalt|reimburs|reembolso|correcci|makeup)\S*/gi, ' ')
+          .replace(/\bmake\s*up\b/gi, ' ')
+          .replace(/\s+/g, ' ').trim()
+        ajustes.push({ ...aj, tipo: 'fila', personaRaw: personaLimpia || nombreRaw })
+      }
       continue
     }
 
@@ -420,6 +542,7 @@ export function analizarHoja(hoja, nombre, opciones) {
       if (Math.abs(calc - impTotal.valor) > 0.05) avisos.push(`fila ${f + 1} (${nombreRaw}): horas × tarifas = $${calc.toFixed(2)} pero el importe del reporte es $${impTotal.valor.toFixed(2)}`)
     }
 
+    const r2 = (x) => (x === null || x === undefined ? x : Math.round(x * 100) / 100)
     filas.push({
       fila: f + 1,
       nombre: nombreRaw,
@@ -429,35 +552,50 @@ export function analizarHoja(hoja, nombre, opciones) {
       posicionRaw: textoCelda(hoja, cols.posicion, f),
       posicion: mapearPosicion(textoCelda(hoja, cols.posicion, f), posMap),
       warehouse: textoCelda(hoja, cols.warehouse, f),
-      tarifaGofoReg: payRate.valor,
-      tarifaGofoOT: otRate.valor,
-      dias,
-      horasTotal: horasTot,
-      horasOT,
-      horasReg,
-      importeGofoReg: impReg.valor,
-      importeGofoOT: impOT.valor,
-      importeGofo: impTotal.valor,
+      tarifaGofoReg: r2(payRate.valor),
+      tarifaGofoOT: r2(otRate.valor),
+      dias: Object.fromEntries(Object.entries(dias).map(([k, v]) => [k, r2(v)])),
+      horasTotal: r2(horasTot),
+      horasOT: r2(horasOT),
+      horasReg: r2(horasReg),
+      importeGofoReg: r2(impReg.valor),
+      importeGofoOT: r2(impOT.valor),
+      importeGofo: r2(impTotal.valor),
     })
 
-    // ajustes laterales (columnas a la derecha del importe total: U..X en el ejemplo)
-    for (let c = (cols.importeTotal || 18) + 1; c <= c2; c++) {
-      const etiqueta = textoCelda(hoja, c, f)
-      if (etiqueta && RX_AJUSTE.test(etiqueta)) {
-        const v = valorNumerico(hoja, c + 1, f)
-        if (v.valor !== null) ajustes.push({ ...ajusteDesdeFila(etiqueta, v.valor, nombre, f), personaRaw: nombreRaw })
-      }
-    }
   }
 
-  // bloque de ajustes/resúmenes laterales SIN fila de trabajador (texto en U.., número al lado)
+  // Ajustes laterales (resúmenes U..X del ejemplo real): etiqueta con palabra
+  // de ajuste/deducción y el VALOR 1-4 columnas a la derecha. Se capturan una
+  // sola vez por celda, haya o no trabajador en esa fila.
+  // La persona de un ajuste lateral solo es confiable si su NOMBRE aparece en
+  // el texto (en el archivo real los resúmenes laterales caen sobre filas de
+  // trabajadores ajenos: la posición de la fila NO identifica a nadie).
+  const nombresFilas = [...new Map(filas.map((x) => [x.nombreNorm, x.nombre])).entries()]
   for (let f = enc.fila + 1; f <= f2; f++) {
     for (let c = (cols.importeTotal || 18) + 1; c <= c2; c++) {
       const etiqueta = textoCelda(hoja, c, f)
       if (!etiqueta || !RX_AJUSTE.test(etiqueta)) continue
-      if (textoCelda(hoja, cols.nombre, f)) continue // ya capturado arriba
-      const v = valorNumerico(hoja, c + 1, f)
-      if (v.valor !== null) ajustes.push(ajusteDesdeFila(etiqueta, v.valor, nombre, f))
+      const v = valorCercano(hoja, f, c, c2)
+      if (v !== null && Math.abs(v) > 0.004) {
+        const aj = ajusteDesdeFila(etiqueta, v, nombre, f)
+        // DEDUPLICACIÓN: si este lateral es el RESUMEN de los ajustes del
+        // detalle (misma suma, por período o en total), se omite — nunca se
+        // cuenta doble.
+        const digitos = (x) => String(x || '').replace(/\D/g, '')
+        const delDetalle = ajustes.filter((a) => a.tipo === 'fila')
+        const sumaMismoPeriodo = aj.periodoOrigenTexto
+          ? delDetalle.filter((a) => digitos(a.periodoOrigenTexto) === digitos(aj.periodoOrigenTexto)).reduce((s, a) => s + a.importe, 0)
+          : null
+        const sumaTodoDetalle = delDetalle.reduce((s, a) => s + a.importe, 0)
+        if (Math.abs(v) > 0.05 && ((sumaMismoPeriodo !== null && Math.abs(sumaMismoPeriodo - v) <= 0.05) || (delDetalle.length > 0 && Math.abs(sumaTodoDetalle - v) <= 0.05))) {
+          avisos.push(`resumen lateral "${aj.concepto}" omitido: su importe ($${v.toFixed(2)}) ya está en el detalle de ajustes`)
+          continue
+        }
+        const etiquetaNorm = normalizarNombre(etiqueta)
+        const persona = nombresFilas.find(([norm]) => norm.length > 4 && etiquetaNorm.includes(norm))
+        ajustes.push(persona ? { ...aj, tipo: 'lateral', personaRaw: persona[1] } : { ...aj, tipo: 'lateral' })
+      }
     }
   }
 
@@ -514,12 +652,15 @@ function buscarImporteEnFila(hoja, f, maxCol) {
   return null
 }
 function ajusteDesdeFila(concepto, importe, hojaNombre, f) {
-  // período original si el concepto lo menciona (p. ej. "ajuste 08.17-08.23")
-  const m = String(concepto).match(/(\d{1,2}[._/]\d{1,2})\s*[-–—]\s*(\d{1,2}[._/]\d{1,2})/)
+  // período original si el concepto lo menciona: "08.17-08.23", "08/17-08/23",
+  // "0803-0809" o una fecha suelta "0806"
+  const s = String(concepto)
+  const m = s.match(/(\d{1,2}[._/]\d{1,2})\s*[-–—]\s*(\d{1,2}[._/]\d{1,2})/) || s.match(/\b(\d{4})\s*[-–—]\s*(\d{4})\b/)
+  const m1 = !m && s.match(/\b(\d{4})\b/)
   return {
-    concepto: String(concepto).trim(),
-    importe,
-    periodoOrigenTexto: m ? `${m[1]}-${m[2]}` : null,
+    concepto: s.trim(),
+    importe: Math.round(importe * 100) / 100,
+    periodoOrigenTexto: m ? `${m[1]}-${m[2]}` : (m1 ? m1[1] : null),
     origen: { hoja: hojaNombre, fila: f + 1 },
   }
 }
