@@ -17,6 +17,7 @@ const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toL
 export default function WhPanelStaff({ irA }) {
   const [datos, setDatos] = useState(null)
   const [rango, setRango] = useState('12') // últimas N semanas en el análisis
+  const [semanaSel, setSemanaSel] = useState('') // una semana específica
   useEffect(() => {
     (async () => {
       const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
@@ -52,16 +53,21 @@ export default function WhPanelStaff({ irA }) {
     )
   }
 
-  const ult = semanas[semanas.length - 1]
-  const ant = semanas.length > 1 ? semanas[semanas.length - 2] : null
+  // los KPIs muestran la semana elegida (o la última si no hay elección)
+  const idxUlt = semanaSel ? semanas.findIndex((x) => x.periodo.id === semanaSel) : semanas.length - 1
+  const ult = semanas[idxUlt] || semanas[semanas.length - 1]
+  const ant = idxUlt > 0 ? semanas[idxUlt - 1] : null
   const tendencia = (campo) => {
     if (!ant || !ant.res[campo]) return undefined
     const d = ((ult.res[campo] - ant.res[campo]) / Math.abs(ant.res[campo])) * 100
     return Math.round(d * 10) / 10
   }
   const recs = recomendacionesStaff({ semanas, registros: datos.registros, ajustes: datos.ajustes, cheques: datos.cheques })
-  // rango de análisis (gráfico, totales, top y posiciones)
-  const vis = rango === 'todas' ? semanas : semanas.slice(-Number(rango))
+  // rango de análisis (gráfico, totales, top y posiciones); una semana
+  // específica elegida manda sobre el rango
+  const vis = semanaSel
+    ? semanas.filter((x) => x.periodo.id === semanaSel)
+    : (rango === 'todas' ? semanas : semanas.slice(-Number(rango)))
   const grafico = vis.map((x) => ({
     nombre: x.periodo.inicio.slice(5),
     Ingreso: x.res.ingreso,
@@ -125,10 +131,14 @@ export default function WhPanelStaff({ irA }) {
         <div className="mt-2 text-[11px] text-slate-400">Sugerencias calculadas con tus datos importados — la decisión siempre es tuya.</div>
       </Card>
 
-      {/* KPIs de la última semana */}
-      <div className="mb-1 flex items-center gap-2 text-xs text-slate-400">
-        Última semana: <b className="text-brand-navy dark:text-slate-200">{ult.periodo.inicio} → {ult.periodo.fin}</b>
+      {/* KPIs de la semana elegida (o la última) */}
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        {semanaSel ? 'Semana elegida:' : 'Última semana:'} <b className="text-brand-navy dark:text-slate-200">{ult.periodo.inicio} → {ult.periodo.fin}</b>
         {ult.res.parcial && <Badge color="red">PARCIAL: faltan tarifas</Badge>}
+        <Select className="ml-auto w-52 text-xs" value={semanaSel} onChange={(e) => setSemanaSel(e.target.value)}>
+          <option value="">Ver una semana específica…</option>
+          {semanas.slice().reverse().map((x) => <option key={x.periodo.id} value={x.periodo.id}>{x.periodo.inicio} → {x.periodo.fin}</option>)}
+        </Select>
       </div>
       <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <KPI label="Ingreso Gofo" value={dinero(ult.res.ingreso)} trend={tendencia('ingreso')} />

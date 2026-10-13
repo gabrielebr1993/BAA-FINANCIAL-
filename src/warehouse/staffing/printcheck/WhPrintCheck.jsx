@@ -87,8 +87,9 @@ export default function WhPrintCheck({ user }) {
 
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
 function PcDashboard({ bd, irA, abrirRegistro }) {
-  const [filtro, setFiltro] = useState({ cuentaId: '', desde: '', hasta: '', estado: 'todos' })
+  const [filtro, setFiltro] = useState({ cuentaId: '', desde: '', hasta: '', estado: 'todos', periodoId: '' })
   const ch = bd.cheques
+    .filter((c) => !filtro.periodoId || (c.distribucion || []).some((d) => d.periodoId === filtro.periodoId))
     .filter((c) => !filtro.cuentaId || c.cuentaId === filtro.cuentaId)
     .filter((c) => !filtro.desde || (c.fecha || '') >= filtro.desde)
     .filter((c) => !filtro.hasta || (c.fecha || '') <= filtro.hasta)
@@ -110,6 +111,10 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
     <div>
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Select className="w-52" value={filtro.periodoId} onChange={(e) => setFiltro({ ...filtro, periodoId: e.target.value })}>
+            <option value="">Todas las semanas</option>
+            {bd.periodos.map((p) => <option key={p.id} value={p.id}>{p.inicio} → {p.fin}</option>)}
+          </Select>
           <Select className="w-56" value={filtro.cuentaId} onChange={(e) => setFiltro({ ...filtro, cuentaId: e.target.value })}>
             <option value="">Todas las cuentas</option>
             {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
@@ -124,8 +129,8 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
             <option value="cobrado">Cobrados</option>
             <option value="cancelado">Anulados</option>
           </Select>
-          {(filtro.cuentaId || filtro.desde || filtro.hasta || filtro.estado !== 'todos') && (
-            <Boton variant="ghost" onClick={() => setFiltro({ cuentaId: '', desde: '', hasta: '', estado: 'todos' })}>Limpiar</Boton>
+          {(filtro.cuentaId || filtro.desde || filtro.hasta || filtro.estado !== 'todos' || filtro.periodoId) && (
+            <Boton variant="ghost" onClick={() => setFiltro({ cuentaId: '', desde: '', hasta: '', estado: 'todos', periodoId: '' })}>Limpiar</Boton>
           )}
           <span className="ml-auto text-slate-400">{ch.length} cheques en el filtro · {dinero(suma(ch))}</span>
         </div>
@@ -548,14 +553,50 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
     await auditarStaff('pc_cheque_borrado', `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)} [${c.estado || 'emitido'}]`)
     recargar()
   }
-  const seleccionables = lista.filter((c) => c.estado !== 'cobrado' || c.origen === 'historico')
+  // ── Acciones MASIVAS sobre la selección (10, 50, los que sean) ───────────
+  const seleccionables = lista
   const seleccionados = seleccionables.filter((c) => sel[c.id])
+  const resumenSel = (ls) => `${ls.slice(0, 8).map((c) => `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)}`).join('\n')}${ls.length > 8 ? `\n… y ${ls.length - 8} más` : ''}`
   const borrarSeleccionados = async () => {
-    if (!seleccionados.length) return
-    const total = r2(seleccionados.reduce((s, c) => s + (c.importe || 0), 0))
-    if (!window.confirm(`¿BORRAR ${seleccionados.length} cheque(s) por ${dinero(total)}?\n\n${seleccionados.slice(0, 8).map((c) => `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)}`).join('\n')}${seleccionados.length > 8 ? `\n… y ${seleccionados.length - 8} más` : ''}\n\nSolo para cheques que NUNCA se entregaron. Los cobrados no se tocan.`)) return
-    await escribirEnLotes(seleccionados.map((c) => ({ ref: refDoc(COL.cheques, c.id), borrar: true })))
-    await auditarStaff('pc_cheques_borrados', `${seleccionados.length} cheques ${dinero(total)}: ${seleccionados.map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')}`)
+    const aptos = seleccionados.filter((c) => c.estado !== 'cobrado' || c.origen === 'historico')
+    const saltados = seleccionados.length - aptos.length
+    if (!aptos.length) { window.alert('Los cheques cobrados no se pueden borrar (solo los históricos).'); return }
+    const total = r2(aptos.reduce((s, c) => s + (c.importe || 0), 0))
+    if (!window.confirm(`¿BORRAR ${aptos.length} cheque(s) por ${dinero(total)}?\n\n${resumenSel(aptos)}${saltados ? `\n\n(${saltados} cobrados NO se tocan)` : ''}\n\nSolo para cheques que NUNCA se entregaron; si ya salieron, usa Anular.`)) return
+    await escribirEnLotes(aptos.map((c) => ({ ref: refDoc(COL.cheques, c.id), borrar: true })))
+    await auditarStaff('pc_cheques_borrados', `${aptos.length} cheques ${dinero(total)}: ${aptos.map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')}`)
+    setSel({})
+    recargar()
+  }
+  const marcarSeleccionados = async (nuevoEstado) => {
+    const aptos = seleccionados.filter((c) => (c.estado || 'emitido') !== nuevoEstado && c.estado !== 'cancelado')
+    if (!aptos.length) { window.alert('Ninguno de los seleccionados puede pasar a ese estado (los anulados no cambian desde aquí).'); return }
+    const etiqueta = nuevoEstado === 'cobrado' ? 'COBRADOS (pagados por el banco)' : 'PENDIENTES (emitidos, sin cobrar)'
+    if (!window.confirm(`¿Marcar ${aptos.length} cheque(s) como ${etiqueta}?\n\n${resumenSel(aptos)}`)) return
+    const ahora = new Date().toISOString()
+    await escribirEnLotes(aptos.map((c) => ({
+      ref: refDoc(COL.cheques, c.id), merge: true,
+      data: {
+        estado: nuevoEstado,
+        ...(nuevoEstado === 'cobrado' ? { fechaCobro: hoyISO(), cobro: { via: 'manual', fecha: hoyISO() } } : {}),
+        historial: arrayUnion({ accion: nuevoEstado === 'cobrado' ? 'cobrado' : 'estado', fecha: ahora, por: user.email, nota: nuevoEstado === 'cobrado' ? 'marcado cobrado a mano' : 'devuelto a pendiente a mano' }),
+      },
+    })))
+    await auditarStaff('pc_cheques_estado', `${aptos.length} cheques → ${nuevoEstado}: ${aptos.map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')}`)
+    setSel({})
+    recargar()
+  }
+  const anularSeleccionados = async () => {
+    const aptos = seleccionados.filter((c) => c.estado !== 'cancelado' && c.estado !== 'cobrado')
+    if (!aptos.length) { window.alert('Solo se anulan cheques que no están cobrados ni ya anulados.'); return }
+    const motivo = window.prompt(`¿Anular ${aptos.length} cheque(s)?\n\n${resumenSel(aptos)}\n\nEscribe el motivo (se aplica a todos):`)
+    if (!motivo) return
+    const ahora = new Date().toISOString()
+    await escribirEnLotes(aptos.map((c) => ({
+      ref: refDoc(COL.cheques, c.id), merge: true,
+      data: { estado: 'cancelado', motivoCancelacion: motivo, canceladoEn: ahora, canceladoPor: user.email, historial: arrayUnion({ accion: 'anulado', fecha: ahora, por: user.email, nota: motivo }) },
+    })))
+    await auditarStaff('pc_cheques_anulados', `${aptos.length} cheques: ${motivo} (${aptos.map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')})`)
     setSel({})
     recargar()
   }
@@ -589,11 +630,15 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
               Seleccionar todos los visibles ({seleccionables.length})
             </label>
             {seleccionados.length > 0 && (
-              <button className="font-semibold text-rose-500 hover:text-rose-700" onClick={borrarSeleccionados}>
-                Borrar seleccionados ({seleccionados.length} · {dinero(r2(seleccionados.reduce((s, c) => s + (c.importe || 0), 0)))})
-              </button>
+              <>
+                <span className="font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} seleccionados · {dinero(r2(seleccionados.reduce((s, c) => s + (c.importe || 0), 0)))}:</span>
+                <button className="rounded-lg bg-emerald-600 px-2.5 py-1 font-semibold text-white hover:opacity-90" onClick={() => marcarSeleccionados('cobrado')}>Marcar cobrados</button>
+                <button className="rounded-lg border border-slate-300 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300" onClick={() => marcarSeleccionados('emitido')}>Volver a pendiente</button>
+                <button className="rounded-lg border border-amber-300 px-2.5 py-1 font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={anularSeleccionados}>Anular</button>
+                <button className="rounded-lg border border-rose-300 px-2.5 py-1 font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={borrarSeleccionados}>Borrar</button>
+              </>
             )}
-            <span className="text-[11px] text-slate-400">Los cheques cobrados no se pueden seleccionar ni borrar.</span>
+            <span className="text-[11px] text-slate-400">Borrar nunca toca cobrados (salvo históricos); anular nunca toca cobrados.</span>
           </div>
         )}
       </Card>
@@ -602,7 +647,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
         {lista.map((c) => (
           <Card key={c.id} className="p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              {(c.estado !== 'cobrado' || c.origen === 'historico') && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
+              <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />
               <button className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700" title="Ver ficha completa" onClick={() => setFichaId(c.id)}><Eye size={15} /></button>
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
               {c.workerId ? <button className="font-semibold hover:underline" title="Abrir su perfil" onClick={() => abrirPerfil(c.workerId)}>{c.beneficiario}</button> : <span className="font-semibold">{c.beneficiario || '—'}</span>}
