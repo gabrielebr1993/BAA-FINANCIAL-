@@ -68,7 +68,7 @@ export default function WhPrintCheck({ user }) {
       </div>
       {sub === 'panel' && <PcDashboard bd={bd} irA={setSub} />}
       {sub === 'crear' && <PcCrear bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
-      {sub === 'imprimir' && <PcImprimir bd={bd} user={user} loteInicial={loteImprimir} chequeSolo={chequeSolo} />}
+      {sub === 'imprimir' && <PcImprimir bd={bd} user={user} loteInicial={loteImprimir} chequeSolo={chequeSolo} recargar={recargar} />}
       {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
       {sub === 'diseno' && <PcDiseno bd={bd} />}
       {sub === 'cuentas' && <PcCuentas bd={bd} user={user} recargar={recargar} />}
@@ -286,7 +286,7 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
   )
 }
 
-function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
+function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
   const [loteId, setLoteId] = useState(loteInicial || bd.lotes[0]?.id || '')
   const [prueba, setPrueba] = useState(false)
   const lote = bd.lotes.find((l) => l.id === loteId)
@@ -297,6 +297,24 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
   }, [bd, loteId, chequeSolo])
   const cuenta = bd.cuentas.find((c) => c.id === (cheques[0]?.cuentaId || lote?.cuentaId)) || {}
   const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
+
+  // Borrar el lote completo: solo si NINGÚN cheque está cobrado. Si era el
+  // último lote de la cuenta, la numeración se regresa para reusar los números.
+  const borrarLote = async () => {
+    if (!lote || chequeSolo) return
+    const delLote = bd.cheques.filter((c) => c.loteId === lote.id)
+    if (delLote.some((c) => c.estado === 'cobrado')) { window.alert('Este lote tiene cheques COBRADOS: no se puede borrar. Anula individualmente los que correspondan.'); return }
+    if (!window.confirm(`¿Borrar el lote completo (${delLote.length} cheques #${lote.desde}–#${lote.hasta}, ${dinero(lote.total)})?\n\nEsto es para lotes generados por error ANTES de entregarlos. Si un cheque ya salió a la calle, usa "anular", no borrar.`)) return
+    const ops = delLote.map((c) => ({ ref: refDoc(COL.cheques, c.id), borrar: true }))
+    ops.push({ ref: refDoc(COLP.lotes, lote.id), borrar: true })
+    const cta = bd.cuentas.find((x) => x.id === lote.cuentaId)
+    const reversa = cta && Number(cta.siguiente) === Number(lote.hasta) + 1
+    if (reversa) ops.push({ ref: refDoc(COLP.cuentas, cta.id), merge: true, data: { siguiente: Number(lote.desde) } })
+    await escribirEnLotes(ops)
+    await auditarStaff('pc_lote_borrado', `${lote.id}: ${delLote.length} cheques #${lote.desde}–#${lote.hasta} ${dinero(lote.total)}${reversa ? ` · numeración regresada a #${lote.desde}` : ''}`)
+    setLoteId('')
+    recargar()
+  }
 
   const imprimir = async () => {
     const html = htmlLote({ cheques, cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba })
@@ -322,6 +340,7 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
             <input type="checkbox" checked={prueba} onChange={(e) => setPrueba(e.target.checked)} /> Impresión de PRUEBA (marca SAMPLE, número 000000)
           </label>
           <Boton variant="gold" disabled={!cheques.length} onClick={imprimir}><Printer size={14} /> {prueba ? 'Imprimir prueba' : `Imprimir ${cheques.length} cheque(s)`}</Boton>
+          {!chequeSolo && lote && <button className="pb-2 text-xs font-semibold text-rose-400 hover:text-rose-600" onClick={borrarLote}>Borrar lote</button>}
         </div>
         <div className="mt-2 text-[11px] text-slate-400">
           Formato voucher: cheque arriba + copia del empleado + copia de la compañía. En el diálogo de impresión usa escala 100% y sin márgenes.
@@ -391,6 +410,15 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
     await auditarStaff('pc_cheque_anulado', `#${c.numeroRaw} ${c.beneficiario} ${dinero(c.importe)}: ${motivo}`)
     recargar()
   }
+  // Borrar = eliminarlo del historial (solo errores ANTES de entregar el
+  // papel; un cheque cobrado jamás se borra; uno entregado se ANULA).
+  const borrar = async (c) => {
+    if (c.estado === 'cobrado') return
+    if (!window.confirm(`¿BORRAR el cheque #${c.numeroRaw || c.numeroNorm} de ${c.beneficiario || '—'} (${dinero(c.importe)})?\n\nBorrar lo elimina del historial: es para cheques generados por error que NUNCA se entregaron. Si el cheque ya salió a la calle, usa "anular".`)) return
+    await escribirEnLotes([{ ref: refDoc(COL.cheques, c.id), borrar: true }])
+    await auditarStaff('pc_cheque_borrado', `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)} [${c.estado || 'emitido'}]`)
+    recargar()
+  }
   return (
     <div>
       <Card className="mb-3 p-3">
@@ -431,6 +459,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
                 <Boton variant="ghost" onClick={async () => { await auditarStaff('pc_reimpresion', `#${c.numeroRaw} ${c.beneficiario}`); irAImprimir('', c.id) }}><Printer size={13} /> Reimprimir</Boton>
               )}
               {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <button className="text-rose-400 hover:text-rose-600" onClick={() => anular(c)}>anular</button>}
+              {c.estado !== 'cobrado' && <button className="text-rose-300 hover:text-rose-600" onClick={() => borrar(c)}>borrar</button>}
             </div>
             {c.motivoCancelacion && <div className="mt-1 text-[11px] text-rose-400">Anulado: {c.motivoCancelacion}</div>}
           </Card>
