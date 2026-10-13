@@ -41,7 +41,7 @@ const TABS = [
   { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
   { id: 'catalogo', label: 'Catálogo', icono: Tags },
   { id: 'precios', label: 'Precios', icono: Wallet },
-  { id: 'tienda', label: 'Tienda (vista previa)', icono: Store },
+  { id: 'tienda', label: 'Tienda', icono: Store },
   { id: 'pedidos', label: 'Pedidos', icono: ShoppingCart },
   { id: 'compras', label: 'Compras a proveedor', icono: PackageSearch },
   { id: 'finanzas', label: 'Finanzas', icono: Wallet },
@@ -79,7 +79,7 @@ function EcomLogin() {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-1 text-xl font-black text-brand-navy dark:text-slate-100">Ecommerce</div>
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-amber-600">Acceso privado</div>
+        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-amber-600">Compras internacionales</div>
         <form onSubmit={entrar} className="space-y-3">
           <Input type="email" placeholder="Correo" value={correo} onChange={(e) => setCorreo(e.target.value)} />
           <Input type="password" placeholder="Contraseña" value={clave} onChange={(e) => setClave(e.target.value)} />
@@ -98,8 +98,8 @@ function EcomPrivado({ onSalir }) {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-md p-8 text-center">
         <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-slate-200 text-slate-500 dark:bg-slate-700"><Lock size={24} /></div>
-        <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo privado</div>
-        <p className="mt-2 text-sm text-slate-500">El módulo Ecommerce todavía no está disponible. Cuando se publique, podrás ver el catálogo y comprar desde aquí.</p>
+        <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Sin acceso</div>
+        <p className="mt-2 text-sm text-slate-500">Tu cuenta no tiene acceso al módulo Ecommerce. Pide acceso al dueño de la cuenta.</p>
         <Boton variant="ghost" className="mt-5" onClick={onSalir}><ArrowLeft size={15} /> Volver</Boton>
       </Card>
     </div>
@@ -142,10 +142,7 @@ function EcomShell({ user }) {
             <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ecommerce</div>
           </div>
         </div>
-        <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-          <Badge color="slate">Privado</Badge>
-        </div>
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto">
           {TABS.map((tdef) => {
             const Icono = tdef.icono
             const activo = tab === tdef.id
@@ -184,7 +181,6 @@ function EcomShell({ user }) {
             <button onClick={() => navigate('/elegir')} className="mr-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Cambiar de módulo"><ArrowLeft size={16} /></button>
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-black text-brand-navy dark:text-slate-100">Ecommerce</span>
-              <Badge color="slate">Privado</Badge>
             </div>
             <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
               <button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button>
@@ -225,10 +221,10 @@ function EcomShell({ user }) {
 function EcomResumen({ ctx, irA }) {
   const { config } = ctx
   const pasos = [
-    { ok: true, texto: 'Módulo privado creado (solo tu cuenta; protegido también en Firestore)' },
-    { ok: true, texto: 'Catálogo con proveedores, variantes, países y datos demo' },
+    { ok: true, texto: 'Acceso protegido: solo tu cuenta puede entrar (también en Firestore)' },
+    { ok: true, texto: 'Catálogo con proveedores, variantes y países' },
     { ok: true, texto: 'Motor de precios: costos desglosados + margen + redondeo por país' },
-    { ok: true, texto: 'Tienda (vista previa): buscador, carrito persistente y checkout DEMO' },
+    { ok: true, texto: 'Tienda: buscador, carrito persistente y checkout' },
     { ok: true, texto: 'Pedidos ↔ compras a proveedor ↔ paquetes con la cadena logística de 9 pasos' },
     { ok: false, texto: 'Pasarela de pagos real (requiere contrato: Stripe/alternativa LATAM)' },
     { ok: false, texto: 'Integraciones de proveedores (ver pestaña Integraciones: qué permite cada uno)' },
@@ -237,8 +233,8 @@ function EcomResumen({ ctx, irA }) {
   return (
     <div>
       <PageTitle>Resumen del módulo</PageTitle>
-      <Aviso tipo="warn" className="mb-4">
-        <b>Todo lo que ves usa datos de DEMOSTRACIÓN.</b> No hay cobros, compras ni envíos reales: los interruptores de publicación y ventas viven en Configuración y nacen apagados. Nadie más que tú puede entrar a este módulo.
+      <Aviso tipo="info" className="mb-4">
+        Los interruptores de publicación del catálogo y de ventas viven en <b>Configuración</b>. Hasta que conectes una pasarela de pagos, el checkout de la tienda no genera cobros reales.
       </Aviso>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Card className="p-4">

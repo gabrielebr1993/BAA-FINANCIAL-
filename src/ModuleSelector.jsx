@@ -94,11 +94,11 @@ export default function ModuleSelector() {
           />
           <OpcionCard
             onClick={() => navigate('/shop')} icon={ShoppingCart} acento="bg-emerald-600" glow="bg-emerald-500"
-            titulo="Ecommerce" subtitulo={t('Privado')} desc={t('Compras internacionales, entregadas por nosotros.')}
+            titulo="Ecommerce" desc={t('Compras internacionales, entregadas por nosotros.')}
           />
           <OpcionCard
             onClick={() => navigate('/wh')} icon={Warehouse} acento="bg-violet-600" glow="bg-violet-500"
-            titulo="Warehouse" subtitulo={t('Privado')} desc={t('Clasificación, staffing e inbound/outbound.')}
+            titulo="Warehouse" desc={t('Clasificación, staffing e inbound/outbound.')}
           />
         </div>
 

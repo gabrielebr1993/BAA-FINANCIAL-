@@ -58,10 +58,10 @@ export default function EcomTienda({ ctx }) {
     return (
       <Card className="mx-auto max-w-xl p-8 text-center">
         <div className="text-4xl">🎉</div>
-        <div className="mt-2 text-xl font-black text-brand-navy dark:text-slate-100">¡Pedido de prueba creado!</div>
-        <p className="mt-2 text-sm text-slate-500">Número: <b>{pedidoListo}</b>. Es un pedido <b>DEMO</b> — sin cobro, sin compra al proveedor. Síguelo en la pestaña <b>Pedidos</b>: ahí puedes avanzarlo por los 9 pasos logísticos hasta la entrega.</p>
+        <div className="mt-2 text-xl font-black text-brand-navy dark:text-slate-100">¡Pedido creado!</div>
+        <p className="mt-2 text-sm text-slate-500">Número: <b>{pedidoListo}</b>. Se creó <b>sin cobro</b> (aún no hay pasarela de pagos conectada). Síguelo en la pestaña <b>Pedidos</b>: ahí puedes avanzarlo por los 9 pasos logísticos hasta la entrega.</p>
         <div className="mt-5 flex justify-center gap-2">
-          <Boton variant="gold" onClick={() => setPedidoListo(null)}>Seguir comprando (demo)</Boton>
+          <Boton variant="gold" onClick={() => setPedidoListo(null)}>Seguir comprando</Boton>
         </div>
       </Card>
     )
@@ -70,7 +70,7 @@ export default function EcomTienda({ ctx }) {
   return (
     <div>
       {/* Barra de la tienda */}
-      <Aviso tipo="warn" className="mb-4"><b>VISTA PREVIA · solo tú la ves.</b> Así se verá la tienda pública. Los pagos están en modo DEMO: nada se cobra ni se compra.</Aviso>
+      <Aviso tipo="info" className="mb-4"><b>Vista previa · solo tú la ves.</b> Así se verá la tienda pública. Los cobros se activarán cuando conectes la pasarela de pagos en Configuración.</Aviso>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -148,7 +148,7 @@ export default function EcomTienda({ ctx }) {
             </div>
             <div className="border-t border-slate-100 pt-3 dark:border-slate-700/60">
               <div className="mb-3 flex items-center justify-between text-sm"><span className="text-slate-500">Total ({pais} · todo incluido)</span><b className="text-lg text-brand-navy dark:text-slate-100">{money2(totalUSD)}</b></div>
-              <Boton variant="gold" className="w-full" disabled={carrito.length === 0} onClick={() => { setVerCarrito(false); setCheckout(true) }}>Finalizar compra (DEMO)</Boton>
+              <Boton variant="gold" className="w-full" disabled={carrito.length === 0} onClick={() => { setVerCarrito(false); setCheckout(true) }}>Finalizar compra</Boton>
               <p className="mt-2 text-center text-[11px] text-slate-400">En la tienda pública: aquí se pediría crear cuenta o iniciar sesión; el carrito se conserva.</p>
             </div>
           </div>
@@ -215,7 +215,7 @@ function CheckoutDemo({ carrito, totalUSD, pais, config, user, onCerrar, onListo
         totalUSD: Math.round(totalUSD * 100) / 100,
         estadoPedido: 'nuevo', estadoPago: 'demo_sin_cobro', estadoCompra: 'pendiente',
         estadoEnvio: ESTADOS_ENVIO[0].id,
-        timeline: [{ estado: ESTADOS_ENVIO[0].id, fecha: new Date().toISOString(), nota: 'Pedido DEMO creado desde la vista previa' }],
+        timeline: [{ estado: ESTADOS_ENVIO[0].id, fecha: new Date().toISOString(), nota: 'Pedido creado desde la tienda (sin cobro: falta pasarela de pagos)' }],
         paquetes: [], creadoEn: serverTimestamp(),
       })
       onListo(numero)
@@ -227,7 +227,7 @@ function CheckoutDemo({ carrito, totalUSD, pais, config, user, onCerrar, onListo
     <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4" onClick={onCerrar}>
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 text-lg font-black text-brand-navy dark:text-slate-100">Finalizar compra</div>
-        <Badge color="gold">DEMO · no se cobra nada</Badge>
+        <Badge color="slate">Sin cobro · falta conectar la pasarela de pagos</Badge>
         <div className="mt-4 space-y-2.5">
           <Input placeholder="Nombre completo" value={form.nombre} onChange={(e) => set('nombre', e.target.value)} />
           <Input placeholder="Teléfono (WhatsApp)" value={form.telefono} onChange={(e) => set('telefono', e.target.value)} />
@@ -240,12 +240,12 @@ function CheckoutDemo({ carrito, totalUSD, pais, config, user, onCerrar, onListo
         </div>
         <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-700/40">
           <div className="flex justify-between"><span>{carrito.reduce((a, i) => a + i.cant, 0)} artículo(s)</span><b>{money2(totalUSD)}</b></div>
-          <div className="mt-1 text-xs text-slate-500">Pago: <b>DEMO (sin cobro)</b>. En producción: el pago se AUTORIZA aquí y solo se CAPTURA cuando confirmemos disponibilidad y costo con el proveedor; si algo cambia, te pedimos aceptar antes de continuar.</div>
+          <div className="mt-1 text-xs text-slate-500">Pago: <b>sin cobro por ahora</b>. Con la pasarela conectada: el pago se AUTORIZA aquí y solo se CAPTURA cuando confirmemos disponibilidad y costo con el proveedor; si algo cambia, te pedimos aceptar antes de continuar.</div>
         </div>
         {error && <Aviso tipo="error" className="mt-3">{error}</Aviso>}
         <div className="mt-4 flex justify-end gap-2">
           <Boton variant="ghost" onClick={onCerrar}>Volver</Boton>
-          <Boton variant="gold" onClick={crear} disabled={creando}>{creando ? <Spinner /> : 'Crear pedido de prueba'}</Boton>
+          <Boton variant="gold" onClick={crear} disabled={creando}>{creando ? <Spinner /> : 'Crear pedido'}</Boton>
         </div>
       </div>
     </div>

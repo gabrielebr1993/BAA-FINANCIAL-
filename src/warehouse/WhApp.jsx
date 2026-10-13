@@ -74,8 +74,8 @@ export default function WhApp() {
       <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
         <Card className="w-full max-w-md p-8 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-slate-200 text-slate-500 dark:bg-slate-700"><Lock size={24} /></div>
-          <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Módulo privado</div>
-          <p className="mt-2 text-sm text-slate-500">El módulo Warehouse es privado del dueño de la cuenta. Si necesitas acceso, contáctalo.</p>
+          <div className="text-lg font-bold text-brand-navy dark:text-slate-100">Sin acceso</div>
+          <p className="mt-2 text-sm text-slate-500">Tu cuenta no tiene acceso al módulo Warehouse. Pide acceso al dueño de la cuenta.</p>
           <Boton variant="ghost" className="mt-5" onClick={() => navigate('/elegir')}><ArrowLeft size={15} /> Volver</Boton>
         </Card>
       </div>
@@ -97,7 +97,7 @@ function WhLogin({ onVolver }) {
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-1 flex items-center gap-2 text-xl font-black text-brand-navy dark:text-slate-100"><Warehouse size={20} /> Warehouse</div>
-        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-violet-500">Acceso privado</div>
+        <div className="mb-4 text-xs font-semibold uppercase tracking-wider text-violet-500">Operación de almacén</div>
         <form onSubmit={entrar} className="space-y-3">
           <Input type="email" placeholder="Correo" value={correo} onChange={(e) => setCorreo(e.target.value)} />
           <Input type="password" placeholder="Contraseña" value={clave} onChange={(e) => setClave(e.target.value)} />
@@ -125,10 +125,7 @@ function WhShell({ user }) {
             <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Warehouse</div>
           </div>
         </div>
-        <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-          <Badge color="slate">Privado</Badge>
-        </div>
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto">
           {TABS.map((tdef) => {
             const Icono = tdef.icono
             const activo = tab === tdef.id
@@ -168,7 +165,6 @@ function WhShell({ user }) {
             <button onClick={() => navigate('/elegir')} className="mr-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Cambiar de módulo"><ArrowLeft size={16} /></button>
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-black text-brand-navy dark:text-slate-100">Warehouse</span>
-              <Badge color="slate">Privado</Badge>
             </div>
             <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
               <button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button>
@@ -242,7 +238,7 @@ function WhResumen({ irA }) {
   return (
     <div>
       <PageTitle>Resumen del almacén</PageTitle>
-      <Aviso tipo="warn" className="mb-4"><b>Módulo privado de tu cuenta.</b> Operación de staffing con Gofo (reportes, tarifas, finanzas y cheques) + servicios de almacén: clasificación, inbound, outbound, almacenaje y cross-dock.</Aviso>
+      <p className="-mt-2 mb-4 text-sm text-slate-500 dark:text-slate-400">Staffing con Gofo (reportes, tarifas, finanzas y cheques) + servicios de almacén: clasificación, inbound, outbound, almacenaje y cross-dock.</p>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Semanas importadas</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.semanas)}</div>{n?.ult && <div className="text-[11px] text-slate-400">última: {n.ult.inicio}</div>}</Card>
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Trabajadores</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.trabajadores)}</div><div className="text-[11px] text-slate-400">perfiles únicos</div></Card>
@@ -343,7 +339,6 @@ function WhTabla({ col, titulo, estados, campos }) {
               <Card key={f.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <b className="text-brand-navy dark:text-slate-100">{f.ref}</b>
-                  {f.demo && <Badge color="gold">DEMO</Badge>}
                   <Badge color={i === estados.length - 1 ? 'green' : 'slate'}>{f.estado}</Badge>
                   <span className="text-xs text-slate-500">{f.cliente || f.destino} · {f.unidades} unidades {f.transportista ? `· ${f.transportista}` : ''} {f.notas ? `· ${f.notas}` : ''}</span>
                   <span className="ml-auto flex items-center gap-2">
@@ -416,7 +411,6 @@ function WhPersonal() {
             <Card key={f.id} className={`p-4 ${!f.activo ? 'opacity-60' : ''}`}>
               <div className="flex items-center gap-2">
                 <b className="text-brand-navy dark:text-slate-100">{f.nombre}</b>
-                {f.demo && <Badge color="gold">DEMO</Badge>}
               </div>
               <div className="mt-0.5 text-xs text-slate-500">{f.rol} · turno {f.turno}</div>
               <div className="mt-2.5 flex items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-700/60">

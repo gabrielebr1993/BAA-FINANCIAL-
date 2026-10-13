@@ -37,7 +37,7 @@ export function EcomPedidos({ ctx }) {
     <div>
       <PageTitle>Pedidos</PageTitle>
       {pedidos.length === 0 ? (
-        <EstadoVacio titulo="Sin pedidos" texto="Crea uno desde la Tienda (vista previa) con el checkout DEMO." />
+        <EstadoVacio titulo="Sin pedidos" texto="Crea uno desde la Tienda con el checkout." />
       ) : (
         <div className="space-y-2.5">
           {pedidos.map((p) => (
@@ -92,7 +92,7 @@ function DetallePedido({ pedido, onCerrar, onCambio, auditar }) {
     } finally { setGuardando(false) }
   }
   const cancelar = async () => {
-    if (!window.confirm('¿Marcar este pedido como CANCELADO? (demo: no hay reembolsos reales)')) return
+    if (!window.confirm('¿Marcar este pedido como CANCELADO?')) return
     await updateDoc(doc(db, 'ecom_orders', pedido.id), {
       estadoPedido: 'cancelado', estadoPago: pedido.estadoPago === 'capturado' ? 'reembolsado' : pedido.estadoPago,
       timeline: [...(pedido.timeline || []), { estado: 'cancelado', fecha: new Date().toISOString(), nota: nota || 'Cancelado por el panel' }],
@@ -262,9 +262,9 @@ export function EcomFinanzas() {
   return (
     <div>
       <PageTitle right={<Boton variant="ghost" onClick={exportarCSV}>Exportar CSV</Boton>}>Finanzas</PageTitle>
-      <Aviso tipo="warn" className="mb-4">Cifras de <b>demostración</b>: no hay cobros reales. "Venta" = total del pedido; "Costo" = compras registradas a proveedor. Los ingresos cobrados vs pendientes se separarán cuando exista pasarela real.</Aviso>
+      <Aviso tipo="info" className="mb-4">"Venta" = total del pedido; "Costo" = compras registradas a proveedor. Los ingresos cobrados vs pendientes se separarán cuando conectes la pasarela de pagos.</Aviso>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Ventas (demo)</div><div className="text-xl font-black text-brand-navy dark:text-slate-100">{money2(tot.venta)}</div></Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Ventas</div><div className="text-xl font-black text-brand-navy dark:text-slate-100">{money2(tot.venta)}</div></Card>
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Costos registrados</div><div className="text-xl font-black text-brand-navy dark:text-slate-100">{money2(tot.costo)}</div></Card>
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Utilidad estimada</div><div className="text-xl font-black text-emerald-600">{money2(tot.utilidad)}</div></Card>
       </div>
