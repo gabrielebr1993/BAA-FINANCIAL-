@@ -1,0 +1,606 @@
+// ============================================================================
+// PRINT CHECK · B&A AMERICAN GROUP LLC / NEXSEND — Fase 1 (núcleo).
+//
+// · Cuentas bancarias con secuencia de cheques propia (número enmascarado).
+// · Crear cheques desde una semana importada de Gofo: neto por trabajador,
+//   candado antiduplicados (quien ya tiene cheque activo queda bloqueado),
+//   numeración consecutiva, lote idempotente (ids chq_CTA_NUM: reintentar no
+//   duplica), integrado con wh_cheques (conciliación bancaria existente).
+// · Impresión: formato voucher (cheque + 2 talones), importe en palabras,
+//   firma de la biblioteca, calibración (offsets), modo PRUEBA con marca
+//   "SAMPLE — NON-NEGOTIABLE". El MICR negociable exige fuente E-13B y tóner
+//   magnético o papel preimpreso: se avisa, no se finge.
+// · Registro con estados (emitido/cobrado/cancelado), anulación con motivo y
+//   reimpresión auditada. · Firmas: biblioteca de imágenes. · Ajustes: datos
+//   de la compañía emisora y calibración. Todo en colecciones wh_pc_* (las
+//   reglas wh_.* ya desplegadas las protegen: solo el dueño).
+// ============================================================================
+import { useEffect, useMemo, useState } from 'react'
+import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
+import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark } from 'lucide-react'
+import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp } from '../datosStaff'
+import { idCheque, normalizarNumero } from '../logicaCheques'
+import { numeroEnPalabras, planearLote, asignarNumeros, lineaMICR, enmascarar, r2 } from './logicaPrint'
+
+const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', config: 'wh_pc_config' }
+const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+const hoyISO = () => new Date().toISOString().slice(0, 10)
+
+export default function WhPrintCheck({ user }) {
+  const [sub, setSub] = useState('panel')
+  const [bd, setBd] = useState(null)
+  const [loteImprimir, setLoteImprimir] = useState('')
+  const [chequeSolo, setChequeSolo] = useState('')
+  const recargar = async () => {
+    const [cuentas, firmas, lotes, cfgs, cheques, periodos, workers] = await Promise.all([
+      cargar(COLP.cuentas), cargar(COLP.firmas), cargar(COLP.lotes), cargar(COLP.config), cargar(COL.cheques), cargar(COL.periodos), cargar(COL.workers),
+    ])
+    setBd({
+      cuentas, firmas, cheques, workers,
+      lotes: lotes.sort((a, b) => String(b.creadoISO || '').localeCompare(a.creadoISO || '')),
+      periodos: periodos.sort((a, b) => String(b.inicio).localeCompare(a.inicio)),
+      empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A AMERICAN GROUP LLC', marca: 'NEXSEND', direccion1: '', direccion2: '' },
+      impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true },
+    })
+  }
+  useEffect(() => { recargar() }, [])
+  if (!bd) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando Print Check…</div>
+
+  const SUBS = [
+    ['panel', 'Dashboard', LayoutDashboard], ['crear', 'Crear cheques', Plus], ['imprimir', 'Imprimir', Printer],
+    ['registro', 'Registro', ListChecks], ['cuentas', 'Cuentas bancarias', Landmark], ['firmas', 'Firmas', FileSignature], ['ajustes', 'Ajustes', Settings],
+  ]
+  const irAImprimir = (loteId, chequeId) => { setLoteImprimir(loteId || ''); setChequeSolo(chequeId || ''); setSub('imprimir') }
+
+  return (
+    <div>
+      <PageTitle>Print Check · emisión e impresión de cheques</PageTitle>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {SUBS.map(([id, label, Icono]) => (
+          <button key={id} onClick={() => setSub(id)}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[13px] font-semibold transition ${sub === id ? 'bg-brand-navy text-white' : 'bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
+            <Icono size={14} /> {label}
+          </button>
+        ))}
+      </div>
+      {sub === 'panel' && <PcDashboard bd={bd} irA={setSub} />}
+      {sub === 'crear' && <PcCrear bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
+      {sub === 'imprimir' && <PcImprimir bd={bd} user={user} loteInicial={loteImprimir} chequeSolo={chequeSolo} />}
+      {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
+      {sub === 'cuentas' && <PcCuentas bd={bd} user={user} recargar={recargar} />}
+      {sub === 'firmas' && <PcFirmas bd={bd} user={user} recargar={recargar} />}
+      {sub === 'ajustes' && <PcAjustes bd={bd} user={user} recargar={recargar} />}
+    </div>
+  )
+}
+
+// ── DASHBOARD ───────────────────────────────────────────────────────────────
+function PcDashboard({ bd, irA }) {
+  const ch = bd.cheques
+  const suma = (lista) => r2(lista.reduce((s, c) => s + (c.importe || 0), 0))
+  const emitidos = ch.filter((c) => c.estado !== 'cancelado')
+  const cobrados = ch.filter((c) => c.estado === 'cobrado')
+  const anulados = ch.filter((c) => c.estado === 'cancelado')
+  const pendientes = ch.filter((c) => c.estado !== 'cancelado' && c.estado !== 'cobrado')
+  const K = ({ label, n, sub, color }) => (
+    <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">{label}</div>
+      <div className={`text-xl font-black ${color || 'text-brand-navy dark:text-slate-100'}`}>{n}</div>
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}</Card>
+  )
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <K label="Cheques emitidos" n={emitidos.length} sub={dinero(suma(emitidos))} />
+        <K label="Pendientes de cobro (outstanding)" n={pendientes.length} sub={dinero(suma(pendientes))} color="text-amber-600" />
+        <K label="Cobrados" n={cobrados.length} sub={dinero(suma(cobrados))} color="text-emerald-600" />
+        <K label="Anulados" n={anulados.length} sub={dinero(suma(anulados))} color="text-rose-500" />
+        <K label="Lotes generados" n={bd.lotes.length} sub={bd.cuentas.length + ' cuenta(s) bancaria(s)'} />
+      </div>
+      {bd.cuentas.length === 0 && (
+        <Aviso tipo="info">Para empezar: crea tu <b>cuenta bancaria</b> (pestaña Cuentas bancarias), sube una <b>firma</b> y luego genera cheques desde una semana importada en <b>Crear cheques</b>.</Aviso>
+      )}
+      {bd.cuentas.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Por cuenta bancaria</div>
+          <table className="w-full text-xs">
+            <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+              <th className="py-1 pr-2">Cuenta</th><th className="pr-2 text-right">Siguiente cheque</th><th className="pr-2 text-right">Emitidos</th><th className="pr-2 text-right">Outstanding</th>
+            </tr></thead>
+            <tbody>{bd.cuentas.map((cta) => {
+              const deCta = bd.cheques.filter((c) => c.cuentaId === cta.id)
+              const out = deCta.filter((c) => c.estado !== 'cancelado' && c.estado !== 'cobrado')
+              return (
+                <tr key={cta.id} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{cta.banco} · {enmascarar(cta.numero)}</td>
+                  <td className="pr-2 text-right font-mono">#{cta.siguiente}</td>
+                  <td className="pr-2 text-right">{deCta.filter((c) => c.estado !== 'cancelado').length}</td>
+                  <td className="pr-2 text-right font-semibold text-amber-600">{dinero(r2(out.reduce((s, c) => s + (c.importe || 0), 0)))}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── CREAR CHEQUES desde una semana importada ───────────────────────────────
+function PcCrear({ bd, user, recargar, irAImprimir }) {
+  const [periodoId, setPeriodoId] = useState('')
+  const [cuentaId, setCuentaId] = useState(bd.cuentas[0]?.id || '')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [memo, setMemo] = useState('')
+  const [plan, setPlan] = useState(null)
+  const [sel, setSel] = useState({})
+  const [trabajando, setTrabajando] = useState(false)
+  const [mensaje, setMensaje] = useState(null)
+  const cuenta = bd.cuentas.find((c) => c.id === cuentaId)
+
+  const cargarPlan = async (pid) => {
+    setPeriodoId(pid); setPlan(null); setMensaje(null)
+    if (!pid) return
+    const p = bd.periodos.find((x) => x.id === pid)
+    setMemo(`Payroll ${p.inicio} - ${p.fin}`)
+    const [registros, ajustes] = await Promise.all([
+      cargarPor(COL.registros, 'periodoId', pid), cargarPor(COL.ajustes, 'periodoAplicaId', pid),
+    ])
+    const filas = planearLote({ periodoId: pid, registros, ajustes, cheques: bd.cheques, workers: bd.workers })
+    setPlan(filas)
+    setSel(Object.fromEntries(filas.filter((f) => f.elegible).map((f) => [f.workerId || f.nombre, true])))
+  }
+  const seleccion = (plan || []).filter((f) => f.elegible && sel[f.workerId || f.nombre])
+  const total = r2(seleccion.reduce((s, f) => s + f.neto, 0))
+  const desde = Number(cuenta?.siguiente) || 1
+  const hasta = desde + Math.max(0, seleccion.length - 1)
+
+  const generar = async () => {
+    if (!cuenta || !seleccion.length) return
+    setTrabajando(true); setMensaje(null)
+    try {
+      const conNumero = asignarNumeros(seleccion, cuenta.siguiente)
+      const loteId = `lote_${periodoId}_${cuenta.id}_${desde}`
+      const ops = conNumero.map((f) => ({
+        ref: refDoc(COL.cheques, idCheque(f.numero, cuenta.numero || cuenta.id)),
+        merge: true,
+        data: {
+          numeroRaw: f.numero, numeroNorm: normalizarNumero(f.numero),
+          cuenta: cuenta.numero || '', cuentaId: cuenta.id, banco: cuenta.banco || '',
+          workerId: f.workerId, beneficiario: f.nombre, importe: f.neto, fecha, memo,
+          estado: 'emitido', origen: 'printcheck', loteId,
+          distribucion: [{ periodoId, importe: f.neto }],
+          detalle: f.detalle, idEmpleado: f.idEmpleado || null,
+          creadoEn: serverTimestamp(), creadoPor: user.email,
+        },
+      }))
+      ops.push({ ref: refDoc(COLP.cuentas, cuenta.id), merge: true, data: { siguiente: desde + conNumero.length, ultimoEmitido: String(hasta) } })
+      ops.push({
+        ref: refDoc(COLP.lotes, loteId),
+        data: {
+          periodoId, cuentaId: cuenta.id, banco: cuenta.banco || '', desde: String(desde), hasta: String(hasta),
+          cantidad: conNumero.length, total, fecha, memo, creadoISO: new Date().toISOString(), creadoPor: user.email,
+        },
+      })
+      await escribirEnLotes(ops)
+      await auditarStaff('pc_lote_generado', `${loteId}: ${conNumero.length} cheques #${desde}–#${hasta}, total ${dinero(total)} (${cuenta.banco})`)
+      setMensaje({ tipo: 'ok', texto: `Lote generado: ${conNumero.length} cheques (#${desde} a #${hasta}) por ${dinero(total)}. Pasando a Imprimir…` })
+      await recargar()
+      irAImprimir(loteId)
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'No se generó el lote (reintentar es seguro, no duplica): ' + (e.message || e) })
+    } finally { setTrabajando(false) }
+  }
+
+  return (
+    <div>
+      {bd.cuentas.length === 0 && <Aviso tipo="warn">Primero crea una <b>cuenta bancaria</b> en la pestaña "Cuentas bancarias".</Aviso>}
+      <Card className="mb-4 p-4">
+        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <div><div className="mb-1 font-bold text-slate-500">Semana (del staffing importado)</div>
+            <Select value={periodoId} onChange={(e) => cargarPlan(e.target.value)}>
+              <option value="">Elegir semana…</option>
+              {bd.periodos.map((p) => <option key={p.id} value={p.id}>{p.inicio} → {p.fin}</option>)}
+            </Select></div>
+          <div><div className="mb-1 font-bold text-slate-500">Cuenta bancaria emisora</div>
+            <Select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)}>
+              {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
+            </Select></div>
+          <div><div className="mb-1 font-bold text-slate-500">Fecha de emisión</div>
+            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
+          <div><div className="mb-1 font-bold text-slate-500">Memo</div>
+            <Input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Payroll semana…" /></div>
+        </div>
+      </Card>
+      {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}
+      {plan && (
+        <Card className="p-4">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+            <b className="text-brand-navy dark:text-slate-100">Pagos de la semana</b>
+            <span className="text-xs text-slate-400">{plan.length} trabajadores · {plan.filter((f) => f.yaTiene).length} ya con cheque activo (bloqueados)</span>
+            <span className="ml-auto text-xs font-semibold">{seleccion.length} seleccionados · {dinero(total)} · #{desde}–#{hasta}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
+              <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+                <th className="py-1 pr-2"><input type="checkbox" checked={seleccion.length === plan.filter((f) => f.elegible).length && seleccion.length > 0}
+                  onChange={(e) => setSel(Object.fromEntries(plan.filter((f) => f.elegible).map((f) => [f.workerId || f.nombre, e.target.checked])))} /></th>
+                <th className="pr-2">Trabajador</th><th className="pr-2">ID</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Neto a pagar</th><th className="pr-2">Estado</th>
+              </tr></thead>
+              <tbody>{plan.map((f) => (
+                <tr key={f.workerId || f.nombre} className={`border-b border-slate-100 dark:border-slate-800 ${!f.elegible ? 'opacity-50' : ''}`}>
+                  <td className="py-1 pr-2">{f.elegible && <input type="checkbox" checked={!!sel[f.workerId || f.nombre]} onChange={(e) => setSel({ ...sel, [f.workerId || f.nombre]: e.target.checked })} />}</td>
+                  <td className="pr-2 font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</td>
+                  <td className="pr-2 font-mono">{f.idEmpleado || '—'}</td>
+                  <td className="pr-2 text-right">{Math.round(f.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right font-semibold">{dinero(f.neto)}</td>
+                  <td className="pr-2">
+                    {f.yaTiene && <Badge color="gold">ya tiene cheque #{f.yaTiene}</Badge>}
+                    {f.pendienteTarifa && <Badge color="red">sin tarifa</Badge>}
+                    {f.elegible && <Badge color="green">listo</Badge>}
+                    {!f.yaTiene && !f.pendienteTarifa && f.neto <= 0 && <Badge color="slate">neto $0</Badge>}
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Boton variant="gold" disabled={trabajando || !cuenta || seleccion.length === 0} onClick={generar}>
+              {trabajando ? <Spinner /> : <>Generar {seleccion.length} cheque(s) · {dinero(total)}</>}
+            </Boton>
+            <span className="text-[11px] text-slate-400">Un trabajador con cheque activo de esta semana queda bloqueado: para pagarle de nuevo, primero anula su cheque en Registro (queda auditado).</span>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── IMPRESIÓN (ventana dedicada con medidas en pulgadas y calibración) ─────
+function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba }) {
+  const off = `margin-left:${Number(impresion.offX) || 0}in;margin-top:${Number(impresion.offY) || 0}in;`
+  const fFecha = (iso) => { const [a, m, d] = String(iso || '').split('-'); return m ? `${m}/${d}/${a}` : iso || '' }
+  const stub = (ch, titulo) => `
+    <div class="stub">
+      <div class="stub-cab"><b>${empresa.nombre || ''}</b> · ${titulo} · Check #${prueba ? '000000' : ch.numeroRaw} · ${fFecha(ch.fecha)}</div>
+      <div class="stub-linea"><span>${ch.beneficiario}${ch.idEmpleado ? ` · ID ${ch.idEmpleado}` : ''}</span><span>${ch.memo || ''}</span><b>$${Number(ch.importe).toFixed(2)}</b></div>
+      ${(ch.detalle || []).map((d) => `<div class="stub-det"><span>${d.posicion}</span><span>${d.horas != null ? d.horas + ' h' : ''}</span><span>$${Number(d.pago || 0).toFixed(2)}</span></div>`).join('')}
+    </div>`
+  const uno = (ch) => `
+    <div class="pagina">
+      ${prueba ? '<div class="muestra">SAMPLE — NON-NEGOTIABLE</div>' : ''}
+      <div class="cheque">
+        <div class="fila1">
+          <div class="emisor"><b>${empresa.nombre || ''}</b><br>${empresa.direccion1 || ''}<br>${empresa.direccion2 || ''}</div>
+          <div class="banco">${cuenta.banco || ''}<br>${cuenta.direccionBanco || ''}</div>
+          <div class="numero">No. <b>${prueba ? '000000' : ch.numeroRaw}</b><br><span class="fecha-lbl">DATE</span> <span class="fecha">${fFecha(ch.fecha)}</span></div>
+        </div>
+        <div class="fila2">
+          <span class="lbl">PAY TO THE<br>ORDER OF</span>
+          <span class="payee">${ch.beneficiario}</span>
+          <span class="caja">$ <b>${Number(ch.importe).toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></span>
+        </div>
+        <div class="fila3"><span class="palabras">${numeroEnPalabras(ch.importe) || ''}</span></div>
+        <div class="fila4">
+          <div class="memo"><span class="lbl">MEMO</span> ${ch.memo || ''}</div>
+          <div class="firma">${firma ? `<img src="${firma.imagen}" alt="" />` : ''}<div class="linea"></div><div class="lbl-firma">AUTHORIZED SIGNATURE</div></div>
+        </div>
+        ${impresion.mostrarMICR ? `<div class="micr">${lineaMICR({ numero: prueba ? '000000' : ch.numeroRaw, routing: cuenta.routing, cuenta: cuenta.numero })}</div>` : ''}
+      </div>
+      ${stub(ch, 'EMPLOYEE COPY')}
+      ${stub(ch, 'COMPANY COPY')}
+    </div>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Checks</title><style>
+    @page{size:8.5in 11in;margin:0}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+    .pagina{position:relative;width:8.5in;height:11in;page-break-after:always;box-sizing:border-box;padding:0.25in 0.4in;${off}}
+    .muestra{position:absolute;top:3in;left:0.6in;font-size:52px;font-weight:900;color:rgba(200,30,30,.25);transform:rotate(-18deg);letter-spacing:4px}
+    .cheque{height:3.1in;border-bottom:1px dashed #999;box-sizing:border-box;padding:0.15in 0.1in;position:relative}
+    .fila1{display:flex;justify-content:space-between;font-size:9.5px;line-height:1.35}
+    .emisor b{font-size:12px}.banco{text-align:center;color:#333}.numero{text-align:right;font-size:11px}
+    .fecha{border-bottom:1px solid #111;padding:0 6px}
+    .fila2{display:flex;align-items:flex-end;gap:10px;margin-top:0.28in}
+    .lbl{font-size:7.5px;color:#444;letter-spacing:.4px}
+    .payee{flex:1;border-bottom:1px solid #111;font-size:13px;font-weight:700;padding:0 4px}
+    .caja{border:1.3px solid #111;padding:4px 10px;font-size:13px;min-width:1.2in;text-align:right}
+    .fila3{margin-top:0.22in}.palabras{display:block;border-bottom:1px solid #111;font-size:10.5px;padding:0 2px}
+    .fila4{display:flex;justify-content:space-between;align-items:flex-end;margin-top:0.3in}
+    .memo{font-size:10px;border-bottom:1px solid #111;min-width:2.6in;padding:0 2px}
+    .firma{text-align:center;width:2.6in;position:relative}
+    .firma img{height:0.55in;position:absolute;bottom:14px;left:50%;transform:translateX(-50%)}
+    .firma .linea{border-bottom:1px solid #111}.lbl-firma{font-size:7.5px;color:#444;margin-top:2px}
+    .micr{position:absolute;bottom:0.08in;left:0.45in;font-family:'MICR','Courier New',monospace;font-size:13px;letter-spacing:2px}
+    .stub{height:3.4in;border-bottom:1px dashed #999;box-sizing:border-box;padding:0.15in 0.1in;font-size:10px}
+    .stub-cab{font-size:10.5px;margin-bottom:6px}
+    .stub-linea{display:flex;justify-content:space-between;border-bottom:1px solid #ccc;padding-bottom:4px;margin-bottom:4px}
+    .stub-det{display:flex;justify-content:space-between;color:#444;padding:1px 0}
+  </style></head><body>${cheques.map(uno).join('')}
+  <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`
+}
+
+function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
+  const [loteId, setLoteId] = useState(loteInicial || bd.lotes[0]?.id || '')
+  const [prueba, setPrueba] = useState(false)
+  const lote = bd.lotes.find((l) => l.id === loteId)
+  const cheques = useMemo(() => {
+    let lista = bd.cheques.filter((c) => c.loteId === loteId)
+    if (chequeSolo) lista = bd.cheques.filter((c) => c.id === chequeSolo)
+    return lista.sort((a, b) => Number(a.numeroRaw) - Number(b.numeroRaw))
+  }, [bd, loteId, chequeSolo])
+  const cuenta = bd.cuentas.find((c) => c.id === (cheques[0]?.cuentaId || lote?.cuentaId)) || {}
+  const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
+
+  const imprimir = async () => {
+    const html = htmlLote({ cheques, cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba })
+    const win = window.open('', '_blank', 'width=900,height=1000')
+    if (!win) { window.alert('Permite las ventanas emergentes para imprimir.'); return }
+    win.document.write(html)
+    win.document.close()
+    await auditarStaff(prueba ? 'pc_impresion_prueba' : 'pc_impresion', `${chequeSolo ? '1 cheque' : `lote ${loteId} (${cheques.length} cheques)`}${prueba ? ' [SAMPLE]' : ''} por ${user.email}`)
+  }
+
+  return (
+    <div>
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap items-end gap-3 text-xs">
+          {!chequeSolo && (
+            <div><div className="mb-1 font-bold text-slate-500">Lote</div>
+              <Select className="w-72" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
+                {bd.lotes.length === 0 && <option value="">No hay lotes todavía</option>}
+                {bd.lotes.map((l) => <option key={l.id} value={l.id}>{l.fecha} · #{l.desde}–#{l.hasta} · {l.cantidad} cheques · {dinero(l.total)}</option>)}
+              </Select></div>
+          )}
+          <label className="inline-flex items-center gap-1.5 pb-2 font-semibold text-slate-600 dark:text-slate-300">
+            <input type="checkbox" checked={prueba} onChange={(e) => setPrueba(e.target.checked)} /> Impresión de PRUEBA (marca SAMPLE, número 000000)
+          </label>
+          <Boton variant="gold" disabled={!cheques.length} onClick={imprimir}><Printer size={14} /> {prueba ? 'Imprimir prueba' : `Imprimir ${cheques.length} cheque(s)`}</Boton>
+        </div>
+        <div className="mt-2 text-[11px] text-slate-400">
+          Formato voucher: cheque arriba + copia del empleado + copia de la compañía. En el diálogo de impresión usa escala 100% y sin márgenes.
+          <b> Importante:</b> un cheque negociable en papel en blanco exige fuente MICR E-13B y tóner magnético; con papel preimpreso del banco, apaga la línea MICR en Ajustes.
+        </div>
+      </Card>
+      {cheques.length === 0 && <EstadoVacio icono={Printer} titulo="Nada para imprimir" texto="Genera un lote en Crear cheques y aparecerá aquí." mostrarBoton={false} />}
+      {cheques.length > 0 && (
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa del lote</div>
+          <div className="grid gap-2">
+            {cheques.map((ch) => (
+              <div key={ch.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
+                <span className="font-mono font-bold text-brand-navy dark:text-slate-100">#{ch.numeroRaw}</span>
+                <span className="font-semibold">{ch.beneficiario}</span>
+                <span className="text-slate-400">{ch.fecha} · {ch.memo}</span>
+                <Badge color={ch.estado === 'cobrado' ? 'green' : ch.estado === 'cancelado' ? 'red' : 'gold'}>{ch.estado}</Badge>
+                <b className="ml-auto">{dinero(ch.importe)}</b>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── REGISTRO (estados, anulación, reimpresión auditada) ────────────────────
+function PcRegistro({ bd, user, recargar, irAImprimir }) {
+  const [filtro, setFiltro] = useState('todos')
+  const [buscar, setBuscar] = useState('')
+  const lista = bd.cheques
+    .filter((c) => filtro === 'todos' || c.estado === filtro)
+    .filter((c) => !buscar || String(c.numeroRaw).includes(buscar) || String(c.beneficiario || '').toLowerCase().includes(buscar.toLowerCase()))
+    .sort((a, b) => Number(b.numeroRaw || 0) - Number(a.numeroRaw || 0))
+  const anular = async (c) => {
+    const motivo = window.prompt(`¿Anular el cheque #${c.numeroRaw} de ${c.beneficiario}? Escribe el motivo:`)
+    if (!motivo) return
+    await setDoc(refDoc(COL.cheques, c.id), { estado: 'cancelado', motivoCancelacion: motivo, canceladoEn: new Date().toISOString(), canceladoPor: user.email }, { merge: true })
+    await auditarStaff('pc_cheque_anulado', `#${c.numeroRaw} ${c.beneficiario} ${dinero(c.importe)}: ${motivo}`)
+    recargar()
+  }
+  return (
+    <div>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Select className="w-44" value={filtro} onChange={(e) => setFiltro(e.target.value)}>
+            <option value="todos">Todos los estados</option><option value="emitido">Emitidos</option>
+            <option value="cobrado">Cobrados</option><option value="cancelado">Anulados</option>
+          </Select>
+          <Input className="w-56" placeholder="Buscar número o beneficiario…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <span className="ml-auto text-slate-400">{lista.length} cheques · {dinero(r2(lista.reduce((s, c) => s + (c.importe || 0), 0)))}</span>
+        </div>
+      </Card>
+      {lista.length === 0 && <EstadoVacio icono={Banknote} titulo="Sin cheques" texto="Los cheques generados (y los importados en la pestaña Cheques) aparecen aquí." mostrarBoton={false} />}
+      <div className="grid gap-2">
+        {lista.map((c) => (
+          <Card key={c.id} className="p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
+              <span className="font-semibold">{c.beneficiario || '—'}</span>
+              <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
+              <span className="text-slate-400">{c.fecha || ''} {c.banco ? `· ${c.banco}` : ''} {c.loteId ? `· ${c.loteId}` : ''}</span>
+              <b className="ml-auto">{dinero(c.importe)}</b>
+              {c.origen === 'printcheck' && c.estado !== 'cancelado' && (
+                <Boton variant="ghost" onClick={async () => { await auditarStaff('pc_reimpresion', `#${c.numeroRaw} ${c.beneficiario}`); irAImprimir('', c.id) }}><Printer size={13} /> Reimprimir</Boton>
+              )}
+              {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <button className="text-rose-400 hover:text-rose-600" onClick={() => anular(c)}>anular</button>}
+            </div>
+            {c.motivoCancelacion && <div className="mt-1 text-[11px] text-rose-400">Anulado: {c.motivoCancelacion}</div>}
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── CUENTAS BANCARIAS ──────────────────────────────────────────────────────
+function PcCuentas({ bd, user, recargar }) {
+  const VACIA = { banco: '', titular: '', routing: '', numero: '', tipo: 'Checking', direccionBanco: '', siguiente: '1001', firmaId: '' }
+  const [form, setForm] = useState(VACIA)
+  const [guardando, setGuardando] = useState(false)
+  const guardar = async () => {
+    if (!form.banco.trim() || !form.numero.trim()) return
+    setGuardando(true)
+    try {
+      const id = 'cta_' + form.banco.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '_' + form.numero.slice(-4)
+      await setDoc(refDoc(COLP.cuentas, id), { ...form, siguiente: Number(form.siguiente) || 1, creadoPor: user.email, creadoEn: new Date().toISOString() }, { merge: true })
+      await auditarStaff('pc_cuenta_guardada', `${form.banco} ····${form.numero.slice(-4)} (siguiente #${form.siguiente})`)
+      setForm(VACIA)
+      recargar()
+    } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <Aviso tipo="info" className="mb-4">El número de cuenta completo solo se usa para imprimir la línea MICR; en pantalla siempre se muestra enmascarado. Nunca guardes aquí claves de banca en línea.</Aviso>
+      {bd.cuentas.map((c) => (
+        <Card key={c.id} className="mb-2 p-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Landmark size={16} className="text-brand-gold" />
+            <b className="text-brand-navy dark:text-slate-100">{c.banco}</b>
+            <span className="text-xs text-slate-500">{c.titular} · {c.tipo} · {enmascarar(c.numero)} · routing {c.routing || '—'}</span>
+            <span className="ml-auto flex items-center gap-2 text-xs">
+              <span className="text-slate-400">Siguiente cheque:</span>
+              <Input className="w-24 text-right font-mono" defaultValue={c.siguiente} onBlur={async (e) => {
+                const v = Number(e.target.value)
+                if (!v || v === c.siguiente) return
+                await setDoc(refDoc(COLP.cuentas, c.id), { siguiente: v }, { merge: true })
+                await auditarStaff('pc_secuencia_cambiada', `${c.banco}: siguiente #${c.siguiente} → #${v}`)
+                recargar()
+              }} />
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            Firma para esta cuenta:
+            <Select className="w-56" value={c.firmaId || ''} onChange={async (e) => {
+              await setDoc(refDoc(COLP.cuentas, c.id), { firmaId: e.target.value }, { merge: true })
+              await auditarStaff('pc_firma_asignada', `${c.banco} → firma ${e.target.value || '(ninguna)'}`)
+              recargar()
+            }}>
+              <option value="">Sin firma (línea en blanco)</option>
+              {bd.firmas.map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+            </Select>
+          </div>
+        </Card>
+      ))}
+      <Card className="p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Agregar cuenta bancaria</div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Input placeholder="Banco (Bank of America…)" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} />
+          <Input placeholder="Titular (B&A American Group LLC)" value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} />
+          <Input placeholder="Routing number" value={form.routing} onChange={(e) => setForm({ ...form, routing: e.target.value })} />
+          <Input placeholder="Número de cuenta" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} />
+          <Input placeholder="Dirección del banco (opcional)" value={form.direccionBanco} onChange={(e) => setForm({ ...form, direccionBanco: e.target.value })} />
+          <Select value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
+            <option>Checking</option><option>Savings</option><option>Payroll</option>
+          </Select>
+          <Input type="number" placeholder="Primer número de cheque" value={form.siguiente} onChange={(e) => setForm({ ...form, siguiente: e.target.value })} />
+          <Boton variant="gold" disabled={guardando} onClick={guardar}>{guardando ? <Spinner /> : 'Guardar cuenta'}</Boton>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ── FIRMAS (biblioteca de imágenes, optimizadas en canvas) ─────────────────
+function PcFirmas({ bd, user, recargar }) {
+  const [nombre, setNombre] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const subir = async (e) => {
+    const f = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!f || !nombre.trim()) { if (!nombre.trim()) window.alert('Primero escribe el nombre del firmante.'); return }
+    setGuardando(true)
+    try {
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url })
+      const canvas = document.createElement('canvas')
+      const esc = Math.min(1, 600 / img.width)
+      canvas.width = Math.round(img.width * esc); canvas.height = Math.round(img.height * esc)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      const optimizada = canvas.toDataURL('image/png')
+      const id = 'fir_' + nombre.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+      await setDoc(refDoc(COLP.firmas, id), { nombre: nombre.trim(), imagen: optimizada, creadoPor: user.email, creadoEn: new Date().toISOString() })
+      await auditarStaff('pc_firma_subida', nombre.trim())
+      setNombre('')
+      recargar()
+    } catch (err) { window.alert('No se pudo procesar la imagen: ' + (err.message || err)) } finally { setGuardando(false) }
+  }
+  const quitar = async (f) => {
+    if (!window.confirm(`¿Eliminar la firma de "${f.nombre}"?`)) return
+    await escribirEnLotes([{ ref: refDoc(COLP.firmas, f.id), borrar: true }])
+    await auditarStaff('pc_firma_eliminada', f.nombre)
+    recargar()
+  }
+  return (
+    <div>
+      <Aviso tipo="info" className="mb-4">Sube la firma autorizada como imagen (PNG/JPG, idealmente tinta oscura sobre fondo blanco o transparente). Se optimiza sola para impresión. Cada uso en un lote queda auditado.</Aviso>
+      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+        {bd.firmas.map((f) => (
+          <Card key={f.id} className="p-3 text-center">
+            <img src={f.imagen} alt={f.nombre} className="mx-auto h-14 object-contain" />
+            <div className="mt-1 text-xs font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</div>
+            <button className="mt-1 text-[11px] text-rose-400 hover:text-rose-600" onClick={() => quitar(f)}>eliminar</button>
+          </Card>
+        ))}
+      </div>
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input className="w-56" placeholder="Nombre del firmante" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
+            <FileSignature size={15} /> {guardando ? 'Procesando…' : 'Subir imagen de firma'}
+            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={subir} disabled={guardando} />
+          </label>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ── AJUSTES (compañía emisora + calibración de impresión) ──────────────────
+function PcAjustes({ bd, user, recargar }) {
+  const [emp, setEmp] = useState(bd.empresa)
+  const [imp, setImp] = useState(bd.impresion)
+  const [guardando, setGuardando] = useState('')
+  const guardarEmp = async () => {
+    setGuardando('emp')
+    try {
+      await setDoc(refDoc(COLP.config, 'empresa'), { ...emp, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_empresa', emp.nombre)
+      recargar()
+    } finally { setGuardando('') }
+  }
+  const guardarImp = async () => {
+    setGuardando('imp')
+    try {
+      await setDoc(refDoc(COLP.config, 'impresion'), { offX: Number(imp.offX) || 0, offY: Number(imp.offY) || 0, mostrarMICR: !!imp.mostrarMICR, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_calibracion', `offset ${imp.offX}/${imp.offY} in · MICR ${imp.mostrarMICR ? 'sí' : 'no'}`)
+      recargar()
+    } finally { setGuardando('') }
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Compañía emisora (lo que se imprime en el cheque)</div>
+        <div className="grid gap-2">
+          <Input placeholder="Razón social (B&A AMERICAN GROUP LLC)" value={emp.nombre || ''} onChange={(e) => setEmp({ ...emp, nombre: e.target.value })} />
+          <Input placeholder="Marca (NEXSEND)" value={emp.marca || ''} onChange={(e) => setEmp({ ...emp, marca: e.target.value })} />
+          <Input placeholder="Dirección línea 1" value={emp.direccion1 || ''} onChange={(e) => setEmp({ ...emp, direccion1: e.target.value })} />
+          <Input placeholder="Dirección línea 2 (ciudad, estado, ZIP)" value={emp.direccion2 || ''} onChange={(e) => setEmp({ ...emp, direccion2: e.target.value })} />
+          <Boton variant="gold" disabled={guardando === 'emp'} onClick={guardarEmp}>{guardando === 'emp' ? <Spinner /> : 'Guardar compañía'}</Boton>
+        </div>
+      </Card>
+      <Card className="p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Calibración de impresión</div>
+        <div className="grid gap-2 text-xs">
+          <label className="flex items-center gap-2">Desplazamiento horizontal (pulgadas)
+            <Input type="number" step="0.05" className="w-24" value={imp.offX} onChange={(e) => setImp({ ...imp, offX: e.target.value })} /></label>
+          <label className="flex items-center gap-2">Desplazamiento vertical (pulgadas)
+            <Input type="number" step="0.05" className="w-24" value={imp.offY} onChange={(e) => setImp({ ...imp, offY: e.target.value })} /></label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={!!imp.mostrarMICR} onChange={(e) => setImp({ ...imp, mostrarMICR: e.target.checked })} />
+            Imprimir línea MICR (apágala si usas papel preimpreso del banco)
+          </label>
+          <Boton variant="gold" disabled={guardando === 'imp'} onClick={guardarImp}>{guardando === 'imp' ? <Spinner /> : 'Guardar calibración'}</Boton>
+          <div className="text-[11px] text-slate-400">Usa "Impresión de PRUEBA" en la pestaña Imprimir y ajusta los desplazamientos hasta que el texto caiga exacto sobre tu papel.</div>
+        </div>
+      </Card>
+    </div>
+  )
+}

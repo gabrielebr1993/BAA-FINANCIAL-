@@ -14,13 +14,14 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
 import WhTrabajadores from './staffing/WhTrabajadores'
 import WhTarifas from './staffing/WhTarifas'
 import WhFinanzasStaff from './staffing/WhFinanzasStaff'
 import WhCheques from './staffing/WhCheques'
+import WhPrintCheck from './staffing/printcheck/WhPrintCheck'
 import '../styles/cloudmotion.css'
 
 async function auditarWh(accion, detalle) {
@@ -56,6 +57,7 @@ const TABS = [
   { id: 'tarifas', label: 'Mis tarifas', icono: DollarSign },
   { id: 'finanzas', label: 'Finanzas', icono: BarChart3 },
   { id: 'cheques', label: 'Cheques', icono: Banknote },
+  { id: 'printcheck', label: 'Print Check', icono: Printer },
   { id: 'servicios', label: 'Servicios', icono: Boxes },
   { id: 'inbound', label: 'Inbound', icono: ArrowDownToLine },
   { id: 'outbound', label: 'Outbound', icono: ArrowUpFromLine },
@@ -199,6 +201,7 @@ function WhShell({ user }) {
         {tab === 'tarifas' && <WhTarifas user={user} />}
         {tab === 'finanzas' && <WhFinanzasStaff user={user} />}
         {tab === 'cheques' && <WhCheques user={user} />}
+        {tab === 'printcheck' && <WhPrintCheck user={user} />}
         {tab === 'servicios' && <WhServicios />}
         {tab === 'inbound' && <WhTabla col="wh_inbound" titulo="Inbound (recepciones)" estados={ESTADOS_IN}
           campos={[['ref', 'Referencia'], ['cliente', 'Cliente / marca'], ['tipo', 'Tipo (cajas/pallets/paquetes)'], ['unidades', 'Unidades'], ['notas', 'Notas']]} />}
