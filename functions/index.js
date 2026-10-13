@@ -2286,3 +2286,8 @@ exports.bulkAlertaGps = onSchedule('every 10 minutes', async () => {
     }
   }
 })
+
+// ── PLAID · conciliación bancaria automática de cheques (Warehouse) ─────────
+const plaid = require('./plaid')
+exports.plaidOp = plaid.plaidOp
+exports.plaidSync = plaid.plaidSync

@@ -17,8 +17,9 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
-import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X } from 'lucide-react'
+import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X, RefreshCw } from 'lucide-react'
 import QRCode from 'qrcode'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp, arrayUnion } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
@@ -45,6 +46,7 @@ export default function WhPrintCheck({ user }) {
       lotes: lotes.sort((a, b) => String(b.creadoISO || '').localeCompare(a.creadoISO || '')),
       periodos: periodos.sort((a, b) => String(b.inicio).localeCompare(a.inicio)),
       // valores iniciales tomados del membrete real del software anterior
+      plaid: cfgs.find((c) => c.id === 'plaid') || { conectado: false },
       empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', marca: 'NEXSEND', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
       impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true, papel: 'blanco' },
     })
@@ -54,7 +56,8 @@ export default function WhPrintCheck({ user }) {
 
   const SUBS = [
     ['panel', 'Dashboard', LayoutDashboard], ['crear', 'Crear cheques', Plus], ['imprimir', 'Imprimir', Printer],
-    ['registro', 'Registro', ListChecks], ['diseno', 'Diseño del cheque', PencilRuler], ['cuentas', 'Cuentas bancarias', Landmark], ['firmas', 'Firmas', FileSignature], ['ajustes', 'Ajustes', Settings],
+    ['registro', 'Registro', ListChecks], ['diseno', 'Diseño del cheque', PencilRuler], ['cuentas', 'Cuentas bancarias', Landmark],
+    ['banco', 'Banco automático', RefreshCw], ['firmas', 'Firmas', FileSignature], ['ajustes', 'Ajustes', Settings],
   ]
   const irAImprimir = (loteId, chequeId) => { setLoteImprimir(loteId || ''); setChequeSolo(chequeId || ''); setSub('imprimir') }
 
@@ -75,6 +78,7 @@ export default function WhPrintCheck({ user }) {
       {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} estadoInicial={registroEstado} />}
       {sub === 'diseno' && <PcDiseno bd={bd} user={user} recargar={recargar} />}
       {sub === 'cuentas' && <PcCuentas bd={bd} user={user} recargar={recargar} />}
+      {sub === 'banco' && <PcBanco bd={bd} recargar={recargar} />}
       {sub === 'firmas' && <PcFirmas bd={bd} user={user} recargar={recargar} />}
       {sub === 'ajustes' && <PcAjustes bd={bd} user={user} recargar={recargar} />}
     </div>
@@ -616,6 +620,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
               {(c.estado !== 'cobrado' || c.origen === 'historico') && <button className="text-rose-300 hover:text-rose-600" onClick={() => borrar(c)}>borrar</button>}
             </div>
             {c.motivoCancelacion && <div className="mt-1 text-[11px] text-rose-400">Anulado: {c.motivoCancelacion}</div>}
+            {c.revisarBanco && <div className="mt-1 text-[11px] font-semibold text-amber-600">⚠ Revisar contra el banco: {c.revisarBanco}</div>}
           </Card>
         ))}
       </div>
@@ -750,6 +755,115 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── BANCO AUTOMÁTICO (Plaid): el banco se consulta cada 6 horas y marca los
+//    cheques cobrados solo; "Sincronizar ahora" fuerza una corrida. ─────────
+function PcBanco({ bd, recargar }) {
+  const [trabajando, setTrabajando] = useState('')
+  const [mensaje, setMensaje] = useState(null)
+  const [entorno, setEntorno] = useState(bd.plaid.entorno || 'production')
+  const plaidOp = (data) => httpsCallable(getFunctions(), 'plaidOp')(data).then((r) => r.data)
+
+  const conectar = async () => {
+    setTrabajando('conectar'); setMensaje(null)
+    try {
+      const { linkToken } = await plaidOp({ op: 'link_token', entorno })
+      // carga el widget oficial de Plaid bajo demanda
+      if (!window.Plaid) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script')
+          s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js'
+          s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar Plaid Link'))
+          document.head.appendChild(s)
+        })
+      }
+      window.Plaid.create({
+        token: linkToken,
+        onSuccess: async (publicToken) => {
+          try {
+            const r = await plaidOp({ op: 'exchange', entorno, publicToken })
+            setMensaje({ tipo: 'ok', texto: `Banco conectado${r.institucion ? `: ${r.institucion}` : ''}. La sincronización corre sola cada 6 horas.` })
+            recargar()
+          } catch (e) { setMensaje({ tipo: 'error', texto: 'No se guardó la conexión: ' + (e.message || e) }) }
+        },
+        onExit: () => setTrabajando(''),
+      }).open()
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: (String(e.message || e).includes('not-found') || String(e.message || e).includes('internal'))
+        ? 'Las functions de Plaid aún no están desplegadas (o faltan los secretos). Sigue los pasos de abajo en Cloud Shell y reintenta.'
+        : 'No se pudo iniciar Plaid: ' + (e.message || e) })
+    } finally { setTrabajando('') }
+  }
+  const sincronizar = async () => {
+    setTrabajando('sync'); setMensaje(null)
+    try {
+      const r = await plaidOp({ op: 'sync_now' })
+      setMensaje({ tipo: 'ok', texto: `Sincronizado: ${r.cobrados} cheque(s) marcados cobrados · ${r.revisar} a revisar · ${r.alertas} alerta(s).` })
+      recargar()
+    } catch (e) { setMensaje({ tipo: 'error', texto: 'No se pudo sincronizar: ' + (e.message || e) }) } finally { setTrabajando('') }
+  }
+  const desconectar = async () => {
+    if (!window.confirm('¿Desconectar el banco? La conciliación automática se detiene (los cheques ya marcados no cambian).')) return
+    setTrabajando('des')
+    try { await plaidOp({ op: 'desconectar' }); setMensaje({ tipo: 'ok', texto: 'Banco desconectado.' }); recargar() } finally { setTrabajando('') }
+  }
+
+  const u = bd.plaid.ultimoSync
+  return (
+    <div>
+      <Aviso tipo="info" className="mb-4">
+        Conecta tu cuenta bancaria con <b>Plaid</b> y la conciliación se vuelve automática: cada <b>6 horas</b> se revisan los movimientos nuevos
+        y los cheques que el banco ya pagó se marcan <b>cobrados</b> solos (por número de cheque + importe exacto; una diferencia va a revisión, nunca se adivina).
+        Tus credenciales bancarias las maneja Plaid — aquí jamás se guardan usuario ni contraseña del banco.
+      </Aviso>
+      {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}
+
+      {!bd.plaid.conectado && (
+        <Card className="mb-4 p-5">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Conectar mi banco</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select className="w-56" value={entorno} onChange={(e) => setEntorno(e.target.value)}>
+              <option value="production">Producción (banco real)</option>
+              <option value="sandbox">Sandbox (pruebas de Plaid)</option>
+            </Select>
+            <Boton variant="gold" disabled={trabajando === 'conectar'} onClick={conectar}>{trabajando === 'conectar' ? <Spinner /> : 'Conectar con Plaid'}</Boton>
+          </div>
+        </Card>
+      )}
+
+      {bd.plaid.conectado && (
+        <Card className="mb-4 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge color="green">conectado</Badge>
+            <b className="text-brand-navy dark:text-slate-100">{bd.plaid.institucion || 'Banco'}</b>
+            <span className="text-xs text-slate-400">{bd.plaid.entorno === 'sandbox' ? 'sandbox' : 'producción'} · corre sola cada 6 horas</span>
+            <span className="ml-auto flex gap-2">
+              <Boton variant="gold" disabled={trabajando === 'sync'} onClick={sincronizar}>{trabajando === 'sync' ? <Spinner /> : <><RefreshCw size={14} /> Sincronizar ahora</>}</Boton>
+              <Boton variant="ghost" disabled={trabajando === 'des'} onClick={desconectar}>Desconectar</Boton>
+            </span>
+          </div>
+          {u && (
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
+              <div><div className="text-[10px] font-bold uppercase text-slate-400">Última corrida</div><b>{String(u.fecha || '').replace('T', ' ').slice(0, 16)}</b></div>
+              <div><div className="text-[10px] font-bold uppercase text-slate-400">Marcados cobrados</div><b className="text-emerald-600">{u.cobrados}</b></div>
+              <div><div className="text-[10px] font-bold uppercase text-slate-400">A revisar</div><b className="text-amber-600">{u.revisar}</b></div>
+              <div><div className="text-[10px] font-bold uppercase text-slate-400">Alertas</div><b className="text-rose-500">{u.alertas}</b></div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card className="p-4 text-xs text-slate-500">
+        <div className="mb-1 font-bold text-brand-navy dark:text-slate-100">Instalación (una sola vez, en Cloud Shell)</div>
+        <pre className="overflow-x-auto rounded-lg bg-slate-100 p-3 font-mono text-[11px] dark:bg-slate-800">{`cd ~/BAA-FINANCIAL- && git pull origin main
+firebase functions:secrets:set PLAID_CLIENT_ID   # pega tu client_id de Plaid
+firebase functions:secrets:set PLAID_SECRET      # pega tu secret de Plaid
+firebase deploy --only functions:plaidOp,functions:plaidSync`}</pre>
+        <div className="mt-1">Las llaves viven como secretos del servidor; nunca en la página ni en el código. La cuenta debe tener el producto <b>Transactions</b> activo en tu panel de Plaid.</div>
+      </Card>
     </div>
   )
 }
