@@ -113,7 +113,7 @@ function ItemMenu({ s, activo, onNavigate, badge }) {
       onClick={onNavigate}
       className={`group relative flex items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-sm no-underline transition-all duration-150 ${
         activo
-          ? 'border-brand-gold bg-slate-100/80 font-semibold text-brand-navy dark:bg-slate-700/40 dark:text-white'
+          ? 'border-transparent bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
           : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
       }`}
     >
@@ -141,10 +141,10 @@ function MenuIA({ onNavigate, esSuperAdmin }) {
       <button
         onClick={() => setAbierto((o) => !o)}
         className={`group flex w-full items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-sm transition-all duration-150 ${
-          enIA ? 'border-brand-gold bg-slate-100/80 font-semibold text-brand-navy dark:bg-slate-700/40 dark:text-white' : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
+          enIA ? 'border-transparent bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
         }`}
       >
-        <Sparkles size={19} strokeWidth={1.8} className="flex-shrink-0 text-brand-gold" />
+        <Sparkles size={19} strokeWidth={1.8} className="flex-shrink-0 text-slate-400" />
         <span className="flex-1 text-left">{t('IA')}</span>
         <ChevronDown size={16} strokeWidth={2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
       </button>

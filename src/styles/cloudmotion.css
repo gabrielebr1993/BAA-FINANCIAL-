@@ -20,6 +20,11 @@
   pointer-events: none;
   overflow: hidden;
 }
+/* El menú lateral queda SIN efecto de color: en escritorio las nubes
+   empiezan después del sidebar (w-64 = 16rem), nunca debajo ni encima. */
+@media (min-width: 768px) {
+  .cm-nubes { left: 16rem; }
+}
 .cm-nubes span {
   position: absolute;
   border-radius: 50%;
