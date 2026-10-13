@@ -374,6 +374,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
   const [buscar, setBuscar] = useState('')
   const [cuentaId, setCuentaId] = useState('')
   const [rango, setRango] = useState({ desde: '', hasta: '' })
+  const [sel, setSel] = useState({}) // multiselección para borrar en grupo
   const q = buscar.trim().toLowerCase()
   const lista = bd.cheques
     .filter((c) => filtro === 'todos' || (c.estado || 'emitido') === filtro)
@@ -419,6 +420,17 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
     await auditarStaff('pc_cheque_borrado', `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)} [${c.estado || 'emitido'}]`)
     recargar()
   }
+  const seleccionables = lista.filter((c) => c.estado !== 'cobrado')
+  const seleccionados = seleccionables.filter((c) => sel[c.id])
+  const borrarSeleccionados = async () => {
+    if (!seleccionados.length) return
+    const total = r2(seleccionados.reduce((s, c) => s + (c.importe || 0), 0))
+    if (!window.confirm(`¿BORRAR ${seleccionados.length} cheque(s) por ${dinero(total)}?\n\n${seleccionados.slice(0, 8).map((c) => `#${c.numeroRaw || c.numeroNorm} ${c.beneficiario || ''} ${dinero(c.importe)}`).join('\n')}${seleccionados.length > 8 ? `\n… y ${seleccionados.length - 8} más` : ''}\n\nSolo para cheques que NUNCA se entregaron. Los cobrados no se tocan.`)) return
+    await escribirEnLotes(seleccionados.map((c) => ({ ref: refDoc(COL.cheques, c.id), borrar: true })))
+    await auditarStaff('pc_cheques_borrados', `${seleccionados.length} cheques ${dinero(total)}: ${seleccionados.map((c) => '#' + (c.numeroRaw || c.numeroNorm)).join(', ')}`)
+    setSel({})
+    recargar()
+  }
   return (
     <div>
       <Card className="mb-3 p-3">
@@ -441,12 +453,28 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
           )}
           <span className="ml-auto text-slate-400">{lista.length} cheques · {dinero(r2(lista.reduce((s, c) => s + (c.importe || 0), 0)))}</span>
         </div>
+        {seleccionables.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-700/60">
+            <label className="inline-flex items-center gap-1.5 text-slate-500">
+              <input type="checkbox" checked={seleccionados.length === seleccionables.length && seleccionados.length > 0}
+                onChange={(e) => setSel(e.target.checked ? Object.fromEntries(seleccionables.map((c) => [c.id, true])) : {})} />
+              Seleccionar todos los visibles ({seleccionables.length})
+            </label>
+            {seleccionados.length > 0 && (
+              <button className="font-semibold text-rose-500 hover:text-rose-700" onClick={borrarSeleccionados}>
+                Borrar seleccionados ({seleccionados.length} · {dinero(r2(seleccionados.reduce((s, c) => s + (c.importe || 0), 0)))})
+              </button>
+            )}
+            <span className="text-[11px] text-slate-400">Los cheques cobrados no se pueden seleccionar ni borrar.</span>
+          </div>
+        )}
       </Card>
       {lista.length === 0 && <EstadoVacio icono={Banknote} titulo="Sin cheques" texto="Los cheques generados (y los importados en la pestaña Cheques) aparecen aquí." mostrarBoton={false} />}
       <div className="grid gap-2">
         {lista.map((c) => (
           <Card key={c.id} className="p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
+              {c.estado !== 'cobrado' && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
               <span className="font-semibold">{c.beneficiario || '—'}</span>
               <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
