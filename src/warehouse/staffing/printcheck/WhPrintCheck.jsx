@@ -17,13 +17,14 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
-import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark } from 'lucide-react'
+import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler } from 'lucide-react'
+import QRCode from 'qrcode'
 import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
 import { htmlLote } from './plantillaBA'
 
-const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', config: 'wh_pc_config' }
+const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', firmasPend: 'wh_pc_firmas_pend', config: 'wh_pc_config' }
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const hoyISO = () => new Date().toISOString().slice(0, 10)
 
@@ -50,7 +51,7 @@ export default function WhPrintCheck({ user }) {
 
   const SUBS = [
     ['panel', 'Dashboard', LayoutDashboard], ['crear', 'Crear cheques', Plus], ['imprimir', 'Imprimir', Printer],
-    ['registro', 'Registro', ListChecks], ['cuentas', 'Cuentas bancarias', Landmark], ['firmas', 'Firmas', FileSignature], ['ajustes', 'Ajustes', Settings],
+    ['registro', 'Registro', ListChecks], ['diseno', 'Diseño del cheque', PencilRuler], ['cuentas', 'Cuentas bancarias', Landmark], ['firmas', 'Firmas', FileSignature], ['ajustes', 'Ajustes', Settings],
   ]
   const irAImprimir = (loteId, chequeId) => { setLoteImprimir(loteId || ''); setChequeSolo(chequeId || ''); setSub('imprimir') }
 
@@ -69,6 +70,7 @@ export default function WhPrintCheck({ user }) {
       {sub === 'crear' && <PcCrear bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
       {sub === 'imprimir' && <PcImprimir bd={bd} user={user} loteInicial={loteImprimir} chequeSolo={chequeSolo} />}
       {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
+      {sub === 'diseno' && <PcDiseno bd={bd} />}
       {sub === 'cuentas' && <PcCuentas bd={bd} user={user} recargar={recargar} />}
       {sub === 'firmas' && <PcFirmas bd={bd} user={user} recargar={recargar} />}
       {sub === 'ajustes' && <PcAjustes bd={bd} user={user} recargar={recargar} />}
@@ -78,7 +80,12 @@ export default function WhPrintCheck({ user }) {
 
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
 function PcDashboard({ bd, irA }) {
+  const [filtro, setFiltro] = useState({ cuentaId: '', desde: '', hasta: '', estado: 'todos' })
   const ch = bd.cheques
+    .filter((c) => !filtro.cuentaId || c.cuentaId === filtro.cuentaId)
+    .filter((c) => !filtro.desde || (c.fecha || '') >= filtro.desde)
+    .filter((c) => !filtro.hasta || (c.fecha || '') <= filtro.hasta)
+    .filter((c) => filtro.estado === 'todos' || (c.estado || 'emitido') === filtro.estado)
   const suma = (lista) => r2(lista.reduce((s, c) => s + (c.importe || 0), 0))
   const emitidos = ch.filter((c) => c.estado !== 'cancelado')
   const cobrados = ch.filter((c) => c.estado === 'cobrado')
@@ -91,7 +98,29 @@ function PcDashboard({ bd, irA }) {
   )
   return (
     <div>
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <Card className="mb-4 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Select className="w-56" value={filtro.cuentaId} onChange={(e) => setFiltro({ ...filtro, cuentaId: e.target.value })}>
+            <option value="">Todas las cuentas</option>
+            {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
+          </Select>
+          <span className="text-slate-500">Del</span>
+          <Input type="date" className="w-36" value={filtro.desde} onChange={(e) => setFiltro({ ...filtro, desde: e.target.value })} />
+          <span className="text-slate-500">al</span>
+          <Input type="date" className="w-36" value={filtro.hasta} onChange={(e) => setFiltro({ ...filtro, hasta: e.target.value })} />
+          <Select className="w-44" value={filtro.estado} onChange={(e) => setFiltro({ ...filtro, estado: e.target.value })}>
+            <option value="todos">Todos los estados</option>
+            <option value="emitido">Emitidos</option>
+            <option value="cobrado">Cobrados</option>
+            <option value="cancelado">Anulados</option>
+          </Select>
+          {(filtro.cuentaId || filtro.desde || filtro.hasta || filtro.estado !== 'todos') && (
+            <Boton variant="ghost" onClick={() => setFiltro({ cuentaId: '', desde: '', hasta: '', estado: 'todos' })}>Limpiar</Boton>
+          )}
+          <span className="ml-auto text-slate-400">{ch.length} cheques en el filtro · {dinero(suma(ch))}</span>
+        </div>
+      </Card>
+      <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <K label="Cheques emitidos" n={emitidos.length} sub={dinero(suma(emitidos))} />
         <K label="Pendientes de cobro (outstanding)" n={pendientes.length} sub={dinero(suma(pendientes))} color="text-amber-600" />
         <K label="Cobrados" n={cobrados.length} sub={dinero(suma(cobrados))} color="text-emerald-600" />
@@ -109,7 +138,7 @@ function PcDashboard({ bd, irA }) {
               <th className="py-1 pr-2">Cuenta</th><th className="pr-2 text-right">Siguiente cheque</th><th className="pr-2 text-right">Emitidos</th><th className="pr-2 text-right">Outstanding</th>
             </tr></thead>
             <tbody>{bd.cuentas.map((cta) => {
-              const deCta = bd.cheques.filter((c) => c.cuentaId === cta.id)
+              const deCta = ch.filter((c) => c.cuentaId === cta.id)
               const out = deCta.filter((c) => c.estado !== 'cancelado' && c.estado !== 'cobrado')
               return (
                 <tr key={cta.id} className="border-b border-slate-100 dark:border-slate-800">
@@ -450,10 +479,72 @@ function PcCuentas({ bd, user, recargar }) {
   )
 }
 
-// ── FIRMAS (biblioteca de imágenes, optimizadas en canvas) ─────────────────
+// ── DISEÑO DEL CHEQUE (vista previa en vivo del formato clonado de B&A) ────
+function PcDiseno({ bd }) {
+  const cuenta = bd.cuentas[0] || { banco: 'JPMORGAN CHASE BANK NA', routing: '111000614', numero: '0000000000', siguiente: 7505 }
+  const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
+  const html = htmlLote({
+    cheques: [{ numeroRaw: String(cuenta.siguiente || '7505'), beneficiario: 'Nombre Del Trabajador', importe: 1234.56, fecha: hoyISO(), memo: 'Payroll', detalle: [{ posicion: 'Sorter', horas: 48, pago: 1234.56 }], idEmpleado: 'TX000000' }],
+    cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: true,
+  }).replace(/<script>[\s\S]*?<\/script>/, '')
+  return (
+    <div>
+      <Aviso tipo="info" className="mb-4">
+        Este es tu diseño actual: el <b>clon exacto del formato de tu software anterior</b> (medido del PDF real), para papel EZ Checks con el cheque arriba.
+        La vista usa datos de muestra con la marca SAMPLE. Lo que se ajusta hoy: compañía, banco/cuenta, firma, tipo de papel, línea MICR y desplazamientos (pestaña Ajustes).
+        El editor visual de arrastrar y soltar elementos es la siguiente fase.
+      </Aviso>
+      <Card className="p-3">
+        <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900">
+          <iframe title="Vista previa del cheque" srcDoc={html} className="mx-auto block rounded-lg bg-white shadow-lg" style={{ border: 0, width: 830, height: 780 }} />
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ── FIRMAS (biblioteca de imágenes + firma remota por QR) ──────────────────
 function PcFirmas({ bd, user, recargar }) {
   const [nombre, setNombre] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [qr, setQr] = useState(null) // { token, imagen }
+  const [remota, setRemota] = useState(null) // doc recibido del iPad
+
+  // sondeo: cuando el iPad envía la firma, aparece aquí para confirmarla
+  useEffect(() => {
+    if (!qr) return undefined
+    const timer = setInterval(async () => {
+      const pendientes = await cargar(COLP.firmasPend)
+      const doc = pendientes.find((p) => p.id === qr.token)
+      if (doc && doc.imagen) setRemota(doc)
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [qr])
+
+  const generarQR = async () => {
+    const token = `qr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const url = `${window.location.origin}/firma-qr#${token}`
+    const imagen = await QRCode.toDataURL(url, { width: 280, margin: 1 })
+    setRemota(null)
+    setQr({ token, url, imagen })
+    await auditarStaff('pc_qr_generado', 'firma remota solicitada')
+  }
+  const confirmarRemota = async () => {
+    if (!remota || !nombre.trim()) { if (!nombre.trim()) window.alert('Escribe el nombre del firmante antes de confirmar.'); return }
+    setGuardando(true)
+    try {
+      const id = 'fir_' + nombre.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+      await setDoc(refDoc(COLP.firmas, id), { nombre: nombre.trim(), imagen: remota.imagen, origen: 'ipad-qr', creadoPor: user.email, creadoEn: new Date().toISOString() })
+      await escribirEnLotes([{ ref: refDoc(COLP.firmasPend, remota.id), borrar: true }])
+      await auditarStaff('pc_firma_remota_guardada', `${nombre.trim()} (firmada en otro dispositivo por ${remota.firmadoPor})`)
+      setQr(null); setRemota(null); setNombre('')
+      recargar()
+    } finally { setGuardando(false) }
+  }
+  const descartarRemota = async () => {
+    if (remota) await escribirEnLotes([{ ref: refDoc(COLP.firmasPend, remota.id), borrar: true }])
+    setQr(null); setRemota(null)
+  }
   const subir = async (e) => {
     const f = e.target.files && e.target.files[0]
     e.target.value = ''
@@ -499,7 +590,32 @@ function PcFirmas({ bd, user, recargar }) {
             <FileSignature size={15} /> {guardando ? 'Procesando…' : 'Subir imagen de firma'}
             <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={subir} disabled={guardando} />
           </label>
+          <Boton variant="ghost" onClick={generarQR}><QrCode size={15} /> Firmar con iPad / teléfono (QR)</Boton>
         </div>
+
+        {qr && (
+          <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2 dark:border-slate-700/60">
+            <div className="text-center">
+              <img src={qr.imagen} alt="QR para firmar" className="mx-auto h-56 w-56 rounded-xl bg-white p-2" />
+              <div className="mt-2 text-xs text-slate-500">1. Escanea con la cámara del iPad o teléfono.<br />2. Inicia sesión con tu cuenta (el QR solo no da acceso).<br />3. Firma con el dedo o el Apple Pencil y toca "Guardar y enviar".</div>
+              <div className="mt-1 text-[11px] text-slate-400">El código caduca en 15 minutos y es de un solo uso.</div>
+            </div>
+            <div className="text-center">
+              {!remota && <div className="grid h-full place-items-center text-xs text-slate-400"><span><Spinner className="mx-auto mb-2" /><br />Esperando la firma desde el otro dispositivo…</span></div>}
+              {remota && (
+                <div>
+                  <div className="mb-1 text-xs font-bold text-emerald-600">¡Firma recibida!</div>
+                  <img src={remota.imagen} alt="Firma recibida" className="mx-auto h-24 rounded-xl border border-slate-200 bg-white object-contain px-3 dark:border-slate-600" />
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    <Boton variant="gold" disabled={guardando} onClick={confirmarRemota}>{guardando ? <Spinner /> : 'Confirmar y guardar en la biblioteca'}</Boton>
+                    <Boton variant="ghost" onClick={descartarRemota}>Descartar</Boton>
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-400">Usa el campo "Nombre del firmante" de arriba antes de confirmar.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   )

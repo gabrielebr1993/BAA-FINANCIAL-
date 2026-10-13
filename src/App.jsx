@@ -26,6 +26,7 @@ const Home3D = lazy(() => import('./pages/Home3D'))
 const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
 // Módulo WAREHOUSE (en construcción): servicios de almacén. Mismo candado privado.
 const WhApp = lazy(() => import('./warehouse/WhApp'))
+const FirmaQR = lazy(() => import('./warehouse/staffing/printcheck/FirmaQR'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
 // nuevas, independientes de la landing (que queda intacta) y de la app.
@@ -185,6 +186,10 @@ function TopBranch() {
   }
   if (pathname === '/wh' || pathname.startsWith('/wh/')) {
     return <Suspense fallback={<Cargando texto="Cargando Warehouse…" />}><WhApp /></Suspense>
+  }
+  // Página para firmar con el iPad/teléfono (QR de Print Check → Firmas).
+  if (pathname === '/firma-qr') {
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><FirmaQR /></Suspense>
   }
   // Páginas informativas del sitio público (una por función + Por qué MilePay).
   if (RUTAS_PUBLICAS.includes(pathname)) {
