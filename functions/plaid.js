@@ -150,7 +150,7 @@ async function operar(req) {
       client_name: 'MilePay',
       products: ['transactions'],
       country_codes: ['US'],
-      language: 'es',
+      language: 'en', // la personalización de Link en el panel de Plaid está en inglés (DTM)
     })
     return { linkToken: r.link_token }
   }
