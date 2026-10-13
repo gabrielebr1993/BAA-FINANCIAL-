@@ -25,6 +25,30 @@ export function tarifaVigente(tarifaDoc, fechaISO) {
   return { reg: Number(candidatas[0].reg), ot: Number(candidatas[0].ot) }
 }
 
+// Escalón por días trabajados (tarifaDoc.escalones = [{minDias, reg, ot}]).
+// Devuelve la tarifa del escalón más alto cuyo mínimo de días se cumple, o
+// null si la posición no tiene escalones o ninguno aplica (se usa la base).
+// Ejemplo Sorter: ≥6 días → $15, 5 días → $14, 4 o menos → $13 se configura
+// como escalones [{minDias:6, …15}, {minDias:5, …14}, {minDias:0, …13}].
+export function escalonVigente(tarifaDoc, diasTrabajados) {
+  const lista = (tarifaDoc && tarifaDoc.escalones) || []
+  if (!lista.length) return null
+  const dias = Number(diasTrabajados) || 0
+  const aplicables = lista
+    .filter((e) => Number.isFinite(Number(e.reg)) && dias >= (Number(e.minDias) || 0))
+    .sort((a, b) => (Number(b.minDias) || 0) - (Number(a.minDias) || 0))
+  if (!aplicables.length) return null
+  const e = aplicables[0]
+  // OT del escalón; si no se definió, cae a la OT base de la posición
+  const ot = Number.isFinite(Number(e.ot)) ? Number(e.ot) : Number(tarifaDoc.ot)
+  return { reg: Number(e.reg), ot, minDias: Number(e.minDias) || 0 }
+}
+
+// Días trabajados de una fila: fechas del detalle con horas > 0.
+export function diasDeFila(fila) {
+  return Object.values(fila.dias || {}).filter((h) => (Number(h) || 0) > 0).length
+}
+
 // Excepción individual vigente (worker.tarifas = [{posicion|'' , reg, ot, desde}]).
 export function excepcionVigente(worker, posicion, fechaISO) {
   const lista = (worker && worker.tarifas) || []
@@ -43,8 +67,9 @@ export function excepcionVigente(worker, posicion, fechaISO) {
 // config: { reglaOT: 'gofo'|'semanal', umbralSemanal: 40 }
 // grupos: {grupoId → {nombre, reglaOT?, umbralSemanal?, tarifas?: {pos: {reg, ot}}}}
 // Prioridad de tarifa: excepción individual → tarifa del GRUPO del trabajador
-// → tarifa de la posición. La regla de OT del grupo manda sobre la general y
-// el umbral semanal se aplica UNA sola vez por persona.
+// → escalón por días trabajados de la posición → tarifa base de la posición.
+// La regla de OT del grupo manda sobre la general y el umbral semanal se
+// aplica UNA sola vez por persona.
 export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupos) {
   const cfg = { reglaOT: 'gofo', umbralSemanal: 40, ...(config || {}) }
   const gps = grupos || {}
@@ -52,9 +77,12 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupo
   const porPersona = {}
   for (const fila of filas) {
     const k = fila.nombreNorm || normalizarNombre(fila.nombre)
-    porPersona[k] = porPersona[k] || { total: 0, filas: [] }
+    porPersona[k] = porPersona[k] || { total: 0, filas: [], fechas: new Set() }
     porPersona[k].total += fila.horasTotal || 0
     porPersona[k].filas.push(fila)
+    // días trabajados de la persona en la semana (fechas únicas con horas > 0,
+    // sumando todas sus posiciones) para las tarifas escalonadas por días
+    for (const [fecha, h] of Object.entries(fila.dias || {})) if ((Number(h) || 0) > 0) porPersona[k].fechas.add(fecha)
   }
   const resultados = []
   for (const fila of filas) {
@@ -63,8 +91,11 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupo
     const grupo = worker && worker.grupoId ? gps[worker.grupoId] : null
     const exc = excepcionVigente(worker, fila.posicion, finPeriodo)
     const deGrupo = grupo && grupo.tarifas && grupo.tarifas[fila.posicion] ? grupo.tarifas[fila.posicion] : null
-    const base = tarifaVigente(tarifas ? tarifas[fila.posicion] : null, finPeriodo)
-    const tarifa = exc || deGrupo || base
+    const tarifaDoc = tarifas ? tarifas[fila.posicion] : null
+    const base = tarifaVigente(tarifaDoc, finPeriodo)
+    const diasPersona = porPersona[k].fechas.size || diasDeFila(fila)
+    const escal = escalonVigente(tarifaDoc, diasPersona)
+    const tarifa = exc || deGrupo || escal || base
     // regla de OT: la del grupo del trabajador manda sobre la general
     const regla = grupo && grupo.reglaOT ? grupo.reglaOT : cfg.reglaOT
     const umbral = grupo && grupo.umbralSemanal ? Number(grupo.umbralSemanal) : cfg.umbralSemanal
@@ -93,7 +124,7 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupo
       miTarifaOT: Number(tarifa.ot),
       miPago: pago,
       pendienteTarifa: false,
-      origenTarifa: exc ? 'excepción individual' : deGrupo ? `grupo ${grupo.nombre || worker.grupoId}` : 'tarifa de posición',
+      origenTarifa: exc ? 'excepción individual' : deGrupo ? `grupo ${grupo.nombre || worker.grupoId}` : escal ? `por días trabajados (${diasPersona} días)` : 'tarifa de posición',
     })
   }
   return resultados

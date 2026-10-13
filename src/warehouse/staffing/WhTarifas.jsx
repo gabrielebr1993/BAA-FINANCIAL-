@@ -23,6 +23,7 @@ export default function WhTarifas({ user }) {
   const [nueva, setNueva] = useState({ posicion: '', reg: '', ot: '', desde: '' })
   const [guardando, setGuardando] = useState('')
   const [nuevoMapeo, setNuevoMapeo] = useState({ de: '', a: '' })
+  const [escal, setEscal] = useState({ posicion: '', filas: [{ minDias: '', reg: '', ot: '' }] })
   const [nuevoGrupo, setNuevoGrupo] = useState({ nombre: '', reglaOT: '', umbralSemanal: '', tarifas: '' })
   const recargar = async () => {
     const [t, c, g] = await Promise.all([cargar(COL.tarifas), cargar(COL.config), cargar(COL.grupos)])
@@ -52,6 +53,38 @@ export default function WhTarifas({ user }) {
       })
       await auditarStaff(existente ? 'tarifa_actualizada' : 'tarifa_creada', `${pos}: $${nueva.reg}/h reg · $${nueva.ot}/h OT desde ${nueva.desde || 'hoy'}`)
       setNueva({ posicion: '', reg: '', ot: '', desde: '' })
+      recargar()
+    } finally { setGuardando('') }
+  }
+
+  const guardarEscalones = async () => {
+    const pos = escal.posicion.trim()
+    if (!pos) return
+    const lista = escal.filas
+      .map((f) => ({ minDias: Number(f.minDias) || 0, reg: Number(f.reg), ot: Number(f.ot) }))
+      .filter((f) => Number.isFinite(f.reg) && f.reg > 0 && Number.isFinite(f.ot) && f.ot > 0)
+      .sort((a, b) => b.minDias - a.minDias)
+    setGuardando('escalones')
+    try {
+      const existente = tarifas.find((t) => t.id === pos)
+      await setDoc(refDoc(COL.tarifas, pos), {
+        posicion: pos,
+        ...(existente ? {} : { reg: lista.length ? lista[lista.length - 1].reg : null, ot: lista.length ? lista[lista.length - 1].ot : null, vigenteDesde: new Date().toISOString().slice(0, 10), historial: [] }),
+        escalones: lista,
+        actualizadoPor: user.email, actualizadoEn: new Date().toISOString(),
+      }, { merge: true })
+      await auditarStaff('tarifa_escalones', `${pos}: ${lista.length ? lista.map((e) => `≥${e.minDias} días $${e.reg}/$${e.ot}`).join(' · ') : 'regla por días eliminada'}`)
+      setEscal({ posicion: '', filas: [{ minDias: '', reg: '', ot: '' }] })
+      recargar()
+    } finally { setGuardando('') }
+  }
+
+  const quitarEscalones = async (t) => {
+    if (!window.confirm(`¿Quitar la regla por días de "${t.posicion}"? Volverá a usar su tarifa fija.`)) return
+    setGuardando('escalones')
+    try {
+      await setDoc(refDoc(COL.tarifas, t.id), { escalones: [], actualizadoPor: user.email, actualizadoEn: new Date().toISOString() }, { merge: true })
+      await auditarStaff('tarifa_escalones', `${t.posicion}: regla por días eliminada`)
       recargar()
     } finally { setGuardando('') }
   }
@@ -130,7 +163,10 @@ export default function WhTarifas({ user }) {
             <tbody>
               {tarifas.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100 text-xs dark:border-slate-800">
-                  <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{t.posicion}</td>
+                  <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">
+                    {t.posicion}
+                    {(t.escalones || []).length > 0 && <div className="mt-0.5 text-[10px] font-normal text-amber-600 dark:text-amber-400">por días: {t.escalones.map((e) => `≥${e.minDias}d ${dinero(e.reg)}`).join(' · ')}</div>}
+                  </td>
                   <td className="pr-2 text-right">{dinero(t.reg)}</td>
                   <td className="pr-2 text-right">{dinero(t.ot)}</td>
                   <td className="pr-2">{t.vigenteDesde}</td>
@@ -147,6 +183,44 @@ export default function WhTarifas({ user }) {
           <Input type="number" step="0.25" placeholder="$ OT/h" className="w-28" value={nueva.ot} onChange={(e) => setNueva({ ...nueva, ot: e.target.value })} />
           <Input type="date" className="w-40" value={nueva.desde} onChange={(e) => setNueva({ ...nueva, desde: e.target.value })} />
           <Boton variant="gold" disabled={guardando === 'tarifa'} onClick={guardarTarifa}>{guardando === 'tarifa' ? <Spinner /> : 'Guardar tarifa'}</Boton>
+        </div>
+      </Card>
+
+      <Card className="mb-4 p-5">
+        <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Tarifa por días trabajados (escalones)</div>
+        <p className="mb-3 text-xs text-slate-500">
+          Para posiciones donde pagas según los días que la persona trabajó en la semana.
+          Ejemplo Sorter: trabaja <b>6 días → $15/h</b>, <b>5 días → $14/h</b>, <b>4 o menos → $13/h</b>.
+          Se escribe como: desde 6 días $15, desde 5 días $14, desde 0 días $13.
+          Se cuentan los días con horas de la persona en toda la semana. La excepción individual
+          y la tarifa de grupo siguen mandando sobre esta regla.
+        </p>
+        {tarifas.filter((t) => (t.escalones || []).length).map((t) => (
+          <div key={t.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
+            <Badge color="navy">{t.posicion}</Badge>
+            {t.escalones.map((e, i) => <span key={i} className="text-slate-600 dark:text-slate-300">desde {e.minDias} días: {dinero(e.reg)} / {dinero(e.ot)} OT</span>)}
+            <button className="ml-auto text-xs font-semibold text-brand-navy hover:underline dark:text-slate-200"
+              onClick={() => setEscal({ posicion: t.posicion, filas: t.escalones.map((e) => ({ minDias: String(e.minDias), reg: String(e.reg), ot: String(e.ot) })) })}>editar</button>
+            <button className="text-rose-400 hover:text-rose-600" onClick={() => quitarEscalones(t)}>quitar</button>
+          </div>
+        ))}
+        <div className="mt-2 space-y-2">
+          <Input placeholder="Posición (p. ej. Sorter)" className="w-44" value={escal.posicion} onChange={(e) => setEscal({ ...escal, posicion: e.target.value })} />
+          {escal.filas.map((f, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span>desde</span>
+              <Input type="number" min="0" className="w-16" placeholder="días" value={f.minDias} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, minDias: e.target.value } : x) })} />
+              <span>días →</span>
+              <Input type="number" step="0.25" className="w-24" placeholder="$ regular/h" value={f.reg} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, reg: e.target.value } : x) })} />
+              <Input type="number" step="0.25" className="w-24" placeholder="$ OT/h" value={f.ot} onChange={(e) => setEscal({ ...escal, filas: escal.filas.map((x, j) => j === i ? { ...x, ot: e.target.value } : x) })} />
+              <button className="text-rose-400 hover:text-rose-600" onClick={() => setEscal({ ...escal, filas: escal.filas.filter((_, j) => j !== i) })}>quitar</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Boton variant="ghost" onClick={() => setEscal({ ...escal, filas: [...escal.filas, { minDias: '', reg: '', ot: '' }] })}>+ agregar escalón</Boton>
+            <Boton variant="gold" disabled={guardando === 'escalones' || !escal.posicion.trim()} onClick={guardarEscalones}>{guardando === 'escalones' ? <Spinner /> : 'Guardar regla por días'}</Boton>
+            <span className="text-[11px] text-slate-400">Guardar sin escalones elimina la regla y vuelve a la tarifa fija.</span>
+          </div>
         </div>
       </Card>
 
@@ -172,7 +246,7 @@ export default function WhTarifas({ user }) {
         <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Grupos de pago</div>
         <p className="mb-3 text-xs text-slate-500">
           Un grupo agrupa trabajadores con sus propias reglas: tarifas por posición y/o regla de OT propia.
-          Prioridad al calcular: <b>excepción individual → grupo del trabajador → tarifa de la posición</b>.
+          Prioridad al calcular: <b>excepción individual → grupo del trabajador → regla por días de la posición → tarifa de la posición</b>.
           El grupo de cada persona se asigna dentro de su perfil (pestaña Trabajadores).
         </p>
         {grupos.length > 0 && (
