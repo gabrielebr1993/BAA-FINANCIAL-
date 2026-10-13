@@ -810,7 +810,19 @@ function PcBanco({ bd, recargar }) {
   const [trabajando, setTrabajando] = useState('')
   const [mensaje, setMensaje] = useState(null)
   const [entorno, setEntorno] = useState(bd.plaid.entorno || 'production')
+  const [banco, setBanco] = useState(null) // { cuentas, movimientos }
   const plaidOp = (data) => httpsCallable(getFunctions(), 'plaidOp')(data).then((r) => r.data)
+  const dineroSigno = (n) => {
+    const v = Number(n) || 0
+    // en Plaid los cargos son positivos: se muestran como salida (−)
+    return `${v > 0 ? '−' : '+'}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  }
+  const verBanco = async () => {
+    setTrabajando('banco'); setMensaje(null)
+    try { setBanco(await plaidOp({ op: 'resumen_banco' })) }
+    catch (e) { setMensaje({ tipo: 'error', texto: 'No se pudo consultar el banco: ' + (e.message || e) }) }
+    finally { setTrabajando('') }
+  }
 
   const conectar = async () => {
     setTrabajando('conectar'); setMensaje(null)
@@ -885,8 +897,9 @@ function PcBanco({ bd, recargar }) {
             <Badge color="green">conectado</Badge>
             <b className="text-brand-navy dark:text-slate-100">{bd.plaid.institucion || 'Banco'}</b>
             <span className="text-xs text-slate-400">{bd.plaid.entorno === 'sandbox' ? 'sandbox' : 'producción'} · corre sola cada 6 horas</span>
-            <span className="ml-auto flex gap-2">
+            <span className="ml-auto flex flex-wrap gap-2">
               <Boton variant="gold" disabled={trabajando === 'sync'} onClick={sincronizar}>{trabajando === 'sync' ? <Spinner /> : <><RefreshCw size={14} /> Sincronizar ahora</>}</Boton>
+              <Boton variant="ghost" disabled={trabajando === 'banco'} onClick={verBanco}>{trabajando === 'banco' ? <Spinner /> : <><Eye size={14} /> Ver saldo y movimientos</>}</Boton>
               <Boton variant="ghost" disabled={trabajando === 'des'} onClick={desconectar}>Desconectar</Boton>
             </span>
           </div>
@@ -899,6 +912,45 @@ function PcBanco({ bd, recargar }) {
             </div>
           )}
         </Card>
+      )}
+
+      {banco && (
+        <>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {banco.cuentas.map((c, i) => (
+              <Card key={i} className="p-4">
+                <div className="text-[11px] font-bold uppercase text-slate-400">{c.institucion || 'Banco'} · {c.tipo} {c.mask && `· •••• ${c.mask}`}</div>
+                <div className="mt-1 text-2xl font-black text-brand-navy dark:text-slate-100">${Number(c.disponible ?? c.actual ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+                <div className="text-[11px] text-slate-400">disponible{c.actual != null && c.disponible != null && c.actual !== c.disponible ? ` · actual $${Number(c.actual).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''} · {c.moneda}</div>
+              </Card>
+            ))}
+          </div>
+          <Card className="mb-4 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">
+              Movimientos de los últimos 30 días
+              <span className="text-xs font-normal text-slate-400">({banco.desde} → {banco.hasta} · {banco.movimientos.length} mostrados)</span>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+                  <th className="py-1 pr-2">Fecha</th><th className="pr-2">Descripción</th><th className="pr-2">Cheque</th><th className="pr-2 text-right">Importe</th>
+                </tr></thead>
+                <tbody>
+                  {banco.movimientos.map((m, i) => (
+                    <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-1.5 pr-2 font-mono text-slate-500">{m.fecha}</td>
+                      <td className="pr-2">{m.nombre}{m.pendiente && <Badge color="gold">pendiente</Badge>}{m.cuentaMask && <span className="ml-1 text-[10px] text-slate-400">•••• {m.cuentaMask}</span>}</td>
+                      <td className="pr-2 font-mono">{m.cheque ? `#${m.cheque}` : ''}</td>
+                      <td className={`pr-2 text-right font-semibold ${Number(m.importe) > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>{dineroSigno(m.importe)}</td>
+                    </tr>
+                  ))}
+                  {banco.movimientos.length === 0 && <tr><td colSpan={4} className="py-3 text-center text-slate-400">Sin movimientos en los últimos 30 días.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-1 text-[11px] text-slate-400">Rojo = salida de dinero · verde = entrada. Nada de esto se guarda: se consulta al banco en el momento y solo tú lo ves.</div>
+          </Card>
+        </>
       )}
 
       <Card className="p-4 text-xs text-slate-500">

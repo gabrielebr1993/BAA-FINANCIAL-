@@ -179,6 +179,40 @@ async function operar(req) {
     return await sincronizar()
   }
 
+  // Saldo y movimientos recientes (últimos 30 días) para VER en la app.
+  // No se guarda nada: se consulta al momento y viaja solo al dueño.
+  if (op === 'resumen_banco') {
+    const items = await db().collection('plaid_items').get()
+    if (items.empty) throw new HttpsError('failed-precondition', 'No hay banco conectado.')
+    const cuentas = []
+    const movimientos = []
+    const hoy = new Date().toISOString().slice(0, 10)
+    const hace30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+    for (const d of items.docs) {
+      const item = d.data()
+      const bal = await plaidPost(item.entorno, '/accounts/balance/get', { access_token: item.access_token })
+      for (const a of bal.accounts || []) {
+        cuentas.push({
+          nombre: a.name || a.official_name || 'Cuenta', mask: a.mask || '', tipo: a.subtype || a.type || '',
+          disponible: a.balances?.available ?? null, actual: a.balances?.current ?? null,
+          moneda: a.balances?.iso_currency_code || 'USD', institucion: item.institucion || '',
+        })
+      }
+      const tx = await plaidPost(item.entorno, '/transactions/get', {
+        access_token: item.access_token, start_date: hace30, end_date: hoy,
+        options: { count: 100, offset: 0, include_original_description: true },
+      })
+      for (const t of tx.transactions || []) {
+        movimientos.push({
+          fecha: t.date, nombre: t.name || t.original_description || '', importe: t.amount,
+          pendiente: !!t.pending, cheque: t.check_number || null, cuentaMask: (bal.accounts || []).find((a) => a.account_id === t.account_id)?.mask || '',
+        })
+      }
+    }
+    movimientos.sort((a, b) => String(b.fecha).localeCompare(a.fecha))
+    return { cuentas, movimientos: movimientos.slice(0, 100), desde: hace30, hasta: hoy }
+  }
+
   if (op === 'desconectar') {
     const items = await db().collection('plaid_items').get()
     for (const d of items.docs) {
