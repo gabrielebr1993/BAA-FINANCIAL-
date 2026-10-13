@@ -17,12 +17,12 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
-import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler } from 'lucide-react'
+import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X } from 'lucide-react'
 import QRCode from 'qrcode'
-import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp } from '../datosStaff'
+import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp, arrayUnion } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
-import { htmlLote } from './plantillaBA'
+import { htmlLote, POS_BASE, ETIQUETAS_POS } from './plantillaBA'
 
 const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', firmasPend: 'wh_pc_firmas_pend', config: 'wh_pc_config' }
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -33,6 +33,7 @@ export default function WhPrintCheck({ user }) {
   const [bd, setBd] = useState(null)
   const [loteImprimir, setLoteImprimir] = useState('')
   const [chequeSolo, setChequeSolo] = useState('')
+  const [registroEstado, setRegistroEstado] = useState('todos')
   const recargar = async () => {
     const [cuentas, firmas, lotes, cfgs, cheques, periodos, workers] = await Promise.all([
       cargar(COLP.cuentas), cargar(COLP.firmas), cargar(COLP.lotes), cargar(COLP.config), cargar(COL.cheques), cargar(COL.periodos), cargar(COL.workers),
@@ -66,11 +67,11 @@ export default function WhPrintCheck({ user }) {
           </button>
         ))}
       </div>
-      {sub === 'panel' && <PcDashboard bd={bd} irA={setSub} />}
+      {sub === 'panel' && <PcDashboard bd={bd} irA={setSub} abrirRegistro={(estado) => { setRegistroEstado(estado || 'todos'); setSub('registro') }} />}
       {sub === 'crear' && <PcCrear bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
       {sub === 'imprimir' && <PcImprimir bd={bd} user={user} loteInicial={loteImprimir} chequeSolo={chequeSolo} recargar={recargar} />}
-      {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} />}
-      {sub === 'diseno' && <PcDiseno bd={bd} />}
+      {sub === 'registro' && <PcRegistro bd={bd} user={user} recargar={recargar} irAImprimir={irAImprimir} estadoInicial={registroEstado} />}
+      {sub === 'diseno' && <PcDiseno bd={bd} user={user} recargar={recargar} />}
       {sub === 'cuentas' && <PcCuentas bd={bd} user={user} recargar={recargar} />}
       {sub === 'firmas' && <PcFirmas bd={bd} user={user} recargar={recargar} />}
       {sub === 'ajustes' && <PcAjustes bd={bd} user={user} recargar={recargar} />}
@@ -79,7 +80,7 @@ export default function WhPrintCheck({ user }) {
 }
 
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
-function PcDashboard({ bd, irA }) {
+function PcDashboard({ bd, irA, abrirRegistro }) {
   const [filtro, setFiltro] = useState({ cuentaId: '', desde: '', hasta: '', estado: 'todos' })
   const ch = bd.cheques
     .filter((c) => !filtro.cuentaId || c.cuentaId === filtro.cuentaId)
@@ -91,10 +92,13 @@ function PcDashboard({ bd, irA }) {
   const cobrados = ch.filter((c) => c.estado === 'cobrado')
   const anulados = ch.filter((c) => c.estado === 'cancelado')
   const pendientes = ch.filter((c) => c.estado !== 'cancelado' && c.estado !== 'cobrado')
-  const K = ({ label, n, sub, color }) => (
-    <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">{label}</div>
+  const K = ({ label, n, sub, color, onClick }) => (
+    <Card className={`p-4 ${onClick ? 'cursor-pointer transition hover:shadow-md' : ''}`} onClick={onClick}>
+      <div className="text-[11px] font-bold uppercase text-slate-400">{label}</div>
       <div className={`text-xl font-black ${color || 'text-brand-navy dark:text-slate-100'}`}>{n}</div>
-      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}</Card>
+      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+      {onClick && <div className="mt-0.5 text-[10px] font-semibold text-brand-gold">ver listado →</div>}
+    </Card>
   )
   return (
     <div>
@@ -121,11 +125,11 @@ function PcDashboard({ bd, irA }) {
         </div>
       </Card>
       <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <K label="Cheques emitidos" n={emitidos.length} sub={dinero(suma(emitidos))} />
-        <K label="Pendientes de cobro (outstanding)" n={pendientes.length} sub={dinero(suma(pendientes))} color="text-amber-600" />
-        <K label="Cobrados" n={cobrados.length} sub={dinero(suma(cobrados))} color="text-emerald-600" />
-        <K label="Anulados" n={anulados.length} sub={dinero(suma(anulados))} color="text-rose-500" />
-        <K label="Lotes generados" n={bd.lotes.length} sub={bd.cuentas.length + ' cuenta(s) bancaria(s)'} />
+        <K label="Cheques emitidos" n={emitidos.length} sub={dinero(suma(emitidos))} onClick={() => abrirRegistro('todos')} />
+        <K label="Pendientes de cobro (outstanding)" n={pendientes.length} sub={dinero(suma(pendientes))} color="text-amber-600" onClick={() => abrirRegistro('emitido')} />
+        <K label="Cobrados" n={cobrados.length} sub={dinero(suma(cobrados))} color="text-emerald-600" onClick={() => abrirRegistro('cobrado')} />
+        <K label="Anulados" n={anulados.length} sub={dinero(suma(anulados))} color="text-rose-500" onClick={() => abrirRegistro('cancelado')} />
+        <K label="Lotes generados" n={bd.lotes.length} sub={bd.cuentas.length + ' cuenta(s) bancaria(s)'} onClick={() => irA('imprimir')} />
       </div>
       {bd.cuentas.length === 0 && (
         <Aviso tipo="info">Para empezar: crea tu <b>cuenta bancaria</b> (pestaña Cuentas bancarias), sube una <b>firma</b> y luego genera cheques desde una semana importada en <b>Crear cheques</b>.</Aviso>
@@ -166,7 +170,25 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
   const [sel, setSel] = useState({})
   const [trabajando, setTrabajando] = useState(false)
   const [mensaje, setMensaje] = useState(null)
+  const [verPagadas, setVerPagadas] = useState(false)
   const cuenta = bd.cuentas.find((c) => c.id === cuentaId)
+
+  // Semanas con pagos PENDIENTES de cheque: por defecto solo se listan esas.
+  const idPorNombre = {}
+  for (const w of bd.workers) { idPorNombre[w.nombreNorm] = w.id; for (const a of (w.alias || [])) idPorNombre[a] = w.id }
+  const pendientesDe = (p) => {
+    const personas = p.personas || []
+    if (!personas.length) return null // períodos viejos sin lista → no se puede saber
+    return personas.filter((norm) => {
+      const wid = idPorNombre[norm]
+      return !bd.cheques.some((ch) => ch.estado !== 'cancelado' && ch.workerId === wid && (ch.distribucion || []).some((d) => d.periodoId === p.id))
+    }).length
+  }
+  const periodosVisibles = bd.periodos.filter((p) => {
+    if (verPagadas) return true
+    const pend = pendientesDe(p)
+    return pend === null || pend > 0
+  })
 
   const cargarPlan = async (pid) => {
     setPeriodoId(pid); setPlan(null); setMensaje(null)
@@ -202,6 +224,7 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
           distribucion: [{ periodoId, importe: f.neto }],
           detalle: f.detalle, idEmpleado: f.idEmpleado || null,
           creadoEn: serverTimestamp(), creadoPor: user.email,
+          historial: [{ accion: 'creado', fecha: new Date().toISOString(), por: user.email, nota: `Lote #${desde}–#${hasta}` }],
         },
       }))
       ops.push({ ref: refDoc(COLP.cuentas, cuenta.id), merge: true, data: { siguiente: desde + conNumero.length, ultimoEmitido: String(hasta) } })
@@ -230,8 +253,15 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
           <div><div className="mb-1 font-bold text-slate-500">Semana (del staffing importado)</div>
             <Select value={periodoId} onChange={(e) => cargarPlan(e.target.value)}>
               <option value="">Elegir semana…</option>
-              {bd.periodos.map((p) => <option key={p.id} value={p.id}>{p.inicio} → {p.fin}</option>)}
-            </Select></div>
+              {periodosVisibles.map((p) => {
+                const pend = pendientesDe(p)
+                return <option key={p.id} value={p.id}>{p.inicio} → {p.fin}{pend !== null ? ` · ${pend} por pagar` : ''}</option>
+              })}
+            </Select>
+            <label className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate-400">
+              <input type="checkbox" checked={verPagadas} onChange={(e) => setVerPagadas(e.target.checked)} />
+              mostrar también semanas ya pagadas por completo
+            </label></div>
           <div><div className="mb-1 font-bold text-slate-500">Cuenta bancaria emisora</div>
             <Select value={cuentaId} onChange={(e) => setCuentaId(e.target.value)}>
               {bd.cuentas.map((c) => <option key={c.id} value={c.id}>{c.banco} · {enmascarar(c.numero)}</option>)}
@@ -323,6 +353,12 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
     win.document.write(html)
     win.document.close()
     await auditarStaff(prueba ? 'pc_impresion_prueba' : 'pc_impresion', `${chequeSolo ? '1 cheque' : `lote ${loteId} (${cheques.length} cheques)`}${prueba ? ' [SAMPLE]' : ''} por ${user.email}`)
+    if (!prueba) {
+      // huella de impresión en el historial de CADA cheque
+      const evento = { accion: 'impreso', fecha: new Date().toISOString(), por: user.email }
+      await escribirEnLotes(cheques.map((c) => ({ ref: refDoc(COL.cheques, c.id), merge: true, data: { historial: arrayUnion(evento), impresoEn: evento.fecha } })))
+      if (recargar) recargar()
+    }
   }
 
   return (
@@ -369,12 +405,13 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
 }
 
 // ── REGISTRO (estados, anulación, reimpresión auditada) ────────────────────
-function PcRegistro({ bd, user, recargar, irAImprimir }) {
-  const [filtro, setFiltro] = useState('todos')
+function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
+  const [filtro, setFiltro] = useState(estadoInicial || 'todos')
   const [buscar, setBuscar] = useState('')
   const [cuentaId, setCuentaId] = useState('')
   const [rango, setRango] = useState({ desde: '', hasta: '' })
   const [sel, setSel] = useState({}) // multiselección para borrar en grupo
+  const [fichaId, setFichaId] = useState(null) // ficha completa (el "ojito")
   const q = buscar.trim().toLowerCase()
   const lista = bd.cheques
     .filter((c) => filtro === 'todos' || (c.estado || 'emitido') === filtro)
@@ -407,7 +444,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
   const anular = async (c) => {
     const motivo = window.prompt(`¿Anular el cheque #${c.numeroRaw} de ${c.beneficiario}? Escribe el motivo:`)
     if (!motivo) return
-    await setDoc(refDoc(COL.cheques, c.id), { estado: 'cancelado', motivoCancelacion: motivo, canceladoEn: new Date().toISOString(), canceladoPor: user.email }, { merge: true })
+    await setDoc(refDoc(COL.cheques, c.id), { estado: 'cancelado', motivoCancelacion: motivo, canceladoEn: new Date().toISOString(), canceladoPor: user.email, historial: arrayUnion({ accion: 'anulado', fecha: new Date().toISOString(), por: user.email, nota: motivo }) }, { merge: true })
     await auditarStaff('pc_cheque_anulado', `#${c.numeroRaw} ${c.beneficiario} ${dinero(c.importe)}: ${motivo}`)
     recargar()
   }
@@ -475,6 +512,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
           <Card key={c.id} className="p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {c.estado !== 'cobrado' && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
+              <button className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700" title="Ver ficha completa" onClick={() => setFichaId(c.id)}><Eye size={15} /></button>
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
               <span className="font-semibold">{c.beneficiario || '—'}</span>
               <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
@@ -492,6 +530,137 @@ function PcRegistro({ bd, user, recargar, irAImprimir }) {
             {c.motivoCancelacion && <div className="mt-1 text-[11px] text-rose-400">Anulado: {c.motivoCancelacion}</div>}
           </Card>
         ))}
+      </div>
+      {fichaId && (() => {
+        const c = bd.cheques.find((x) => x.id === fichaId)
+        if (!c) return null
+        return <FichaCheque c={c} bd={bd} user={user} recargar={recargar} cerrar={() => setFichaId(null)}
+          anular={() => anular(c)} borrar={() => { setFichaId(null); borrar(c) }} verCheque={() => verCheque(c)} />
+      })()}
+    </div>
+  )
+}
+
+// ── FICHA COMPLETA del cheque (el "ojito"): vista previa, acciones, historial
+//    de actividad y resumen del beneficiario (como tu software anterior, pero
+//    integrado con el staffing). ─────────────────────────────────────────────
+function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque }) {
+  const cuenta = bd.cuentas.find((x) => x.id === c.cuentaId) || { banco: c.banco || '', routing: '', numero: c.cuenta || '' }
+  const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
+  const html = htmlLote({ cheques: [c], cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: false })
+    .replace(/<script>[\s\S]*?<\/script>/, '')
+  // totales a este beneficiario (cheques no anulados)
+  const deEste = bd.cheques.filter((x) => x.workerId && x.workerId === c.workerId && x.estado !== 'cancelado')
+  const hoy = hoyISO()
+  const suma = (lista) => r2(lista.reduce((s, x) => s + (x.importe || 0), 0))
+  const mes = suma(deEste.filter((x) => String(x.fecha || '').slice(0, 7) === hoy.slice(0, 7)))
+  const anio = suma(deEste.filter((x) => String(x.fecha || '').slice(0, 4) === hoy.slice(0, 4)))
+  const ultimos = deEste.slice().sort((a, b) => String(b.fecha || '').localeCompare(a.fecha || '') || Number(b.numeroRaw || 0) - Number(a.numeroRaw || 0)).slice(0, 10)
+  // línea de tiempo: historial guardado + eventos derivados de los campos
+  const eventos = [...(c.historial || [])]
+  if (!eventos.some((e) => e.accion === 'creado') && c.creadoPor) eventos.unshift({ accion: 'creado', fecha: c.fecha || '', por: c.creadoPor })
+  if (c.estado === 'cobrado') eventos.push({ accion: 'cobrado', fecha: c.fechaCobro || '', por: 'conciliación bancaria' })
+  eventos.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
+  const fEv = (iso) => (iso ? String(iso).replace('T', ' ').slice(0, 16) : '—')
+  const ETIQ = { creado: 'Creado', impreso: 'Impreso', reimpreso: 'Reimpreso', anulado: 'Anulado', cobrado: 'Cobrado en el banco', clonado: 'Clonado' }
+
+  const clonar = async () => {
+    const cta = bd.cuentas.find((x) => x.id === c.cuentaId)
+    if (!cta) { window.alert('La cuenta original ya no existe; crea el cheque desde Crear cheques.'); return }
+    if (!window.confirm(`¿Clonar este cheque? Se crea uno NUEVO con el siguiente número (#${cta.siguiente}) para ${c.beneficiario} por ${dinero(c.importe)}. Ojo: el candado antiduplicados no aplica a los clones — úsalo solo si de verdad corresponde otro pago.`)) return
+    const numero = String(cta.siguiente)
+    const evento = { accion: 'creado', fecha: new Date().toISOString(), por: user.email, nota: `Clon del cheque #${c.numeroRaw}` }
+    await escribirEnLotes([
+      {
+        ref: refDoc(COL.cheques, idCheque(numero, cta.numero || cta.id)),
+        merge: true,
+        data: {
+          numeroRaw: numero, numeroNorm: normalizarNumero(numero),
+          cuenta: cta.numero || '', cuentaId: cta.id, banco: cta.banco || '',
+          workerId: c.workerId || null, beneficiario: c.beneficiario, importe: c.importe, fecha: hoyISO(), memo: c.memo || '',
+          estado: 'emitido', origen: 'printcheck', loteId: null, distribucion: c.distribucion || [], detalle: c.detalle || [],
+          idEmpleado: c.idEmpleado || null, creadoEn: serverTimestamp(), creadoPor: user.email, historial: [evento],
+        },
+      },
+      { ref: refDoc(COLP.cuentas, cta.id), merge: true, data: { siguiente: Number(cta.siguiente) + 1, ultimoEmitido: numero } },
+      { ref: refDoc(COL.cheques, c.id), merge: true, data: { historial: arrayUnion({ accion: 'clonado', fecha: new Date().toISOString(), por: user.email, nota: `→ #${numero}` }) } },
+    ])
+    await auditarStaff('pc_cheque_clonado', `#${c.numeroRaw} → #${numero} ${c.beneficiario} ${dinero(c.importe)}`)
+    cerrar()
+    recargar()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-3" onClick={cerrar}>
+      <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-lg font-black text-brand-navy dark:text-slate-100">Cheque #{c.numeroRaw || c.numeroNorm}</span>
+          <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
+          <span className="text-xs text-slate-400">{c.fecha} · {cuenta.banco} · {c.loteId || 'sin lote'}</span>
+          <span className="ml-auto flex flex-wrap items-center gap-1.5">
+            <Boton variant="ghost" onClick={verCheque}><Printer size={13} /> Imprimir</Boton>
+            {c.estado !== 'cancelado' && <Boton variant="ghost" onClick={clonar}><Copy size={13} /> Clonar</Boton>}
+            {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <Boton variant="ghost" onClick={anular}>Anular</Boton>}
+            {c.estado !== 'cobrado' && <button className="rounded-xl px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={borrar}>Borrar</button>}
+            <button className="grid h-9 w-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700" onClick={cerrar}><X size={17} /></button>
+          </span>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <div>
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800" style={{ height: 480 }}>
+              <iframe title={`Cheque ${c.numeroRaw}`} srcDoc={html} className="mx-auto block bg-white" style={{ border: 0, width: 830, height: 1060 }} />
+            </div>
+            <div className="mt-3">
+              <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Actividad de este cheque</div>
+              <div className="space-y-1 text-xs">
+                {eventos.length === 0 && <div className="text-slate-400">Sin eventos registrados.</div>}
+                {eventos.map((e, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-1.5 dark:border-slate-700/60">
+                    <Badge color={e.accion === 'anulado' ? 'red' : e.accion === 'cobrado' ? 'green' : 'slate'}>{ETIQ[e.accion] || e.accion}</Badge>
+                    <span className="text-slate-500">{fEv(e.fecha)}</span>
+                    <span className="text-slate-400">{e.por}</span>
+                    {e.nota && <span className="text-slate-500">· {e.nota}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <Card className="p-3">
+              <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{c.beneficiario || '—'}</div>
+              {c.idEmpleado && <Badge color="navy">ID {c.idEmpleado}</Badge>}
+              <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Este mes</div><b>{dinero(mes)}</b></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Este año</div><b>{dinero(anio)}</b></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Histórico</div><b>{dinero(suma(deEste))}</b></div>
+              </div>
+              <div className="mt-1 text-center text-[10px] text-slate-400">pagado a esta persona (sin anulados)</div>
+            </Card>
+            <Card className="p-3">
+              <div className="mb-1 text-xs font-bold text-brand-navy dark:text-slate-100">Últimos cheques de esta persona</div>
+              <div className="space-y-1 text-xs">
+                {ultimos.map((x) => (
+                  <div key={x.id} className={`flex items-center gap-2 ${x.id === c.id ? 'font-bold text-brand-navy dark:text-slate-100' : 'text-slate-500'}`}>
+                    <span className="font-mono">#{x.numeroRaw || x.numeroNorm}</span>
+                    <span>{x.fecha || '—'}</span>
+                    <Badge color={x.estado === 'cobrado' ? 'green' : 'gold'}>{x.estado || 'emitido'}</Badge>
+                    <b className="ml-auto">{dinero(x.importe)}</b>
+                  </div>
+                ))}
+                {ultimos.length === 0 && <div className="text-slate-400">Sin cheques previos.</div>}
+              </div>
+            </Card>
+            {(c.detalle || []).length > 0 && (
+              <Card className="p-3">
+                <div className="mb-1 text-xs font-bold text-brand-navy dark:text-slate-100">Qué paga este cheque</div>
+                <div className="space-y-1 text-xs text-slate-500">
+                  {(c.distribucion || []).map((d, i) => <div key={i}>Semana {String(d.periodoId).replace('gofo_', '').replace('_', ' → ')}: <b>{dinero(d.importe)}</b></div>)}
+                  {(c.detalle || []).map((d, i) => <div key={i}>{d.posicion}{d.horas != null ? ` · ${d.horas} h` : ''} · {dinero(d.pago)}</div>)}
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -577,21 +746,114 @@ function PcCuentas({ bd, user, recargar }) {
   )
 }
 
-// ── DISEÑO DEL CHEQUE (vista previa en vivo del formato clonado de B&A) ────
-function PcDiseno({ bd }) {
+// ── DISEÑADOR EN VIVO: mueve cada elemento y ve el cheque al instante ──────
+function PcDiseno({ bd, user, recargar }) {
+  const [pos, setPos] = useState(() => JSON.parse(JSON.stringify(bd.impresion.pos || {})))
+  const [elem, setElem] = useState('payto')
+  const [muestra, setMuestra] = useState({ beneficiario: 'Nombre Del Trabajador', importe: '1234.56', memo: 'Payroll', numero: '' })
+  const [guardando, setGuardando] = useState(false)
+
   const cuenta = bd.cuentas[0] || { banco: 'JPMORGAN CHASE BANK NA', routing: '111000614', numero: '0000000000', siguiente: 7505 }
   const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
-  const html = htmlLote({
-    cheques: [{ numeroRaw: String(cuenta.siguiente || '7505'), beneficiario: 'Nombre Del Trabajador', importe: 1234.56, fecha: hoyISO(), memo: 'Payroll', detalle: [{ posicion: 'Sorter', horas: 48, pago: 1234.56 }], idEmpleado: 'TX000000' }],
-    cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: true,
-  }).replace(/<script>[\s\S]*?<\/script>/, '')
+  const chequeMuestra = {
+    numeroRaw: muestra.numero || String(cuenta.siguiente || '7505'),
+    beneficiario: muestra.beneficiario || 'Nombre Del Trabajador',
+    importe: Number(muestra.importe) || 0,
+    fecha: hoyISO(), memo: muestra.memo,
+    detalle: [{ posicion: 'Sorter', horas: 48, pago: Number(muestra.importe) || 0 }], idEmpleado: 'TX000000',
+  }
+  const impresionViva = { ...bd.impresion, pos }
+  const html = htmlLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
+    .replace(/<script>[\s\S]*?<\/script>/, '')
+
+  const efectiva = (k) => ({ ...POS_BASE[k], ...(pos[k] || {}) })
+  const mover = (k, campo, delta) => {
+    const e = efectiva(k)
+    const v = Math.max(0, Math.round((Number(e[campo]) + delta) * 10) / 10)
+    setPos({ ...pos, [k]: { ...efectiva(k), [campo]: v } })
+  }
+  const fijar = (k, campo, valor) => setPos({ ...pos, [k]: { ...efectiva(k), [campo]: Number(valor) || 0 } })
+  const cambiado = Object.keys(pos).length > 0
+
+  const guardar = async () => {
+    setGuardando(true)
+    try {
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_diseno_guardado', Object.keys(pos).map((k) => `${k}(${efectiva(k).x},${efectiva(k).y},${efectiva(k).s})`).join(' ') || 'sin cambios')
+      recargar()
+    } finally { setGuardando(false) }
+  }
+  const restablecer = async () => {
+    if (!window.confirm('¿Volver al diseño original (el clon de tu software anterior)?')) return
+    setPos({})
+    setGuardando(true)
+    try {
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos: {}, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_diseno_restablecido', 'posiciones base')
+      recargar()
+    } finally { setGuardando(false) }
+  }
+  const imprimirPrueba = () => {
+    const conPrint = htmlLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
+    const win = window.open('', '_blank', 'width=900,height=1000')
+    if (!win) { window.alert('Permite las ventanas emergentes para imprimir la prueba.'); return }
+    win.document.write(conPrint)
+    win.document.close()
+    auditarStaff('pc_impresion_prueba', 'desde el diseñador')
+  }
+
+  const e = efectiva(elem)
+  const Flecha = ({ t, campo, delta }) => (
+    <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700" onClick={() => mover(elem, campo, delta)}>{t}</button>
+  )
   return (
-    <div>
-      <Aviso tipo="info" className="mb-4">
-        Este es tu diseño actual: el <b>clon exacto del formato de tu software anterior</b> (medido del PDF real), para papel EZ Checks con el cheque arriba.
-        La vista usa datos de muestra con la marca SAMPLE. Lo que se ajusta hoy: compañía, banco/cuenta, firma, tipo de papel, línea MICR y desplazamientos (pestaña Ajustes).
-        El editor visual de arrastrar y soltar elementos es la siguiente fase.
-      </Aviso>
+    <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
+      <div className="space-y-3">
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Elemento a mover</div>
+          <Select value={elem} onChange={(ev) => setElem(ev.target.value)}>
+            {Object.entries(ETIQUETAS_POS).map(([k, v]) => <option key={k} value={k}>{v}{pos[k] ? ' ●' : ''}</option>)}
+          </Select>
+          <div className="mt-3 grid grid-cols-[auto_1fr] items-center gap-2 text-xs">
+            <div className="grid grid-cols-3 gap-1">
+              <span /><Flecha t="▲" campo="y" delta={-2} /><span />
+              <Flecha t="◀" campo="x" delta={-2} />
+              <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-[10px] text-slate-400 dark:border-slate-600" title="pasos de 2 puntos (~0.7 mm)">2pt</button>
+              <Flecha t="▶" campo="x" delta={2} />
+              <span /><Flecha t="▼" campo="y" delta={2} /><span />
+            </div>
+            <div className="space-y-1.5">
+              <label className="flex items-center justify-between gap-2">X (desde la izquierda)
+                <Input type="number" step="1" className="w-20 text-right" value={e.x} onChange={(ev) => fijar(elem, 'x', ev.target.value)} /></label>
+              <label className="flex items-center justify-between gap-2">Y (desde arriba)
+                <Input type="number" step="1" className="w-20 text-right" value={e.y} onChange={(ev) => fijar(elem, 'y', ev.target.value)} /></label>
+              <label className="flex items-center justify-between gap-2">{elem === 'firma' ? 'Alto del recuadro' : 'Tamaño de letra'}
+                <Input type="number" step="0.5" className="w-20 text-right" value={e.s} onChange={(ev) => fijar(elem, 's', ev.target.value)} /></label>
+              {pos[elem] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [elem]: _, ...resto } = pos; setPos(resto) }}>devolver este elemento a su lugar original</button>}
+            </div>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">Las medidas están en puntos (72 = 1 pulgada). Las etiquetas (DATE:, Pay To:…) acompañan a su dato.</div>
+        </Card>
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Datos de prueba</div>
+          <div className="space-y-2 text-xs">
+            <Input placeholder="Beneficiario" value={muestra.beneficiario} onChange={(ev) => setMuestra({ ...muestra, beneficiario: ev.target.value })} />
+            <div className="flex gap-2">
+              <Input type="number" step="0.01" placeholder="Importe" value={muestra.importe} onChange={(ev) => setMuestra({ ...muestra, importe: ev.target.value })} />
+              <Input placeholder={`Nº (${cuenta.siguiente || ''})`} value={muestra.numero} onChange={(ev) => setMuestra({ ...muestra, numero: ev.target.value })} />
+            </div>
+            <Input placeholder="Memo" value={muestra.memo} onChange={(ev) => setMuestra({ ...muestra, memo: ev.target.value })} />
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex flex-col gap-2">
+            <Boton variant="gold" disabled={guardando} onClick={guardar}>{guardando ? <Spinner /> : 'Guardar diseño (se usa al imprimir)'}</Boton>
+            <Boton variant="ghost" onClick={imprimirPrueba}><Printer size={14} /> Imprimir prueba con este diseño</Boton>
+            {cambiado && <Boton variant="ghost" onClick={restablecer}>Restablecer el diseño original</Boton>}
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">El diseño guardado lo usan Imprimir, Ver cheque y las reimpresiones. La prueba sale con SAMPLE y número 000000.</div>
+        </Card>
+      </div>
       <Card className="p-3">
         <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900">
           <iframe title="Vista previa del cheque" srcDoc={html} className="mx-auto block rounded-lg bg-white shadow-lg" style={{ border: 0, width: 830, height: 780 }} />

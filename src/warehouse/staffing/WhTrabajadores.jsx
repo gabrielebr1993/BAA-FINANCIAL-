@@ -15,6 +15,7 @@ import { Users, ArrowLeft, Link2, FileDown, Printer } from 'lucide-react'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
 import { Select } from '../../components/ui'
 import { normalizarNombre } from './parserGofo'
+import { htmlLote } from './printcheck/plantillaBA'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
@@ -23,10 +24,18 @@ export default function WhTrabajadores({ user }) {
   const [buscar, setBuscar] = useState('')
   const [sel, setSel] = useState(null)
   const recargar = async () => {
-    const [workers, registros, ajustes, cheques, grupos] = await Promise.all([
+    const [workers, registros, ajustes, cheques, grupos, pcCuentas, pcFirmas, pcConfig] = await Promise.all([
       cargar(COL.workers), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.cheques), cargar(COL.grupos),
+      cargar('wh_pc_cuentas'), cargar('wh_pc_firmas'), cargar('wh_pc_config'),
     ])
-    setDatos({ workers, registros, ajustes, cheques, grupos })
+    setDatos({
+      workers, registros, ajustes, cheques, grupos,
+      pc: {
+        cuentas: pcCuentas, firmas: pcFirmas,
+        empresa: pcConfig.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
+        impresion: pcConfig.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true, papel: 'blanco' },
+      },
+    })
   }
   useEffect(() => { recargar() }, [])
   if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando perfiles…</div>
@@ -217,6 +226,19 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
     auditarStaff('paystub_generado', `${w.nombre}: ${p.inicio} → ${p.fin}`)
   }
 
+  // abre el cheque impreso (misma plantilla/diseño de Print Check)
+  const verCheque = (c) => {
+    const cuenta = (datos.pc?.cuentas || []).find((x) => x.id === c.cuentaId) || { banco: c.banco || '', routing: '', numero: c.cuenta || '' }
+    const firma = (datos.pc?.firmas || []).find((f) => f.id === cuenta.firmaId) || (datos.pc?.firmas || [])[0] || null
+    const html = htmlLote({ cheques: [c], cuenta, empresa: datos.pc?.empresa || {}, firma, impresion: datos.pc?.impresion || {}, prueba: false })
+      .replace(/<script>[\s\S]*?<\/script>/, '')
+      .replace('</body>', '<div style="position:fixed;top:10px;right:10px;z-index:9;display:flex;gap:8px"><button onclick="window.print()" style="background:#13233f;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Imprimir</button><button onclick="window.close()" style="background:#e2e8f0;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Cerrar</button></div></body>')
+    const win = window.open('', '_blank', 'width=900,height=1000')
+    if (!win) { window.alert('Permite las ventanas emergentes para ver el cheque.'); return }
+    win.document.write(html)
+    win.document.close()
+  }
+
   const [nuevaExc, setNuevaExc] = useState({ posicion: '', reg: '', ot: '', desde: '' })
   const [guardando, setGuardando] = useState(false)
   const [idEmp, setIdEmp] = useState(w.idEmpleado || '')
@@ -312,7 +334,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
           {cheques.length > 0 && (
             <table className="w-full text-xs">
               <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-                <th className="py-1 pr-2">Cheque</th><th className="pr-2 text-right">Importe</th><th className="pr-2">Estado</th><th className="pr-2">Semanas que cubre</th>
+                <th className="py-1 pr-2">Cheque</th><th className="pr-2 text-right">Importe</th><th className="pr-2">Estado</th><th className="pr-2">Semanas que cubre</th><th className="pr-2"></th>
               </tr></thead>
               <tbody>
                 {cheques.slice().sort((a, b) => String(b.numeroNorm).localeCompare(String(a.numeroNorm))).map((c) => (
@@ -321,6 +343,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
                     <td className="pr-2 text-right">{dinero(c.importe)}</td>
                     <td className="pr-2"><Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'pendiente'}</Badge></td>
                     <td className="pr-2 text-slate-500">{(c.distribucion || []).map((d) => `${String(d.periodoId).replace('gofo_', '').replace('_', ' → ')} (${dinero(d.importe)})`).join(' · ') || '—'}</td>
+                    <td className="pr-2 text-right">{c.origen === 'printcheck' && <button className="font-semibold text-brand-navy hover:underline dark:text-slate-200" onClick={() => verCheque(c)}>ver</button>}</td>
                   </tr>
                 ))}
               </tbody>

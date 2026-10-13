@@ -2,55 +2,82 @@
 // PRINT CHECK · Plantilla de impresión CLONADA del software anterior de B&A
 // (coordenadas medidas del PDF real, 72 pt = 1 pulgada). Archivo PURO (sin
 // React/Firebase) para poder validarla en pruebas automatizadas.
+//
+// El diseñador en vivo guarda ajustes por elemento en impresion.pos
+// ({clave: {x, y, s}} en puntos); aquí se mezclan sobre las POSICIONES BASE,
+// así la vista previa, la impresión y "Ver cheque" usan siempre lo mismo.
+// Las etiquetas (DATE:, Amount:, Pay To:, MEMO:) acompañan a su valor.
 // ============================================================================
 import { numeroEnPalabras } from './logicaPrint'
 
-// ── IMPRESIÓN · plantilla CLONADA del software anterior de B&A ─────────────
-// Coordenadas tomadas del PDF real (página carta en puntos, 72 pt = 1 in):
-// cheque arriba (compañía izq, banco centro, número der, DATE, Amount en
-// palabras con *****, Pay To, $ **importe, MEMO, AUTHORIZED SIGNATURE, línea
-// MICR "(num) &routing& cuenta)") + talón con Pay To / Pay From / MEMO.
+// Posiciones base (x, y en puntos desde arriba-izquierda; s = tamaño).
+export const POS_BASE = {
+  empresa: { x: 31, y: 20, s: 11.5 },   // nombre de la compañía (+ dirección debajo)
+  banco: { x: 262, y: 21, s: 10 },      // nombre del banco
+  numero: { x: 490, y: 25, s: 10.5 },   // número de cheque (alineado a la derecha)
+  fecha: { x: 500, y: 61, s: 10 },      // fecha (la etiqueta DATE: la acompaña)
+  palabras: { x: 116, y: 100, s: 10 },  // importe en palabras (etiqueta Amount :)
+  payto: { x: 118, y: 121, s: 10.5 },   // beneficiario (etiqueta Pay To :)
+  importe: { x: 443, y: 121, s: 16 },   // $ **1,234.56 grande
+  memo: { x: 32, y: 187, s: 8.5 },      // MEMO : texto
+  firma: { x: 421, y: 158, s: 40 },     // recuadro de firma (s = alto del recuadro)
+  micr: { x: 94, y: 226, s: 12 },       // línea MICR
+}
+export const ETIQUETAS_POS = {
+  empresa: 'Compañía (membrete)', banco: 'Banco', numero: 'Número de cheque',
+  fecha: 'Fecha', palabras: 'Importe en palabras', payto: 'Beneficiario (Pay To)',
+  importe: 'Importe grande ($)', memo: 'Memo', firma: 'Firma', micr: 'Línea MICR',
+}
+
 export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba }) {
   const offX = (Number(impresion.offX) || 0) * 72
   const offY = (Number(impresion.offY) || 0) * 72
-  // papel 'blanco' (EZ Checks en blanco: se imprime TODO, incluida la MICR)
-  // o 'preimpreso' (el papel ya trae membrete/banco/número/MICR: solo datos)
   const preimpreso = impresion.papel === 'preimpreso'
+  // posiciones efectivas = base + ajustes del diseñador
+  const P = {}
+  for (const k of Object.keys(POS_BASE)) {
+    const o = (impresion.pos && impresion.pos[k]) || {}
+    P[k] = {
+      x: Number.isFinite(Number(o.x)) ? Number(o.x) : POS_BASE[k].x,
+      y: Number.isFinite(Number(o.y)) ? Number(o.y) : POS_BASE[k].y,
+      s: Number.isFinite(Number(o.s)) && Number(o.s) > 0 ? Number(o.s) : POS_BASE[k].s,
+    }
+  }
   const fFecha = (iso) => { const [a, m, d] = String(iso || '').split('-'); return m ? `${m}/${d}/${a}` : iso || '' }
   const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   const importeNum = (ch) => '**' + Number(ch.importe).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const palabras = (ch) => {
     // estilo del software anterior: "Three Hundred Ten and 70/100*****"
-    // (Title Case, sin guiones, sin la palabra DOLLARS, relleno de *****)
     const w = (numeroEnPalabras(ch.importe) || '').replace(/ DOLLARS$/, '').replace(/-/g, ' ')
     const t = w.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(/\bAnd\b/g, 'and')
     return t + '*****'
   }
+  const el = (p, extra, contenido, clase = '') =>
+    `<div class="el ${clase}" data-k="${p.k || ''}" style="left:${p.x}pt;top:${p.y}pt;font-size:${p.fs}pt;${extra || ''}">${contenido}</div>`
   const uno = (ch) => {
     const num = prueba ? '000000' : ch.numeroRaw
     return `
     <div class="pagina">
       ${prueba ? '<div class="muestra">SAMPLE — NON-NEGOTIABLE</div>' : ''}
       ${preimpreso ? '' : `
-      <div class="el b" style="left:31pt;top:20pt;font-size:11.5pt">${esc(empresa.nombre)}</div>
-      <div class="el b" style="left:262pt;top:21pt;font-size:10pt">${esc(cuenta.banco)}</div>
-      <div class="el b" style="left:490pt;top:25pt;font-size:10.5pt;width:80pt;text-align:right">${esc(num)}</div>
-      <div class="el" style="left:32pt;top:35pt;font-size:9.5pt">${esc(empresa.direccion1)}</div>
-      <div class="el" style="left:32pt;top:48pt;font-size:9.5pt">${esc(empresa.direccion2)}</div>`}
-      <div class="el b" style="left:462pt;top:60pt;font-size:10.5pt">DATE:</div>
-      <div class="el" style="left:500pt;top:61pt;font-size:10pt">${esc(fFecha(ch.fecha))}</div>
-      <div class="el b" style="left:33pt;top:99pt;font-size:10.5pt">Amount :</div>
-      <div class="el prop" style="left:116pt;top:100pt;font-size:10pt;width:320pt">${esc(palabras(ch))}</div>
-      <div class="el b" style="left:33pt;top:120pt;font-size:10.5pt">Pay To :</div>
-      <div class="el" style="left:118pt;top:121pt;font-size:10.5pt;width:300pt">${esc(ch.beneficiario)}</div>
-      <div class="el b" style="left:443pt;top:121pt;font-size:16pt">$ ${esc(importeNum(ch))}</div>
-      <div class="el b" style="left:32pt;top:187pt;font-size:8.5pt">MEMO : <span style="font-weight:400">${esc(ch.memo)}</span></div>
-      <div class="el cajafirma" style="left:421pt;top:158pt;width:154pt;height:40pt"></div>
-      ${firma ? `<img class="el" src="${firma.imagen}" style="left:433pt;top:160pt;height:36pt" alt="" />` : ''}
-      <div class="el" style="left:443pt;top:201pt;font-size:8pt;color:#555;letter-spacing:.5px">AUTHORIZED SIGNATURE</div>
+      ${el({ k: 'empresa', x: P.empresa.x, y: P.empresa.y, fs: P.empresa.s }, '', esc(empresa.nombre), 'b')}
+      ${el({ k: 'empresa', x: P.empresa.x + 1, y: P.empresa.y + 15, fs: 9.5 }, '', esc(empresa.direccion1))}
+      ${el({ k: 'empresa', x: P.empresa.x + 1, y: P.empresa.y + 28, fs: 9.5 }, '', esc(empresa.direccion2))}
+      ${el({ k: 'banco', x: P.banco.x, y: P.banco.y, fs: P.banco.s }, '', esc(cuenta.banco), 'b')}
+      ${el({ k: 'numero', x: P.numero.x, y: P.numero.y, fs: P.numero.s }, 'width:80pt;text-align:right', esc(num), 'b')}`}
+      ${el({ k: 'fecha', x: P.fecha.x - 38, y: P.fecha.y - 1, fs: 10.5 }, '', 'DATE:', 'b')}
+      ${el({ k: 'fecha', x: P.fecha.x, y: P.fecha.y, fs: P.fecha.s }, '', esc(fFecha(ch.fecha)))}
+      ${el({ k: 'palabras', x: 33, y: P.palabras.y - 1, fs: 10.5 }, '', 'Amount :', 'b')}
+      ${el({ k: 'palabras', x: P.palabras.x, y: P.palabras.y, fs: P.palabras.s }, 'width:320pt', esc(palabras(ch)), 'prop')}
+      ${el({ k: 'payto', x: 33, y: P.payto.y - 1, fs: 10.5 }, '', 'Pay To :', 'b')}
+      ${el({ k: 'payto', x: P.payto.x, y: P.payto.y, fs: P.payto.s }, 'width:300pt', esc(ch.beneficiario))}
+      ${el({ k: 'importe', x: P.importe.x, y: P.importe.y, fs: P.importe.s }, '', '$ ' + esc(importeNum(ch)), 'b')}
+      ${el({ k: 'memo', x: P.memo.x, y: P.memo.y, fs: P.memo.s }, '', 'MEMO : <span style="font-weight:400">' + esc(ch.memo) + '</span>', 'b')}
+      <div class="el cajafirma" data-k="firma" style="left:${P.firma.x}pt;top:${P.firma.y}pt;width:154pt;height:${P.firma.s}pt"></div>
+      ${firma ? `<img class="el" data-k="firma" src="${firma.imagen}" style="left:${P.firma.x + 12}pt;top:${P.firma.y + 2}pt;height:${P.firma.s - 4}pt" alt="" />` : ''}
+      ${el({ k: 'firma', x: P.firma.x + 22, y: P.firma.y + P.firma.s + 3, fs: 8 }, 'color:#555;letter-spacing:.5px', 'AUTHORIZED SIGNATURE')}
       <div class="el linea" style="left:0;top:215pt;width:612pt"></div>
-      ${impresion.mostrarMICR && !preimpreso ? `
-      <div class="el micr" style="left:94pt;top:226pt">(${esc(num)})&nbsp;&nbsp;&nbsp;&amp;${esc(cuenta.routing)}&amp;&nbsp;&nbsp;${esc(cuenta.numero)})</div>` : ''}
+      ${impresion.mostrarMICR && !preimpreso ? el({ k: 'micr', x: P.micr.x, y: P.micr.y, fs: P.micr.s }, '', `(${esc(num)})&nbsp;&nbsp;&nbsp;&amp;${esc(cuenta.routing)}&amp;&nbsp;&nbsp;${esc(cuenta.numero)})`, 'micr') : ''}
       <div class="el linea" style="left:0;top:251pt;width:612pt"></div>
       <div class="el" style="left:26pt;top:273pt;font-size:10pt">${esc(fFecha(ch.fecha))}</div>
       <div class="el b" style="left:470pt;top:273pt;font-size:10pt;width:70pt;text-align:right">${esc(num)}</div>
@@ -66,8 +93,6 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
       <div class="el linea" style="left:0;top:515pt;width:612pt"></div>
     </div>`
   }
-  // fuente MICR: la subida por el dueño (Ajustes) manda; si no, se intenta la
-  // instalada en el equipo (el software anterior instala una llamada "MICR")
   const fontFace = impresion.fuenteMICR
     ? `@font-face{font-family:'MICRCustom';src:url(${impresion.fuenteMICR})}`
     : ''
@@ -82,9 +107,8 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     .det{font-size:8pt;color:#333}
     .cajafirma{border:1.5pt solid #111}
     .linea{border-top:0.8pt solid #444;height:0}
-    .micr{font-family:'MICRCustom','MICR','MICR E13B','MICR Encoding','MICRe13b','E-13B','Courier New',monospace;font-size:12pt;font-weight:700;letter-spacing:1px}
+    .micr{font-family:'MICRCustom','MICR','MICR E13B','MICR Encoding','MICRe13b','E-13B','Courier New',monospace;font-weight:700;letter-spacing:1px}
     .muestra{position:absolute;top:220pt;left:60pt;font-size:52px;font-weight:900;color:rgba(200,30,30,.25);transform:rotate(-18deg);letter-spacing:4px;z-index:5}
   </style></head><body>${cheques.map(uno).join('')}
   <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`
 }
-
