@@ -665,16 +665,53 @@ function ajusteDesdeFila(concepto, importe, hojaNombre, f) {
   }
 }
 
+// ── Hoja de ASISTENCIA (la provisional trae el ID del empleado 工号) ────────
+// De aquí NUNCA se crean perfiles, horas ni pagos (es provisional): solo se
+// extrae el mapa nombre → ID de empleado como fuente autorizada del ID, para
+// que el dueño lo aplique a los perfiles EXISTENTES si quiere.
+export function extraerAsistencia(hoja) {
+  const { c2, f2 } = rangoHoja(hoja)
+  if (c2 < 0) return null
+  // fila de encabezados con columna de ID (工号 / employee id / worker id)
+  for (let f = 0; f < Math.min(f2 + 1, 10); f++) {
+    let cId = -1, cNombre = -1
+    for (let c = 0; c <= c2; c++) {
+      const t = textoCelda(hoja, c, f).toLowerCase()
+      if (cId < 0 && (/工号/.test(t) || /(employee|worker|emp)\s*id/.test(t) || t === 'id')) cId = c
+      if (cNombre < 0 && /(姓名|员工|name|nombre)/.test(t)) cNombre = c
+    }
+    if (cId < 0 || cNombre < 0) continue
+    const ids = new Map()
+    for (let ff = f + 1; ff <= f2; ff++) {
+      const nombreRaw = textoCelda(hoja, cNombre, ff)
+      const id = textoCelda(hoja, cId, ff)
+      if (!nombreRaw || !id) continue
+      const norm = normalizarNombre(nombreRaw)
+      const previo = ids.get(norm)
+      if (previo && previo.idEmpleado !== id) previo.conflicto = true
+      else if (!previo) ids.set(norm, { nombre: nombreRaw, nombreNorm: norm, idEmpleado: id })
+    }
+    if (ids.size) return [...ids.values()]
+    return null
+  }
+  return null
+}
+
 // ── Análisis del LIBRO completo ────────────────────────────────────────────
 export function analizarLibro(wb, opciones) {
   const periodos = []
   const omitidas = []
+  const idsEmpleado = new Map()
   for (const nombre of wb.SheetNames) {
     const r = analizarHoja(wb.Sheets[nombre], nombre, opciones)
-    if (r.tipo === 'omitida') omitidas.push(r)
-    else periodos.push(r)
+    if (r.tipo === 'omitida') {
+      omitidas.push(r)
+      // la hoja provisional suele ser el reporte de asistencia con el 工号
+      const asis = extraerAsistencia(wb.Sheets[nombre])
+      if (asis) for (const a of asis) if (!idsEmpleado.has(a.nombreNorm)) idsEmpleado.set(a.nombreNorm, { ...a, hoja: nombre })
+    } else periodos.push(r)
   }
   // orden por fecha de inicio
   periodos.sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
-  return { periodos, omitidas }
+  return { periodos, omitidas, idsEmpleado: [...idsEmpleado.values()] }
 }

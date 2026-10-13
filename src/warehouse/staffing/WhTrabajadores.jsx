@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner, EstadoVacio } from '../../components/ui'
 import { Users, ArrowLeft, Link2 } from 'lucide-react'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
+import { Select } from '../../components/ui'
 import { normalizarNombre } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -22,10 +23,10 @@ export default function WhTrabajadores({ user }) {
   const [buscar, setBuscar] = useState('')
   const [sel, setSel] = useState(null)
   const recargar = async () => {
-    const [workers, registros, ajustes, cheques] = await Promise.all([
-      cargar(COL.workers), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.cheques),
+    const [workers, registros, ajustes, cheques, grupos] = await Promise.all([
+      cargar(COL.workers), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.cheques), cargar(COL.grupos),
     ])
-    setDatos({ workers, registros, ajustes, cheques })
+    setDatos({ workers, registros, ajustes, cheques, grupos })
   }
   useEffect(() => { recargar() }, [])
   if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando perfiles…</div>
@@ -75,6 +76,7 @@ export default function WhTrabajadores({ user }) {
           <Card key={w.id} className="cursor-pointer p-3 hover:shadow-md" onClick={() => setSel(w.id)}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-bold text-brand-navy dark:text-slate-100">{w.nombre}</span>
+              {w.idEmpleado && <Badge color="navy">{w.idEmpleado}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
               <span className="ml-auto text-xs text-slate-400">{periodos} semanas · {Math.round(horas * 100) / 100} h · calculado {dinero(calc)} · cobrado {dinero(cobradoCheques)}</span>
             </div>
@@ -122,6 +124,21 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
 
   const [nuevaExc, setNuevaExc] = useState({ posicion: '', reg: '', ot: '', desde: '' })
   const [guardando, setGuardando] = useState(false)
+  const [idEmp, setIdEmp] = useState(w.idEmpleado || '')
+  const [guardandoId, setGuardandoId] = useState(false)
+  const guardarId = async () => {
+    setGuardandoId(true)
+    try {
+      await setDoc(refDoc(COL.workers, w.id), { idEmpleado: idEmp.trim() || null, idEmpleadoFuente: 'manual' }, { merge: true })
+      await auditarStaff('worker_id', `${w.nombre}: ID ${idEmp.trim() || '(quitado)'}`)
+      recargar()
+    } finally { setGuardandoId(false) }
+  }
+  const cambiarGrupo = async (grupoId) => {
+    await setDoc(refDoc(COL.workers, w.id), { grupoId: grupoId || null }, { merge: true })
+    await auditarStaff('worker_grupo', `${w.nombre} → ${grupoId ? (datos.grupos.find((g) => g.id === grupoId)?.nombre || grupoId) : 'sin grupo'}`)
+    recargar()
+  }
   const guardarExc = async () => {
     if (!nuevaExc.reg || !nuevaExc.ot) return
     setGuardando(true)
@@ -146,6 +163,21 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
       </div>
 
       {(w.alias || []).length > 0 && <div className="mb-3 text-xs text-slate-400">Alias verificados: {(w.alias || []).join(' · ')}</div>}
+
+      <Card className="mb-4 p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Identidad y grupo de pago</div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500">ID de empleado (工号):</span>
+          <Input className="w-36" placeholder="p. ej. TX042885" value={idEmp} onChange={(e) => setIdEmp(e.target.value)} />
+          <Boton variant="ghost" disabled={guardandoId || idEmp === (w.idEmpleado || '')} onClick={guardarId}>{guardandoId ? <Spinner /> : 'Guardar ID'}</Boton>
+          <span className="ml-4 text-slate-500">Grupo de pago:</span>
+          <Select className="w-52" value={w.grupoId || ''} onChange={(e) => cambiarGrupo(e.target.value)}>
+            <option value="">Sin grupo (tarifas de posición)</option>
+            {datos.grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+          </Select>
+        </div>
+        <div className="mt-1 text-[11px] text-slate-400">El ID viene del reporte de asistencia de Gofo (fuente autorizada) o se escribe a mano. El grupo aplica sus tarifas y su regla de OT; la excepción individual sigue mandando.</div>
+      </Card>
 
       <Card className="mb-4 p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Excepciones de tarifa (mandan sobre la tarifa de su posición)</div>

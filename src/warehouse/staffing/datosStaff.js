@@ -17,6 +17,7 @@ export const COL = {
   gastos: 'wh_staff_gastos',
   cobros: 'wh_staff_cobros',
   workers: 'wh_workers',
+  grupos: 'wh_staff_grupos',
   cheques: 'wh_cheques',
   bancoPend: 'wh_cheques_banco',
   config: 'wh_staff_config',

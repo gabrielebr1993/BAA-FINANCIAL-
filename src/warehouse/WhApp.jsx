@@ -14,7 +14,8 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Sparkles, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Sparkles, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
+import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
 import WhTrabajadores from './staffing/WhTrabajadores'
 import WhTarifas from './staffing/WhTarifas'
@@ -62,6 +63,7 @@ const SERVICIOS = [
 
 const TABS = [
   { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
+  { id: 'panel', label: 'Dashboard', icono: Gauge },
   { id: 'gofo', label: 'Staffing Gofo', icono: FileSpreadsheet },
   { id: 'trabajadores', label: 'Trabajadores', icono: UserRound },
   { id: 'tarifas', label: 'Mis tarifas', icono: DollarSign },
@@ -197,6 +199,7 @@ function WhShell({ user }) {
         </div>
         <div className="mx-auto max-w-7xl px-4 py-5">
         {tab === 'resumen' && <WhResumen irA={setTab} />}
+        {tab === 'panel' && <WhPanelStaff irA={setTab} />}
         {tab === 'gofo' && <WhStaffing user={user} />}
         {tab === 'trabajadores' && <WhTrabajadores user={user} />}
         {tab === 'tarifas' && <WhTarifas user={user} />}

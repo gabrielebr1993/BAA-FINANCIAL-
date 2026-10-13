@@ -11,7 +11,7 @@
 // ============================================================================
 import { useEffect, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner } from '../../components/ui'
-import { COL, cargar, auditarStaff, refDoc, setDoc } from './datosStaff'
+import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
 import { POSICIONES_BASE } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toFixed(2)}`)
@@ -19,12 +19,15 @@ const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toF
 export default function WhTarifas({ user }) {
   const [tarifas, setTarifas] = useState(null)
   const [config, setConfig] = useState(null)
+  const [grupos, setGrupos] = useState([])
   const [nueva, setNueva] = useState({ posicion: '', reg: '', ot: '', desde: '' })
   const [guardando, setGuardando] = useState('')
   const [nuevoMapeo, setNuevoMapeo] = useState({ de: '', a: '' })
+  const [nuevoGrupo, setNuevoGrupo] = useState({ nombre: '', reglaOT: '', umbralSemanal: '', tarifas: '' })
   const recargar = async () => {
-    const [t, c] = await Promise.all([cargar(COL.tarifas), cargar(COL.config)])
+    const [t, c, g] = await Promise.all([cargar(COL.tarifas), cargar(COL.config), cargar(COL.grupos)])
     setTarifas(t)
+    setGrupos(g)
     setConfig({
       posiciones: c.find((x) => x.id === 'posiciones')?.mapa || { ...POSICIONES_BASE },
       reglas: { reglaOT: 'gofo', umbralSemanal: 40, ...(c.find((x) => x.id === 'reglas') || {}) },
@@ -70,6 +73,40 @@ export default function WhTarifas({ user }) {
       await setDoc(refDoc(COL.config, 'posiciones'), { mapa }, { merge: true })
       await auditarStaff('mapeo_posicion', `${nuevoMapeo.de} → ${nuevoMapeo.a}`)
       setNuevoMapeo({ de: '', a: '' })
+      recargar()
+    } finally { setGuardando('') }
+  }
+
+  const guardarGrupo = async () => {
+    const nombre = nuevoGrupo.nombre.trim()
+    if (!nombre) return
+    setGuardando('grupo')
+    try {
+      // tarifas en texto "Sorter 14/21, Forklift 16/24" → objeto {pos: {reg, ot}}
+      const tarifasG = {}
+      for (const parte of nuevoGrupo.tarifas.split(',')) {
+        const m = parte.trim().match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/)
+        if (m) tarifasG[m[1].trim()] = { reg: Number(m[2]), ot: Number(m[3]) }
+      }
+      const id = 'g_' + nombre.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+      await setDoc(refDoc(COL.grupos, id), {
+        nombre,
+        reglaOT: nuevoGrupo.reglaOT || null,
+        umbralSemanal: nuevoGrupo.reglaOT === 'semanal' ? (Number(nuevoGrupo.umbralSemanal) || 40) : null,
+        tarifas: tarifasG,
+        creadoPor: user.email, creadoEn: new Date().toISOString(),
+      })
+      await auditarStaff('grupo_creado', `${nombre} (OT ${nuevoGrupo.reglaOT || 'general'}; ${Object.keys(tarifasG).length} tarifas)`)
+      setNuevoGrupo({ nombre: '', reglaOT: '', umbralSemanal: '', tarifas: '' })
+      recargar()
+    } finally { setGuardando('') }
+  }
+  const eliminarGrupo = async (g) => {
+    if (!window.confirm(`¿Eliminar el grupo "${g.nombre}"? Los trabajadores asignados vuelven a las tarifas de posición.`)) return
+    setGuardando('grupo')
+    try {
+      await escribirEnLotes([{ ref: refDoc(COL.grupos, g.id), borrar: true }])
+      await auditarStaff('grupo_eliminado', g.nombre)
       recargar()
     } finally { setGuardando('') }
   }
@@ -128,6 +165,45 @@ export default function WhTarifas({ user }) {
             </>
           )}
           {guardando === 'reglas' && <Spinner />}
+        </div>
+      </Card>
+
+      <Card className="mb-4 p-5">
+        <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Grupos de pago</div>
+        <p className="mb-3 text-xs text-slate-500">
+          Un grupo agrupa trabajadores con sus propias reglas: tarifas por posición y/o regla de OT propia.
+          Prioridad al calcular: <b>excepción individual → grupo del trabajador → tarifa de la posición</b>.
+          El grupo de cada persona se asigna dentro de su perfil (pestaña Trabajadores).
+        </p>
+        {grupos.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {grupos.map((g) => (
+              <div key={g.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
+                <Badge color="navy">{g.nombre}</Badge>
+                <span className="text-slate-500">OT: {g.reglaOT === 'semanal' ? `umbral semanal ${g.umbralSemanal || 40} h` : g.reglaOT === 'gofo' ? 'como Gofo' : 'regla general'}</span>
+                <span className="text-slate-500">
+                  {Object.keys(g.tarifas || {}).length
+                    ? Object.entries(g.tarifas).map(([p, t]) => `${p} ${dinero(t.reg)}/${dinero(t.ot)}`).join(' · ')
+                    : 'sin tarifas propias (usa las de posición)'}
+                </span>
+                <button className="ml-auto text-rose-400 hover:text-rose-600" onClick={() => eliminarGrupo(g)}>eliminar</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Input placeholder="Nombre del grupo (p. ej. FLD noche)" value={nuevoGrupo.nombre} onChange={(e) => setNuevoGrupo({ ...nuevoGrupo, nombre: e.target.value })} />
+          <Select value={nuevoGrupo.reglaOT} onChange={(e) => setNuevoGrupo({ ...nuevoGrupo, reglaOT: e.target.value })}>
+            <option value="">OT: usar la regla general</option>
+            <option value="gofo">OT: como el reporte de Gofo</option>
+            <option value="semanal">OT: umbral semanal propio</option>
+          </Select>
+          {nuevoGrupo.reglaOT === 'semanal' && <Input type="number" placeholder="Umbral (40)" value={nuevoGrupo.umbralSemanal} onChange={(e) => setNuevoGrupo({ ...nuevoGrupo, umbralSemanal: e.target.value })} />}
+          <Input placeholder="Tarifas: Sorter 14/21, Forklift 16/24" value={nuevoGrupo.tarifas} onChange={(e) => setNuevoGrupo({ ...nuevoGrupo, tarifas: e.target.value })} />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Boton variant="gold" disabled={guardando === 'grupo' || !nuevoGrupo.nombre.trim()} onClick={guardarGrupo}>{guardando === 'grupo' ? <Spinner /> : 'Crear grupo'}</Boton>
+          <span className="text-[11px] text-slate-400">Las tarifas del grupo se escriben como "Posición reg/ot" separadas por coma (opcional).</span>
         </div>
       </Card>
 

@@ -41,8 +41,13 @@ export function excepcionVigente(worker, posicion, fechaISO) {
 // Calcula el pago de TODAS las filas de un período.
 // filas: salida del parser · tarifas: {posicion → doc} · workers: {nombreNorm → worker}
 // config: { reglaOT: 'gofo'|'semanal', umbralSemanal: 40 }
-export function calcularPagos(filas, tarifas, workers, config, finPeriodo) {
+// grupos: {grupoId → {nombre, reglaOT?, umbralSemanal?, tarifas?: {pos: {reg, ot}}}}
+// Prioridad de tarifa: excepción individual → tarifa del GRUPO del trabajador
+// → tarifa de la posición. La regla de OT del grupo manda sobre la general y
+// el umbral semanal se aplica UNA sola vez por persona.
+export function calcularPagos(filas, tarifas, workers, config, finPeriodo, grupos) {
   const cfg = { reglaOT: 'gofo', umbralSemanal: 40, ...(config || {}) }
+  const gps = grupos || {}
   // horas por persona (todas las posiciones juntas) para la regla semanal
   const porPersona = {}
   for (const fila of filas) {
@@ -55,13 +60,18 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo) {
   for (const fila of filas) {
     const k = fila.nombreNorm || normalizarNombre(fila.nombre)
     const worker = workers ? workers[k] : null
+    const grupo = worker && worker.grupoId ? gps[worker.grupoId] : null
     const exc = excepcionVigente(worker, fila.posicion, finPeriodo)
+    const deGrupo = grupo && grupo.tarifas && grupo.tarifas[fila.posicion] ? grupo.tarifas[fila.posicion] : null
     const base = tarifaVigente(tarifas ? tarifas[fila.posicion] : null, finPeriodo)
-    const tarifa = exc || base
+    const tarifa = exc || deGrupo || base
+    // regla de OT: la del grupo del trabajador manda sobre la general
+    const regla = grupo && grupo.reglaOT ? grupo.reglaOT : cfg.reglaOT
+    const umbral = grupo && grupo.umbralSemanal ? Number(grupo.umbralSemanal) : cfg.umbralSemanal
     let horasReg, horasOT
-    if (cfg.reglaOT === 'semanal') {
+    if (regla === 'semanal') {
       const persona = porPersona[k]
-      const otPersona = Math.max(0, persona.total - cfg.umbralSemanal)
+      const otPersona = Math.max(0, persona.total - umbral)
       // reparto proporcional del OT entre las posiciones de la persona
       const proporcion = persona.total > 0 ? (fila.horasTotal || 0) / persona.total : 0
       horasOT = Math.round(otPersona * proporcion * 100) / 100
@@ -70,23 +80,31 @@ export function calcularPagos(filas, tarifas, workers, config, finPeriodo) {
       horasReg = fila.horasReg != null ? fila.horasReg : Math.max(0, (fila.horasTotal || 0) - (fila.horasOT || 0))
       horasOT = fila.horasOT || 0
     }
-    if (!tarifa || !Number.isFinite(tarifa.reg) || !Number.isFinite(tarifa.ot)) {
+    if (!tarifa || !Number.isFinite(Number(tarifa.reg)) || !Number.isFinite(Number(tarifa.ot))) {
       resultados.push({ ...fila, miHorasReg: horasReg, miHorasOT: horasOT, miTarifaReg: null, miTarifaOT: null, miPago: null, pendienteTarifa: true, origenTarifa: null })
       continue
     }
-    const pago = Math.round((horasReg * tarifa.reg + horasOT * tarifa.ot) * 100) / 100
+    const pago = Math.round((horasReg * Number(tarifa.reg) + horasOT * Number(tarifa.ot)) * 100) / 100
     resultados.push({
       ...fila,
       miHorasReg: horasReg,
       miHorasOT: horasOT,
-      miTarifaReg: tarifa.reg,
-      miTarifaOT: tarifa.ot,
+      miTarifaReg: Number(tarifa.reg),
+      miTarifaOT: Number(tarifa.ot),
       miPago: pago,
       pendienteTarifa: false,
-      origenTarifa: exc ? 'excepción individual' : 'tarifa de posición',
+      origenTarifa: exc ? 'excepción individual' : deGrupo ? `grupo ${grupo.nombre || worker.grupoId}` : 'tarifa de posición',
     })
   }
   return resultados
+}
+
+// Gastos fijos vigentes para un período: activos y con 'desde' ≤ fin del
+// período. Se aplican a CADA semana en Finanzas (etiquetados como fijos).
+export function gastosFijosDe(lista, finPeriodo) {
+  return (lista || [])
+    .filter((g) => g.activo !== false && (Number(g.importe) || 0) > 0 && (!g.desde || g.desde <= (finPeriodo || '9999-12-31')))
+    .map((g) => ({ concepto: `${g.concepto} (fijo)`, importe: Number(g.importe), fijo: true }))
 }
 
 // Resumen financiero de un período.

@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../components/ui'
 import { BarChart3, Plus, Trash2 } from 'lucide-react'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
-import { resumenPeriodo } from './calculosStaff'
+import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
 import { normalizarNombre, hashContenido } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -25,10 +25,11 @@ export default function WhFinanzasStaff({ user }) {
   const [datos, setDatos] = useState(null)
   const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '' })
   const recargar = async () => {
-    const [periodos, registros, ajustes, gastos, cobros, cheques] = await Promise.all([
-      cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques),
+    const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
+      cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config),
     ])
-    setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques })
+    const gastosFijos = configs.find((c) => c.id === 'gastosFijos')?.lista || []
+    setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques, gastosFijos })
   }
   useEffect(() => { recargar() }, [])
 
@@ -45,7 +46,7 @@ export default function WhFinanzasStaff({ user }) {
         const res = resumenPeriodo({
           registros: regs,
           ajustes: hayFiltroDetalle ? [] : datos.ajustes.filter((a) => a.periodoAplicaId === p.id && a.estado !== 'revision'),
-          gastos: hayFiltroDetalle ? [] : datos.gastos.filter((g) => g.periodoId === p.id),
+          gastos: hayFiltroDetalle ? [] : [...datos.gastos.filter((g) => g.periodoId === p.id), ...gastosFijosDe(datos.gastosFijos, p.fin)],
           cobros: hayFiltroDetalle ? [] : datos.cobros.filter((c) => c.periodoId === p.id),
           cheques: hayFiltroDetalle ? [] : datos.cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === p.id)),
         })
@@ -102,6 +103,8 @@ export default function WhFinanzasStaff({ user }) {
               <Card className="p-3"><b className="text-brand-navy dark:text-slate-100">Utilidad</b><div>Mayor: {mayor('utilidad')?.p.inicio} ({dinero(mayor('utilidad')?.res.utilidad)})</div><div>Menor: {menor('utilidad')?.p.inicio} ({dinero(menor('utilidad')?.res.utilidad)})</div></Card>
             </div>
           )}
+
+          {!hayFiltroDetalle && <GastosFijos lista={datos.gastosFijos} user={user} recargar={recargar} />}
 
           {filas.map((x, i) => (
             <SemanaCard key={x.p.id} x={x} anterior={i > 0 ? filas[i - 1] : null} user={user} recargar={recargar}
@@ -213,6 +216,61 @@ function SemanaCard({ x, anterior, user, recargar, hayFiltroDetalle, gastos, cob
           </div>
         </div>
       )}
+    </Card>
+  )
+}
+
+
+// Gastos FIJOS: se aplican automáticamente a cada semana (etiquetados "fijo")
+// desde su fecha de vigencia. Ejemplos: supervisión, administración, seguros,
+// cargas de nómina. Nada se descuenta dos veces: los gastos del período son
+// aparte y se capturan en cada tarjeta semanal.
+function GastosFijos({ lista, user, recargar }) {
+  const [nuevo, setNuevo] = useState({ concepto: '', importe: '', desde: '' })
+  const [guardando, setGuardando] = useState(false)
+  const guardarLista = async (nueva, accion, detalle) => {
+    setGuardando(true)
+    try {
+      await setDoc(refDoc(COL.config, 'gastosFijos'), { lista: nueva, actualizadoPor: user.email, actualizadoEn: new Date().toISOString() }, { merge: true })
+      await auditarStaff(accion, detalle)
+      recargar()
+    } finally { setGuardando(false) }
+  }
+  const agregar = () => {
+    if (!nuevo.concepto.trim() || !Number(nuevo.importe)) return
+    const item = { concepto: nuevo.concepto.trim(), importe: Number(nuevo.importe), desde: nuevo.desde || new Date().toISOString().slice(0, 10), activo: true }
+    guardarLista([...(lista || []), item], 'gasto_fijo_agregado', `${item.concepto}: ${dinero(item.importe)}/semana desde ${item.desde}`)
+    setNuevo({ concepto: '', importe: '', desde: '' })
+  }
+  const alternar = (i) => {
+    const nueva = lista.map((g, j) => (j === i ? { ...g, activo: g.activo === false } : g))
+    guardarLista(nueva, 'gasto_fijo_alternado', `${lista[i].concepto} → ${lista[i].activo === false ? 'activo' : 'pausado'}`)
+  }
+  const quitar = (i) => {
+    guardarLista(lista.filter((_, j) => j !== i), 'gasto_fijo_eliminado', lista[i].concepto)
+  }
+  const totalActivo = (lista || []).filter((g) => g.activo !== false).reduce((s, g) => s + (Number(g.importe) || 0), 0)
+  return (
+    <Card className="mb-3 p-4">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">
+        Gastos fijos semanales
+        <span className="text-xs font-normal text-slate-400">se descuentan solos en cada semana · activos: {dinero(totalActivo)}/semana</span>
+      </div>
+      {(lista || []).map((g, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2 py-1 text-xs">
+          <span className={g.activo === false ? 'text-slate-400 line-through' : ''}>{g.concepto}</span>
+          <b className={g.activo === false ? 'text-slate-400 line-through' : ''}>{dinero(g.importe)}</b>
+          <span className="text-slate-400">desde {g.desde}</span>
+          <button className="text-slate-400 hover:text-brand-navy dark:hover:text-white" onClick={() => alternar(i)}>{g.activo === false ? 'reactivar' : 'pausar'}</button>
+          <button className="text-rose-400 hover:text-rose-600" onClick={() => quitar(i)}>quitar</button>
+        </div>
+      ))}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Input className="w-56" placeholder="Concepto (supervisión, seguro…)" value={nuevo.concepto} onChange={(e) => setNuevo({ ...nuevo, concepto: e.target.value })} />
+        <Input className="w-28" type="number" step="0.01" placeholder="$/semana" value={nuevo.importe} onChange={(e) => setNuevo({ ...nuevo, importe: e.target.value })} />
+        <Input className="w-40" type="date" value={nuevo.desde} onChange={(e) => setNuevo({ ...nuevo, desde: e.target.value })} />
+        <Boton variant="ghost" disabled={guardando} onClick={agregar}><Plus size={13} /> Gasto fijo</Boton>
+      </div>
     </Card>
   )
 }

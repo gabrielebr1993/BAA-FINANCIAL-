@@ -29,8 +29,8 @@ export default function WhStaffing({ user }) {
   const [mensaje, setMensaje] = useState(null)
 
   const recargarBd = async () => {
-    const [periodos, tarifas, workers, configs] = await Promise.all([
-      cargar(COL.periodos), cargar(COL.tarifas), cargar(COL.workers), cargar(COL.config),
+    const [periodos, tarifas, workers, configs, gruposLista] = await Promise.all([
+      cargar(COL.periodos), cargar(COL.tarifas), cargar(COL.workers), cargar(COL.config), cargar(COL.grupos),
     ])
     const posiciones = configs.find((c) => c.id === 'posiciones')?.mapa || POSICIONES_BASE
     const reglas = configs.find((c) => c.id === 'reglas') || { reglaOT: 'gofo', umbralSemanal: 40 }
@@ -40,6 +40,7 @@ export default function WhStaffing({ user }) {
       workers,
       posiciones,
       reglas,
+      grupos: Object.fromEntries(gruposLista.map((g) => [g.id, g])),
     })
   }
   useEffect(() => { recargarBd() }, [])
@@ -79,7 +80,7 @@ export default function WhStaffing({ user }) {
     try {
       // 1) pagos con MIS tarifas vigentes
       const workersMap = Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])]))
-      const pagos = calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin)
+      const pagos = calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos)
       // 2) perfiles: crear los que falten / reutilizar existentes (nunca duplicar)
       const ops = []
       const nuevosWorkers = {}
@@ -169,6 +170,54 @@ export default function WhStaffing({ user }) {
     } finally { setTrabajando('') }
   }
 
+  const aplicarIds = async () => {
+    if (!analisis || !analisis.idsEmpleado) return
+    setTrabajando('ids')
+    try {
+      const ops = []
+      let aplicados = 0, conflictos = 0, sinPerfil = 0
+      for (const x of analisis.idsEmpleado) {
+        const w = bd.workers.find((ww) => ww.nombreNorm === x.nombreNorm || (ww.alias || []).includes(x.nombreNorm))
+        if (!w) { sinPerfil++; continue } // de la asistencia NO se crean perfiles
+        if (w.idEmpleado && w.idEmpleado !== x.idEmpleado) {
+          conflictos++
+          ops.push({ ref: refDoc(COL.workers, w.id), merge: true, data: { idConflicto: `${w.idEmpleado} vs ${x.idEmpleado} (${x.hoja})`, revisarId: true } })
+          continue
+        }
+        if (!w.idEmpleado) {
+          aplicados++
+          ops.push({ ref: refDoc(COL.workers, w.id), merge: true, data: { idEmpleado: x.idEmpleado, idEmpleadoFuente: `asistencia ${x.hoja}` } })
+        }
+      }
+      if (ops.length) await escribirEnLotes(ops)
+      await auditarStaff('ids_aplicados', `${aplicados} IDs aplicados, ${conflictos} conflictos marcados, ${sinPerfil} sin perfil (no se crean desde asistencia)`)
+      setMensaje({ tipo: 'ok', texto: `IDs: ${aplicados} aplicados · ${conflictos} en conflicto (marcados para revisar) · ${sinPerfil} nombres sin perfil todavía (se crearán al importar su semana).` })
+      await recargarBd()
+    } finally { setTrabajando('') }
+  }
+
+  // RECALCULAR un período ya importado con las tarifas/grupos/reglas ACTUALES
+  // (acción explícita y auditada: cambiar una tarifa nunca recalcula solo).
+  const recalcularPeriodo = async (pd) => {
+    setTrabajando('re_' + pd.id)
+    try {
+      const regs = await cargarPor(COL.registros, 'periodoId', pd.id)
+      const workersMap = Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((al) => [al, w])]))
+      const pagos = calcularPagos(regs, bd.tarifas, workersMap, bd.reglas, pd.fin, bd.grupos)
+      const ops = pagos.map((x) => ({
+        ref: refDoc(COL.registros, x.id),
+        merge: true,
+        data: { miHorasReg: x.miHorasReg, miHorasOT: x.miHorasOT, miTarifaReg: x.miTarifaReg, miTarifaOT: x.miTarifaOT, miPago: x.miPago, pendienteTarifa: !!x.pendienteTarifa, origenTarifa: x.origenTarifa || null, recalculadoEn: new Date().toISOString(), recalculadoPor: user.email },
+      }))
+      ops.push({ ref: refDoc(COL.periodos, pd.id), merge: true, data: { recalculadoEn: new Date().toISOString() } })
+      await escribirEnLotes(ops)
+      const pendientes = pagos.filter((x) => x.pendienteTarifa).length
+      await auditarStaff('periodo_recalculado', `${pd.id}: ${pagos.length} registros con tarifas/reglas actuales (${pendientes} aún sin tarifa)`)
+      setMensaje({ tipo: 'ok', texto: `Período ${pd.inicio} recalculado con tus tarifas, grupos y reglas actuales (${pagos.length} registros${pendientes ? `, ${pendientes} siguen sin tarifa` : ''}).` })
+      await recargarBd()
+    } finally { setTrabajando('') }
+  }
+
   if (!bd) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando staffing…</div>
 
   const categorias = analisis ? analisis.periodos.map((p) => ({ p, cat: categorizar(p) })) : []
@@ -212,6 +261,21 @@ export default function WhStaffing({ user }) {
             />
           ))}
 
+          {analisis.idsEmpleado && analisis.idsEmpleado.length > 0 && (
+            <Card className="mt-4 p-4">
+              <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">IDs de empleado encontrados (工号, hoja de asistencia)</div>
+              <p className="mb-2 text-xs text-slate-500">
+                La hoja provisional trae el ID oficial de cada trabajador. De ahí NO se importan horas ni perfiles;
+                solo puedes aplicar los IDs a los perfiles que YA existen (coincidencia por nombre). {analisis.idsEmpleado.length} encontrados.
+              </p>
+              <div className="mb-2 flex flex-wrap gap-1.5 text-[11px]">
+                {analisis.idsEmpleado.slice(0, 8).map((x) => <Badge key={x.nombreNorm} color="slate">{x.nombre} → {x.idEmpleado}</Badge>)}
+                {analisis.idsEmpleado.length > 8 && <span className="text-slate-400">… y {analisis.idsEmpleado.length - 8} más</span>}
+              </div>
+              <Boton variant="ghost" disabled={trabajando === 'ids'} onClick={aplicarIds}>{trabajando === 'ids' ? <Spinner /> : 'Aplicar IDs a los perfiles existentes'}</Boton>
+            </Card>
+          )}
+
           {analisis.omitidas.length > 0 && (
             <Card className="mt-4 p-4">
               <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Pestañas omitidas</div>
@@ -234,6 +298,10 @@ export default function WhStaffing({ user }) {
               <span className="text-slate-400">{pd.totales?.personas} personas · {pd.totales?.horas} h · ingreso {dinero(pd.totales?.ingresoGofo)}</span>
               {(pd.versiones || []).length > 0 && <Badge color="gold">{pd.versiones.length} actualización(es)</Badge>}
               <span className="ml-auto text-slate-400">{pd.archivo}</span>
+              <button className="font-semibold text-brand-gold hover:underline" disabled={trabajando === 're_' + pd.id}
+                onClick={() => recalcularPeriodo(pd)} title="Recalcular MI pago con las tarifas, grupos y reglas de hoy (no toca los datos de Gofo)">
+                {trabajando === 're_' + pd.id ? 'recalculando…' : 'recalcular pagos'}
+              </button>
             </div>
           ))}
         </div>
@@ -245,7 +313,7 @@ export default function WhStaffing({ user }) {
 function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar, onTarifaGuardada, user }) {
   const [abierto, setAbierto] = useState(cat === 'nuevo' || cat === 'cambios')
   const workersMap = useMemo(() => Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])])), [bd.workers])
-  const pagos = useMemo(() => calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin), [p, bd, workersMap])
+  const pagos = useMemo(() => calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos), [p, bd, workersMap])
   const sinTarifa = [...new Set(pagos.filter((x) => x.pendienteTarifa).map((x) => x.posicion))]
   const color = cat === 'nuevo' ? 'green' : cat === 'ya' ? 'slate' : cat === 'cambios' ? 'gold' : 'red'
   const etiqueta = cat === 'nuevo' ? 'Listo para importar' : cat === 'ya' ? 'Ya procesado (sin cambios)' : cat === 'cambios' ? 'Cambió desde la importación — requiere revisión' : 'Incompleto / pendiente'
