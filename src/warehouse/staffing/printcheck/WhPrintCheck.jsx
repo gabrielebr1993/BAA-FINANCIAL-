@@ -135,6 +135,18 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
           <span className="ml-auto text-slate-400">{ch.length} cheques en el filtro · {dinero(suma(ch))}</span>
         </div>
       </Card>
+      {/* Saldo del banco al iniciar sesión (foto que refresca Plaid cada 6 h) */}
+      {(bd.plaid?.banco?.cuentas || []).length > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {bd.plaid.banco.cuentas.map((c, i) => (
+            <Card key={i} className="cursor-pointer p-4 transition hover:shadow-md" onClick={() => irA('banco')}>
+              <div className="text-[11px] font-bold uppercase text-slate-400">💳 {c.institucion || 'Banco'} {c.mask && `· •••• ${c.mask}`}</div>
+              <div className="mt-1 text-2xl font-black text-brand-navy dark:text-slate-100">${Number(c.disponible ?? c.actual ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              <div className="text-[11px] text-slate-400">saldo disponible · al {String(bd.plaid.banco.consultadoEn || '').replace('T', ' ').slice(0, 16)} · ver movimientos →</div>
+            </Card>
+          ))}
+        </div>
+      )}
       <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <K label="Cheques emitidos" n={emitidos.length} sub={dinero(suma(emitidos))} onClick={() => abrirRegistro('todos')} />
         <K label="Pendientes de cobro (outstanding)" n={pendientes.length} sub={dinero(suma(pendientes))} color="text-amber-600" onClick={() => abrirRegistro('emitido')} />
@@ -810,7 +822,9 @@ function PcBanco({ bd, recargar }) {
   const [trabajando, setTrabajando] = useState('')
   const [mensaje, setMensaje] = useState(null)
   const [entorno, setEntorno] = useState(bd.plaid.entorno || 'production')
-  const [banco, setBanco] = useState(null) // { cuentas, movimientos }
+  // arranca con la foto guardada (visible AL INSTANTE, como tu banco);
+  // "Actualizar" pide datos frescos a Plaid y renueva la foto
+  const [banco, setBanco] = useState(bd.plaid.banco || null)
   const plaidOp = (data) => httpsCallable(getFunctions(), 'plaidOp')(data).then((r) => r.data)
   const dineroSigno = (n) => {
     const v = Number(n) || 0
@@ -899,7 +913,7 @@ function PcBanco({ bd, recargar }) {
             <span className="text-xs text-slate-400">{bd.plaid.entorno === 'sandbox' ? 'sandbox' : 'producción'} · corre sola cada 6 horas</span>
             <span className="ml-auto flex flex-wrap gap-2">
               <Boton variant="gold" disabled={trabajando === 'sync'} onClick={sincronizar}>{trabajando === 'sync' ? <Spinner /> : <><RefreshCw size={14} /> Sincronizar ahora</>}</Boton>
-              <Boton variant="ghost" disabled={trabajando === 'banco'} onClick={verBanco}>{trabajando === 'banco' ? <Spinner /> : <><Eye size={14} /> Ver saldo y movimientos</>}</Boton>
+              <Boton variant="ghost" disabled={trabajando === 'banco'} onClick={verBanco}>{trabajando === 'banco' ? <Spinner /> : <><RefreshCw size={14} /> Actualizar saldo y movimientos</>}</Boton>
               <Boton variant="ghost" disabled={trabajando === 'des'} onClick={desconectar}>Desconectar</Boton>
             </span>
           </div>
@@ -926,9 +940,10 @@ function PcBanco({ bd, recargar }) {
             ))}
           </div>
           <Card className="mb-4 p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">
               Movimientos de los últimos 30 días
               <span className="text-xs font-normal text-slate-400">({banco.desde} → {banco.hasta} · {banco.movimientos.length} mostrados)</span>
+              {banco.consultadoEn && <span className="ml-auto text-xs font-normal text-slate-400">actualizado: {String(banco.consultadoEn).replace('T', ' ').slice(0, 16)}</span>}
             </div>
             <div className="max-h-96 overflow-y-auto">
               <table className="w-full text-xs">

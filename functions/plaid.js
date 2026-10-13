@@ -56,6 +56,43 @@ async function auditar(accion, detalle) {
   })
 }
 
+// ── Foto del banco (saldo + movimientos de 30 días) ────────────────────────
+// Se guarda en wh_pc_config/plaid para que la app la muestre AL INSTANTE al
+// iniciar sesión (como un banco), sin pagarle una consulta a Plaid por cada
+// visita. La refrescan: la corrida de cada 6 horas y el botón "Actualizar".
+async function consultarYGuardarBanco(items) {
+  const cuentas = []
+  const movimientos = []
+  const hoy = new Date().toISOString().slice(0, 10)
+  const hace30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+  for (const d of items.docs) {
+    const item = d.data()
+    const bal = await plaidPost(item.entorno, '/accounts/balance/get', { access_token: item.access_token })
+    for (const a of bal.accounts || []) {
+      cuentas.push({
+        nombre: a.name || a.official_name || 'Cuenta', mask: a.mask || '', tipo: a.subtype || a.type || '',
+        disponible: a.balances?.available ?? null, actual: a.balances?.current ?? null,
+        moneda: a.balances?.iso_currency_code || 'USD', institucion: item.institucion || '',
+      })
+    }
+    const tx = await plaidPost(item.entorno, '/transactions/get', {
+      access_token: item.access_token, start_date: hace30, end_date: hoy,
+      options: { count: 100, offset: 0, include_original_description: true },
+    })
+    for (const t of tx.transactions || []) {
+      movimientos.push({
+        fecha: t.date, nombre: t.name || t.original_description || '', importe: t.amount,
+        pendiente: !!t.pending, cheque: t.check_number || null,
+        cuentaMask: (bal.accounts || []).find((a) => a.account_id === t.account_id)?.mask || '',
+      })
+    }
+  }
+  movimientos.sort((a, b) => String(b.fecha).localeCompare(a.fecha))
+  const foto = { cuentas, movimientos: movimientos.slice(0, 60), desde: hace30, hasta: hoy, consultadoEn: new Date().toISOString() }
+  await db().collection('wh_pc_config').doc('plaid').set({ banco: foto }, { merge: true })
+  return foto
+}
+
 // ── Sincronización (programada y a demanda) ────────────────────────────────
 async function sincronizar() {
   const items = await db().collection('plaid_items').get()
@@ -117,6 +154,8 @@ async function sincronizar() {
     }
     await itemDoc.ref.set({ cursor, ultimoSync: new Date().toISOString() }, { merge: true })
   }
+  // refresca también la foto de saldo/movimientos para la app (best-effort)
+  try { await consultarYGuardarBanco(items) } catch (e) { await auditar('plaid_foto_error', e.message || String(e)) }
   const resumen = { items: items.size, cobrados, revisar, alertas, sinNumero, fecha: new Date().toISOString() }
   await db().collection('wh_pc_config').doc('plaid').set({ conectado: true, ultimoSync: resumen }, { merge: true })
   await auditar('plaid_sync', `cobrados ${cobrados} · a revisar ${revisar} · alertas ${alertas}`)
@@ -179,38 +218,11 @@ async function operar(req) {
     return await sincronizar()
   }
 
-  // Saldo y movimientos recientes (últimos 30 días) para VER en la app.
-  // No se guarda nada: se consulta al momento y viaja solo al dueño.
+  // Saldo y movimientos frescos a demanda (también refresca la foto guardada).
   if (op === 'resumen_banco') {
     const items = await db().collection('plaid_items').get()
     if (items.empty) throw new HttpsError('failed-precondition', 'No hay banco conectado.')
-    const cuentas = []
-    const movimientos = []
-    const hoy = new Date().toISOString().slice(0, 10)
-    const hace30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-    for (const d of items.docs) {
-      const item = d.data()
-      const bal = await plaidPost(item.entorno, '/accounts/balance/get', { access_token: item.access_token })
-      for (const a of bal.accounts || []) {
-        cuentas.push({
-          nombre: a.name || a.official_name || 'Cuenta', mask: a.mask || '', tipo: a.subtype || a.type || '',
-          disponible: a.balances?.available ?? null, actual: a.balances?.current ?? null,
-          moneda: a.balances?.iso_currency_code || 'USD', institucion: item.institucion || '',
-        })
-      }
-      const tx = await plaidPost(item.entorno, '/transactions/get', {
-        access_token: item.access_token, start_date: hace30, end_date: hoy,
-        options: { count: 100, offset: 0, include_original_description: true },
-      })
-      for (const t of tx.transactions || []) {
-        movimientos.push({
-          fecha: t.date, nombre: t.name || t.original_description || '', importe: t.amount,
-          pendiente: !!t.pending, cheque: t.check_number || null, cuentaMask: (bal.accounts || []).find((a) => a.account_id === t.account_id)?.mask || '',
-        })
-      }
-    }
-    movimientos.sort((a, b) => String(b.fecha).localeCompare(a.fecha))
-    return { cuentas, movimientos: movimientos.slice(0, 100), desde: hace30, hasta: hoy }
+    return await consultarYGuardarBanco(items)
   }
 
   if (op === 'desconectar') {
