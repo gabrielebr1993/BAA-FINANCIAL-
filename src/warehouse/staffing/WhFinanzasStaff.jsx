@@ -23,7 +23,7 @@ const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
 
 export default function WhFinanzasStaff({ user }) {
   const [datos, setDatos] = useState(null)
-  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '' })
+  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })
   const recargar = async () => {
     const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
       cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config),
@@ -53,6 +53,13 @@ export default function WhFinanzasStaff({ user }) {
         return { p, res, regs }
       })
       .filter((x) => x.regs.length > 0)
+      // filtro de cobro: solo sin filtros de detalle (con ellos los cobros no
+      // se incluyen y todas las semanas parecerían pendientes)
+      .filter((x) => {
+        if (!filtro.cobro || hayFiltroDetalle) return true
+        const cobrada = x.res.porCobrar <= 0.01
+        return filtro.cobro === 'cobradas' ? cobrada : !cobrada
+      })
   }, [datos, filtro])
 
   if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando finanzas…</div>
@@ -91,7 +98,12 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="">Todos los warehouses</option>
                 {warehouses.map((x) => <option key={x}>{x}</option>)}
               </Select>
-              {(filtro.periodo || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '' })}>Limpiar</Boton>}
+              <Select className="w-52" value={filtro.cobro} onChange={(e) => setFiltro({ ...filtro, cobro: e.target.value })} disabled={!!hayFiltroDetalle} title={hayFiltroDetalle ? 'Quita los filtros de detalle para filtrar por cobro' : ''}>
+                <option value="">Cobro: todas las semanas</option>
+                <option value="cobradas">Cobradas al 100%</option>
+                <option value="pendientes">Con saldo por cobrar</option>
+              </Select>
+              {(filtro.periodo || filtro.cobro || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })}>Limpiar</Boton>}
             </div>
             {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
           </Card>
@@ -183,6 +195,9 @@ function SemanaCard({ x, anterior, user, recargar, hayFiltroDetalle, gastos, cob
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
         {res.parcial && <Badge color="red">PARCIAL: {res.pendientesTarifa} registros sin tarifa</Badge>}
+        {!hayFiltroDetalle && (res.porCobrar <= 0.01
+          ? <Badge color="green">cobrada</Badge>
+          : <Badge color="gold">por cobrar {dinero(res.porCobrar)}</Badge>)}
         <span className="ml-auto text-xs text-slate-400">{res.trabajadores} personas · {res.horas} h</span>
       </div>
       <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
