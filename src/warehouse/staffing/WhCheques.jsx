@@ -46,6 +46,7 @@ export default function WhCheques({ user }) {
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [buscar, setBuscar] = useState('')
   const [trabajando, setTrabajando] = useState(false)
+  const [arrastrando, setArrastrando] = useState('')
 
   const recargar = async () => {
     const [cheques, pend, workers, periodos, configs] = await Promise.all([
@@ -72,10 +73,15 @@ export default function WhCheques({ user }) {
 
   if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando cheques…</div>
 
-  const alArchivo = async (e, tipo) => {
+  const alArchivo = (e, tipo) => {
     const f = e.target.files && e.target.files[0]
     e.target.value = ''
+    if (f) procesarArchivo(f, tipo)
+  }
+  // Procesa el archivo (botón o arrastrar y soltar).
+  const procesarArchivo = async (f, tipo) => {
     if (!f) return
+    if (!/\.(xlsx|xls|csv)$/i.test(f.name)) { setMensaje({ tipo: 'error', texto: `"${f.name}" no es un Excel ni CSV.` }); return }
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { cellDates: true })
       let hoja = null
@@ -186,15 +192,21 @@ export default function WhCheques({ user }) {
         {datos.configCheques.ultimoBanco && <span> Último reporte bancario: <b>{datos.configCheques.ultimoBanco.archivo}</b> ({new Date(datos.configCheques.ultimoBanco.fecha).toLocaleString()}).</span>}
       </Aviso>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
-          <Upload size={15} /> Subir historial de emisión
-          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => alArchivo(e, 'emision')} />
-        </label>
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Banknote size={15} /> Subir reporte bancario
-          <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => alArchivo(e, 'banco')} />
-        </label>
+      <div className="mb-4 grid gap-2 sm:grid-cols-2">
+        {[['emision', 'Subir historial de emisión', Upload], ['banco', 'Subir reporte bancario', Banknote]].map(([tipo, titulo, Icono]) => (
+          <div key={tipo}
+            className={`rounded-2xl border-2 border-dashed p-4 text-center transition ${arrastrando === tipo ? 'border-brand-gold bg-amber-50/70 dark:bg-amber-500/10' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'}`}
+            onDragOver={(e) => { e.preventDefault(); setArrastrando(tipo) }}
+            onDragLeave={() => setArrastrando('')}
+            onDrop={(e) => { e.preventDefault(); setArrastrando(''); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) procesarArchivo(f, tipo) }}
+          >
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ${tipo === 'emision' ? 'bg-brand-navy text-white hover:opacity-90' : 'border border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              <Icono size={15} /> {titulo}
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => alArchivo(e, tipo)} />
+            </label>
+            <div className="mt-1.5 text-[11px] text-slate-400">{arrastrando === tipo ? '¡Suéltalo aquí!' : 'o arrastra el archivo a este recuadro'}</div>
+          </div>
+        ))}
       </div>
 
       {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}

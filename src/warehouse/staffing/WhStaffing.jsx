@@ -27,6 +27,7 @@ export default function WhStaffing({ user }) {
   const [archivoNombre, setArchivoNombre] = useState('')
   const [trabajando, setTrabajando] = useState('')
   const [mensaje, setMensaje] = useState(null)
+  const [arrastrando, setArrastrando] = useState(false)
 
   const recargarBd = async () => {
     const [periodos, tarifas, workers, configs, gruposLista] = await Promise.all([
@@ -46,10 +47,16 @@ export default function WhStaffing({ user }) {
   }
   useEffect(() => { recargarBd() }, [])
 
-  const alArchivo = async (e) => {
+  const alArchivo = (e) => {
     const f = e.target.files && e.target.files[0]
     e.target.value = ''
+    if (f) procesarArchivo(f)
+  }
+
+  // Procesa el libro (viene del botón o de arrastrar y soltar).
+  const procesarArchivo = async (f) => {
     if (!f || !bd) return
+    if (!/\.(xlsx|xls)$/i.test(f.name)) { setMensaje({ tipo: 'error', texto: `"${f.name}" no es un Excel (.xlsx o .xls).` }); return }
     setTrabajando('analizando')
     setMensaje(null)
     try {
@@ -232,13 +239,19 @@ export default function WhStaffing({ user }) {
         Las provisionales (Shift/Sheet + número) se omiten siempre. Importar el reporte <b>no</b> significa que Gofo ya pagó ni que ya pagaste al trabajador.
       </Aviso>
 
-      <Card className="mb-4 p-5">
+      <div
+        className={`mb-4 rounded-2xl border-2 border-dashed p-5 text-center shadow-card transition ${arrastrando ? 'border-brand-gold bg-amber-50/70 dark:bg-amber-500/10' : 'border-slate-300 bg-surface-card dark:border-slate-600 dark:bg-surface-dark-card'}`}
+        onDragOver={(e) => { e.preventDefault(); setArrastrando(true) }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={(e) => { e.preventDefault(); setArrastrando(false); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) procesarArchivo(f) }}
+      >
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
           <Upload size={15} /> {trabajando === 'analizando' ? 'Analizando…' : 'Subir libro de Gofo (.xlsx)'}
           <input type="file" accept=".xlsx,.xls" className="hidden" onChange={alArchivo} disabled={trabajando !== ''} />
         </label>
-        {archivoNombre && <span className="ml-3 text-xs text-slate-400">{archivoNombre}</span>}
-      </Card>
+        <div className="mt-2 text-xs text-slate-400">{arrastrando ? '¡Suéltalo aquí!' : 'o arrastra el reporte y suéltalo en este recuadro'}</div>
+        {archivoNombre && <div className="mt-1 text-xs text-slate-400">{archivoNombre}</div>}
+      </div>
 
       {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}
 
