@@ -20,7 +20,8 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVac
 import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark } from 'lucide-react'
 import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
-import { numeroEnPalabras, planearLote, asignarNumeros, lineaMICR, enmascarar, r2 } from './logicaPrint'
+import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
+import { htmlLote } from './plantillaBA'
 
 const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', config: 'wh_pc_config' }
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -39,7 +40,8 @@ export default function WhPrintCheck({ user }) {
       cuentas, firmas, cheques, workers,
       lotes: lotes.sort((a, b) => String(b.creadoISO || '').localeCompare(a.creadoISO || '')),
       periodos: periodos.sort((a, b) => String(b.inicio).localeCompare(a.inicio)),
-      empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A AMERICAN GROUP LLC', marca: 'NEXSEND', direccion1: '', direccion2: '' },
+      // valores iniciales tomados del membrete real del software anterior
+      empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', marca: 'NEXSEND', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
       impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true },
     })
   }
@@ -253,68 +255,6 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
       )}
     </div>
   )
-}
-
-// ── IMPRESIÓN (ventana dedicada con medidas en pulgadas y calibración) ─────
-function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba }) {
-  const off = `margin-left:${Number(impresion.offX) || 0}in;margin-top:${Number(impresion.offY) || 0}in;`
-  const fFecha = (iso) => { const [a, m, d] = String(iso || '').split('-'); return m ? `${m}/${d}/${a}` : iso || '' }
-  const stub = (ch, titulo) => `
-    <div class="stub">
-      <div class="stub-cab"><b>${empresa.nombre || ''}</b> · ${titulo} · Check #${prueba ? '000000' : ch.numeroRaw} · ${fFecha(ch.fecha)}</div>
-      <div class="stub-linea"><span>${ch.beneficiario}${ch.idEmpleado ? ` · ID ${ch.idEmpleado}` : ''}</span><span>${ch.memo || ''}</span><b>$${Number(ch.importe).toFixed(2)}</b></div>
-      ${(ch.detalle || []).map((d) => `<div class="stub-det"><span>${d.posicion}</span><span>${d.horas != null ? d.horas + ' h' : ''}</span><span>$${Number(d.pago || 0).toFixed(2)}</span></div>`).join('')}
-    </div>`
-  const uno = (ch) => `
-    <div class="pagina">
-      ${prueba ? '<div class="muestra">SAMPLE — NON-NEGOTIABLE</div>' : ''}
-      <div class="cheque">
-        <div class="fila1">
-          <div class="emisor"><b>${empresa.nombre || ''}</b><br>${empresa.direccion1 || ''}<br>${empresa.direccion2 || ''}</div>
-          <div class="banco">${cuenta.banco || ''}<br>${cuenta.direccionBanco || ''}</div>
-          <div class="numero">No. <b>${prueba ? '000000' : ch.numeroRaw}</b><br><span class="fecha-lbl">DATE</span> <span class="fecha">${fFecha(ch.fecha)}</span></div>
-        </div>
-        <div class="fila2">
-          <span class="lbl">PAY TO THE<br>ORDER OF</span>
-          <span class="payee">${ch.beneficiario}</span>
-          <span class="caja">$ <b>${Number(ch.importe).toLocaleString('en-US', { minimumFractionDigits: 2 })}</b></span>
-        </div>
-        <div class="fila3"><span class="palabras">${numeroEnPalabras(ch.importe) || ''}</span></div>
-        <div class="fila4">
-          <div class="memo"><span class="lbl">MEMO</span> ${ch.memo || ''}</div>
-          <div class="firma">${firma ? `<img src="${firma.imagen}" alt="" />` : ''}<div class="linea"></div><div class="lbl-firma">AUTHORIZED SIGNATURE</div></div>
-        </div>
-        ${impresion.mostrarMICR ? `<div class="micr">${lineaMICR({ numero: prueba ? '000000' : ch.numeroRaw, routing: cuenta.routing, cuenta: cuenta.numero })}</div>` : ''}
-      </div>
-      ${stub(ch, 'EMPLOYEE COPY')}
-      ${stub(ch, 'COMPANY COPY')}
-    </div>`
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Checks</title><style>
-    @page{size:8.5in 11in;margin:0}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#111}
-    .pagina{position:relative;width:8.5in;height:11in;page-break-after:always;box-sizing:border-box;padding:0.25in 0.4in;${off}}
-    .muestra{position:absolute;top:3in;left:0.6in;font-size:52px;font-weight:900;color:rgba(200,30,30,.25);transform:rotate(-18deg);letter-spacing:4px}
-    .cheque{height:3.1in;border-bottom:1px dashed #999;box-sizing:border-box;padding:0.15in 0.1in;position:relative}
-    .fila1{display:flex;justify-content:space-between;font-size:9.5px;line-height:1.35}
-    .emisor b{font-size:12px}.banco{text-align:center;color:#333}.numero{text-align:right;font-size:11px}
-    .fecha{border-bottom:1px solid #111;padding:0 6px}
-    .fila2{display:flex;align-items:flex-end;gap:10px;margin-top:0.28in}
-    .lbl{font-size:7.5px;color:#444;letter-spacing:.4px}
-    .payee{flex:1;border-bottom:1px solid #111;font-size:13px;font-weight:700;padding:0 4px}
-    .caja{border:1.3px solid #111;padding:4px 10px;font-size:13px;min-width:1.2in;text-align:right}
-    .fila3{margin-top:0.22in}.palabras{display:block;border-bottom:1px solid #111;font-size:10.5px;padding:0 2px}
-    .fila4{display:flex;justify-content:space-between;align-items:flex-end;margin-top:0.3in}
-    .memo{font-size:10px;border-bottom:1px solid #111;min-width:2.6in;padding:0 2px}
-    .firma{text-align:center;width:2.6in;position:relative}
-    .firma img{height:0.55in;position:absolute;bottom:14px;left:50%;transform:translateX(-50%)}
-    .firma .linea{border-bottom:1px solid #111}.lbl-firma{font-size:7.5px;color:#444;margin-top:2px}
-    .micr{position:absolute;bottom:0.08in;left:0.45in;font-family:'MICR','Courier New',monospace;font-size:13px;letter-spacing:2px}
-    .stub{height:3.4in;border-bottom:1px dashed #999;box-sizing:border-box;padding:0.15in 0.1in;font-size:10px}
-    .stub-cab{font-size:10.5px;margin-bottom:6px}
-    .stub-linea{display:flex;justify-content:space-between;border-bottom:1px solid #ccc;padding-bottom:4px;margin-bottom:4px}
-    .stub-det{display:flex;justify-content:space-between;color:#444;padding:1px 0}
-  </style></head><body>${cheques.map(uno).join('')}
-  <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`
 }
 
 function PcImprimir({ bd, user, loteInicial, chequeSolo }) {
