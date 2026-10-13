@@ -109,7 +109,16 @@ function EcomPrivado({ onSalir }) {
 // ── Shell del módulo (solo dueño) ───────────────────────────────────────────
 function EcomShell({ user }) {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('resumen')
+  // La pestaña activa vive en el hash de la URL (/shop#pedidos) para que
+  // recargar con F5 te deje en la misma página y no en el Resumen.
+  const [tab, setTabEstado] = useState(() => {
+    const h = (window.location.hash || '').replace('#', '')
+    return TABS.some((t) => t.id === h) ? h : 'resumen'
+  })
+  const setTab = (id) => {
+    setTabEstado(id)
+    try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
+  }
   const [config, setConfig] = useState(null)
   const [guardandoCfg, setGuardandoCfg] = useState(false)
   const recargarConfig = async () => {

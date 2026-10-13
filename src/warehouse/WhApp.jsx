@@ -112,7 +112,16 @@ function WhLogin({ onVolver }) {
 
 function WhShell({ user }) {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('resumen')
+  // La pestaña activa vive en el hash de la URL (/wh#tarifas) para que
+  // recargar con F5 te deje en la misma página y no en el Resumen.
+  const [tab, setTabEstado] = useState(() => {
+    const h = (window.location.hash || '').replace('#', '')
+    return TABS.some((t) => t.id === h) ? h : 'resumen'
+  })
+  const setTab = (id) => {
+    setTabEstado(id)
+    try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
+  }
   return (
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
       {/* ── MENÚ LATERAL en escritorio: mismo estilo que el módulo de
