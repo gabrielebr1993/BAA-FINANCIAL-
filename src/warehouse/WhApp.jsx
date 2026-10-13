@@ -197,7 +197,7 @@ function WhShell({ user }) {
             })}
           </div>
         </div>
-        <div className="mx-auto max-w-7xl px-4 py-5">
+        <div className="max-w-full p-4 sm:p-6 lg:p-8">
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
         {tab === 'gofo' && <WhStaffing user={user} />}
@@ -218,27 +218,67 @@ function WhShell({ user }) {
 }
 
 function WhResumen({ irA }) {
-  const [n, setN] = useState({ inb: '…', out: '…', staff: '…' })
+  const [n, setN] = useState(null)
   useEffect(() => { (async () => {
     try {
-      const [a, b, c] = await Promise.all([cargarCol('wh_inbound'), cargarCol('wh_outbound'), cargarCol('wh_staff')])
-      setN({ inb: a.length, out: b.length, staff: c.filter((x) => x.activo).length })
-    } catch { setN({ inb: 0, out: 0, staff: 0 }) }
+      const [a, b, c, periodos, workers, cheques] = await Promise.all([
+        cargarCol('wh_inbound'), cargarCol('wh_outbound'), cargarCol('wh_staff'),
+        cargarCol('wh_staff_periodos'), cargarCol('wh_workers'), cargarCol('wh_cheques'),
+      ])
+      const ult = periodos.sort((x, y) => String(x.inicio || '').localeCompare(y.inicio || '')).slice(-1)[0] || null
+      setN({
+        inb: a.length,
+        out: b.length,
+        staff: c.filter((x) => x.activo).length,
+        semanas: periodos.length,
+        trabajadores: workers.filter((w) => !w.fusionadoEn).length,
+        chequesPend: cheques.filter((x) => x.estado === 'emitido').length,
+        ult,
+      })
+    } catch { setN({ inb: 0, out: 0, staff: 0, semanas: 0, trabajadores: 0, chequesPend: 0, ult: null }) }
   })() }, [])
+  const dinero = (x) => (x === null || x === undefined ? '—' : `$${Number(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+  const v = (x) => (n ? x : '…')
+  // Accesos grandes a cada área (misma lógica visual del módulo de Paquetería)
+  const AREAS = [
+    { id: 'panel', icono: Gauge, t: 'Dashboard', d: 'KPIs, tendencia semanal y recomendaciones de JARVIS sobre tus números.' },
+    { id: 'gofo', icono: FileSpreadsheet, t: 'Staffing Gofo', d: 'Sube el libro semanal: vista previa, candados antiduplicado y confirmación.' },
+    { id: 'trabajadores', icono: UserRound, t: 'Trabajadores', d: 'Perfiles únicos con ID (工号), historial, alias, grupo y excepciones.' },
+    { id: 'tarifas', icono: DollarSign, t: 'Mis tarifas', d: 'Tarifas por posición, grupos de pago, regla de OT y mapeo de posiciones.' },
+    { id: 'finanzas', icono: BarChart3, t: 'Finanzas', d: 'Ingreso vs cobrado, pagos vs pagado, gastos fijos y utilidad por semana.' },
+    { id: 'cheques', icono: Banknote, t: 'Cheques', d: 'Emisión + reporte bancario: conciliación sin pagos dobles.' },
+    { id: 'inbound', icono: ArrowDownToLine, t: 'Inbound', d: 'Recepciones: cita, descarga, verificación y almacenaje.' },
+    { id: 'outbound', icono: ArrowUpFromLine, t: 'Outbound', d: 'Despachos: preparación, carga y entrega al transportista.' },
+  ]
   return (
     <div>
       <PageTitle>Resumen del almacén</PageTitle>
-      <Aviso tipo="warn" className="mb-4"><b>Módulo en construcción con datos de DEMOSTRACIÓN.</b> Aquí se gestionarán los servicios de almacén que ofrece tu empresa: clasificación, staffing, inbound, outbound, almacenaje y cross-dock. Solo tu cuenta puede entrar.</Aviso>
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Recepciones (inbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{n.inb}</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Despachos (outbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{n.out}</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Personal activo</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{n.staff}</div></Card>
+      <Aviso tipo="warn" className="mb-4"><b>Módulo privado de tu cuenta.</b> Operación de staffing con Gofo (reportes, tarifas, finanzas y cheques) + servicios de almacén: clasificación, inbound, outbound, almacenaje y cross-dock.</Aviso>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Semanas importadas</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.semanas)}</div>{n?.ult && <div className="text-[11px] text-slate-400">última: {n.ult.inicio}</div>}</Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Trabajadores</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.trabajadores)}</div><div className="text-[11px] text-slate-400">perfiles únicos</div></Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Ingreso última semana</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{n ? (n.ult ? dinero(n.ult.totales?.ingresoGofo) : '—') : '…'}</div></Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Cheques por cobrar</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.chequesPend)}</div></Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Recepciones (inbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.inb)}</div></Card>
+        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Despachos (outbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.out)}</div></Card>
       </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {AREAS.map((a2) => (
+          <Card key={a2.id} className="cursor-pointer p-5 transition hover:-translate-y-0.5 hover:shadow-md" onClick={() => irA(a2.id)}>
+            <div className="mb-2 grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-brand-navy dark:bg-slate-700/50 dark:text-slate-100"><a2.icono size={19} strokeWidth={1.8} /></div>
+            <div className="mb-1 text-[15px] font-bold text-brand-navy dark:text-slate-100">{a2.t}</div>
+            <div className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">{a2.d}</div>
+          </Card>
+        ))}
+      </div>
+
       <Card className="p-5">
         <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">Por dónde empezar</div>
         <div className="flex flex-wrap gap-2">
-          <Boton variant="gold" onClick={() => irA('servicios')}>Ver los servicios que ofreces</Boton>
-          <Boton variant="ghost" onClick={() => irA('inbound')}>Registrar una recepción</Boton>
+          <Boton variant="gold" onClick={() => irA('gofo')}>Importar el reporte de Gofo</Boton>
+          <Boton variant="ghost" onClick={() => irA('tarifas')}>Configurar mis tarifas</Boton>
+          <Boton variant="ghost" onClick={() => irA('servicios')}>Ver los servicios que ofreces</Boton>
           <Boton variant="ghost" onClick={() => irA('personal')}>Armar tu plantilla</Boton>
         </div>
       </Card>

@@ -200,7 +200,7 @@ function EcomShell({ user }) {
           </div>
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 py-5">
+        <div className="max-w-full p-4 sm:p-6 lg:p-8">
         {tab === 'resumen' && <EcomResumen ctx={ctx} irA={setTab} />}
         {tab === 'catalogo' && <EcomCatalogo ctx={ctx} />}
         {tab === 'precios' && <EcomPrecios ctx={ctx} />}
