@@ -90,13 +90,20 @@ export default function WhStaffing({ user }) {
       const workersMap = Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])]))
       const pagos = calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos)
       // 2) perfiles: crear los que falten / reutilizar existentes (nunca duplicar)
+      // Los IDs de empleado (工号) de la asistencia del MISMO archivo se
+      // aplican solos: el perfil nuevo nace con su ID, el existente sin ID lo
+      // recibe, y un ID distinto al guardado se marca para revisar.
+      const idsPorNombre = {}
+      for (const x of (analisis?.idsEmpleado || [])) idsPorNombre[x.nombreNorm] = x
       const ops = []
       const nuevosWorkers = {}
       const workerIdDe = {}
+      const idsTratados = new Set()
       for (const fila of pagos) {
         if (workerIdDe[fila.nombreNorm]) continue
         const res = resolverWorker(fila.nombre, [...bd.workers, ...Object.values(nuevosWorkers)])
         workerIdDe[fila.nombreNorm] = res.id
+        const infoId = idsPorNombre[fila.nombreNorm]
         if (res.nuevo && !nuevosWorkers[res.id]) {
           nuevosWorkers[res.id] = { id: res.id, nombre: fila.nombre, nombreNorm: fila.nombreNorm, alias: [] }
           ops.push({
@@ -106,8 +113,17 @@ export default function WhStaffing({ user }) {
               nombre: fila.nombre, nombreNorm: fila.nombreNorm, alias: [],
               creadoEn: serverTimestamp(), creadoPor: user.email,
               ...(res.posibleDuplicadoDe ? { posibleDuplicadoDe: res.posibleDuplicadoDe } : {}),
+              ...(infoId ? { idEmpleado: infoId.idEmpleado, idEmpleadoFuente: `asistencia ${infoId.hoja}` } : {}),
             },
           })
+        } else if (!res.nuevo && infoId && !idsTratados.has(res.id)) {
+          idsTratados.add(res.id)
+          const w = bd.workers.find((ww) => ww.id === res.id)
+          if (w && !w.idEmpleado) {
+            ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idEmpleado: infoId.idEmpleado, idEmpleadoFuente: `asistencia ${infoId.hoja}` } })
+          } else if (w && w.idEmpleado !== infoId.idEmpleado) {
+            ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idConflicto: `${w.idEmpleado} vs ${infoId.idEmpleado} (${infoId.hoja})`, revisarId: true } })
+          }
         }
       }
       // 3) si es actualización aprobada: borrar los registros/ajustes anteriores

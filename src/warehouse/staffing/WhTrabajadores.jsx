@@ -11,7 +11,7 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner, EstadoVacio } from '../../components/ui'
-import { Users, ArrowLeft, Link2 } from 'lucide-react'
+import { Users, ArrowLeft, Link2, FileDown, Printer } from 'lucide-react'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
 import { Select } from '../../components/ui'
 import { normalizarNombre } from './parserGofo'
@@ -122,6 +122,92 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
   const emitido = cheques.filter((c) => c.estado !== 'cancelado').reduce((s, c) => s + (c.importe || 0), 0)
   const cobrado = cheques.filter((c) => c.estado === 'cobrado').reduce((s, c) => s + (c.importe || 0), 0)
 
+  const posiciones = [...new Set(regs.map((r) => r.posicion).filter(Boolean))]
+  const horasTot = Math.round(regs.reduce((s, r) => s + (r.horasTotal || 0), 0) * 100) / 100
+  const grupoNombre = w.grupoId ? (datos.grupos.find((g) => g.id === w.grupoId)?.nombre || w.grupoId) : null
+  const iniciales = (w.nombre || '?').split(/\s+/).filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase()
+
+  // ── Exportar historial completo a CSV (abre en Excel) ─────────────────────
+  const exportarCSV = () => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const enc = ['Semana inicio', 'Semana fin', 'Concepto', 'Posición', 'Agencia', 'Warehouse', 'Días trabajados', 'Horas totales', 'Horas reg', 'Horas OT', 'Mi tarifa reg', 'Mi tarifa OT', 'Pago', 'Cheque(s)']
+    const lineas = [enc.map(esc).join(',')]
+    for (const [pid, p] of porPeriodo.slice().reverse()) {
+      const chP = cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === pid))
+      const chTxt = chP.map((c) => `#${c.numeroRaw || c.numeroNorm} (${c.estado})`).join(' · ')
+      p.filas.forEach((r, i) => lineas.push([
+        r.inicio, r.fin, 'Trabajo', r.posicion, r.agencia || '', r.warehouse || '',
+        Object.values(r.dias || {}).filter((h) => (Number(h) || 0) > 0).length,
+        r.horasTotal, r.horasReg, r.horasOT, r.miTarifaReg ?? '', r.miTarifaOT ?? '', r.miPago ?? '',
+        i === 0 ? chTxt : '',
+      ].map(esc).join(',')))
+      for (const a of ajustes.filter((x) => x.periodoAplicaId === pid)) {
+        lineas.push([p.inicio, p.fin, `Ajuste: ${a.concepto}`, '', '', '', '', '', '', '', '', '', a.importe, ''].map(esc).join(','))
+      }
+    }
+    const blob = new Blob(['﻿' + lineas.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `historial_${(w.nombre || 'trabajador').replace(/\s+/g, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    auditarStaff('historial_exportado', `${w.nombre}: CSV con ${regs.length} registros`)
+  }
+
+  // ── Paystub imprimible de UNA semana (ventana lista para imprimir/PDF) ────
+  const paystub = (pid, p) => {
+    const ajP = ajustes.filter((a) => a.periodoAplicaId === pid)
+    const chP = cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === pid))
+    const subtotal = p.filas.reduce((s, r) => s + (r.miPago || 0), 0)
+    const totAj = ajP.reduce((s, a) => s + (a.importe || 0), 0)
+    const fmt = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    const filasHtml = p.filas.map((r) => `
+      <tr><td>${r.posicion || ''}</td><td class="n">${r.horasReg ?? ''}</td><td class="n">${r.horasOT ?? ''}</td>
+      <td class="n">${fmt(r.miTarifaReg)}</td><td class="n">${fmt(r.miTarifaOT)}</td><td class="n"><b>${fmt(r.miPago)}</b></td></tr>`).join('')
+    const ajHtml = ajP.map((a) => `<tr><td colspan="5">Ajuste: ${a.concepto}</td><td class="n"><b>${fmt(a.importe)}</b></td></tr>`).join('')
+    const chHtml = chP.length
+      ? `<p class="meta">Cheque(s): ${chP.map((c) => `#${c.numeroRaw || c.numeroNorm} ${fmt((c.distribucion || []).find((d) => d.periodoId === pid)?.importe)} [${c.estado}]`).join(' · ')}</p>`
+      : ''
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Paystub · ${w.nombre} · ${p.inicio}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#13233f;margin:40px;font-size:13px}
+        .cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #13233f;padding-bottom:12px;margin-bottom:16px}
+        .logo{font-size:22px;font-weight:900}.logo span{color:#b78a2e}
+        h1{font-size:16px;margin:0 0 2px}
+        .meta{color:#5b6b85;font-size:12px;margin:2px 0}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#5b6b85;text-align:left;border-bottom:1px solid #d7dce6;padding:6px 8px}
+        td{padding:7px 8px;border-bottom:1px solid #eef1f6}
+        .n{text-align:right}
+        .tot td{border-top:2px solid #13233f;border-bottom:none;font-size:15px;font-weight:900}
+        .pie{margin-top:26px;color:#8a94a6;font-size:10px;border-top:1px solid #d7dce6;padding-top:10px}
+        @media print{body{margin:16mm}}
+      </style></head><body>
+      <div class="cab">
+        <div><div class="logo">MilePay <span>· Warehouse</span></div><div class="meta">Comprobante de pago · Pay statement</div></div>
+        <div style="text-align:right"><h1>${w.nombre}</h1>
+          ${w.idEmpleado ? `<div class="meta">ID empleado: <b>${w.idEmpleado}</b></div>` : ''}
+          <div class="meta">Semana: <b>${p.inicio} → ${p.fin}</b></div>
+          ${grupoNombre ? `<div class="meta">Grupo: ${grupoNombre}</div>` : ''}
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Posición</th><th class="n">Horas reg</th><th class="n">Horas OT</th><th class="n">Tarifa reg</th><th class="n">Tarifa OT</th><th class="n">Pago</th></tr></thead>
+        <tbody>${filasHtml}${ajHtml}
+          <tr class="tot"><td colspan="5">TOTAL</td><td class="n">${fmt(subtotal + totAj)}</td></tr>
+        </tbody>
+      </table>
+      ${chHtml}
+      <p class="pie">Documento informativo generado por MilePay el ${new Date().toLocaleDateString()} · no constituye un comprobante fiscal.</p>
+      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
+      </body></html>`
+    const win = window.open('', '_blank', 'width=820,height=980')
+    if (!win) { window.alert('Tu navegador bloqueó la ventana del paystub. Permite las ventanas emergentes para milepay.io.'); return }
+    win.document.write(html)
+    win.document.close()
+    auditarStaff('paystub_generado', `${w.nombre}: ${p.inicio} → ${p.fin}`)
+  }
+
   const [nuevaExc, setNuevaExc] = useState({ posicion: '', reg: '', ot: '', desde: '' })
   const [guardando, setGuardando] = useState(false)
   const [idEmp, setIdEmp] = useState(w.idEmpleado || '')
@@ -154,7 +240,29 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
 
   return (
     <div>
-      <PageTitle right={<Boton variant="ghost" onClick={volver}><ArrowLeft size={14} /> Volver</Boton>}>{w.nombre}</PageTitle>
+      <PageTitle right={<Boton variant="ghost" onClick={volver}><ArrowLeft size={14} /> Volver</Boton>}>Perfil del trabajador</PageTitle>
+
+      {/* ── Encabezado profesional del perfil ── */}
+      <Card className="mb-4 p-5">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-brand-navy text-2xl font-black text-brand-gold">{iniciales}</div>
+          <div className="min-w-0">
+            <div className="text-xl font-black text-brand-navy dark:text-slate-100">{w.nombre}</div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {w.idEmpleado && <Badge color="navy">ID {w.idEmpleado}</Badge>}
+              {posiciones.map((pos) => <Badge key={pos} color="slate">{pos}</Badge>)}
+              {grupoNombre && <Badge color="gold">Grupo: {grupoNombre}</Badge>}
+              {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
+              {w.revisarId && <Badge color="red">ID en conflicto: {w.idConflicto}</Badge>}
+            </div>
+          </div>
+          <div className="ml-auto flex flex-col items-end gap-2">
+            <Boton variant="gold" onClick={exportarCSV}><FileDown size={14} /> Exportar historial (CSV)</Boton>
+            <span className="text-xs text-slate-400">{porPeriodo.length} semanas · {horasTot} h trabajadas</span>
+          </div>
+        </div>
+      </Card>
+
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Calculado a pagar</div><div className="text-xl font-black text-brand-navy dark:text-slate-100">{dinero(calc)}</div></Card>
         <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Cheques emitidos</div><div className="text-xl font-black text-brand-navy dark:text-slate-100">{dinero(emitido)}</div><div className="text-[11px] text-slate-400">pendiente de emitir {dinero(Math.max(0, calc - emitido))}</div></Card>
@@ -163,6 +271,54 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
       </div>
 
       {(w.alias || []).length > 0 && <div className="mb-3 text-xs text-slate-400">Alias verificados: {(w.alias || []).join(' · ')}</div>}
+
+      {/* ── Todo lo asociado: resumen por posición y cheques ── */}
+      <div className="mb-4 grid gap-3 lg:grid-cols-2">
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resumen por posición</div>
+          <table className="w-full text-xs">
+            <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+              <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Pago</th>
+            </tr></thead>
+            <tbody>
+              {Object.values(regs.reduce((m, r) => {
+                const k = r.posicion || '—'
+                m[k] = m[k] || { posicion: k, semanas: new Set(), horas: 0, pago: 0 }
+                m[k].semanas.add(r.periodoId); m[k].horas += r.horasTotal || 0; m[k].pago += r.miPago || 0
+                return m
+              }, {})).sort((a, b) => b.pago - a.pago).map((x) => (
+                <tr key={x.posicion} className="border-b border-slate-100 dark:border-slate-800">
+                  <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{x.posicion}</td>
+                  <td className="pr-2 text-right">{x.semanas.size}</td>
+                  <td className="pr-2 text-right">{Math.round(x.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right font-semibold">{dinero(Math.round(x.pago * 100) / 100)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+        <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Cheques de este trabajador ({cheques.length})</div>
+          {cheques.length === 0 && <div className="text-xs text-slate-400">Todavía no hay cheques vinculados. Se vinculan en la pestaña Cheques.</div>}
+          {cheques.length > 0 && (
+            <table className="w-full text-xs">
+              <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+                <th className="py-1 pr-2">Cheque</th><th className="pr-2 text-right">Importe</th><th className="pr-2">Estado</th><th className="pr-2">Semanas que cubre</th>
+              </tr></thead>
+              <tbody>
+                {cheques.slice().sort((a, b) => String(b.numeroNorm).localeCompare(String(a.numeroNorm))).map((c) => (
+                  <tr key={c.id} className="border-b border-slate-100 dark:border-slate-800">
+                    <td className="py-1.5 pr-2 font-mono font-semibold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</td>
+                    <td className="pr-2 text-right">{dinero(c.importe)}</td>
+                    <td className="pr-2"><Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'pendiente'}</Badge></td>
+                    <td className="pr-2 text-slate-500">{(c.distribucion || []).map((d) => `${String(d.periodoId).replace('gofo_', '').replace('_', ' → ')} (${dinero(d.importe)})`).join(' · ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
 
       <Card className="mb-4 p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Identidad y grupo de pago</div>
@@ -205,6 +361,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
               <span className="ml-auto text-xs text-slate-400">{Math.round(tot.h * 100) / 100} h · Gofo {dinero(tot.g)} · mi pago {dinero(tot.m)}</span>
+              <Boton variant="ghost" onClick={() => paystub(pid, p)}><Printer size={13} /> Paystub</Boton>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-xs">

@@ -13,7 +13,7 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../components/ui'
-import { BarChart3, Plus, Trash2 } from 'lucide-react'
+import { BarChart3, Plus, Trash2, FileDown } from 'lucide-react'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
 import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
 import { normalizarNombre, hashContenido } from './parserGofo'
@@ -24,6 +24,7 @@ const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
 export default function WhFinanzasStaff({ user }) {
   const [datos, setDatos] = useState(null)
   const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })
+  const [orden, setOrden] = useState('fecha')
   const recargar = async () => {
     const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
       cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config),
@@ -76,6 +77,41 @@ export default function WhFinanzasStaff({ user }) {
   const posiciones = [...new Set(datos.registros.map((r) => r.posicion).filter(Boolean))]
   const warehouses = [...new Set(datos.registros.map((r) => r.warehouse).filter(Boolean))]
 
+  // pares (semana, anterior cronológica) para que el orden elegido no rompa
+  // la comparación "vs semana anterior"
+  const pares = filas.map((x, i) => ({ x, ant: i > 0 ? filas[i - 1] : null }))
+  const paresOrdenados = orden === 'fecha' ? pares : [...pares].sort((a, b) => (b.x.res[orden] || 0) - (a.x.res[orden] || 0))
+
+  // totales de lo filtrado: la GANANCIA REAL (después de gastos) manda
+  const totFiltro = {
+    ingreso: filas.reduce((s, x) => s + x.res.ingreso, 0),
+    cobrado: filas.reduce((s, x) => s + x.res.cobrado, 0),
+    pagos: filas.reduce((s, x) => s + x.res.pagoCalc, 0),
+    gastos: filas.reduce((s, x) => s + x.res.gastos, 0),
+    utilidad: completos.reduce((s, x) => s + x.res.utilidad, 0),
+    horas: filas.reduce((s, x) => s + x.res.horas, 0),
+    parciales: filas.length - completos.length,
+  }
+
+  const exportarCSV = () => {
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const enc = ['Semana inicio', 'Semana fin', 'Personas', 'Horas', 'Ingreso Gofo', 'Ajustes', 'Cobrado', 'Por cobrar', 'Pagos calculados', 'Pagado real', 'Por pagar', 'Gastos', 'Margen', 'Ganancia real (después de gastos)', '% utilidad', 'Estado']
+    const lineas = [enc.map(esc).join(',')]
+    for (const { x } of pares) {
+      const r = x.res
+      lineas.push([x.p.inicio, x.p.fin, r.trabajadores, r.horas, r.ingreso, r.ajustes, r.cobrado, r.porCobrar, r.pagoCalc, r.pagado, r.porPagar, r.gastos,
+        r.parcial ? '' : r.margen, r.parcial ? '' : r.utilidad, r.pctUtilidad ?? '', r.parcial ? 'PARCIAL' : (r.porCobrar <= 0.01 ? 'cobrada' : 'por cobrar')].map(esc).join(','))
+    }
+    lineas.push(['TOTAL', '', '', totFiltro.horas, totFiltro.ingreso, '', totFiltro.cobrado, Math.max(0, totFiltro.ingreso - totFiltro.cobrado), totFiltro.pagos, '', '', totFiltro.gastos, '', totFiltro.utilidad, '', ''].map(esc).join(','))
+    const blob = new Blob(['﻿' + lineas.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'finanzas_staffing.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    auditarStaff('finanzas_exportadas', `${filas.length} semanas a CSV`)
+  }
+
   return (
     <div>
       <PageTitle>Finanzas · Warehouse / Staffing</PageTitle>
@@ -103,10 +139,36 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="cobradas">Cobradas al 100%</option>
                 <option value="pendientes">Con saldo por cobrar</option>
               </Select>
+              <Select className="w-44" value={orden} onChange={(e) => setOrden(e.target.value)}>
+                <option value="fecha">Orden: cronológico</option>
+                <option value="utilidad">Orden: mayor ganancia</option>
+                <option value="ingreso">Orden: mayor ingreso</option>
+                <option value="porCobrar">Orden: mayor saldo por cobrar</option>
+              </Select>
+              <Boton variant="ghost" onClick={exportarCSV}><FileDown size={13} /> Exportar CSV</Boton>
               {(filtro.periodo || filtro.cobro || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })}>Limpiar</Boton>}
             </div>
             {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
           </Card>
+
+          {/* Totales de lo filtrado: ganancia real primero */}
+          {!hayFiltroDetalle && filas.length > 0 && (
+            <Card className="mb-4 p-4">
+              <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Totales de las semanas mostradas ({filas.length})</div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-500/10">
+                  <div className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Ganancia real (después de gastos)</div>
+                  <div className={`text-xl font-black ${totFiltro.utilidad >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{dinero(totFiltro.utilidad)}</div>
+                  <div className="text-[10px] text-slate-400">{totFiltro.ingreso > 0 ? `${Math.round((totFiltro.utilidad / totFiltro.ingreso) * 1000) / 10}% del ingreso` : 'no aplica'}{totFiltro.parciales ? ` · sin ${totFiltro.parciales} parcial(es)` : ''}</div>
+                </div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Ingreso Gofo</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.ingreso)}</div></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Cobrado</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.cobrado)}</div><div className="text-[10px] text-slate-400">por cobrar {dinero(Math.max(0, totFiltro.ingreso - totFiltro.cobrado))}</div></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Pagos a trabajadores</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.pagos)}</div></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Gastos</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.gastos)}</div></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Horas</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{Math.round(totFiltro.horas).toLocaleString()} h</div></div>
+              </div>
+            </Card>
+          )}
 
           {!hayFiltroDetalle && completos.length > 1 && (
             <div className="mb-4 grid gap-2 text-xs sm:grid-cols-3">
@@ -118,8 +180,8 @@ export default function WhFinanzasStaff({ user }) {
 
           {!hayFiltroDetalle && <GastosFijos lista={datos.gastosFijos} user={user} recargar={recargar} />}
 
-          {filas.map((x, i) => (
-            <SemanaCard key={x.p.id} x={x} anterior={i > 0 ? filas[i - 1] : null} user={user} recargar={recargar}
+          {paresOrdenados.map(({ x, ant }) => (
+            <SemanaCard key={x.p.id} x={x} anterior={ant} user={user} recargar={recargar}
               hayFiltroDetalle={hayFiltroDetalle}
               gastos={datos.gastos.filter((g) => g.periodoId === x.p.id)}
               cobros={datos.cobros.filter((c) => c.periodoId === x.p.id)} />
