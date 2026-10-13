@@ -49,7 +49,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
   // (con o sin sufijo) sigan cayendo en el mismo perfil.
   const conSufijo = activos.filter((w) => limpiarNombrePersona(w.nombre) !== w.nombre)
   const limpiarSufijos = async () => {
-    if (!window.confirm(`¿Quitar el número sobrante del final en ${conSufijo.length} nombre(s)? El nombre original queda como alias (nada se duplica ni se pierde).`)) return
+    if (!window.confirm(`¿Limpiar ${conSufijo.length} nombre(s)? Se quitan los números y las etiquetas en chino (叉车, 分拣工, 清洁工) del final. El nombre original queda como alias (nada se duplica ni se pierde).`)) return
     const normsExistentes = new Set(activos.map((w) => w.nombreNorm))
     const ops = []
     let saltados = 0
@@ -111,9 +111,9 @@ export default function WhTrabajadores({ user, perfilInicial }) {
       )}
       {conSufijo.length > 0 && (
         <Aviso tipo="info" className="mb-4">
-          <b>{conSufijo.length} nombres traen un número sobrante del archivo</b> (p. ej. "{conSufijo[0].nombre}").
-          <Boton variant="ghost" className="ml-2" onClick={limpiarSufijos}>Quitar los números de todos</Boton>
-          <span className="ml-2 text-[11px] text-slate-400">El nombre viejo queda como alias; las importaciones nuevas ya vienen limpias.</span>
+          <b>{conSufijo.length} nombres traen sufijos del archivo</b> — números o etiquetas en chino (p. ej. "{conSufijo[0].nombre}").
+          <Boton variant="ghost" className="ml-2" onClick={limpiarSufijos}>Limpiar todos los nombres</Boton>
+          <span className="ml-2 text-[11px] text-slate-400">Quita el número y las letras chinas del final; el nombre viejo queda como alias y las importaciones nuevas ya vienen limpias.</span>
         </Aviso>
       )}
       <Card className="mb-3 p-3"><Input placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} /></Card>
