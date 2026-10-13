@@ -128,8 +128,18 @@ exports.plaidSync = onSchedule({ schedule: 'every 6 hours', secrets: SECRETS, ti
   try { await sincronizar() } catch (e) { await auditar('plaid_sync_error', e.message || String(e)) }
 })
 
-// Operaciones desde la app (solo el dueño).
+// Operaciones desde la app (solo el dueño). Los errores de Plaid se devuelven
+// con su mensaje real (si no, el cliente solo ve un "INTERNAL" inservible).
 exports.plaidOp = onCall({ secrets: SECRETS, timeoutSeconds: 120 }, async (req) => {
+  try {
+    return await operar(req)
+  } catch (e) {
+    if (e instanceof HttpsError) throw e
+    throw new HttpsError('failed-precondition', e.message || String(e))
+  }
+})
+
+async function operar(req) {
   const email = String(req.auth?.token?.email || '').toLowerCase()
   if (email !== DUENO) throw new HttpsError('permission-denied', 'Solo el dueño puede operar Plaid.')
   const { op, entorno = 'production', publicToken } = req.data || {}
@@ -181,4 +191,4 @@ exports.plaidOp = onCall({ secrets: SECRETS, timeoutSeconds: 120 }, async (req) 
   }
 
   throw new HttpsError('invalid-argument', 'Operación desconocida.')
-})
+}
