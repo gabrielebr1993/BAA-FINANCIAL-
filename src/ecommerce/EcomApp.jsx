@@ -150,7 +150,7 @@ function EcomShell({ user }) {
             const Icono = tdef.icono
             return (
               <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? 'bg-brand-navy text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                 <Icono size={14} /> {tdef.label}
               </button>
             )

@@ -74,7 +74,7 @@ export default function PortalLayout({ icon: Icon, titulo, subtitulo, empresa, i
             <button
               key={i.k} onClick={() => { onSelect?.(i.k); if (window.innerWidth < 768) setMenuAbierto(false) }}
               className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${activo === i.k
-                ? 'bg-amber-500/15 font-semibold text-amber-700 before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-500 dark:text-amber-300'
+                ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
                 : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
             >
               {i.icon && <i.icon size={17} strokeWidth={1.9} />} {i.label}

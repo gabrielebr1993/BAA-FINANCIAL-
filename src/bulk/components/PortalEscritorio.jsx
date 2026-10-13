@@ -41,7 +41,7 @@ export default function PortalEscritorio({ tabs = [], activo, onSelect, usuario,
           const Icon = tb.icon
           return (
             <button key={tb.k} type="button" onClick={() => onSelect?.(tb.k)}
-              className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${on ? 'bg-amber-500/15 font-semibold text-amber-700 before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-500' : 'font-medium text-slate-600 hover:bg-slate-100'}`}>
+              className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${on ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100'}`}>
               {Icon && <Icon size={17} strokeWidth={1.9} />} {tb.label}
               {tb.badge > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{tb.badge > 99 ? '99+' : tb.badge}</span>}
             </button>

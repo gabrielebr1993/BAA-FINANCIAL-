@@ -100,7 +100,7 @@ export default function BulkLayout({ children }) {
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {items.map((i) => (
             <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
-              className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-amber-500/15 font-semibold text-amber-700 before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-amber-500 dark:text-amber-300' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
               <i.icon size={17} strokeWidth={1.9} /> {t(i.label)}
               {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
             </NavLink>
