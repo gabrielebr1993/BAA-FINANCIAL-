@@ -14,7 +14,12 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Sparkles } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Sparkles, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote } from 'lucide-react'
+import WhStaffing from './staffing/WhStaffing'
+import WhTrabajadores from './staffing/WhTrabajadores'
+import WhTarifas from './staffing/WhTarifas'
+import WhFinanzasStaff from './staffing/WhFinanzasStaff'
+import WhCheques from './staffing/WhCheques'
 
 async function auditarWh(accion, detalle) {
   try {
@@ -57,6 +62,11 @@ const SERVICIOS = [
 
 const TABS = [
   { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
+  { id: 'gofo', label: 'Staffing Gofo', icono: FileSpreadsheet },
+  { id: 'trabajadores', label: 'Trabajadores', icono: UserRound },
+  { id: 'tarifas', label: 'Mis tarifas', icono: DollarSign },
+  { id: 'finanzas', label: 'Finanzas', icono: BarChart3 },
+  { id: 'cheques', label: 'Cheques', icono: Banknote },
   { id: 'servicios', label: 'Servicios', icono: Boxes },
   { id: 'inbound', label: 'Inbound', icono: ArrowDownToLine },
   { id: 'outbound', label: 'Outbound', icono: ArrowUpFromLine },
@@ -187,6 +197,11 @@ function WhShell({ user }) {
         </div>
         <div className="mx-auto max-w-7xl px-4 py-5">
         {tab === 'resumen' && <WhResumen irA={setTab} />}
+        {tab === 'gofo' && <WhStaffing user={user} />}
+        {tab === 'trabajadores' && <WhTrabajadores user={user} />}
+        {tab === 'tarifas' && <WhTarifas user={user} />}
+        {tab === 'finanzas' && <WhFinanzasStaff user={user} />}
+        {tab === 'cheques' && <WhCheques user={user} />}
         {tab === 'servicios' && <WhServicios />}
         {tab === 'inbound' && <WhTabla col="wh_inbound" titulo="Inbound (recepciones)" estados={ESTADOS_IN} demo={DEMO_IN}
           campos={[['ref', 'Referencia'], ['cliente', 'Cliente / marca'], ['tipo', 'Tipo (cajas/pallets/paquetes)'], ['unidades', 'Unidades'], ['notas', 'Notas']]} />}

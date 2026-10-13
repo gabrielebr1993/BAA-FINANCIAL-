@@ -759,5 +759,12 @@ service cloud.firestore {
     match /wh_outbound/{id} { allow read, write: if esDuenoEcom(); }
     match /wh_staff/{id}    { allow read, write: if esDuenoEcom(); }
     match /wh_audit/{id}    { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
+    // Staffing Gofo + cheques: candado genérico para TODA colección wh_*
+    // (wh_staff_periodos, wh_staff_registros, wh_staff_ajustes, wh_staff_tarifas,
+    //  wh_staff_gastos, wh_staff_cobros, wh_staff_config, wh_workers,
+    //  wh_cheques, wh_cheques_banco). Solo el dueño verificado.
+    match /{coleccionWh}/{id} {
+      allow read, write: if coleccionWh.matches('wh_.*') && coleccionWh != 'wh_audit' && esDuenoEcom();
+    }
   }
 }

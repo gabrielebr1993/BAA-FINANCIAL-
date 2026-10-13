@@ -1,0 +1,218 @@
+// ============================================================================
+// WAREHOUSE / STAFFING · Finanzas: comparación semanal.
+//
+// Por semana: ingreso reconocido por Gofo (con ajustes), dinero cobrado,
+// pagos calculados, dinero efectivamente pagado (cheques cobrados), gastos,
+// margen, utilidad operativa y %, saldos por cobrar/pagar, personas y horas.
+// · Mejor/peor semana por ingreso, cobro real y utilidad.
+// · Variación vs semana anterior en $ y % + qué la explica (horas, tarifas,
+//   gastos). · Filtros por período, persona, posición y warehouse.
+// · Los períodos con tarifas pendientes se marcan PARCIALES para no comparar
+//   contra números incompletos. Rentabilidad ≠ flujo de caja: se muestran
+//   ambos por separado.
+// ============================================================================
+import { useEffect, useMemo, useState } from 'react'
+import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../components/ui'
+import { BarChart3, Plus, Trash2 } from 'lucide-react'
+import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
+import { resumenPeriodo } from './calculosStaff'
+import { normalizarNombre, hashContenido } from './parserGofo'
+
+const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
+
+export default function WhFinanzasStaff({ user }) {
+  const [datos, setDatos] = useState(null)
+  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '' })
+  const recargar = async () => {
+    const [periodos, registros, ajustes, gastos, cobros, cheques] = await Promise.all([
+      cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques),
+    ])
+    setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques })
+  }
+  useEffect(() => { recargar() }, [])
+
+  const filas = useMemo(() => {
+    if (!datos) return []
+    const hayFiltroDetalle = filtro.persona || filtro.posicion || filtro.warehouse
+    return datos.periodos
+      .filter((p) => !filtro.periodo || p.id === filtro.periodo)
+      .map((p) => {
+        let regs = datos.registros.filter((r) => r.periodoId === p.id)
+        if (filtro.persona) regs = regs.filter((r) => r.nombreNorm.includes(normalizarNombre(filtro.persona)))
+        if (filtro.posicion) regs = regs.filter((r) => r.posicion === filtro.posicion)
+        if (filtro.warehouse) regs = regs.filter((r) => r.warehouse === filtro.warehouse)
+        const res = resumenPeriodo({
+          registros: regs,
+          ajustes: hayFiltroDetalle ? [] : datos.ajustes.filter((a) => a.periodoAplicaId === p.id && a.estado !== 'revision'),
+          gastos: hayFiltroDetalle ? [] : datos.gastos.filter((g) => g.periodoId === p.id),
+          cobros: hayFiltroDetalle ? [] : datos.cobros.filter((c) => c.periodoId === p.id),
+          cheques: hayFiltroDetalle ? [] : datos.cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === p.id)),
+        })
+        return { p, res, regs }
+      })
+      .filter((x) => x.regs.length > 0)
+  }, [datos, filtro])
+
+  if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando finanzas…</div>
+
+  const completos = filas.filter((x) => !x.res.parcial)
+  const extremo = (campo, fn) => {
+    if (!completos.length) return null
+    return completos.reduce((m, x) => (fn(x.res[campo], m.res[campo]) ? x : m), completos[0])
+  }
+  const mayor = (c) => extremo(c, (a, b) => a > b)
+  const menor = (c) => extremo(c, (a, b) => a < b)
+  const hayFiltroDetalle = filtro.persona || filtro.posicion || filtro.warehouse
+
+  const posiciones = [...new Set(datos.registros.map((r) => r.posicion).filter(Boolean))]
+  const warehouses = [...new Set(datos.registros.map((r) => r.warehouse).filter(Boolean))]
+
+  return (
+    <div>
+      <PageTitle>Finanzas · Warehouse / Staffing</PageTitle>
+      {datos.periodos.length === 0 && <EstadoVacio icono={BarChart3} titulo="Sin períodos importados" texto="Importa semanas de Gofo para ver la comparación." mostrarBoton={false} />}
+
+      {datos.periodos.length > 0 && (
+        <>
+          <Card className="mb-4 p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Select className="w-52" value={filtro.periodo} onChange={(e) => setFiltro({ ...filtro, periodo: e.target.value })}>
+                <option value="">Todos los períodos</option>
+                {datos.periodos.map((p) => <option key={p.id} value={p.id}>{p.inicio} → {p.fin}</option>)}
+              </Select>
+              <Input className="w-44" placeholder="Persona…" value={filtro.persona} onChange={(e) => setFiltro({ ...filtro, persona: e.target.value })} />
+              <Select className="w-40" value={filtro.posicion} onChange={(e) => setFiltro({ ...filtro, posicion: e.target.value })}>
+                <option value="">Todas las posiciones</option>
+                {posiciones.map((x) => <option key={x}>{x}</option>)}
+              </Select>
+              <Select className="w-40" value={filtro.warehouse} onChange={(e) => setFiltro({ ...filtro, warehouse: e.target.value })}>
+                <option value="">Todos los warehouses</option>
+                {warehouses.map((x) => <option key={x}>{x}</option>)}
+              </Select>
+              {(filtro.periodo || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '' })}>Limpiar</Boton>}
+            </div>
+            {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
+          </Card>
+
+          {!hayFiltroDetalle && completos.length > 1 && (
+            <div className="mb-4 grid gap-2 text-xs sm:grid-cols-3">
+              <Card className="p-3"><b className="text-brand-navy dark:text-slate-100">Ingreso</b><div>Mayor: {mayor('ingreso')?.p.inicio} ({dinero(mayor('ingreso')?.res.ingreso)})</div><div>Menor: {menor('ingreso')?.p.inicio} ({dinero(menor('ingreso')?.res.ingreso)})</div></Card>
+              <Card className="p-3"><b className="text-brand-navy dark:text-slate-100">Cobro real</b><div>Mayor: {mayor('cobrado')?.p.inicio} ({dinero(mayor('cobrado')?.res.cobrado)})</div><div>Menor: {menor('cobrado')?.p.inicio} ({dinero(menor('cobrado')?.res.cobrado)})</div></Card>
+              <Card className="p-3"><b className="text-brand-navy dark:text-slate-100">Utilidad</b><div>Mayor: {mayor('utilidad')?.p.inicio} ({dinero(mayor('utilidad')?.res.utilidad)})</div><div>Menor: {menor('utilidad')?.p.inicio} ({dinero(menor('utilidad')?.res.utilidad)})</div></Card>
+            </div>
+          )}
+
+          {filas.map((x, i) => (
+            <SemanaCard key={x.p.id} x={x} anterior={i > 0 ? filas[i - 1] : null} user={user} recargar={recargar}
+              hayFiltroDetalle={hayFiltroDetalle}
+              gastos={datos.gastos.filter((g) => g.periodoId === x.p.id)}
+              cobros={datos.cobros.filter((c) => c.periodoId === x.p.id)} />
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+function Delta({ ahora, antes, formato }) {
+  if (antes === null || antes === undefined || ahora === null || ahora === undefined) return null
+  const d = Math.round((ahora - antes) * 100) / 100
+  const p = antes !== 0 ? Math.round((d / Math.abs(antes)) * 1000) / 10 : null
+  const color = d > 0 ? 'text-emerald-600' : d < 0 ? 'text-rose-500' : 'text-slate-400'
+  return <span className={`ml-1 text-[10px] font-bold ${color}`}>{d >= 0 ? '+' : ''}{formato ? formato(d) : d}{p !== null ? ` (${p >= 0 ? '+' : ''}${p}%)` : ''}</span>
+}
+
+function SemanaCard({ x, anterior, user, recargar, hayFiltroDetalle, gastos, cobros }) {
+  const { p, res, regs } = x
+  const ant = anterior && !hayFiltroDetalle ? anterior.res : null
+  const [nuevoGasto, setNuevoGasto] = useState({ concepto: '', importe: '' })
+  const [nuevoCobro, setNuevoCobro] = useState({ fecha: '', importe: '' })
+  const [guardando, setGuardando] = useState('')
+
+  const agregarGasto = async () => {
+    if (!nuevoGasto.concepto || !nuevoGasto.importe) return
+    setGuardando('gasto')
+    try {
+      const id = `${p.id}__g_${hashContenido(nuevoGasto.concepto + Date.now())}`
+      await setDoc(refDoc(COL.gastos, id), { periodoId: p.id, concepto: nuevoGasto.concepto, importe: Number(nuevoGasto.importe), creadoPor: user.email, creadoEn: new Date().toISOString() })
+      await auditarStaff('gasto_agregado', `${p.id}: ${nuevoGasto.concepto} ${nuevoGasto.importe}`)
+      setNuevoGasto({ concepto: '', importe: '' })
+      recargar()
+    } finally { setGuardando('') }
+  }
+  const quitarGasto = async (g) => {
+    setGuardando('gasto')
+    try {
+      await escribirEnLotes([{ ref: refDoc(COL.gastos, g.id), borrar: true }])
+      await auditarStaff('gasto_eliminado', `${p.id}: ${g.concepto} ${g.importe}`)
+      recargar()
+    } finally { setGuardando('') }
+  }
+  const agregarCobro = async () => {
+    if (!nuevoCobro.importe) return
+    setGuardando('cobro')
+    try {
+      const id = `${p.id}__c_${hashContenido((nuevoCobro.fecha || '') + nuevoCobro.importe + Date.now())}`
+      await setDoc(refDoc(COL.cobros, id), { periodoId: p.id, fecha: nuevoCobro.fecha || null, importe: Number(nuevoCobro.importe), creadoPor: user.email, creadoEn: new Date().toISOString() })
+      await auditarStaff('cobro_registrado', `${p.id}: ${dinero(Number(nuevoCobro.importe))} recibido de Gofo`)
+      setNuevoCobro({ fecha: '', importe: '' })
+      recargar()
+    } finally { setGuardando('') }
+  }
+
+  // qué explica la diferencia vs semana anterior
+  const explicacion = []
+  if (ant && anterior) {
+    const dHoras = Math.round((res.horas - ant.horas) * 100) / 100
+    if (Math.abs(dHoras) > 0.01) explicacion.push(`${dHoras > 0 ? '+' : ''}${dHoras} horas`)
+    const tarifaProm = (rr) => { const conT = rr.filter((r) => r.miTarifaReg); return conT.length ? conT.reduce((s, r) => s + r.miTarifaReg, 0) / conT.length : null }
+    const tAhora = tarifaProm(regs), tAntes = tarifaProm(anterior.regs)
+    if (tAhora && tAntes && Math.abs(tAhora - tAntes) > 0.01) explicacion.push(`tarifa media ${dinero(tAntes)} → ${dinero(tAhora)}`)
+    const dGastos = Math.round((res.gastos - ant.gastos) * 100) / 100
+    if (Math.abs(dGastos) > 0.01) explicacion.push(`gastos ${dGastos > 0 ? '+' : ''}${dinero(dGastos)}`)
+    const dPers = res.trabajadores - ant.trabajadores
+    if (dPers !== 0) explicacion.push(`${dPers > 0 ? '+' : ''}${dPers} personas`)
+  }
+
+  return (
+    <Card className="mb-3 p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
+        {res.parcial && <Badge color="red">PARCIAL: {res.pendientesTarifa} registros sin tarifa</Badge>}
+        <span className="ml-auto text-xs text-slate-400">{res.trabajadores} personas · {res.horas} h</span>
+      </div>
+      <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-5">
+        <div><div className="text-[10px] font-bold uppercase text-slate-400">Ingreso Gofo{res.ajustes ? ` (ajustes ${dinero(res.ajustes)})` : ''}</div><div className="text-base font-black text-brand-navy dark:text-slate-100">{dinero(res.ingreso)}<Delta ahora={res.ingreso} antes={ant?.ingreso} formato={dinero} /></div><div className="text-slate-400">cobrado {dinero(res.cobrado)}<Delta ahora={res.cobrado} antes={ant?.cobrado} formato={dinero} /> · por cobrar {dinero(res.porCobrar)}</div></div>
+        <div><div className="text-[10px] font-bold uppercase text-slate-400">Pagos calculados</div><div className="text-base font-black text-brand-navy dark:text-slate-100">{dinero(res.pagoCalc)}<Delta ahora={res.pagoCalc} antes={ant?.pagoCalc} formato={dinero} /></div><div className="text-slate-400">pagado real {dinero(res.pagado)} · por pagar {dinero(res.porPagar)}</div></div>
+        <div><div className="text-[10px] font-bold uppercase text-slate-400">Gastos</div><div className="text-base font-black text-brand-navy dark:text-slate-100">{dinero(res.gastos)}<Delta ahora={res.gastos} antes={ant?.gastos} formato={dinero} /></div></div>
+        <div><div className="text-[10px] font-bold uppercase text-slate-400">Margen antes de gastos</div><div className="text-base font-black text-brand-navy dark:text-slate-100">{res.parcial ? 'pendiente' : dinero(res.margen)}</div></div>
+        <div><div className="text-[10px] font-bold uppercase text-slate-400">Utilidad operativa</div><div className={`text-base font-black ${res.utilidad >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{res.parcial ? 'pendiente' : dinero(res.utilidad)}{!res.parcial && <Delta ahora={res.utilidad} antes={ant?.utilidad} formato={dinero} />}</div><div className="text-slate-400">{res.parcial ? 'faltan tarifas' : pct(res.pctUtilidad)}</div></div>
+      </div>
+      {explicacion.length > 0 && <div className="mt-2 text-[11px] text-slate-500">Qué cambió vs la semana anterior: {explicacion.join(' · ')}</div>}
+
+      {!hayFiltroDetalle && (
+        <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 text-xs md:grid-cols-2 dark:border-slate-800">
+          <div>
+            <div className="mb-1 font-bold text-slate-500">Gastos del período (supervisión, admin, seguros, cargas de nómina…)</div>
+            {gastos.map((g) => <div key={g.id} className="flex items-center gap-2"><span>{g.concepto}</span><b>{dinero(g.importe)}</b><button className="text-rose-400 hover:text-rose-600" onClick={() => quitarGasto(g)} title="Eliminar"><Trash2 size={12} /></button></div>)}
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Input className="w-44" placeholder="Concepto" value={nuevoGasto.concepto} onChange={(e) => setNuevoGasto({ ...nuevoGasto, concepto: e.target.value })} />
+              <Input className="w-28" type="number" step="0.01" placeholder="$" value={nuevoGasto.importe} onChange={(e) => setNuevoGasto({ ...nuevoGasto, importe: e.target.value })} />
+              <Boton variant="ghost" disabled={guardando === 'gasto'} onClick={agregarGasto}><Plus size={13} /> Gasto</Boton>
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 font-bold text-slate-500">Dinero recibido de Gofo (flujo de caja, separado de lo reconocido)</div>
+            {cobros.map((c) => <div key={c.id} className="flex items-center gap-2"><span>{c.fecha || 'sin fecha'}</span><b>{dinero(c.importe)}</b></div>)}
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Input className="w-36" type="date" value={nuevoCobro.fecha} onChange={(e) => setNuevoCobro({ ...nuevoCobro, fecha: e.target.value })} />
+              <Input className="w-28" type="number" step="0.01" placeholder="$" value={nuevoCobro.importe} onChange={(e) => setNuevoCobro({ ...nuevoCobro, importe: e.target.value })} />
+              <Boton variant="ghost" disabled={guardando === 'cobro'} onClick={agregarCobro}><Plus size={13} /> Cobro</Boton>
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
