@@ -124,6 +124,14 @@ function WhShell({ user }) {
     setTabEstado(id)
     try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
   }
+  // "abrir el perfil de este trabajador" desde cualquier pestaña (p. ej. al
+  // tocar un nombre en Print Check): evento global → pestaña Trabajadores.
+  const [perfilPedido, setPerfilPedido] = useState(null)
+  useEffect(() => {
+    const h = (e) => { if (e.detail) { setPerfilPedido({ id: e.detail, t: Date.now() }); setTab('trabajadores') } }
+    window.addEventListener('wh-abrir-perfil', h)
+    return () => window.removeEventListener('wh-abrir-perfil', h)
+  }, [])
   return (
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
       {/* ── MENÚ LATERAL en escritorio: mismo estilo que el módulo de
@@ -197,7 +205,7 @@ function WhShell({ user }) {
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
         {tab === 'gofo' && <WhStaffing user={user} />}
-        {tab === 'trabajadores' && <WhTrabajadores user={user} />}
+        {tab === 'trabajadores' && <WhTrabajadores user={user} perfilInicial={perfilPedido} />}
         {tab === 'tarifas' && <WhTarifas user={user} />}
         {tab === 'finanzas' && <WhFinanzasStaff user={user} />}
         {tab === 'cheques' && <WhCheques user={user} />}

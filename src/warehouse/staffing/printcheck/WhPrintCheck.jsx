@@ -27,6 +27,8 @@ import { htmlLote, POS_BASE, ETIQUETAS_POS } from './plantillaBA'
 const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', firmasPend: 'wh_pc_firmas_pend', config: 'wh_pc_config' }
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const hoyISO = () => new Date().toISOString().slice(0, 10)
+// abre el perfil del trabajador (pestaña Trabajadores) desde cualquier parte
+const abrirPerfil = (workerId) => { if (workerId) window.dispatchEvent(new CustomEvent('wh-abrir-perfil', { detail: workerId })) }
 
 export default function WhPrintCheck({ user }) {
   const [sub, setSub] = useState('panel')
@@ -375,7 +377,7 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
               <tbody>{plan.map((f) => (
                 <tr key={f.workerId || f.nombre} className={`border-b border-slate-100 dark:border-slate-800 ${!f.elegible ? 'opacity-50' : ''}`}>
                   <td className="py-1 pr-2">{f.elegible && <input type="checkbox" checked={!!sel[f.workerId || f.nombre]} onChange={(e) => setSel({ ...sel, [f.workerId || f.nombre]: e.target.checked })} />}</td>
-                  <td className="pr-2 font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</td>
+                  <td className="pr-2 font-semibold text-brand-navy dark:text-slate-100">{f.workerId ? <button className="hover:underline" title="Abrir su perfil" onClick={() => abrirPerfil(f.workerId)}>{f.nombre}</button> : f.nombre}</td>
                   <td className="pr-2 font-mono">{f.idEmpleado || '—'}</td>
                   <td className="pr-2 text-right">{Math.round(f.horas * 100) / 100}</td>
                   <td className="pr-2 text-right font-semibold">{dinero(f.neto)}</td>
@@ -599,7 +601,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
               {(c.estado !== 'cobrado' || c.origen === 'historico') && <input type="checkbox" checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} onClick={(e) => e.stopPropagation()} />}
               <button className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700" title="Ver ficha completa" onClick={() => setFichaId(c.id)}><Eye size={15} /></button>
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
-              <span className="font-semibold">{c.beneficiario || '—'}</span>
+              {c.workerId ? <button className="font-semibold hover:underline" title="Abrir su perfil" onClick={() => abrirPerfil(c.workerId)}>{c.beneficiario}</button> : <span className="font-semibold">{c.beneficiario || '—'}</span>}
               <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
               {c.origen === 'historico' && <Badge color="slate">histórico</Badge>}
               <span className="text-slate-400">{c.fecha || ''} {c.banco ? `· ${c.banco}` : ''} {c.loteId ? `· ${c.loteId}` : ''}</span>
@@ -713,7 +715,7 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
           </div>
           <div className="space-y-3">
             <Card className="p-3">
-              <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{c.beneficiario || '—'}</div>
+              <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{c.workerId ? <button className="hover:underline" title="Abrir su perfil" onClick={() => { cerrar(); abrirPerfil(c.workerId) }}>{c.beneficiario}</button> : (c.beneficiario || '—')}</div>
               {c.idEmpleado && <Badge color="navy">ID {c.idEmpleado}</Badge>}
               <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
                 <div><div className="text-[10px] font-bold uppercase text-slate-400">Este mes</div><b>{dinero(mes)}</b></div>

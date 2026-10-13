@@ -14,15 +14,16 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner, EstadoVacio } fro
 import { Users, ArrowLeft, Link2, FileDown, Printer } from 'lucide-react'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
 import { Select } from '../../components/ui'
-import { normalizarNombre } from './parserGofo'
+import { normalizarNombre, limpiarNombrePersona } from './parserGofo'
 import { htmlLote } from './printcheck/plantillaBA'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
-export default function WhTrabajadores({ user }) {
+export default function WhTrabajadores({ user, perfilInicial }) {
   const [datos, setDatos] = useState(null)
   const [buscar, setBuscar] = useState('')
-  const [sel, setSel] = useState(null)
+  const [sel, setSel] = useState(perfilInicial?.id || null)
+  useEffect(() => { if (perfilInicial?.id) setSel(perfilInicial.id) }, [perfilInicial])
   const recargar = async () => {
     const [workers, registros, ajustes, cheques, grupos, pcCuentas, pcFirmas, pcConfig] = await Promise.all([
       cargar(COL.workers), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.cheques), cargar(COL.grupos),
@@ -42,6 +43,28 @@ export default function WhTrabajadores({ user }) {
 
   const activos = datos.workers.filter((w) => !w.fusionadoEn)
   const duplicados = activos.filter((w) => w.posibleDuplicadoDe && datos.workers.some((x) => x.id === w.posibleDuplicadoDe))
+
+  // Nombres con sufijo numérico del archivo ("Alberto Leon 3"): limpieza en
+  // un clic — el nombre viejo queda como ALIAS para que futuras importaciones
+  // (con o sin sufijo) sigan cayendo en el mismo perfil.
+  const conSufijo = activos.filter((w) => limpiarNombrePersona(w.nombre) !== w.nombre)
+  const limpiarSufijos = async () => {
+    if (!window.confirm(`¿Quitar el número sobrante del final en ${conSufijo.length} nombre(s)? El nombre original queda como alias (nada se duplica ni se pierde).`)) return
+    const normsExistentes = new Set(activos.map((w) => w.nombreNorm))
+    const ops = []
+    let saltados = 0
+    for (const w of conSufijo) {
+      const limpio = limpiarNombrePersona(w.nombre)
+      const normLimpio = normalizarNombre(limpio)
+      // si YA existe otro perfil con el nombre limpio, no se toca (revisión manual)
+      if (normLimpio !== w.nombreNorm && normsExistentes.has(normLimpio)) { saltados++; continue }
+      ops.push({ ref: refDoc(COL.workers, w.id), merge: true, data: { nombre: limpio, nombreNorm: normLimpio, alias: arrayUnion(w.nombreNorm) } })
+      normsExistentes.add(normLimpio)
+    }
+    if (ops.length) await escribirEnLotes(ops)
+    await auditarStaff('workers_sufijos_limpiados', `${ops.length} nombres limpiados${saltados ? `, ${saltados} saltados por coincidir con otro perfil` : ''}`)
+    recargar()
+  }
 
   if (sel) {
     const w = datos.workers.find((x) => x.id === sel)
@@ -84,6 +107,13 @@ export default function WhTrabajadores({ user }) {
               )
             })}
           </div>
+        </Aviso>
+      )}
+      {conSufijo.length > 0 && (
+        <Aviso tipo="info" className="mb-4">
+          <b>{conSufijo.length} nombres traen un número sobrante del archivo</b> (p. ej. "{conSufijo[0].nombre}").
+          <Boton variant="ghost" className="ml-2" onClick={limpiarSufijos}>Quitar los números de todos</Boton>
+          <span className="ml-2 text-[11px] text-slate-400">El nombre viejo queda como alias; las importaciones nuevas ya vienen limpias.</span>
         </Aviso>
       )}
       <Card className="mb-3 p-3"><Input placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} /></Card>

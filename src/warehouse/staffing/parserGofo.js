@@ -62,6 +62,14 @@ export const POSICIONES_BASE = {
   '叉车工': 'Forklift',
   '清洁工': 'Cleaner',
 }
+// El reporte de Gofo agrega sufijos numéricos al nombre ("Alberto Leon 3"):
+// son artefactos del archivo (turno/almacén), no parte del nombre. Se quitan
+// SIEMPRE al importar; la migración en Trabajadores conserva el nombre viejo
+// como alias para que nada se duplique.
+export function limpiarNombrePersona(raw) {
+  return String(raw || '').trim().replace(/\s+#?\d{1,3}$/, '').trim()
+}
+
 export function mapearPosicion(raw, mapa) {
   const texto = String(raw || '').trim()
   if (!texto) return ''
@@ -543,10 +551,11 @@ export function analizarHoja(hoja, nombre, opciones) {
     }
 
     const r2 = (x) => (x === null || x === undefined ? x : Math.round(x * 100) / 100)
+    const nombreLimpio = limpiarNombrePersona(nombreRaw)
     filas.push({
       fila: f + 1,
-      nombre: nombreRaw,
-      nombreNorm: normalizarNombre(nombreRaw),
+      nombre: nombreLimpio,
+      nombreNorm: normalizarNombre(nombreLimpio),
       estado: textoCelda(hoja, cols.estado, f),
       agencia: textoCelda(hoja, cols.agencia, f),
       posicionRaw: textoCelda(hoja, cols.posicion, f),
@@ -683,7 +692,7 @@ export function extraerAsistencia(hoja) {
     if (cId < 0 || cNombre < 0) continue
     const ids = new Map()
     for (let ff = f + 1; ff <= f2; ff++) {
-      const nombreRaw = textoCelda(hoja, cNombre, ff)
+      const nombreRaw = limpiarNombrePersona(textoCelda(hoja, cNombre, ff))
       const id = textoCelda(hoja, cId, ff)
       if (!nombreRaw || !id) continue
       const norm = normalizarNombre(nombreRaw)

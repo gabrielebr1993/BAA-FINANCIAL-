@@ -85,6 +85,8 @@ export function planearLote({ periodoId, registros, ajustes, cheques, workers })
     const w = x.workerId ? mapaW[x.workerId] : null
     return {
       ...x,
+      // el nombre del PERFIL manda (ya limpio de sufijos del archivo)
+      nombre: (w && w.nombre) || x.nombre,
       neto: r2(x.neto),
       idEmpleado: w?.idEmpleado || null,
       yaTiene: existente ? (existente.numeroRaw || existente.numeroNorm) : null,
