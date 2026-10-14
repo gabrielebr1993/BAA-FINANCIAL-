@@ -45,6 +45,11 @@ function rangoHoja(hoja) {
 export function normalizarNombre(s) {
   return String(s || '').trim().replace(/\s+/g, ' ').toUpperCase()
 }
+// Para BUSCAR: sin acentos ni mayúsculas ("maria" encuentra "María").
+// Solo para comparar en filtros; nunca cambia lo guardado.
+export function paraBuscar(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim()
+}
 export function hashContenido(obj) {
   const s = typeof obj === 'string' ? obj : JSON.stringify(obj)
   let h1 = 5381, h2 = 52711

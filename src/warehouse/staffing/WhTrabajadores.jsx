@@ -14,8 +14,9 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner, EstadoVacio } fro
 import { Users, ArrowLeft, Link2, FileDown, Printer } from 'lucide-react'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
 import { Select } from '../../components/ui'
-import { normalizarNombre, limpiarNombrePersona } from './parserGofo'
+import { normalizarNombre, limpiarNombrePersona, paraBuscar } from './parserGofo'
 import { htmlLote } from './printcheck/plantillaBA'
+import { generarPdfLote } from './printcheck/pdfLote'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
@@ -23,6 +24,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
   const [datos, setDatos] = useState(null)
   const [buscar, setBuscar] = useState('')
   const [nuevaExterna, setNuevaExterna] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('todos') // todos|activos|inactivos|externos
   const [sel, setSel] = useState(perfilInicial?.id || null)
   useEffect(() => { if (perfilInicial?.id) setSel(perfilInicial.id) }, [perfilInicial])
   const recargar = async () => {
@@ -97,6 +99,9 @@ export default function WhTrabajadores({ user, perfilInicial }) {
     return <PerfilWorker w={w} datos={datos} user={user} volver={() => setSel(null)} recargar={recargar} />
   }
 
+  // ACTIVO = trabajó en la última semana importada; INACTIVO = tiene historial
+  // pero no apareció en esa última semana; EXTERNA = perfil manual sin Gofo.
+  const ultimoPeriodoId = datos.registros.reduce((m, r) => (String(r.inicio || '') > String(m.inicio || '') ? r : m), {}).periodoId || null
   const lista = activos
     .map((w) => {
       const regs = datos.registros.filter((r) => r.workerId === w.id)
@@ -110,10 +115,19 @@ export default function WhTrabajadores({ user, perfilInicial }) {
         : cobradoCheques >= calc - 0.01 ? { color: 'green', texto: 'pagado' }
         : emitido >= calc - 0.01 ? { color: 'gold', texto: 'cheque en tránsito' }
         : { color: 'red', texto: `por pagar $${(Math.round((calc - emitido) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
-      return { w, periodos: new Set(regs.map((r) => r.periodoId)).size, horas: regs.reduce((s, r) => s + (r.horasTotal || 0), 0), calc, cobradoCheques, estadoPago }
+      const enUltima = !!ultimoPeriodoId && regs.some((r) => r.periodoId === ultimoPeriodoId)
+      const tipo = w.externo ? 'externos' : enUltima ? 'activos' : regs.length ? 'inactivos' : 'externos'
+      return { w, tipo, periodos: new Set(regs.map((r) => r.periodoId)).size, horas: regs.reduce((s, r) => s + (r.horasTotal || 0), 0), calc, cobradoCheques, estadoPago }
     })
-    .filter((x) => !buscar || x.w.nombreNorm.includes(normalizarNombre(buscar)))
+    .filter((x) => !buscar || paraBuscar(x.w.nombre + ' ' + (x.w.alias || []).join(' ')).includes(paraBuscar(buscar)))
+    .filter((x) => filtroTipo === 'todos' || x.tipo === filtroTipo)
     .sort((a, b) => b.horas - a.horas)
+  const todas = activos.map((w) => {
+    const regs = datos.registros.filter((r) => r.workerId === w.id)
+    const enUltima = !!ultimoPeriodoId && regs.some((r) => r.periodoId === ultimoPeriodoId)
+    return w.externo ? 'externos' : enUltima ? 'activos' : regs.length ? 'inactivos' : 'externos'
+  })
+  const nTipo = (t) => todas.filter((x) => x === t).length
 
   return (
     <div>
@@ -142,6 +156,18 @@ export default function WhTrabajadores({ user, perfilInicial }) {
           <span className="ml-2 text-[11px] text-slate-400">Quita el número y las letras chinas del final; el nombre viejo queda como alias y las importaciones nuevas ya vienen limpias.</span>
         </Aviso>
       )}
+      {/* Mini-dashboard de la plantilla: clic en una tarjeta filtra la lista */}
+      <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[['todos', 'Perfiles totales', activos.length, 'text-brand-navy dark:text-slate-100'],
+          ['activos', 'Activos (última semana)', nTipo('activos'), 'text-emerald-600'],
+          ['inactivos', 'Inactivos', nTipo('inactivos'), 'text-amber-600'],
+          ['externos', 'Externas', nTipo('externos'), 'text-slate-500']].map(([t, label, n, color]) => (
+          <Card key={t} className={`cursor-pointer p-4 transition hover:shadow-md ${filtroTipo === t ? 'ring-2 ring-brand-gold' : ''}`} onClick={() => setFiltroTipo(t)}>
+            <div className="text-[11px] font-bold uppercase text-slate-400">{label}</div>
+            <div className={`text-2xl font-black ${color}`}>{n}</div>
+          </Card>
+        ))}
+      </div>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input className="min-w-[220px] flex-1" placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
@@ -152,12 +178,13 @@ export default function WhTrabajadores({ user, perfilInicial }) {
       </Card>
       {lista.length === 0 && <EstadoVacio icono={Users} titulo="Sin trabajadores todavía" texto="Importa un período de Gofo en la pestaña Staffing Gofo y los perfiles se crean solos." mostrarBoton={false} />}
       <div className="grid gap-2">
-        {lista.map(({ w, periodos, horas, calc, cobradoCheques, estadoPago }) => (
+        {lista.map(({ w, tipo, periodos, horas, calc, cobradoCheques, estadoPago }) => (
           <Card key={w.id} className="cursor-pointer p-3 hover:shadow-md" onClick={() => setSel(w.id)}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-bold text-brand-navy dark:text-slate-100">{w.nombre}</span>
               {w.idEmpleado && <Badge color="navy">{w.idEmpleado}</Badge>}
               {w.externo && <Badge color="slate">externa</Badge>}
+              {tipo === 'inactivos' && <Badge color="gold">inactivo</Badge>}
               {estadoPago && <Badge color={estadoPago.color}>{estadoPago.texto}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
               <span className="ml-auto text-xs text-slate-400">{periodos} semanas · {Math.round(horas * 100) / 100} h · calculado {dinero(calc)} · cobrado {dinero(cobradoCheques)}</span>
@@ -418,7 +445,15 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
                     <td className="pr-2 text-right">{dinero(c.importe)}</td>
                     <td className="pr-2"><Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'pendiente'}</Badge></td>
                     <td className="pr-2 text-slate-500">{(c.distribucion || []).map((d) => `${String(d.periodoId).replace('gofo_', '').replace('_', ' → ')} (${dinero(d.importe)})`).join(' · ') || '—'}</td>
-                    <td className="pr-2 text-right">{c.origen === 'printcheck' && <button className="font-semibold text-brand-navy hover:underline dark:text-slate-200" onClick={() => verCheque(c)}>ver</button>}</td>
+                    <td className="pr-2 text-right">{c.origen === 'printcheck' && <span className="flex justify-end gap-2">
+                      <button className="font-semibold text-brand-navy hover:underline dark:text-slate-200" onClick={() => verCheque(c)}>ver</button>
+                      <button className="font-semibold text-brand-navy hover:underline dark:text-slate-200" onClick={() => {
+                        const cuenta = (datos.pc?.cuentas || []).find((x) => x.id === c.cuentaId) || { banco: c.banco || '', routing: '', numero: c.cuenta || '' }
+                        const firma = (datos.pc?.firmas || []).find((f) => f.id === cuenta.firmaId) || (datos.pc?.firmas || [])[0] || null
+                        generarPdfLote({ cheques: [c], cuenta, empresa: datos.pc?.empresa || {}, firma, impresion: datos.pc?.impresion || {}, prueba: false, nombreArchivo: `cheque_${c.numeroRaw || c.numeroNorm}.pdf` })
+                        auditarStaff('pc_pdf_descargado', `cheque #${c.numeroRaw || c.numeroNorm} (perfil)`) 
+                      }}>pdf</button>
+                    </span>}</td>
                   </tr>
                 ))}
               </tbody>

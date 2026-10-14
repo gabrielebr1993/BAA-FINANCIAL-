@@ -16,7 +16,7 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVac
 import { BarChart3, Plus, Trash2, FileDown } from 'lucide-react'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
 import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
-import { normalizarNombre, hashContenido } from './parserGofo'
+import { normalizarNombre, hashContenido, paraBuscar } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
@@ -41,7 +41,7 @@ export default function WhFinanzasStaff({ user }) {
       .filter((p) => !filtro.periodo || p.id === filtro.periodo)
       .map((p) => {
         let regs = datos.registros.filter((r) => r.periodoId === p.id)
-        if (filtro.persona) regs = regs.filter((r) => r.nombreNorm.includes(normalizarNombre(filtro.persona)))
+        if (filtro.persona) regs = regs.filter((r) => paraBuscar(r.nombre || r.nombreNorm).includes(paraBuscar(filtro.persona)))
         if (filtro.posicion) regs = regs.filter((r) => r.posicion === filtro.posicion)
         if (filtro.warehouse) regs = regs.filter((r) => r.warehouse === filtro.warehouse)
         const res = resumenPeriodo({

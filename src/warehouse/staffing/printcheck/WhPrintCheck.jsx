@@ -22,6 +22,7 @@ import QRCode from 'qrcode'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp, arrayUnion } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
+import { paraBuscar } from '../parserGofo'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
 import { htmlLote, POS_BASE, ETIQUETAS_POS } from './plantillaBA'
 import { generarPdfLote } from './pdfLote'
@@ -593,17 +594,17 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
   const [rango, setRango] = useState({ desde: '', hasta: '' })
   const [sel, setSel] = useState({}) // multiselección para borrar en grupo
   const [fichaId, setFichaId] = useState(null) // ficha completa (el "ojito")
-  const q = buscar.trim().toLowerCase()
+  const q = paraBuscar(buscar)
   const lista = bd.cheques
     .filter((c) => filtro === 'todos' || (c.estado || 'emitido') === filtro)
     .filter((c) => !cuentaId || c.cuentaId === cuentaId)
     .filter((c) => !rango.desde || (c.fecha || '') >= rango.desde)
     .filter((c) => !rango.hasta || (c.fecha || '') <= rango.hasta)
     .filter((c) => !q
-      || String(c.numeroRaw || c.numeroNorm || '').toLowerCase().includes(q)
-      || String(c.beneficiario || '').toLowerCase().includes(q)
-      || String(c.memo || '').toLowerCase().includes(q)
-      || String(c.loteId || '').toLowerCase().includes(q)
+      || paraBuscar(c.numeroRaw || c.numeroNorm).includes(q)
+      || paraBuscar(c.beneficiario).includes(q)
+      || paraBuscar(c.memo).includes(q)
+      || paraBuscar(c.loteId).includes(q)
       || Number(c.importe || 0).toFixed(2).includes(q))
     .sort((a, b) => Number(b.numeroRaw || 0) - Number(a.numeroRaw || 0))
 

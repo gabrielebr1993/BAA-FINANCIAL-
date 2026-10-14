@@ -20,7 +20,7 @@ import {
   vincularBeneficiario, validarDistribucion,
 } from './logicaCheques'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
-import { hashContenido } from './parserGofo'
+import { hashContenido, paraBuscar } from './parserGofo'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const COLORES_ESTADO = { emitido: 'gold', cobrado: 'green', cancelado: 'slate', diferencia: 'red' }
@@ -65,8 +65,8 @@ export default function WhCheques({ user }) {
     else if (filtroEstado === 'cancelados') l = l.filter((c) => c.estado === 'cancelado')
     else if (filtroEstado === 'revision') l = l.filter((c) => c.estado === 'diferencia' || c.revision || c.alerta || c.workerAmbiguo)
     if (buscar) {
-      const q = buscar.toLowerCase()
-      l = l.filter((c) => [c.numeroRaw, c.numeroNorm, c.beneficiario, c.cuenta, c.periodoTexto, c.fechaEmision, c.cobro?.fecha].some((v) => String(v || '').toLowerCase().includes(q)))
+      const q = paraBuscar(buscar)
+      l = l.filter((c) => [c.numeroRaw, c.numeroNorm, c.beneficiario, c.cuenta, c.periodoTexto, c.fechaEmision, c.cobro?.fecha].some((v) => paraBuscar(v).includes(q)))
     }
     return l.sort((a, b) => String(b.fechaEmision || '').localeCompare(String(a.fechaEmision || '')) || String(a.numeroNorm).localeCompare(b.numeroNorm, undefined, { numeric: true }))
   }, [datos, filtroEstado, buscar])
