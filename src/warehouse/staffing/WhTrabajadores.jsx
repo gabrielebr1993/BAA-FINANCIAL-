@@ -22,6 +22,7 @@ const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toL
 export default function WhTrabajadores({ user, perfilInicial }) {
   const [datos, setDatos] = useState(null)
   const [buscar, setBuscar] = useState('')
+  const [nuevaExterna, setNuevaExterna] = useState('')
   const [sel, setSel] = useState(perfilInicial?.id || null)
   useEffect(() => { if (perfilInicial?.id) setSel(perfilInicial.id) }, [perfilInicial])
   const recargar = async () => {
@@ -47,6 +48,20 @@ export default function WhTrabajadores({ user, perfilInicial }) {
   // Nombres con sufijo numérico del archivo ("Alberto Leon 3"): limpieza en
   // un clic — el nombre viejo queda como ALIAS para que futuras importaciones
   // (con o sin sufijo) sigan cayendo en el mismo perfil.
+  // Personas EXTERNAS (fuera de Gofo): perfil manual para que sus cheques
+  // queden agrupados igual que los de un trabajador del staffing.
+  const agregarExterna = async () => {
+    const nombre = limpiarNombrePersona(nuevaExterna)
+    if (!nombre) return
+    const norm = normalizarNombre(nombre)
+    if (activos.some((w) => w.nombreNorm === norm || (w.alias || []).includes(norm))) { window.alert('Ya existe un perfil con ese nombre.'); return }
+    const id = 'ext_' + norm.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+    await setDoc(refDoc(COL.workers, id), { nombre, nombreNorm: norm, alias: [], externo: true, creadoPor: user.email, creadoEn: new Date().toISOString() })
+    await auditarStaff('worker_externo_creado', nombre)
+    setNuevaExterna('')
+    recargar()
+  }
+
   const conSufijo = activos.filter((w) => limpiarNombrePersona(w.nombre) !== w.nombre)
   const limpiarSufijos = async () => {
     if (!window.confirm(`¿Limpiar ${conSufijo.length} nombre(s)? Se quitan los números y las etiquetas en chino (叉车, 分拣工, 清洁工) del final. El nombre original queda como alias (nada se duplica ni se pierde).`)) return
@@ -116,7 +131,14 @@ export default function WhTrabajadores({ user, perfilInicial }) {
           <span className="ml-2 text-[11px] text-slate-400">Quita el número y las letras chinas del final; el nombre viejo queda como alias y las importaciones nuevas ya vienen limpias.</span>
         </Aviso>
       )}
-      <Card className="mb-3 p-3"><Input placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} /></Card>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input className="min-w-[220px] flex-1" placeholder="Buscar trabajador…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <Input className="w-56" placeholder="Nombre de persona externa…" value={nuevaExterna} onChange={(e) => setNuevaExterna(e.target.value)} />
+          <Boton variant="ghost" disabled={!nuevaExterna.trim()} onClick={agregarExterna}>+ Agregar externa</Boton>
+        </div>
+        <div className="mt-1 text-[11px] text-slate-400">Externa = alguien fuera de Gofo (limpieza, proveedores…): tendrá su perfil con el historial de sus cheques.</div>
+      </Card>
       {lista.length === 0 && <EstadoVacio icono={Users} titulo="Sin trabajadores todavía" texto="Importa un período de Gofo en la pestaña Staffing Gofo y los perfiles se crean solos." mostrarBoton={false} />}
       <div className="grid gap-2">
         {lista.map(({ w, periodos, horas, calc, cobradoCheques, estadoPago }) => (
@@ -124,6 +146,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-bold text-brand-navy dark:text-slate-100">{w.nombre}</span>
               {w.idEmpleado && <Badge color="navy">{w.idEmpleado}</Badge>}
+              {w.externo && <Badge color="slate">externa</Badge>}
               {estadoPago && <Badge color={estadoPago.color}>{estadoPago.texto}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
               <span className="ml-auto text-xs text-slate-400">{periodos} semanas · {Math.round(horas * 100) / 100} h · calculado {dinero(calc)} · cobrado {dinero(cobradoCheques)}</span>
