@@ -1149,6 +1149,7 @@ function PcDiseno({ bd, user, recargar }) {
   const [selId, setSelId] = useState(null)
   const [muestra, setMuestra] = useState({ beneficiario: 'Nombre Del Trabajador', importe: '1234.56', memo: 'Payroll', numero: '' })
   const [guardando, setGuardando] = useState(false)
+  const [zoom, setZoom] = useState(1) // lupa del lienzo (el arrastre compensa)
   const arrastre = useRef(null) // { id, x0, y0, dx0, dy0 }
 
   const cuenta = bd.cuentas[0] || { banco: 'JPMORGAN CHASE BANK NA', routing: '111000614', numero: '0000000000', siguiente: 7637 }
@@ -1177,7 +1178,7 @@ function PcDiseno({ bd, user, recargar }) {
     const a = arrastre.current
     if (!a) return
     e.preventDefault()
-    fijarDelta(a.id, { dx: Math.round((a.dx0 + (e.clientX - a.x0)) * 2) / 2, dy: Math.round((a.dy0 + (e.clientY - a.y0)) * 2) / 2 })
+    fijarDelta(a.id, { dx: Math.round((a.dx0 + (e.clientX - a.x0) / zoom) * 2) / 2, dy: Math.round((a.dy0 + (e.clientY - a.y0) / zoom) * 2) / 2 })
   }
   const soltarArrastre = () => { arrastre.current = null }
 
@@ -1278,10 +1279,21 @@ function PcDiseno({ bd, user, recargar }) {
         </Card>
       </div>
 
-      {/* Lienzo: la hoja carta a escala 1pt = 1px */}
+      {/* Lienzo: la hoja carta a escala 1pt = 1px, con lupa */}
       <Card className="p-3">
-        <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900">
-          <div className="relative mx-auto bg-white shadow-lg" style={{ width: 612, height: 792, touchAction: 'none' }}
+        <div className="mb-2 flex items-center gap-2 text-xs">
+          <span className="font-bold text-brand-navy dark:text-slate-100">Lupa</span>
+          {[0.75, 1, 1.5, 2, 3].map((z) => (
+            <button key={z} onClick={() => setZoom(z)}
+              className={`rounded-lg px-2.5 py-1 font-semibold ${zoom === z ? 'bg-brand-navy text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
+              {z === 1 ? '100%' : Math.round(z * 100) + '%'}
+            </button>
+          ))}
+          <span className="text-slate-400">— acércate para mover con precisión; desplázate con el scroll</span>
+        </div>
+        <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900" style={{ maxHeight: 820 }}>
+          <div style={{ width: 612 * zoom, height: 792 * zoom }}>
+          <div className="relative bg-white shadow-lg" style={{ width: 612, height: 792, touchAction: 'none', transform: `scale(${zoom})`, transformOrigin: 'top left' }}
             onPointerMove={moverArrastre} onPointerUp={soltarArrastre} onPointerCancel={soltarArrastre}
             onPointerDown={(e) => { if (e.target === e.currentTarget) setSelId(null) }}>
             {/* guías de los dobleces del papel (solo pantalla) */}
@@ -1299,6 +1311,7 @@ function PcDiseno({ bd, user, recargar }) {
                   onPointerDown={(ev) => empezarArrastre(ev, e)}>{e.str || ' '}</div>
               )
             })}
+          </div>
           </div>
         </div>
       </Card>
