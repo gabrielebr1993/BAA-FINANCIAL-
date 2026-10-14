@@ -339,19 +339,30 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resumen por posición</div>
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-              <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Pago</th>
+              <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Tarifa (última)</th><th className="pr-2 text-right">Pago</th>
             </tr></thead>
             <tbody>
               {Object.values(regs.reduce((m, r) => {
                 const k = r.posicion || '—'
-                m[k] = m[k] || { posicion: k, semanas: new Set(), horas: 0, pago: 0 }
+                m[k] = m[k] || { posicion: k, semanas: new Set(), horas: 0, pago: 0, tarifa: null, fin: '' }
                 m[k].semanas.add(r.periodoId); m[k].horas += r.horasTotal || 0; m[k].pago += r.miPago || 0
+                // tarifa usada más reciente para esta posición (con su origen)
+                if (r.miTarifaReg != null && String(r.fin || '') >= m[k].fin) {
+                  m[k].fin = String(r.fin || '')
+                  m[k].tarifa = { reg: r.miTarifaReg, ot: r.miTarifaOT, origen: r.origenTarifa }
+                }
                 return m
               }, {})).sort((a, b) => b.pago - a.pago).map((x) => (
                 <tr key={x.posicion} className="border-b border-slate-100 dark:border-slate-800">
                   <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{x.posicion}</td>
                   <td className="pr-2 text-right">{x.semanas.size}</td>
                   <td className="pr-2 text-right">{Math.round(x.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right">
+                    {x.tarifa ? <>
+                      <b>{dinero(x.tarifa.reg)}</b>{x.tarifa.ot != null && x.tarifa.ot !== x.tarifa.reg ? ` / ${dinero(x.tarifa.ot)} OT` : <span className="text-slate-400"> flat</span>}
+                      {x.tarifa.origen && <div className="text-[10px] text-slate-400">{x.tarifa.origen}</div>}
+                    </> : '—'}
+                  </td>
                   <td className="pr-2 text-right font-semibold">{dinero(Math.round(x.pago * 100) / 100)}</td>
                 </tr>
               ))}

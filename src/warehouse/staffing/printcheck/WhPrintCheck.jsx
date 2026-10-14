@@ -393,7 +393,7 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
               <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
                 <th className="py-1 pr-2"><input type="checkbox" checked={seleccion.length === plan.filter((f) => f.elegible).length && seleccion.length > 0}
                   onChange={(e) => setSel(Object.fromEntries(plan.filter((f) => f.elegible).map((f) => [f.workerId || f.nombre, e.target.checked])))} /></th>
-                <th className="pr-2">Trabajador</th><th className="pr-2">ID</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Neto a pagar</th><th className="pr-2">Estado</th>
+                <th className="pr-2">Trabajador</th><th className="pr-2">ID</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Tarifa</th><th className="pr-2 text-right">Neto a pagar</th><th className="pr-2">Estado</th>
               </tr></thead>
               <tbody>{plan.map((f) => (
                 <tr key={f.workerId || f.nombre} className={`border-b border-slate-100 dark:border-slate-800 ${!f.elegible ? 'opacity-50' : ''}`}>
@@ -401,6 +401,7 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
                   <td className="pr-2 font-semibold text-brand-navy dark:text-slate-100">{f.workerId ? <button className="hover:underline" title="Abrir su perfil" onClick={() => abrirPerfil(f.workerId)}>{f.nombre}</button> : f.nombre}</td>
                   <td className="pr-2 font-mono">{f.idEmpleado || '—'}</td>
                   <td className="pr-2 text-right">{Math.round(f.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right">{f.tarifa ? <span title={f.tarifa.origen || ''}>{dinero(f.tarifa.reg)}{f.tarifa.ot != null && f.tarifa.ot !== f.tarifa.reg ? `/${dinero(f.tarifa.ot)}` : ''}<span className="text-slate-400">/h</span></span> : '—'}</td>
                   <td className="pr-2 text-right font-semibold">{dinero(f.neto)}</td>
                   <td className="pr-2">
                     {f.yaTiene && <Badge color="gold">ya tiene cheque #{f.yaTiene}</Badge>}
@@ -805,7 +806,7 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
                 <div className="mb-1 text-xs font-bold text-brand-navy dark:text-slate-100">Qué paga este cheque</div>
                 <div className="space-y-1 text-xs text-slate-500">
                   {(c.distribucion || []).map((d, i) => <div key={i}>Semana {String(d.periodoId).replace('gofo_', '').replace('_', ' → ')}: <b>{dinero(d.importe)}</b></div>)}
-                  {(c.detalle || []).map((d, i) => <div key={i}>{d.posicion}{d.horas != null ? ` · ${d.horas} h` : ''} · {dinero(d.pago)}</div>)}
+                  {(c.detalle || []).map((d, i) => <div key={i}>{d.posicion}{d.horas != null ? ` · ${d.horas} h` : ''}{d.tarifa != null ? ` · ${dinero(d.tarifa)}/h` : ''} · {dinero(d.pago)}</div>)}
                 </div>
               </Card>
             )}

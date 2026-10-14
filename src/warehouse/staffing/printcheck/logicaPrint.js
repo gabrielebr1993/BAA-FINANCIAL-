@@ -70,7 +70,8 @@ export function planearLote({ periodoId, registros, ajustes, cheques, workers })
     porWorker[k].neto += r.miPago || 0
     porWorker[k].horas += r.horasTotal || 0
     porWorker[k].pendienteTarifa = porWorker[k].pendienteTarifa || !!r.pendienteTarifa
-    porWorker[k].detalle.push({ posicion: r.posicion, horas: r.horasTotal, pago: r.miPago })
+    if (r.miTarifaReg != null) porWorker[k].tarifa = { reg: r.miTarifaReg, ot: r.miTarifaOT, origen: r.origenTarifa || null }
+    porWorker[k].detalle.push({ posicion: r.posicion, horas: r.horasTotal, pago: r.miPago, tarifa: r.miTarifaReg ?? null })
   }
   for (const a of ajustes || []) {
     if (!a.workerId || a.estado === 'revision') continue

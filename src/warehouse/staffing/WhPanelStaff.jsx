@@ -201,7 +201,7 @@ export default function WhPanelStaff({ irA }) {
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Top trabajadores por pago</div>
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-              <th className="py-1 pr-2">Trabajador</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Pago</th>
+              <th className="py-1 pr-2">Trabajador</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">$/h</th><th className="pr-2 text-right">Pago</th>
             </tr></thead>
             <tbody>
               {topTrab.map((t) => (
@@ -209,6 +209,7 @@ export default function WhPanelStaff({ irA }) {
                   <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{t.nombre}</td>
                   <td className="pr-2 text-right">{t.semanas.size}</td>
                   <td className="pr-2 text-right">{Math.round(t.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right">{t.horas > 0 ? dinero(Math.round((t.pago / t.horas) * 100) / 100) : '—'}</td>
                   <td className="pr-2 text-right font-semibold">{dinero(Math.round(t.pago * 100) / 100)}</td>
                 </tr>
               ))}
@@ -219,7 +220,7 @@ export default function WhPanelStaff({ irA }) {
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Reparto por posición</div>
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-              <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Personas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Ingreso</th><th className="pr-2 text-right">Pago</th><th className="pr-2 text-right">Margen</th>
+              <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Personas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Mi $/h</th><th className="pr-2 text-right">Ingreso</th><th className="pr-2 text-right">Pago</th><th className="pr-2 text-right">Margen</th>
             </tr></thead>
             <tbody>
               {porPos.map((x) => (
@@ -227,6 +228,7 @@ export default function WhPanelStaff({ irA }) {
                   <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{x.posicion}</td>
                   <td className="pr-2 text-right">{x.personas.size}</td>
                   <td className="pr-2 text-right">{Math.round(x.horas * 100) / 100}</td>
+                  <td className="pr-2 text-right">{x.horas > 0 ? dinero(Math.round((x.pago / x.horas) * 100) / 100) : '—'}</td>
                   <td className="pr-2 text-right">{dinero(Math.round(x.ingreso * 100) / 100)}</td>
                   <td className="pr-2 text-right">{dinero(Math.round(x.pago * 100) / 100)}</td>
                   <td className={`pr-2 text-right font-semibold ${x.ingreso - x.pago >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{dinero(Math.round((x.ingreso - x.pago) * 100) / 100)}</td>
