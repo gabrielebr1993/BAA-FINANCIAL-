@@ -15,7 +15,7 @@
 //   de la compañía emisora y calibración. Todo en colecciones wh_pc_* (las
 //   reglas wh_.* ya desplegadas las protegen: solo el dueño).
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
 import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X, RefreshCw, FileDown } from 'lucide-react'
 import QRCode from 'qrcode'
@@ -24,7 +24,7 @@ import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, 
 import { idCheque, normalizarNumero } from '../logicaCheques'
 import { paraBuscar } from '../parserGofo'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
-import { htmlLote, POS_BASE, ETIQUETAS_POS } from './plantillaBA'
+import { htmlLote, elementosPagina, ETIQUETAS_EL } from './plantillaBA'
 import { generarPdfLote } from './pdfLote'
 
 const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', firmasPend: 'wh_pc_firmas_pend', config: 'wh_pc_config' }
@@ -1138,93 +1138,119 @@ function PcCuentas({ bd, user, recargar }) {
   )
 }
 
-// ── DISEÑADOR EN VIVO: mueve cada elemento y ve el cheque al instante ──────
+// ── DISEÑADOR VISUAL: clic en CUALQUIER elemento del cheque (textos, número,
+//    MICR, rayas, recuadro de firma, talón) para seleccionarlo y ARRASTRARLO;
+//    flechas de precisión, guías del papel y pruebas de impresión/PDF. Los
+//    ajustes se guardan en impresion.pos2 {id:{dx,dy,ds}} y los usan TODAS
+//    las salidas (ventana, PDF, reimpresiones). ─────────────────────────────
 function PcDiseno({ bd, user, recargar }) {
-  const [pos, setPos] = useState(() => JSON.parse(JSON.stringify(bd.impresion.pos || {})))
-  const [elem, setElem] = useState('payto')
+  const [pos2, setPos2] = useState(() => JSON.parse(JSON.stringify(bd.impresion.pos2 || {})))
+  const [lineasVer, setLineasVer] = useState(!!bd.impresion.mostrarLineas)
+  const [selId, setSelId] = useState(null)
   const [muestra, setMuestra] = useState({ beneficiario: 'Nombre Del Trabajador', importe: '1234.56', memo: 'Payroll', numero: '' })
   const [guardando, setGuardando] = useState(false)
+  const arrastre = useRef(null) // { id, x0, y0, dx0, dy0 }
 
-  const cuenta = bd.cuentas[0] || { banco: 'JPMORGAN CHASE BANK NA', routing: '111000614', numero: '0000000000', siguiente: 7505 }
+  const cuenta = bd.cuentas[0] || { banco: 'JPMORGAN CHASE BANK NA', routing: '111000614', numero: '0000000000', siguiente: 7637 }
   const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
   const chequeMuestra = {
-    numeroRaw: muestra.numero || String(cuenta.siguiente || '7505'),
+    numeroRaw: muestra.numero || String(cuenta.siguiente || '7637'),
     beneficiario: muestra.beneficiario || 'Nombre Del Trabajador',
     importe: Number(muestra.importe) || 0,
     fecha: hoyISO(), memo: muestra.memo,
-    detalle: [{ posicion: 'Sorter', horas: 48, pago: Number(muestra.importe) || 0 }], idEmpleado: 'TX000000',
+    detalle: [{ posicion: 'Sorter', horas: 48, pago: Number(muestra.importe) || 0, tarifa: 15 }], idEmpleado: 'TX000000',
   }
-  const impresionViva = { ...bd.impresion, pos }
-  const html = htmlLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
-    .replace(/<script>[\s\S]*?<\/script>/, '')
+  const impresionViva = { ...bd.impresion, pos2, mostrarLineas: lineasVer }
+  const els = elementosPagina({ ch: chequeMuestra, cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
+  const elSel = els.find((e) => e.id === selId) || null
+  const delta = (id) => pos2[id] || { dx: 0, dy: 0, ds: 0 }
+  const fijarDelta = (id, o) => setPos2({ ...pos2, [id]: { ...delta(id), ...o } })
 
-  const efectiva = (k) => ({ ...POS_BASE[k], ...(pos[k] || {}) })
-  const mover = (k, campo, delta) => {
-    const e = efectiva(k)
-    const v = Math.max(0, Math.round((Number(e[campo]) + delta) * 10) / 10)
-    setPos({ ...pos, [k]: { ...efectiva(k), [campo]: v } })
+  const empezarArrastre = (e, el) => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setSelId(el.id)
+    const d = delta(el.id)
+    arrastre.current = { id: el.id, x0: e.clientX, y0: e.clientY, dx0: Number(d.dx) || 0, dy0: Number(d.dy) || 0 }
   }
-  const fijar = (k, campo, valor) => setPos({ ...pos, [k]: { ...efectiva(k), [campo]: Number(valor) || 0 } })
-  const cambiado = Object.keys(pos).length > 0
+  const moverArrastre = (e) => {
+    const a = arrastre.current
+    if (!a) return
+    e.preventDefault()
+    fijarDelta(a.id, { dx: Math.round((a.dx0 + (e.clientX - a.x0)) * 2) / 2, dy: Math.round((a.dy0 + (e.clientY - a.y0)) * 2) / 2 })
+  }
+  const soltarArrastre = () => { arrastre.current = null }
 
   const guardar = async () => {
     setGuardando(true)
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { pos, actualizadoPor: user.email }, { merge: true })
-      await auditarStaff('pc_diseno_guardado', Object.keys(pos).map((k) => `${k}(${efectiva(k).x},${efectiva(k).y},${efectiva(k).s})`).join(' ') || 'sin cambios')
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos2, mostrarLineas: lineasVer, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_diseno_guardado', Object.keys(pos2).length ? Object.entries(pos2).map(([k, o]) => `${k}(${o.dx || 0},${o.dy || 0}${o.ds ? ',' + o.ds : ''})`).join(' ') : 'sin ajustes')
       recargar()
     } finally { setGuardando(false) }
   }
   const restablecer = async () => {
-    if (!window.confirm('¿Volver al diseño original (el clon de tu software anterior)?')) return
-    setPos({})
-    setGuardando(true)
+    if (!window.confirm('¿Volver TODO al diseño original (el clon de tu software anterior)?')) return
+    setPos2({}); setSelId(null); setGuardando(true)
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { pos: {}, actualizadoPor: user.email }, { merge: true })
-      await auditarStaff('pc_diseno_restablecido', 'posiciones base')
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos2: {}, pos: {}, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_diseno_restablecido', 'todo al original')
       recargar()
     } finally { setGuardando(false) }
   }
   const imprimirPrueba = () => {
-    const conPrint = htmlLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
+    const html = htmlLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
     const win = window.open('', '_blank', 'width=900,height=1000')
     if (!win) { window.alert('Permite las ventanas emergentes para imprimir la prueba.'); return }
-    win.document.write(conPrint)
-    win.document.close()
+    win.document.write(html); win.document.close()
     auditarStaff('pc_impresion_prueba', 'desde el diseñador')
   }
+  const pdfPrueba = () => {
+    generarPdfLote({ cheques: [chequeMuestra], cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true, nombreArchivo: 'prueba_diseno_SAMPLE.pdf' })
+    auditarStaff('pc_pdf_descargado', 'prueba del diseñador [SAMPLE]')
+  }
 
-  const e = efectiva(elem)
-  const Flecha = ({ t, campo, delta }) => (
-    <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700" onClick={() => mover(elem, campo, delta)}>{t}</button>
+  const Flecha = ({ t, campo, d }) => (
+    <button className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+      disabled={!selId} onClick={() => selId && fijarDelta(selId, { [campo]: Math.round(((Number(delta(selId)[campo]) || 0) + d) * 2) / 2 })}>{t}</button>
   )
+
+  const fuenteDe = (e) => e.f === 'prop' ? 'Arial, Helvetica, sans-serif' : e.f === 'micr' ? "'MICR','Courier New',monospace" : "'Courier New',Courier,monospace"
+
   return (
-    <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
+    <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
       <div className="space-y-3">
+        <Aviso tipo="info">
+          <b>Haz clic sobre cualquier parte del cheque</b> (un texto, el número, la MICR, una raya, la firma…) y <b>arrástrala</b> con el mouse.
+          Las flechas mueven de a 1 punto (≈0.35 mm). Las líneas punteadas doradas marcan los dobleces de tu papel (3.5" y 7") — solo se ven aquí, no se imprimen.
+        </Aviso>
         <Card className="p-4">
-          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Elemento a mover</div>
-          <Select value={elem} onChange={(ev) => setElem(ev.target.value)}>
-            {Object.entries(ETIQUETAS_POS).map(([k, v]) => <option key={k} value={k}>{v}{pos[k] ? ' ●' : ''}</option>)}
-          </Select>
-          <div className="mt-3 grid grid-cols-[auto_1fr] items-center gap-2 text-xs">
-            <div className="grid grid-cols-3 gap-1">
-              <span /><Flecha t="▲" campo="y" delta={-2} /><span />
-              <Flecha t="◀" campo="x" delta={-2} />
-              <button className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-[10px] text-slate-400 dark:border-slate-600" title="pasos de 2 puntos (~0.7 mm)">2pt</button>
-              <Flecha t="▶" campo="x" delta={2} />
-              <span /><Flecha t="▼" campo="y" delta={2} /><span />
+          <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{elSel ? (ETIQUETAS_EL[elSel.id] || elSel.id) : 'Nada seleccionado'}</div>
+          {!elSel && <div className="text-xs text-slate-400">Toca un elemento en el cheque de la derecha.</div>}
+          {elSel && (
+            <div className="grid grid-cols-[auto_1fr] items-center gap-3 text-xs">
+              <div className="grid grid-cols-3 gap-1">
+                <span /><Flecha t="▲" campo="dy" d={-1} /><span />
+                <Flecha t="◀" campo="dx" d={-1} />
+                <span className="grid h-8 w-8 place-items-center text-[9px] text-slate-400">1pt</span>
+                <Flecha t="▶" campo="dx" d={1} />
+                <span /><Flecha t="▼" campo="dy" d={1} /><span />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-slate-500">Posición: <b>{Math.round(elSel.x)}</b> , <b>{Math.round(elSel.y)}</b> pt</div>
+                {(elSel.t === 'tx' || elSel.t === 'img' || elSel.t === 'rect') && (
+                  <label className="flex items-center justify-between gap-2">{elSel.t === 'tx' ? 'Tamaño de letra' : 'Alto'}
+                    <span className="flex items-center gap-1">
+                      <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarDelta(selId, { ds: (Number(delta(selId).ds) || 0) - 0.5 })}>−</button>
+                      <b>{Math.round((elSel.t === 'tx' ? elSel.s : elSel.h) * 10) / 10}</b>
+                      <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarDelta(selId, { ds: (Number(delta(selId).ds) || 0) + 0.5 })}>+</button>
+                    </span>
+                  </label>
+                )}
+                {pos2[selId] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [selId]: _, ...resto } = pos2; setPos2(resto) }}>devolver a su lugar original</button>}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="flex items-center justify-between gap-2">X (desde la izquierda)
-                <Input type="number" step="1" className="w-20 text-right" value={e.x} onChange={(ev) => fijar(elem, 'x', ev.target.value)} /></label>
-              <label className="flex items-center justify-between gap-2">Y (desde arriba)
-                <Input type="number" step="1" className="w-20 text-right" value={e.y} onChange={(ev) => fijar(elem, 'y', ev.target.value)} /></label>
-              <label className="flex items-center justify-between gap-2">{elem === 'firma' ? 'Alto del recuadro' : 'Tamaño de letra'}
-                <Input type="number" step="0.5" className="w-20 text-right" value={e.s} onChange={(ev) => fijar(elem, 's', ev.target.value)} /></label>
-              {pos[elem] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [elem]: _, ...resto } = pos; setPos(resto) }}>devolver este elemento a su lugar original</button>}
-            </div>
-          </div>
-          <div className="mt-2 text-[11px] text-slate-400">Las medidas están en puntos (72 = 1 pulgada). Las etiquetas (DATE:, Pay To:…) acompañan a su dato.</div>
+          )}
         </Card>
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Datos de prueba</div>
@@ -1235,20 +1261,45 @@ function PcDiseno({ bd, user, recargar }) {
               <Input placeholder={`Nº (${cuenta.siguiente || ''})`} value={muestra.numero} onChange={(ev) => setMuestra({ ...muestra, numero: ev.target.value })} />
             </div>
             <Input placeholder="Memo" value={muestra.memo} onChange={(ev) => setMuestra({ ...muestra, memo: ev.target.value })} />
+            <label className="flex items-center gap-2 text-slate-500">
+              <input type="checkbox" checked={lineasVer} onChange={(ev) => setLineasVer(ev.target.checked)} />
+              Ver e imprimir las rayas divisorias (puedes moverlas)
+            </label>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex flex-col gap-2">
             <Boton variant="gold" disabled={guardando} onClick={guardar}>{guardando ? <Spinner /> : 'Guardar diseño (se usa al imprimir)'}</Boton>
-            <Boton variant="ghost" onClick={imprimirPrueba}><Printer size={14} /> Imprimir prueba con este diseño</Boton>
-            {cambiado && <Boton variant="ghost" onClick={restablecer}>Restablecer el diseño original</Boton>}
+            <Boton variant="ghost" onClick={imprimirPrueba}><Printer size={14} /> Imprimir prueba</Boton>
+            <Boton variant="ghost" onClick={pdfPrueba}><FileDown size={14} /> PDF de prueba</Boton>
+            {(Object.keys(pos2).length > 0 || Object.keys(bd.impresion.pos2 || {}).length > 0) && <Boton variant="ghost" onClick={restablecer}>Restablecer el diseño original</Boton>}
           </div>
-          <div className="mt-2 text-[11px] text-slate-400">El diseño guardado lo usan Imprimir, Ver cheque y las reimpresiones. La prueba sale con SAMPLE y número 000000.</div>
+          <div className="mt-2 text-[11px] text-slate-400">El diseño guardado lo usan Imprimir, los PDF, Ver cheque y las reimpresiones. Las pruebas salen con SAMPLE y número 000000.</div>
         </Card>
       </div>
+
+      {/* Lienzo: la hoja carta a escala 1pt = 1px */}
       <Card className="p-3">
         <div className="overflow-auto rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-900">
-          <iframe title="Vista previa del cheque" srcDoc={html} className="mx-auto block rounded-lg bg-white shadow-lg" style={{ border: 0, width: 830, height: 780 }} />
+          <div className="relative mx-auto bg-white shadow-lg" style={{ width: 612, height: 792, touchAction: 'none' }}
+            onPointerMove={moverArrastre} onPointerUp={soltarArrastre} onPointerCancel={soltarArrastre}
+            onPointerDown={(e) => { if (e.target === e.currentTarget) setSelId(null) }}>
+            {/* guías de los dobleces del papel (solo pantalla) */}
+            <div className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-amber-400/70" style={{ top: 252 }} />
+            <div className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-amber-400/70" style={{ top: 504 }} />
+            <div className="pointer-events-none absolute select-none font-black" style={{ top: 220, left: 60, fontSize: 48, color: 'rgba(200,30,30,.18)', transform: 'rotate(-18deg)', letterSpacing: 4 }}>SAMPLE — NON-NEGOTIABLE</div>
+            {els.map((e, i) => {
+              const sel = e.id === selId
+              const estilo = { position: 'absolute', left: e.x, top: e.y, cursor: 'move', outline: sel ? '1.5px dashed #b78a2e' : 'none', outlineOffset: 2 }
+              if (e.t === 'line') return <div key={i} style={{ ...estilo, width: e.w, height: 8, marginTop: -4 }} onPointerDown={(ev) => empezarArrastre(ev, e)}><div style={{ borderTop: '1px solid #444', marginTop: 4 }} /></div>
+              if (e.t === 'rect') return <div key={i} style={{ ...estilo, width: e.w, height: e.h, border: '1.5px solid #111' }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
+              if (e.t === 'img') return <img key={i} src={e.src} alt="" draggable={false} style={{ ...estilo, height: e.h }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
+              return (
+                <div key={i} style={{ ...estilo, fontSize: e.s, fontFamily: fuenteDe(e), fontWeight: e.b ? 700 : 400, whiteSpace: 'nowrap', color: e.f === 'det' ? '#333' : '#111', ...(e.al === 'r' ? { width: e.w, textAlign: 'right' } : {}) }}
+                  onPointerDown={(ev) => empezarArrastre(ev, e)}>{e.str || ' '}</div>
+              )
+            })}
+          </div>
         </div>
       </Card>
     </div>
@@ -1323,6 +1374,28 @@ function PcFirmas({ bd, user, recargar }) {
     await auditarStaff('pc_firma_eliminada', f.nombre)
     recargar()
   }
+  // Engrosar la firma: redibuja la imagen con pequeños desplazamientos (los
+  // trazos quedan más gruesos y oscuros). Cada toque suma; "restaurar" vuelve
+  // al original (que se conserva aparte la primera vez).
+  const engrosar = async (f) => {
+    setGuardando(true)
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = f.imagen })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width; canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      for (const [ox, oy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) ctx.drawImage(img, ox, oy)
+      await setDoc(refDoc(COLP.firmas, f.id), { imagen: canvas.toDataURL('image/png'), imagenOriginal: f.imagenOriginal || f.imagen }, { merge: true })
+      await auditarStaff('pc_firma_engrosada', f.nombre)
+      recargar()
+    } catch (e) { window.alert('No se pudo procesar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  const restaurarFirma = async (f) => {
+    if (!f.imagenOriginal) return
+    await setDoc(refDoc(COLP.firmas, f.id), { imagen: f.imagenOriginal }, { merge: true })
+    await auditarStaff('pc_firma_restaurada', f.nombre)
+    recargar()
+  }
   return (
     <div>
       <Aviso tipo="info" className="mb-4">Sube la firma autorizada como imagen (PNG/JPG, idealmente tinta oscura sobre fondo blanco o transparente). Se optimiza sola para impresión. Cada uso en un lote queda auditado.</Aviso>
@@ -1331,7 +1404,11 @@ function PcFirmas({ bd, user, recargar }) {
           <Card key={f.id} className="p-3 text-center">
             <img src={f.imagen} alt={f.nombre} className="mx-auto h-14 object-contain" />
             <div className="mt-1 text-xs font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</div>
-            <button className="mt-1 text-[11px] text-rose-400 hover:text-rose-600" onClick={() => quitar(f)}>eliminar</button>
+            <div className="mt-1 flex justify-center gap-2 text-[11px]">
+              <button className="font-semibold text-brand-navy hover:underline dark:text-slate-200" disabled={guardando} onClick={() => engrosar(f)}>＋ gruesa</button>
+              {f.imagenOriginal && <button className="text-slate-400 hover:text-slate-600" onClick={() => restaurarFirma(f)}>restaurar</button>}
+              <button className="text-rose-400 hover:text-rose-600" onClick={() => quitar(f)}>eliminar</button>
+            </div>
           </Card>
         ))}
       </div>

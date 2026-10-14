@@ -61,49 +61,76 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
   const preimpreso = impresion.papel === 'preimpreso'
   const num = prueba ? '000000' : String(ch.numeroRaw || '')
   const els = []
-  const tx = (x, y, s, str, extra) => els.push({ t: 'tx', x, y, s, str: String(str ?? ''), ...(extra || {}) })
+  const tx = (id, x, y, s, str, extra) => els.push({ id, t: 'tx', x, y, s, str: String(str ?? ''), ...(extra || {}) })
 
   if (!preimpreso) {
-    tx(P.empresa.x, P.empresa.y, P.empresa.s, empresa.nombre, { b: 1 })
-    tx(P.empresa.x + 1, P.empresa.y + 15, 9.5, empresa.direccion1)
-    tx(P.empresa.x + 1, P.empresa.y + 28, 9.5, empresa.direccion2)
-    tx(P.banco.x, P.banco.y, P.banco.s, cuenta.banco, { b: 1 })
-    tx(P.numero.x, P.numero.y, P.numero.s, num, { b: 1, al: 'r', w: 80 })
+    tx('empresa', P.empresa.x, P.empresa.y, P.empresa.s, empresa.nombre, { b: 1 })
+    tx('empresaDir1', P.empresa.x + 1, P.empresa.y + 15, 9.5, empresa.direccion1)
+    tx('empresaDir2', P.empresa.x + 1, P.empresa.y + 28, 9.5, empresa.direccion2)
+    tx('banco', P.banco.x, P.banco.y, P.banco.s, cuenta.banco, { b: 1 })
+    tx('numero', P.numero.x, P.numero.y, P.numero.s, num, { b: 1, al: 'r', w: 80 })
   }
-  tx(P.fecha.x - 38, P.fecha.y - 1, 10.5, 'DATE:', { b: 1 })
-  tx(P.fecha.x, P.fecha.y, P.fecha.s, fFecha(ch.fecha))
-  tx(33, P.palabras.y - 1, 10.5, 'Amount :', { b: 1 })
-  tx(P.palabras.x, P.palabras.y, P.palabras.s, palabrasDe(ch), { f: 'prop' })
-  tx(33, P.payto.y - 1, 10.5, 'Pay To :', { b: 1 })
-  tx(P.payto.x, P.payto.y, P.payto.s, limpiarNombrePersona(ch.beneficiario))
-  tx(P.importe.x, P.importe.y, P.importe.s, '$ ' + importeNum(ch), { b: 1 })
-  tx(P.memo.x, P.memo.y, P.memo.s, 'MEMO : ' + (ch.memo || ''), { b: 1 })
-  els.push({ t: 'rect', x: P.firma.x, y: P.firma.y, w: 154, h: P.firma.s })
-  if (firma && firma.imagen) els.push({ t: 'img', x: P.firma.x + 12, y: P.firma.y + 2, h: P.firma.s - 4, src: firma.imagen })
-  tx(P.firma.x + 22, P.firma.y + P.firma.s + 3, 8, 'AUTHORIZED SIGNATURE', { f: 'det' })
-  if (impresion.mostrarLineas) els.push({ t: 'line', x: 0, y: 215, w: 612 })
+  tx('fechaEtiqueta', P.fecha.x - 38, P.fecha.y - 1, 10.5, 'DATE:', { b: 1 })
+  tx('fecha', P.fecha.x, P.fecha.y, P.fecha.s, fFecha(ch.fecha))
+  tx('palabrasEtiqueta', 33, P.palabras.y - 1, 10.5, 'Amount :', { b: 1 })
+  tx('palabras', P.palabras.x, P.palabras.y, P.palabras.s, palabrasDe(ch), { f: 'prop' })
+  tx('paytoEtiqueta', 33, P.payto.y - 1, 10.5, 'Pay To :', { b: 1 })
+  tx('payto', P.payto.x, P.payto.y, P.payto.s, limpiarNombrePersona(ch.beneficiario))
+  tx('importe', P.importe.x, P.importe.y, P.importe.s, '$ ' + importeNum(ch), { b: 1 })
+  tx('memo', P.memo.x, P.memo.y, P.memo.s, 'MEMO : ' + (ch.memo || ''), { b: 1 })
+  els.push({ id: 'firmaCaja', t: 'rect', x: P.firma.x, y: P.firma.y, w: 154, h: P.firma.s })
+  if (firma && firma.imagen) els.push({ id: 'firmaImagen', t: 'img', x: P.firma.x + 12, y: P.firma.y + 2, h: P.firma.s - 4, src: firma.imagen })
+  tx('firmaEtiqueta', P.firma.x + 22, P.firma.y + P.firma.s + 3, 8, 'AUTHORIZED SIGNATURE', { f: 'det' })
+  if (impresion.mostrarLineas) els.push({ id: 'linea1', t: 'line', x: 0, y: 215, w: 612 })
   if (impresion.mostrarMICR && !preimpreso) {
-    tx(P.micr.x, P.micr.y, P.micr.s, `(${num})   &${cuenta.routing || ''}&  ${cuenta.numero || ''})`, { f: 'micr', b: 1 })
+    tx('micr', P.micr.x, P.micr.y, P.micr.s, `(${num})   &${cuenta.routing || ''}&  ${cuenta.numero || ''})`, { f: 'micr', b: 1 })
   }
-  if (impresion.mostrarLineas) els.push({ t: 'line', x: 0, y: 251, w: 612 })
+  if (impresion.mostrarLineas) els.push({ id: 'linea2', t: 'line', x: 0, y: 251, w: 612 })
 
   // ── talón ──
-  tx(26, 273, 10, fFecha(ch.fecha))
-  tx(470, 273, 10, num, { b: 1, al: 'r', w: 70 })
-  tx(24, 313, 10, 'Pay To:')
-  tx(110, 313, 10.5, `${limpiarNombrePersona(ch.beneficiario)}${ch.idEmpleado ? ' · ID ' + ch.idEmpleado : ''}`)
-  tx(24, 381, 10, 'Pay From:')
-  tx(111, 381, 10.5, empresa.nombre)
-  tx(111, 395, 10, empresa.direccion1)
-  tx(111, 409, 10, empresa.direccion2)
+  tx('talonFecha', 26, 273, 10, fFecha(ch.fecha))
+  tx('talonNumero', 470, 273, 10, num, { b: 1, al: 'r', w: 70 })
+  tx('talonPaytoEtiqueta', 24, 313, 10, 'Pay To:')
+  tx('talonPayto', 110, 313, 10.5, `${limpiarNombrePersona(ch.beneficiario)}${ch.idEmpleado ? ' · ID ' + ch.idEmpleado : ''}`)
+  tx('talonPayfromEtiqueta', 24, 381, 10, 'Pay From:')
+  tx('talonPayfrom', 111, 381, 10.5, empresa.nombre)
+  tx('talonPayfromDir1', 111, 395, 10, empresa.direccion1)
+  tx('talonPayfromDir2', 111, 409, 10, empresa.direccion2)
   ;(ch.detalle || []).slice(0, 4).forEach((d, i) => {
     const tarifa = d.tarifa != null ? Number(d.tarifa) : (Number(d.horas) > 0 ? Math.round((Number(d.pago) / Number(d.horas)) * 100) / 100 : null)
-    tx(111, 433 + i * 11, 8, `${d.posicion || ''}${d.horas != null ? ' · ' + d.horas + ' h' : ''}${tarifa != null ? ' · $' + tarifa.toFixed(2) + '/h' : ''} · $${Number(d.pago || 0).toFixed(2)}`, { f: 'det' })
+    tx('talonDetalle' + (i + 1), 111, 433 + i * 11, 8, `${d.posicion || ''}${d.horas != null ? ' · ' + d.horas + ' h' : ''}${tarifa != null ? ' · $' + tarifa.toFixed(2) + '/h' : ''} · $${Number(d.pago || 0).toFixed(2)}`, { f: 'det' })
   })
-  tx(28, 476, 8.5, 'MEMO: ' + (ch.memo || ''), { b: 1 })
-  tx(440, 475, 10, importeNum(ch), { b: 1, al: 'r', w: 100 })
-  if (impresion.mostrarLineas) els.push({ t: 'line', x: 0, y: 515, w: 612 })
+  tx('talonMemo', 28, 476, 8.5, 'MEMO: ' + (ch.memo || ''), { b: 1 })
+  tx('talonImporte', 440, 475, 10, importeNum(ch), { b: 1, al: 'r', w: 100 })
+  if (impresion.mostrarLineas) els.push({ id: 'linea3', t: 'line', x: 0, y: 515, w: 612 })
+
+  // ajustes finos por elemento del diseñador: {id: {dx, dy, ds}}
+  const finos = (impresion && impresion.pos2) || {}
+  for (const e of els) {
+    const o = finos[e.id]
+    if (!o) continue
+    e.x += Number(o.dx) || 0
+    e.y += Number(o.dy) || 0
+    if (e.t === 'tx' && Number.isFinite(Number(o.ds))) e.s = Math.max(4, e.s + Number(o.ds))
+    if (e.t === 'img' && Number.isFinite(Number(o.ds))) e.h = Math.max(8, e.h + Number(o.ds))
+    if (e.t === 'rect' && Number.isFinite(Number(o.ds))) e.h = Math.max(10, e.h + Number(o.ds))
+  }
   return els
+}
+
+// Nombres legibles para el diseñador (clic sobre el elemento).
+export const ETIQUETAS_EL = {
+  empresa: 'Nombre de la compañía', empresaDir1: 'Dirección línea 1', empresaDir2: 'Dirección línea 2',
+  banco: 'Banco', numero: 'Número de cheque', fechaEtiqueta: 'Etiqueta DATE:', fecha: 'Fecha',
+  palabrasEtiqueta: 'Etiqueta Amount:', palabras: 'Importe en palabras', paytoEtiqueta: 'Etiqueta Pay To:',
+  payto: 'Beneficiario', importe: 'Importe grande ($)', memo: 'Memo del cheque',
+  firmaCaja: 'Recuadro de la firma', firmaImagen: 'Imagen de la firma', firmaEtiqueta: 'AUTHORIZED SIGNATURE',
+  micr: 'Línea MICR (números del banco)', linea1: 'Raya 1 (fin del cheque)', linea2: 'Raya 2 (bajo la MICR)', linea3: 'Raya 3 (fin del talón)',
+  talonFecha: 'Talón · fecha', talonNumero: 'Talón · número', talonPaytoEtiqueta: 'Talón · etiqueta Pay To',
+  talonPayto: 'Talón · beneficiario', talonPayfromEtiqueta: 'Talón · etiqueta Pay From', talonPayfrom: 'Talón · compañía',
+  talonPayfromDir1: 'Talón · dirección 1', talonPayfromDir2: 'Talón · dirección 2',
+  talonDetalle1: 'Talón · detalle 1', talonDetalle2: 'Talón · detalle 2', talonDetalle3: 'Talón · detalle 3', talonDetalle4: 'Talón · detalle 4',
+  talonMemo: 'Talón · memo', talonImporte: 'Talón · importe',
 }
 
 // ── Salida HTML (impresión del navegador / vista previa) ───────────────────
