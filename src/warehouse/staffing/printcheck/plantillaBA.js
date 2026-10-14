@@ -11,6 +11,7 @@
 // su banda de seguridad y las rayas impresas estorban.
 // ============================================================================
 import { numeroEnPalabras } from './logicaPrint'
+import { limpiarNombrePersona } from '../parserGofo'
 
 export const POS_BASE = {
   empresa: { x: 31, y: 20, s: 11.5 },
@@ -74,7 +75,7 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
   tx(33, P.palabras.y - 1, 10.5, 'Amount :', { b: 1 })
   tx(P.palabras.x, P.palabras.y, P.palabras.s, palabrasDe(ch), { f: 'prop' })
   tx(33, P.payto.y - 1, 10.5, 'Pay To :', { b: 1 })
-  tx(P.payto.x, P.payto.y, P.payto.s, ch.beneficiario)
+  tx(P.payto.x, P.payto.y, P.payto.s, limpiarNombrePersona(ch.beneficiario))
   tx(P.importe.x, P.importe.y, P.importe.s, '$ ' + importeNum(ch), { b: 1 })
   tx(P.memo.x, P.memo.y, P.memo.s, 'MEMO : ' + (ch.memo || ''), { b: 1 })
   els.push({ t: 'rect', x: P.firma.x, y: P.firma.y, w: 154, h: P.firma.s })
@@ -90,7 +91,7 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
   tx(26, 273, 10, fFecha(ch.fecha))
   tx(470, 273, 10, num, { b: 1, al: 'r', w: 70 })
   tx(24, 313, 10, 'Pay To:')
-  tx(110, 313, 10.5, `${ch.beneficiario || ''}${ch.idEmpleado ? ' · ID ' + ch.idEmpleado : ''}`)
+  tx(110, 313, 10.5, `${limpiarNombrePersona(ch.beneficiario)}${ch.idEmpleado ? ' · ID ' + ch.idEmpleado : ''}`)
   tx(24, 381, 10, 'Pay From:')
   tx(111, 381, 10.5, empresa.nombre)
   tx(111, 395, 10, empresa.direccion1)
