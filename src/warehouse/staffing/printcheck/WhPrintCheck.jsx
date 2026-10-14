@@ -281,6 +281,46 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
     } finally { setHistTrabajando(false) }
   }
 
+  // ── Cheque MANUAL: para pagarle a alguien que no viene de Gofo (limpieza,
+  // un proveedor, un extra). Usa la numeración de la cuenta y entra al mismo
+  // Registro/conciliación; si el nombre coincide con un perfil, se vincula.
+  const [manual, setManual] = useState({ beneficiario: '', importe: '', memo: '' })
+  const crearManual = async () => {
+    if (!cuenta || !manual.beneficiario.trim() || !(Number(manual.importe) > 0)) return
+    const numero = String(Number(cuenta.siguiente) || 1)
+    const nombre = manual.beneficiario.trim()
+    const norm = nombre.toUpperCase().replace(/\s+/g, ' ')
+    const worker = bd.workers.find((w) => w.nombreNorm === norm || (w.alias || []).includes(norm))
+    if (!window.confirm(`¿Crear el cheque #${numero} para ${nombre} por ${dinero(Number(manual.importe))}?${worker ? `\n(Se vincula al perfil de ${worker.nombre})` : '\n(No está en tus trabajadores: queda como beneficiario externo)'}`)) return
+    setTrabajando(true); setMensaje(null)
+    try {
+      const ahora = new Date().toISOString()
+      await escribirEnLotes([
+        {
+          ref: refDoc(COL.cheques, idCheque(numero, cuenta.numero || cuenta.id)),
+          merge: true,
+          data: {
+            numeroRaw: numero, numeroNorm: normalizarNumero(numero),
+            cuenta: cuenta.numero || '', cuentaId: cuenta.id, banco: cuenta.banco || '',
+            workerId: worker?.id || null, beneficiario: worker?.nombre || nombre,
+            importe: r2(Number(manual.importe)), fecha, memo: manual.memo || '',
+            estado: 'emitido', origen: 'printcheck', loteId: null, distribucion: [], detalle: [],
+            idEmpleado: worker?.idEmpleado || null, manual: true,
+            creadoEn: serverTimestamp(), creadoPor: user.email,
+            historial: [{ accion: 'creado', fecha: ahora, por: user.email, nota: 'Cheque manual (fuera de Gofo)' }],
+          },
+        },
+        { ref: refDoc(COLP.cuentas, cuenta.id), merge: true, data: { siguiente: Number(numero) + 1, ultimoEmitido: numero } },
+      ])
+      await auditarStaff('pc_cheque_manual', `#${numero} ${nombre} ${dinero(Number(manual.importe))} (${manual.memo || 'sin memo'})`)
+      setManual({ beneficiario: '', importe: '', memo: '' })
+      await recargar()
+      irAImprimir('', idCheque(numero, cuenta.numero || cuenta.id))
+    } catch (e) {
+      setMensaje({ tipo: 'error', texto: 'No se creó el cheque: ' + (e.message || e) })
+    } finally { setTrabajando(false) }
+  }
+
   const generar = async () => {
     if (!cuenta || !seleccion.length) return
     setTrabajando(true); setMensaje(null)
@@ -349,6 +389,24 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
             <Input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Payroll semana…" /></div>
         </div>
       </Card>
+      {/* Cheque individual manual (alguien fuera de Gofo) */}
+      <Card className="mb-4 p-4">
+        <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Cheque individual (manual)</div>
+        <p className="mb-2 text-xs text-slate-500">
+          Para pagarle a alguien que no viene del reporte de Gofo — la señora de la limpieza, un proveedor, un extra.
+          Usa la cuenta y la fecha de arriba, toma el siguiente número ({cuenta ? `#${cuenta.siguiente}` : '—'}) y entra al Registro y a la conciliación como cualquier otro.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input className="w-56" list="pc-beneficiarios" placeholder="Beneficiario (nombre completo)" value={manual.beneficiario} onChange={(e) => setManual({ ...manual, beneficiario: e.target.value })} />
+          <datalist id="pc-beneficiarios">{bd.workers.map((w) => <option key={w.id} value={w.nombre} />)}</datalist>
+          <Input className="w-32" type="number" step="0.01" placeholder="$ importe" value={manual.importe} onChange={(e) => setManual({ ...manual, importe: e.target.value })} />
+          <Input className="w-56" placeholder="Memo (Limpieza oficina semana 42…)" value={manual.memo} onChange={(e) => setManual({ ...manual, memo: e.target.value })} />
+          <Boton variant="gold" disabled={trabajando || !cuenta || !manual.beneficiario.trim() || !(Number(manual.importe) > 0)} onClick={crearManual}>
+            {trabajando ? <Spinner /> : `Crear cheque${cuenta ? ` #${cuenta.siguiente}` : ''}`}
+          </Boton>
+        </div>
+      </Card>
+
       {mensaje && <Aviso tipo={mensaje.tipo === 'ok' ? 'ok' : 'error'} className="mb-4">{mensaje.texto}</Aviso>}
 
       {hist && (
