@@ -497,15 +497,24 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa del lote</div>
           <div className="grid gap-2">
-            {cheques.map((ch) => (
-              <div key={ch.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
-                <span className="font-mono font-bold text-brand-navy dark:text-slate-100">#{ch.numeroRaw}</span>
-                <span className="font-semibold">{ch.beneficiario}</span>
-                <span className="text-slate-400">{ch.fecha} · {ch.memo}</span>
-                <Badge color={ch.estado === 'cobrado' ? 'green' : ch.estado === 'cancelado' ? 'red' : 'gold'}>{ch.estado}</Badge>
-                <b className="ml-auto">{dinero(ch.importe)}</b>
-              </div>
-            ))}
+            {cheques.map((ch) => {
+              // tarifa por cheque: la guardada en el detalle o, para cheques
+              // viejos, derivada de pago ÷ horas de cada línea
+              const tarifas = [...new Set((ch.detalle || [])
+                .map((d) => d.tarifa != null ? Number(d.tarifa) : (Number(d.horas) > 0 ? Math.round((Number(d.pago) / Number(d.horas)) * 100) / 100 : null))
+                .filter((t) => t != null)
+                .map((t) => `$${t.toFixed(2)}`))]
+              return (
+                <div key={ch.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-700/60">
+                  <span className="font-mono font-bold text-brand-navy dark:text-slate-100">#{ch.numeroRaw}</span>
+                  <span className="font-semibold">{ch.beneficiario}</span>
+                  <span className="text-slate-400">{ch.fecha} · {ch.memo}</span>
+                  {tarifas.length > 0 && <Badge color="slate">{tarifas.join(' · ')}/h</Badge>}
+                  <Badge color={ch.estado === 'cobrado' ? 'green' : ch.estado === 'cancelado' ? 'red' : 'gold'}>{ch.estado}</Badge>
+                  <b className="ml-auto">{dinero(ch.importe)}</b>
+                </div>
+              )
+            })}
           </div>
         </Card>
       )}

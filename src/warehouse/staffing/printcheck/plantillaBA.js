@@ -87,7 +87,10 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
       <div class="el" style="left:111pt;top:381pt;font-size:10.5pt">${esc(empresa.nombre)}</div>
       <div class="el" style="left:111pt;top:395pt;font-size:10pt">${esc(empresa.direccion1)}</div>
       <div class="el" style="left:111pt;top:409pt;font-size:10pt">${esc(empresa.direccion2)}</div>
-      ${(ch.detalle || []).slice(0, 4).map((d, i) => `<div class="el det" style="left:111pt;top:${433 + i * 11}pt">${esc(d.posicion)}${d.horas != null ? ' · ' + d.horas + ' h' : ''} · $${Number(d.pago || 0).toFixed(2)}</div>`).join('')}
+      ${(ch.detalle || []).slice(0, 4).map((d, i) => {
+        const tarifa = d.tarifa != null ? Number(d.tarifa) : (Number(d.horas) > 0 ? Math.round((Number(d.pago) / Number(d.horas)) * 100) / 100 : null)
+        return `<div class="el det" style="left:111pt;top:${433 + i * 11}pt">${esc(d.posicion)}${d.horas != null ? ' · ' + d.horas + ' h' : ''}${tarifa != null ? ' · $' + tarifa.toFixed(2) + '/h' : ''} · $${Number(d.pago || 0).toFixed(2)}</div>`
+      }).join('')}
       <div class="el b" style="left:28pt;top:476pt;font-size:8.5pt">MEMO: <span style="font-weight:400">${esc(ch.memo)}</span></div>
       <div class="el b" style="left:440pt;top:475pt;font-size:10pt;width:100pt;text-align:right">${esc(importeNum(ch))}</div>
       <div class="el linea" style="left:0;top:515pt;width:612pt"></div>
