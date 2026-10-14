@@ -26,15 +26,17 @@ const FAM = {
 const ESPACIADO_MICR = 0.75 // letter-spacing:1px del CSS, en pt de impresión
 
 let ctxMedir = null
-function ctxDe(familia, s, b, i, espaciado) {
+function ctxDe(familia, s, b, i) {
   if (!ctxMedir) ctxMedir = document.createElement('canvas').getContext('2d')
+  // el letter-spacing se suma a mano (k × esp): mismo resultado en Chrome y
+  // en Safari, que no soporta letterSpacing en canvas
+  try { if ('letterSpacing' in ctxMedir) ctxMedir.letterSpacing = '0px' } catch { /* opcional */ }
   ctxMedir.font = `${i ? 'italic ' : ''}${b ? 'bold ' : ''}${s}px ${familia}`
-  try { ctxMedir.letterSpacing = `${espaciado || 0}px` } catch { /* navegadores viejos */ }
   return ctxMedir
 }
 function ascentDe(familia, s) {
   try {
-    const m = ctxDe(familia, s, 0, 0, 0).measureText('Hg0&')
+    const m = ctxDe(familia, s, 0, 0).measureText('Hg0&')
     if (m && Number.isFinite(m.fontBoundingBoxAscent) && m.fontBoundingBoxAscent > 0) return m.fontBoundingBoxAscent
   } catch { /* navegadores sin fontBoundingBoxAscent */ }
   return s * 0.82
@@ -47,7 +49,18 @@ const cargarImg = (src) => new Promise((res) => {
   i.src = src
 })
 
-export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresion, prueba, nombreArchivo }) {
+export async function generarPdfLote(args) {
+  // si algo truena en un navegador concreto (Safari…), que el usuario VEA
+  // el error en vez de un botón que no hace nada
+  try {
+    await generarPdfLoteInterno(args)
+  } catch (err) {
+    console.error('PDF:', err)
+    try { window.alert('No se pudo generar el PDF: ' + (err && err.message ? err.message : err)) } catch { /* sin UI */ }
+  }
+}
+
+async function generarPdfLoteInterno({ cheques, cuenta, empresa, firma, impresion, prueba, nombreArchivo }) {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' }) // 612 × 792 pt
   const offX = (Number(impresion.offX) || 0) * 72
   const offY = (Number(impresion.offY) || 0) * 72
@@ -104,13 +117,13 @@ export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresio
     // el PDF debe hacer lo mismo o los grupos quedan corridos
     const str = String(e.str || '').replace(/\s+/g, ' ')
     let ctx
-    try { ctx = ctxDe(familia, e.s, e.b, e.i, esp) } catch { ctx = null }
+    try { ctx = ctxDe(familia, e.s, e.b, e.i) } catch { ctx = null }
     if (!ctx || !str) { doc.text(str, x, baseline); return }
     // alineado a la derecha: arrancar donde arrancaría el navegador
     let x0 = x
-    if (e.al === 'r') x0 = x + (e.w || 0) - ctx.measureText(str).width
+    if (e.al === 'r') x0 = x + (e.w || 0) - (ctx.measureText(str).width + str.length * esp)
     for (let k = 0; k < str.length; k++) {
-      const antes = ctx.measureText(str.slice(0, k)).width
+      const antes = ctx.measureText(str.slice(0, k)).width + k * esp
       doc.text(str[k], x0 + antes, baseline)
     }
   }
