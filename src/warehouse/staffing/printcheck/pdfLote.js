@@ -62,6 +62,9 @@ export async function generarPdfLote(args) {
 
 async function generarPdfLoteInterno({ cheques, cuenta, empresa, firma, impresion, prueba, nombreArchivo }) {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' }) // 612 × 792 pt
+  // instrucción interna del PDF: imprimir a TAMAÑO REAL, sin "ajustar al
+  // papel" — evita que Vista Previa/Adobe reescalen y el cheque baje
+  try { doc.viewerPreferences({ PrintScaling: 'None' }) } catch { /* opcional */ }
   const offX = (Number(impresion.offX) || 0) * 72
   const offY = (Number(impresion.offY) || 0) * 72
 
