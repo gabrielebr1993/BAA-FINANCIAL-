@@ -2,12 +2,16 @@
 // PRINT CHECK · Descarga en PDF (jsPDF) — misma lista de elementos que la
 // vista/impresión HTML (elementosPagina), mismas coordenadas en puntos.
 //
-// Para que el PDF caiga EXACTO donde cae la impresión del navegador:
-// · la línea base de cada texto se mide con la MISMA fuente que usa el HTML
-//   (canvas.measureText → fontBoundingBoxAscent), no con un factor fijo;
-// · la línea MICR lleva el mismo espaciado extra (letter-spacing 1px = 0.75pt);
-// · las imágenes sin ancho propio (firmas) usan su proporción REAL, que se
-//   precarga antes de dibujar (por eso la función es async).
+// jsPDF mide las letras con SUS tablas (Helvetica/Courier de Adobe), que no
+// son las del navegador, así que un texto dibujado "de corrido" se va
+// desfasando. Para que el PDF caiga EXACTO donde cae la impresión HTML:
+// · cada carácter se coloca en la posición que mide el navegador
+//   (canvas.measureText con la MISMA familia, negrita/cursiva y
+//   letter-spacing del CSS) — el desfase no se acumula;
+// · la línea base se mide con fontBoundingBoxAscent (donde la pone el HTML);
+// · los recuadros imitan el borde CSS (hacia afuera del ancho/alto);
+// · las rayas se corren media línea como el border-top/left del CSS;
+// · las imágenes sin ancho (firmas) usan su proporción real precargada.
 // Si el dueño subió su fuente MICR (.ttf) en Ajustes, se incrusta en el PDF.
 // ============================================================================
 import { jsPDF } from 'jspdf'
@@ -19,14 +23,18 @@ const FAM = {
   prop: 'Arial,Helvetica,sans-serif',
   micr: "'MICRCustom','MICR','MICR E13B','MICR Encoding','MICRe13b','E-13B','Courier New',monospace",
 }
+const ESPACIADO_MICR = 0.75 // letter-spacing:1px del CSS, en pt de impresión
 
 let ctxMedir = null
+function ctxDe(familia, s, b, i, espaciado) {
+  if (!ctxMedir) ctxMedir = document.createElement('canvas').getContext('2d')
+  ctxMedir.font = `${i ? 'italic ' : ''}${b ? 'bold ' : ''}${s}px ${familia}`
+  try { ctxMedir.letterSpacing = `${espaciado || 0}px` } catch { /* navegadores viejos */ }
+  return ctxMedir
+}
 function ascentDe(familia, s) {
-  // dónde pone el navegador la línea base: tope del elemento + ascent de la fuente
   try {
-    if (!ctxMedir) ctxMedir = document.createElement('canvas').getContext('2d')
-    ctxMedir.font = `${s}px ${familia}`
-    const m = ctxMedir.measureText('Hg0&')
+    const m = ctxDe(familia, s, 0, 0, 0).measureText('Hg0&')
     if (m && Number.isFinite(m.fontBoundingBoxAscent) && m.fontBoundingBoxAscent > 0) return m.fontBoundingBoxAscent
   } catch { /* navegadores sin fontBoundingBoxAscent */ }
   return s * 0.82
@@ -56,12 +64,18 @@ export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresio
   } catch { /* cae a courier */ }
 
   // la fuente MICR también debe estar registrada en el navegador para poder
-  // medir su línea base igual que la pinta el HTML (p. ej. PDF desde el
-  // perfil del trabajador sin haber abierto Print Check)
+  // medirla igual que la pinta el HTML (p. ej. PDF desde el perfil del
+  // trabajador sin haber abierto Print Check). OJO: document.fonts.check()
+  // responde "sí" para familias desconocidas, así que se recorre el set.
   try {
-    if (impresion.fuenteMICR && !document.fonts.check('12px MICRCustom')) {
-      const ff = new FontFace('MICRCustom', `url(${impresion.fuenteMICR})`)
-      document.fonts.add(await ff.load())
+    if (impresion.fuenteMICR) {
+      let registrada = false
+      document.fonts.forEach((f) => { if (String(f.family).replace(/["']/g, '') === 'MICRCustom') registrada = true })
+      if (!registrada) {
+        const ff = new FontFace('MICRCustom', `url(${impresion.fuenteMICR})`)
+        document.fonts.add(await ff.load())
+      }
+      await document.fonts.load('12px MICRCustom')
     }
   } catch { /* opcional: solo afecta la medición fina */ }
 
@@ -74,6 +88,32 @@ export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresio
     const img = await cargarImg(src)
     if (img && img.height > 0) proporciones[src] = img.width / img.height
   }))
+
+  // texto colocado carácter por carácter donde lo mediría el navegador
+  const textoExacto = (e, x, y) => {
+    const esMicr = e.f === 'micr'
+    const familia = e.f === 'prop' ? FAM.prop : esMicr ? FAM.micr : FAM.mono
+    const fuentePdf = e.f === 'prop' ? 'helvetica' : esMicr ? fuenteMicr : 'courier'
+    const estilo = fuentePdf === 'MICRCustom' ? 'normal' : (e.b && e.i ? 'bolditalic' : e.b ? 'bold' : e.i ? 'italic' : 'normal')
+    doc.setFont(fuentePdf, estilo)
+    doc.setFontSize(e.s)
+    doc.setTextColor(e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17)
+    const esp = esMicr ? ESPACIADO_MICR : 0
+    const baseline = y + ascentDe(familia, e.s)
+    // el HTML colapsa los espacios seguidos a uno (white-space: nowrap);
+    // el PDF debe hacer lo mismo o los grupos quedan corridos
+    const str = String(e.str || '').replace(/\s+/g, ' ')
+    let ctx
+    try { ctx = ctxDe(familia, e.s, e.b, e.i, esp) } catch { ctx = null }
+    if (!ctx || !str) { doc.text(str, x, baseline); return }
+    // alineado a la derecha: arrancar donde arrancaría el navegador
+    let x0 = x
+    if (e.al === 'r') x0 = x + (e.w || 0) - ctx.measureText(str).width
+    for (let k = 0; k < str.length; k++) {
+      const antes = ctx.measureText(str.slice(0, k)).width
+      doc.text(str[k], x0 + antes, baseline)
+    }
+  }
 
   paginas.forEach((els, idx) => {
     if (idx > 0) doc.addPage('letter')
@@ -91,31 +131,26 @@ export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresio
       const x = e.x + offX
       const y = e.y + offY
       if (e.t === 'line') {
-        doc.setDrawColor(68, 68, 68); doc.setLineWidth(e.g || 0.8)
-        doc.line(x, y, x + e.w, y)
+        // el CSS pinta el border-top de y hacia abajo; la línea del PDF se
+        // centra en su trazo → correr media línea
+        const g = e.g || 0.8
+        doc.setDrawColor(68, 68, 68); doc.setLineWidth(g)
+        doc.line(x, y + g / 2, x + e.w, y + g / 2)
       } else if (e.t === 'vline') {
-        doc.setDrawColor(68, 68, 68); doc.setLineWidth(e.g || 0.8)
-        doc.line(x, y, x, y + e.h)
+        const g = e.g || 0.8
+        doc.setDrawColor(68, 68, 68); doc.setLineWidth(g)
+        doc.line(x + g / 2, y, x + g / 2, y + e.h)
       } else if (e.t === 'rect') {
+        // el CSS dibuja el borde HACIA AFUERA del ancho/alto (content-box)
         doc.setDrawColor(17, 17, 17); doc.setLineWidth(1.5)
-        doc.rect(x, y, e.w, e.h)
+        doc.rect(x + 0.75, y + 0.75, e.w + 1.5, e.h + 1.5)
       } else if (e.t === 'img') {
         try {
           const w = e.w || e.h * (proporciones[e.src] || 3)
           doc.addImage(e.src, 'PNG', x, y, w, e.h)
         } catch { /* una firma no rasterizable no debe tumbar el PDF */ }
       } else {
-        const esMicr = e.f === 'micr'
-        const fuente = e.f === 'prop' ? 'helvetica' : esMicr ? fuenteMicr : 'courier'
-        const estiloFuente = fuente === 'MICRCustom' ? 'normal' : (e.b && e.i ? 'bolditalic' : e.b ? 'bold' : e.i ? 'italic' : 'normal')
-        doc.setFont(fuente, estiloFuente)
-        doc.setFontSize(e.s)
-        doc.setTextColor(e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17)
-        const familia = e.f === 'prop' ? FAM.prop : esMicr ? FAM.micr : FAM.mono
-        const baseline = y + ascentDe(familia, e.s)
-        const ops = esMicr ? { charSpace: 0.75 } : {} // letter-spacing 1px del CSS
-        if (e.al === 'r') doc.text(e.str, x + (e.w || 0), baseline, { align: 'right', ...ops })
-        else doc.text(e.str, x, baseline, ops)
+        textoExacto(e, x, y)
       }
     }
   })
