@@ -17,13 +17,14 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../../components/ui'
-import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X, RefreshCw } from 'lucide-react'
+import { Banknote, Printer, Plus, FileSignature, Settings, LayoutDashboard, ListChecks, Landmark, QrCode, PencilRuler, Eye, Copy, X, RefreshCw, FileDown } from 'lucide-react'
 import QRCode from 'qrcode'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { COL, cargar, cargarPor, auditarStaff, refDoc, setDoc, escribirEnLotes, serverTimestamp, arrayUnion } from '../datosStaff'
 import { idCheque, normalizarNumero } from '../logicaCheques'
 import { planearLote, asignarNumeros, enmascarar, r2 } from './logicaPrint'
 import { htmlLote, POS_BASE, ETIQUETAS_POS } from './plantillaBA'
+import { generarPdfLote } from './pdfLote'
 
 const COLP = { cuentas: 'wh_pc_cuentas', lotes: 'wh_pc_lotes', firmas: 'wh_pc_firmas', firmasPend: 'wh_pc_firmas_pend', config: 'wh_pc_config' }
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -543,6 +544,10 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
             <input type="checkbox" checked={prueba} onChange={(e) => setPrueba(e.target.checked)} /> Impresión de PRUEBA (marca SAMPLE, número 000000)
           </label>
           <Boton variant="gold" disabled={!cheques.length} onClick={imprimir}><Printer size={14} /> {prueba ? 'Imprimir prueba' : `Imprimir ${cheques.length} cheque(s)`}</Boton>
+          <Boton variant="ghost" disabled={!cheques.length} onClick={async () => {
+            generarPdfLote({ cheques, cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba, nombreArchivo: `cheques_${chequeSolo ? cheques[0]?.numeroRaw : (lote?.desde + '-' + lote?.hasta)}${prueba ? '_SAMPLE' : ''}.pdf` })
+            await auditarStaff('pc_pdf_descargado', `${chequeSolo ? '1 cheque' : `lote ${loteId} (${cheques.length})`}${prueba ? ' [SAMPLE]' : ''}`)
+          }}><FileDown size={14} /> Descargar PDF</Boton>
           {!chequeSolo && lote && <button className="pb-2 text-xs font-semibold text-rose-400 hover:text-rose-600" onClick={borrarLote}>Borrar lote</button>}
         </div>
         <div className="mt-2 text-[11px] text-slate-400">
@@ -608,7 +613,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
     const firma = bd.firmas.find((f) => f.id === cuenta.firmaId) || bd.firmas[0] || null
     const html = htmlLote({ cheques: [c], cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: false })
       .replace(/<script>[\s\S]*?<\/script>/, '')
-      .replace('</body>', `<div style="position:fixed;top:10px;right:10px;z-index:9;display:flex;gap:8px">
+      .replace('</body>', `<style>@media print{.pc-tb{display:none!important}}</style><div class="pc-tb" style="position:fixed;bottom:14px;right:14px;z-index:9;display:flex;gap:8px">
         <button onclick="window.print()" style="background:#13233f;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Imprimir</button>
         <button onclick="window.close()" style="background:#e2e8f0;border:0;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Cerrar</button>
       </div></body>`)
@@ -817,6 +822,10 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
           <span className="text-xs text-slate-400">{c.fecha} · {cuenta.banco} · {c.loteId || 'sin lote'}</span>
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
             <Boton variant="ghost" onClick={verCheque}><Printer size={13} /> Imprimir</Boton>
+            <Boton variant="ghost" onClick={async () => {
+              generarPdfLote({ cheques: [c], cuenta, empresa: bd.empresa, firma, impresion: bd.impresion, prueba: false, nombreArchivo: `cheque_${c.numeroRaw || c.numeroNorm}.pdf` })
+              await auditarStaff('pc_pdf_descargado', `cheque #${c.numeroRaw || c.numeroNorm}`)
+            }}><FileDown size={13} /> PDF</Boton>
             {c.estado !== 'cancelado' && <Boton variant="ghost" onClick={clonar}><Copy size={13} /> Clonar</Boton>}
             {c.estado !== 'cancelado' && c.estado !== 'cobrado' && <Boton variant="ghost" onClick={anular}>Anular</Boton>}
             {(c.estado !== 'cobrado' || c.origen === 'historico') && <button className="rounded-xl px-3 py-2 text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={borrar}>Borrar</button>}
@@ -1379,7 +1388,7 @@ function PcAjustes({ bd, user, recargar }) {
   const guardarImp = async () => {
     setGuardando('imp')
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { offX: Number(imp.offX) || 0, offY: Number(imp.offY) || 0, mostrarMICR: !!imp.mostrarMICR, papel: imp.papel || 'blanco', actualizadoPor: user.email }, { merge: true })
+      await setDoc(refDoc(COLP.config, 'impresion'), { offX: Number(imp.offX) || 0, offY: Number(imp.offY) || 0, mostrarMICR: !!imp.mostrarMICR, mostrarLineas: !!imp.mostrarLineas, papel: imp.papel || 'blanco', actualizadoPor: user.email }, { merge: true })
       await auditarStaff('pc_calibracion', `papel ${imp.papel || 'blanco'} · offset ${imp.offX}/${imp.offY} in · MICR ${imp.mostrarMICR ? 'sí' : 'no'}`)
       recargar()
     } finally { setGuardando('') }
@@ -1424,6 +1433,10 @@ function PcAjustes({ bd, user, recargar }) {
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={!!imp.mostrarMICR} onChange={(e) => setImp({ ...imp, mostrarMICR: e.target.checked })} />
             Imprimir línea MICR (apágala si usas papel preimpreso del banco)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={!!imp.mostrarLineas} onChange={(e) => setImp({ ...imp, mostrarLineas: e.target.checked })} />
+            Imprimir líneas divisorias horizontales (apagadas: el papel EZ Checks ya trae su banda de seguridad)
           </label>
           <Boton variant="gold" disabled={guardando === 'imp'} onClick={guardarImp}>{guardando === 'imp' ? <Spinner /> : 'Guardar calibración'}</Boton>
           <div className="mt-2 border-t border-slate-100 pt-2 dark:border-slate-700/60">

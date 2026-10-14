@@ -63,6 +63,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
   }
 
   const conSufijo = activos.filter((w) => limpiarNombrePersona(w.nombre) !== w.nombre)
+  const chequesConSufijo = datos.cheques.filter((c) => limpiarNombrePersona(c.beneficiario || '') !== (c.beneficiario || '')).length
   const limpiarSufijos = async () => {
     if (!window.confirm(`¿Limpiar ${conSufijo.length} nombre(s)? Se quitan los números y las etiquetas en chino (叉车, 分拣工, 清洁工) del final. El nombre original queda como alias (nada se duplica ni se pierde).`)) return
     const normsExistentes = new Set(activos.map((w) => w.nombreNorm))
@@ -76,8 +77,18 @@ export default function WhTrabajadores({ user, perfilInicial }) {
       ops.push({ ref: refDoc(COL.workers, w.id), merge: true, data: { nombre: limpio, nombreNorm: normLimpio, alias: arrayUnion(w.nombreNorm) } })
       normsExistentes.add(normLimpio)
     }
+    // también los CHEQUES ya emitidos con el nombre sucio (para reimpresiones
+    // y fichas; el papel ya impreso obviamente no cambia)
+    let chequesLimpiados = 0
+    for (const c of datos.cheques) {
+      const limpio = limpiarNombrePersona(c.beneficiario || '')
+      if (limpio && limpio !== c.beneficiario) {
+        ops.push({ ref: refDoc(COL.cheques, c.id), merge: true, data: { beneficiario: limpio } })
+        chequesLimpiados++
+      }
+    }
     if (ops.length) await escribirEnLotes(ops)
-    await auditarStaff('workers_sufijos_limpiados', `${ops.length} nombres limpiados${saltados ? `, ${saltados} saltados por coincidir con otro perfil` : ''}`)
+    await auditarStaff('workers_sufijos_limpiados', `${ops.length - chequesLimpiados} nombres limpiados${chequesLimpiados ? ` + ${chequesLimpiados} cheques` : ''}${saltados ? `, ${saltados} saltados por coincidir con otro perfil` : ''}`)
     recargar()
   }
 
@@ -124,9 +135,9 @@ export default function WhTrabajadores({ user, perfilInicial }) {
           </div>
         </Aviso>
       )}
-      {conSufijo.length > 0 && (
+      {(conSufijo.length > 0 || chequesConSufijo > 0) && (
         <Aviso tipo="info" className="mb-4">
-          <b>{conSufijo.length} nombres traen sufijos del archivo</b> — números o etiquetas en chino (p. ej. "{conSufijo[0].nombre}").
+          <b>{conSufijo.length + chequesConSufijo} nombres/cheques traen sufijos del archivo</b> — números o etiquetas en chino{conSufijo[0] ? ` (p. ej. "${conSufijo[0].nombre}")` : ''}.
           <Boton variant="ghost" className="ml-2" onClick={limpiarSufijos}>Limpiar todos los nombres</Boton>
           <span className="ml-2 text-[11px] text-slate-400">Quita el número y las letras chinas del final; el nombre viejo queda como alias y las importaciones nuevas ya vienen limpias.</span>
         </Aviso>

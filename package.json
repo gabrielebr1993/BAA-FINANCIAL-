@@ -15,7 +15,7 @@
     "@stripe/react-connect-js": "^3.4.4",
     "firebase": "^11.0.2",
     "firebase-admin": "^12.7.0",
-    "jspdf": "^4.2.1",
+    "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.23.0",
