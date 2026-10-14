@@ -54,6 +54,16 @@ export default function WhPrintCheck({ user }) {
     })
   }
   useEffect(() => { recargar() }, [])
+  // la fuente MICR subida en Ajustes también se registra en la app, para que
+  // el diseñador y las vistas muestren los símbolos bancarios reales (⑆⑈)
+  useEffect(() => {
+    const url = bd?.impresion?.fuenteMICR
+    if (!url) return
+    try {
+      const fuente = new FontFace('MICRCustom', `url(${url})`)
+      fuente.load().then((f) => document.fonts.add(f)).catch(() => {})
+    } catch { /* navegadores sin FontFace */ }
+  }, [bd?.impresion?.fuenteMICR])
   if (!bd) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando Print Check…</div>
 
   const SUBS = [
@@ -1216,7 +1226,7 @@ function PcDiseno({ bd, user, recargar }) {
       disabled={!selId} onClick={() => selId && fijarDelta(selId, { [campo]: Math.round(((Number(delta(selId)[campo]) || 0) + d) * 2) / 2 })}>{t}</button>
   )
 
-  const fuenteDe = (e) => e.f === 'prop' ? 'Arial, Helvetica, sans-serif' : e.f === 'micr' ? "'MICR','Courier New',monospace" : "'Courier New',Courier,monospace"
+  const fuenteDe = (e) => e.f === 'prop' ? 'Arial, Helvetica, sans-serif' : e.f === 'micr' ? "'MICRCustom','MICR','Courier New',monospace" : "'Courier New',Courier,monospace"
 
   return (
     <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
