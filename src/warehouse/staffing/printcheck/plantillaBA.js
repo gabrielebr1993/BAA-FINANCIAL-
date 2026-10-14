@@ -115,6 +115,17 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
     if (e.t === 'img' && Number.isFinite(Number(o.ds))) e.h = Math.max(8, e.h + Number(o.ds))
     if (e.t === 'rect' && Number.isFinite(Number(o.ds))) e.h = Math.max(10, e.h + Number(o.ds))
   }
+
+  // elementos AGREGADOS por el dueño en el diseñador (rayas, logos, textos):
+  // guardan su posición/tamaño propios (impresion.extras), no usan pos2.
+  for (const ex of (Array.isArray(impresion.extras) ? impresion.extras : [])) {
+    if (!ex || !ex.id) continue
+    const x = Number(ex.x) || 0, y = Number(ex.y) || 0
+    if (ex.tipo === 'hline') els.push({ id: ex.id, ex: 1, t: 'line', x, y, w: Number(ex.w) || 100, g: Number(ex.g) || 0.8 })
+    else if (ex.tipo === 'vline') els.push({ id: ex.id, ex: 1, t: 'vline', x, y, h: Number(ex.h) || 100, g: Number(ex.g) || 0.8 })
+    else if (ex.tipo === 'img' && ex.src) els.push({ id: ex.id, ex: 1, t: 'img', x, y, h: Number(ex.h) || 40, w: Number(ex.w) || 0, src: ex.src })
+    else if (ex.tipo === 'tx') els.push({ id: ex.id, ex: 1, t: 'tx', x, y, s: Number(ex.s) || 10, str: String(ex.str || ''), b: ex.b ? 1 : 0 })
+  }
   return els
 }
 
@@ -139,9 +150,10 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
   const offY = (Number(impresion.offY) || 0) * 72
   const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   const el = (e) => {
-    if (e.t === 'line') return `<div class="el linea" style="left:${e.x}pt;top:${e.y}pt;width:${e.w}pt"></div>`
+    if (e.t === 'line') return `<div class="el linea" style="left:${e.x}pt;top:${e.y}pt;width:${e.w}pt;border-top-width:${e.g || 0.8}pt"></div>`
+    if (e.t === 'vline') return `<div class="el lineav" style="left:${e.x}pt;top:${e.y}pt;height:${e.h}pt;border-left-width:${e.g || 0.8}pt"></div>`
     if (e.t === 'rect') return `<div class="el cajafirma" style="left:${e.x}pt;top:${e.y}pt;width:${e.w}pt;height:${e.h}pt"></div>`
-    if (e.t === 'img') return `<img class="el" src="${e.src}" style="left:${e.x}pt;top:${e.y}pt;height:${e.h}pt" alt="" />`
+    if (e.t === 'img') return `<img class="el" src="${e.src}" style="left:${e.x}pt;top:${e.y}pt;height:${e.h}pt${e.w ? `;width:${e.w}pt` : ''}" alt="" />`
     const clase = ['el', e.b ? 'b' : '', e.f === 'prop' ? 'prop' : '', e.f === 'det' ? 'det' : '', e.f === 'micr' ? 'micr' : ''].filter(Boolean).join(' ')
     const ancho = e.al === 'r' ? `width:${e.w}pt;text-align:right;` : ''
     return `<div class="${clase}" style="left:${e.x}pt;top:${e.y}pt;font-size:${e.s}pt;${ancho}">${esc(e.str)}</div>`
@@ -165,6 +177,7 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     .det{color:#333}
     .cajafirma{border:1.5pt solid #111}
     .linea{border-top:0.8pt solid #444;height:0}
+    .lineav{border-left:0.8pt solid #444;width:0}
     .micr{font-family:'MICRCustom','MICR','MICR E13B','MICR Encoding','MICRe13b','E-13B','Courier New',monospace;letter-spacing:1px}
     .muestra{position:absolute;top:220pt;left:60pt;font-size:52px;font-weight:900;color:rgba(200,30,30,.25);transform:rotate(-18deg);letter-spacing:4px;z-index:5}
   </style></head><body>${cheques.map(uno).join('')}

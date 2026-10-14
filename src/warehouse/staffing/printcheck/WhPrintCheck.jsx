@@ -1155,6 +1155,7 @@ function PcCuentas({ bd, user, recargar }) {
 //    las salidas (ventana, PDF, reimpresiones). ─────────────────────────────
 function PcDiseno({ bd, user, recargar }) {
   const [pos2, setPos2] = useState(() => JSON.parse(JSON.stringify(bd.impresion.pos2 || {})))
+  const [extras, setExtras] = useState(() => JSON.parse(JSON.stringify(bd.impresion.extras || [])))
   const [lineasVer, setLineasVer] = useState(!!bd.impresion.mostrarLineas)
   const [selId, setSelId] = useState(null)
   const [muestra, setMuestra] = useState({ beneficiario: 'Nombre Del Trabajador', importe: '1234.56', memo: 'Payroll', numero: '' })
@@ -1171,40 +1172,74 @@ function PcDiseno({ bd, user, recargar }) {
     fecha: hoyISO(), memo: muestra.memo,
     detalle: [{ posicion: 'Sorter', horas: 48, pago: Number(muestra.importe) || 0, tarifa: 15 }], idEmpleado: 'TX000000',
   }
-  const impresionViva = { ...bd.impresion, pos2, mostrarLineas: lineasVer }
+  const impresionViva = { ...bd.impresion, pos2, extras, mostrarLineas: lineasVer }
   const els = elementosPagina({ ch: chequeMuestra, cuenta, empresa: bd.empresa, firma, impresion: impresionViva, prueba: true })
   const elSel = els.find((e) => e.id === selId) || null
   const delta = (id) => pos2[id] || { dx: 0, dy: 0, ds: 0 }
   const fijarDelta = (id, o) => setPos2({ ...pos2, [id]: { ...delta(id), ...o } })
 
+  // ── elementos propios (rayas / logos / textos agregados por el dueño) ──
+  const extraSel = elSel && elSel.ex ? extras.find((o) => o.id === elSel.id) : null
+  const fijarExtra = (id, o) => setExtras((xs) => xs.map((x) => (x.id === id ? { ...x, ...o } : x)))
+  const borrarExtra = (id) => { setExtras((xs) => xs.filter((x) => x.id !== id)); setSelId(null) }
+  const agregarExtra = (obj) => {
+    const id = 'x_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
+    setExtras((xs) => [...xs, { id, ...obj }])
+    setSelId(id)
+  }
+  const subirLogo = async (e) => {
+    const f = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!f) return
+    try {
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f) })
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url })
+      const esc = Math.min(1, 500 / img.width)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * esc); canvas.height = Math.round(img.height * esc)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      const png = canvas.toDataURL('image/png')
+      if (png.length > 350000) { window.alert('La imagen pesa demasiado. Usa una versión más pequeña o con fondo simple (máx ~250 KB).'); return }
+      const h = 36
+      agregarExtra({ tipo: 'img', x: 240, y: 55, h, w: Math.round(h * (canvas.width / canvas.height) * 10) / 10, src: png })
+    } catch { window.alert('No se pudo leer esa imagen. Intenta con un PNG o JPG.') }
+  }
+
   const empezarArrastre = (e, el) => {
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     setSelId(el.id)
-    const d = delta(el.id)
-    arrastre.current = { id: el.id, x0: e.clientX, y0: e.clientY, dx0: Number(d.dx) || 0, dy0: Number(d.dy) || 0 }
+    if (el.ex) {
+      const item = extras.find((o) => o.id === el.id)
+      arrastre.current = { id: el.id, extra: true, x0: e.clientX, y0: e.clientY, ex0: Number(item?.x) || 0, ey0: Number(item?.y) || 0 }
+    } else {
+      const d = delta(el.id)
+      arrastre.current = { id: el.id, x0: e.clientX, y0: e.clientY, dx0: Number(d.dx) || 0, dy0: Number(d.dy) || 0 }
+    }
   }
   const moverArrastre = (e) => {
     const a = arrastre.current
     if (!a) return
     e.preventDefault()
-    fijarDelta(a.id, { dx: Math.round((a.dx0 + (e.clientX - a.x0) / zoom) * 2) / 2, dy: Math.round((a.dy0 + (e.clientY - a.y0) / zoom) * 2) / 2 })
+    const mx = (e.clientX - a.x0) / zoom, my = (e.clientY - a.y0) / zoom
+    if (a.extra) fijarExtra(a.id, { x: Math.round((a.ex0 + mx) * 2) / 2, y: Math.round((a.ey0 + my) * 2) / 2 })
+    else fijarDelta(a.id, { dx: Math.round((a.dx0 + mx) * 2) / 2, dy: Math.round((a.dy0 + my) * 2) / 2 })
   }
   const soltarArrastre = () => { arrastre.current = null }
 
   const guardar = async () => {
     setGuardando(true)
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { pos2, mostrarLineas: lineasVer, actualizadoPor: user.email }, { merge: true })
-      await auditarStaff('pc_diseno_guardado', Object.keys(pos2).length ? Object.entries(pos2).map(([k, o]) => `${k}(${o.dx || 0},${o.dy || 0}${o.ds ? ',' + o.ds : ''})`).join(' ') : 'sin ajustes')
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos2, extras, mostrarLineas: lineasVer, actualizadoPor: user.email }, { merge: true })
+      await auditarStaff('pc_diseno_guardado', `${Object.keys(pos2).length} ajustes · ${extras.length} elementos propios`)
       recargar()
     } finally { setGuardando(false) }
   }
   const restablecer = async () => {
-    if (!window.confirm('¿Volver TODO al diseño original (el clon de tu software anterior)?')) return
-    setPos2({}); setSelId(null); setGuardando(true)
+    if (!window.confirm('¿Volver TODO al diseño original (el clon de tu software anterior)? También se quitan las rayas, logos y textos que agregaste.')) return
+    setPos2({}); setExtras([]); setSelId(null); setGuardando(true)
     try {
-      await setDoc(refDoc(COLP.config, 'impresion'), { pos2: {}, pos: {}, actualizadoPor: user.email }, { merge: true })
+      await setDoc(refDoc(COLP.config, 'impresion'), { pos2: {}, pos: {}, extras: [], actualizadoPor: user.email }, { merge: true })
       await auditarStaff('pc_diseno_restablecido', 'todo al original')
       recargar()
     } finally { setGuardando(false) }
@@ -1221,10 +1256,20 @@ function PcDiseno({ bd, user, recargar }) {
     auditarStaff('pc_pdf_descargado', 'prueba del diseñador [SAMPLE]')
   }
 
+  const empujar = (campo, d) => {
+    if (!selId) return
+    if (extraSel) {
+      const eje = campo === 'dx' ? 'x' : 'y'
+      fijarExtra(selId, { [eje]: Math.round(((Number(extraSel[eje]) || 0) + d) * 2) / 2 })
+    } else {
+      fijarDelta(selId, { [campo]: Math.round(((Number(delta(selId)[campo]) || 0) + d) * 2) / 2 })
+    }
+  }
   const Flecha = ({ t, campo, d }) => (
     <button className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-      disabled={!selId} onClick={() => selId && fijarDelta(selId, { [campo]: Math.round(((Number(delta(selId)[campo]) || 0) + d) * 2) / 2 })}>{t}</button>
+      disabled={!selId} onClick={() => empujar(campo, d)}>{t}</button>
   )
+  const NOMBRE_EXTRA = { hline: 'Raya horizontal (tuya)', vline: 'Raya vertical (tuya)', img: 'Logo / imagen (tuyo)', tx: 'Texto (tuyo)' }
 
   const fuenteDe = (e) => e.f === 'prop' ? 'Arial, Helvetica, sans-serif' : e.f === 'micr' ? "'MICRCustom','MICR','Courier New',monospace" : "'Courier New',Courier,monospace"
 
@@ -1233,10 +1278,11 @@ function PcDiseno({ bd, user, recargar }) {
       <div className="space-y-3">
         <Aviso tipo="info">
           <b>Haz clic sobre cualquier parte del cheque</b> (un texto, el número, la MICR, una raya, la firma…) y <b>arrástrala</b> con el mouse.
-          Las flechas mueven de a 1 punto (≈0.35 mm). Las líneas punteadas doradas marcan los dobleces de tu papel (3.5" y 7") — solo se ven aquí, no se imprimen.
+          Las flechas mueven de a 1 punto (≈0.35 mm). También puedes <b>agregar</b> rayas, tu logo o textos con "Agregar al cheque".
+          Las líneas punteadas doradas marcan los dobleces de tu papel (3.5" y 7") — solo se ven aquí, no se imprimen.
         </Aviso>
         <Card className="p-4">
-          <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{elSel ? (ETIQUETAS_EL[elSel.id] || elSel.id) : 'Nada seleccionado'}</div>
+          <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">{elSel ? (elSel.ex ? (NOMBRE_EXTRA[extraSel?.tipo] || 'Elemento tuyo') : (ETIQUETAS_EL[elSel.id] || elSel.id)) : 'Nada seleccionado'}</div>
           {!elSel && <div className="text-xs text-slate-400">Toca un elemento en el cheque de la derecha.</div>}
           {elSel && (
             <div className="grid grid-cols-[auto_1fr] items-center gap-3 text-xs">
@@ -1249,7 +1295,7 @@ function PcDiseno({ bd, user, recargar }) {
               </div>
               <div className="space-y-1.5">
                 <div className="text-slate-500">Posición: <b>{Math.round(elSel.x)}</b> , <b>{Math.round(elSel.y)}</b> pt</div>
-                {(elSel.t === 'tx' || elSel.t === 'img' || elSel.t === 'rect') && (
+                {!elSel.ex && (elSel.t === 'tx' || elSel.t === 'img' || elSel.t === 'rect') && (
                   <label className="flex items-center justify-between gap-2">{elSel.t === 'tx' ? 'Tamaño de letra' : 'Alto'}
                     <span className="flex items-center gap-1">
                       <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarDelta(selId, { ds: (Number(delta(selId).ds) || 0) - 0.5 })}>−</button>
@@ -1258,7 +1304,46 @@ function PcDiseno({ bd, user, recargar }) {
                     </span>
                   </label>
                 )}
-                {pos2[selId] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [selId]: _, ...resto } = pos2; setPos2(resto) }}>devolver a su lugar original</button>}
+                {!elSel.ex && pos2[selId] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [selId]: _, ...resto } = pos2; setPos2(resto) }}>devolver a su lugar original</button>}
+
+                {extraSel && extraSel.tipo === 'tx' && (
+                  <>
+                    <Input value={extraSel.str || ''} onChange={(ev) => fijarExtra(selId, { str: ev.target.value })} placeholder="Escribe el texto…" />
+                    <label className="flex items-center justify-between gap-2">Tamaño de letra
+                      <span className="flex items-center gap-1">
+                        <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarExtra(selId, { s: Math.max(4, (Number(extraSel.s) || 10) - 0.5) })}>−</button>
+                        <b>{Number(extraSel.s) || 10}</b>
+                        <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarExtra(selId, { s: (Number(extraSel.s) || 10) + 0.5 })}>+</button>
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 text-slate-500">
+                      <input type="checkbox" checked={!!extraSel.b} onChange={(ev) => fijarExtra(selId, { b: ev.target.checked ? 1 : 0 })} /> Negrita
+                    </label>
+                  </>
+                )}
+                {extraSel && (extraSel.tipo === 'hline' || extraSel.tipo === 'vline') && (
+                  <>
+                    <label className="flex items-center justify-between gap-2">{extraSel.tipo === 'hline' ? 'Largo' : 'Alto'}
+                      <Input type="number" step="1" className="w-20" value={extraSel.tipo === 'hline' ? (extraSel.w ?? 100) : (extraSel.h ?? 100)}
+                        onChange={(ev) => fijarExtra(selId, extraSel.tipo === 'hline' ? { w: Math.max(5, Number(ev.target.value) || 0) } : { h: Math.max(5, Number(ev.target.value) || 0) })} />
+                    </label>
+                    <label className="flex items-center justify-between gap-2">Grosor
+                      <Select className="w-20" value={String(extraSel.g || 0.8)} onChange={(ev) => fijarExtra(selId, { g: Number(ev.target.value) })}>
+                        {[0.5, 0.8, 1, 1.5, 2, 3].map((g) => <option key={g} value={g}>{g} pt</option>)}
+                      </Select>
+                    </label>
+                  </>
+                )}
+                {extraSel && extraSel.tipo === 'img' && (
+                  <label className="flex items-center justify-between gap-2">Alto
+                    <span className="flex items-center gap-1">
+                      <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => { const h = Math.max(8, (Number(extraSel.h) || 36) - 2); fijarExtra(selId, { h, w: Math.round(h * ((Number(extraSel.w) || h) / (Number(extraSel.h) || h)) * 10) / 10 }) }}>−</button>
+                      <b>{Number(extraSel.h) || 36}</b>
+                      <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => { const h = (Number(extraSel.h) || 36) + 2; fijarExtra(selId, { h, w: Math.round(h * ((Number(extraSel.w) || h) / (Number(extraSel.h) || h)) * 10) / 10 }) }}>+</button>
+                    </span>
+                  </label>
+                )}
+                {extraSel && <button className="text-[11px] font-semibold text-rose-500 hover:text-rose-600" onClick={() => borrarExtra(selId)}>🗑 Eliminar este elemento</button>}
               </div>
             </div>
           )}
@@ -1279,11 +1364,27 @@ function PcDiseno({ bd, user, recargar }) {
           </div>
         </Card>
         <Card className="p-4">
+          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Agregar al cheque</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <Boton variant="ghost" onClick={() => agregarExtra({ tipo: 'hline', x: 180, y: 150, w: 220, g: 0.8 })}>― Raya horizontal</Boton>
+            <Boton variant="ghost" onClick={() => agregarExtra({ tipo: 'vline', x: 306, y: 60, h: 120, g: 0.8 })}>│ Raya vertical</Boton>
+            <Boton variant="ghost" onClick={() => agregarExtra({ tipo: 'tx', x: 180, y: 165, s: 10, str: 'Texto nuevo', b: 0 })}>Aa Texto libre</Boton>
+            <label className="inline-flex cursor-pointer items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
+              🖼 Logo / imagen
+              <input type="file" accept="image/*" className="hidden" onChange={subirLogo} />
+            </label>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400">
+            El elemento nuevo aparece sobre el cheque: <b>tócalo y arrástralo</b> a su lugar. Sirve para tu logo, el logo del banco,
+            rayas extra o cualquier texto fijo. Se imprimen en TODOS los cheques cuando guardas el diseño.
+          </div>
+        </Card>
+        <Card className="p-4">
           <div className="flex flex-col gap-2">
             <Boton variant="gold" disabled={guardando} onClick={guardar}>{guardando ? <Spinner /> : 'Guardar diseño (se usa al imprimir)'}</Boton>
             <Boton variant="ghost" onClick={imprimirPrueba}><Printer size={14} /> Imprimir prueba</Boton>
             <Boton variant="ghost" onClick={pdfPrueba}><FileDown size={14} /> PDF de prueba</Boton>
-            {(Object.keys(pos2).length > 0 || Object.keys(bd.impresion.pos2 || {}).length > 0) && <Boton variant="ghost" onClick={restablecer}>Restablecer el diseño original</Boton>}
+            {(Object.keys(pos2).length > 0 || Object.keys(bd.impresion.pos2 || {}).length > 0 || extras.length > 0 || (bd.impresion.extras || []).length > 0) && <Boton variant="ghost" onClick={restablecer}>Restablecer el diseño original</Boton>}
           </div>
           <div className="mt-2 text-[11px] text-slate-400">El diseño guardado lo usan Imprimir, los PDF, Ver cheque y las reimpresiones. Las pruebas salen con SAMPLE y número 000000.</div>
         </Card>
@@ -1313,9 +1414,10 @@ function PcDiseno({ bd, user, recargar }) {
             {els.map((e, i) => {
               const sel = e.id === selId
               const estilo = { position: 'absolute', left: e.x, top: e.y, cursor: 'move', outline: sel ? '1.5px dashed #b78a2e' : 'none', outlineOffset: 2 }
-              if (e.t === 'line') return <div key={i} style={{ ...estilo, width: e.w, height: 8, marginTop: -4 }} onPointerDown={(ev) => empezarArrastre(ev, e)}><div style={{ borderTop: '1px solid #444', marginTop: 4 }} /></div>
+              if (e.t === 'line') return <div key={i} style={{ ...estilo, width: e.w, height: 8, marginTop: -4 }} onPointerDown={(ev) => empezarArrastre(ev, e)}><div style={{ borderTop: `${Math.max(1, e.g || 1)}px solid #444`, marginTop: 4 }} /></div>
+              if (e.t === 'vline') return <div key={i} style={{ ...estilo, width: 8, marginLeft: -4, height: e.h }} onPointerDown={(ev) => empezarArrastre(ev, e)}><div style={{ borderLeft: `${Math.max(1, e.g || 1)}px solid #444`, height: '100%', marginLeft: 4 }} /></div>
               if (e.t === 'rect') return <div key={i} style={{ ...estilo, width: e.w, height: e.h, border: '1.5px solid #111' }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
-              if (e.t === 'img') return <img key={i} src={e.src} alt="" draggable={false} style={{ ...estilo, height: e.h }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
+              if (e.t === 'img') return <img key={i} src={e.src} alt="" draggable={false} style={{ ...estilo, height: e.h, ...(e.w ? { width: e.w } : {}) }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
               return (
                 <div key={i} style={{ ...estilo, fontSize: e.s, fontFamily: fuenteDe(e), fontWeight: e.b ? 700 : 400, whiteSpace: 'nowrap', color: e.f === 'det' ? '#333' : '#111', ...(e.al === 'r' ? { width: e.w, textAlign: 'right' } : {}) }}
                   onPointerDown={(ev) => empezarArrastre(ev, e)}>{e.str || ' '}</div>

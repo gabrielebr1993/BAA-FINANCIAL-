@@ -39,15 +39,18 @@ export function generarPdfLote({ cheques, cuenta, empresa, firma, impresion, pru
       const x = e.x + offX
       const y = e.y + offY
       if (e.t === 'line') {
-        doc.setDrawColor(68, 68, 68); doc.setLineWidth(0.8)
+        doc.setDrawColor(68, 68, 68); doc.setLineWidth(e.g || 0.8)
         doc.line(x, y, x + e.w, y)
+      } else if (e.t === 'vline') {
+        doc.setDrawColor(68, 68, 68); doc.setLineWidth(e.g || 0.8)
+        doc.line(x, y, x, y + e.h)
       } else if (e.t === 'rect') {
         doc.setDrawColor(17, 17, 17); doc.setLineWidth(1.5)
         doc.rect(x, y, e.w, e.h)
       } else if (e.t === 'img') {
         try {
-          // alto fijo; el ancho se estima 3:1 (las firmas se optimizan apaisadas)
-          doc.addImage(e.src, 'PNG', x, y, e.h * 3, e.h)
+          // ancho propio si lo trae (logos); si no, 3:1 (firmas apaisadas)
+          doc.addImage(e.src, 'PNG', x, y, e.w || e.h * 3, e.h)
         } catch { /* una firma no rasterizable no debe tumbar el PDF */ }
       } else {
         const fuente = e.f === 'prop' ? 'helvetica' : e.f === 'micr' ? fuenteMicr : 'courier'
