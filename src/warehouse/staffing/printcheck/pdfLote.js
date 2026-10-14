@@ -107,7 +107,8 @@ export async function generarPdfLote({ cheques, cuenta, empresa, firma, impresio
       } else {
         const esMicr = e.f === 'micr'
         const fuente = e.f === 'prop' ? 'helvetica' : esMicr ? fuenteMicr : 'courier'
-        doc.setFont(fuente, fuente === 'MICRCustom' ? 'normal' : (e.b ? 'bold' : 'normal'))
+        const estiloFuente = fuente === 'MICRCustom' ? 'normal' : (e.b && e.i ? 'bolditalic' : e.b ? 'bold' : e.i ? 'italic' : 'normal')
+        doc.setFont(fuente, estiloFuente)
         doc.setFontSize(e.s)
         doc.setTextColor(e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17, e.f === 'det' ? 51 : 17)
         const familia = e.f === 'prop' ? FAM.prop : esMicr ? FAM.micr : FAM.mono

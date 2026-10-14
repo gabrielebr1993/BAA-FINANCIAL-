@@ -112,6 +112,8 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
     e.x += Number(o.dx) || 0
     e.y += Number(o.dy) || 0
     if (e.t === 'tx' && Number.isFinite(Number(o.ds))) e.s = Math.max(4, e.s + Number(o.ds))
+    if (e.t === 'tx' && (o.b === 0 || o.b === 1)) e.b = o.b // negrita elegida en el diseñador
+    if (e.t === 'tx' && (o.i === 0 || o.i === 1)) e.i = o.i // cursiva elegida en el diseñador
     if (e.t === 'img' && Number.isFinite(Number(o.ds))) e.h = Math.max(8, e.h + Number(o.ds))
     if (e.t === 'rect' && Number.isFinite(Number(o.ds))) e.h = Math.max(10, e.h + Number(o.ds))
   }
@@ -124,7 +126,7 @@ export function elementosPagina({ ch, cuenta, empresa, firma, impresion, prueba 
     if (ex.tipo === 'hline') els.push({ id: ex.id, ex: 1, t: 'line', x, y, w: Number(ex.w) || 100, g: Number(ex.g) || 0.8 })
     else if (ex.tipo === 'vline') els.push({ id: ex.id, ex: 1, t: 'vline', x, y, h: Number(ex.h) || 100, g: Number(ex.g) || 0.8 })
     else if (ex.tipo === 'img' && ex.src) els.push({ id: ex.id, ex: 1, t: 'img', x, y, h: Number(ex.h) || 40, w: Number(ex.w) || 0, src: ex.src })
-    else if (ex.tipo === 'tx') els.push({ id: ex.id, ex: 1, t: 'tx', x, y, s: Number(ex.s) || 10, str: String(ex.str || ''), b: ex.b ? 1 : 0 })
+    else if (ex.tipo === 'tx') els.push({ id: ex.id, ex: 1, t: 'tx', x, y, s: Number(ex.s) || 10, str: String(ex.str || ''), b: ex.b ? 1 : 0, i: ex.i ? 1 : 0 })
   }
   return els
 }
@@ -154,7 +156,7 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     if (e.t === 'vline') return `<div class="el lineav" style="left:${e.x}pt;top:${e.y}pt;height:${e.h}pt;border-left-width:${e.g || 0.8}pt"></div>`
     if (e.t === 'rect') return `<div class="el cajafirma" style="left:${e.x}pt;top:${e.y}pt;width:${e.w}pt;height:${e.h}pt"></div>`
     if (e.t === 'img') return `<img class="el" src="${e.src}" style="left:${e.x}pt;top:${e.y}pt;height:${e.h}pt${e.w ? `;width:${e.w}pt` : ''}" alt="" />`
-    const clase = ['el', e.b ? 'b' : '', e.f === 'prop' ? 'prop' : '', e.f === 'det' ? 'det' : '', e.f === 'micr' ? 'micr' : ''].filter(Boolean).join(' ')
+    const clase = ['el', e.b ? 'b' : '', e.i ? 'i' : '', e.f === 'prop' ? 'prop' : '', e.f === 'det' ? 'det' : '', e.f === 'micr' ? 'micr' : ''].filter(Boolean).join(' ')
     const ancho = e.al === 'r' ? `width:${e.w}pt;text-align:right;` : ''
     return `<div class="${clase}" style="left:${e.x}pt;top:${e.y}pt;font-size:${e.s}pt;${ancho}">${esc(e.str)}</div>`
   }
@@ -173,6 +175,7 @@ export function htmlLote({ cheques, cuenta, empresa, firma, impresion, prueba })
     .pagina{position:relative;width:612pt;height:792pt;page-break-after:always;overflow:hidden}
     .el{position:absolute;white-space:nowrap;transform:translate(${offX}pt,${offY}pt)}
     .b{font-weight:700}
+    .i{font-style:italic}
     .prop{font-family:Arial,Helvetica,sans-serif}
     .det{color:#333}
     .cajafirma{border:1.5pt solid #111}

@@ -1304,6 +1304,16 @@ function PcDiseno({ bd, user, recargar }) {
                     </span>
                   </label>
                 )}
+                {!elSel.ex && elSel.t === 'tx' && elSel.id !== 'micr' && (
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 text-slate-500">
+                      <input type="checkbox" checked={!!elSel.b} onChange={(ev) => fijarDelta(selId, { b: ev.target.checked ? 1 : 0 })} /> <b>Negrita</b>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-slate-500">
+                      <input type="checkbox" checked={!!elSel.i} onChange={(ev) => fijarDelta(selId, { i: ev.target.checked ? 1 : 0 })} /> <i>Cursiva</i>
+                    </label>
+                  </div>
+                )}
                 {!elSel.ex && pos2[selId] && <button className="text-[11px] text-slate-400 hover:text-rose-500" onClick={() => { const { [selId]: _, ...resto } = pos2; setPos2(resto) }}>devolver a su lugar original</button>}
 
                 {extraSel && extraSel.tipo === 'tx' && (
@@ -1316,9 +1326,14 @@ function PcDiseno({ bd, user, recargar }) {
                         <button className="h-7 w-7 rounded-lg border border-slate-200 font-bold dark:border-slate-600" onClick={() => fijarExtra(selId, { s: (Number(extraSel.s) || 10) + 0.5 })}>+</button>
                       </span>
                     </label>
-                    <label className="flex items-center gap-2 text-slate-500">
-                      <input type="checkbox" checked={!!extraSel.b} onChange={(ev) => fijarExtra(selId, { b: ev.target.checked ? 1 : 0 })} /> Negrita
-                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-1.5 text-slate-500">
+                        <input type="checkbox" checked={!!extraSel.b} onChange={(ev) => fijarExtra(selId, { b: ev.target.checked ? 1 : 0 })} /> <b>Negrita</b>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-slate-500">
+                        <input type="checkbox" checked={!!extraSel.i} onChange={(ev) => fijarExtra(selId, { i: ev.target.checked ? 1 : 0 })} /> <i>Cursiva</i>
+                      </label>
+                    </div>
                   </>
                 )}
                 {extraSel && (extraSel.tipo === 'hline' || extraSel.tipo === 'vline') && (
@@ -1419,7 +1434,7 @@ function PcDiseno({ bd, user, recargar }) {
               if (e.t === 'rect') return <div key={i} style={{ ...estilo, width: e.w, height: e.h, border: '1.5px solid #111' }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
               if (e.t === 'img') return <img key={i} src={e.src} alt="" draggable={false} style={{ ...estilo, height: e.h, ...(e.w ? { width: e.w } : {}) }} onPointerDown={(ev) => empezarArrastre(ev, e)} />
               return (
-                <div key={i} style={{ ...estilo, fontSize: e.s, fontFamily: fuenteDe(e), fontWeight: e.b ? 700 : 400, whiteSpace: 'nowrap', color: e.f === 'det' ? '#333' : '#111', ...(e.al === 'r' ? { width: e.w, textAlign: 'right' } : {}) }}
+                <div key={i} style={{ ...estilo, fontSize: e.s, fontFamily: fuenteDe(e), fontWeight: e.b ? 700 : 400, fontStyle: e.i ? 'italic' : 'normal', whiteSpace: 'nowrap', color: e.f === 'det' ? '#333' : '#111', ...(e.al === 'r' ? { width: e.w, textAlign: 'right' } : {}) }}
                   onPointerDown={(ev) => empezarArrastre(ev, e)}>{e.str || ' '}</div>
               )
             })}
