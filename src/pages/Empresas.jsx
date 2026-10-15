@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { collection, addDoc, doc, setDoc, updateDoc, deleteDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore'
-import { Copy, Check, Building2, UserPlus, Eye, EyeOff, Trash2, AlertTriangle } from 'lucide-react'
+import { Copy, Check, Building2, UserPlus, Eye, EyeOff, Trash2, AlertTriangle, Eraser } from 'lucide-react'
 import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -28,6 +28,9 @@ export default function Empresas() {
   const [porEliminar, setPorEliminar] = useState(null)
   const [confirmNombre, setConfirmNombre] = useState('')
   const [eliminando, setEliminando] = useState(false)
+  const [porVaciar, setPorVaciar] = useState(null)
+  const [confirmVaciar, setConfirmVaciar] = useState('')
+  const [vaciando, setVaciando] = useState(false)
   const [progreso, setProgreso] = useState(null) // { hechos, total } durante el borrado
   const [borrarUsuarios, setBorrarUsuarios] = useState(false)
 
@@ -144,6 +147,34 @@ export default function Empresas() {
     return snap.docs.filter((d) => d.data().superAdmin !== true && d.id !== auth.currentUser?.uid).map((d) => d.ref)
   }
 
+  // VACIAR una empresa: borra TODOS sus datos (facturas, choferes, claims,
+  // nómina, managers, estadísticas) pero CONSERVA la empresa, sus usuarios y
+  // su configuración — queda en cero, lista para empezar a subir de nuevo.
+  const vaciarEmpresa = async () => {
+    if (!porVaciar) return
+    const cid = porVaciar.id
+    const nombreEmp = porVaciar.nombre
+    setVaciando(true); setError(''); setOk(''); setProgreso({ hechos: 0, total: 0 })
+    try {
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] Vaciando datos de "${nombreEmp}" (id: ${cid})…`)
+      const grupos = await Promise.all(COLECCIONES_DATOS.map((c) => refsDeColeccion(c, cid)))
+      const refs = grupos.flat()
+      const total = await borrarRefsEnLotes(refs, (hechos, tt) => setProgreso({ hechos, total: tt }))
+      // eslint-disable-next-line no-console
+      console.log(`[MilePay] "${nombreEmp}" vaciada. Docs borrados: ${total}`)
+      setPorVaciar(null); setConfirmVaciar('')
+      setOk(`"${nombreEmp}" ${t('quedó en cero:')} ${total} ${t('registro(s) borrados. La empresa, sus usuarios y su configuración se conservan — ya puede subir facturas y registrar choferes desde cero.')}`)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[MilePay] Error al vaciar empresa:', e)
+      setError(`${t('No se pudo vaciar:')} ${e.message}`)
+    } finally {
+      setVaciando(false)
+      setProgreso(null)
+    }
+  }
+
   // Elimina una empresa concreta (por su ID) y TODOS sus datos por companyId.
   // RÁPIDO: lee todas las colecciones EN PARALELO, junta las refs y las borra en
   // lotes de 450 ejecutados en paralelo por olas (segundos, no minutos). Blindado
@@ -254,6 +285,9 @@ export default function Empresas() {
                   <Boton variant="ghost" onClick={() => toggleActivo(row)} className="px-2.5 py-1 text-xs">
                     {row.activo !== false ? t('Desactivar') : t('Activar')}
                   </Boton>
+                  <Boton variant="ghost" onClick={() => { setPorVaciar(row); setConfirmVaciar('') }} className="px-2.5 py-1 text-xs text-amber-600 dark:text-amber-400" title={t('Borra todos sus datos (facturas, choferes, claims, nómina) pero conserva la empresa y sus usuarios')}>
+                    <Eraser size={13} strokeWidth={1.8} /> {t('Vaciar')}
+                  </Boton>
                   <Boton variant="danger" onClick={() => { setPorEliminar(row); setConfirmNombre(''); setBorrarUsuarios(false) }} className="px-2.5 py-1 text-xs"><Trash2 size={13} strokeWidth={1.8} /> {t('Eliminar')}</Boton>
                 </div>
               )
@@ -289,6 +323,43 @@ export default function Empresas() {
           </div>
         )}
       </Card>
+
+      {/* Confirmación de VACIADO (empezar de cero) escribiendo el nombre */}
+      {porVaciar && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/50 p-4" onClick={() => !vaciando && setPorVaciar(null)}>
+          <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="m-0 mb-2 flex items-center gap-2 text-lg font-bold text-amber-600 dark:text-amber-400"><Eraser size={20} strokeWidth={1.8} /> {t('Vaciar empresa (empezar de cero)')}</h3>
+            <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+              {t('Vas a borrar')} <b>{t('todos los datos')}</b> {t('de')} <b>{porVaciar.nombre}</b>: {t('facturas, choferes, claims, nómina, managers y estadísticas. No se puede deshacer.')}
+            </p>
+            <p className="mb-3 rounded-xl bg-emerald-50 p-2.5 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+              {t('SÍ se conservan: la empresa, sus usuarios (accesos) y su configuración. Queda lista para subir facturas y registrar choferes desde cero.')}
+            </p>
+            <p className="mb-3 text-xs text-slate-400">ID: <span className="font-mono">{porVaciar.id}</span></p>
+            <div className="mb-3">
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Para confirmar, escribe el nombre exacto de la empresa:')}</div>
+              <Input className="w-full" value={confirmVaciar} onChange={(e) => setConfirmVaciar(e.target.value)} placeholder={porVaciar.nombre} />
+            </div>
+            {vaciando && progreso && (
+              <div className="mb-3">
+                <div className="mb-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span>{t('Vaciando datos…')}</span>
+                  <span>{progreso.hechos} {t('de')} {progreso.total || '—'}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full rounded-full bg-amber-500 transition-all duration-200" style={{ width: `${progreso.total ? Math.round((progreso.hechos / progreso.total) * 100) : 5}%` }} />
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Boton variant="ghost" onClick={() => setPorVaciar(null)} disabled={vaciando}>{t('Cancelar')}</Boton>
+              <Boton variant="danger" onClick={vaciarEmpresa} disabled={vaciando || confirmVaciar.trim() !== porVaciar.nombre.trim()}>
+                {vaciando ? t('Vaciando…') : <><Eraser size={15} strokeWidth={1.8} /> {t('Vaciar definitivamente')}</>}
+              </Boton>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Confirmación de borrado de empresa (escribiendo su nombre) */}
       {porEliminar && (
