@@ -74,12 +74,16 @@ export const POSICIONES_BASE = {
 // solo se quita la última palabra cuando es una etiqueta de posición conocida
 // y queda al menos una palabra de nombre. La migración en Trabajadores
 // conserva el nombre viejo como alias para que nada se duplique.
-// Regla general: si el resto del nombre tiene letras latinas, CUALQUIER
-// palabra escrita solo en chino al final es una etiqueta del archivo y se
-// quita (叉车, 分拣工, 夜班, el almacén, lo que sea). Un nombre totalmente
-// chino (persona china real) nunca se toca.
+// Regla general: si el resto del nombre tiene letras latinas, se quita del
+// final CUALQUIER etiqueta del archivo:
+// · palabras solo en chino (posición, turno, almacén, lo que sea)
+// · mezclas sin letras latinas ("3(叉车", "(3)", "#12")
+// · etiquetas de turno/posición en MAYÚSCULAS del reporte ("FLD", "ON"…)
+// Un nombre totalmente chino (persona china real) nunca se toca.
 const RX_CJK = /^[㐀-䶿一-鿿豈-﫿]+$/
 const RX_LATINO = /[A-Za-zÀ-ÿ]/
+const RX_SIN_LATINO = /^[^A-Za-zÀ-ÿ]+$/ // dígitos, paréntesis, chino, # …
+const RX_TAG_ARCHIVO = /^(FLD|ON|OFF|AM|PM)$/ // exactas, solo en MAYÚSCULAS
 export function limpiarNombrePersona(raw) {
   let s = String(raw || '').trim()
   let antes
@@ -87,11 +91,15 @@ export function limpiarNombrePersona(raw) {
     antes = s
     s = s.replace(/\s+#?\d{1,3}$/, '').trim()
     const partes = s.split(/\s+/)
-    const ultimo = (partes[partes.length - 1] || '').replace(/^[([【（]+|[)\]】）]+$/g, '')
-    const restoConLatino = partes.slice(0, -1).some((p) => RX_LATINO.test(p))
-    if (partes.length > 1 && restoConLatino && RX_CJK.test(ultimo)) {
-      s = partes.slice(0, -1).join(' ')
+    if (partes.length > 1) {
+      const ultimo = partes[partes.length - 1]
+      const pelado = ultimo.replace(/^[([【（]+|[)\]】）]+$/g, '')
+      const restoConLatino = partes.slice(0, -1).some((p) => RX_LATINO.test(p))
+      if (restoConLatino && (RX_CJK.test(pelado) || RX_SIN_LATINO.test(ultimo) || RX_TAG_ARCHIVO.test(pelado))) {
+        s = partes.slice(0, -1).join(' ')
+      }
     }
+    s = s.trim()
   } while (s !== antes)
   return s
 }
