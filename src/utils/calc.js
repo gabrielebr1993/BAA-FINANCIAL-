@@ -72,6 +72,22 @@ export function claimFeeDe(inv, ciudad) {
   return CLAIM_FEE
 }
 
+// Regla de UNA ruta con búsqueda tolerante: el archivo y la configuración no
+// siempre escriben la ruta igual ("dal 12" vs "DAL-12" vs su nombre). Orden:
+// código exacto → código normalizado (mayúsculas/espacios/guiones) → nombre.
+export function reglaDeRuta(reglas, ruta) {
+  if (!reglas) return null
+  const cruda = String(ruta || '').trim()
+  if (!cruda) return null
+  if (reglas[cruda]) return reglas[cruda]
+  const norm = (s) => String(s || '').trim().toUpperCase().replace(/[\s\-_]+/g, ' ')
+  const objetivo = norm(cruda)
+  if (!objetivo) return null
+  for (const k of Object.keys(reglas)) if (norm(k) === objetivo) return reglas[k]
+  for (const k of Object.keys(reglas)) if (norm(reglas[k]?.nombre) === objetivo) return reglas[k]
+  return null
+}
+
 // Método (M1/M2/M3) que le corresponde a UN claim. Prioridad:
 //   1) claim.metodo (override guardado/manual en ese claim)
 //   2) reglas de la ciudad guardadas en la factura, por su categoría
@@ -82,7 +98,7 @@ export function metodoDe(inv, ciudad, claim) {
   const cat = categoriaClaim(claim?.claimType)
   // Modo POR RUTA: el método sale de la regla de la ruta asignada al chofer.
   if (inv?.modoConfig === 'ruta') {
-    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[claim?.rutaAsignada]
+    const rr = reglaDeRuta(inv?.reglasRutaAplicadas, claim?.rutaAsignada)
     if (rr?.metodos && rr.metodos[cat]) return rr.metodos[cat]
     return METODO_CLAIM_DEFAULT
   }
@@ -98,7 +114,7 @@ export function montoM1De(inv, ciudad, claim) {
   const cat = categoriaClaim(claim?.claimType)
   // Modo POR RUTA: precio M1 de la ruta asignada (por categoría → multa de la ruta).
   if (inv?.modoConfig === 'ruta') {
-    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[claim?.rutaAsignada]
+    const rr = reglaDeRuta(inv?.reglasRutaAplicadas, claim?.rutaAsignada)
     if (rr?.montos && numONull(rr.montos[cat]) != null) return Number(rr.montos[cat])
     if (rr && numONull(rr.claimFee) != null) return Number(rr.claimFee)
     return CLAIM_FEE
@@ -114,7 +130,7 @@ export function montoM1De(inv, ciudad, claim) {
 export function tarifaDriver(inv, drivers, nombre) {
   if (inv?.modoConfig === 'ruta') {
     const ruta = inv?.asignacionRuta && inv.asignacionRuta[nombre]
-    const rr = ruta && inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[ruta]
+    const rr = ruta && reglaDeRuta(inv?.reglasRutaAplicadas, ruta)
     if (rr) {
       const tarifaInd = Number(rr.tarifaInd) || 0
       const tarifaDoble = Number(rr.tarifaDoble) || 0
@@ -411,7 +427,7 @@ function pagoPorRutaChofer(inv, drivers, ch) {
   let pagoInd = 0, pagoDob = 0, indTot = 0, dobTot = 0
   const rutasSinTarifa = []
   for (const r of crr) {
-    const rr = inv?.reglasRutaAplicadas && inv.reglasRutaAplicadas[r.ruta]
+    const rr = reglaDeRuta(inv?.reglasRutaAplicadas, r.ruta)
     const tInd = rr ? Number(rr.tarifaInd) || 0 : 0
     const tDob = rr ? Number(rr.tarifaDoble) || 0 : 0
     const ri = Number(r.individuales) || 0, rd = Number(r.dobles) || 0

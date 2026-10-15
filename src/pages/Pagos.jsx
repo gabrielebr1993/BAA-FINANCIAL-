@@ -39,6 +39,7 @@ export default function Pagos() {
   const [pagandoStripe, setPagandoStripe] = useState(null) // nombre del chofer en proceso
   const [stripeMsg, setStripeMsg] = useState(null)
   const [fEstado, setFEstado] = useState('')
+  const [fRuta, setFRuta] = useState('') // filtro por ruta (modo pago por ruta)
   const [busqueda, setBusqueda] = useState('') // por nombre o rate
   const [expandido, setExpandido] = useState(null)
   const [perdonandoId, setPerdonandoId] = useState(null)
@@ -85,6 +86,34 @@ export default function Pagos() {
 
   // Ajustes manuales (préstamo/bono) por chofer, guardados EN la factura de la semana.
   const invActual = invoicesRango.length === 1 ? invoicesRango[0] : null
+
+  // Modo POR RUTA: la factura guarda una FOTO de los precios de ruta al
+  // subirla. Si los precios se configuraron o cambiaron DESPUÉS, el pago sale
+  // en $0 — este botón vuelve a aplicar la configuración actual a la(s)
+  // factura(s) del rango (las asignaciones chofer→ruta no se tocan).
+  const reaplicarPreciosRuta = async () => {
+    const objetivo = (invoicesRango || []).filter((i) => i?.id && i.modoConfig === 'ruta')
+    if (!objetivo.length) return
+    if (!ajustes?.reglasRuta || !Object.keys(ajustes.reglasRuta).length) {
+      setStripeMsg({ tipo: 'error', txt: t('No tienes rutas configuradas todavía: ve a Configuración y define los precios por ruta primero.') })
+      return
+    }
+    setOcupado(true)
+    try {
+      for (const inv of objetivo) {
+        const base = JSON.parse(JSON.stringify(ajustes.reglasRuta))
+        for (const code of new Set(Object.values(inv.asignacionRuta || {}))) {
+          if (code && !base[code]) base[code] = { nombre: '', tarifaInd: 0, tarifaDoble: 0, metodos: {}, montos: {} }
+        }
+        await updateDoc(doc(db, 'invoices', inv.id), { reglasRutaAplicadas: base })
+      }
+      registrarAuditoria(activeCompanyId, { ...audit, accion: 'precios_ruta_reaplicados', detalles: `${objetivo.length} factura(s) del rango` })
+      await reloadInvoices()
+      setStripeMsg({ tipo: 'ok', txt: t('Precios por ruta reaplicados con tu configuración actual: los totales se recalcularon.') })
+    } catch (e) {
+      setStripeMsg({ tipo: 'error', txt: t('No se pudo reaplicar: ') + (e.message || e) })
+    } finally { setOcupado(false) }
+  }
   const [editAjuste, setEditAjuste] = useState({}) // nombre -> { prestamo, bono }
   const [guardandoAjuste, setGuardandoAjuste] = useState(null)
   // Seguro repartido: un monto total que se divide en partes iguales entre TODOS los
@@ -146,9 +175,11 @@ export default function Pagos() {
   const pagosConEstado = pagos
     .map((p) => ({ ...p, seguro: seguroPorChofer, totalPagar: p.totalPagar - seguroPorChofer, estado: payrollMap[p.nombre]?.estado || 'pendiente', ruta: esRuta ? rutaDe(p.nombre) : null }))
     .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+  const rutasDisponibles = esRuta ? [...new Set(pagosConEstado.map((p) => p.ruta || '—'))].sort() : []
   const filtrados = pagosConEstado.filter((p) => {
     if (fEstado === 'pendiente' && p.estado !== 'pendiente') return false
     if (fEstado === 'pagado' && p.estado !== 'pagado') return false
+    if (esRuta && fRuta && (p.ruta || '—') !== fRuta) return false
     const q = busqueda.trim().toLowerCase()
     if (q) {
       const nombre = (p.nombre || '').toLowerCase()
@@ -397,6 +428,18 @@ export default function Pagos() {
                     <option value="pendiente">{t('Solo pendientes')}</option>
                     <option value="pagado">{t('Solo pagados')}</option>
                   </Select>
+                  {esRuta && (
+                    <Select value={fRuta} onChange={(e) => setFRuta(e.target.value)} title={t('Filtrar y pagar por ruta')}>
+                      <option value="">{t('Todas las rutas')}</option>
+                      {rutasDisponibles.map((r) => <option key={r} value={r}>{t('Ruta')} {r}</option>)}
+                    </Select>
+                  )}
+                  {esRuta && puedePagar && (
+                    <Boton variant="ghost" disabled={ocupado} onClick={reaplicarPreciosRuta}
+                      title={t('Vuelve a aplicar a esta factura los precios por ruta que tienes configurados AHORA (útil si configuraste o cambiaste precios después de subir la factura).')}>
+                      {ocupado ? <Spinner /> : t('Reaplicar precios de ruta')}
+                    </Boton>
+                  )}
                   <div className="flex items-center gap-1">
                     <Input className="w-56" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder={t('Buscar por nombre o rate (ej. 1.6)…')} />
                     {busqueda && <Boton variant="ghost" className="px-2 py-1 text-xs" onClick={() => setBusqueda('')}><X size={13} strokeWidth={2} /></Boton>}
