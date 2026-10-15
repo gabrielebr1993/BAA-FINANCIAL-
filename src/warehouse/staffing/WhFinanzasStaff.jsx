@@ -328,6 +328,16 @@ function GastosFijos({ lista, user, recargar }) {
   const quitar = (i) => {
     guardarLista(lista.filter((_, j) => j !== i), 'gasto_fijo_eliminado', lista[i].concepto)
   }
+  // edición en línea: concepto, importe y fecha "desde" (sin borrar y recrear)
+  const [editando, setEditando] = useState(null)
+  const [edit, setEdit] = useState({ concepto: '', importe: '', desde: '' })
+  const empezarEditar = (i) => { setEditando(i); setEdit({ concepto: lista[i].concepto, importe: lista[i].importe, desde: lista[i].desde || '' }) }
+  const guardarEdicion = () => {
+    const i = editando
+    const nueva = lista.map((g, j) => (j === i ? { ...g, concepto: edit.concepto.trim() || g.concepto, importe: Number(edit.importe) > 0 ? Number(edit.importe) : g.importe, desde: edit.desde || g.desde } : g))
+    guardarLista(nueva, 'gasto_fijo_editado', `${nueva[i].concepto}: ${dinero(nueva[i].importe)}/semana desde ${nueva[i].desde}`)
+    setEditando(null)
+  }
   const totalActivo = (lista || []).filter((g) => g.activo !== false).reduce((s, g) => s + (Number(g.importe) || 0), 0)
   return (
     <Card className="mb-3 p-4">
@@ -336,13 +346,24 @@ function GastosFijos({ lista, user, recargar }) {
         <span className="text-xs font-normal text-slate-400">se descuentan solos en cada semana · activos: {dinero(totalActivo)}/semana</span>
       </div>
       {(lista || []).map((g, i) => (
+        editando === i ? (
+          <div key={i} className="flex flex-wrap items-center gap-2 py-1 text-xs">
+            <Input className="w-44" value={edit.concepto} onChange={(e) => setEdit({ ...edit, concepto: e.target.value })} />
+            <Input className="w-24" type="number" step="0.01" value={edit.importe} onChange={(e) => setEdit({ ...edit, importe: e.target.value })} />
+            <Input className="w-36" type="date" value={edit.desde} onChange={(e) => setEdit({ ...edit, desde: e.target.value })} />
+            <button className="font-semibold text-emerald-600 hover:text-emerald-700" disabled={guardando} onClick={guardarEdicion}>guardar</button>
+            <button className="text-slate-400 hover:text-brand-navy dark:hover:text-white" onClick={() => setEditando(null)}>cancelar</button>
+          </div>
+        ) : (
         <div key={i} className="flex flex-wrap items-center gap-2 py-1 text-xs">
           <span className={g.activo === false ? 'text-slate-400 line-through' : ''}>{g.concepto}</span>
           <b className={g.activo === false ? 'text-slate-400 line-through' : ''}>{dinero(g.importe)}</b>
           <span className="text-slate-400">desde {g.desde}</span>
+          <button className="text-slate-400 hover:text-brand-navy dark:hover:text-white" onClick={() => empezarEditar(i)}>editar</button>
           <button className="text-slate-400 hover:text-brand-navy dark:hover:text-white" onClick={() => alternar(i)}>{g.activo === false ? 'reactivar' : 'pausar'}</button>
           <button className="text-rose-400 hover:text-rose-600" onClick={() => quitar(i)}>quitar</button>
         </div>
+        )
       ))}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Input className="w-56" placeholder="Concepto (supervisión, seguro…)" value={nuevo.concepto} onChange={(e) => setNuevo({ ...nuevo, concepto: e.target.value })} />
