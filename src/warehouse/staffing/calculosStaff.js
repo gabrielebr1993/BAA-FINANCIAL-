@@ -183,7 +183,11 @@ export function resumenPeriodo({ registros, ajustes, gastos, cobros, cheques, pa
   const ajustesTot = (ajustes || []).reduce((s, a) => s + (a.importe || 0), 0)
   const ingreso = Math.round((ingresoDetalle + ajustesTot) * 100) / 100
   const pendientesTarifa = regsPago.filter((r) => r.pendienteTarifa || r.miPago === null || r.miPago === undefined).length
-  const pagoCalc = Math.round(regsPago.reduce((s, r) => s + (r.miPago || 0), 0) * 100) / 100
+  // Los ajustes del archivo con trabajador asignado se PAGAN en su cheque
+  // (planearLote los suma al neto): cuentan en el pago igual que en el
+  // ingreso, para que la utilidad no se infle con dinero que solo pasa.
+  const ajustesPagados = (ajustes || []).reduce((s, a) => s + (a.workerId && !aparte.has(a.workerId) ? (a.importe || 0) : 0), 0)
+  const pagoCalc = Math.round((regsPago.reduce((s, r) => s + (r.miPago || 0), 0) + ajustesPagados) * 100) / 100
   const gastosTot = Math.round((gastos || []).reduce((s, g) => s + (g.importe || 0), 0) * 100) / 100
   const cobrado = Math.round((cobros || []).reduce((s, c) => s + (c.importe || 0), 0) * 100) / 100
   // pagado real: distribución de cheques COBRADOS que apuntan a este período
