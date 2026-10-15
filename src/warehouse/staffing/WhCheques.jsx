@@ -21,6 +21,7 @@ import {
 } from './logicaCheques'
 import { COL, cargar, auditarStaff, escribirEnLotes, refDoc, setDoc, arrayUnion } from './datosStaff'
 import { hashContenido, paraBuscar } from './parserGofo'
+import { enmascarar } from './printcheck/logicaPrint'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const COLORES_ESTADO = { emitido: 'gold', cobrado: 'green', cancelado: 'slate', diferencia: 'red' }
@@ -330,7 +331,7 @@ function ChequeCard({ c, datos, user, recargar }) {
         <span className="font-semibold">{c.beneficiario}</span>
         {worker && <Badge color="slate">{worker.nombre}</Badge>}
         <span className="ml-auto">{dinero(c.importe)}</span>
-        <span className="text-slate-400">{c.fechaEmision || 'sin fecha'}{c.cobro?.fecha ? ` · cobrado ${c.cobro.fecha}` : ''}{c.cuenta ? ` · cta ${c.cuenta}` : ''}</span>
+        <span className="text-slate-400">{c.fechaEmision || c.fecha || 'sin fecha'}{c.cobro?.fecha ? ` · cobrado ${c.cobro.fecha}` : ''}{c.cuenta ? ` · cta ${enmascarar(c.cuenta)}` : ''}</span>
       </button>
       {abierto && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
