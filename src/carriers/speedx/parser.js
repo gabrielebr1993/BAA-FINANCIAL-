@@ -52,11 +52,25 @@ function indices(headerRow, defs) {
   return out
 }
 
+// Fecha de una celda de Excel → 'aaaa-mm-dd'. La columna puede venir como
+// texto, como Date o como NÚMERO DE SERIE de Excel (45931 = 2025-10-01):
+// sin esta conversión, el serial se leía como "año 45931" y Firestore
+// rechazaba la factura ("Timestamp seconds out of range").
+function fechaCelda(v) {
+  if (v == null || v === '') return ''
+  if (typeof v === 'number' && v > 20000 && v < 60000) {
+    return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10)
+  }
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10)
+  return String(v).slice(0, 10)
+}
+
 // "0829-0904" + fechas reales → { semana, fechaInicioISO, fechaFinISO }.
 function semanaDeNota(nota, fechas) {
   const m = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/.exec(String(nota || '').trim())
-  // El AÑO sale de las fechas del detalle (la nota no lo trae).
-  const anios = fechas.filter(Boolean).map((f) => new Date(f).getFullYear()).filter((y) => y > 2000)
+  // El AÑO sale de las fechas del detalle (la nota no lo trae). Años absurdos
+  // (serial de Excel mal leído, celdas basura) se descartan.
+  const anios = fechas.filter(Boolean).map((f) => new Date(f).getFullYear()).filter((y) => y > 2000 && y < 2100)
   const anio = anios.length ? Math.max(...anios) : new Date().getFullYear()
   if (!m) return { semana: String(nota || ''), fechaInicioISO: null, fechaFinISO: null }
   const [, m1, d1, m2, d2] = m
@@ -140,7 +154,7 @@ export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
       rate, adj, monto,
       // Paquete ADICIONAL de la parada: SpeedX lo baja a la tarifa de stop (0.45).
       esStopAdicional: adj < 0,
-      fecha: String(f[iP.fecha] ?? f[iP.fechaEntrega] ?? '').slice(0, 10),
+      fecha: fechaCelda(f[iP.fecha] ?? f[iP.fechaEntrega]),
       nota: String(f[iP.nota] ?? '').trim(),
       estado: String(f[iP.status] ?? '').trim(),
     })
@@ -442,7 +456,7 @@ export function procesarReporteRutasSpeedX(arrayBuffer, nombreArchivo = '') {
       temu: /^temu/i.test(String(f[i.cuenta] ?? '')),
       rate: 0, adj: 0, monto: 0,
       esStopAdicional: esDoble,
-      fecha: String(f[i.plan] ?? f[i.completado] ?? '').slice(0, 10),
+      fecha: fechaCelda(f[i.plan] ?? f[i.completado]),
       nota: '',
       estado,
     })

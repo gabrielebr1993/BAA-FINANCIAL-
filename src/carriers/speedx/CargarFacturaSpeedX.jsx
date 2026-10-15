@@ -39,6 +39,9 @@ const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 const deISO = (iso) => {
   if (!iso) return null
   const [y, m, d] = String(iso).split('-').map(Number)
+  // año fuera de rango humano (serial de Excel mal leído) → null, nunca una
+  // fecha imposible que Firestore rechace al guardar
+  if (!y || y < 2000 || y > 2100) return null
   const dt = new Date(y, (m || 1) - 1, d || 1, 12)
   return isNaN(dt.getTime()) ? null : dt
 }
