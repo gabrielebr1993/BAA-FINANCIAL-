@@ -213,11 +213,14 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
   // Semanas con pagos PENDIENTES de cheque: por defecto solo se listan esas.
   const idPorNombre = {}
   for (const w of bd.workers) { idPorNombre[w.nombreNorm] = w.id; for (const a of (w.alias || [])) idPorNombre[a] = w.id }
+  // perfiles "se paga aparte": no cuentan como pendientes ni generan cheque
+  const idsPagoAparte = new Set(bd.workers.filter((w) => w.pagoAparte).map((w) => w.id))
   const pendientesDe = (p) => {
     const personas = p.personas || []
     if (!personas.length) return null // períodos viejos sin lista → no se puede saber
     return personas.filter((norm) => {
       const wid = idPorNombre[norm]
+      if (wid && idsPagoAparte.has(wid)) return false
       return !bd.cheques.some((ch) => ch.estado !== 'cancelado' && ch.workerId === wid && (ch.distribucion || []).some((d) => d.periodoId === p.id))
     }).length
   }
@@ -474,10 +477,11 @@ function PcCrear({ bd, user, recargar, irAImprimir }) {
                   <td className="pr-2 text-right">{f.tarifa ? <span title={f.tarifa.origen || ''}>{dinero(f.tarifa.reg)}{f.tarifa.ot != null && f.tarifa.ot !== f.tarifa.reg ? `/${dinero(f.tarifa.ot)}` : ''}<span className="text-slate-400">/h</span></span> : '—'}</td>
                   <td className="pr-2 text-right font-semibold">{dinero(f.neto)}</td>
                   <td className="pr-2">
+                    {f.pagoAparte && <Badge color="gold">se paga aparte · sin cheque</Badge>}
                     {f.yaTiene && <Badge color="gold">ya tiene cheque #{f.yaTiene}</Badge>}
-                    {f.pendienteTarifa && <Badge color="red">sin tarifa</Badge>}
+                    {!f.pagoAparte && f.pendienteTarifa && <Badge color="red">sin tarifa</Badge>}
                     {f.elegible && <Badge color="green">listo</Badge>}
-                    {!f.yaTiene && !f.pendienteTarifa && f.neto <= 0 && <Badge color="slate">neto $0</Badge>}
+                    {!f.pagoAparte && !f.yaTiene && !f.pendienteTarifa && f.neto <= 0 && <Badge color="slate">neto $0</Badge>}
                   </td>
                 </tr>
               ))}</tbody>

@@ -84,14 +84,18 @@ export function planearLote({ periodoId, registros, ajustes, cheques, workers })
   return Object.values(porWorker).map((x) => {
     const existente = (cheques || []).find((c) => chequeActivoDe(c, x.workerId, periodoId))
     const w = x.workerId ? mapaW[x.workerId] : null
+    // perfil marcado "se paga aparte": sus horas/pagos se registran normal,
+    // pero NUNCA entra a la emisión de cheques
+    const pagoAparte = !!(w && w.pagoAparte)
     return {
       ...x,
       // el nombre del PERFIL manda (ya limpio de sufijos del archivo)
       nombre: (w && w.nombre) || x.nombre,
       neto: r2(x.neto),
       idEmpleado: w?.idEmpleado || null,
+      pagoAparte,
       yaTiene: existente ? (existente.numeroRaw || existente.numeroNorm) : null,
-      elegible: !existente && !x.pendienteTarifa && r2(x.neto) > 0,
+      elegible: !existente && !x.pendienteTarifa && r2(x.neto) > 0 && !pagoAparte,
     }
   }).sort((a, b) => a.nombre.localeCompare(b.nombre))
 }

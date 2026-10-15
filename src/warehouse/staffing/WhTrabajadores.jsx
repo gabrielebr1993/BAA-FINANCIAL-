@@ -184,6 +184,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
               <span className="font-bold text-brand-navy dark:text-slate-100">{w.nombre}</span>
               {w.idEmpleado && <Badge color="navy">{w.idEmpleado}</Badge>}
               {w.externo && <Badge color="slate">externa</Badge>}
+              {w.pagoAparte && <Badge color="gold">se paga aparte</Badge>}
               {tipo === 'inactivos' && <Badge color="gold">inactivo</Badge>}
               {estadoPago && <Badge color={estadoPago.color}>{estadoPago.texto}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
@@ -347,6 +348,13 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
     await auditarStaff('worker_grupo', `${w.nombre} → ${grupoId ? (datos.grupos.find((g) => g.id === grupoId)?.nombre || grupoId) : 'sin grupo'}`)
     recargar()
   }
+  // "Se paga aparte": sus horas y pagos se registran normal (Finanzas, perfil),
+  // pero nunca entra a la creación de cheques en Print Check.
+  const cambiarPagoAparte = async (valor) => {
+    await setDoc(refDoc(COL.workers, w.id), { pagoAparte: !!valor }, { merge: true })
+    await auditarStaff('worker_pago_aparte', `${w.nombre}: ${valor ? 'SE PAGA APARTE (sin cheque)' : 'vuelve a pagarse con cheque'}`)
+    recargar()
+  }
   const guardarExc = async () => {
     if (!nuevaExc.reg || !nuevaExc.ot) return
     setGuardando(true)
@@ -376,11 +384,16 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
               {grupoNombre && <Badge color="gold">Grupo: {grupoNombre}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
               {w.revisarId && <Badge color="red">ID en conflicto: {w.idConflicto}</Badge>}
+              {w.pagoAparte && <Badge color="gold">se paga aparte · sin cheque</Badge>}
             </div>
           </div>
           <div className="ml-auto flex flex-col items-end gap-2">
             <Boton variant="gold" onClick={exportarCSV}><FileDown size={14} /> Exportar historial (CSV)</Boton>
             <span className="text-xs text-slate-400">{porPeriodo.length} semanas · {horasTot} h trabajadas</span>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500" title="Sus horas y pagos se registran normal en Finanzas y en su perfil, pero NUNCA aparece en Crear cheques (le pagas por otra vía).">
+              <input type="checkbox" checked={!!w.pagoAparte} onChange={(e) => cambiarPagoAparte(e.target.checked)} />
+              Se paga aparte (sin cheque)
+            </label>
           </div>
         </div>
       </Card>
@@ -508,6 +521,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
                 if (activos.some((c) => c.estado === 'cobrado')) return <Badge color="green">pagada · cheque cobrado</Badge>
                 if (activos.length) return <Badge color="gold">cheque #{activos[0].numeroRaw || activos[0].numeroNorm} en tránsito</Badge>
                 if (chP.length) return <Badge color="red">cheque anulado · reemitir</Badge>
+                if (w.pagoAparte) return <Badge color="slate">pago aparte (sin cheque)</Badge>
                 return <Badge color="slate">sin cheque emitido</Badge>
               })()}
               <span className="ml-auto text-xs text-slate-400">{Math.round(tot.h * 100) / 100} h · Gofo {dinero(tot.g)} · mi pago {dinero(tot.m)}</span>
