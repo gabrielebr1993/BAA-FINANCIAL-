@@ -173,12 +173,17 @@ export function gastosFijosDe(lista, finPeriodo) {
 
 // Resumen financiero de un período.
 // Utilidad operativa = ingreso Gofo (con ajustes) − pagos calculados − gastos.
-export function resumenPeriodo({ registros, ajustes, gastos, cobros, cheques }) {
+// pagoAparteIds: workers que se pagan FUERA del sistema (cantidad fija) — su
+// cobro a Gofo SÍ cuenta como ingreso, pero su pago calculado por horas NO
+// cuenta como gasto (el pago real se registra como gasto fijo o del período).
+export function resumenPeriodo({ registros, ajustes, gastos, cobros, cheques, pagoAparteIds }) {
+  const aparte = pagoAparteIds instanceof Set ? pagoAparteIds : new Set(pagoAparteIds || [])
+  const regsPago = (registros || []).filter((r) => !(r.workerId && aparte.has(r.workerId)))
   const ingresoDetalle = (registros || []).reduce((s, r) => s + (r.importeGofo || 0), 0)
   const ajustesTot = (ajustes || []).reduce((s, a) => s + (a.importe || 0), 0)
   const ingreso = Math.round((ingresoDetalle + ajustesTot) * 100) / 100
-  const pendientesTarifa = (registros || []).filter((r) => r.pendienteTarifa || r.miPago === null || r.miPago === undefined).length
-  const pagoCalc = Math.round((registros || []).reduce((s, r) => s + (r.miPago || 0), 0) * 100) / 100
+  const pendientesTarifa = regsPago.filter((r) => r.pendienteTarifa || r.miPago === null || r.miPago === undefined).length
+  const pagoCalc = Math.round(regsPago.reduce((s, r) => s + (r.miPago || 0), 0) * 100) / 100
   const gastosTot = Math.round((gastos || []).reduce((s, g) => s + (g.importe || 0), 0) * 100) / 100
   const cobrado = Math.round((cobros || []).reduce((s, c) => s + (c.importe || 0), 0) * 100) / 100
   // pagado real: distribución de cheques COBRADOS que apuntan a este período

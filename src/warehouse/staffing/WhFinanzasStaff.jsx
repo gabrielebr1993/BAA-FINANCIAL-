@@ -26,11 +26,12 @@ export default function WhFinanzasStaff({ user }) {
   const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })
   const [orden, setOrden] = useState('fecha')
   const recargar = async () => {
-    const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
-      cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config),
+    const [periodos, registros, ajustes, gastos, cobros, cheques, configs, workers] = await Promise.all([
+      cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config), cargar(COL.workers),
     ])
     const gastosFijos = configs.find((c) => c.id === 'gastosFijos')?.lista || []
-    setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques, gastosFijos })
+    const pagoAparteIds = new Set(workers.filter((w) => w.pagoAparte).map((w) => w.id))
+    setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques, gastosFijos, pagoAparteIds })
   }
   useEffect(() => { recargar() }, [])
 
@@ -50,6 +51,7 @@ export default function WhFinanzasStaff({ user }) {
           gastos: hayFiltroDetalle ? [] : [...datos.gastos.filter((g) => g.periodoId === p.id), ...gastosFijosDe(datos.gastosFijos, p.fin)],
           cobros: hayFiltroDetalle ? [] : datos.cobros.filter((c) => c.periodoId === p.id),
           cheques: hayFiltroDetalle ? [] : datos.cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === p.id)),
+          pagoAparteIds: datos.pagoAparteIds,
         })
         return { p, res, regs }
       })

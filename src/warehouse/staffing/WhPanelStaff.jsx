@@ -20,11 +20,12 @@ export default function WhPanelStaff({ irA }) {
   const [semanaSel, setSemanaSel] = useState('') // una semana específica
   useEffect(() => {
     (async () => {
-      const [periodos, registros, ajustes, gastos, cobros, cheques, configs] = await Promise.all([
-        cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config),
+      const [periodos, registros, ajustes, gastos, cobros, cheques, configs, workers] = await Promise.all([
+        cargar(COL.periodos), cargar(COL.registros), cargar(COL.ajustes), cargar(COL.gastos), cargar(COL.cobros), cargar(COL.cheques), cargar(COL.config), cargar(COL.workers),
       ])
       const gastosFijos = configs.find((c) => c.id === 'gastosFijos')?.lista || []
-      setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques, gastosFijos })
+      const pagoAparteIds = new Set(workers.filter((w) => w.pagoAparte).map((w) => w.id))
+      setDatos({ periodos: periodos.sort((a, b) => String(a.inicio).localeCompare(b.inicio)), registros, ajustes, gastos, cobros, cheques, gastosFijos, pagoAparteIds })
     })()
   }, [])
 
@@ -38,6 +39,7 @@ export default function WhPanelStaff({ irA }) {
         gastos: [...datos.gastos.filter((g) => g.periodoId === p.id), ...gastosFijosDe(datos.gastosFijos, p.fin)],
         cobros: datos.cobros.filter((c) => c.periodoId === p.id),
         cheques: datos.cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === p.id)),
+        pagoAparteIds: datos.pagoAparteIds,
       })
       return { periodo: p, res, regs }
     }).filter((x) => x.regs.length > 0)
