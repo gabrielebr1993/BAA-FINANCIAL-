@@ -98,6 +98,7 @@ async function sincronizar() {
   const items = await db().collection('plaid_items').get()
   if (items.empty) return { items: 0, cobrados: 0, revisar: 0, alertas: 0, sinNumero: 0 }
   let cobrados = 0, revisar = 0, alertas = 0, sinNumero = 0
+  const noEncontrados = [] // cheques que el banco cobró pero no existen en MilePay
   for (const itemDoc of items.docs) {
     const item = itemDoc.data()
     let cursor = item.cursor || undefined
@@ -110,7 +111,11 @@ async function sincronizar() {
         count: 250,
         options: { include_original_description: true },
       })
-      transacciones.push(...(r.added || []))
+      // added = movimientos nuevos; modified = ACTUALIZADOS. Un cheque suele
+      // entrar "pendiente" (a veces sin número) y el banco lo actualiza al
+      // cobrarse con su check_number: si solo se lee added, ese cobro jamás
+      // se cruza y el cheque se queda "emitido" para siempre.
+      transacciones.push(...(r.added || []), ...(r.modified || []))
       cursor = r.next_cursor
       hasMore = r.has_more
     }
@@ -127,7 +132,10 @@ async function sincronizar() {
       // en Plaid los cargos salen con monto POSITIVO
       const monto = r2(Math.abs(tx.amount))
       const q = await db().collection('wh_cheques').where('numeroNorm', '==', norm).get()
-      if (q.empty) continue
+      if (q.empty) {
+        if (noEncontrados.length < 20) noEncontrados.push(`#${numero} $${monto} ${tx.date || ''}`)
+        continue
+      }
       for (const chDoc of q.docs) {
         const ch = chDoc.data()
         if (ch.origen === 'historico') continue
@@ -156,9 +164,9 @@ async function sincronizar() {
   }
   // refresca también la foto de saldo/movimientos para la app (best-effort)
   try { await consultarYGuardarBanco(items) } catch (e) { await auditar('plaid_foto_error', e.message || String(e)) }
-  const resumen = { items: items.size, cobrados, revisar, alertas, sinNumero, fecha: new Date().toISOString() }
+  const resumen = { items: items.size, cobrados, revisar, alertas, sinNumero, noEncontrados, fecha: new Date().toISOString() }
   await db().collection('wh_pc_config').doc('plaid').set({ conectado: true, ultimoSync: resumen }, { merge: true })
-  await auditar('plaid_sync', `cobrados ${cobrados} · a revisar ${revisar} · alertas ${alertas}`)
+  await auditar('plaid_sync', `cobrados ${cobrados} · a revisar ${revisar} · alertas ${alertas}${noEncontrados.length ? ` · del banco sin cheque en MilePay: ${noEncontrados.join(', ')}` : ''}`)
   return resumen
 }
 

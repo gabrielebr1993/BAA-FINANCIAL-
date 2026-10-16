@@ -1017,6 +1017,12 @@ function PcBanco({ bd, recargar }) {
               <div><div className="text-[10px] font-bold uppercase text-slate-400">Alertas</div><b className="text-rose-500">{u.alertas}</b></div>
             </div>
           )}
+          {u && (u.noEncontrados || []).length > 0 && (
+            <div className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+              <b>El banco cobró cheques que no están en MilePay:</b> {(u.noEncontrados || []).join(' · ')}
+              <span className="text-amber-500"> — suelen ser cheques del software anterior o manuales no registrados.</span>
+            </div>
+          )}
         </Card>
       )}
 
