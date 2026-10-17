@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio, KPI } from '../../components/ui'
+import { Gauge, WaterfallUtilidad, AreaAcumulada } from './graficasStaff'
 import { BarChart3, Plus, Trash2, FileDown, TrendingUp, DollarSign, Wallet, Banknote, Receipt, Clock } from 'lucide-react'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
 import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
@@ -171,8 +172,27 @@ export default function WhFinanzasStaff({ user }) {
             </>
           )}
 
+          {/* Medidores + waterfall: del total mostrado */}
+          {!hayFiltroDetalle && filas.length > 0 && (
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Gauge label="% de ganancia real" pct={totFiltro.ingreso > 0 ? (totFiltro.utilidad / totFiltro.ingreso) * 100 : null}
+                sub={`${dinero(totFiltro.utilidad)} de ${dinero(totFiltro.ingreso)}`} color={totFiltro.utilidad < 0 ? '#e0526a' : '#149d80'} />
+              <Gauge label="% cobrado de Gofo" pct={totFiltro.ingreso > 0 ? (totFiltro.cobrado / totFiltro.ingreso) * 100 : null}
+                sub={`${dinero(totFiltro.cobrado)} de ${dinero(totFiltro.ingreso)}`} color="#3d5a80" />
+              <div className="sm:col-span-2">
+                <WaterfallUtilidad titulo="¿Cómo el ingreso se vuelve ganancia? (semanas mostradas)" ingreso={totFiltro.ingreso} pagos={totFiltro.pagos} gastos={totFiltro.gastos} />
+              </div>
+            </div>
+          )}
+          {!hayFiltroDetalle && completos.length > 1 && (
+            <div className="mb-4">
+              <AreaAcumulada titulo="Ganancia real acumulada (semanas mostradas)"
+                puntos={filas.filter((x) => !x.res.parcial).map((x) => ({ nombre: String(x.p.inicio || '').slice(5), valor: x.res.utilidad }))} />
+            </div>
+          )}
+
           {/* Gráfica semanal: ingreso vs pagos+gastos y la línea de ganancia real */}
-          {!hayFiltroDetalle && filas.length > 1 && (
+          {!hayFiltroDetalle && filas.length > 0 && (
             <Card className="mb-4 p-4">
               <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Ingreso, pagos y ganancia real por semana</div>
               <div style={{ width: '100%', height: 260 }}>

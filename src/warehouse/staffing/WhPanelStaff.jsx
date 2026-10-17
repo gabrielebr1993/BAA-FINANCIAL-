@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
 import { Card, PageTitle, KPI, Badge, Spinner, EstadoVacio, Select } from '../../components/ui'
+import { Gauge, WaterfallUtilidad, HeatmapDias, AreaAcumulada } from './graficasStaff'
 import { Sparkles, BarChart3 } from 'lucide-react'
 import { COL, cargar } from './datosStaff'
 import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
@@ -196,6 +197,35 @@ export default function WhPanelStaff({ irA }) {
         </div>
         <div className="mt-1 text-[11px] text-slate-400">La línea de utilidad se corta en semanas parciales (tarifas pendientes) para no mostrar números incompletos. Incluye gastos fijos configurados.</div>
       </Card>
+
+      {/* Medidores + waterfall + ganancia acumulada */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Gauge label="% de ganancia (semana elegida)" pct={ult.res.parcial ? null : ult.res.pctUtilidad} sub={ult.res.parcial ? 'faltan tarifas' : `${dinero(ult.res.utilidad)} de ${dinero(ult.res.ingreso)}`} color={!ult.res.parcial && ult.res.utilidad < 0 ? '#e0526a' : '#149d80'} />
+        <Gauge label="% cobrado de Gofo (rango)" pct={acum.ingreso > 0 ? (acum.cobrado / acum.ingreso) * 100 : null} sub={`${dinero(acum.cobrado)} de ${dinero(acum.ingreso)}`} color="#3d5a80" />
+        <div className="sm:col-span-2">
+          <WaterfallUtilidad titulo={`¿Cómo el ingreso se vuelve ganancia? (${ult.periodo.inicio.slice(5)} → ${ult.periodo.fin.slice(5)})`} ingreso={ult.res.ingreso} pagos={ult.res.pagoCalc} gastos={ult.res.gastos} />
+        </div>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        {vis.length > 1 && (
+          <AreaAcumulada titulo="Ganancia real acumulada del rango" nota={acum.parciales ? `sin ${acum.parciales} semana(s) parcial(es)` : undefined}
+            puntos={completasVis.map((x) => ({ nombre: x.periodo.inicio.slice(5), valor: x.res.utilidad }))} />
+        )}
+        <HeatmapDias titulo={`Horas por día y posición (${semanaSel ? 'semana elegida' : 'rango'})`}
+          nota="Más oscuro = más horas ese día. Útil para ver qué días pesan más en la nómina."
+          filas={(() => {
+            const mapa = {}
+            for (const r of regsVis) {
+              const k = r.posicion || '—'
+              mapa[k] = mapa[k] || [0, 0, 0, 0, 0, 0, 0]
+              for (const [f, h] of Object.entries(r.dias || {})) {
+                const d = new Date(f + 'T12:00:00').getDay()
+                if (d >= 0) mapa[k][d] += Number(h) || 0
+              }
+            }
+            return Object.entries(mapa).map(([etiqueta, dias]) => ({ etiqueta, dias })).sort((a, b) => b.dias.reduce((s, x) => s + x, 0) - a.dias.reduce((s, x) => s + x, 0)).slice(0, 7)
+          })()} />
+      </div>
 
       {/* Top de trabajadores y reparto por posición (del rango elegido) */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
