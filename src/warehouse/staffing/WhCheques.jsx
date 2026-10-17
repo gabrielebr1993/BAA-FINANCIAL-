@@ -13,8 +13,8 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../components/ui'
-import { Upload, Banknote, Ban, Link2 } from 'lucide-react'
+import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio, KPI } from '../../components/ui'
+import { Upload, Banknote, Ban, Link2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 import {
   normalizarNumero, normalizarCuenta, idCheque, huellaFilaBanco, adivinarMapeo, conciliarBanco,
   vincularBeneficiario, validarDistribucion,
@@ -208,6 +208,29 @@ export default function WhCheques({ user }) {
   const suma = (l) => l.reduce((s, c) => s + (c.importe || 0), 0)
   const porEstado = (e) => datos.cheques.filter((c) => c.estado === e)
 
+  // ── Dashboard de conciliación: cobrado vs pendiente de un vistazo ──
+  const dCobrados = porEstado('cobrado')
+  const dPendientes = porEstado('emitido')
+  const dCancelados = porEstado('cancelado')
+  const dRevision = datos.cheques.filter((c) => c.estado === 'diferencia' || c.revision || c.workerAmbiguo)
+  const dImpCobrado = suma(dCobrados)
+  const dImpPend = suma(dPendientes)
+  const dImpActivo = dImpCobrado + dImpPend
+  const pctCobrado = dImpActivo > 0 ? Math.round((dImpCobrado / dImpActivo) * 100) : 0
+  const pctCant = (dCobrados.length + dPendientes.length) > 0 ? Math.round((dCobrados.length / (dCobrados.length + dPendientes.length)) * 100) : 0
+  // cuántos días tarda un cheque en cobrarse (promedio de los ya cobrados)
+  const diasDeCobro = dCobrados
+    .map((c) => {
+      const emi = c.fechaEmision || c.fecha
+      const cob = c.cobro?.fecha || c.fechaCobro
+      if (!emi || !cob) return null
+      const d = Math.round((new Date(cob) - new Date(emi)) / 86400000)
+      return d >= 0 && d < 120 ? d : null
+    })
+    .filter((d) => d !== null)
+  const diasProm = diasDeCobro.length ? Math.round(diasDeCobro.reduce((s, d) => s + d, 0) / diasDeCobro.length) : null
+  const ultimoCobro = dCobrados.map((c) => c.cobro?.fecha || c.fechaCobro).filter(Boolean).sort().pop() || null
+
   return (
     <div>
       <PageTitle>Cheques · control y conciliación</PageTitle>
@@ -277,6 +300,32 @@ export default function WhCheques({ user }) {
           </ul>
         </Card>
       )}
+
+      {/* ── Dashboard: tarjetas clicables + barra cobrado vs pendiente ── */}
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KPI label="Dinero emitido (activo)" value={dinero(dImpActivo)} sub={`${dCobrados.length + dPendientes.length} cheques en circulación`} icon={Banknote} accent="navy" onClick={() => setFiltroEstado('todos')} animado />
+        <KPI label="Cobrados" value={dinero(dImpCobrado)} sub={`${dCobrados.length} cheques · ${pctCobrado}% del dinero · ${pctCant}% de los cheques`} icon={CheckCircle2} accent="green" onClick={() => setFiltroEstado('cobrados')} animado />
+        <KPI label="Pendientes por cobrar" value={dinero(dImpPend)} sub={`${dPendientes.length} cheques · ${100 - pctCobrado}% del dinero aún en la calle`} icon={Clock} accent="gold" onClick={() => setFiltroEstado('pendientes')} animado />
+        <KPI label="Sin conciliar / alertas" value={String(dRevision.length)} sub={dRevision.length ? 'revisa estas diferencias' : dCancelados.length ? `todo cuadra · ${dCancelados.length} cancelado(s)` : 'todo cuadra'} icon={AlertTriangle} accent={dRevision.length ? 'red' : 'slate'} onClick={() => setFiltroEstado('revision')} animado />
+      </div>
+      <Card className="mb-3 p-4">
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-brand-navy dark:text-slate-100">¿Cuánto del dinero emitido ya se cobró?</span>
+          <span className="text-slate-400">
+            {pctCobrado}% cobrado · {100 - pctCobrado}% pendiente
+            {diasProm !== null ? ` · un cheque tarda ~${diasProm} día(s) en cobrarse` : ''}
+            {ultimoCobro ? ` · último cobro ${ultimoCobro}` : ''}
+          </span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          <div className="bg-emerald-500 transition-all duration-500" style={{ width: `${pctCobrado}%` }} />
+          <div className="bg-brand-gold transition-all duration-500" style={{ width: `${100 - pctCobrado}%` }} />
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-4 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Cobrado {dinero(dImpCobrado)}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-full bg-brand-gold" /> Pendiente {dinero(dImpPend)}</span>
+        </div>
+      </Card>
 
       {/* resumen + filtros */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
