@@ -12,8 +12,9 @@
 //   ambos por separado.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio } from '../../components/ui'
-import { BarChart3, Plus, Trash2, FileDown } from 'lucide-react'
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
+import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, EstadoVacio, KPI } from '../../components/ui'
+import { BarChart3, Plus, Trash2, FileDown, TrendingUp, DollarSign, Wallet, Banknote, Receipt, Clock } from 'lucide-react'
 import { COL, cargar, auditarStaff, refDoc, setDoc, escribirEnLotes } from './datosStaff'
 import { resumenPeriodo, gastosFijosDe } from './calculosStaff'
 import { normalizarNombre, hashContenido, paraBuscar } from './parserGofo'
@@ -153,22 +154,49 @@ export default function WhFinanzasStaff({ user }) {
             {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
           </Card>
 
-          {/* Totales de lo filtrado: ganancia real primero */}
+          {/* Totales de lo filtrado: KPIs con la ganancia real al frente */}
           {!hayFiltroDetalle && filas.length > 0 && (
-            <Card className="mb-4 p-4">
-              <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Totales de las semanas mostradas ({filas.length})</div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-500/10">
-                  <div className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Ganancia real (después de gastos)</div>
-                  <div className={`text-xl font-black ${totFiltro.utilidad >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{dinero(totFiltro.utilidad)}</div>
-                  <div className="text-[10px] text-slate-400">{totFiltro.ingreso > 0 ? `${Math.round((totFiltro.utilidad / totFiltro.ingreso) * 1000) / 10}% del ingreso` : 'no aplica'}{totFiltro.parciales ? ` · sin ${totFiltro.parciales} parcial(es)` : ''}</div>
-                </div>
-                <div><div className="text-[10px] font-bold uppercase text-slate-400">Ingreso Gofo</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.ingreso)}</div></div>
-                <div><div className="text-[10px] font-bold uppercase text-slate-400">Cobrado</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.cobrado)}</div><div className="text-[10px] text-slate-400">por cobrar {dinero(Math.max(0, totFiltro.ingreso - totFiltro.cobrado))}</div></div>
-                <div><div className="text-[10px] font-bold uppercase text-slate-400">Pagos a trabajadores</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.pagos)}</div></div>
-                <div><div className="text-[10px] font-bold uppercase text-slate-400">Gastos</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{dinero(totFiltro.gastos)}</div></div>
-                <div><div className="text-[10px] font-bold uppercase text-slate-400">Horas</div><div className="text-lg font-black text-brand-navy dark:text-slate-100">{Math.round(totFiltro.horas).toLocaleString()} h</div></div>
+            <>
+              <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Totales de las semanas mostradas ({filas.length})</div>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                <KPI label="Ganancia real (después de gastos)" value={dinero(totFiltro.utilidad)} icon={TrendingUp} animado
+                  accent={totFiltro.utilidad >= 0 ? 'green' : 'red'}
+                  sub={`${totFiltro.ingreso > 0 ? `${Math.round((totFiltro.utilidad / totFiltro.ingreso) * 1000) / 10}% del ingreso` : 'no aplica'}${totFiltro.parciales ? ` · sin ${totFiltro.parciales} parcial(es)` : ''}`} />
+                <KPI label="Ingreso Gofo" value={dinero(totFiltro.ingreso)} icon={DollarSign} accent="navy" animado />
+                <KPI label="Cobrado" value={dinero(totFiltro.cobrado)} icon={Wallet} accent="blue" animado sub={`por cobrar ${dinero(Math.max(0, totFiltro.ingreso - totFiltro.cobrado))}`} />
+                <KPI label="Pagos a trabajadores" value={dinero(totFiltro.pagos)} icon={Banknote} accent="gold" animado />
+                <KPI label="Gastos" value={dinero(totFiltro.gastos)} icon={Receipt} accent="slate" animado />
+                <KPI label="Horas trabajadas" value={`${Math.round(totFiltro.horas).toLocaleString()} h`} icon={Clock} accent="slate" animado />
               </div>
+            </>
+          )}
+
+          {/* Gráfica semanal: ingreso vs pagos+gastos y la línea de ganancia real */}
+          {!hayFiltroDetalle && filas.length > 1 && (
+            <Card className="mb-4 p-4">
+              <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Ingreso, pagos y ganancia real por semana</div>
+              <div style={{ width: '100%', height: 260 }}>
+                <ResponsiveContainer>
+                  <ComposedChart data={filas.map(({ p, res }) => ({
+                    nombre: String(p.inicio || '').slice(5),
+                    Ingreso: res.ingreso,
+                    Pagos: res.pagoCalc,
+                    Gastos: res.gastos,
+                    'Ganancia real': res.parcial ? null : res.utilidad,
+                  }))} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.25)" />
+                    <XAxis dataKey="nombre" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v) => dinero(v)} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Ingreso" fill="#3d5a80" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Pagos" fill="#c9a24b" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Gastos" fill="#9aa3b2" radius={[6, 6, 0, 0]} />
+                    <Line type="monotone" dataKey="Ganancia real" stroke="#149d80" strokeWidth={2.5} dot={{ r: 3 }} connectNulls={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">La línea de ganancia se corta en semanas parciales (tarifas pendientes) para no mostrar números incompletos.</div>
             </Card>
           )}
 
