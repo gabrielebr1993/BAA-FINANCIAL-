@@ -72,6 +72,30 @@ export default function WhCheques({ user }) {
     return l.sort((a, b) => String(b.fechaEmision || '').localeCompare(String(a.fechaEmision || '')) || String(a.numeroNorm).localeCompare(b.numeroNorm, undefined, { numeric: true }))
   }, [datos, filtroEstado, buscar])
 
+  // Exporta a CSV (Excel) la lista VISIBLE: respeta la pestaña activa
+  // (pendientes/cobrados/cancelados/sin conciliar) y la búsqueda.
+  const exportarCSV = async () => {
+    if (!lista.length) { window.alert('No hay cheques con el filtro actual.'); return }
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const semanasDe = (c) => (c.distribucion || []).map((d) => String(d.periodoId || '').replace(/^gofo_/, '').replace('_', ' a ')).join(' | ')
+    const enc = ['Número', 'Beneficiario', 'Importe', 'Fecha emisión', 'Estado', 'Fecha cobro', 'Cuenta', 'Semana(s) que paga', 'Nota']
+    const filas = lista.map((c) => [
+      c.numeroRaw || c.numeroNorm, c.beneficiario || '', Number(c.importe || 0).toFixed(2),
+      c.fechaEmision || c.fecha || '', c.estado || 'emitido', c.cobro?.fecha || c.fechaCobro || '',
+      enmascarar(c.cuenta || ''), semanasDe(c),
+      c.revision || c.bancoPendiente?.motivo || c.motivoCancelacion || (c.workerAmbiguo ? 'beneficiario ambiguo' : ''),
+    ].map(esc).join(','))
+    const total = Math.round(lista.reduce((s, c) => s + (Number(c.importe) || 0), 0) * 100) / 100
+    const csv = '﻿' + [enc.join(','), ...filas, ['TOTAL', '', total.toFixed(2)].join(',')].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `cheques_${filtroEstado}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    await auditarStaff('cheques_exportados', `${lista.length} cheques (${filtroEstado}) ${dinero(total)} a CSV`)
+  }
+
   if (!datos) return <div className="py-10 text-center text-sm text-slate-400"><Spinner className="mx-auto mb-2" /> Cargando cheques…</div>
 
   const alArchivo = (e, tipo) => {
@@ -265,6 +289,7 @@ export default function WhCheques({ user }) {
           <button key={k} onClick={() => setFiltroEstado(k)} className={`rounded-lg px-3 py-1.5 font-semibold transition ${filtroEstado === k ? 'bg-slate-100 text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{etiqueta}</button>
         ))}
         <Input className="ml-auto w-64" placeholder="Buscar persona, número, período, fecha, cuenta…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+        <Boton variant="gold" onClick={exportarCSV} title="Descarga en Excel (CSV) exactamente lo que ves con la pestaña y búsqueda activas">Exportar</Boton>
       </div>
 
       {lista.length === 0 && <EstadoVacio icono={Banknote} titulo="Sin cheques" texto="Sube el historial de emisión para empezar." mostrarBoton={false} />}
