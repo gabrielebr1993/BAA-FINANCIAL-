@@ -700,6 +700,32 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
     setSel({})
     recargar()
   }
+  // Exporta a CSV (Excel) LO QUE SE VE: respeta todos los filtros activos
+  // (estado cobrado/emitido/anulado, cuenta, fechas y búsqueda).
+  const exportarCSV = async () => {
+    if (!lista.length) { window.alert('No hay cheques con los filtros actuales.'); return }
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const semanasDe = (c) => (c.distribucion || []).map((d) => String(d.periodoId || '').replace(/^gofo_/, '').replace('_', ' a ')).join(' | ')
+    const enc = ['Número', 'Beneficiario', 'ID empleado', 'Importe', 'Fecha emisión', 'Estado', 'Fecha cobro', 'Cobro vía', 'Banco', 'Cuenta', 'Memo', 'Semana(s) que paga', 'Lote', 'Motivo anulación']
+    const filas = lista.map((c) => {
+      const cta = bd.cuentas.find((x) => x.id === c.cuentaId)
+      return [
+        c.numeroRaw || c.numeroNorm, c.beneficiario || '', c.idEmpleado || '',
+        Number(c.importe || 0).toFixed(2), c.fecha || '', c.estado || 'emitido',
+        c.fechaCobro || '', c.cobro?.via || '', cta?.banco || c.banco || '', enmascarar(cta?.numero || c.cuenta || ''),
+        c.memo || '', semanasDe(c), c.loteId || '', c.motivoCancelacion || '',
+      ].map(esc).join(',')
+    })
+    const total = r2(lista.reduce((s, c) => s + (c.importe || 0), 0))
+    const csv = '﻿' + [enc.join(','), ...filas, ['TOTAL', '', '', total.toFixed(2)].join(',')].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `cheques_${filtro}_${hoyISO()}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    await auditarStaff('pc_registro_exportado', `${lista.length} cheques (${filtro}) ${dinero(total)} a CSV`)
+  }
   return (
     <div>
       <Card className="mb-3 p-3">
@@ -720,7 +746,10 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
           {(q || filtro !== 'todos' || cuentaId || rango.desde || rango.hasta) && (
             <Boton variant="ghost" onClick={() => { setBuscar(''); setFiltro('todos'); setCuentaId(''); setRango({ desde: '', hasta: '' }) }}>Limpiar</Boton>
           )}
-          <span className="ml-auto text-slate-400">{lista.length} cheques · {dinero(r2(lista.reduce((s, c) => s + (c.importe || 0), 0)))}</span>
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-slate-400">{lista.length} cheques · {dinero(r2(lista.reduce((s, c) => s + (c.importe || 0), 0)))}</span>
+            <Boton variant="gold" onClick={exportarCSV} title="Descarga en Excel (CSV) exactamente lo que ves con los filtros puestos"><FileDown size={14} /> Exportar</Boton>
+          </span>
         </div>
         {seleccionables.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 text-xs dark:border-slate-700/60">
