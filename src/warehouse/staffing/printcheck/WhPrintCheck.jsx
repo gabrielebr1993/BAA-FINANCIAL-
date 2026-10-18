@@ -1041,11 +1041,23 @@ function PcBanco({ bd, recargar }) {
           {u && (
             <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
               <div><div className="text-[10px] font-bold uppercase text-slate-400">Última corrida</div><b>{String(u.fecha || '').replace('T', ' ').slice(0, 16)}</b></div>
-              <div><div className="text-[10px] font-bold uppercase text-slate-400">Marcados cobrados</div><b className="text-emerald-600">{u.cobrados}</b></div>
+              <div><div className="text-[10px] font-bold uppercase text-slate-400">Cobrados EN esta corrida</div><b className="text-emerald-600">{u.cobrados}</b><div className="text-[10px] text-slate-400">0 = nada nuevo que marcar</div></div>
               <div><div className="text-[10px] font-bold uppercase text-slate-400">A revisar</div><b className="text-amber-600">{u.revisar}</b></div>
               <div><div className="text-[10px] font-bold uppercase text-slate-400">Alertas</div><b className="text-rose-500">{u.alertas}</b></div>
             </div>
           )}
+          {(() => {
+            const activos = bd.cheques.filter((c) => c.origen !== 'historico')
+            const cob = activos.filter((c) => c.estado === 'cobrado')
+            const pend = activos.filter((c) => c.estado === 'emitido')
+            const s = (l) => l.reduce((t, c) => t + (Number(c.importe) || 0), 0)
+            return (
+              <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-center text-xs dark:bg-slate-800/50">
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Total cobrados (histórico)</div><b className="text-emerald-600">{cob.length} · {dinero(s(cob))}</b></div>
+                <div><div className="text-[10px] font-bold uppercase text-slate-400">Aún pendientes por cobrar</div><b className="text-amber-600">{pend.length} · {dinero(s(pend))}</b></div>
+              </div>
+            )
+          })()}
           {u && (u.noEncontrados || []).length > 0 && (
             <div className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
               <b>El banco cobró cheques que no están en MilePay:</b> {(u.noEncontrados || []).join(' · ')}
