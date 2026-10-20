@@ -6,7 +6,7 @@
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts'
-import { Card, PageTitle, KPI, Badge, Spinner, EstadoVacio, Select } from '../../components/ui'
+import { Card, PageTitle, KPI, Badge, Spinner, EstadoVacio, Select, Input } from '../../components/ui'
 import { Gauge, WaterfallUtilidad, HeatmapDias, AreaAcumulada } from './graficasStaff'
 import { Sparkles, BarChart3 } from 'lucide-react'
 import { COL, cargar } from './datosStaff'
@@ -19,6 +19,8 @@ export default function WhPanelStaff({ irA }) {
   const [datos, setDatos] = useState(null)
   const [rango, setRango] = useState('12') // últimas N semanas en el análisis
   const [semanaSel, setSemanaSel] = useState('') // una semana específica
+  const [fDesde, setFDesde] = useState('') // rango de fechas opcional
+  const [fHasta, setFHasta] = useState('')
   useEffect(() => {
     (async () => {
       const [periodos, registros, ajustes, gastos, cobros, cheques, configs, workers] = await Promise.all([
@@ -68,9 +70,10 @@ export default function WhPanelStaff({ irA }) {
   const recs = recomendacionesStaff({ semanas, registros: datos.registros, ajustes: datos.ajustes, cheques: datos.cheques })
   // rango de análisis (gráfico, totales, top y posiciones); una semana
   // específica elegida manda sobre el rango
+  const enFechas = semanas.filter((x) => (!fDesde || String(x.periodo.fin) >= fDesde) && (!fHasta || String(x.periodo.inicio) <= fHasta))
   const vis = semanaSel
     ? semanas.filter((x) => x.periodo.id === semanaSel)
-    : (rango === 'todas' ? semanas : semanas.slice(-Number(rango)))
+    : (rango === 'todas' || fDesde || fHasta ? enFechas : enFechas.slice(-Number(rango)))
   const grafico = vis.map((x) => ({
     nombre: x.periodo.inicio.slice(5),
     Ingreso: x.res.ingreso,
@@ -156,7 +159,12 @@ export default function WhPanelStaff({ irA }) {
       <Card className="mb-4 p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Acumulado del rango</span>
-          <Select className="ml-auto w-44 text-xs" value={rango} onChange={(e) => setRango(e.target.value)}>
+          <span className="ml-auto flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+            Del <Input type="date" className="w-36" value={fDesde} onChange={(e) => setFDesde(e.target.value)} />
+            al <Input type="date" className="w-36" value={fHasta} onChange={(e) => setFHasta(e.target.value)} />
+            {(fDesde || fHasta) && <button className="font-semibold text-slate-400 hover:text-rose-500" onClick={() => { setFDesde(''); setFHasta('') }}>limpiar</button>}
+          </span>
+          <Select className="w-44 text-xs" value={rango} onChange={(e) => setRango(e.target.value)} disabled={!!(fDesde || fHasta)} title={(fDesde || fHasta) ? 'El rango de fechas manda; límpialo para usar este selector' : ''}>
             <option value="4">Últimas 4 semanas</option>
             <option value="8">Últimas 8 semanas</option>
             <option value="12">Últimas 12 semanas</option>

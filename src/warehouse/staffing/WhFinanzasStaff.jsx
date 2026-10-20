@@ -25,7 +25,7 @@ const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
 
 export default function WhFinanzasStaff({ user }) {
   const [datos, setDatos] = useState(null)
-  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })
+  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '', desde: '', hasta: '' })
   const [orden, setOrden] = useState('fecha')
   const recargar = async () => {
     const [periodos, registros, ajustes, gastos, cobros, cheques, configs, workers] = await Promise.all([
@@ -42,6 +42,8 @@ export default function WhFinanzasStaff({ user }) {
     const hayFiltroDetalle = filtro.persona || filtro.posicion || filtro.warehouse
     return datos.periodos
       .filter((p) => !filtro.periodo || p.id === filtro.periodo)
+      .filter((p) => !filtro.desde || String(p.fin) >= filtro.desde)
+      .filter((p) => !filtro.hasta || String(p.inicio) <= filtro.hasta)
       .map((p) => {
         let regs = datos.registros.filter((r) => r.periodoId === p.id)
         if (filtro.persona) regs = regs.filter((r) => paraBuscar(r.nombre || r.nombreNorm).includes(paraBuscar(filtro.persona)))
@@ -143,6 +145,10 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="cobradas">Cobradas al 100%</option>
                 <option value="pendientes">Con saldo por cobrar</option>
               </Select>
+              <span className="text-slate-500">Del</span>
+              <Input type="date" className="w-36" value={filtro.desde} onChange={(e) => setFiltro({ ...filtro, desde: e.target.value })} title="Semanas que terminan en o después de esta fecha" />
+              <span className="text-slate-500">al</span>
+              <Input type="date" className="w-36" value={filtro.hasta} onChange={(e) => setFiltro({ ...filtro, hasta: e.target.value })} title="Semanas que empiezan en o antes de esta fecha" />
               <Select className="w-44" value={orden} onChange={(e) => setOrden(e.target.value)}>
                 <option value="fecha">Orden: cronológico</option>
                 <option value="utilidad">Orden: mayor ganancia</option>
@@ -150,7 +156,7 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="porCobrar">Orden: mayor saldo por cobrar</option>
               </Select>
               <Boton variant="ghost" onClick={exportarCSV}><FileDown size={13} /> Exportar CSV</Boton>
-              {(filtro.periodo || filtro.cobro || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '' })}>Limpiar</Boton>}
+              {(filtro.periodo || filtro.cobro || filtro.desde || filtro.hasta || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '', desde: '', hasta: '' })}>Limpiar</Boton>}
             </div>
             {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
           </Card>
