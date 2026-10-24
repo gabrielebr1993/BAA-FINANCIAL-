@@ -365,7 +365,20 @@ export default function WhCheques({ user }) {
         ))}
         <Select className="ml-auto w-56" value={filtroPeriodo} onChange={(e) => setFiltroPeriodo(e.target.value)} title="Ver solo los cheques afiliados a una semana/factura">
           <option value="">Todas las semanas / facturas</option>
-          {datos.periodos.map((pp) => <option key={pp.id} value={pp.id}>{pp.inicio} → {pp.fin}</option>)}
+          {(() => {
+            // semanas de los períodos importados + las que aparezcan en los
+            // propios cheques (por si un período viejo ya no está en la lista)
+            const vistos = new Map()
+            for (const pp of datos.periodos) vistos.set(pp.id, `${pp.inicio} → ${pp.fin}`)
+            for (const c of datos.cheques) for (const d of (c.distribucion || [])) {
+              if (d.periodoId && !vistos.has(d.periodoId)) {
+                const t = String(d.periodoId).split('_')
+                vistos.set(d.periodoId, t.length === 3 ? `${t[1]} → ${t[2]}` : d.periodoId)
+              }
+            }
+            return [...vistos.entries()].sort((x, y) => y[1].localeCompare(x[1]))
+              .map(([id, etiqueta]) => <option key={id} value={id}>{etiqueta}</option>)
+          })()}
         </Select>
         <Input className="w-64" placeholder="Buscar persona, número, período, fecha, cuenta…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
         <Boton variant="gold" onClick={exportarCSV} title="Descarga en Excel (CSV) exactamente lo que ves con la pestaña y búsqueda activas">Exportar</Boton>
