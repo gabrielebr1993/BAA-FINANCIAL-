@@ -45,6 +45,8 @@ export default function WhCheques({ user }) {
   const [importa, setImporta] = useState(null) // { tipo:'emision'|'banco', encabezados, filas, mapeo }
   const [mensaje, setMensaje] = useState(null)
   const [filtroEstado, setFiltroEstado] = useState('todos')
+  const [filtroPeriodo, setFiltroPeriodo] = useState('') // afiliación a una semana/factura
+  const [sel, setSel] = useState({}) // multiselección para marcar cobrados
   const [buscar, setBuscar] = useState('')
   const [trabajando, setTrabajando] = useState(false)
   const [arrastrando, setArrastrando] = useState('')
@@ -65,12 +67,36 @@ export default function WhCheques({ user }) {
     else if (filtroEstado === 'cobrados') l = l.filter((c) => c.estado === 'cobrado')
     else if (filtroEstado === 'cancelados') l = l.filter((c) => c.estado === 'cancelado')
     else if (filtroEstado === 'revision') l = l.filter((c) => c.estado === 'diferencia' || c.revision || c.alerta || c.workerAmbiguo)
+    if (filtroPeriodo) l = l.filter((c) => (c.distribucion || []).some((d) => d.periodoId === filtroPeriodo))
     if (buscar) {
       const q = paraBuscar(buscar)
       l = l.filter((c) => [c.numeroRaw, c.numeroNorm, c.beneficiario, c.cuenta, c.periodoTexto, c.fechaEmision, c.cobro?.fecha].some((v) => paraBuscar(v).includes(q)))
     }
     return l.sort((a, b) => String(b.fechaEmision || '').localeCompare(String(a.fechaEmision || '')) || String(a.numeroNorm).localeCompare(b.numeroNorm, undefined, { numeric: true }))
-  }, [datos, filtroEstado, buscar])
+  }, [datos, filtroEstado, filtroPeriodo, buscar])
+
+  // Acciones masivas sobre la selección (marcar cobrados / devolver a pendiente)
+  const seleccionados = lista.filter((c) => sel[c.id])
+  const marcarSel = async (nuevoEstado) => {
+    const aptos = seleccionados.filter((c) => c.estado !== 'cancelado' && (c.estado || 'emitido') !== nuevoEstado)
+    if (!aptos.length) { window.alert('Ninguno de los seleccionados puede pasar a ese estado (los anulados no cambian desde aquí).'); return }
+    const total = aptos.reduce((t, c) => t + (Number(c.importe) || 0), 0)
+    const etiqueta = nuevoEstado === 'cobrado' ? 'COBRADOS (pagados por el banco)' : 'PENDIENTES por cobrar'
+    if (!window.confirm(`¿Marcar ${aptos.length} cheque(s) por ${dinero(total)} como ${etiqueta}?`)) return
+    const ahora = new Date().toISOString()
+    const hoy = ahora.slice(0, 10)
+    await escribirEnLotes(aptos.map((c) => ({
+      ref: refDoc(COL.cheques, c.id), merge: true,
+      data: {
+        estado: nuevoEstado,
+        ...(nuevoEstado === 'cobrado' ? { fechaCobro: hoy, cobro: { via: 'manual', fecha: hoy } } : {}),
+        historial: arrayUnion({ accion: nuevoEstado === 'cobrado' ? 'cobrado' : 'estado', fecha: ahora, por: user.email, nota: nuevoEstado === 'cobrado' ? 'marcado cobrado a mano (conciliación)' : 'devuelto a pendiente a mano (conciliación)' }),
+      },
+    })))
+    await auditarStaff('cheques_estado_masivo', `${aptos.length} cheques → ${nuevoEstado} (${dinero(total)})`)
+    setSel({})
+    recargar()
+  }
 
   // Exporta a CSV (Excel) la lista VISIBLE: respeta la pestaña activa
   // (pendientes/cobrados/cancelados/sin conciliar) y la búsqueda.
@@ -337,19 +363,39 @@ export default function WhCheques({ user }) {
         ].map(([k, etiqueta]) => (
           <button key={k} onClick={() => setFiltroEstado(k)} className={`rounded-lg px-3 py-1.5 font-semibold transition ${filtroEstado === k ? 'bg-slate-100 text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{etiqueta}</button>
         ))}
-        <Input className="ml-auto w-64" placeholder="Buscar persona, número, período, fecha, cuenta…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+        <Select className="ml-auto w-56" value={filtroPeriodo} onChange={(e) => setFiltroPeriodo(e.target.value)} title="Ver solo los cheques afiliados a una semana/factura">
+          <option value="">Todas las semanas / facturas</option>
+          {datos.periodos.map((pp) => <option key={pp.id} value={pp.id}>{pp.inicio} → {pp.fin}</option>)}
+        </Select>
+        <Input className="w-64" placeholder="Buscar persona, número, período, fecha, cuenta…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
         <Boton variant="gold" onClick={exportarCSV} title="Descarga en Excel (CSV) exactamente lo que ves con la pestaña y búsqueda activas">Exportar</Boton>
       </div>
+      {lista.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/50">
+          <label className="inline-flex items-center gap-1.5 text-slate-500">
+            <input type="checkbox" checked={seleccionados.length === lista.length && lista.length > 0}
+              onChange={(e) => setSel(e.target.checked ? Object.fromEntries(lista.map((c) => [c.id, true])) : {})} />
+            Seleccionar todos los visibles ({lista.length})
+          </label>
+          {seleccionados.length > 0 && (
+            <>
+              <span className="font-semibold text-brand-navy dark:text-slate-100">{seleccionados.length} seleccionados · {dinero(seleccionados.reduce((t, c) => t + (Number(c.importe) || 0), 0))}:</span>
+              <button className="rounded-lg bg-emerald-600 px-2.5 py-1 font-semibold text-white hover:opacity-90" onClick={() => marcarSel('cobrado')}>Marcar cobrados</button>
+              <button className="rounded-lg border border-slate-300 px-2.5 py-1 font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300" onClick={() => marcarSel('emitido')}>Volver a pendiente</button>
+            </>
+          )}
+        </div>
+      )}
 
       {lista.length === 0 && <EstadoVacio icono={Banknote} titulo="Sin cheques" texto="Sube el historial de emisión para empezar." mostrarBoton={false} />}
       <div className="space-y-2">
-        {lista.map((c) => <ChequeCard key={c.id} c={c} datos={datos} user={user} recargar={recargar} />)}
+        {lista.map((c) => <ChequeCard key={c.id} c={c} datos={datos} user={user} recargar={recargar} seleccionado={!!sel[c.id]} onToggleSel={() => setSel((v) => ({ ...v, [c.id]: !v[c.id] }))} />)}
       </div>
     </div>
   )
 }
 
-function ChequeCard({ c, datos, user, recargar }) {
+function ChequeCard({ c, datos, user, recargar, seleccionado, onToggleSel }) {
   const [abierto, setAbierto] = useState(false)
   const [dist, setDist] = useState({ periodoId: '', importe: '' })
   const [workerSel, setWorkerSel] = useState('')
@@ -397,6 +443,8 @@ function ChequeCard({ c, datos, user, recargar }) {
 
   return (
     <Card className="p-3">
+      <div className="flex items-start gap-2">
+      {onToggleSel && <input type="checkbox" className="mt-1" checked={!!seleccionado} onChange={onToggleSel} onClick={(e) => e.stopPropagation()} title="Seleccionar para acciones masivas" />}
       <button className="flex w-full flex-wrap items-center gap-2 text-left text-xs" onClick={() => setAbierto(!abierto)}>
         <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
         <Badge color={COLORES_ESTADO[c.estado] || 'slate'}>{c.estado}</Badge>
@@ -405,8 +453,13 @@ function ChequeCard({ c, datos, user, recargar }) {
         <span className="font-semibold">{c.beneficiario}</span>
         {worker && <Badge color="slate">{worker.nombre}</Badge>}
         <span className="ml-auto">{dinero(c.importe)}</span>
+        {(c.distribucion || []).slice(0, 2).map((d) => {
+          const tramos = String(d.periodoId || '').split('_')
+          return tramos.length === 3 ? <Badge key={d.periodoId} color="navy">{tramos[1].slice(5)} → {tramos[2].slice(5)}</Badge> : null
+        })}
         <span className="text-slate-400">{c.fechaEmision || c.fecha || 'sin fecha'}{c.cobro?.fecha ? ` · cobrado ${c.cobro.fecha}` : ''}{c.cuenta ? ` · cta ${enmascarar(c.cuenta)}` : ''}</span>
       </button>
+      </div>
       {abierto && (
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
           {c.conflicto && <Aviso tipo="warn">Conflicto en reimportación: {c.conflicto}</Aviso>}
