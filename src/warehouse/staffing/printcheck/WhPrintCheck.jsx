@@ -552,7 +552,13 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
             <div><div className="mb-1 font-bold text-slate-500">Lote</div>
               <Select className="w-72" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
                 {bd.lotes.length === 0 && <option value="">No hay lotes todavía</option>}
-                {bd.lotes.map((l) => <option key={l.id} value={l.id}>{l.fecha} · #{l.desde}–#{l.hasta} · {l.cantidad} cheques · {dinero(l.total)}</option>)}
+                {bd.lotes.map((l) => {
+                  // lo importante primero: QUÉ SEMANA paga el lote (del periodoId
+                  // "gofo_inicio_fin"); la fecha de creación va al final
+                  const tramos = String(l.periodoId || '').split('_')
+                  const semana = tramos.length === 3 ? `Semana ${tramos[1]} → ${tramos[2]}` : (l.periodoId || 'Lote')
+                  return <option key={l.id} value={l.id}>{semana} · {l.cantidad} cheques #{l.desde}–#{l.hasta} · {dinero(l.total)} · creado {l.fecha}</option>
+                })}
               </Select></div>
           )}
           <label className="inline-flex items-center gap-1.5 pb-2 font-semibold text-slate-600 dark:text-slate-300">
