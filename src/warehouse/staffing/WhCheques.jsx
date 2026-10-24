@@ -232,13 +232,18 @@ export default function WhCheques({ user }) {
   }
 
   const suma = (l) => l.reduce((s, c) => s + (c.importe || 0), 0)
-  const porEstado = (e) => datos.cheques.filter((c) => c.estado === e)
+  // TODO el tablero (KPIs, barra y pestañas) respeta el filtro de
+  // semana/factura: al elegir un período, los totales son de ESE período.
+  const base = filtroPeriodo
+    ? datos.cheques.filter((c) => (c.distribucion || []).some((d) => d.periodoId === filtroPeriodo))
+    : datos.cheques
+  const porEstado = (e) => base.filter((c) => c.estado === e)
 
   // ── Dashboard de conciliación: cobrado vs pendiente de un vistazo ──
   const dCobrados = porEstado('cobrado')
   const dPendientes = porEstado('emitido')
   const dCancelados = porEstado('cancelado')
-  const dRevision = datos.cheques.filter((c) => c.estado === 'diferencia' || c.revision || c.workerAmbiguo)
+  const dRevision = base.filter((c) => c.estado === 'diferencia' || c.revision || c.workerAmbiguo)
   const dImpCobrado = suma(dCobrados)
   const dImpPend = suma(dPendientes)
   const dImpActivo = dImpCobrado + dImpPend
@@ -336,7 +341,7 @@ export default function WhCheques({ user }) {
       </div>
       <Card className="mb-3 p-4">
         <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="font-bold text-brand-navy dark:text-slate-100">¿Cuánto del dinero emitido ya se cobró?</span>
+          <span className="font-bold text-brand-navy dark:text-slate-100">¿Cuánto del dinero emitido ya se cobró?{filtroPeriodo ? ' · semana elegida' : ''}</span>
           <span className="text-slate-400">
             {pctCobrado}% cobrado · {100 - pctCobrado}% pendiente
             {diasProm !== null ? ` · un cheque tarda ~${diasProm} día(s) en cobrarse` : ''}
@@ -355,11 +360,11 @@ export default function WhCheques({ user }) {
 
       {/* resumen + filtros */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-        {[['todos', `Todos (${datos.cheques.length} · ${dinero(suma(datos.cheques))})`],
+        {[['todos', `Todos (${base.length} · ${dinero(suma(base))})`],
           ['pendientes', `Pendientes por cobrar (${porEstado('emitido').length} · ${dinero(suma(porEstado('emitido')))})`],
           ['cobrados', `Pagados/cobrados (${porEstado('cobrado').length} · ${dinero(suma(porEstado('cobrado')))})`],
           ['cancelados', `Cancelados (${porEstado('cancelado').length})`],
-          ['revision', `Sin conciliar / diferencias (${datos.cheques.filter((c) => c.estado === 'diferencia' || c.revision || c.workerAmbiguo).length})`],
+          ['revision', `Sin conciliar / diferencias (${dRevision.length})`],
         ].map(([k, etiqueta]) => (
           <button key={k} onClick={() => setFiltroEstado(k)} className={`rounded-lg px-3 py-1.5 font-semibold transition ${filtroEstado === k ? 'bg-slate-100 text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{etiqueta}</button>
         ))}
