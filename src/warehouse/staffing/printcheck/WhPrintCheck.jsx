@@ -137,7 +137,7 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
           <Input type="date" className="w-36" value={filtro.hasta} onChange={(e) => setFiltro({ ...filtro, hasta: e.target.value })} />
           <Select className="w-44" value={filtro.estado} onChange={(e) => setFiltro({ ...filtro, estado: e.target.value })}>
             <option value="todos">Todos los estados</option>
-            <option value="emitido">Emitidos</option>
+            <option value="emitido">Pendientes por cobrar (emitidos)</option>
             <option value="cobrado">Cobrados</option>
             <option value="cancelado">Anulados</option>
           </Select>
@@ -732,7 +732,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Input className="w-64" placeholder="Buscar: nombre, número, importe, memo, lote…" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
           <Select className="w-40" value={filtro} onChange={(e) => setFiltro(e.target.value)}>
-            <option value="todos">Todos los estados</option><option value="emitido">Emitidos</option>
+            <option value="todos">Todos los estados</option><option value="emitido">Pendientes por cobrar (emitidos)</option>
             <option value="cobrado">Cobrados</option><option value="cancelado">Anulados</option>
           </Select>
           <Select className="w-52" value={cuentaId} onChange={(e) => setCuentaId(e.target.value)}>
@@ -780,7 +780,7 @@ function PcRegistro({ bd, user, recargar, irAImprimir, estadoInicial }) {
               <button className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700" title="Ver ficha completa" onClick={() => setFichaId(c.id)}><Eye size={15} /></button>
               <span className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">#{c.numeroRaw || c.numeroNorm}</span>
               {c.workerId ? <button className="font-semibold hover:underline" title="Abrir su perfil" onClick={() => abrirPerfil(c.workerId)}>{c.beneficiario}</button> : <span className="font-semibold">{c.beneficiario || '—'}</span>}
-              <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
+              <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{(c.estado || 'emitido') === 'emitido' ? 'emitido · por cobrar' : c.estado}</Badge>
               {c.origen === 'historico' && <Badge color="slate">histórico</Badge>}
               <span className="text-slate-400">{c.fecha || ''} {c.banco ? `· ${c.banco}` : ''} {c.loteId ? `· ${c.loteId}` : ''}</span>
               <b className="ml-auto">{dinero(c.importe)}</b>
@@ -862,7 +862,7 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
       <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="font-mono text-lg font-black text-brand-navy dark:text-slate-100">Cheque #{c.numeroRaw || c.numeroNorm}</span>
-          <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{c.estado || 'emitido'}</Badge>
+          <Badge color={c.estado === 'cobrado' ? 'green' : c.estado === 'cancelado' ? 'red' : 'gold'}>{(c.estado || 'emitido') === 'emitido' ? 'emitido · por cobrar' : c.estado}</Badge>
           <span className="text-xs text-slate-400">{c.fecha} · {cuenta.banco} · {c.loteId || 'sin lote'}</span>
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
             <Boton variant="ghost" onClick={verCheque}><Printer size={13} /> Imprimir</Boton>
@@ -914,7 +914,7 @@ function FichaCheque({ c, bd, user, recargar, cerrar, anular, borrar, verCheque 
                   <div key={x.id} className={`flex items-center gap-2 ${x.id === c.id ? 'font-bold text-brand-navy dark:text-slate-100' : 'text-slate-500'}`}>
                     <span className="font-mono">#{x.numeroRaw || x.numeroNorm}</span>
                     <span>{x.fecha || '—'}</span>
-                    <Badge color={x.estado === 'cobrado' ? 'green' : 'gold'}>{x.estado || 'emitido'}</Badge>
+                    <Badge color={x.estado === 'cobrado' ? 'green' : 'gold'}>{(x.estado || 'emitido') === 'emitido' ? 'emitido · por cobrar' : x.estado}</Badge>
                     <b className="ml-auto">{dinero(x.importe)}</b>
                   </div>
                 ))}
