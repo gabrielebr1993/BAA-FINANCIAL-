@@ -553,11 +553,11 @@ function PcImprimir({ bd, user, loteInicial, chequeSolo, recargar }) {
               <Select className="w-72" value={loteId} onChange={(e) => setLoteId(e.target.value)}>
                 {bd.lotes.length === 0 && <option value="">No hay lotes todavía</option>}
                 {bd.lotes.map((l) => {
-                  // lo importante primero: QUÉ SEMANA paga el lote (del periodoId
-                  // "gofo_inicio_fin"); la fecha de creación va al final
+                  // QUÉ SEMANA paga el lote (del periodoId "gofo_inicio_fin"),
+                  // con el mismo formato del filtro de conciliación
                   const tramos = String(l.periodoId || '').split('_')
-                  const semana = tramos.length === 3 ? `Semana ${tramos[1]} → ${tramos[2]}` : (l.periodoId || 'Lote')
-                  return <option key={l.id} value={l.id}>{semana} · {l.cantidad} cheques #{l.desde}–#{l.hasta} · {dinero(l.total)} · creado {l.fecha}</option>
+                  const semana = tramos.length === 3 ? `${tramos[1]} → ${tramos[2]}` : (l.fecha || 'Lote')
+                  return <option key={l.id} value={l.id}>{semana} · {l.cantidad} cheques #{l.desde}–#{l.hasta} · {dinero(l.total)}</option>
                 })}
               </Select></div>
           )}
