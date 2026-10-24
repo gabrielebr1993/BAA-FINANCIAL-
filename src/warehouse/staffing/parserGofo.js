@@ -342,9 +342,13 @@ function detectarEncabezados(hoja, maxFila, maxCol, anoPista) {
       if (cPay < 0 && /pay\s*rate/.test(t) && !/ot/.test(t)) cPay = c
       if (cOT < 0 && /ot\s*rate|overtime\s*rate/.test(t)) cOT = c
     }
-    if (cPay < 0 || cOT < 0) continue
+    if (cPay < 0) continue
+    // Formato NUEVO de Gofo (10.12-10.18 en adelante): ya NO hay columna
+    // OT Rate (todo es flat). Se acepta la fila como encabezado si tiene
+    // Pay Rate + columnas de día con fecha; sinOT marca ese modo.
+    const sinOT = cOT < 0
     // esta es la fila de encabezados: mapear el resto por texto
-    const cols = { payRate: cPay, otRate: cOT, dias: [] }
+    const cols = { payRate: cPay, otRate: cOT, dias: [], sinOT }
     for (let c = 0; c <= maxCol; c++) {
       const bruto = textoCelda(hoja, c, f)
       const t = bruto.toLowerCase()
@@ -353,6 +357,8 @@ function detectarEncabezados(hoja, maxFila, maxCol, anoPista) {
       }
       if (/^(status|estado)/.test(t)) cols.estado = c
       if (/(agency|agencia)/.test(t)) cols.agencia = c
+      if (cols.idEmpleado === undefined && (/工号/.test(bruto) || /(employee|worker|emp)\s*id/.test(t))) cols.idEmpleado = c
+      if (cols.proveedor === undefined && (/供应商/.test(bruto) || /(vendor|supplier|proveedor)/.test(t))) cols.proveedor = c
       if (/(position|posici|岗位|工种)/.test(t)) cols.posicion = c
       if (/(warehouse|almac|仓库)/.test(t)) cols.warehouse = c
       const fecha = fechaDeEncabezado(celda(hoja, c, f), anoPista)
@@ -367,7 +373,16 @@ function detectarEncabezados(hoja, maxFila, maxCol, anoPista) {
       if (esOT && cols.importeOT === undefined) cols.importeOT = c
       if (!esReg && !esOT && /(total|grand)\s*(cost|amount|pay|salary|importe|wage)/.test(t) && cols.importeTotal === undefined) cols.importeTotal = c
     }
+    if (sinOT && !cols.dias.length) continue // sin OT Rate Y sin días: no es el encabezado
     if (cols.nombre === undefined) cols.nombre = 0 // el nombre va antes del Pay Rate
+    if (sinOT) {
+      // formato nuevo: todo por texto, nada posicional; el proveedor hace de
+      // agencia y el importe total es la única cifra de dinero
+      if (cols.agencia === undefined && cols.proveedor !== undefined) cols.agencia = cols.proveedor
+      if (cols.totalHoras === undefined && cols.dias.length) cols.totalHoras = cols.dias[cols.dias.length - 1].col + 1
+      if (cols.importeTotal === undefined && cols.totalHoras !== undefined) cols.importeTotal = cols.totalHoras + 1
+      return { fila: f, cols }
+    }
     // respaldo con el layout documentado (A..S) si faltó algo por texto
     if (cols.posicion === undefined) cols.posicion = 5
     if (cols.estado === undefined) cols.estado = 3
@@ -547,7 +562,8 @@ export function analizarHoja(hoja, nombre, opciones) {
     }
 
     const payRate = valorNumerico(hoja, cols.payRate, f)
-    const otRate = valorNumerico(hoja, cols.otRate, f)
+    // formato nuevo sin OT: la tarifa OT ES la regular (flat, sin 1.5x)
+    const otRate = cols.sinOT ? { valor: payRate.valor } : valorNumerico(hoja, cols.otRate, f)
     const dias = {}
     let sumaDias = 0
     for (const d of cols.dias) {
@@ -556,14 +572,14 @@ export function analizarHoja(hoja, nombre, opciones) {
       if (v.error) avisos.push(`fila ${f + 1}: ${v.error}`)
     }
     const totalHoras = valorNumerico(hoja, cols.totalHoras, f)
-    const otHoras = valorNumerico(hoja, cols.otHoras, f)
-    const impReg = valorNumerico(hoja, cols.importeReg, f)
-    const impOT = valorNumerico(hoja, cols.importeOT, f)
+    const otHoras = cols.sinOT ? { valor: 0 } : valorNumerico(hoja, cols.otHoras, f)
     const impTotal = valorNumerico(hoja, cols.importeTotal, f)
+    const impReg = cols.sinOT ? { valor: impTotal.valor } : valorNumerico(hoja, cols.importeReg, f)
+    const impOT = cols.sinOT ? { valor: 0 } : valorNumerico(hoja, cols.importeOT, f)
 
     const faltantes = []
     if (payRate.valor === null) faltantes.push('Pay Rate')
-    if (otRate.valor === null) faltantes.push('OT Rate')
+    if (!cols.sinOT && otRate.valor === null) faltantes.push('OT Rate')
     if (totalHoras.valor === null) faltantes.push('total de horas')
     if (impTotal.valor === null) faltantes.push('importe total')
     for (const x of [payRate, otRate, totalHoras, otHoras, impReg, impOT, impTotal]) if (x.error) faltantes.push(x.error)
@@ -595,6 +611,7 @@ export function analizarHoja(hoja, nombre, opciones) {
       posicionRaw: textoCelda(hoja, cols.posicion, f),
       posicion: mapearPosicion(textoCelda(hoja, cols.posicion, f), posMap),
       warehouse: textoCelda(hoja, cols.warehouse, f),
+      idEmpleado: cols.idEmpleado !== undefined ? textoCelda(hoja, cols.idEmpleado, f) : '',
       tarifaGofoReg: r2(payRate.valor),
       tarifaGofoOT: r2(otRate.valor),
       dias: Object.fromEntries(Object.entries(dias).map(([k, v]) => [k, r2(v)])),
@@ -752,7 +769,15 @@ export function analizarLibro(wb, opciones) {
       // la hoja provisional suele ser el reporte de asistencia con el 工号
       const asis = extraerAsistencia(wb.Sheets[nombre])
       if (asis) for (const a of asis) if (!idsEmpleado.has(a.nombreNorm)) idsEmpleado.set(a.nombreNorm, { ...a, hoja: nombre })
-    } else periodos.push(r)
+    } else {
+      periodos.push(r)
+      // formato nuevo: el 工号 viene en la misma hoja del período
+      for (const fl of r.filas || []) {
+        if (fl.idEmpleado && !idsEmpleado.has(fl.nombreNorm)) {
+          idsEmpleado.set(fl.nombreNorm, { nombre: fl.nombre, nombreNorm: fl.nombreNorm, idEmpleado: fl.idEmpleado, hoja: nombre })
+        }
+      }
+    }
   }
   // orden por fecha de inicio
   periodos.sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
