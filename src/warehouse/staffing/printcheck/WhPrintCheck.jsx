@@ -172,6 +172,7 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
       {bd.cuentas.length > 0 && (
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Por cuenta bancaria</div>
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
               <th className="py-1 pr-2">Cuenta</th><th className="pr-2 text-right">Siguiente cheque</th><th className="pr-2 text-right">Emitidos</th><th className="pr-2 text-right">Outstanding</th>
@@ -189,6 +190,7 @@ function PcDashboard({ bd, irA, abrirRegistro }) {
               )
             })}</tbody>
           </table>
+          </div>
         </Card>
       )}
     </div>
@@ -1091,6 +1093,7 @@ function PcBanco({ bd, recargar }) {
               {banco.consultadoEn && <span className="ml-auto text-xs font-normal text-slate-400">actualizado: {String(banco.consultadoEn).replace('T', ' ').slice(0, 16)}</span>}
             </div>
             <div className="max-h-96 overflow-y-auto">
+              <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
                   <th className="py-1 pr-2">Fecha</th><th className="pr-2">Descripción</th><th className="pr-2">Cheque</th><th className="pr-2 text-right">Importe</th>
@@ -1107,6 +1110,7 @@ function PcBanco({ bd, recargar }) {
                   {banco.movimientos.length === 0 && <tr><td colSpan={4} className="py-3 text-center text-slate-400">Sin movimientos en los últimos 30 días.</td></tr>}
                 </tbody>
               </table>
+              </div>
             </div>
             <div className="mt-1 text-[11px] text-slate-400">Rojo = salida de dinero · verde = entrada. Nada de esto se guarda: se consulta al banco en el momento y solo tú lo ves.</div>
           </Card>

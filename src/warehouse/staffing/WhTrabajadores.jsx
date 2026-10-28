@@ -301,12 +301,14 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
           ${grupoNombre ? `<div class="meta">Grupo: ${grupoNombre}</div>` : ''}
         </div>
       </div>
+      <div className="overflow-x-auto">
       <table>
         <thead><tr><th>Posición</th><th class="n">Horas reg</th><th class="n">Horas OT</th><th class="n">Tarifa reg</th><th class="n">Tarifa OT</th><th class="n">Pago</th></tr></thead>
         <tbody>${filasHtml}${ajHtml}
           <tr class="tot"><td colspan="5">TOTAL</td><td class="n">${fmt(subtotal + totAj)}</td></tr>
         </tbody>
       </table>
+      </div>
       ${chHtml}
       <p class="pie">Documento informativo generado por MilePay el ${new Date().toLocaleDateString()} · no constituye un comprobante fiscal.</p>
       <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
@@ -411,6 +413,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
       <div className="mb-4 grid gap-3 lg:grid-cols-2">
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resumen por posición</div>
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
               <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Tarifa (última)</th><th className="pr-2 text-right">Pago</th>
@@ -442,11 +445,13 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Cheques de este trabajador ({cheques.length})</div>
           {cheques.length === 0 && <div className="text-xs text-slate-400">Todavía no hay cheques vinculados. Se vinculan en la pestaña Cheques.</div>}
           {cheques.length > 0 && (
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
                 <th className="py-1 pr-2">Cheque</th><th className="pr-2 text-right">Importe</th><th className="pr-2">Estado</th><th className="pr-2">Semanas que cubre</th><th className="pr-2"></th>
@@ -471,6 +476,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>

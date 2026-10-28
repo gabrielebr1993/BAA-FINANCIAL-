@@ -239,6 +239,7 @@ export default function WhPanelStaff({ irA }) {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Top trabajadores por pago</div>
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
               <th className="py-1 pr-2">Trabajador</th><th className="pr-2 text-right">Semanas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">$/h</th><th className="pr-2 text-right">Pago</th>
@@ -255,9 +256,11 @@ export default function WhPanelStaff({ irA }) {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Reparto por posición</div>
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
               <th className="py-1 pr-2">Posición</th><th className="pr-2 text-right">Personas</th><th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">Mi $/h</th><th className="pr-2 text-right">Ingreso</th><th className="pr-2 text-right">Pago</th><th className="pr-2 text-right">Margen</th>
@@ -276,6 +279,7 @@ export default function WhPanelStaff({ irA }) {
               ))}
             </tbody>
           </table>
+          </div>
           <div className="mt-1 text-[11px] text-slate-400">Margen = ingreso de Gofo − tu pago, antes de gastos generales.</div>
         </Card>
       </div>
