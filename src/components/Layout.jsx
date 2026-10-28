@@ -229,6 +229,35 @@ function SidebarContent({ onNavigate }) {
   )
 }
 
+// Acciones rápidas en la barra superior (aprovecha el espacio libre junto a
+// la campana): empresa activa, modo claro/oscuro e idioma — compactas, para
+// que en pantalla ancha (plegable abierto, tablet) todo esté a un toque.
+function TopActions() {
+  const { t } = useLang()
+  const { oscuro, alternar } = useTheme()
+  const { esSuperAdmin } = useAuth()
+  const { companies, activeCompanyId, setActiveCompanyId, empresaActiva } = useData()
+  return (
+    <div className="flex items-center gap-1.5">
+      {esSuperAdmin && companies.length > 0 ? (
+        <select value={activeCompanyId || ''} onChange={(e) => setActiveCompanyId(e.target.value)}
+          title={t('Empresa activa')}
+          className="hidden max-w-[160px] rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy sm:block dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+          {companies.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
+        </select>
+      ) : (empresaActiva?.nombre ? (
+        <span className="hidden rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-brand-navy sm:inline dark:border-slate-700 dark:text-slate-100">{empresaActiva.nombre}</span>
+      ) : null)}
+      <button onClick={alternar} title={oscuro ? t('Cambiar a claro') : t('Cambiar a oscuro')}
+        className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
+        {oscuro ? <Sun size={17} strokeWidth={1.8} /> : <Moon size={17} strokeWidth={1.8} />}
+      </button>
+      <div className="hidden sm:block"><LangToggle /></div>
+      <CampanaAlertas />
+    </div>
+  )
+}
+
 export default function Layout({ children }) {
   const { t } = useLang()
   const [abierto, setAbierto] = useState(false)
@@ -260,7 +289,7 @@ export default function Layout({ children }) {
               </button>
               <span className="font-extrabold text-brand-navy dark:text-white sm:hidden">MilePay</span>
               <div className="ml-auto">
-                <CampanaAlertas />
+                <TopActions />
               </div>
             </div>
             <GlobalFilterBar />
