@@ -139,7 +139,7 @@ function WhShell({ user }) {
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
       {/* ── MENÚ LATERAL en escritorio: mismo estilo que el módulo de
              Paquetería (sidebar blanco, ítem activo con píldora dorada) ── */}
-      <aside className="sticky top-0 hidden h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 md:flex dark:border-slate-700/60 dark:bg-surface-dark-card">
+      <aside className="sticky top-0 hidden h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 lg:flex dark:border-slate-700/60 dark:bg-surface-dark-card">
         <div className="flex items-center gap-3 px-1 pb-3 pt-1">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
           <div>
@@ -229,7 +229,29 @@ function WhShell({ user }) {
             </aside>
           </div>
         )}
-        <div className="max-w-full py-4 sm:py-6 lg:py-8"
+        {/* Barra lateral de ICONOS a la derecha (estilo WhatsApp): en el
+            plegable abierto (md..lg) la navegación vive en una columna
+            flotante a la derecha, al lado de la barra de estado. En móvil
+            manda la hamburguesa; en escritorio, el menú lateral izquierdo. */}
+        <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden items-center md:flex lg:hidden"
+          style={{ paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingTop: 'env(safe-area-inset-top)' }}>
+          <nav className="pointer-events-auto flex max-h-[90vh] flex-col items-center gap-1 overflow-y-auto rounded-[28px] border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95">
+            {TABS.map((tdef) => {
+              const Icono = tdef.icono
+              const activo = tab === tdef.id
+              return (
+                <button key={tdef.id} onClick={() => setTab(tdef.id)} title={tdef.label}
+                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition ${activo ? 'bg-brand-navy text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
+                  <Icono size={20} strokeWidth={1.8} />
+                </button>
+              )
+            })}
+            <div className="my-1 h-px w-6 bg-slate-200 dark:bg-slate-700" />
+            <button onClick={() => navigate('/elegir')} title="Cambiar de módulo" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><ArrowLeft size={20} /></button>
+            <button onClick={() => signOut(auth)} title="Cerrar sesión" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-rose-500 dark:text-slate-300 dark:hover:bg-slate-700"><LogOut size={20} /></button>
+          </nav>
+        </div>
+        <div className="max-w-full py-4 sm:py-6 lg:py-8 md:mr-[72px] lg:mr-0"
           style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
