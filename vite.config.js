@@ -33,7 +33,10 @@ export default defineConfig({
         theme_color: '#13233f',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        // libre: vertical, horizontal y pantallas plegables abiertas — el
+        // layout ya es responsivo (barra superior en angosto, menú lateral
+        // desde 768px, que es justo lo que da un plegable abierto)
+        orientation: 'any',
         start_url: '/',
         scope: '/',
         lang: 'es',
