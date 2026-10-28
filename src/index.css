@@ -95,3 +95,22 @@
 }
 /* Formato angosto de ticket (comprobante) para pantalla e impresión. */
 .ticket-narrow { width: 80mm; max-width: 100%; }
+
+/* ── Pantallas plegables (iPhone/Android fold) ──────────────────────────────
+   Cuando el visor está partido en dos segmentos horizontales (pantalla
+   abierta sobre la bisagra), dejamos un respiro del ancho de la bisagra para
+   que ningún texto ni botón caiga en el doblez. Es mejora progresiva: en
+   pantallas normales no hace nada. */
+@media (horizontal-viewport-segments: 2) {
+  .cm-scope > div[class*="p-4"],
+  .cm-scope > div[class*="p-6"],
+  .cm-scope > div[class*="p-8"] {
+    padding-left: max(1rem, env(viewport-segment-right 0 0));
+    padding-right: max(1rem, calc(100vw - env(viewport-segment-left 1 0)));
+  }
+}
+/* Pantalla muy ancha (plegable abierto en horizontal, tablet): el contenido
+   del almacén no se estira infinito, se centra y respira. */
+@media (min-width: 1700px) {
+  .cm-scope > div[class*="p-8"] { max-width: 1600px; margin-inline: auto; }
+}

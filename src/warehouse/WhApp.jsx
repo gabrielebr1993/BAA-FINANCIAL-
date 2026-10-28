@@ -14,7 +14,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer, Menu, X } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
 import WhTrabajadores from './staffing/WhTrabajadores'
@@ -120,10 +120,13 @@ function WhShell({ user }) {
     const h = (window.location.hash || '').replace('#', '')
     return TABS.some((t) => t.id === h) ? h : 'resumen'
   })
+  const [menuAbierto, setMenuAbierto] = useState(false) // cajón lateral (móvil/plegable)
   const setTab = (id) => {
     setTabEstado(id)
+    setMenuAbierto(false) // al elegir, se cierra el cajón
     try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
   }
+  const tabActual = TABS.find((t) => t.id === tab)
   // "abrir el perfil de este trabajador" desde cualquier pestaña (p. ej. al
   // tocar un nombre en Print Check): evento global → pestaña Trabajadores.
   const [perfilPedido, setPerfilPedido] = useState(null)
@@ -177,30 +180,55 @@ function WhShell({ user }) {
         {/* Cloud Motion igual que en el módulo de paquetería: nubes pastel muy
             suaves detrás del contenido, nunca sobre el menú lateral. */}
         <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
-        {/* Barra superior con pestañas SOLO en móvil (en escritorio manda el
-            menú lateral) */}
-        <div className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur md:hidden dark:border-slate-700/60 dark:bg-slate-900/80">
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-            <button onClick={() => navigate('/elegir')} className="mr-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Cambiar de módulo"><ArrowLeft size={16} /></button>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-black text-brand-navy dark:text-slate-100">Warehouse</span>
-            </div>
-            <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
-              <button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button>
-            </div>
+        {/* Barra superior SOLO en pantallas sin sidebar fijo (móvil / plegable
+            cerrado): hamburguesa que abre el MENÚ LATERAL + sección actual */}
+        <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 py-2.5 backdrop-blur md:hidden dark:border-slate-700/60 dark:bg-slate-900/80"
+          style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
+          <button onClick={() => setMenuAbierto(true)} className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" title="Abrir menú"><Menu size={20} /></button>
+          <div className="flex items-center gap-2 font-black text-brand-navy dark:text-slate-100">
+            {tabActual?.icono ? <tabActual.icono size={18} /> : null}
+            <span className="text-base">{tabActual?.label || 'Warehouse'}</span>
           </div>
-          <div className="flex gap-1 overflow-x-auto px-4 pb-2">
-            {TABS.map((tdef) => {
-              const Icono = tdef.icono
-              return (
-                <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                  <Icono size={14} /> {tdef.label}
-                </button>
-              )
-            })}
-          </div>
+          <button onClick={() => signOut(auth)} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={16} /></button>
         </div>
+
+        {/* CAJÓN lateral deslizable (móvil / plegable en cualquier posición) */}
+        {menuAbierto && (
+          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMenuAbierto(false)} />
+            <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col gap-1 border-r border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700/60 dark:bg-surface-dark-card"
+              style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+              <div className="flex items-center gap-3 px-1 pb-3">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
+                <div className="flex-1">
+                  <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
+                  <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Warehouse</div>
+                </div>
+                <button onClick={() => setMenuAbierto(false)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+              </div>
+              <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+                {TABS.map((tdef) => {
+                  const Icono = tdef.icono
+                  const activo = tab === tdef.id
+                  return (
+                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                      className={`flex items-center gap-3 rounded-xl py-3 pl-3 pr-3 text-left text-sm transition ${activo ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40'}`}>
+                      <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
+                      <span className="flex-1">{tdef.label}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+              <div className="border-t border-slate-200 pt-3 dark:border-slate-700/60">
+                <div className="truncate px-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{user.email}</div>
+                <div className="px-1 text-[11px] text-slate-400">usuario · dueño</div>
+                <button onClick={() => navigate('/elegir')} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                  <ArrowLeft size={15} /> Cambiar de módulo
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
         <div className="max-w-full p-4 sm:p-6 lg:p-8">
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
