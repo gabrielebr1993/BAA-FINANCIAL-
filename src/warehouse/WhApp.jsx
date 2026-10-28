@@ -229,7 +229,8 @@ function WhShell({ user }) {
             </aside>
           </div>
         )}
-        <div className="max-w-full p-4 sm:p-6 lg:p-8">
+        <div className="max-w-full py-4 sm:py-6 lg:py-8"
+          style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
         {tab === 'gofo' && <WhStaffing user={user} />}

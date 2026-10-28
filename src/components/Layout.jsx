@@ -295,7 +295,8 @@ export default function Layout({ children }) {
             <GlobalFilterBar />
           </header>
 
-          <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+          <main className="max-w-full flex-1 overflow-x-hidden py-4 sm:py-6 lg:py-8"
+            style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>{children}</main>
         </div>
       </div>
     </div>
