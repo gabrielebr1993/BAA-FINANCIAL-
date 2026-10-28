@@ -182,7 +182,7 @@ function WhShell({ user }) {
         <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
         {/* Barra superior SOLO en pantallas sin sidebar fijo (móvil / plegable
             cerrado): hamburguesa que abre el MENÚ LATERAL + sección actual */}
-        <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 py-2.5 backdrop-blur md:hidden dark:border-slate-700/60 dark:bg-slate-900/80"
+        <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 py-2.5 backdrop-blur sm:hidden dark:border-slate-700/60 dark:bg-slate-900/80"
           style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
           <button onClick={() => setMenuAbierto(true)} className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" title="Abrir menú"><Menu size={20} /></button>
           <div className="flex items-center gap-2 font-black text-brand-navy dark:text-slate-100">
@@ -194,7 +194,7 @@ function WhShell({ user }) {
 
         {/* CAJÓN lateral deslizable (móvil / plegable en cualquier posición) */}
         {menuAbierto && (
-          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMenuAbierto(false)} />
             <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col gap-1 border-r border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700/60 dark:bg-surface-dark-card"
               style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
@@ -233,7 +233,7 @@ function WhShell({ user }) {
             plegable abierto (md..lg) la navegación vive en una columna
             flotante a la derecha, al lado de la barra de estado. En móvil
             manda la hamburguesa; en escritorio, el menú lateral izquierdo. */}
-        <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden items-center md:flex lg:hidden"
+        <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden items-center sm:flex lg:hidden"
           style={{ paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingTop: 'env(safe-area-inset-top)' }}>
           <nav className="pointer-events-auto flex max-h-[90vh] flex-col items-center gap-1 overflow-y-auto rounded-[28px] border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-800/95">
             {TABS.map((tdef) => {
@@ -251,7 +251,7 @@ function WhShell({ user }) {
             <button onClick={() => signOut(auth)} title="Cerrar sesión" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-rose-500 dark:text-slate-300 dark:hover:bg-slate-700"><LogOut size={20} /></button>
           </nav>
         </div>
-        <div className="max-w-full py-4 sm:py-6 lg:py-8 md:mr-[72px] lg:mr-0"
+        <div className="max-w-full py-4 sm:py-6 lg:py-8 sm:mr-[72px] lg:mr-0"
           style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
