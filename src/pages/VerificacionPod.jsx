@@ -233,8 +233,14 @@ export default function VerificacionPod() {
   // perfil, useAuth da null y la consulta nunca corría, por eso la pantalla
   // se quedaba en EJEMPLO aunque existieran documentos reales para la empresa
   // seleccionada ("En uso"). Respaldo: companyId del perfil si no hay activa.
-  const { activeCompanyId } = useData()
+  const { activeCompanyId, ajustes, reloadAjustes } = useData()
   const companyId = activeCompanyId || companyIdPerfil
+  // Barra de análisis en MilePay (2026-10-29): el análisis externo escribe
+  // su progreso en settings/{companyId}.analisisPodHoy (sin colección nueva
+  // ni regla nueva). Si aún no hay datos, la barra muestra 0% y lo dice.
+  const progresoAnalisis = ajustes?.analisisPodHoy || null
+  const porcentajeAnalisis = progresoAnalisis && typeof progresoAnalisis.porcentaje === 'number'
+    ? Math.max(0, Math.min(100, progresoAnalisis.porcentaje)) : 0
   const [filtro, setFiltro] = useState('todas')
   const [sitio, setSitio] = useState('todas')
   const [busqueda, setBusqueda] = useState('')
@@ -375,6 +381,65 @@ export default function VerificacionPod() {
     }
   }
 
+  // ── Procesar en MilePay (2026-10-29): el punto es que el procesamiento
+  // ocurra AQUÍ, en MilePay, y se vea cuántos paquetes faltan.
+  // Pendiente = entrega real sin revisión guardada (revision null o
+  // 'pendiente'); procesada = 'confirmado' o 'revision'. Al procesar, las
+  // verdes se confirman automáticamente y las amarillas/rojas se envían a
+  // revisión humana (no se penaliza a nadie automáticamente).
+  const [progresoProcesamiento, setProgresoProcesamiento] = useState(null)
+  const pendientesProcesar = useMemo(() => {
+    if (!modoReal) return []
+    return reales.filter((e) => {
+      const r = revisiones[e.id]
+      return r !== 'confirmado' && r !== 'revision'
+    })
+  }, [modoReal, reales, revisiones])
+  const totalReales = reales.length
+  const procesadasReales = totalReales - pendientesProcesar.length
+  const porcentajeProcesadas = totalReales ? Math.round((procesadasReales / totalReales) * 100) : 0
+  const pendientesHumanas = pendientesProcesar.filter((e) => e.general !== 'verde').length
+  const procesarPendientes = async () => {
+    const pendientes = pendientesProcesar
+    if (!pendientes.length || procesandoLote) return
+    setProcesandoLote(true)
+    setMensajeLote(null)
+    setProgresoProcesamiento(0)
+    try {
+      const auto = pendientes.filter((e) => e.general === 'verde')
+      const aRevision = pendientes.filter((e) => e.general !== 'verde')
+      const total = pendientes.length
+      let hechas = 0
+      const aplicar = async (listaPend, valor) => {
+        for (let i = 0; i < listaPend.length; i += 500) {
+          const lote = writeBatch(db)
+          listaPend.slice(i, i + 500).forEach((e) => lote.update(doc(db, 'podVerifications', e.id), {
+            revision: valor,
+            revisionPor: user?.uid || null,
+            revisionEn: new Date().toISOString(),
+          }))
+          await lote.commit()
+          hechas += listaPend.slice(i, i + 500).length
+          setProgresoProcesamiento(Math.round((hechas / total) * 100))
+        }
+      }
+      await aplicar(auto, 'confirmado')
+      await aplicar(aRevision, 'revision')
+      setRevisiones((r) => {
+        const next = { ...r }
+        auto.forEach((e) => { next[e.id] = 'confirmado' })
+        aRevision.forEach((e) => { next[e.id] = 'revision' })
+        return next
+      })
+      setMensajeLote(`Procesadas ${total} entregas en MilePay: ${auto.length} confirmadas automáticamente (verdes) y ${aRevision.length} enviadas a revisión humana (amarillas/rojas). Quedan ${aRevision.length} por revisar humanamente.`)
+    } catch (err) {
+      setMensajeLote(`No se pudo completar el procesamiento: ${err?.message || 'error de Firestore'}.`)
+    } finally {
+      setProcesandoLote(false)
+      setProgresoProcesamiento(100)
+    }
+  }
+
   const cambiarDesde = (v) => { setDesde(v); if (v && hasta && v > hasta) setHasta(v) }
   const cambiarHasta = (v) => { setHasta(v); if (v && desde && v < desde) setDesde(v) }
   const limpiarRango = () => { const r = rangoUltimos7Dias(); setDesde(r.desde); setHasta(r.hasta) }
@@ -428,6 +493,30 @@ export default function VerificacionPod() {
           <button type="button" onClick={() => setMensajeLote(null)} className="ml-3 rounded-lg border px-2 py-0.5 text-xs">Cerrar</button>
         </Card>
       )}
+
+      {/* Procesamiento EN MilePay: cuántas faltan y barra de avance */}
+      <Card className="mb-5 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-brand-navy dark:text-slate-100">Procesar entregas pendientes · En MilePay</h2>
+            <p className="text-xs text-slate-500">
+              {modoReal
+                ? `Te faltan por procesar ${pendientesProcesar.length} de ${totalReales} entregas reales (${procesadasReales} ya procesadas). De las pendientes, ${pendientesHumanas} son amarillas/rojas y quedarán para revisión humana; las verdes se confirman solas.`
+                : 'En modo ejemplo no hay entregas reales que procesar: se muestran ejemplos marcados.'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Análisis de hoy en Gofo: {progresoAnalisis ? `${progresoAnalisis.estado || 'En curso'} · Sitios ${progresoAnalisis.sitiosCompletados ?? 0}/${progresoAnalisis.sitiosTotales ?? 11} · ${porcentajeAnalisis}%` : 'sin datos todavía en MilePay'}
+            </p>
+          </div>
+          <button type="button" onClick={procesarPendientes} disabled={!modoReal || pendientesProcesar.length === 0 || procesandoLote} className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40">
+            {procesandoLote ? 'Procesando…' : `Procesar entregas pendientes (${pendientesProcesar.length} restantes)`}
+          </button>
+        </div>
+        <div className="mt-3 h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" aria-valuenow={progresoProcesamiento ?? porcentajeProcesadas} aria-valuemin="0" aria-valuemax="100">
+          <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${progresoProcesamiento ?? porcentajeProcesadas}%` }} />
+        </div>
+        <p className="mt-1 text-right text-xs font-bold">{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes</p>
+      </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
       {/* El rango filtra la lista Y los contadores del semáforo (base). */}
