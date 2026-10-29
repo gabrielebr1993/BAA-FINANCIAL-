@@ -25,7 +25,7 @@ const pct = (n) => (n === null || n === undefined ? 'no aplica' : `${n}%`)
 
 export default function WhFinanzasStaff({ user }) {
   const [datos, setDatos] = useState(null)
-  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '', desde: '', hasta: '' })
+  const [filtro, setFiltro] = useState({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: 'pendientes', desde: '', hasta: '' })
   const [orden, setOrden] = useState('fecha')
   const recargar = async () => {
     const [periodos, registros, ajustes, gastos, cobros, cheques, configs, workers] = await Promise.all([
@@ -140,10 +140,10 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="">Todos los warehouses</option>
                 {warehouses.map((x) => <option key={x}>{x}</option>)}
               </Select>
-              <Select className="w-52" value={filtro.cobro} onChange={(e) => setFiltro({ ...filtro, cobro: e.target.value })} disabled={!!hayFiltroDetalle} title={hayFiltroDetalle ? 'Quita los filtros de detalle para filtrar por cobro' : ''}>
-                <option value="">Cobro: todas las semanas</option>
-                <option value="cobradas">Cobradas al 100%</option>
-                <option value="pendientes">Con saldo por cobrar</option>
+              <Select className="w-56" value={filtro.cobro} onChange={(e) => setFiltro({ ...filtro, cobro: e.target.value })} disabled={!!hayFiltroDetalle} title={hayFiltroDetalle ? 'Quita los filtros de detalle para filtrar por estado de pago' : ''}>
+                <option value="pendientes">💰 Sin pagar (por cobrar)</option>
+                <option value="cobradas">✅ Pagadas (cobradas al 100%)</option>
+                <option value="">Ver todas las semanas</option>
               </Select>
               <span className="text-slate-500">Del</span>
               <Input type="date" className="w-36" value={filtro.desde} onChange={(e) => setFiltro({ ...filtro, desde: e.target.value })} title="Semanas que terminan en o después de esta fecha" />
@@ -156,7 +156,7 @@ export default function WhFinanzasStaff({ user }) {
                 <option value="porCobrar">Orden: mayor saldo por cobrar</option>
               </Select>
               <Boton variant="ghost" onClick={exportarCSV}><FileDown size={13} /> Exportar CSV</Boton>
-              {(filtro.periodo || filtro.cobro || filtro.desde || filtro.hasta || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: '', desde: '', hasta: '' })}>Limpiar</Boton>}
+              {(filtro.periodo || filtro.cobro || filtro.desde || filtro.hasta || hayFiltroDetalle) && <Boton variant="ghost" onClick={() => setFiltro({ periodo: '', persona: '', posicion: '', warehouse: '', cobro: 'pendientes', desde: '', hasta: '' })}>Limpiar</Boton>}
             </div>
             {hayFiltroDetalle && <div className="mt-2 text-[11px] text-slate-400">Con filtros de detalle, los gastos, cobros, ajustes y cheques (que son del período completo) no se incluyen para no engañar la comparación.</div>}
           </Card>
