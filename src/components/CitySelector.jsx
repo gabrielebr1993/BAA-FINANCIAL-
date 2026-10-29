@@ -31,19 +31,21 @@ export default function CitySelector() {
     return <MultiCiudad opciones={[...misCiudades].map((c) => [c, nombreDe(c)])} {...{ selectedCity, selectedCities, setSelectedCities }} />
   }
 
-  // Lista = ciudades CONFIGURADAS + detectadas en facturas, deduplicadas por NOMBRE.
-  const conDatos = new Set(ciudades)
-  const porNombre = new Map()
-  const considerar = (code, nombre) => {
+  // Lista = ciudades CONFIGURADAS + detectadas en facturas, deduplicadas por
+  // CÓDIGO (un código = una ciudad; el código es la identidad real). Si el
+  // mismo código aparece con dos nombres (p. ej. Gofo renombró la ciudad y se
+  // agregó otra con el mismo código), se muestra UNA sola opción — así marcar
+  // una no activa la otra. Se prefiere el nombre configurado por la empresa.
+  const porCodigo = new Map()
+  const considerar = (code, nombre, esEmpresa) => {
     if (!code) return
     const nom = String(nombre || code).trim()
-    const prev = porNombre.get(nom)
-    if (!prev) { porNombre.set(nom, code); return }
-    if (conDatos.has(code) && !conDatos.has(prev)) porNombre.set(nom, code)
+    const prev = porCodigo.get(code)
+    if (!prev || (esEmpresa && !prev.esEmpresa)) porCodigo.set(code, { nombre: nom, esEmpresa: !!esEmpresa })
   }
-  ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) considerar(c.codigo, c.nombre) })
-  ciudades.forEach((c) => considerar(c, nombreCiudadDe(facturaRango, c)))
-  const opciones = [...porNombre.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([nombre, code]) => [code, nombre])
+  ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) considerar(c.codigo, c.nombre, true) })
+  ciudades.forEach((c) => considerar(c, nombreCiudadDe(facturaRango, c), false))
+  const opciones = [...porCodigo.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre)).map(([code, v]) => [code, v.nombre])
 
   return <MultiCiudad opciones={opciones} {...{ selectedCity, selectedCities, setSelectedCities }} />
 }
