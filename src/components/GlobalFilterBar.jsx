@@ -26,30 +26,25 @@ export default function GlobalFilterBar() {
   const {
     rango, setRango, invoices, invoicesRango, numSemanas, vista, setVista,
     selectedCity, setSelectedCity, selectedCities, selectedDriver, setSelectedDriver,
-    facturaRangoFull, ciudadBloqueada, ciudadesEmpresa,
+    facturaRangoFull, ciudadBloqueada,
   } = useData()
   // Facturas elegidas a mano (multiselección): array de ids con respaldo a la única.
   const facturaIds = Array.isArray(rango.invoiceIds) && rango.invoiceIds.length ? rango.invoiceIds : (rango.invoiceId ? [rango.invoiceId] : [])
 
-  // El SELECTOR de facturas respeta el filtro de ciudad: si eliges "Dallas", solo lista
-  // facturas de Dallas. Compara por código Y por nombre (normalizados) contra la ciudad
-  // principal de la factura, para no colar otras ciudades aunque los códigos no coincidan.
+  // El SELECTOR de facturas respeta el filtro de ciudad SOLO POR CÓDIGO (la
+  // identidad real de la ciudad). Antes también emparejaba por NOMBRE, y eso
+  // cruzaba ciudades distintas con nombres parecidos (p. ej. "Chicago-ORD01" y
+  // "Chicago-ORD02" tras renombrar en Gofo): al elegir una salían las dos. Con
+  // códigos únicos, el código basta y cada ciudad queda aislada.
   const filtroCiu = (selectedCities && selectedCities.length)
     ? selectedCities
     : (selectedCity && selectedCity !== TODAS ? [selectedCity] : null)
   const normC = (s) => String(s || '').trim().toLowerCase()
-  const nombreCode = (code) => (ciudadesEmpresa || []).find((c) => c.codigo === code)?.nombre || code
-  const selKeysCiu = new Set((filtroCiu || []).flatMap((c) => [normC(c), normC(nombreCode(c))]).filter(Boolean))
+  const selKeysCiu = new Set((filtroCiu || []).map((c) => normC(c)).filter(Boolean))
   const clavesFac = (inv) => {
     const ks = []
-    if (inv.ciudad) ks.push(normC(inv.ciudad), normC(nombreCode(inv.ciudad)))
-    if (inv.ciudadNombre) ks.push(normC(inv.ciudadNombre))
-    if (!inv.ciudad && !inv.ciudadNombre) {
-      (inv.resumenCiudades || []).forEach((c) => {
-        if (c.ubicacion) ks.push(normC(c.ubicacion), normC(nombreCode(c.ubicacion)))
-        if (c.nombreCiudad) ks.push(normC(c.nombreCiudad))
-      })
-    }
+    if (inv.ciudad) ks.push(normC(inv.ciudad))
+    ;(inv.resumenCiudades || []).forEach((c) => { if (c.ubicacion) ks.push(normC(c.ubicacion)) })
     return ks.filter(Boolean)
   }
   // Siempre se dejan las ya seleccionadas (para no romper la etiqueta ni la selección).
