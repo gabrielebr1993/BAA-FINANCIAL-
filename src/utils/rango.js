@@ -289,7 +289,8 @@ export function combinarFacturas(invoices) {
     Object.assign(ciudadesMap, inv.ciudadesMap || {})
     for (const c of inv.resumenChoferes || []) {
       const k = `${c.nombre}||${c.ciudad}`
-      const t = (porChofer[k] = porChofer[k] || { nombre: c.nombre, ciudad: c.ciudad, nombreCiudad: c.nombreCiudad, individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, fallidos: 0 })
+      const t = (porChofer[k] = porChofer[k] || { nombre: c.nombre, ciudad: c.ciudad, nombreCiudad: c.nombreCiudad, idGofo: c.idGofo || '', individuales: 0, dobles: 0, ingreso: 0, numClaims: 0, fallidos: 0 })
+      if (!t.idGofo && c.idGofo) t.idGofo = c.idGofo
       t.individuales += c.individuales || 0
       t.dobles += c.dobles || 0
       t.ingreso += c.ingreso || 0

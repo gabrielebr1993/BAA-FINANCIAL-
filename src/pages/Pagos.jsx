@@ -637,6 +637,9 @@ function FilaChofer({ p, abierto, onToggle, onMarcar, invoice, puedeMarcar, carg
           <button onClick={onToggle} className="font-semibold text-brand-navy dark:text-slate-100">
             {abierto ? '▾' : '▸'} {p.nombre}
           </button>{' '}
+          {(driver?.idGofo || p.idGofo) && (
+            <span className="ml-1 inline-flex items-center rounded-full bg-brand-navy/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-navy dark:bg-brand-gold/15 dark:text-brand-gold" title={t('Delivery ID de Gofo')}>ID {driver?.idGofo || p.idGofo}</span>
+          )}
           {p.sinTarifa && <Badge color="red">{t('sin tarifa')}</Badge>}
         </td>
         {esRuta && <td className={TD}>{p.ruta ? <Badge color="gold">{p.ruta}</Badge> : '—'}</td>}

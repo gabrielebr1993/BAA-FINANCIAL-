@@ -525,6 +525,7 @@ export function calcularPagos(inv, claims, drivers, ciudad, ajustesPorChofer = n
     const intentos = entregados + fallidos // un fallido es un intento no entregado
     return {
       nombre: ch.nombre,
+      idGofo: ch.idGofo || '',
       ciudad: ch.ciudad,
       nombreCiudad: nombreCiudad(ch.ciudad),
       individuales: ch.individuales,

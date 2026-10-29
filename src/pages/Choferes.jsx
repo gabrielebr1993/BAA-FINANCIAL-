@@ -18,7 +18,7 @@ import RegistroChoferes from '../components/RegistroChoferes'
 import { useLang } from '../i18n'
 import { useCarrier } from '../carriers/CarrierContext'
 
-const vacio = { nombre: '', precioIndividual: '', precioDoble: '', activo: true }
+const vacio = { nombre: '', idGofo: '', precioIndividual: '', precioDoble: '', activo: true }
 const key = (n) => (n || '').trim().toLowerCase()
 
 export default function Choferes() {
@@ -66,6 +66,30 @@ export default function Choferes() {
     for (const [nombre, m] of Object.entries(acc)) out[nombre] = Object.keys(m).sort((a, b) => m[b] - m[a])[0] || ''
     return out
   }, [invoices])
+
+  // Delivery ID de Gofo DETECTADO por nombre (clave normalizada). Mapea nombre ->
+  // conjunto de IDs vistos en las facturas. Si un mismo nombre trae DOS IDs, suele
+  // significar que dos personas distintas se fusionaron por error (ej. "Juan
+  // Gonzalez" 457972 absorbido por "Juan Sebastián Gonzalez Vargas" 269745).
+  const idGofoDetectado = useMemo(() => {
+    const acc = {}
+    for (const inv of (invoices || [])) {
+      for (const ch of (inv.resumenChoferes || [])) {
+        const id = String(ch.idGofo || '').trim()
+        if (!id) continue
+        const k = normNombre(ch.nombre)
+        ;(acc[k] = acc[k] || new Set()).add(id)
+      }
+    }
+    const out = {}
+    for (const [k, set] of Object.entries(acc)) out[k] = [...set]
+    return out
+  }, [invoices])
+  // Guarda en el perfil el Delivery ID detectado (botón "Asociar ID").
+  const asociarId = async (d, id) => {
+    await updateDoc(doc(db, 'drivers', d.id), { idGofo: String(id).trim() })
+    await reloadDrivers()
+  }
 
   // Lista de choferes respetando la CIUDAD seleccionada en la barra global:
   //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
@@ -214,6 +238,7 @@ export default function Choferes() {
     try {
       await addDoc(collection(db, 'drivers'), {
         nombre: form.nombre.trim(),
+        idGofo: (form.idGofo || '').trim(),
         precioIndividual: Number(form.precioIndividual) || 0,
         precioDoble: Number(form.precioDoble) || 0,
         activo: !!form.activo,
@@ -333,7 +358,7 @@ export default function Choferes() {
   // ---- modal ----
   const abrirModal = async (d) => {
     setModal(d)
-    setModalForm({ nombre: d.nombre || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', precioStopAdicional: d.precioStopAdicional ?? '', activo: d.activo !== false, notas: d.notas || '' })
+    setModalForm({ nombre: d.nombre || '', idGofo: d.idGofo || '', precioIndividual: d.precioIndividual ?? '', precioDoble: d.precioDoble ?? '', precioStopAdicional: d.precioStopAdicional ?? '', activo: d.activo !== false, notas: d.notas || '' })
     setAccesoForm({ email: '', password: '' })
     setAccesoMsg(null)
     setCargandoHist(true)
@@ -353,6 +378,7 @@ export default function Choferes() {
     setGuardandoModal(true)
     try {
       await updateDoc(doc(db, 'drivers', modal.id), {
+        idGofo: (modalForm.idGofo || '').trim(),
         precioIndividual: Number(modalForm.precioIndividual) || 0,
         precioDoble: Number(modalForm.precioDoble) || 0,
         activo: !!modalForm.activo,
@@ -409,6 +435,7 @@ export default function Choferes() {
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{t('Agregar chofer')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <Campo label={t('Nombre (= Courier del Excel)')}><Input className="w-56" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} /></Campo>
+          <Campo label={t('Delivery ID de Gofo (opcional)')}><Input className="w-36" placeholder={t('ej. 269745')} value={form.idGofo} onChange={(e) => setForm((f) => ({ ...f, idGofo: e.target.value }))} /></Campo>
           <Campo label={t('Rate individual ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioIndividual} onChange={(e) => setForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>
           <Campo label={t('Rate doble ($) — lo que le pagas')}><Input className="w-36" type="number" step="0.01" min="0" value={form.precioDoble} onChange={(e) => setForm((f) => ({ ...f, precioDoble: e.target.value }))} /></Campo>
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
@@ -551,11 +578,40 @@ export default function Choferes() {
                       )}
                       <div className="min-w-0">
                         <button onClick={() => navigate(`/choferes/${encodeURIComponent(d.nombre)}`)} className="block truncate font-medium text-brand-navy hover:underline dark:text-slate-100">{d.nombre}</button>
-                        {ciudadDeDriverNombre[d.nombre] && (
-                          <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700/60 dark:text-slate-300">
-                            <MapPin size={9} strokeWidth={2} /> {nombreCiudadCorto(ciudadDeDriverNombre[d.nombre])}
-                          </span>
-                        )}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          {ciudadDeDriverNombre[d.nombre] && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700/60 dark:text-slate-300">
+                              <MapPin size={9} strokeWidth={2} /> {nombreCiudadCorto(ciudadDeDriverNombre[d.nombre])}
+                            </span>
+                          )}
+                          {(() => {
+                            // Delivery ID de Gofo al lado del nombre.
+                            const detect = idGofoDetectado[normNombre(d.nombre)] || []
+                            if (d.idGofo) {
+                              const choca = detect.length && !detect.includes(String(d.idGofo).trim())
+                              return (
+                                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${choca ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' : 'bg-brand-navy/10 text-brand-navy dark:bg-brand-gold/15 dark:text-brand-gold'}`} title={choca ? t('El ID del perfil no coincide con el de la factura') : t('Delivery ID de Gofo')}>
+                                  ID {d.idGofo}{choca ? ' ⚠' : ''}
+                                </span>
+                              )
+                            }
+                            if (detect.length === 1) {
+                              return (
+                                <button onClick={() => asociarId(d, detect[0])} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300" title={t('Guardar este Delivery ID en el perfil')}>
+                                  ID {detect[0]} · {t('asociar')}
+                                </button>
+                              )
+                            }
+                            if (detect.length > 1) {
+                              return (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" title={t('Este nombre trae VARIOS Delivery IDs: probablemente son personas distintas fusionadas por error')}>
+                                  ⚠ {detect.length} {t('IDs')}: {detect.join(', ')}
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
+                        </div>
                       </div>
                       {guardadoId === d.id && <span className="ml-1 inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400"><Check size={12} strokeWidth={2.4} /> {t('guardado')}</span>}
                     </div>
@@ -629,6 +685,23 @@ export default function Choferes() {
             <div className="mb-3">
               <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Nombre (= Courier del Excel)')}</div>
               <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800">{modalForm.nombre}</div>
+            </div>
+            <div className="mb-3">
+              <div className="mb-1 text-xs text-slate-500 dark:text-slate-400">{t('Delivery ID de Gofo (identifica a la persona y evita confusiones)')}</div>
+              <div className="flex items-center gap-2">
+                <Input className="w-40" placeholder={t('ej. 269745')} value={modalForm.idGofo} onChange={(e) => setModalForm((f) => ({ ...f, idGofo: e.target.value }))} />
+                {(() => {
+                  const detect = idGofoDetectado[normNombre(modalForm.nombre)] || []
+                  if (!detect.length) return null
+                  if (detect.length === 1 && String(modalForm.idGofo).trim() !== detect[0]) {
+                    return <button type="button" onClick={() => setModalForm((f) => ({ ...f, idGofo: detect[0] }))} className="rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300">{t('Usar el de la factura:')} {detect[0]}</button>
+                  }
+                  if (detect.length > 1) {
+                    return <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">⚠ {t('La factura trae varios IDs para este nombre:')} {detect.join(', ')}</span>
+                  }
+                  return null
+                })()}
+              </div>
             </div>
             <div className="mb-3 flex flex-wrap gap-3">
               <Campo label={t('Rate individual ($)')}><Input className="w-36" type="number" step="0.01" min="0" value={modalForm.precioIndividual} onChange={(e) => setModalForm((f) => ({ ...f, precioIndividual: e.target.value }))} /></Campo>

@@ -314,6 +314,10 @@ export function procesarArchivo(arrayBuffer, nombreArchivo, modoConfig = 'estand
     const dsRows = leerObjetos(
       hDriverSum,
       {
+        // "Delivery ID" (columna A): identificador ÚNICO del chofer en Gofo. Sirve
+        // para distinguir dos personas con nombres parecidos (p. ej. "Juan Gonzalez"
+        // vs "Juan Sebastián Gonzalez Vargas") y evitar que se fusionen por error.
+        idGofo: { cands: ['deliveryid'], fallback: 0 },
         nombre: { cands: ['courier', 'couriername'], fallback: 1 },
         individuales: { cands: ['totalfullpricetickets'], fallback: 9 },
         dobles: { cands: ['totalnonfullpricetickets'], fallback: 11 },
@@ -324,7 +328,8 @@ export function procesarArchivo(arrayBuffer, nombreArchivo, modoConfig = 'estand
     for (const r of dsRows) {
       const nombre = String(r.nombre == null ? '' : r.nombre).trim()
       if (!nombre) continue
-      driverSummary.push({ nombre, individuales: toNum(r.individuales), dobles: toNum(r.dobles), ingreso: toNum(r.ingreso) })
+      const idGofo = String(r.idGofo == null ? '' : r.idGofo).trim()
+      driverSummary.push({ nombre, idGofo, individuales: toNum(r.individuales), dobles: toNum(r.dobles), ingreso: toNum(r.ingreso) })
     }
   }
 
@@ -552,7 +557,7 @@ export function construirResumen(detalles, claims, nombreMap, driverSummary = nu
       const nombre = ds.nombre
       const ciudad = ciudadDeChofer[norm(nombre)] || ciudadMayor
       const ck = `${nombre}||${ciudad}`
-      nuevoPorChofer[ck] = { nombre, ciudad, individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: Number(ds.ingreso) || 0, numClaims: 0 }
+      nuevoPorChofer[ck] = { nombre, ciudad, idGofo: ds.idGofo || '', individuales: Number(ds.individuales) || 0, dobles: Number(ds.dobles) || 0, ingreso: Number(ds.ingreso) || 0, numClaims: 0 }
     }
     for (const k of Object.keys(porChofer)) delete porChofer[k]
     Object.assign(porChofer, nuevoPorChofer)
