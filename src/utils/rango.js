@@ -188,6 +188,62 @@ export function facturaDeChofer(fact, chofer) {
   }
 }
 
+// ---- filtro por ciudad ------------------------------------------------------
+
+// Reduce una factura combinada (facturaRango) a UNA sola CIUDAD (por su CÓDIGO,
+// p. ej. "AUS01"), recomputando choferes/rutas/ciudades/totales desde SUS filas,
+// para que TODA la app muestre SOLO los datos de esa ciudad — igual que se hace
+// con un chofer. Antes, al elegir ciudad NO se recortaban los datos (solo cada
+// pantalla filtraba por su cuenta), y por eso se "colaban" datos de otra ciudad
+// (ej. elegir Austin y ver Chicago). La identidad de la ciudad es el CÓDIGO.
+export function facturaDeCiudad(fact, code) {
+  if (!fact || !code) return fact
+  const choferes = (fact.resumenChoferes || []).filter((c) => (c.ciudad || c.ubicacion) === code)
+  const base = {
+    ...fact,
+    __ciudadScope: code,
+    verificacion: null,
+    totalDescuentoGofo: 0,
+  }
+  if (choferes.length === 0) {
+    return { ...base, resumenChoferes: [], resumenChoferRuta: [], resumenRutas: [], resumenCiudades: [],
+      simuladorDesglose: (fact.simuladorDesglose || []).filter((x) => x.ciudad === code),
+      totalIndividuales: 0, totalDobles: 0, totalPaquetes: 0, ingresoTotal: 0, totalClaims: 0,
+      numChoferes: 0, numRutas: 0, totalFallidos: 0, fallidosPorChofer: {}, fallidosSinAsociar: [] }
+  }
+  const nombresEnCiudad = new Set(choferes.map((c) => c.nombre))
+  const choferRuta = (fact.resumenChoferRuta || []).filter((c) => (c.ciudad || c.ubicacion) === code)
+  const resumenRutas = (fact.resumenRutas || []).filter((r) => r.ciudad === code)
+  const resumenCiudades = (fact.resumenCiudades || []).filter((c) => c.ubicacion === code)
+  const simuladorDesglose = (fact.simuladorDesglose || []).filter((x) => x.ciudad === code)
+  // Fallidos: solo los de choferes de ESTA ciudad.
+  const fallidosPorChofer = {}
+  for (const [nombre, n] of Object.entries(fact.fallidosPorChofer || {})) {
+    if (nombresEnCiudad.has(nombre)) fallidosPorChofer[nombre] = n
+  }
+  const fallidosSinAsociar = (fact.fallidosSinAsociar || []).filter((s) => s.ciudad == null || s.ciudad === code)
+
+  const suma = (campo) => choferes.reduce((a, c) => a + (c[campo] || 0), 0)
+  return {
+    ...base,
+    resumenChoferes: choferes,
+    resumenChoferRuta: choferRuta,
+    resumenRutas,
+    resumenCiudades,
+    simuladorDesglose,
+    totalIndividuales: suma('individuales'),
+    totalDobles: suma('dobles'),
+    totalPaquetes: suma('individuales') + suma('dobles'),
+    ingresoTotal: suma('ingreso'),
+    totalClaims: suma('numClaims'),
+    numChoferes: nombresEnCiudad.size,
+    numRutas: resumenRutas.length,
+    totalFallidos: suma('fallidos'),
+    fallidosPorChofer,
+    fallidosSinAsociar,
+  }
+}
+
 // ---- verificación de Gofo combinada -----------------------------------------
 
 // Suma la verificación de Gofo (Bruto→Neto + "Cuadra con Gofo") de varias facturas

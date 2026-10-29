@@ -32,27 +32,30 @@ export default function CitySelector() {
   }
 
   // Lista = ciudades CONFIGURADAS + detectadas en facturas, deduplicadas por
-  // CÓDIGO (un código = una ciudad; el código es la identidad real). Si el
-  // Deduplicado por NOMBRE: una sola opción por nombre de ciudad. Si el mismo
-  // nombre aparece con dos códigos (p. ej. tu "Austin" configurada AUS01 + una
-  // "Austin" vieja detectada en facturas con otro código), se muestra UNA sola
-  // opción y se PREFIERE el código que tú configuraste. Ciudades con nombres
-  // distintos (Chicago-ORD01 vs Chicago-ORD02) quedan separadas, como deben.
-  // la CLAVE de agrupación ignora mayúsculas/acentos/espacios para que
-  // "Austin", "Austin " y "AUSTIN" se junten en una sola opción
-  const claveNom = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase()
-  const porNombre = new Map()
+  // CÓDIGO (un código = una ciudad; el CÓDIGO es la identidad real, NO el nombre).
+  // Si dos entradas comparten código (p. ej. "Chicago" y "Chicago-ORD01", ambas
+  // ORD01), se muestra UNA sola opción. Códigos distintos (Austin AUS01 vs
+  // Austin-AUS02 AUS02) quedan SEPARADOS, como deben. Al elegir el nombre a
+  // mostrar se PREFIERE: lo que tú configuraste (empresa) sobre lo detectado, y
+  // un nombre LIMPIO (sin el código pegado, ej. "Chicago" antes que "Chicago-ORD01").
+  const porCodigo = new Map()
   const considerar = (code, nombre, esEmpresa) => {
-    if (!code) return
-    const disp = String(nombre || code).trim().replace(/\s+/g, ' ')
-    const key = claveNom(disp)
-    if (!key) return
-    const prev = porNombre.get(key)
-    if (!prev || (esEmpresa && !prev.esEmpresa)) porNombre.set(key, { code, nombre: disp, esEmpresa: !!esEmpresa })
+    const cod = String(code || '').trim().toUpperCase()
+    if (!cod) return
+    const disp = String(nombre || cod).trim().replace(/\s+/g, ' ')
+    const tieneCod = new RegExp(cod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(disp)
+    const prev = porCodigo.get(cod)
+    if (!prev) { porCodigo.set(cod, { code: cod, nombre: disp, esEmpresa: !!esEmpresa, tieneCod }); return }
+    // Preferir entrada de empresa sobre detectada.
+    if (esEmpresa && !prev.esEmpresa) { porCodigo.set(cod, { code: cod, nombre: disp, esEmpresa: true, tieneCod }); return }
+    if (esEmpresa === prev.esEmpresa && prev.tieneCod && !tieneCod) {
+      // Misma categoría: preferir el nombre LIMPIO (sin el código dentro).
+      porCodigo.set(cod, { code: cod, nombre: disp, esEmpresa: !!esEmpresa, tieneCod })
+    }
   }
   ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) considerar(c.codigo, c.nombre, true) })
   ciudades.forEach((c) => considerar(c, nombreCiudadDe(facturaRango, c), false))
-  const opciones = [...porNombre.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((v) => [v.code, v.nombre])
+  const opciones = [...porCodigo.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((v) => [v.code, v.nombre])
 
   return <MultiCiudad opciones={opciones} {...{ selectedCity, selectedCities, setSelectedCities }} />
 }

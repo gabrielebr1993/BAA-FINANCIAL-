@@ -25,7 +25,7 @@ export default function GlobalFilterBar() {
   const { t } = useLang()
   const {
     rango, setRango, invoices, invoicesRango, numSemanas, vista, setVista,
-    selectedCity, setSelectedCity, selectedCities, selectedDriver, setSelectedDriver,
+    selectedCity, setSelectedCity, selectedCities, setSelectedCities, selectedDriver, setSelectedDriver,
     facturaRangoFull, ciudadBloqueada,
   } = useData()
   // Facturas elegidas a mano (multiselección): array de ids con respaldo a la única.
@@ -76,7 +76,14 @@ export default function GlobalFilterBar() {
   const irPeriodo = () => { if (modo !== 'periodo') setRango({ preset: ultimoPreset.current || 'ultima', desde: '', hasta: '' }) }
   const irFactura = () => {
     if (modo === 'factura') return
-    const id = rango.invoiceId && invoices.some((i) => i.id === rango.invoiceId) ? rango.invoiceId : (invoices[0]?.id || '')
+    // Se elige una factura DE LA CIUDAD seleccionada (invoicesSelector ya está
+    // filtrado por código). Antes se tomaba invoices[0] de cualquier ciudad, y por
+    // eso "Una factura" parecía no hacer nada (quedaba en una ciudad distinta a la
+    // elegida). Respaldo: cualquier factura si no hay ninguna de esa ciudad.
+    const cand = invoicesSelector.length ? invoicesSelector : invoices
+    const id = rango.invoiceId && cand.some((i) => i.id === rango.invoiceId)
+      ? rango.invoiceId
+      : (cand[0]?.id || invoices[0]?.id || '')
     if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' })
   }
   // Manager: forzar modo "Una factura" (elige la más reciente si venía en período).
@@ -97,7 +104,7 @@ export default function GlobalFilterBar() {
   const limpiar = () => {
     setDesde(''); setHasta(''); setAbrirPers(false)
     setRango({ preset: 'ultima', desde: '', hasta: '' })
-    if (!ciudadBloqueada) setSelectedCity(TODAS)
+    if (!ciudadBloqueada) { setSelectedCity(TODAS); setSelectedCities([]) }
     setSelectedDriver(TODOS)
   }
 

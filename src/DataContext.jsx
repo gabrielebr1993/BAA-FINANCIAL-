@@ -8,7 +8,7 @@ import { collection, getDocs, getDoc, doc, updateDoc, query, where } from 'fireb
 import { db } from './firebase'
 import { useAuth } from './AuthContext'
 import { TODAS, TODOS } from './utils/calc'
-import { conFechas, invoicesEnRango, combinarFacturas, combinarVerificacion, facturaDeChofer } from './utils/rango'
+import { conFechas, invoicesEnRango, combinarFacturas, combinarVerificacion, facturaDeChofer, facturaDeCiudad } from './utils/rango'
 import { calcularAlertas, SEVERIDAD_ORDEN } from './utils/alertas'
 import { cargarEstadosAlertas, guardarEstadoAlerta, borrarEstadoAlerta } from './utils/alertEstados'
 import { subirBackupStorage } from './utils/backup'
@@ -52,9 +52,26 @@ export function DataProvider({ children }) {
   // Catálogo de ciudades del CARRIER activo: cada compañía tiene SUS ciudades
   // (las de SpeedX no son las de Gofo). Gofo usa el campo histórico `ciudades`;
   // los demás carriers, `ciudades_<carrier>` en el mismo doc de settings.
-  const ciudadesEmpresaCarrier = useMemo(() => (
-    carrierActivo === 'gofo' ? (ajustes?.ciudades || []) : (ajustes?.[`ciudades_${carrierActivo}`] || [])
-  ), [ajustes, carrierActivo])
+  const ciudadesEmpresaCarrier = useMemo(() => {
+    const raw = carrierActivo === 'gofo' ? (ajustes?.ciudades || []) : (ajustes?.[`ciudades_${carrierActivo}`] || [])
+    // DEDUP POR CÓDIGO (la identidad real de la ciudad, como en la factura de Gofo).
+    // Si dos entradas comparten código (p. ej. "Chicago" y "Chicago-ORD01", ambas
+    // ORD01), se deja UNA sola, prefiriendo el nombre LIMPIO (sin el código pegado).
+    // Así el duplicado desaparece en TODA la app: filtros, dashboards y facturas.
+    const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const porCod = new Map()
+    for (const c of raw) {
+      const cod = String(c?.codigo || '').trim().toUpperCase()
+      if (!cod) continue
+      const nom = String(c?.nombre || cod).trim().replace(/\s+/g, ' ')
+      const tieneCod = new RegExp(esc(cod), 'i').test(nom)
+      const prev = porCod.get(cod)
+      if (!prev) { porCod.set(cod, { ...c, codigo: cod, nombre: nom, _tc: tieneCod }); continue }
+      if (prev._tc && !tieneCod) porCod.set(cod, { ...c, codigo: cod, nombre: nom, _tc: tieneCod })
+    }
+    // eslint-disable-next-line no-unused-vars
+    return [...porCod.values()].map(({ _tc, ...c }) => c)
+  }, [ajustes, carrierActivo])
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   // Ciudad y rango PERSISTIDOS: al recargar se mantiene lo que tenías elegido.
   const [selectedCity, setSelectedCity] = useState(() => {
@@ -314,10 +331,16 @@ export function DataProvider({ children }) {
   // chofer (recomputando ciudades/rutas/totales); si no, es la completa. Así todo el
   // resto de la app (funciones de cálculo intactas) muestra solo sus datos.
   const hayChofer = selectedDriver && selectedDriver !== TODOS
-  const facturaRango = useMemo(
-    () => (hayChofer ? facturaDeChofer(facturaRangoFull, selectedDriver) : facturaRangoFull),
-    [facturaRangoFull, hayChofer, selectedDriver]
-  )
+  const hayCiudad = selectedCityEff && selectedCityEff !== TODAS
+  // Se recorta primero por CIUDAD (si hay una elegida) y luego por CHOFER, para que
+  // TODA la app muestre solo los datos de esa ciudad/chofer. Antes, elegir ciudad NO
+  // recortaba los datos y se colaban otras ciudades (ej. Austin mostrando Chicago).
+  const facturaRango = useMemo(() => {
+    let f = facturaRangoFull
+    if (hayCiudad) f = facturaDeCiudad(f, selectedCityEff)
+    if (hayChofer) f = facturaDeChofer(f, selectedDriver)
+    return f
+  }, [facturaRangoFull, hayCiudad, selectedCityEff, hayChofer, selectedDriver])
   // Verificación de Gofo de la CIUDAD seleccionada. Como cada factura es de una sola
   // ciudad (Gofo paga por ciudad), se suma la verificación de las facturas del rango
   // que son EXACTAMENTE de esa ciudad → su "Cuadra con Gofo" real e independiente.
