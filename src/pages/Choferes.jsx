@@ -447,7 +447,10 @@ export default function Choferes() {
           (al subir una factura y responder "es el mismo que…"). Permite ver
           quién fue combinado con quién y deshacer una unión equivocada. */}
       {(() => {
-        const unidos = driversAll.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
+        // Respeta el FILTRO de ciudad: usa `drivers` (ya filtrado por la ciudad
+        // elegida) en vez de `driversAll`. Con "Todas las ciudades" muestra todo;
+        // con una ciudad elegida, solo las uniones de esa ciudad.
+        const unidos = drivers.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
         if (!unidos.length) return null
         // ¿CUÁNDO se vio cada nombre absorbido por ÚLTIMA VEZ como chofer
         // APARTE? Se rastrea en los resúmenes de todas las facturas cargadas:
