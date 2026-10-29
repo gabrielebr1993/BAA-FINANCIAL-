@@ -18,6 +18,15 @@ rules_version = '2';
 // ---------------------------------------------------------------------------
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Verificación POD (Gofo): solo staff de la empresa. Un chofer NO la lee ni
+    // la escribe (la pantalla ya exige permiso verFinanzas y carrier Gofo).
+    // No contiene datos sensibles: solo nombre de chofer, guía, sitio, fecha,
+    // fotos POD, estado y revisión humana. Nunca SSN, banco, teléfono ni ID.
+    match /podVerifications/{id} {
+      allow read: if isStaff(resource.data.companyId);
+      allow create: if isStaff(request.resource.data.companyId);
+      allow update, delete: if isStaff(resource.data.companyId);
+    }
 
     function signedIn() {
       return request.auth != null;
