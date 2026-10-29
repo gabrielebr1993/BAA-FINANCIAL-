@@ -113,13 +113,17 @@ function normalizarReal(docSnap) {
     tipo: d.tipo || '—',
     fechaEntrega: typeof d.fechaEntrega === 'string' ? d.fechaEntrega : null,
     origen: d.origen || d.origin || null,
+    // Link a Gofo (2026-10-29): si el documento trae un gofoUrl/portalUrl
+    // exacto se usa ese; si no, el portal general, donde se busca la guía
+    // por su waybill y se abre su celda POD. Solo para entregas reales.
+    gofoUrl: d.gofoUrl || d.portalUrl || 'https://dms.gofoexpress.com/login',
     fotos,
     general: estadoGeneral(fotos.length ? fotos : [{ estado: 'amarillo' }]),
     revision: d.revision || null, // 'confirmado' | 'revision' | null
   }
 }
 function ejemploANormal(e) {
-  return { ...e, id: e.waybill, esEjemplo: true, fechaEntrega: null, origen: null, general: estadoGeneral(e.fotos) }
+  return { ...e, id: e.waybill, esEjemplo: true, fechaEntrega: null, origen: null, gofoUrl: null, general: estadoGeneral(e.fotos) }
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +523,9 @@ export default function VerificacionPod() {
                   <p className="mt-1 text-xs text-slate-500">Estado general = peor estado de sus 3 fotos. Toca una foto para verla en grande.</p>
                 </div>
                 <div className="flex gap-2">
+                  {!e.esEjemplo && e.gofoUrl && (
+                    <a href={e.gofoUrl} target="_blank" rel="noreferrer" title={`Abrir Gofo y buscar la guía ${e.waybill} para ver sus fotos POD`} className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Ver fotos en Gofo ↗</a>
+                  )}
                   <button type="button" onClick={() => marcarUno(e, 'confirmado')} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Confirmar veredicto</button>
                   <button type="button" onClick={() => marcarUno(e, 'revision')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50">Marcar para revisión</button>
                 </div>
@@ -601,6 +608,9 @@ export default function VerificacionPod() {
             </p>
             <p className="mt-2 text-sm">{ampliada.foto.motivo}</p>
             <p className="mt-1 text-xs text-slate-500">{ampliada.foto.criterio}</p>
+            {!ampliada.entrega.esEjemplo && ampliada.entrega.gofoUrl && !ampliada.foto.url && (
+              <a href={ampliada.entrega.gofoUrl} target="_blank" rel="noreferrer" title={`Abrir Gofo y buscar la guía ${ampliada.entrega.waybill}`} className="mt-3 inline-block rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Ver fotos en Gofo ↗</a>
+            )}
           </div>
         </div>
       )}
