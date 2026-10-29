@@ -44,6 +44,7 @@ const Financiero = lazy(() => import('./pages/Financiero'))
 const Cobros = lazy(() => import('./pages/Cobros'))
 const ReporteManual = lazy(() => import('./carriers/speedx/ReporteManual'))
 const ReclamosGofo = lazy(() => import('./pages/ReclamosGofo'))
+const VerificacionPod = lazy(() => import('./pages/VerificacionPod'))
 const Claims = lazy(() => import('./pages/Claims'))
 const Choferes = lazy(() => import('./pages/Choferes'))
 const PerfilChofer = lazy(() => import('./pages/PerfilChofer'))
@@ -125,6 +126,7 @@ function PackageApp() {
               <Route path="/cobros" element={<Page filtro="verFinanzas"><Cobros /></Page>} />
               <Route path="/reporte-manual" element={<Page filtro="subirFacturas"><ReporteManual /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
+              <Route path="/verificacion" element={<Page filtro="verFinanzas"><VerificacionPod /></Page>} />
               <Route path="/claims" element={<Page filtro="verClaims"><Claims /></Page>} />
               <Route path="/choferes" element={<Page filtro="gestionarChoferes"><Choferes /></Page>} />
               <Route path="/managers/:id" element={<Page filtro="gestionarChoferes"><ManagerPerfil /></Page>} />
