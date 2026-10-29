@@ -32,7 +32,7 @@ export default function CargarFactura() {
 function CargarFacturaGofo() {
   const { t } = useLang()
   const { perfil } = useAuth()
-  const { invoices, drivers, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadAjustes, setSelectedInvoiceId } = useData()
+  const { invoices, drivers, idGofoPorNombre, selectedInvoiceId, activeCompanyId, empresaActiva, ciudadesEmpresa, ajustes, reloadInvoices, reloadDrivers, reloadAjustes, setSelectedInvoiceId } = useData()
 
   const [procesando, setProcesando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -1500,14 +1500,18 @@ function CargarFacturaGofo() {
                     <div className="mt-2 scroll-thin max-h-64 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
                       {Object.entries(unif.auto).map(([raw, canon]) => {
                         const idRaw = idPorRawNombre[normNombre(raw)] || ''
-                        const idCanon = idPorDriverNorm[normNombre(canon)] || idPorRawNombre[normNombre(canon)] || ''
+                        // ID del destino: perfil → esta factura → historial de facturas.
+                        const idCanon = idPorDriverNorm[normNombre(canon)] || idPorRawNombre[normNombre(canon)] || (idGofoPorNombre?.[normNombre(canon)] || '')
                         const choca = idRaw && idCanon && idRaw !== idCanon
+                        const mismo = idRaw && idCanon && idRaw === idCanon
                         return (
                           <div key={raw} className="flex flex-wrap items-center gap-1.5">
                             <span className="text-slate-500 dark:text-slate-400">{raw}{idRaw ? ` (ID ${idRaw})` : ''}</span>
                             <span className="text-brand-gold">→</span>
                             <b className="text-brand-navy dark:text-slate-100">{canon}{idCanon ? ` (ID ${idCanon})` : ''}</b>
-                            {choca && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">⚠ {t('IDs distintos')}</span>}
+                            {choca && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">⚠ {t('IDs distintos → sepáralos')}</span>}
+                            {mismo && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ {t('mismo ID')}</span>}
+                            {!idCanon && idRaw && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700/60 dark:text-slate-300" title={t('El destino no aparece como persona aparte en la factura: no hay otro ID para comparar. Si dudas, sepáralo.')}>{t('sin ID aparte')}</span>}
                             <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">{t('separar (es otro)')}</button>
                           </div>
                         )
