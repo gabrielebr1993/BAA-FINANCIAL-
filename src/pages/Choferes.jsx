@@ -120,6 +120,7 @@ export default function Choferes() {
   // ---- selección / masivo ----
   const [seleccion, setSeleccion] = useState(() => new Set())
   const [busqueda, setBusqueda] = useState('')
+  const [buscarUnidos, setBuscarUnidos] = useState('') // buscador de la tarjeta de auditoría
   const [bulkTarifa, setBulkTarifa] = useState({ ind: '', dob: '' })
   const [bulkAjuste, setBulkAjuste] = useState({ modo: 'monto', op: 'sumar', valor: '' })
   const [confirm, setConfirm] = useState(null) // { texto, accion }
@@ -469,14 +470,26 @@ export default function Choferes() {
           await updateDoc(doc(db, 'drivers', d.id), { alias: arrayRemove(a) })
           await reloadDrivers()
         }
+        // Filtro del buscador: coincide por el nombre principal O por cualquier alias.
+        const term = buscarUnidos.trim().toLowerCase()
+        const unidosFiltrados = !term ? unidos : unidos.filter((d) =>
+          (d.nombre || '').toLowerCase().includes(term) ||
+          (d.alias || []).some((a) => String(a).toLowerCase().includes(term))
+        )
         return (
           <Card className="mb-4 p-4">
             <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nombres unidos (auditoría)')} <Badge color="gold">{unidos.length}</Badge></h3>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
               {t('Al subir una factura, cuando el sistema preguntó «¿es la misma persona?», estos nombres quedaron UNIDOS a una sola ficha (sus paquetes se suman juntos). Si una unión fue un error: 1) quítala aquí con la ✕, 2) borra la factura de esa semana en «Facturas», y 3) vuélvela a subir respondiendo que es un chofer NUEVO — así sus paquetes vuelven a separarse.')}
             </p>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Input className="w-72" value={buscarUnidos} onChange={(e) => setBuscarUnidos(e.target.value)} placeholder={t('🔎 Buscar nombre o alias (ej. Jose Rodríguez)…')} />
+              {term && <Boton variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setBuscarUnidos('')}>{t('Limpiar')}</Boton>}
+              <span className="text-xs text-slate-500 dark:text-slate-400">{unidosFiltrados.length} {t('de')} {unidos.length}</span>
+            </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {unidos.map((d) => (
+              {unidosFiltrados.length === 0 && <div className="py-3 text-sm text-slate-400">{t('Ningún nombre unido coincide con la búsqueda.')}</div>}
+              {unidosFiltrados.map((d) => (
                 <div key={d.id} className="flex flex-wrap items-center gap-2 py-2">
                   <b className="text-brand-navy dark:text-slate-100">{d.nombre}</b>
                   <span className="text-xs text-slate-400">{t('absorbió:')}</span>
