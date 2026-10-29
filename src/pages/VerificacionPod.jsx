@@ -35,7 +35,7 @@
 //  rojo (urgente) > amarillo (intermedia) > verde (verificada y OK).
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Camera, Eye, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
+import { Camera, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
 import { collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
@@ -113,13 +113,17 @@ function normalizarReal(docSnap) {
     tipo: d.tipo || '—',
     fechaEntrega: typeof d.fechaEntrega === 'string' ? d.fechaEntrega : null,
     origen: d.origen || d.origin || null,
+    // Link a Gofo (2026-10-29): si el documento trae un gofoUrl/portalUrl
+    // exacto se usa ese; si no, el portal general, donde se busca la guía
+    // por su waybill y se abre su celda POD. Solo para entregas reales.
+    gofoUrl: d.gofoUrl || d.portalUrl || 'https://dms.gofoexpress.com/login',
     fotos,
     general: estadoGeneral(fotos.length ? fotos : [{ estado: 'amarillo' }]),
     revision: d.revision || null, // 'confirmado' | 'revision' | null
   }
 }
 function ejemploANormal(e) {
-  return { ...e, id: e.waybill, esEjemplo: true, fechaEntrega: null, origen: null, general: estadoGeneral(e.fotos) }
+  return { ...e, id: e.waybill, esEjemplo: true, fechaEntrega: null, origen: null, gofoUrl: null, general: estadoGeneral(e.fotos) }
 }
 
 // ---------------------------------------------------------------------------
@@ -516,9 +520,12 @@ export default function VerificacionPod() {
                     <span className="text-xs text-slate-500">{e.fechaEntrega ? `Entrega: ${e.fechaEntrega}` : 'Sin fecha'}</span>
                     {e.fotos.length !== 3 && <span className="text-xs font-semibold text-amber-700">Fotos registradas: {e.fotos.length}/3</span>}
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">Estado general = peor estado de sus 3 fotos. Toca una foto para verla en grande.</p>
+                  <p className="mt-1 text-xs text-slate-500">Estado general = peor estado de sus 3 fotos. Lista de fotos: toca una para ver su detalle y el link a Gofo.</p>
                 </div>
                 <div className="flex gap-2">
+                  {!e.esEjemplo && e.gofoUrl && (
+                    <a href={e.gofoUrl} target="_blank" rel="noreferrer" title={`Abrir Gofo y buscar la guía ${e.waybill} para ver sus fotos POD`} className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Ver fotos en Gofo ↗</a>
+                  )}
                   <button type="button" onClick={() => marcarUno(e, 'confirmado')} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Confirmar veredicto</button>
                   <button type="button" onClick={() => marcarUno(e, 'revision')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50">Marcar para revisión</button>
                 </div>
@@ -531,34 +538,35 @@ export default function VerificacionPod() {
                 </p>
               )}
 
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {/* Modo lista (2026-10-29): sin previews. Las fotos de Gofo no
+                  están cargadas en MilePay, así que un cuadro gris no aporta
+                  nada; cada foto es una fila con su estado, motivo y criterio,
+                  y el link a Gofo está en la tarjeta. Si una foto trae URL
+                  real, se muestra una miniatura pequeña junto a su fila. */}
+              <ul className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-slate-700 dark:border-slate-700">
                 {e.fotos.map((f) => {
                   const fe = ESTADOS[f.estado]
                   return (
-                    <button
-                      key={f.titulo}
-                      type="button"
-                      onClick={() => setAmpliada({ entrega: e, foto: f })}
-                      className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow ${fe.borde} bg-white dark:bg-slate-800`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-1.5 text-xs font-bold"><Camera size={14} /> {f.titulo}</span>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${fe.chip}`}>
+                    <li key={f.titulo}>
+                      <button
+                        type="button"
+                        onClick={() => setAmpliada({ entrega: e, foto: f })}
+                        className={`flex w-full items-start gap-3 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 ${fe.borde} border-l-4`}
+                      >
+                        <span className="mt-0.5 flex items-center gap-1.5 text-xs font-bold"><Camera size={14} /> {f.titulo}</span>
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${fe.chip}`}>
                           <IconoEstado estado={f.estado} size={12} /> {fe.label}
                         </span>
-                      </div>
-                      {f.url ? (
-                        <img src={f.url} alt={f.titulo} loading="lazy" className="mt-2 h-24 w-full rounded-lg object-cover" />
-                      ) : (
-                        <div className="mt-2 grid h-24 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-300">
-                          <span className="flex items-center gap-1 text-xs"><Eye size={14} /> Ver en grande</span>
-                        </div>
-                      )}
-                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{f.motivo}</p>
-                    </button>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs text-slate-600 dark:text-slate-300">{f.motivo}</span>
+                          {f.criterio && <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">{f.criterio}</span>}
+                        </span>
+                        {f.url && <img src={f.url} alt={f.titulo} loading="lazy" className="h-12 w-16 shrink-0 rounded-lg object-cover" />}
+                      </button>
+                    </li>
                   )
                 })}
-              </div>
+              </ul>
             </Card>
           )
         })}
@@ -592,15 +600,18 @@ export default function VerificacionPod() {
             {ampliada.foto.url ? (
               <img src={ampliada.foto.url} alt={ampliada.foto.titulo} className="mt-3 h-56 w-full rounded-xl object-cover" />
             ) : (
-              <div className="mt-3 grid h-56 place-items-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                <span className="text-center text-sm">{ampliada.entrega.esEjemplo ? 'Vista ampliada de ejemplo' : 'Sin URL de foto en este registro'}<br /><span className="text-xs">Sin foto real: marcador de posición descriptivo</span></span>
-              </div>
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-300">
+                {ampliada.entrega.esEjemplo ? 'Vista de ejemplo: sin foto real.' : 'Foto no cargada en MilePay. Ábrela en Gofo con el link de abajo.'}
+              </p>
             )}
             <p className={`mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${ESTADOS[ampliada.foto.estado].chip}`}>
               <IconoEstado estado={ampliada.foto.estado} size={12} /> {ESTADOS[ampliada.foto.estado].label}
             </p>
             <p className="mt-2 text-sm">{ampliada.foto.motivo}</p>
             <p className="mt-1 text-xs text-slate-500">{ampliada.foto.criterio}</p>
+            {!ampliada.entrega.esEjemplo && ampliada.entrega.gofoUrl && !ampliada.foto.url && (
+              <a href={ampliada.entrega.gofoUrl} target="_blank" rel="noreferrer" title={`Abrir Gofo y buscar la guía ${ampliada.entrega.waybill}`} className="mt-3 inline-block rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Ver fotos en Gofo ↗</a>
+            )}
           </div>
         </div>
       )}
