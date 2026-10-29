@@ -462,13 +462,35 @@ export default function ReporteManual() {
     }
   }
   // Devuelve un reporte VERIFICADO a PENDIENTE (para poder abrirlo y editarlo
-  // de nuevo). No toca la factura oficial; solo limpia la verificación.
+  // de nuevo). No toca la factura oficial; GUARDA la comparación por si se
+  // quiere volver a marcar verificado sin re-subir la oficial.
   const revertirProvisional = async (pr) => {
     if (!window.confirm(`${t('¿Devolver a PENDIENTE el reporte de')} ${pr.ciudad} · ${t('semana')} ${pr.semana}?\n\n${t('Podrás volver a abrirlo y editarlo. La factura oficial NO se toca; al reabrirlo se compara de nuevo cuando quieras.')}`)) return
     try {
-      await updateDoc(doc(db, 'invoices', pr.id), { estado: 'pendiente', comparacion: null, invoiceOficialId: null, verificadoEn: null, revertidoEn: new Date().toISOString() })
+      await updateDoc(doc(db, 'invoices', pr.id), {
+        estado: 'pendiente', comparacion: null, verificadoEn: null, revertidoEn: new Date().toISOString(),
+        // se guardan para poder re-verificar a mano sin re-subir la oficial
+        comparacionGuardada: pr.comparacion || pr.comparacionGuardada || null,
+        invoiceOficialIdPrev: pr.invoiceOficialId || pr.invoiceOficialIdPrev || null,
+        invoiceOficialId: null,
+      })
       await reloadInvoices()
       setOkMsg(t('Reporte devuelto a PENDIENTE. Ya puedes abrirlo y editarlo.'))
+    } catch (e) { setErrores((x) => [...x, t('No se pudo cambiar el estado: ') + (e.message || e)]) }
+  }
+  // Marca un reporte PENDIENTE como VERIFICADO a mano. Restaura la comparación
+  // guardada si existía (de un verificado anterior); si nunca se comparó con la
+  // oficial, queda verificado sin diferencias (solo como estado).
+  const marcarVerificado = async (pr) => {
+    if (!window.confirm(`${t('¿Marcar como VERIFICADO el reporte de')} ${pr.ciudad} · ${t('semana')} ${pr.semana}?`)) return
+    try {
+      await updateDoc(doc(db, 'invoices', pr.id), {
+        estado: 'verificado', verificadoEn: new Date().toISOString(), verificadoManual: true,
+        comparacion: pr.comparacionGuardada || pr.comparacion || null,
+        invoiceOficialId: pr.invoiceOficialIdPrev || pr.invoiceOficialId || null,
+      })
+      await reloadInvoices()
+      setOkMsg(t('Reporte marcado como VERIFICADO.'))
     } catch (e) { setErrores((x) => [...x, t('No se pudo cambiar el estado: ') + (e.message || e)]) }
   }
   const borrarProvisional = async (pr) => {
@@ -574,6 +596,9 @@ export default function ReporteManual() {
                     )}
                     {!verificado && (
                       <button onClick={() => abrirProvisional(pr)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-brand-navy transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700/40">{t('Abrir')}</button>
+                    )}
+                    {!verificado && (
+                      <button onClick={() => marcarVerificado(pr)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50 dark:border-emerald-500/40 dark:hover:bg-emerald-500/10" title={t('Marcar como verificado a mano')}><CheckCircle2 size={13} /> {t('Marcar verificado')}</button>
                     )}
                     {verificado && (
                       <button onClick={() => revertirProvisional(pr)} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-600 transition hover:bg-amber-50 dark:border-amber-500/40 dark:hover:bg-amber-500/10" title={t('Devolver a pendiente para poder editarlo')}><RotateCcw size={13} /> {t('Volver a pendiente')}</button>
