@@ -21,7 +21,7 @@ import { construirResumenSpeedX } from './resumen'
 import { buscarDriver } from '../../utils/calc'
 import { exportarExcel, exportarPDF } from '../../utils/exportar'
 import { money, num } from '../../utils/format'
-import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers, CheckCircle2, Trash2, ChevronDown, ChevronUp, Save, MapPin } from 'lucide-react'
+import { Upload, FileClock, Package, DollarSign, AlertTriangle, X, FileSpreadsheet, FileText, Info, Layers, CheckCircle2, Trash2, ChevronDown, ChevronUp, Save, MapPin, RotateCcw } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { useLang } from '../../i18n'
 
@@ -461,6 +461,16 @@ export default function ReporteManual() {
       setGuardando(false)
     }
   }
+  // Devuelve un reporte VERIFICADO a PENDIENTE (para poder abrirlo y editarlo
+  // de nuevo). No toca la factura oficial; solo limpia la verificación.
+  const revertirProvisional = async (pr) => {
+    if (!window.confirm(`${t('¿Devolver a PENDIENTE el reporte de')} ${pr.ciudad} · ${t('semana')} ${pr.semana}?\n\n${t('Podrás volver a abrirlo y editarlo. La factura oficial NO se toca; al reabrirlo se compara de nuevo cuando quieras.')}`)) return
+    try {
+      await updateDoc(doc(db, 'invoices', pr.id), { estado: 'pendiente', comparacion: null, invoiceOficialId: null, verificadoEn: null, revertidoEn: new Date().toISOString() })
+      await reloadInvoices()
+      setOkMsg(t('Reporte devuelto a PENDIENTE. Ya puedes abrirlo y editarlo.'))
+    } catch (e) { setErrores((x) => [...x, t('No se pudo cambiar el estado: ') + (e.message || e)]) }
+  }
   const borrarProvisional = async (pr) => {
     if (!window.confirm(`${t('¿Eliminar el provisional de la semana')} ${pr.semana}?`)) return
     // Si ESTE provisional fue el que aplicó diferencias arrastradas, se
@@ -564,6 +574,9 @@ export default function ReporteManual() {
                     )}
                     {!verificado && (
                       <button onClick={() => abrirProvisional(pr)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-brand-navy transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700/40">{t('Abrir')}</button>
+                    )}
+                    {verificado && (
+                      <button onClick={() => revertirProvisional(pr)} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-600 transition hover:bg-amber-50 dark:border-amber-500/40 dark:hover:bg-amber-500/10" title={t('Devolver a pendiente para poder editarlo')}><RotateCcw size={13} /> {t('Volver a pendiente')}</button>
                     )}
                     <button onClick={() => borrarProvisional(pr)} className="text-slate-400 transition hover:text-rose-500" title={t('Eliminar')}><Trash2 size={15} /></button>
                   </div>
