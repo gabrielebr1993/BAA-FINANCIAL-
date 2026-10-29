@@ -248,7 +248,11 @@ export default function ReporteManual() {
       // Sin edición manual, aplica el ajuste arrastrado de semanas anteriores.
       const desc = descManual !== undefined && descManual !== '' ? Number(descManual) || 0 : (proc ? (ajustesPrevios.desc[k] || 0) : 0)
       const bono = bonoManual !== undefined && bonoManual !== '' ? Number(bonoManual) || 0 : (proc ? (ajustesPrevios.bono[k] || 0) : 0)
-      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo: tInd > 0 && tDob > 0 }
+      // "listo" = tiene tarifa para lo que REALMENTE lleva: si no tiene dobles,
+      // no necesita tarifa de dobles (y viceversa). Antes exigía ambas siempre,
+      // y un chofer solo-individuales bloqueaba el guardado del reporte.
+      const listo = (ch.individuales <= 0 || tInd > 0) && (ch.dobles <= 0 || tDob > 0) && (tInd > 0 || tDob > 0)
+      return { ...ch, _key: k, tInd, tDob, paquetes, pago: r2(pago), claimsMonto: r2(claims), desc: r2(desc), bono: r2(bono), total: r2(pago - claims - desc + bono), listo }
     }).sort((a, b) => b.total - a.total)
   }, [proc, res, provEdit, rango, claveRango, tarifas, claimsPorChofer, descuentos, bonos, ajustesPrevios])
 
