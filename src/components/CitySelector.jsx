@@ -38,16 +38,21 @@ export default function CitySelector() {
   // "Austin" vieja detectada en facturas con otro código), se muestra UNA sola
   // opción y se PREFIERE el código que tú configuraste. Ciudades con nombres
   // distintos (Chicago-ORD01 vs Chicago-ORD02) quedan separadas, como deben.
+  // la CLAVE de agrupación ignora mayúsculas/acentos/espacios para que
+  // "Austin", "Austin " y "AUSTIN" se junten en una sola opción
+  const claveNom = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase()
   const porNombre = new Map()
   const considerar = (code, nombre, esEmpresa) => {
     if (!code) return
-    const nom = String(nombre || code).trim()
-    const prev = porNombre.get(nom)
-    if (!prev || (esEmpresa && !prev.esEmpresa)) porNombre.set(nom, { code, esEmpresa: !!esEmpresa })
+    const disp = String(nombre || code).trim().replace(/\s+/g, ' ')
+    const key = claveNom(disp)
+    if (!key) return
+    const prev = porNombre.get(key)
+    if (!prev || (esEmpresa && !prev.esEmpresa)) porNombre.set(key, { code, nombre: disp, esEmpresa: !!esEmpresa })
   }
   ;(ciudadesEmpresa || []).forEach((c) => { if (c && c.codigo) considerar(c.codigo, c.nombre, true) })
   ciudades.forEach((c) => considerar(c, nombreCiudadDe(facturaRango, c), false))
-  const opciones = [...porNombre.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([nombre, v]) => [v.code, nombre])
+  const opciones = [...porNombre.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((v) => [v.code, v.nombre])
 
   return <MultiCiudad opciones={opciones} {...{ selectedCity, selectedCities, setSelectedCities }} />
 }
