@@ -34,9 +34,9 @@
 // Estado general de una entrega = el peor estado de sus 3 fotos:
 //  rojo (urgente) > amarillo (intermedia) > verde (verificada y OK).
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
-import { collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, doc, onSnapshot, query, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -238,7 +238,19 @@ export default function VerificacionPod() {
   // Barra de análisis en MilePay (2026-10-29): el análisis externo escribe
   // su progreso en settings/{companyId}.analisisPodHoy (sin colección nueva
   // ni regla nueva). Si aún no hay datos, la barra muestra 0% y lo dice.
-  const progresoAnalisis = ajustes?.analisisPodHoy || null
+  // Auto-refresco de la barra (2026-10-29): sin esto, aunque el análisis
+  // escriba su progreso en settings, la barra no se movía hasta recargar
+  // la página o cambiar de empresa. Ahora se recargan los ajustes cada
+  // 15 s mientras haya un análisis en curso (porcentaje < 100).
+  const reloadRef = useRef(null)
+  reloadRef.current = reloadAjustes
+  const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
+  useEffect(() => {
+    if (!progresoAnalisis || (typeof progresoAnalisis.porcentaje === 'number' && progresoAnalisis.porcentaje >= 100)) return undefined
+    const id = setInterval(() => { if (reloadRef.current) reloadRef.current() }, 15000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progresoAnalisis?.porcentaje, companyId])
   const porcentajeAnalisis = progresoAnalisis && typeof progresoAnalisis.porcentaje === 'number'
     ? Math.max(0, Math.min(100, progresoAnalisis.porcentaje)) : 0
   const [filtro, setFiltro] = useState('todas')
@@ -255,21 +267,19 @@ export default function VerificacionPod() {
   const [mensajeLote, setMensajeLote] = useState(null)
   const [procesandoLote, setProcesandoLote] = useState(false)
 
-  // Carga real (solo lectura de la empresa activa seleccionada). Sin companyId
-  // no hay consulta: se queda en ejemplos. Si la lectura falla (p. ej. reglas de
-  // Firestore aún sin desplegar), NO se rompe la pantalla: se avisa y se
-  // siguen mostrando los ejemplos marcados.
+  // Carga real EN TIEMPO REAL (2026-10-29): onSnapshot en vez de una sola
+  // lectura. Así, si se verifican 1500 entregas y luego aparecen 800 sin
+  // verificar (o al revés), los contadores, la lista y la barra cambian
+  // solos en MilePay, sin recargar la página. Sin companyId no hay
+  // consulta: se queda en ejemplos. Si la lectura falla, NO se rompe la
+  // pantalla: se avisa y se siguen mostrando los ejemplos marcados.
   useEffect(() => {
-    if (!companyId || carrier !== 'gofo') return
-    let cancelado = false
+    if (!companyId || carrier !== 'gofo') return undefined
     setCargandoReales(true)
     setErrorReales(null)
-    getDocs(query(collection(db, 'podVerifications'), where('companyId', '==', companyId)))
-      .then((snap) => {
-        if (cancelado) return
-        // Filtro de carrier en cliente (la consulta solo filtra companyId para
-        // no exigir un índice compuesto): solo carrier 'gofo' o sin carrier
-        // histórico (los documentos viejos sin carrier cuentan como Gofo).
+    const unsub = onSnapshot(
+      query(collection(db, 'podVerifications'), where('companyId', '==', companyId)),
+      (snap) => {
         const soloGofo = snap.docs.map(normalizarReal).filter((e, i) => {
           const raw = snap.docs[i].data() || {}
           return !raw.carrier || raw.carrier === 'gofo'
@@ -278,11 +288,21 @@ export default function VerificacionPod() {
         const rev = {}
         soloGofo.forEach((e) => { if (e.revision) rev[e.id] = e.revision })
         setRevisiones((prev) => ({ ...prev, ...rev }))
-      })
-      .catch((err) => { if (!cancelado) setErrorReales(err?.message || 'No se pudieron leer las entregas reales.') })
-      .finally(() => { if (!cancelado) setCargandoReales(false) })
-    return () => { cancelado = true }
+        setCargandoReales(false)
+      },
+      (err) => { setErrorReales(err?.message || 'No se pudieron leer las entregas reales.'); setCargandoReales(false) },
+    )
+    return () => unsub()
   }, [companyId, carrier])
+  // Progreso del análisis también en tiempo real: escucha settings/{companyId}
+  // directamente, no solo la carga inicial de DataContext.
+  const [progresoEnVivo, setProgresoEnVivo] = useState(null)
+  useEffect(() => {
+    if (!companyId) return undefined
+    return onSnapshot(doc(db, 'settings', companyId), (snap) => {
+      setProgresoEnVivo(snap.exists() ? (snap.data()?.analisisPodHoy || null) : null)
+    }, () => {})
+  }, [companyId])
 
   const modoReal = reales.length > 0
   const fuente = useMemo(
@@ -501,7 +521,7 @@ export default function VerificacionPod() {
             <h2 className="font-bold text-brand-navy dark:text-slate-100">Procesar entregas pendientes · En MilePay</h2>
             <p className="text-xs text-slate-500">
               {modoReal
-                ? `Te faltan por procesar ${pendientesProcesar.length} de ${totalReales} entregas reales (${procesadasReales} ya procesadas). De las pendientes, ${pendientesHumanas} son amarillas/rojas y quedarán para revisión humana; las verdes se confirman solas.`
+                ? `En vivo: ${reales.filter((e) => revisiones[e.id] === 'confirmado').length} verificadas · ${totalReales - reales.filter((e) => revisiones[e.id] === 'confirmado').length} sin verificar · ${totalReales} en total. Te faltan por procesar ${pendientesProcesar.length} de ${totalReales} entregas reales (${procesadasReales} ya procesadas). De las pendientes, ${pendientesHumanas} son amarillas/rojas y quedarán para revisión humana; las verdes se confirman solas. Los números cambian solos en tiempo real cuando llegan nuevas entregas o se verifican otras, sin recargar.`
                 : 'En modo ejemplo no hay entregas reales que procesar: se muestran ejemplos marcados.'}
             </p>
             <p className="mt-1 text-xs text-slate-500">
@@ -513,9 +533,12 @@ export default function VerificacionPod() {
           </button>
         </div>
         <div className="mt-3 h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" aria-valuenow={progresoProcesamiento ?? porcentajeProcesadas} aria-valuemin="0" aria-valuemax="100">
-          <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${progresoProcesamiento ?? porcentajeProcesadas}%` }} />
+          <div className={`h-full rounded-full bg-sky-500 transition-all ${procesandoLote ? 'animate-pulse' : ''}`} style={{ width: `${progresoProcesamiento ?? porcentajeProcesadas}%` }} />
         </div>
-        <p className="mt-1 text-right text-xs font-bold">{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes</p>
+        <p className="mt-1 text-right text-xs font-bold">
+          {procesandoLote ? `Procesando… ${progresoProcesamiento ?? 0}% · ` : ''}{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes
+          {!modoReal ? '' : (pendientesProcesar.length === 0 ? ' · Nada pendiente' : ' · Pulsa “Procesar entregas pendientes” para que la barra avance')}
+        </p>
       </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
