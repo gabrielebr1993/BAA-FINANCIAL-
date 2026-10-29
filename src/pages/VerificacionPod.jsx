@@ -1,0 +1,329 @@
+// ============================================================================
+// Verificación POD — Gofo (MilePay, módulo Gofo)
+// ----------------------------------------------------------------------------
+// FASE UI ÚNICAMENTE. Esta pantalla NO se conecta al portal de Gofo, NO hace
+// sync en vivo, NO escribe en Firestore y NO toca pagos, claims, facturas ni
+// datos de choferes. Todo lo que se ve aquí son EJEMPLOS marcados como tales,
+// con estado de revisión solo local (useState): confirmar o marcar para
+// revisión cambia solo la pantalla, no guarda nada.
+// Conectar y probar con datos reales es una fase posterior, con aprobación
+// aparte del dueño.
+// ----------------------------------------------------------------------------
+// Criterio aplicado (sin inventar una regla genérica de puerta):
+//  * Guía BAA de choferes: 3 fotos por entrega — 1) etiqueta clara (solo la
+//    etiqueta, no el paquete), 2) paquete en su lugar, 3) número / prueba de
+//    dirección según el tipo de entrega.
+//  * Criterios GF POD de Gofo, Partes 1 y 2, por escenario: casa, apartamento /
+//    condo, en persona, punto de recogida, comercial, escuela / hospital /
+//    institución, FLA, granjas / montañas, dirección inaccesible y PUDO.
+// Estado general de una entrega = el peor estado de sus 3 fotos:
+//  rojo (urgente) > amarillo (intermedia) > verde (verificada y OK).
+// ============================================================================
+import { useMemo, useState } from 'react'
+import { Camera, Eye, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
+import { Card, PageTitle, EstadoVacio } from '../components/ui'
+import { useCarrier } from '../carriers/CarrierContext'
+
+// Los 11 sitios Gofo vistos en el selector del portal (solo consulta).
+export const SITIOS_GOFO = [
+  'DFW-BAA', 'AUS-BAA', 'IAH-BAA', 'MSN-BAA', 'ORD-BAA', 'ABI-BAA',
+  'IAH02-BAA', 'DFW02-BAA', 'AUS02-BAA', 'ORD02-BAA', 'LCH-BAA',
+]
+
+const ESTADOS = {
+  rojo: { label: 'Urgente', orden: 0, chip: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300', borde: 'border-red-300 dark:border-red-500/40' },
+  amarillo: { label: 'Intermedia', orden: 1, chip: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300', borde: 'border-amber-300 dark:border-amber-500/40' },
+  verde: { label: 'Verificada y OK', orden: 2, chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300', borde: 'border-emerald-300 dark:border-emerald-500/40' },
+}
+
+function IconoEstado({ estado, size = 16 }) {
+  if (estado === 'rojo') return <XCircle size={size} strokeWidth={1.8} />
+  if (estado === 'amarillo') return <AlertTriangle size={size} strokeWidth={1.8} />
+  return <CheckCircle2 size={size} strokeWidth={1.8} />
+}
+
+function estadoGeneral(fotos) {
+  if (fotos.some((f) => f.estado === 'rojo')) return 'rojo'
+  if (fotos.some((f) => f.estado === 'amarillo')) return 'amarillo'
+  return 'verde'
+}
+
+// ---------------------------------------------------------------------------
+// EJEMPLOS. Cada entrega trae sus 3 fotos POD. Las fotos son marcadores de
+// posición descriptivos (sin fotos reales): al tocar una se abre en grande
+// con su motivo y el criterio que verifica. No hay imágenes externas.
+// ---------------------------------------------------------------------------
+const EJEMPLOS = [
+  {
+    waybill: 'EJ-0201', sitio: 'DFW-BAA', chofer: 'Chofer ejemplo 1', tipo: 'Casa',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Paquete en puerta', estado: 'verde', motivo: 'Paquete en la puerta, puerta completa visible.', criterio: 'Casa: paquete en la puerta de la casa, no en zona pública peligrosa lejos de la puerta.' },
+      { titulo: 'Foto 3 · Número de casa', estado: 'verde', motivo: 'Número claro y enfocado.', criterio: 'Casa: número de casa claro; si no hay número, captura de Google Maps o panorámica de la casa.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0202', sitio: 'DFW-BAA', chofer: 'Chofer ejemplo 2', tipo: 'Casa',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Paquete en mano', estado: 'amarillo', motivo: 'Etiqueta clara, pero no se ve puerta ni porche.', criterio: 'Casa: hace falta la foto del paquete colocado en la puerta; la foto en mano solo cubre la etiqueta.' },
+      { titulo: 'Foto 3 · Número de casa', estado: 'verde', motivo: 'Número claro y enfocado.', criterio: 'Casa: número de casa claro; si no hay número, captura de Google Maps o panorámica de la casa.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0203', sitio: 'DFW-BAA', chofer: 'Chofer ejemplo 3', tipo: 'Apartamento / Condo',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Buzón en primer plano', estado: 'rojo', motivo: 'Primer plano de buzón, sin paquete y sin puerta.', criterio: 'Fallo duro: sin foto de distancia / ubicación del paquete. La zona de buzones debe estar dentro de la puerta y el paquete debe verse colocado.' },
+      { titulo: 'Foto 3 · Exterior del edificio', estado: 'amarillo', motivo: 'Edificio visible, pero sin número de puerta del destinatario.', criterio: 'Apartamento: número de puerta o entorno evidente; prioridad puerta de la habitación > recepción > sala de correo > zona de buzones.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0204', sitio: 'AUS-BAA', chofer: 'Chofer ejemplo 4', tipo: 'En persona',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Entrega en persona', estado: 'amarillo', motivo: 'Solo se ve la espalda del destinatario, sin proceso de entrega.', criterio: 'Fallo duro en persona: sin proceso de entrega no vale, aunque no se fotografíe la cara ni el documento de identidad.' },
+      { titulo: 'Foto 3 · Número / edificio', estado: 'verde', motivo: 'Número de puerta visible.', criterio: 'En persona: número de puerta del destinatario o aspecto del edificio, más coordenadas correctas.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0205', sitio: 'IAH-BAA', chofer: 'Chofer ejemplo 5', tipo: 'Comercial',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'rojo', motivo: 'Etiqueta borrosa: el número de Waybill no se distingue.', criterio: 'Fallo duro: número de Waybill borroso, que no coincide con el sistema o demasiado lejos.' },
+      { titulo: 'Foto 2 · Recepción', estado: 'verde', motivo: 'Paquete con etiqueta hacia arriba en recepción, personal visible.', criterio: 'Comercial: etiqueta hacia arriba, en recepción o entregado al personal, con personal o entorno de trabajo visible.' },
+      { titulo: 'Foto 3 · Exterior comercial', estado: 'verde', motivo: 'Número y exterior de la tienda visibles.', criterio: 'Comercial: número de dirección, exterior de la tienda o captura de mapa.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0206', sitio: 'IAH-BAA', chofer: 'Chofer ejemplo 6', tipo: 'Escuela / Hospital',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Punto de recogida', estado: 'amarillo', motivo: 'Paquete en sala de correo, pero el logo del punto no se identifica.', criterio: 'Escuela / hospital: el logo del punto de recogida debe identificarse claramente y hace falta foto exterior del punto (puede haber varios).' },
+      { titulo: 'Foto 3 · Exterior del punto', estado: 'verde', motivo: 'Exterior del punto visible.', criterio: 'Escuela / hospital: foto exterior del punto obligatoria; si no se puede contactar al destinatario y no hay punto autorizado, NO es entrega exitosa.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0207', sitio: 'AUS-BAA', chofer: 'Chofer ejemplo 7', tipo: 'Locker',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Pantalla del locker', estado: 'rojo', motivo: 'La pantalla no muestra nombre ni unidad del destinatario.', criterio: 'Locker: si la pantalla no muestra nombre y unidad, NO se deposita; hay que volver a introducir la información. Lockers no cooperativos conllevan riesgo de pérdida y reclamo.' },
+      { titulo: 'Foto 3 · Entrada del condominio', estado: 'verde', motivo: 'Número y nombre de la entrada visibles.', criterio: 'Locker / condo: entrada con número y nombre para confirmar la dirección correcta.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0208', sitio: 'ORD-BAA', chofer: 'Chofer ejemplo 8', tipo: 'Granja / Montaña',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Paquete debajo del buzón', estado: 'verde', motivo: 'Puerta del patio cerrada: colocar debajo del buzón está permitido.', criterio: 'Granja / montaña: prioridad zona protegida dentro de la barandilla > debajo del buzón; nunca dentro del buzón ni en buzones de vías principales.' },
+      { titulo: 'Foto 3 · Panorámica', estado: 'verde', motivo: 'Número de puerta y panorámica visibles.', criterio: 'Granja / montaña: número de puerta o foto panorámica, más foto de colocación.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0209', sitio: 'MSN-BAA', chofer: 'Chofer ejemplo 9', tipo: 'PUDO',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Entrega en PUDO', estado: 'verde', motivo: 'Proceso de entrega visible, identidad verificada en recogida.', criterio: 'PUDO: escanear y almacenar uno por uno, verificar identidad en la recogida, POD estándar.' },
+      { titulo: 'Foto 3 · Panorámica PUDO', estado: 'verde', motivo: 'Punto PUDO completo visible.', criterio: 'PUDO: panorámica del punto; la foto de la firma del destinatario en el Waybill es opcional, nunca cara ni documento de identidad.' },
+    ],
+  },
+  {
+    waybill: 'EJ-0210', sitio: 'ABI-BAA', chofer: 'Chofer ejemplo 10', tipo: 'Punto de recogida',
+    fotos: [
+      { titulo: 'Foto 1 · Etiqueta', estado: 'verde', motivo: 'Código de barras y número legibles.', criterio: 'Etiqueta clara: código de barras y seguimiento visibles, sin borrosidad.' },
+      { titulo: 'Foto 2 · Buzón USPS', estado: 'rojo', motivo: 'Paquete colocado en buzón USPS: entrega prohibida.', criterio: 'Fallo duro: USPS / PO BOX no se puede entregar; si el cliente reclama no haberlo recibido, se juzga Fake POD.' },
+      { titulo: 'Foto 3 · Exterior', estado: 'verde', motivo: 'Exterior del edificio visible.', criterio: 'Punto de recogida: la foto colectiva debe mostrar paquetes de otros servicios de entrega.' },
+    ],
+  },
+]
+
+const FALLOS_DUROS = [
+  'Sin foto de distancia / ubicación del paquete.',
+  'Número de Waybill que no coincide con el sistema, borroso o demasiado lejos.',
+  'Número de puerta, edificio o habitación ausente, borroso o demasiado oscuro, sin exterior que confirme el edificio.',
+  'Buzón USPS / PO BOX, o buzón en vía pública principal.',
+  'Zonas comunes desatendidas de escuela o apartamento.',
+  'Entrada de tienda, pasillo, escalera o área pública desatendida.',
+  'Entrega en persona sin proceso de entrega (o solo la espalda del destinatario).',
+  'Fotografiar la cara del destinatario o su documento de identidad.',
+]
+
+export default function VerificacionPod() {
+  const { carrier } = useCarrier()
+  const [filtro, setFiltro] = useState('todas')
+  const [sitio, setSitio] = useState('todas')
+  const [busqueda, setBusqueda] = useState('')
+  const [ampliada, setAmpliada] = useState(null) // { entrega, foto } o null
+  const [revisiones, setRevisiones] = useState({}) // solo local: waybill -> 'confirmado' | 'revision'
+
+  // Los hooks van ANTES de cualquier retorno condicional (reglas de React).
+  const lista = useMemo(() => {
+    const conEstado = EJEMPLOS.map((e) => ({ ...e, general: estadoGeneral(e.fotos) }))
+    const filtrada = conEstado.filter((e) =>
+      (filtro === 'todas' || e.general === filtro) &&
+      (sitio === 'todas' || e.sitio === sitio) &&
+      (busqueda.trim() === '' || e.waybill.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    )
+    // Orden semáforo: urgentes primero, luego intermedias, luego verificadas.
+    return filtrada.sort((a, b) => ESTADOS[a.general].orden - ESTADOS[b.general].orden)
+  }, [filtro, sitio, busqueda])
+
+  const conteos = useMemo(() => {
+    const base = sitio === 'todas' ? EJEMPLOS : EJEMPLOS.filter((e) => e.sitio === sitio)
+    const c = { rojo: 0, amarillo: 0, verde: 0 }
+    base.forEach((e) => { c[estadoGeneral(e.fotos)] += 1 })
+    return { ...c, total: base.length }
+  }, [sitio])
+
+  const marcar = (waybill, valor) => setRevisiones((r) => ({ ...r, [waybill]: valor }))
+
+  // Gofo únicamente: el menú ya oculta esta sección en SpeedX (soloCarrier),
+  // y la entrada directa también queda bloqueada aquí.
+  if (carrier !== 'gofo') {
+    return (
+      <div>
+        <PageTitle>Verificación POD</PageTitle>
+        <EstadoVacio titulo="Solo disponible con Gofo" texto="Esta sección pertenece al módulo Gofo. Cambia a Gofo para verla." />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <PageTitle right={<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">EJEMPLO · Sin conexión a Gofo</span>}>
+        Verificación POD
+      </PageTitle>
+
+      <Card className="mb-5 p-4 text-sm text-slate-600 dark:text-slate-300">
+        Vista previa solo de interfaz: entradas de ejemplo, sin conexión al portal de Gofo,
+        sin sync en vivo y sin guardar nada en Firestore. El estado general de cada entrega
+        es el peor estado de sus 3 fotos. Confirmar o marcar para revisión solo cambia
+        esta pantalla; no guarda, no cobra ni modifica pagos, claims o facturas.
+      </Card>
+
+      {/* Filtros: semáforo + ciudad + búsqueda por guía */}
+      <Card className="mb-5 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Semáforo</span>
+            <select value={filtro} onChange={(e) => setFiltro(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              <option value="todas">Todas ({conteos.total})</option>
+              <option value="rojo">🔴 Urgentes ({conteos.rojo})</option>
+              <option value="amarillo">🟡 Intermedias ({conteos.amarillo})</option>
+              <option value="verde">🟢 Verificadas y OK ({conteos.verde})</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Ciudad / Sitio</span>
+            <select value={sitio} onChange={(e) => setSitio(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              <option value="todas">Todas las ciudades</option>
+              {SITIOS_GOFO.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Buscar guía</span>
+            <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="EJ-0201…" className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800" />
+          </label>
+        </div>
+      </Card>
+
+      {/* Lista de entregas, ordenadas por semáforo */}
+      <div className="grid gap-4">
+        {lista.length === 0 && (
+          <EstadoVacio titulo="Sin entregas con estos filtros" texto="Cambia el semáforo, la ciudad o la búsqueda para ver otros ejemplos." />
+        )}
+        {lista.map((e) => {
+          const est = ESTADOS[e.general]
+          const rev = revisiones[e.waybill]
+          return (
+            <Card key={e.waybill} className={`p-4 border-l-4 ${est.borde}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-brand-navy dark:text-slate-100">{e.waybill}</span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${est.chip}`}>
+                      <IconoEstado estado={e.general} /> {est.label}
+                    </span>
+                    <span className="text-xs text-slate-500">{e.tipo} · {e.sitio} · {e.chofer}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Estado general = peor estado de sus 3 fotos. Toca una foto para verla en grande.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => marcar(e.waybill, 'confirmado')} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Confirmar veredicto</button>
+                  <button type="button" onClick={() => marcar(e.waybill, 'revision')} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50">Marcar para revisión</button>
+                </div>
+              </div>
+
+              {rev && (
+                <p className="mt-2 text-xs font-semibold text-slate-600">
+                  Revisión local (no guardada): {rev === 'confirmado' ? 'veredicto confirmado en pantalla' : 'pendiente de revisión humana'}
+                </p>
+              )}
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {e.fotos.map((f) => {
+                  const fe = ESTADOS[f.estado]
+                  return (
+                    <button
+                      key={f.titulo}
+                      type="button"
+                      onClick={() => setAmpliada({ entrega: e, foto: f })}
+                      className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow ${fe.borde} bg-white dark:bg-slate-800`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 text-xs font-bold"><Camera size={14} /> {f.titulo}</span>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${fe.chip}`}>
+                          <IconoEstado estado={f.estado} size={12} /> {fe.label}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid h-24 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-300">
+                        <span className="flex items-center gap-1 text-xs"><Eye size={14} /> Ver en grande</span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{f.motivo}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Referencia de criterio y fallos duros */}
+      <Card className="mt-5 p-4">
+        <h2 className="flex items-center gap-2 font-bold text-brand-navy dark:text-slate-100"><MapPin size={16} /> Fallos duros (Gofo GF POD, Partes 1 y 2)</h2>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
+          {FALLOS_DUROS.map((f) => <li key={f}>{f}</li>)}
+        </ul>
+        <p className="mt-3 text-xs text-slate-500">
+          Regla de flexibilidad de Gofo: si el POD cumple los requisitos y coincide con la vista de calle,
+          puede juzgarse con flexibilidad aunque la ubicación no sea la dirección exacta. Los POD conformes
+          no se limitan a los escenarios de ejemplo. Lluvia / nieve: bajo techo; viento: paquetes ligeros
+          en zonas protegidas.
+        </p>
+      </Card>
+
+      {/* Vista ampliada de una foto */}
+      {ampliada && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setAmpliada(null)} role="presentation">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900" onClick={(ev) => ev.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-brand-navy dark:text-slate-100">{ampliada.entrega.waybill} · {ampliada.foto.titulo}</h3>
+                <p className="text-xs text-slate-500">{ampliada.entrega.tipo} · {ampliada.entrega.sitio}</p>
+              </div>
+              <button type="button" onClick={() => setAmpliada(null)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Cerrar</button>
+            </div>
+            <div className="mt-3 grid h-56 place-items-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+              <span className="text-center text-sm">Vista ampliada de ejemplo<br /><span className="text-xs">Sin foto real: marcador de posición descriptivo</span></span>
+            </div>
+            <p className={`mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${ESTADOS[ampliada.foto.estado].chip}`}>
+              <IconoEstado estado={ampliada.foto.estado} size={12} /> {ESTADOS[ampliada.foto.estado].label}
+            </p>
+            <p className="mt-2 text-sm">{ampliada.foto.motivo}</p>
+            <p className="mt-1 text-xs text-slate-500">{ampliada.foto.criterio}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
