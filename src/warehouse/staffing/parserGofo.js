@@ -329,8 +329,10 @@ export function esNombreProvisional(nombre) {
   return /^\s*(shift|sheet)\s*\d+\s*$/i.test(String(nombre || ''))
 }
 // Nombre de período definitivo: "08.24-08.30", "9.28 - 10.04", "08.24–08.30"…
+// Se admite un sufijo al final (p. ej. "10.19-10.25 (2)", "… copia") que Excel
+// agrega al DUPLICAR una hoja: lo importante es que EMPIECE con el rango.
 export function esNombrePeriodo(nombre) {
-  return /^\s*\d{1,2}[._/]\d{1,2}\s*[-–—]\s*\d{1,2}[._/]\d{1,2}\s*$/.test(String(nombre || ''))
+  return /^\s*\d{1,2}[._/]\d{1,2}\s*[-–—]\s*\d{1,2}[._/]\d{1,2}\s*($|[\s(].*$)/.test(String(nombre || ''))
 }
 
 // ── Detección de encabezados por TEXTO (no por posición) ───────────────────
