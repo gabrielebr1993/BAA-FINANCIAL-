@@ -233,8 +233,14 @@ export default function VerificacionPod() {
   // perfil, useAuth da null y la consulta nunca corría, por eso la pantalla
   // se quedaba en EJEMPLO aunque existieran documentos reales para la empresa
   // seleccionada ("En uso"). Respaldo: companyId del perfil si no hay activa.
-  const { activeCompanyId } = useData()
+  const { activeCompanyId, ajustes, reloadAjustes } = useData()
   const companyId = activeCompanyId || companyIdPerfil
+  // Barra de análisis en MilePay (2026-10-29): el análisis externo escribe
+  // su progreso en settings/{companyId}.analisisPodHoy (sin colección nueva
+  // ni regla nueva). Si aún no hay datos, la barra muestra 0% y lo dice.
+  const progresoAnalisis = ajustes?.analisisPodHoy || null
+  const porcentajeAnalisis = progresoAnalisis && typeof progresoAnalisis.porcentaje === 'number'
+    ? Math.max(0, Math.min(100, progresoAnalisis.porcentaje)) : 0
   const [filtro, setFiltro] = useState('todas')
   const [sitio, setSitio] = useState('todas')
   const [busqueda, setBusqueda] = useState('')
@@ -428,6 +434,25 @@ export default function VerificacionPod() {
           <button type="button" onClick={() => setMensajeLote(null)} className="ml-3 rounded-lg border px-2 py-0.5 text-xs">Cerrar</button>
         </Card>
       )}
+
+      {/* Barra de porcentaje del análisis (visible en MilePay) */}
+      <Card className="mb-5 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-brand-navy dark:text-slate-100">Análisis de hoy · 2026-10-29</h2>
+            <p className="text-xs text-slate-500">
+              {progresoAnalisis
+                ? `${progresoAnalisis.estado || 'En curso'} · Sitios ${progresoAnalisis.sitiosCompletados ?? 0}/${progresoAnalisis.sitiosTotales ?? 11} · Calificadas ${progresoAnalisis.calificadas ?? 0}${progresoAnalisis.total ? ` de ${progresoAnalisis.total}` : ''}`
+                : 'Análisis en curso: el porcentaje aparecerá aquí en cuanto el análisis escriba su progreso. Mientras tanto, el porcentaje también se reporta en el chat.'}
+            </p>
+          </div>
+          <button type="button" onClick={() => { if (reloadAjustes) reloadAjustes() }} className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Procesar entregas pendientes · Actualizar barra</button>
+        </div>
+        <div className="mt-3 h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" aria-valuenow={porcentajeAnalisis} aria-valuemin="0" aria-valuemax="100">
+          <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${porcentajeAnalisis}%` }} />
+        </div>
+        <p className="mt-1 text-right text-xs font-bold">{porcentajeAnalisis}%</p>
+      </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
       {/* El rango filtra la lista Y los contadores del semáforo (base). */}
