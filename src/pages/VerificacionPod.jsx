@@ -254,11 +254,8 @@ export default function VerificacionPod() {
   // estado, entregadas, enProgreso, calificadas, total, actualizadas}. Así
   // en MilePay se ve el avance de cada ciudad a la vez, no un solo %.
   const progresoSitios = progresoSitiosEnVivo || ajustes?.analisisPodHoySitios || null
-  const conteoPorSitio = useMemo(() => {
-    const c = {}
-    reales.forEach((e) => { c[e.sitio] = (c[e.sitio] || 0) + 1 })
-    return c
-  }, [reales])
+  // conteoPorSitio va DESPUÉS de la declaración de reales (fix PR #12):
+  // si queda aquí, rompe en producción con error de inicialización.
   useEffect(() => {
     if (!progresoAnalisis || (typeof progresoAnalisis.porcentaje === 'number' && progresoAnalisis.porcentaje >= 100)) return undefined
     const id = setInterval(() => { if (reloadRef.current) reloadRef.current() }, 15000)
@@ -275,6 +272,11 @@ export default function VerificacionPod() {
   const [ampliada, setAmpliada] = useState(null) // { entrega, foto } o null
   const [revisiones, setRevisiones] = useState({}) // id -> 'confirmado' | 'revision'
   const [reales, setReales] = useState([])
+  const conteoPorSitio = useMemo(() => {
+    const c = {}
+    reales.forEach((e) => { c[e.sitio] = (c[e.sitio] || 0) + 1 })
+    return c
+  }, [reales])
   const [cargandoReales, setCargandoReales] = useState(false)
   const [errorReales, setErrorReales] = useState(null)
   const [seleccion, setSeleccion] = useState([]) // ids de entregas filtradas
