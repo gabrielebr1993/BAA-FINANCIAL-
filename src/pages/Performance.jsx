@@ -8,6 +8,7 @@ import { calcularPagos, pagosPorRuta, rankingsRutas, porCiudad, claimsValidos, c
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { Card, PageTitle, Aviso, Badge, Boton, Input, Select, Cargando, EstadoVacio } from '../components/ui'
+import IdGofoBadge from '../components/IdGofoBadge'
 import { BarCard, DonutCard, Widget } from '../components/charts'
 import KpiPro from '../components/KpiPro'
 import RankingClaimsTipo from '../components/RankingClaimsTipo'
@@ -406,6 +407,7 @@ export default function Performance() {
                     <tr key={p.nombre} className="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700/50 dark:hover:bg-slate-700/30">
                       <td className="px-2.5 py-2">
                         <button onClick={() => verPerfil(p.nombre)} className="font-medium text-brand-navy hover:underline dark:text-slate-100">{p.nombre}</button>
+                        <IdGofoBadge nombre={p.nombre} id={p.idGofo} />
                         {p.sinTarifa && <Badge color="red">{t('sin tarifa')}</Badge>}
                       </td>
                       <td className="px-2.5 py-2">{p.nombreCiudad}</td>

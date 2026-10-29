@@ -478,6 +478,23 @@ export function DataProvider({ children }) {
     return idx >= 0 ? invoicesCarrier[idx + 1] : null
   }, [facturaRangoFull, invoicesCarrier])
 
+  // Mapa nombre(normalizado) -> Delivery ID de Gofo, desde las facturas y los perfiles
+  // de chofer. Lo usa el badge de ID para mostrarlo junto al nombre en TODA la app.
+  // El perfil tiene prioridad; si no, el detectado en facturas (también por alias).
+  const idGofoPorNombre = useMemo(() => {
+    const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase()
+    const acc = {}
+    for (const inv of invoicesVisibles) for (const ch of (inv.resumenChoferes || [])) {
+      const id = String(ch.idGofo || '').trim()
+      if (id && !acc[norm(ch.nombre)]) acc[norm(ch.nombre)] = id
+    }
+    for (const d of driversCarrier) {
+      const id = String(d.idGofo || '').trim()
+      if (id) { acc[norm(d.nombre)] = id; for (const a of (d.alias || [])) acc[norm(a)] = id }
+    }
+    return acc
+  }, [invoicesVisibles, driversCarrier])
+
   const alertasBase = useMemo(() => calcularAlertas({ inv: facturaRangoFull, claims: claimsEfectivos, drivers: driversCarrier, managers: managersCarrier, semanas: numSemanas, invAnterior }), [facturaRangoFull, claimsEfectivos, driversCarrier, managersCarrier, numSemanas, invAnterior])
   // Todas las alertas con su estado persistido adjunto.
   const alertasTodas = useMemo(
@@ -564,6 +581,7 @@ export function DataProvider({ children }) {
     reloadCompanies: cargarCompanies,
     // datos
     invoices: invoicesVisibles,
+    idGofoPorNombre,
     provisionales: provisionalesCarrier,
     drivers: driversCarrier,
     managers: managersCarrier,

@@ -11,6 +11,7 @@ import {
 import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { money, num, pct } from '../utils/format'
 import { Card, KPI, PageTitle, Badge, Tabla, Cargando, EstadoVacio, Aviso, Boton } from '../components/ui'
+import IdGofoBadge from '../components/IdGofoBadge'
 import { TrendCard } from '../components/charts'
 import VerificacionChofer from '../components/VerificacionChofer'
 import FotoPerfil from '../components/FotoPerfil'
@@ -199,6 +200,7 @@ export default function PerfilChofer() {
                 <div className="min-w-0 flex-1 pb-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{decoded}</h2>
+                    <IdGofoBadge nombre={decoded} id={driver?.idGofo} />
                     {driver ? (
                       driver.activo === false ? <Badge color="slate">{t('Inactivo')}</Badge> : <Badge color="green">{t('Activo')}</Badge>
                     ) : <Badge color="red">{t('Sin tarifa')}</Badge>}

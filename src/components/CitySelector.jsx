@@ -162,15 +162,21 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
 // la ciudad elegida). Acota todos los datos a ese chofer (ver DataContext).
 export function DriverSelector() {
   const { t } = useLang()
-  const { facturaRangoFull, selectedCity, selectedDriver, setSelectedDriver } = useData()
+  const { facturaRangoFull, selectedCity, selectedDriver, setSelectedDriver, idGofoPorNombre } = useData()
   const choferes = (facturaRangoFull?.resumenChoferes || [])
     .filter((c) => selectedCity === TODAS || (c.ciudad || c.ubicacion) === selectedCity)
   const nombres = [...new Set(choferes.map((c) => c.nombre).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   if (nombres.length === 0 && (!selectedDriver || selectedDriver === TODOS)) return null
+  // Se añade el Delivery ID al texto de la opción (el value sigue siendo el nombre).
+  const normN = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, ' ').toLowerCase()
+  const idDe = (n) => {
+    const idEnFactura = choferes.find((c) => c.nombre === n)?.idGofo
+    return String(idEnFactura || idGofoPorNombre?.[normN(n)] || '').trim()
+  }
   return (
     <Select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} aria-label={t('Filtro de chofer')}>
       <option value={TODOS}>{t('Todos los choferes')}</option>
-      {nombres.map((n) => (<option key={n} value={n}>{n}</option>))}
+      {nombres.map((n) => { const id = idDe(n); return (<option key={n} value={n}>{n}{id ? ` · ID ${id}` : ''}</option>) })}
     </Select>
   )
 }

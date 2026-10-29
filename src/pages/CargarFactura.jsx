@@ -219,7 +219,10 @@ function CargarFacturaGofo() {
       }
       const r = resolverNombre(raw, canonicos)
       if (r) {
-        const idDestino = idPorDriverNorm[normNombre(r.nombre)] || ''
+        // ID del destino: primero el guardado en el perfil; si no, el que trae el
+        // nombre del destino en ESTA MISMA factura (así se bloquea la fusión aunque
+        // los perfiles aún no tengan ID guardado — p. ej. en la primera carga).
+        const idDestino = idPorDriverNorm[normNombre(r.nombre)] || idPorRawNombre[normNombre(r.nombre)] || ''
         // 2) El nombre calza con un chofer que tiene OTRO Delivery ID → son personas
         //    distintas: NO unir, tratarlo como chofer aparte.
         if (rawId && idDestino && rawId !== idDestino) {
@@ -1495,14 +1498,20 @@ function CargarFacturaGofo() {
                   </button>
                   {verUniones && (
                     <div className="mt-2 scroll-thin max-h-64 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/50">
-                      {Object.entries(unif.auto).map(([raw, canon]) => (
-                        <div key={raw} className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-slate-500 dark:text-slate-400">{raw}</span>
-                          <span className="text-brand-gold">→</span>
-                          <b className="text-brand-navy dark:text-slate-100">{canon}</b>
-                          <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">{t('separar (es otro)')}</button>
-                        </div>
-                      ))}
+                      {Object.entries(unif.auto).map(([raw, canon]) => {
+                        const idRaw = idPorRawNombre[normNombre(raw)] || ''
+                        const idCanon = idPorDriverNorm[normNombre(canon)] || idPorRawNombre[normNombre(canon)] || ''
+                        const choca = idRaw && idCanon && idRaw !== idCanon
+                        return (
+                          <div key={raw} className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-slate-500 dark:text-slate-400">{raw}{idRaw ? ` (ID ${idRaw})` : ''}</span>
+                            <span className="text-brand-gold">→</span>
+                            <b className="text-brand-navy dark:text-slate-100">{canon}{idCanon ? ` (ID ${idCanon})` : ''}</b>
+                            {choca && <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">⚠ {t('IDs distintos')}</span>}
+                            <button onClick={() => asignarManual(raw, '__nuevo__')} className="ml-1 text-[11px] text-rose-500 hover:underline">{t('separar (es otro)')}</button>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -1537,7 +1546,12 @@ function CargarFacturaGofo() {
                       <tbody>
                         {reconocidosFiltrados.map((n, i) => (
                           <tr key={n} className={`border-t border-slate-100 dark:border-slate-700/50 ${i % 2 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
-                            <td className="px-3 py-1.5">{n}</td>
+                            <td className="px-3 py-1.5">
+                              {n}
+                              {(idPorRawNombre[normNombre(n)] || idPorDriverNorm[normNombre(n)]) && (
+                                <span className="ml-1.5 inline-flex items-center rounded-full bg-brand-navy/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-navy dark:bg-brand-gold/15 dark:text-brand-gold">ID {idPorRawNombre[normNombre(n)] || idPorDriverNorm[normNombre(n)]}</span>
+                              )}
+                            </td>
                             <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'ind')} onChange={(e) => setExist(n, 'ind', e.target.value)} /></td>
                             <td className="px-3 py-1.5 text-right"><Input className="w-28 text-right" type="number" step="0.01" min="0" value={valorExist(n, 'doble')} onChange={(e) => setExist(n, 'doble', e.target.value)} /></td>
                           </tr>
