@@ -264,6 +264,12 @@ export default function VerificacionPod() {
   }, [progresoAnalisis?.porcentaje, companyId])
   const porcentajeAnalisis = progresoAnalisis && typeof progresoAnalisis.porcentaje === 'number'
     ? Math.max(0, Math.min(100, progresoAnalisis.porcentaje)) : 0
+  // Fix "Sitios /11": algunas escrituras guardan sitiosCompletados como
+  // arreglo vacío en vez de número; si es arreglo, usa su largo.
+  const sitiosCompletadosAnalisis = Array.isArray(progresoAnalisis?.sitiosCompletados)
+    ? progresoAnalisis.sitiosCompletados.length
+    : (progresoAnalisis?.sitiosCompletados ?? 0)
+  const sitiosTotalesAnalisis = progresoAnalisis?.sitiosTotales ?? 11
   const [filtro, setFiltro] = useState('todas')
   const [sitio, setSitio] = useState('todas')
   const [busqueda, setBusqueda] = useState('')
@@ -541,7 +547,7 @@ export default function VerificacionPod() {
                 : 'En modo ejemplo no hay entregas reales que procesar: se muestran ejemplos marcados.'}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Análisis de hoy en Gofo: {progresoAnalisis ? `${progresoAnalisis.estado || 'En curso'} · Sitios ${progresoAnalisis.sitiosCompletados ?? 0}/${progresoAnalisis.sitiosTotales ?? 11} · ${porcentajeAnalisis}%` : 'sin datos todavía en MilePay'}
+              Análisis de hoy en Gofo: {progresoAnalisis ? `${progresoAnalisis.estado || 'En curso'} · Sitios ${sitiosCompletadosAnalisis}/${sitiosTotalesAnalisis} · ${porcentajeAnalisis}%` : 'sin datos todavía en MilePay'}
             </p>
           </div>
           <button type="button" onClick={procesarPendientes} disabled={!modoReal || pendientesProcesar.length === 0 || procesandoLote} className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40">
