@@ -141,6 +141,7 @@ function MultiCiudad({ opciones, selectedCity, selectedCities, setSelectedCities
                   {on && <Check size={11} strokeWidth={3} />}
                 </span>
                 <span className="truncate">{nombre}</span>
+                <span className="ml-auto flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{code}</span>
               </button>
             )
           })}
