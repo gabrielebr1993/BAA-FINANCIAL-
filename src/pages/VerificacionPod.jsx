@@ -34,7 +34,7 @@
 // Estado general de una entrega = el peor estado de sus 3 fotos:
 //  rojo (urgente) > amarillo (intermedia) > verde (verificada y OK).
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
 import { collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -238,7 +238,19 @@ export default function VerificacionPod() {
   // Barra de análisis en MilePay (2026-10-29): el análisis externo escribe
   // su progreso en settings/{companyId}.analisisPodHoy (sin colección nueva
   // ni regla nueva). Si aún no hay datos, la barra muestra 0% y lo dice.
+  // Auto-refresco de la barra (2026-10-29): sin esto, aunque el análisis
+  // escriba su progreso en settings, la barra no se movía hasta recargar
+  // la página o cambiar de empresa. Ahora se recargan los ajustes cada
+  // 15 s mientras haya un análisis en curso (porcentaje < 100).
+  const reloadRef = useRef(null)
+  reloadRef.current = reloadAjustes
   const progresoAnalisis = ajustes?.analisisPodHoy || null
+  useEffect(() => {
+    if (!progresoAnalisis || (typeof progresoAnalisis.porcentaje === 'number' && progresoAnalisis.porcentaje >= 100)) return undefined
+    const id = setInterval(() => { if (reloadRef.current) reloadRef.current() }, 15000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progresoAnalisis?.porcentaje, companyId])
   const porcentajeAnalisis = progresoAnalisis && typeof progresoAnalisis.porcentaje === 'number'
     ? Math.max(0, Math.min(100, progresoAnalisis.porcentaje)) : 0
   const [filtro, setFiltro] = useState('todas')
@@ -513,9 +525,12 @@ export default function VerificacionPod() {
           </button>
         </div>
         <div className="mt-3 h-4 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" role="progressbar" aria-valuenow={progresoProcesamiento ?? porcentajeProcesadas} aria-valuemin="0" aria-valuemax="100">
-          <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${progresoProcesamiento ?? porcentajeProcesadas}%` }} />
+          <div className={`h-full rounded-full bg-sky-500 transition-all ${procesandoLote ? 'animate-pulse' : ''}`} style={{ width: `${progresoProcesamiento ?? porcentajeProcesadas}%` }} />
         </div>
-        <p className="mt-1 text-right text-xs font-bold">{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes</p>
+        <p className="mt-1 text-right text-xs font-bold">
+          {procesandoLote ? `Procesando… ${progresoProcesamiento ?? 0}% · ` : ''}{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes
+          {!modoReal ? '' : (pendientesProcesar.length === 0 ? ' · Nada pendiente' : ' · Pulsa “Procesar entregas pendientes” para que la barra avance')}
+        </p>
       </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
