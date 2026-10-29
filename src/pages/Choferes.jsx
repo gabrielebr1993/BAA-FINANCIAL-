@@ -13,6 +13,7 @@ import { Truck, Check, KeyRound, Trash2, FileSpreadsheet, Landmark, MapPin } fro
 import { exportarExcel } from '../utils/exportar'
 import { exportarDatosBancarios } from '../utils/exportarBancos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../components/ui'
+import IdGofoBadge from '../components/IdGofoBadge'
 import ManagersPanel from '../components/ManagersPanel'
 import RegistroChoferes from '../components/RegistroChoferes'
 import { useLang } from '../i18n'
@@ -495,12 +496,14 @@ export default function Choferes() {
               {unidosFiltrados.map((d) => (
                 <div key={d.id} className="flex flex-wrap items-center gap-2 py-2">
                   <b className="text-brand-navy dark:text-slate-100">{d.nombre}</b>
+                  <IdGofoBadge nombre={d.nombre} id={d.idGofo} />
                   <span className="text-xs text-slate-400">{t('absorbió:')}</span>
                   {d.alias.map((a) => {
                     const u = ultimaVez[normNombre(a)]
                     return (
                       <span key={a} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
                         {a}
+                        <IdGofoBadge nombre={a} />
                         {u
                           ? <span className="font-normal text-amber-600/80 dark:text-amber-300/70">· {t('aparecía APARTE hasta la semana')} {u.semana} ({u.ciudad} · {u.paq} {t('paq.')})</span>
                           : <span className="font-normal text-amber-600/80 dark:text-amber-300/70">· {t('nunca apareció aparte (variación del mismo nombre)')}</span>}
