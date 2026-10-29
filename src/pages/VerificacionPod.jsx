@@ -39,6 +39,7 @@ import { Camera, Eye, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucid
 import { collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
+import { useData } from '../DataContext'
 import { Card, PageTitle, EstadoVacio } from '../components/ui'
 import { useCarrier } from '../carriers/CarrierContext'
 
@@ -222,7 +223,14 @@ const FALLOS_DUROS = [
 
 export default function VerificacionPod() {
   const { carrier } = useCarrier()
-  const { companyId, user } = useAuth()
+  const { companyId: companyIdPerfil, user } = useAuth()
+  // CORRECCIÓN 2026-10-29: usar la empresa activa seleccionada (DataContext),
+  // no solo el companyId del perfil. Para un súper-admin sin companyId en su
+  // perfil, useAuth da null y la consulta nunca corría, por eso la pantalla
+  // se quedaba en EJEMPLO aunque existieran documentos reales para la empresa
+  // seleccionada ("En uso"). Respaldo: companyId del perfil si no hay activa.
+  const { activeCompanyId } = useData()
+  const companyId = activeCompanyId || companyIdPerfil
   const [filtro, setFiltro] = useState('todas')
   const [sitio, setSitio] = useState('todas')
   const [busqueda, setBusqueda] = useState('')
@@ -237,8 +245,8 @@ export default function VerificacionPod() {
   const [mensajeLote, setMensajeLote] = useState(null)
   const [procesandoLote, setProcesandoLote] = useState(false)
 
-  // Carga real (solo lectura de la empresa activa). Sin companyId no hay
-  // consulta: se queda en ejemplos. Si la lectura falla (p. ej. reglas de
+  // Carga real (solo lectura de la empresa activa seleccionada). Sin companyId
+  // no hay consulta: se queda en ejemplos. Si la lectura falla (p. ej. reglas de
   // Firestore aún sin desplegar), NO se rompe la pantalla: se avisa y se
   // siguen mostrando los ejemplos marcados.
   useEffect(() => {
