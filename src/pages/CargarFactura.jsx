@@ -173,23 +173,67 @@ function CargarFacturaGofo() {
     [procesados]
   )
 
-  // Resolución: raw → canónico. mapaManual manda; luego el match automático; si no,
-  // se deja el nombre crudo (chofer nuevo) y se lista en "sin asociar".
+  // --- Delivery ID de Gofo: identidad fuerte para NO fusionar personas distintas ---
+  // ID por nombre CRUDO de esta factura (de Driver Summary): normNombre -> idGofo.
+  const idPorRawNombre = useMemo(() => {
+    const acc = {}
+    for (const p of procesados) for (const ds of (p.driverSummary || [])) {
+      const id = String(ds.idGofo || '').trim()
+      if (id) acc[normNombre(ds.nombre)] = id
+    }
+    return acc
+  }, [procesados])
+  // IDs guardados en los perfiles: idGofo -> nombre del chofer; y nombre/alias -> idGofo.
+  const driverPorId = useMemo(() => {
+    const acc = {}
+    for (const d of drivers) { const id = String(d.idGofo || '').trim(); if (id && !acc[id]) acc[id] = d.nombre }
+    return acc
+  }, [drivers])
+  const idPorDriverNorm = useMemo(() => {
+    const acc = {}
+    for (const d of drivers) {
+      const id = String(d.idGofo || '').trim(); if (!id) continue
+      acc[normNombre(d.nombre)] = id
+      for (const a of (d.alias || [])) acc[normNombre(a)] = id
+    }
+    return acc
+  }, [drivers])
+
+  // Resolución: raw → canónico. mapaManual manda; luego ID; luego match por nombre; si
+  // no, se deja el nombre crudo (chofer nuevo) y se lista en "sin asociar".
   const unif = useMemo(() => {
     const map = {}
     const auto = {} // raw -> canónico (solo los unidos automáticamente, para mostrarlos)
     const sinAsociar = []
+    const bloqueadosPorId = [] // nombres que NO se unieron porque el Delivery ID difiere
     for (const raw of rawCouriers) {
       const man = mapaManual[raw]
       if (man && man !== '__nuevo__') { map[raw] = man; continue }
       if (man === '__nuevo__') { map[raw] = raw; continue }
+      const rawId = idPorRawNombre[normNombre(raw)] || ''
+      // 1) Si el Delivery ID ya está asociado a un chofer, se une por ID (gana al nombre).
+      if (rawId && driverPorId[rawId]) {
+        map[raw] = driverPorId[rawId]
+        if (normNombre(driverPorId[rawId]) !== normNombre(raw)) auto[raw] = driverPorId[rawId]
+        continue
+      }
       const r = resolverNombre(raw, canonicos)
-      if (r) { map[raw] = r.nombre; if (normNombre(r.nombre) !== normNombre(raw)) auto[raw] = r.nombre } else { map[raw] = raw; sinAsociar.push(raw) }
+      if (r) {
+        const idDestino = idPorDriverNorm[normNombre(r.nombre)] || ''
+        // 2) El nombre calza con un chofer que tiene OTRO Delivery ID → son personas
+        //    distintas: NO unir, tratarlo como chofer aparte.
+        if (rawId && idDestino && rawId !== idDestino) {
+          map[raw] = raw; sinAsociar.push(raw); bloqueadosPorId.push(raw)
+        } else {
+          map[raw] = r.nombre
+          if (normNombre(r.nombre) !== normNombre(raw)) auto[raw] = r.nombre
+        }
+      } else { map[raw] = raw; sinAsociar.push(raw) }
     }
     const unidas = rawCouriers.filter((raw) => normNombre(map[raw]) !== normNombre(raw)).length
     const totalReal = new Set(rawCouriers.map((raw) => normNombre(map[raw]))).size
-    return { map, auto, sinAsociar, unidas, totalReal }
-  }, [rawCouriers, canonicos, mapaManual])
+    return { map, auto, sinAsociar, unidas, totalReal, bloqueadosPorId }
+  }, [rawCouriers, canonicos, mapaManual, idPorRawNombre, driverPorId, idPorDriverNorm])
   const asignarManual = (raw, valor) => setMapaManual((m) => ({ ...m, [raw]: valor }))
   // Opciones del combobox de choferes (nuevo + toda la lista canónica).
   const opcionesChofer = useMemo(
@@ -627,6 +671,17 @@ function CargarFacturaGofo() {
         const canon = unif.map[raw] || raw
         if (normNombre(canon) !== normNombre(raw)) (aliasPorCanonico[canon] = aliasPorCanonico[canon] || []).push(raw)
       }
+      // Delivery ID por chofer canónico (de esta factura), para asociarlo al perfil.
+      // Se PREFIERE el ID del nombre EXACTO del chofer (no el de un alias/variante).
+      const idExacto = {}, idAlias = {}
+      for (const raw of rawCouriers) {
+        const canon = unif.map[raw] || raw
+        const id = idPorRawNombre[normNombre(raw)]
+        if (!id) continue
+        if (normNombre(raw) === normNombre(canon)) idExacto[canon] = id
+        else if (!idAlias[canon]) idAlias[canon] = id
+      }
+      const idPorCanonico = { ...idAlias, ...idExacto }
       const chunk = 450
       // Crear los choferes NUEVOS (inexistentes) en batch, con su alias.
       if (choferesNuevos.length > 0) {
@@ -637,6 +692,7 @@ function CargarFacturaGofo() {
             const dref = doc(collection(db, 'drivers'))
             batch.set(dref, {
               nombre: n,
+              idGofo: idPorCanonico[n] || '',
               precioIndividual: Number(precios[n]?.ind) || 0,
               precioDoble: Number(precios[n]?.doble) || 0,
               activo: true,
@@ -661,6 +717,11 @@ function CargarFacturaGofo() {
       for (const [canon, aliases] of Object.entries(aliasPorCanonico)) {
         const d = buscarDriver(drivers, canon)
         if (d && aliases.length) updates[d.id] = { ...(updates[d.id] || {}), alias: arrayUnion(...aliases) }
+      }
+      // Asociar el Delivery ID a choferes EXISTENTES que aún no lo tienen guardado.
+      for (const [canon, id] of Object.entries(idPorCanonico)) {
+        const d = buscarDriver(drivers, canon)
+        if (d && !String(d.idGofo || '').trim()) updates[d.id] = { ...(updates[d.id] || {}), idGofo: id }
       }
       const upIds = Object.keys(updates)
       for (let i = 0; i < upIds.length; i += chunk) {
@@ -1394,7 +1455,13 @@ function CargarFacturaGofo() {
                 <Badge color="green">{num(rawCouriers.length)} → {num(unif.totalReal)} {t('choferes')}</Badge>
                 {unif.unidas > 0 && <Badge color="gold">{num(unif.unidas)} {t('variantes unidas')}</Badge>}
                 {unif.sinAsociar.length > 0 && <Badge color="red">{num(unif.sinAsociar.length)} {t('sin asociar')}</Badge>}
+                {unif.bloqueadosPorId?.length > 0 && <Badge color="gold">🛡 {num(unif.bloqueadosPorId.length)} {t('separados por Delivery ID')}</Badge>}
               </div>
+              {unif.bloqueadosPorId?.length > 0 && (
+                <p className="mb-2 rounded-lg bg-brand-navy/5 px-3 py-2 text-xs text-slate-600 dark:bg-brand-gold/10 dark:text-slate-300">
+                  🛡 {t('El Delivery ID evitó fusionar personas distintas con nombres parecidos:')} <b>{unif.bloqueadosPorId.join(', ')}</b>. {t('Quedan como choferes separados (correcto).')}
+                </p>
+              )}
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
                 <b>{num(rawCouriers.length)}</b> {t('nombres en la factura se asociaron a')} <b>{num(unif.totalReal)}</b> {t('choferes reales (')}{num(unif.unidas)} {t('variantes unidas). Los paquetes, pagos y claims de cada variante se suman al chofer correcto.')}
               </p>
