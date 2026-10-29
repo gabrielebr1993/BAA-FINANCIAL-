@@ -244,7 +244,7 @@ export default function VerificacionPod() {
   // 15 s mientras haya un análisis en curso (porcentaje < 100).
   const reloadRef = useRef(null)
   reloadRef.current = reloadAjustes
-  const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
+  const [progresoEnVivo, setProgresoEnVivo] = useState(null); const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
   useEffect(() => {
     if (!progresoAnalisis || (typeof progresoAnalisis.porcentaje === 'number' && progresoAnalisis.porcentaje >= 100)) return undefined
     const id = setInterval(() => { if (reloadRef.current) reloadRef.current() }, 15000)
@@ -296,7 +296,7 @@ export default function VerificacionPod() {
   }, [companyId, carrier])
   // Progreso del análisis también en tiempo real: escucha settings/{companyId}
   // directamente, no solo la carga inicial de DataContext.
-  const [progresoEnVivo, setProgresoEnVivo] = useState(null)
+  
   useEffect(() => {
     if (!companyId) return undefined
     return onSnapshot(doc(db, 'settings', companyId), (snap) => {
