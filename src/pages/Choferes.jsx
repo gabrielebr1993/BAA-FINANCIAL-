@@ -68,6 +68,19 @@ export default function Choferes() {
     return out
   }, [invoices])
 
+  // TODAS las ciudades (códigos) donde se vio cada nombre (perfil o alias) en las
+  // facturas. Sirve para que la auditoría respete el filtro SIN perder uniones que
+  // cruzan ciudades (un nombre absorbido en Dallas + otro en Houston aparece en ambas).
+  const ciudadesDeNombre = useMemo(() => {
+    const acc = {}
+    for (const inv of (invoices || [])) for (const ch of (inv.resumenChoferes || [])) {
+      if (!ch.ciudad) continue
+      const k = normNombre(ch.nombre)
+      ;(acc[k] = acc[k] || new Set()).add(ch.ciudad)
+    }
+    return acc
+  }, [invoices])
+
   // Delivery ID de Gofo DETECTADO por nombre (clave normalizada). Mapea nombre ->
   // conjunto de IDs vistos en las facturas. Si un mismo nombre trae DOS IDs, suele
   // significar que dos personas distintas se fusionaron por error (ej. "Juan
@@ -448,11 +461,23 @@ export default function Choferes() {
           (al subir una factura y responder "es el mismo que…"). Permite ver
           quién fue combinado con quién y deshacer una unión equivocada. */}
       {(() => {
-        // Respeta el FILTRO de ciudad: usa `drivers` (ya filtrado por la ciudad
-        // elegida) en vez de `driversAll`. Con "Todas las ciudades" muestra todo;
-        // con una ciudad elegida, solo las uniones de esa ciudad.
-        const unidos = drivers.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
-        if (!unidos.length) return null
+        // TODAS las uniones (de todas las ciudades). Si no hay ninguna, no se pinta.
+        const unidosTodos = driversAll.filter((d) => Array.isArray(d.alias) && d.alias.length > 0)
+        if (!unidosTodos.length) return null
+        // Respeta el FILTRO de ciudad de forma INCLUSIVA: una unión se muestra si TOCA
+        // la ciudad elegida por el perfil O por cualquiera de sus alias (así una mezcla
+        // Houston+Dallas aparece en ambas ciudades y no se pierde).
+        const tocaCiudadSel = (d) => {
+          if (!ciudadesRelevantes || ciudadesRelevantes.size === 0) return true // "Todas"
+          const codes = new Set()
+          if (d.ciudad) codes.add(d.ciudad)
+          if (ciudadDeDriverNombre[d.nombre]) codes.add(ciudadDeDriverNombre[d.nombre])
+          for (const c of (ciudadesDeNombre[normNombre(d.nombre)] || [])) codes.add(c)
+          for (const a of (d.alias || [])) for (const c of (ciudadesDeNombre[normNombre(a)] || [])) codes.add(c)
+          for (const c of codes) if (ciudadesRelevantes.has(c)) return true
+          return false
+        }
+        const unidos = unidosTodos.filter(tocaCiudadSel)
         // ¿CUÁNDO se vio cada nombre absorbido por ÚLTIMA VEZ como chofer
         // APARTE? Se rastrea en los resúmenes de todas las facturas cargadas:
         // si "X" aparecía solo hasta la semana pasada y en la última ya no
@@ -482,7 +507,7 @@ export default function Choferes() {
         )
         return (
           <Card className="mb-4 p-4">
-            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nombres unidos (auditoría)')} <Badge color="gold">{unidos.length}</Badge></h3>
+            <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Nombres unidos (auditoría)')} <Badge color="gold">{unidos.length}</Badge>{unidos.length < unidosTodos.length && <span className="ml-2 text-xs font-normal text-slate-400">({unidosTodos.length} {t('en total — pon «Todas las ciudades» para verlas todas')})</span>}</h3>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
               {t('Al subir una factura, cuando el sistema preguntó «¿es la misma persona?», estos nombres quedaron UNIDOS a una sola ficha (sus paquetes se suman juntos). Si una unión fue un error: 1) quítala aquí con la ✕, 2) borra la factura de esa semana en «Facturas», y 3) vuélvela a subir respondiendo que es un chofer NUEVO — así sus paquetes vuelven a separarse.')}
             </p>
@@ -492,7 +517,12 @@ export default function Choferes() {
               <span className="text-xs text-slate-500 dark:text-slate-400">{unidosFiltrados.length} {t('de')} {unidos.length}</span>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {unidosFiltrados.length === 0 && <div className="py-3 text-sm text-slate-400">{t('Ningún nombre unido coincide con la búsqueda.')}</div>}
+              {unidosFiltrados.length === 0 && (
+                <div className="py-3 text-sm text-slate-400">
+                  {term ? t('Ningún nombre unido coincide con la búsqueda.')
+                        : t('No hay uniones en esta ciudad. Pon «Todas las ciudades» en el filtro para ver todas.')}
+                </div>
+              )}
               {unidosFiltrados.map((d) => (
                 <div key={d.id} className="flex flex-wrap items-center gap-2 py-2">
                   <b className="text-brand-navy dark:text-slate-100">{d.nombre}</b>
