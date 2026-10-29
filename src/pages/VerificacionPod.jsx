@@ -244,7 +244,21 @@ export default function VerificacionPod() {
   // 15 s mientras haya un análisis en curso (porcentaje < 100).
   const reloadRef = useRef(null)
   reloadRef.current = reloadAjustes
-  const [progresoEnVivo, setProgresoEnVivo] = useState(null); const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
+  // Declarar antes de su primer uso (fix PR #11): si queda abajo, la
+  // pantalla rompe con error de inicialización en producción.
+  const [progresoEnVivo, setProgresoEnVivo] = useState(null)
+  const [progresoSitiosEnVivo, setProgresoSitiosEnVivo] = useState(null)
+  const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
+  // Progreso POR CIUDAD (2026-10-29): el trabajo por sitios escribe en
+  // settings/{companyId}.analisisPodHoySitios un mapa sitio -> {porcentaje,
+  // estado, entregadas, enProgreso, calificadas, total, actualizadas}. Así
+  // en MilePay se ve el avance de cada ciudad a la vez, no un solo %.
+  const progresoSitios = progresoSitiosEnVivo || ajustes?.analisisPodHoySitios || null
+  const conteoPorSitio = useMemo(() => {
+    const c = {}
+    reales.forEach((e) => { c[e.sitio] = (c[e.sitio] || 0) + 1 })
+    return c
+  }, [reales])
   useEffect(() => {
     if (!progresoAnalisis || (typeof progresoAnalisis.porcentaje === 'number' && progresoAnalisis.porcentaje >= 100)) return undefined
     const id = setInterval(() => { if (reloadRef.current) reloadRef.current() }, 15000)
@@ -296,11 +310,11 @@ export default function VerificacionPod() {
   }, [companyId, carrier])
   // Progreso del análisis también en tiempo real: escucha settings/{companyId}
   // directamente, no solo la carga inicial de DataContext.
-  
   useEffect(() => {
     if (!companyId) return undefined
     return onSnapshot(doc(db, 'settings', companyId), (snap) => {
       setProgresoEnVivo(snap.exists() ? (snap.data()?.analisisPodHoy || null) : null)
+      setProgresoSitiosEnVivo(snap.exists() ? (snap.data()?.analisisPodHoySitios || null) : null)
     }, () => {})
   }, [companyId])
 
@@ -539,6 +553,37 @@ export default function VerificacionPod() {
           {procesandoLote ? `Procesando… ${progresoProcesamiento ?? 0}% · ` : ''}{progresoProcesamiento ?? porcentajeProcesadas}% procesado · {pendientesProcesar.length} restantes
           {!modoReal ? '' : (pendientesProcesar.length === 0 ? ' · Nada pendiente' : ' · Pulsa “Procesar entregas pendientes” para que la barra avance')}
         </p>
+      </Card>
+
+      {/* Progreso POR CIUDAD en MilePay (2026-10-29): las 11 a la vez.
+          Cada fila lee settings.analisisPodHoySitios en tiempo real; si un
+          sitio aún no tiene datos, dice "sin datos todavía" y muestra
+          cuántas entregas de ese sitio ya están en MilePay. */}
+      <Card className="mb-5 p-4">
+        <h2 className="font-bold text-brand-navy dark:text-slate-100">Progreso por ciudad · Hoy, en MilePay</h2>
+        <p className="text-xs text-slate-500">Todas las ciudades a la vez. El % y los conteos de cada ciudad se actualizan solos cuando el trabajo por sitios escribe su avance en los ajustes.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {SITIOS_GOFO.map((s) => {
+            const p = progresoSitios?.[s] || null
+            const pct = p && typeof p.porcentaje === 'number' ? Math.max(0, Math.min(100, p.porcentaje)) : 0
+            const enMilePay = conteoPorSitio[s] || 0
+            return (
+              <div key={s} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{s}</span>
+                  <span className="text-xs font-bold">{p ? `${pct}%` : 'sin datos todavía'}</span>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {p ? `${p.estado || 'En curso'}${typeof p.entregadas === 'number' ? ` · ${p.entregadas} entregadas` : ''}${typeof p.enProgreso === 'number' ? ` · ${p.enProgreso} en progreso` : ''}${typeof p.calificadas === 'number' ? ` · ${p.calificadas} calificadas` : ''}` : 'Sin avance reportado todavía'}
+                  {` · ${enMilePay} en MilePay`}
+                </p>
+              </div>
+            )
+          })}
+        </div>
       </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
