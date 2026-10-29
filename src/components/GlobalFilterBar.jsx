@@ -47,10 +47,14 @@ export default function GlobalFilterBar() {
     ;(inv.resumenCiudades || []).forEach((c) => { if (c.ubicacion) ks.push(normC(c.ubicacion)) })
     return ks.filter(Boolean)
   }
-  // Siempre se dejan las ya seleccionadas (para no romper la etiqueta ni la selección).
+  // Facturas de la CIUDAD seleccionada (match ESTRICTO por código). El selector de
+  // "Una factura" muestra SOLO estas — antes también dejaba la factura ya elegida
+  // aunque fuera de otra ciudad, y por eso al elegir Austin seguía saliendo Chicago.
   const invoicesSelector = filtroCiu
-    ? invoices.filter((inv) => facturaIds.includes(inv.id) || clavesFac(inv).some((k) => selKeysCiu.has(k)))
+    ? invoices.filter((inv) => clavesFac(inv).some((k) => selKeysCiu.has(k)))
     : invoices
+  const selKeysCiuKey = [...selKeysCiu].sort().join('|')
+  const invSelIds = invoicesSelector.map((i) => i.id).join(',')
 
   // SOLO el rol "manager" queda restringido a "Una factura" (no "Por período").
   // Owner, admin y súper-admin conservan ambos modos SIEMPRE.
@@ -93,6 +97,19 @@ export default function GlobalFilterBar() {
     if (id) setRango({ preset: 'factura', invoiceId: id, desde: '', hasta: '' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soloFactura, modo, invoices])
+  // Al CAMBIAR de ciudad estando en "Una factura": si la(s) factura(s) elegida(s)
+  // NO son de la ciudad seleccionada, se cambian por una de esa ciudad (o se deja la
+  // que sí corresponde). Así elegir Austin deja de mostrar la factura de Chicago.
+  useEffect(() => {
+    if (modo !== 'factura' || !filtroCiu) return
+    const idsCiudad = new Set(invoicesSelector.map((i) => i.id))
+    const vigentes = facturaIds.filter((id) => idsCiudad.has(id))
+    if (vigentes.length === facturaIds.length && vigentes.length > 0) return // ya están todas en la ciudad
+    const nuevos = vigentes.length ? vigentes : (invoicesSelector[0]?.id ? [invoicesSelector[0].id] : [])
+    if (nuevos.length === 0) return // no hay facturas de esa ciudad: no se toca
+    setRango({ preset: 'factura', invoiceIds: nuevos, invoiceId: nuevos[0], desde: '', hasta: '' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modo, selKeysCiuKey, invSelIds])
   const setPreset = (preset) => { setAbrirPers(false); setRango({ preset, desde: '', hasta: '' }) }
   const buscar = () => {
     let d = desde, h = hasta
