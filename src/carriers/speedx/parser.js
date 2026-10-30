@@ -97,16 +97,274 @@ export const CATEGORIAS_SPEEDX = [
   { id: 'otros', label: 'Otros' },
 ]
 
+// ── Parser del FORMATO NUEVO (DFW TTC 2026+) ─────────────────────────────────
+// Hojas: Settlement (totales clave-valor), Driver Summary (Driver/Stops/Packages/
+// Delivery Pay), Driver Rate Pivot (desglose por tarifa + Compensation + Claim
+// Deduction/Refund por chofer), Delivery Data (detalle por paquete SIN tarifas),
+// Claims (deducciones) y Refunds (reembolsos). La plata es AUTORITATIVA en el
+// Settlement/Driver Summary; el detalle por paquete sale de "Delivery Data" y los
+// DOBLES se derivan por RUTA+DIRECCIÓN (igual que el reporte manual). Devuelve la
+// MISMA forma que el parser viejo para no tocar nada río abajo.
+function procesarSpeedXNuevo(wb, nombreArchivo = '') {
+  const avisos = []
+  const r2 = (n) => Math.round(n * 100) / 100
+
+  // ── Settlement (totales oficiales, clave→valor) ──
+  const settlement = {}
+  const wsSet = hoja(wb, 'Settlement')
+  if (wsSet) for (const f of filasMatriz(wsSet)) { const k = norm(f[0]); if (k) settlement[k] = f[1] }
+  const period = String(settlement['period'] || '').trim()
+
+  // ── Driver Rate Pivot: tarifas usadas + plata por chofer ──
+  const pivot = {} // normNombre → { volumen, menor1, mayor1, temu, comp, claimDed, claimRef }
+  const rateStats = {} // tarifa → { men, may }
+  const wsPiv = hoja(wb, 'Driver Rate Pivot')
+  if (wsPiv) {
+    const mP = filasMatriz(wsPiv)
+    let cur = null
+    for (let r = 1; r < mP.length; r++) {
+      const f = mP[r]; if (!f) continue
+      const c0 = String(f[0] ?? '').trim(); if (!c0) continue
+      const esTarifa = /^\$?\d+(\.\d+)?$/.test(c0.replace(/,/g, ''))
+      if (!esTarifa) {
+        if (/grand\s*total|^total$/i.test(c0)) { cur = null; continue }
+        cur = { nombre: c0.replace(/\s+/g, ' '), volumen: toNum(f[1]), menor1: toNum(f[2]), mayor1: toNum(f[3]), temu: toNum(f[4]), comp: toNum(f[5]), claimDed: toNum(f[6]), claimRef: toNum(f[7]), rates: [] }
+        pivot[norm(cur.nombre)] = cur
+      } else if (cur) {
+        const rt = toNum(c0)
+        cur.rates.push({ rate: rt, vol: toNum(f[1]) }) // cantidad de paquetes a esa tarifa
+        rateStats[rt] = rateStats[rt] || { men: 0, may: 0 }
+        rateStats[rt].men += toNum(f[2]); rateStats[rt].may += toNum(f[3])
+      }
+    }
+  }
+  // Clasificar tarifas: la más baja = STOP adicional; de las demás, la que tiene
+  // más volumen <1lb = tarifa de <1lb, la de más >1lb = tarifa de ≥1lb.
+  const tarifas = Object.keys(rateStats).map(Number).sort((a, b) => a - b)
+  const stopRate = tarifas.length ? tarifas[0] : 0.45
+  const pesoRates = tarifas.slice(1)
+  let menorRate = pesoRates[0] ?? 1.75
+  let mayorRate = pesoRates[pesoRates.length - 1] ?? 1.90
+  if (pesoRates.length) {
+    menorRate = [...pesoRates].sort((a, b) => rateStats[b].men - rateStats[a].men)[0]
+    mayorRate = [...pesoRates].sort((a, b) => rateStats[b].may - rateStats[a].may)[0]
+  }
+
+  // ── Delivery Data: detalle por paquete (dobles por ruta+dirección) ──
+  const wsDD = hoja(wb, 'Delivery Data')
+  if (!wsDD) throw new Error('El archivo nuevo no trae la hoja "Delivery Data".')
+  const m = filasMatriz(wsDD)
+  const H = (m[0] || []).map((h) => String(h ?? ''))
+  const col = (n) => H.findIndex((h) => norm(h) === norm(n))
+  const i = {
+    poe: col('POE'), ruta: col('Route'), dir: col('Address'), unit: col('Unit'), zip: col('ZipCode'),
+    track: col('TrackingNo'), status: col('FinalStatus'), status2: col('Status'), completado: col('CompleteTime'),
+    peso: col('Weight'), fleet: col('FleeName'), driver: col('DriverName'),
+  }
+  if (i.track < 0 || i.driver < 0) throw new Error('La hoja "Delivery Data" no trae TrackingNo / DriverName.')
+  const normD = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const vistos = new Set(), grupos = new Set()
+  const detalles = []
+  let duplicados = 0
+  const excluidos = {}
+  for (let r = 1; r < m.length; r++) {
+    const f = m[r]; if (!f || !f[i.track]) continue
+    const track = String(f[i.track]).trim()
+    if (vistos.has(track)) { duplicados++; continue }
+    vistos.add(track)
+    const estado = String(f[i.status] ?? f[i.status2] ?? '').trim()
+    if (estado && norm(estado) !== 'delivered') { const k = estado || 'SIN ESTADO'; excluidos[k] = (excluidos[k] || 0) + 1; continue }
+    const peso = toNum(f[i.peso])
+    const kParada = `${f[i.ruta]}||${normD(f[i.dir])}${normD(f[i.unit])}`
+    const esDoble = grupos.has(kParada); grupos.add(kParada)
+    const esMenor1 = peso < 1
+    const monto = esDoble ? stopRate : (esMenor1 ? menorRate : mayorRate)
+    detalles.push({
+      waybill: track,
+      courier: String(f[i.driver] ?? '').trim().replace(/\s+/g, ' '),
+      ruta: String(f[i.ruta] ?? '').trim() || 'Sin ruta',
+      ciudad: codigoFleet(f[i.fleet]) || String(f[i.poe] ?? '').trim().toUpperCase() || 'SPX',
+      zip: String(f[i.zip] ?? '').trim(),
+      peso,
+      rangoPeso: esMenor1 ? '<1 lbs' : '1-10 lbs',
+      esMenor1Lb: esMenor1,
+      temu: false,
+      rate: monto, adj: esDoble ? -(menorRate - stopRate) : 0, monto,
+      esStopAdicional: esDoble,
+      fecha: fechaCelda(f[i.completado]),
+      nota: '',
+      estado: estado || 'DELIVERED',
+    })
+  }
+  if (!detalles.length) throw new Error('La hoja "Delivery Data" no trae paquetes entregados.')
+  if (duplicados) avisos.push(`${duplicados} tracking(s) repetidos: se contaron una sola vez.`)
+  const nExcl = Object.values(excluidos).reduce((a, n) => a + n, 0)
+  if (nExcl) avisos.push(`${nExcl} paquete(s) NO entregados quedan fuera: ${Object.entries(excluidos).map(([k, n]) => `${k} (${n})`).join(', ')}.`)
+
+  // MONTO EXACTO por paquete: se asignan las tarifas del pivot (cantidades por
+  // tarifa de cada chofer) a SUS paquetes, para que la suma por chofer = su
+  // Delivery Pay autoritativo. Los paquetes se ordenan para que los más baratos
+  // (stop adicional, luego los más livianos) reciban las tarifas más bajas; así el
+  // doble (0.45) queda alineado con la definición de SpeedX.
+  const porChoferPk = {}
+  for (const d of detalles) (porChoferPk[norm(d.courier)] = porChoferPk[norm(d.courier)] || []).push(d)
+  for (const [k, pks] of Object.entries(porChoferPk)) {
+    const pv = pivot[k]
+    if (!pv || !pv.rates || !pv.rates.length) continue
+    const tramos = [...pv.rates].sort((a, b) => a.rate - b.rate)
+    const ord = [...pks].sort((a, b) => (Number(b.esStopAdicional) - Number(a.esStopAdicional)) || (a.peso - b.peso))
+    let idx = 0
+    for (const tr of tramos) {
+      for (let n = 0; n < tr.vol && idx < ord.length; n++, idx++) {
+        ord[idx].rate = tr.rate; ord[idx].monto = tr.rate; ord[idx].esStopAdicional = tr.rate === stopRate
+      }
+    }
+    for (; idx < ord.length; idx++) { ord[idx].rate = mayorRate; ord[idx].monto = mayorRate; ord[idx].esStopAdicional = false }
+  }
+
+  // Ciudad representativa + ciudad por chofer (para atribuir claims).
+  const conteoCiudad = {}, porChoferCiudad = {}
+  for (const d of detalles) {
+    conteoCiudad[d.ciudad] = (conteoCiudad[d.ciudad] || 0) + 1
+    const k = norm(d.courier); porChoferCiudad[k] = porChoferCiudad[k] || {}
+    porChoferCiudad[k][d.ciudad] = (porChoferCiudad[k][d.ciudad] || 0) + 1
+  }
+  const ciudadDeCourier = {}
+  for (const k of Object.keys(porChoferCiudad)) ciudadDeCourier[k] = Object.keys(porChoferCiudad[k]).sort((a, b) => porChoferCiudad[k][b] - porChoferCiudad[k][a])[0]
+  const ciudad = Object.keys(conteoCiudad).sort((a, b) => conteoCiudad[b] - conteoCiudad[a])[0] || 'SPX'
+  const fleet = String(settlement['dsp'] || (m[1] || [])[i.fleet] || '').trim()
+
+  // Semana del "Period" (DFW 1010-1016) + año de las fechas del detalle.
+  const mp = period.match(/(\d{4})-(\d{4})/)
+  const mmdd = mp ? `${mp[1]}-${mp[2]}` : ''
+  const { semana, fechaInicioISO, fechaFinISO } = semanaDeNota(mmdd, detalles.map((d) => d.fecha))
+
+  // ── Claims (deducciones) y Refunds (reembolsos) ──
+  const leerCR = (nombreHoja, esRefund) => {
+    const ws = hoja(wb, nombreHoja); if (!ws) return []
+    const mc = filasMatriz(ws)
+    const ix = indices(mc[0], [
+      ['track', ['Tracking Number', 'TrackingNo'], 0],
+      ['driver', ['Driver'], 10],
+      ['valor', ['Claim Value ($)', 'Claim Value'], 13],
+      ['tipo', ['Claim Type'], 12],
+      ['ruta', ['Last Physical Delivery Route Name', 'Route'], 11],
+      ['zip', ['Zip Code'], 6],
+      ['periodo', ['Week Filed (Fin. Wk)', 'Week Filed'], 3],
+    ])
+    const out = []
+    for (let r = 1; r < mc.length; r++) {
+      const f = mc[r]; if (!f || !f[ix.track]) continue
+      const val = Math.abs(toNum(f[ix.valor]))
+      const courier = String(f[ix.driver] ?? '').trim().replace(/\s+/g, ' ')
+      const tipo = String(f[ix.tipo] ?? '').trim()
+      out.push({
+        waybill: String(f[ix.track]).trim(), courier, date: String(f[ix.periodo] ?? '').trim(),
+        postalCode: String(f[ix.zip] ?? '').trim(), claimType: tipo, categoria: categoriaClaimSpeedX(tipo),
+        montoGofo: esRefund ? val : -val, valor: val, delFee: 0, ruta: String(f[ix.ruta] ?? '').trim(),
+        ciudad: ciudadDeCourier[norm(courier)] || ciudad, esRefund: !!esRefund,
+      })
+    }
+    return out
+  }
+  const claims = leerCR('Claims', false)
+  const refunds = leerCR('Refunds', true)
+
+  // ── Driver Summary (plata AUTORITATIVA por chofer) ──
+  const driverSummary = []
+  const wsDs = hoja(wb, 'Driver Summary')
+  if (wsDs) {
+    const mDs = filasMatriz(wsDs)
+    const iD = indices(mDs[0], [['nombre', ['Driver'], 0], ['stops', ['Stops'], 1], ['packages', ['Packages'], 2], ['pay', ['Delivery Pay'], 3]])
+    for (let r = 1; r < mDs.length; r++) {
+      const f = mDs[r]; if (!f) continue
+      const nombre = String(f[iD.nombre] ?? '').trim()
+      if (!nombre || /^total$/i.test(nombre) || /grand\s*total/i.test(nombre)) continue
+      const pv = pivot[norm(nombre)] || {}
+      driverSummary.push({
+        courier: nombre.replace(/\s+/g, ' '),
+        volumen: toNum(f[iD.packages]) || pv.volumen || 0,
+        menor1: pv.menor1 || 0,
+        mayor1: pv.mayor1 || 0,
+        temu: pv.temu || 0,
+        stops: toNum(f[iD.stops]),
+        compensacionCarrier: toNum(f[iD.pay]) || pv.comp || 0,
+        claimDeduction: pv.claimDed || 0,
+        claimRefund: pv.claimRef || 0,
+      })
+    }
+  }
+
+  // ── Totales oficiales desde el Settlement ──
+  const deliveryPay = toNum(settlement['deliverypay'])
+  const claimDeductions = toNum(settlement['claimdeductions'])
+  const claimRefunds = toNum(settlement['claimrefunds'])
+  const net = settlement['netsettlement'] != null && settlement['netsettlement'] !== ''
+    ? toNum(settlement['netsettlement'])
+    : r2(deliveryPay - claimDeductions + claimRefunds)
+  const packagesOficial = toNum(settlement['packages'])
+  const oficial = {
+    brn: '', fleet, vendorId: '',
+    pcs: packagesOficial || detalles.length,
+    confirmRate: deliveryPay,
+    ajustePrevio: 0, claimPrevio: 0,
+    claim: claimDeductions,
+    claimRefund: claimRefunds,
+    totalPago: net,
+    pagoCombinado: false, totalDeposito: null, referenciaPago: period,
+  }
+
+  // ── Verificación (el "cuadra") ──
+  const sumaDetalle = r2(detalles.reduce((a, d) => a + d.monto, 0))
+  const sumaClaims = r2(claims.reduce((a, c) => a + Math.abs(c.montoGofo), 0))
+  const sumaRefunds = r2(refunds.reduce((a, c) => a + Math.abs(c.montoGofo), 0))
+  // El total oficial de SpeedX ya es NET = DeliveryPay − deducciones + reembolsos.
+  const totalCalculado = r2(deliveryPay - claimDeductions + claimRefunds)
+  const difPaquetes = packagesOficial ? detalles.length - packagesOficial : null
+  const verificacion = {
+    paquetes: detalles.length,
+    sumaDetalle,
+    sumaClaims,
+    sumaRefunds,
+    claimsSinDetalle: 0,
+    totalCalculado,
+    speedx: { pcs: oficial.pcs, confirmRate: deliveryPay, claim: claimDeductions, claimRefund: claimRefunds, ajustePrevio: 0, claimPrevio: 0, totalOficial: net },
+    difPaquetes,
+    difMonto: r2(totalCalculado - net),
+    cuadra: Math.abs(totalCalculado - net) < 0.01 && (difPaquetes == null || Math.abs(difPaquetes) === 0),
+  }
+  if (difPaquetes) avisos.push(`El detalle trae ${detalles.length} paquetes entregados y el Settlement dice ${packagesOficial}. La diferencia suele ser paquetes no entregados (que SpeedX no paga).`)
+
+  return {
+    carrier: 'speedx',
+    formatoNuevo: true,
+    nombreArchivo,
+    fleet,
+    ciudad,
+    semana, fechaInicioISO, fechaFinISO,
+    detalles, claims, refunds, driverSummary, oficial,
+    verificacion, avisos,
+  }
+}
+
 // ── Parser principal ─────────────────────────────────────────────────────────
 // arrayBuffer → { detalles, claims, driverSummary, oficial, semana, fechas,
 //                 ciudad, fleet, verificacion, avisos }
 export function procesarArchivoSpeedX(arrayBuffer, nombreArchivo = '') {
   const wb = XLSX.read(arrayBuffer, { type: 'array', raw: true })
+  // FORMATO NUEVO (DFW TTC 2026+): hojas "Delivery Data" + "Settlement" /
+  // "Driver Rate Pivot". El viejo trae "PLD" + "DSP Summary". Se detecta por las
+  // hojas y se usa el parser correspondiente (las otras ciudades que aún no hayan
+  // actualizado siguen usando el formato viejo sin cambios).
+  const tieneHoja = (n) => wb.SheetNames.some((s) => norm(s) === norm(n) || norm(s).includes(norm(n)))
+  if (tieneHoja('Delivery Data') && (tieneHoja('Settlement') || tieneHoja('Driver Rate Pivot'))) {
+    return procesarSpeedXNuevo(wb, nombreArchivo)
+  }
   const avisos = []
 
   // ── 1) PLD: detalle por paquete ──────────────────────────────────────────
   const wsPld = hoja(wb, 'PLD')
-  if (!wsPld) throw new Error('El archivo no trae la hoja "PLD" (detalle por paquete). ¿Es la factura de SpeedX?')
+  if (!wsPld) throw new Error('El archivo no trae la hoja "PLD" (detalle por paquete). ¿Es la factura de SpeedX? (tampoco es el formato nuevo con "Delivery Data").')
   const mPld = filasMatriz(wsPld)
   const iP = indices(mPld[0], [
     ['poe', ['POE'], 0],
