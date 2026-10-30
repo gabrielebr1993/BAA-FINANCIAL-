@@ -36,7 +36,7 @@
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, AlertTriangle, XCircle, MapPin } from 'lucide-react'
-import { collection, doc, onSnapshot, query, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, doc, getCountFromServer, getDocs, limit, onSnapshot, query, runTransaction, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
@@ -91,6 +91,34 @@ function enRango(fecha, desde, hasta) {
 // No inventa fotos ni estados: si un documento trae menos de 3 fotos, se
 // muestra tal cual y la tarjeta avisa cuántas trae (n/3).
 const ROLES_FOTO = ['etiqueta', 'en_sitio', 'numero']
+
+// Modo flujo SIN COLA (Piso 1): tipos y criterio corto por tipo, tomados
+// de la guía BAA y los criterios GF POD ya cargados en esta pantalla.
+const TIPOS_FLUJO = ['Casa', 'Apartamento', 'Apartamento / Condo', 'En persona', 'Comercial', 'Escuela / Hospital', 'Locker', 'Mail room', 'Granja / Montaña', 'PUDO', 'Punto de recogida', 'Negocio / Otro']
+const CRITERIO_EN_SITIO = {
+  Casa: 'Casa: paquete en la puerta de la casa, puerta completa visible, no en zona pública lejos de la puerta.',
+  Apartamento: 'Apartamento: paquete con la puerta completa y el número de apartamento visible.',
+  'Apartamento / Condo': 'Apartamento/condo: paquete con puerta y número; prioridad puerta > recepción > sala de correo > zona de buzones dentro de la puerta.',
+  'En persona': 'En persona: paquete entregado al cliente, manos visibles, nunca la cara ni documentos.',
+  Comercial: 'Comercial: etiqueta hacia arriba en recepción o con el personal, entorno de trabajo visible; negocio cerrado NO se deja fuera.',
+  'Escuela / Hospital': 'Escuela/hospital: paquete en el punto de recogida autorizado con logo identificable; hace falta foto exterior del punto.',
+  Locker: 'Locker: pantalla con nombre y unidad del cliente y paquete dentro del locker abierto; si la pantalla no muestra nombre y unidad, no se deposita.',
+  'Mail room': 'Mail room: paquete en el estante/rack de la sala de correo autorizada, con el exterior de la sala o entrada principal.',
+  'Granja / Montaña': 'Granja/montaña: lugar protegido, prioridad dentro de la barandilla > debajo del buzón; nunca dentro del buzón.',
+  PUDO: 'PUDO: proceso de entrega en el punto visible, paquetes escaneados y almacenados uno por uno.',
+  'Punto de recogida': 'Punto de recogida: nunca USPS/PO BOX ni Amazon locker; punto autorizado e identificable.',
+  'Negocio / Otro': 'Negocio/otro: lugar seguro no visible desde la calle, con exterior y número del lugar.',
+}
+function criterioFlujo(tipo) {
+  return {
+    etiqueta: 'Etiqueta clara: código de barras y número de seguimiento visibles, sin borrosidad, y coincide con esta guía.',
+    en_sitio: CRITERIO_EN_SITIO[tipo] || CRITERIO_EN_SITIO['Negocio / Otro'],
+    numero: (tipo === 'Apartamento' || tipo === 'Apartamento / Condo')
+      ? 'Apartamento: número de puerta claro; además edificio y entrada del condo con número y nombre cuando aplique.'
+      : 'Número de casa/edificio claro y enfocado; si no hay número, captura de Google Maps o panorámica que pruebe la dirección.',
+  }
+}
+const TITULOS_FOTO = { etiqueta: 'Foto 1 · Etiqueta', en_sitio: 'Foto 2 · Paquete en sitio', numero: 'Foto 3 · Número / dirección' }
 function normalizarFoto(f, i) {
   return {
     rol: ROLES_FOTO[i] || f?.rol || 'foto',
@@ -248,12 +276,16 @@ export default function VerificacionPod() {
   // pantalla rompe con error de inicialización en producción.
   const [progresoEnVivo, setProgresoEnVivo] = useState(null)
   const [progresoSitiosEnVivo, setProgresoSitiosEnVivo] = useState(null)
+  const [colaSitiosEnVivo, setColaSitiosEnVivo] = useState(null)
   const progresoAnalisis = progresoEnVivo || ajustes?.analisisPodHoy || null
   // Progreso POR CIUDAD (2026-10-29): el trabajo por sitios escribe en
   // settings/{companyId}.analisisPodHoySitios un mapa sitio -> {porcentaje,
   // estado, entregadas, enProgreso, calificadas, total, actualizadas}. Así
   // en MilePay se ve el avance de cada ciudad a la vez, no un solo %.
   const progresoSitios = progresoSitiosEnVivo || ajustes?.analisisPodHoySitios || null
+  // PISO 1 (cola, 2026-10-29): totales del índice/cola por sitio, escritos
+  // en settings/{companyId}.colaPodHoySitios por el importador de índice.
+  const colaSitios = colaSitiosEnVivo || ajustes?.colaPodHoySitios || null
   // conteoPorSitio va DESPUÉS de la declaración de reales (fix PR #12):
   // si queda aquí, rompe en producción con error de inicialización.
   useEffect(() => {
@@ -288,6 +320,20 @@ export default function VerificacionPod() {
   const [seleccion, setSeleccion] = useState([]) // ids de entregas filtradas
   const [mensajeLote, setMensajeLote] = useState(null)
   const [procesandoLote, setProcesandoLote] = useState(false)
+  // Importador de índice (Piso 1): sitio, fecha, avance y mensajes.
+  const [impSitio, setImpSitio] = useState('DFW-BAA')
+  const [impFecha, setImpFecha] = useState(() => fechaLocal(new Date()))
+  const [importandoCola, setImportandoCola] = useState(false)
+  const [mensajeCola, setMensajeCola] = useState(null)
+  const [progresoCola, setProgresoCola] = useState(null)
+  // Modo flujo SIN COLA: la entrega tomada ahora mismo y su captura.
+  const [flujoSitio, setFlujoSitio] = useState('DFW-BAA')
+  const [flujoActual, setFlujoActual] = useState(null)
+  const [flujoTipo, setFlujoTipo] = useState('Casa')
+  const [flujoFotos, setFlujoFotos] = useState(() => ROLES_FOTO.map(() => ({ estado: 'verde', motivo: '' })))
+  const [flujoPendientes, setFlujoPendientes] = useState(null)
+  const [flujoMsg, setFlujoMsg] = useState(null)
+  const [flujoOcupado, setFlujoOcupado] = useState(false)
 
   // Carga real EN TIEMPO REAL (2026-10-29): onSnapshot en vez de una sola
   // lectura. Así, si se verifican 1500 entregas y luego aparecen 800 sin
@@ -323,6 +369,7 @@ export default function VerificacionPod() {
     return onSnapshot(doc(db, 'settings', companyId), (snap) => {
       setProgresoEnVivo(snap.exists() ? (snap.data()?.analisisPodHoy || null) : null)
       setProgresoSitiosEnVivo(snap.exists() ? (snap.data()?.analisisPodHoySitios || null) : null)
+      setColaSitiosEnVivo(snap.exists() ? (snap.data()?.colaPodHoySitios || null) : null)
     }, () => {})
   }, [companyId])
 
@@ -482,6 +529,186 @@ export default function VerificacionPod() {
     }
   }
 
+  // ── PISO 1 · Importador de índice (cola) ─────────────────────────────────
+  // Separa "estar en MilePay" de "estar calificado": importa la lista
+  // maestra de guías de un sitio (exportación de Gofo en Excel/CSV, o un
+  // CSV con una guía por línea) a la colección gofoQueue, UN documento
+  // por guía, SIN calificaciones. La calificación sigue llegando por
+  // podVerifications; la cola solo dice qué existe y qué falta. Escribe
+  // en lotes y al final cuenta los documentos reales de ese sitio con
+  // getCountFromServer y guarda el total en
+  // settings/{companyId}.colaPodHoySitios. Nada de pagos ni claims.
+  const importarIndice = async (file) => {
+    if (!file || !companyId || importandoCola) return
+    setImportandoCola(true)
+    setMensajeCola(null)
+    setProgresoCola(0)
+    try {
+      const XLSX = await import('xlsx')
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      if (!filas.length) throw new Error('El archivo no trae filas legibles.')
+      let hIdx = filas.findIndex((f) => f.some((c) => /waybill|tracking|gu[ií]a|awb/i.test(String(c))))
+      let colGuia = 0
+      let colCourier = -1
+      if (hIdx >= 0) {
+        colGuia = filas[hIdx].findIndex((c) => /waybill|tracking|gu[ií]a|awb/i.test(String(c)))
+        colCourier = filas[hIdx].findIndex((c) => /courier|driver|chofer|repartidor/i.test(String(c)))
+      } else {
+        hIdx = -1 // sin encabezado: primera columna = guía
+      }
+      const datos = filas.slice(hIdx + 1)
+      const unicos = new Map()
+      datos.forEach((f) => {
+        const w = String(f[colGuia] ?? '').trim().toUpperCase()
+        if (!/^[A-Z0-9]{8,}$/.test(w)) return
+        if (!unicos.has(w)) {
+          unicos.set(w, {
+            waybill: w,
+            courier: colCourier >= 0 ? String(f[colCourier] ?? '').trim() || null : null,
+          })
+        }
+      })
+      if (!unicos.size) {
+        const encabezados = (filas[0] || []).map((c) => String(c)).filter(Boolean).join(' | ')
+        throw new Error(`No encontré ninguna guía válida. Primera fila del archivo: ${encabezados || '(vacía)'}. Si Gofo cambió los encabezados, pásame esa fila y ajusto el importador.`)
+      }
+      const yaCalificadas = new Set(reales.map((e) => e.waybill))
+      const lista = Array.from(unicos.values())
+      for (let i = 0; i < lista.length; i += 400) {
+        const lote = writeBatch(db)
+        lista.slice(i, i + 400).forEach((g) => {
+          lote.set(doc(db, 'gofoQueue', `${companyId}__${g.waybill}`), {
+            companyId,
+            carrier: 'gofo',
+            site: impSitio,
+            waybill: g.waybill,
+            courier: g.courier,
+            fechaEntrega: impFecha,
+            estado: yaCalificadas.has(g.waybill) ? 'calificada' : 'pendiente',
+            fuente: 'importador-milepay',
+            actualizadoEn: new Date().toISOString(),
+          }, { merge: true })
+        })
+        await lote.commit()
+        setProgresoCola(Math.round((Math.min(i + 400, lista.length) / lista.length) * 100))
+      }
+      const conteo = await getCountFromServer(query(collection(db, 'gofoQueue'), where('companyId', '==', companyId), where('site', '==', impSitio)))
+      const totalCola = conteo.data().count
+      await updateDoc(doc(db, 'settings', companyId), {
+        [`colaPodHoySitios.${impSitio}`]: { total: totalCola, fecha: impFecha, actualizadoEn: new Date().toISOString() },
+      })
+      setMensajeCola(`Índice importado para ${impSitio}: ${lista.length} guías del archivo escritas en la cola; el índice de ese sitio tiene ${totalCola} guías en total. Las ya calificadas quedaron marcadas; el resto queda pendiente de calificar, sin inventar ninguna calificación.`)
+    } catch (err) {
+      setMensajeCola(`No se pudo importar el índice: ${err?.message || 'error desconocido'}.`)
+    } finally {
+      setImportandoCola(false)
+      setProgresoCola(null)
+    }
+  }
+
+  // ── MODO FLUJO · SIN COLA ────────────────────────────────────────────────
+  // Nada de listas de exclusión por tanda ni esperas: quien califica pide
+  // LA SIGUIENTE pendiente de la cola y el sistema la marca "tomada" en
+  // una transacción, para que ningún otro agente o persona la repita.
+  // Si al abrir una guía su documento ya existe, ya está revisada: se
+  // salta al instante y se toma la siguiente. Una tras otra, sin cola.
+  const contarFlujo = async (s) => {
+    try {
+      const c = await getCountFromServer(query(collection(db, 'gofoQueue'), where('companyId', '==', companyId), where('site', '==', s), where('estado', '==', 'pendiente')))
+      setFlujoPendientes(c.data().count)
+    } catch { setFlujoPendientes(null) }
+  }
+  const tomarSiguiente = async () => {
+    if (!companyId) return
+    setFlujoOcupado(true)
+    setFlujoMsg(null)
+    try {
+      const snap = await getDocs(query(collection(db, 'gofoQueue'), where('companyId', '==', companyId), where('site', '==', flujoSitio), where('estado', '==', 'pendiente'), limit(10)))
+      let tomada = null
+      for (const d of snap.docs) {
+        const ref = d.ref
+        const ok = await runTransaction(db, async (tx) => {
+          const cur = await tx.get(ref)
+          if (!cur.exists() || cur.data().estado !== 'pendiente') return false
+          tx.update(ref, { estado: 'tomada', tomadaPor: user?.uid || 'staff', tomadaEn: new Date().toISOString() })
+          return true
+        })
+        if (ok) {
+          const data = d.data()
+          tomada = { id: d.id, waybill: data.waybill, courier: data.courier || null, site: data.site, fechaEntrega: data.fechaEntrega || impFecha }
+          break
+        }
+      }
+      if (tomada) {
+        setFlujoActual(tomada)
+        setFlujoTipo('Casa')
+        setFlujoFotos(ROLES_FOTO.map(() => ({ estado: 'verde', motivo: '' })))
+        setFlujoMsg(`Tomada ${tomada.waybill}: quedó marcada como tomada, nadie más la puede tomar. Mírala en Gofo con el enlace y califica sus 3 fotos aquí mismo.`)
+      } else {
+        setFlujoActual(null)
+        setFlujoMsg(`No hay pendientes por tomar en ${flujoSitio} en este momento: o se acabaron o las primeras ya las tomó otro.`)
+      }
+      await contarFlujo(flujoSitio)
+    } catch (err) {
+      setFlujoMsg(`No se pudo tomar la siguiente: ${err?.message || 'error'}. Si habla de permisos, falta publicar la regla de gofoQueue.`)
+    } finally {
+      setFlujoOcupado(false)
+    }
+  }
+  const guardarFlujo = async () => {
+    if (!flujoActual) return
+    if (flujoFotos.some((f) => !f.motivo.trim())) { setFlujoMsg('Falta el motivo de alguna foto: escribe en cada una lo que realmente viste en Gofo, sin inventar.'); return }
+    setFlujoOcupado(true)
+    setFlujoMsg(null)
+    try {
+      const crit = criterioFlujo(flujoTipo)
+      const fotos = ROLES_FOTO.map((rol, i) => ({
+        rol, titulo: TITULOS_FOTO[rol], estado: flujoFotos[i].estado,
+        motivo: flujoFotos[i].motivo.trim(), criterio: crit[rol], url: null,
+      }))
+      const lote = writeBatch(db)
+      lote.set(doc(db, 'podVerifications', flujoActual.id), {
+        companyId, carrier: 'gofo', site: flujoActual.site, waybill: flujoActual.waybill,
+        courier: flujoActual.courier, tipo: flujoTipo, fechaEntrega: flujoActual.fechaEntrega,
+        origen: 'portal-gofo', gofoUrl: 'https://dms.gofoexpress.com/login',
+        revision: 'pendiente', revisionPor: null, revisionEn: null, fotos,
+      })
+      lote.update(doc(db, 'gofoQueue', flujoActual.id), { estado: 'calificada', calificadaEn: new Date().toISOString() })
+      await lote.commit()
+      const wb = flujoActual.waybill
+      setFlujoActual(null)
+      setFlujoMsg(`Guardada ${wb}: ya está en MilePay y en la cola quedó como calificada. Tomando la siguiente…`)
+      setFlujoOcupado(false)
+      await tomarSiguiente()
+    } catch (err) {
+      setFlujoMsg(`No se pudo guardar: ${err?.message || 'error'}. La entrega sigue tomada por ti; reintenta o libérala.`)
+      setFlujoOcupado(false)
+    }
+  }
+  const liberarFlujo = async (bloqueada) => {
+    if (!flujoActual) return
+    setFlujoOcupado(true)
+    try {
+      await updateDoc(doc(db, 'gofoQueue', flujoActual.id), {
+        estado: bloqueada ? 'bloqueada' : 'pendiente',
+        tomadaPor: null,
+        ultimoProblema: bloqueada ? 'Marcada bloqueada en modo flujo (no se pudo revisar)' : 'Liberada sin calificar en modo flujo',
+      })
+      setFlujoMsg(bloqueada
+        ? `${flujoActual.waybill} quedó bloqueada y fuera del flujo, para revisión posterior. Toma la siguiente cuando quieras.`
+        : `${flujoActual.waybill} volvió a pendientes: otro podrá tomarla.`)
+      setFlujoActual(null)
+      await contarFlujo(flujoSitio)
+    } catch (err) {
+      setFlujoMsg(`No se pudo liberar: ${err?.message || 'error'}.`)
+    } finally {
+      setFlujoOcupado(false)
+    }
+  }
+
   const cambiarDesde = (v) => { setDesde(v); if (v && hasta && v > hasta) setHasta(v) }
   const cambiarHasta = (v) => { setHasta(v); if (v && desde && v < desde) setDesde(v) }
   const limpiarRango = () => { const r = rangoUltimos7Dias(); setDesde(r.desde); setHasta(r.hasta) }
@@ -592,6 +819,142 @@ export default function VerificacionPod() {
             )
           })}
         </div>
+      </Card>
+
+      {/* PISO 1 · Índice / cola del día: qué guías existen en MilePay por
+          ciudad y cuántas faltan por calificar, sin mezclar la cola con
+          las verificadas. El total viene de settings.colaPodHoySitios
+          (lo escribe el importador); si un sitio no tiene índice, se
+          dice tal cual. */}
+      <Card className="mb-5 p-4">
+        <h2 className="font-bold text-brand-navy dark:text-slate-100">Índice del día · Cola de verificación (Piso 1)</h2>
+        <p className="text-xs text-slate-500">
+          La cola guarda la lista maestra de guías por ciudad, sin calificaciones: dice qué existe y qué falta. Pendientes en cola = guías del índice que aún no están calificadas en MilePay. Importa aquí la exportación de Gofo (Excel o CSV) de una ciudad y su lista completa entra de una vez, en lotes.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Ciudad de la exportación</span>
+            <select value={impSitio} onChange={(e) => setImpSitio(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              {SITIOS_GOFO.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Fecha de entrega</span>
+            <input type="date" value={impFecha} onChange={(e) => setImpFecha(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800" />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Archivo de Gofo (.xlsx o .csv)</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              disabled={!modoReal || importandoCola}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importarIndice(f); e.target.value = '' }}
+              className="block text-xs"
+            />
+          </label>
+          {importandoCola ? <span className="text-xs font-semibold text-sky-700">Importando… {progresoCola ?? 0}%</span> : null}
+        </div>
+        {mensajeCola ? <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{mensajeCola}</p> : null}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {SITIOS_GOFO.map((s) => {
+            const c = colaSitios?.[s] || null
+            const total = c && typeof c.total === 'number' ? c.total : null
+            const enMilePay = conteoPorSitio[s] || 0
+            const pendientes = total !== null ? Math.max(0, total - enMilePay) : null
+            return (
+              <div key={s} className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{s}</span>
+                  <span className="text-xs font-bold">{total !== null ? `${pendientes} pendientes en cola` : 'sin índice todavía'}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {total !== null ? `${total} guías en el índice · ${enMilePay} ya calificadas en MilePay` : 'Importa la exportación de esta ciudad para crear su índice.'}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </Card>
+
+      {/* MODO FLUJO · SIN COLA: tomar la siguiente pendiente, calificarla
+          aquí mismo y seguir con la otra, sin listas ni esperas. La
+          entrega tomada se marca en la cola y nadie más la repite. */}
+      <Card className="mb-5 p-4">
+        <h2 className="font-bold text-brand-navy dark:text-slate-100">Modo flujo · Sin cola</h2>
+        <p className="text-xs text-slate-500">
+          Tomas una entrega pendiente, la revisas en Gofo con el enlace, calificas sus 3 fotos aquí y el sistema te da la siguiente. Cada entrega tomada queda marcada para que ningún otro agente la repita, y si una ya está revisada, ni siquiera te la ofrece. Una tras otra, sin lista de espera.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold">Ciudad</span>
+            <select value={flujoSitio} disabled={!!flujoActual} onChange={(e) => { setFlujoSitio(e.target.value); setFlujoPendientes(null); contarFlujo(e.target.value) }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              {SITIOS_GOFO.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <div className="text-sm">
+            <span className="mb-1 block font-semibold">Pendientes por tomar</span>
+            <span className="block py-2 text-sm font-bold">{flujoPendientes === null ? '—' : flujoPendientes}</span>
+          </div>
+          <button type="button" onClick={tomarSiguiente} disabled={!modoReal || flujoOcupado || !!flujoActual} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40">
+            {flujoOcupado ? 'Trabajando…' : 'Tomar la siguiente pendiente'}
+          </button>
+          <button type="button" onClick={() => contarFlujo(flujoSitio)} disabled={flujoOcupado} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+            Actualizar conteo
+          </button>
+        </div>
+        {flujoMsg ? <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{flujoMsg}</p> : null}
+        {flujoActual ? (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm">
+                <strong>{flujoActual.waybill}</strong>
+                {flujoActual.courier ? ` · ${flujoActual.courier}` : ''} · {flujoActual.site} · Entrega {flujoActual.fechaEntrega}
+              </p>
+              <a href="https://dms.gofoexpress.com/login" target="_blank" rel="noreferrer" className="rounded-lg border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Ver fotos en Gofo</a>
+            </div>
+            <label className="mt-3 block text-sm">
+              <span className="mb-1 block font-semibold">Tipo de entrega (según lo que ves en las fotos)</span>
+              <select value={flujoTipo} onChange={(e) => setFlujoTipo(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+                {TIPOS_FLUJO.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <div className="mt-3 grid gap-2">
+              {ROLES_FOTO.map((rol, i) => (
+                <div key={rol} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+                  <span className="w-44 text-xs font-bold">{TITULOS_FOTO[rol]}</span>
+                  <select
+                    value={flujoFotos[i].estado}
+                    onChange={(e) => setFlujoFotos((prev) => prev.map((f, j) => (j === i ? { ...f, estado: e.target.value } : f)))}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+                  >
+                    <option value="verde">🟢 Verde</option>
+                    <option value="amarillo">🟡 Amarillo</option>
+                    <option value="rojo">🔴 Rojo</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={flujoFotos[i].motivo}
+                    onChange={(e) => setFlujoFotos((prev) => prev.map((f, j) => (j === i ? { ...f, motivo: e.target.value } : f)))}
+                    placeholder="Motivo: lo que realmente se ve en esta foto"
+                    className="min-w-52 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">{criterioFlujo(flujoTipo).en_sitio}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={guardarFlujo} disabled={flujoOcupado} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+                Guardar calificación y tomar la siguiente
+              </button>
+              <button type="button" onClick={() => liberarFlujo(false)} disabled={flujoOcupado} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                No pude revisarla, liberarla
+              </button>
+              <button type="button" onClick={() => liberarFlujo(true)} disabled={flujoOcupado} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40">
+                Marcar bloqueada y seguir
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       {/* Filtros: semáforo + ciudad + búsqueda + rango de fechas */}
