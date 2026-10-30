@@ -327,6 +327,10 @@ export default function CargarFacturaSpeedX() {
         ...resumenSinVerif,
         verificacion,
         oficialSpeedX: proc.oficial || null,
+        // REEMBOLSOS (formato nuevo): plata que SpeedX devuelve de claims previos.
+        // Ya está incluida en el total a cobrar (NET). Se guarda para verla por chofer.
+        refundsData: (proc.refunds || []).map((rf) => ({ waybill: rf.waybill, courier: rf.courier, monto: Math.abs(rf.montoGofo), ciudad: rf.ciudad, claimType: rf.claimType, ruta: rf.ruta })),
+        totalRefunds: r2((proc.refunds || []).reduce((a, rf) => a + Math.abs(rf.montoGofo), 0)),
         // FONDO: SpeedX paga la semana con retraso. Control de cobro editable.
         fechaEsperadaCobro: deISO(fechaCobro) || null,
         estadoCobro: 'pendiente',
@@ -704,7 +708,7 @@ export default function CargarFacturaSpeedX() {
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
                 <span className="text-slate-500 dark:text-slate-400">{t('Total oficial de SpeedX (DSP Summary):')}</span>{' '}
                 <b className="text-brand-navy dark:text-slate-100">{money(v.speedx.totalOficial)}</b>
-                <span className="text-slate-400"> · {t('calculado')}: {money(v.totalCalculado)} · {t('ajustes de la semana previa')}: {money((v.speedx.ajustePrevio || 0) + (v.speedx.claimPrevio || 0))}</span>
+                <span className="text-slate-400"> · {t('calculado')}: {money(v.totalCalculado)}{v.sumaRefunds > 0 ? ` · ${t('reembolsos')}: +${money(v.sumaRefunds)}` : ''} · {t('ajustes de la semana previa')}: {money((v.speedx.ajustePrevio || 0) + (v.speedx.claimPrevio || 0))}</span>
               </div>
             )}
             {/* DIAGNÓSTICO cuando NO cuadra: el desglose exacto de la diferencia
@@ -714,7 +718,7 @@ export default function CargarFacturaSpeedX() {
                 <div className="space-y-1">
                   <div><b>{t('¿Por qué no cuadra?')}</b></div>
                   <div>
-                    {t('Mi cálculo:')} {money(v.sumaDetalle)} {t('entregas')} − {money(Math.abs(v.sumaClaims || 0))} {t('claims')} + {money((v.speedx?.ajustePrevio || 0) + (v.speedx?.claimPrevio || 0))} {t('ajustes previos')} = <b>{money(v.totalCalculado)}</b>
+                    {t('Mi cálculo:')} {money(v.sumaDetalle)} {t('entregas')} − {money(Math.abs(v.sumaClaims || 0))} {t('claims')}{v.sumaRefunds > 0 ? ` + ${money(v.sumaRefunds)} ${t('reembolsos')}` : ''} + {money((v.speedx?.ajustePrevio || 0) + (v.speedx?.claimPrevio || 0))} {t('ajustes previos')} = <b>{money(v.totalCalculado)}</b>
                     {' '}· {t('Total oficial:')} <b>{money(v.speedx?.totalOficial || 0)}</b> · {t('Diferencia:')} <b>{money(v.difMonto || 0)}</b>
                   </div>
                   <div>
@@ -727,6 +731,44 @@ export default function CargarFacturaSpeedX() {
               </Aviso>
             )}
           </Card>
+
+          {/* REEMBOLSOS (Refunds) por chofer — solo formato nuevo de SpeedX */}
+          {proc.refunds?.length > 0 && (() => {
+            const porCh = {}
+            for (const rf of proc.refunds) { const k = rf.courier || '—'; porCh[k] = porCh[k] || { n: 0, total: 0 }; porCh[k].n++; porCh[k].total += Math.abs(rf.montoGofo) }
+            const filas = Object.entries(porCh).map(([courier, vv]) => ({ courier, ...vv })).sort((a, b) => b.total - a.total)
+            const total = filas.reduce((a, f) => a + f.total, 0)
+            return (
+              <Card className="mb-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600/10 text-emerald-600"><DollarSign size={17} /></span>
+                  <div className="min-w-0">
+                    <div className="font-bold text-brand-navy dark:text-slate-100">{t('Reembolsos (Refunds)')} <Badge color="green">{proc.refunds.length}</Badge></div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{t('Plata que SpeedX te DEVUELVE de claims previos. Ya está sumada al total a cobrar.')}</div>
+                  </div>
+                  <span className="ml-auto text-lg font-bold text-emerald-600">+{money(total)}</span>
+                </div>
+                <div className="scroll-thin max-h-56 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800"><tr>
+                      <th className="px-3 py-2 text-left font-semibold">{t('Chofer')}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t('Reembolsos')}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t('Monto')}</th>
+                    </tr></thead>
+                    <tbody>
+                      {filas.map((f) => (
+                        <tr key={f.courier} className="border-t border-slate-100 dark:border-slate-700/50">
+                          <td className="px-3 py-1.5">{f.courier}</td>
+                          <td className="px-3 py-1.5 text-right">{num(f.n)}</td>
+                          <td className="px-3 py-1.5 text-right font-semibold text-emerald-600">+{money(f.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )
+          })()}
 
           {/* 3) FONDO: cuándo nos paga SpeedX esta semana (editable) */}
           <Card className="mb-4">

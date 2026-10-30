@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
 import { useData } from '../DataContext'
 import { perdonarClaim, quitarPerdon, decidirClaimRepetido, perdonarVarios, quitarPerdonVarios, cambiarMetodoClaim, cambiarMetodoVarios } from '../utils/claims'
-import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, detectarTrackingDuplicado, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria } from '../utils/calc'
+import { porCiudad, claimsDeCiudad, claimsValidos, detectarClaimsRepetidos, detectarTrackingDuplicado, feeDeClaim, metodoDe, categoriaClaim, etiquetaCategoria, TODAS } from '../utils/calc'
 import { nombreCiudad } from '../constants'
 import { money, num } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
-import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X, FileSpreadsheet, FileText } from 'lucide-react'
+import { AlertTriangle, Handshake, Ban, Percent, TrendingDown, Copy, Check, X, FileSpreadsheet, FileText, DollarSign, ChevronDown } from 'lucide-react'
 import { Card, KPI, PageTitle, Boton, Tabla, Badge, Input, Select, Cargando, EstadoVacio } from '../components/ui'
 import { useLang } from '../i18n'
 import { conCarrier } from '../utils/carrierTexto'
@@ -20,7 +20,8 @@ export default function Claims() {
   // de "Descuento a choferes" y "Te descontó Gofo".
   const verGofo = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const ocultarGofo = !verGofo
-  const { claims, facturaRango: selectedInvoice, selectedCity, reloadClaims, cargando } = useData()
+  const { claims, facturaRango: selectedInvoice, selectedCity, invoicesRango, reloadClaims, cargando } = useData()
+  const [verRefunds, setVerRefunds] = useState(false)
   const [fCourier, setFCourier] = useState('')
   const [fTipo, setFTipo] = useState('')
   const [fEstado, setFEstado] = useState('')
@@ -33,6 +34,25 @@ export default function Claims() {
   const [motivoLote, setMotivoLote] = useState('')
 
   const base = useMemo(() => claimsDeCiudad(claims, selectedCity, selectedInvoice), [claims, selectedCity, selectedInvoice])
+  // REEMBOLSOS (Refunds de SpeedX, formato nuevo): plata que SpeedX DEVUELVE. Se
+  // guardan en cada factura (refundsData); aquí se juntan del rango y se agrupan por
+  // chofer. No se "cobran" a nadie: solo se muestran para tener la cuenta clara.
+  const refunds = useMemo(() => {
+    const out = []
+    for (const inv of (invoicesRango || [])) {
+      for (const rf of (inv.refundsData || [])) {
+        if (selectedCity && selectedCity !== TODAS && (rf.ciudad || inv.ciudad) !== selectedCity) continue
+        out.push({ ...rf, semana: inv.semana })
+      }
+    }
+    return out
+  }, [invoicesRango, selectedCity])
+  const refundsPorChofer = useMemo(() => {
+    const m = {}
+    for (const rf of refunds) { const k = rf.courier || '—'; m[k] = m[k] || { n: 0, total: 0 }; m[k].n++; m[k].total += Math.abs(rf.monto || 0) }
+    return Object.entries(m).map(([courier, vv]) => ({ courier, ...vv })).sort((a, b) => b.total - a.total)
+  }, [refunds])
+  const totalRefunds = useMemo(() => refunds.reduce((a, rf) => a + Math.abs(rf.monto || 0), 0), [refunds])
   const couriers = useMemo(() => [...new Set(base.map((c) => c.courier))].sort(), [base])
   const tipos = useMemo(() => [...new Set(base.map((c) => c.claimType).filter(Boolean))].sort(), [base])
 
@@ -197,6 +217,41 @@ export default function Claims() {
   return (
     <div>
       <PageTitle>{t('Claims')}</PageTitle>
+
+      {/* REEMBOLSOS (Refunds de SpeedX): plata que SpeedX DEVUELVE, por chofer. */}
+      {refunds.length > 0 && (
+        <Card className="mb-4 border border-emerald-200 p-4 dark:border-emerald-500/30">
+          <button onClick={() => setVerRefunds((o) => !o)} className="flex w-full items-center gap-2 text-left">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600/10 text-emerald-600"><DollarSign size={17} /></span>
+            <div className="min-w-0">
+              <div className="font-bold text-brand-navy dark:text-slate-100">{t('Reembolsos (Refunds)')} <Badge color="green">{refunds.length}</Badge></div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('Plata que SpeedX te DEVUELVE de claims previos. Ya está incluida en lo que cobras; aquí la ves por chofer.')}</div>
+            </div>
+            <span className="ml-auto text-lg font-bold text-emerald-600">+{money(totalRefunds)}</span>
+            <ChevronDown size={18} strokeWidth={2} className={`transition ${verRefunds ? 'rotate-180' : ''}`} />
+          </button>
+          {verRefunds && (
+            <div className="scroll-thin mt-3 max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700/60">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800"><tr>
+                  <th className="px-3 py-2 text-left font-semibold">{t('Chofer')}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t('Reembolsos')}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{t('Monto')}</th>
+                </tr></thead>
+                <tbody>
+                  {refundsPorChofer.map((f) => (
+                    <tr key={f.courier} className="border-t border-slate-100 dark:border-slate-700/50">
+                      <td className="px-3 py-1.5">{f.courier}</td>
+                      <td className="px-3 py-1.5 text-right">{num(f.n)}</td>
+                      <td className="px-3 py-1.5 text-right font-semibold text-emerald-600">+{money(f.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       {cargando ? (
         <Cargando texto={t('Cargando claims…')} />
