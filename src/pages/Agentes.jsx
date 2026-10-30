@@ -17,6 +17,23 @@
 // sin calificar (calificadas < entregadas) o cuando su porcentaje es
 // < 100; en otro caso se muestra "sin pendientes". No se toca pago,
 // claims, facturas ni datos de choferes. Solo lectura.
+// Oleadas: settings/{companyId}.agentesOleadas guarda, por ciudad,
+// cuántos agentes se han lanzado (lanzados) y cuántos forman la
+// oleada activa (activos), y en cuántos tramos (30) se divide el
+// trabajo de cada ciudad. La pantalla muestra esos conteos reales;
+// si aún no hay reporte de oleadas, muestra solo la primera oleada
+// (1 agente lanzado por ciudad), que es lo que existía al crear la
+// pantalla. En el mapa se dibuja un punto en movimiento por cada
+// agente activo de una ciudad que está trabajando (máximo 3 puntos
+// por ciudad, solo por claridad visual).
+// Buscadores en Gofo: además de los puntos azules ciudad -> MilePay,
+// la gráfica muestra puntos VERDES viajando entre Gofo y MilePay y
+// un halo alrededor de Gofo mientras hay ciudades trabajando. Esos
+// puntos representan a los agentes que en ese momento buscan la
+// info en Gofo y la traen a MilePay; su número en el texto
+// (totalBuscandoEnGofo) es la suma de los agentes activos de las
+// ciudades que están trabajando. En el mapa se dibujan como máximo
+// 5 puntos verdes, también solo por claridad visual.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Bot } from 'lucide-react'
@@ -50,6 +67,8 @@ export default function Agentes() {
   const companyId = activeCompanyId || companyIdPerfil
   const [reales, setReales] = useState([])
   const [progresoSitios, setProgresoSitios] = useState(null)
+  const [oleadas, setOleadas] = useState(null)
+  const [colaSitios, setColaSitios] = useState(null)
 
   useEffect(() => {
     if (!companyId || carrier !== 'gofo') return undefined
@@ -68,7 +87,10 @@ export default function Agentes() {
   useEffect(() => {
     if (!companyId) return undefined
     return onSnapshot(doc(db, 'settings', companyId), (snap) => {
-      setProgresoSitios(snap.exists() ? (snap.data()?.analisisPodHoySitios || null) : null)
+      const data = snap.exists() ? (snap.data() || {}) : {}
+      setProgresoSitios(data.analisisPodHoySitios || null)
+      setOleadas(data.agentesOleadas || null)
+      setColaSitios(data.colaPodHoySitios || null)
     }, () => {})
   }, [companyId])
 
@@ -85,6 +107,7 @@ export default function Agentes() {
     return c
   }, [reales])
 
+  const tramosTotales = typeof oleadas?.tramosPorCiudad === 'number' ? oleadas.tramosPorCiudad : 30
   const agentes = SITIOS_GOFO.map((s, i) => {
     const p = progresoSitios?.[s] || ajustes?.analisisPodHoySitios?.[s] || null
     const m = porSitio[s] || { enMilePay: 0, verificadas: 0, enRevision: 0 }
@@ -92,17 +115,34 @@ export default function Agentes() {
     const calificadas = typeof p?.calificadas === 'number' ? p.calificadas : m.enMilePay
     const pct = typeof p?.porcentaje === 'number' ? Math.max(0, Math.min(100, p.porcentaje)) : null
     const trabajando = p ? (entregadas === null || calificadas < entregadas || (pct !== null && pct < 100)) : false
-    return { sitio: s, i, p, m, entregadas, calificadas, pct, trabajando }
+    const ol = oleadas?.porCiudad?.[s] || null
+    const lanzados = typeof ol?.lanzados === 'number' ? ol.lanzados : 1
+    const activos = typeof ol?.activos === 'number' ? ol.activos : 1
+    const coberturaTramos = entregadas && entregadas > 0
+      ? Math.min(tramosTotales, Math.ceil((m.enMilePay / entregadas) * tramosTotales))
+      : 0
+    const colaTotal = typeof colaSitios?.[s]?.total === 'number' ? colaSitios[s].total : null
+    const pendientesCola = colaTotal !== null ? Math.max(0, colaTotal - m.enMilePay) : null
+    return { sitio: s, i, p, m, entregadas, calificadas, pct, trabajando, lanzados, activos, coberturaTramos, colaTotal, pendientesCola }
   })
   const trabajandoCount = agentes.filter((a) => a.trabajando).length
+  const totalLanzados = agentes.reduce((n, a) => n + (a.lanzados || 0), 0)
+  const totalActivos = agentes.reduce((n, a) => n + (a.activos || 0), 0)
+  const totalBuscandoEnGofo = agentes.filter((a) => a.trabajando).reduce((n, a) => n + (a.activos || 0), 0)
+  const totalCola = agentes.reduce((n, a) => n + (a.colaTotal || 0), 0)
+  const totalPendientesCola = agentes.reduce((n, a) => n + (a.pendientesCola || 0), 0)
+  const hayCola = agentes.some((a) => a.colaTotal !== null)
 
   return (
     <div>
       <PageTitle titulo="Agentes en vivo" subtitulo="Mapa interactivo: Gofo → agentes por ciudad → MilePay. Los puntos se mueven solo en las ciudades que están trabajando; los números son reales, en tiempo real, sin recargar." />
       <Card className="mb-5 p-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          <strong>{trabajandoCount} de 11 agentes trabajando</strong> · {reales.length} entregas en MilePay en total · MilePay en el centro, Gofo a la derecha, cada agente a la izquierda con su camino.
+          <strong>{trabajandoCount} de 11 ciudades trabajando</strong> · {totalBuscandoEnGofo} agentes buscando info en Gofo ahora y trayéndola a MilePay · {totalLanzados} agentes lanzados en oleadas · {totalActivos} en oleada activa · Trabajo dividido en {tramosTotales} tramos por ciudad · {reales.length} entregas en MilePay en total{hayCola ? ` · ${totalCola} guías en el índice (cola) · ${totalPendientesCola} pendientes en cola` : ''} · MilePay en el centro, Gofo a la derecha, cada agente a la izquierda con su camino.
         </p>
+        {oleadas?.actualizadoEn ? (
+          <p className="mt-1 text-xs text-slate-500">Último reporte de oleadas: {String(oleadas.actualizadoEn)}</p>
+        ) : null}
         <svg viewBox="0 0 1000 560" className="mt-3 w-full rounded-xl bg-slate-50 dark:bg-slate-900" role="img" aria-label="Mapa de agentes entre Gofo y MilePay">
           {/* Caminos Gofo -> MilePay y ciudad -> MilePay */}
           {agentes.map((a) => {
@@ -111,11 +151,11 @@ export default function Agentes() {
               <g key={a.sitio}>
                 <path d={`M ${x + 40} ${y} Q 400 ${y} ${MILEPAY[0] - 60} ${MILEPAY[1]}`} fill="none" stroke={a.trabajando ? '#0ea5e9' : '#cbd5e1'} strokeWidth={a.trabajando ? 3 : 1.5} strokeDasharray={a.trabajando ? '0' : '6 6'} />
                 <path d={`M ${MILEPAY[0] + 60} ${MILEPAY[1]} Q 700 ${MILEPAY[1]} ${GOFO[0] - 60} ${GOFO[1]}`} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="6 6" />
-                {a.trabajando && (
-                  <circle r="7" fill="#0ea5e9">
-                    <animateMotion dur={`${4 + (a.i % 5)}s`} repeatCount="indefinite" path={`M ${x + 40} ${y} Q 400 ${y} ${MILEPAY[0] - 60} ${MILEPAY[1]}`} />
+                {a.trabajando && Array.from({ length: Math.max(1, Math.min(a.activos, 3)) }).map((_, di) => (
+                  <circle key={di} r={di === 0 ? 7 : 5} fill="#0ea5e9">
+                    <animateMotion dur={`${4 + ((a.i + di * 2) % 5)}s`} begin={`${-di * 1.7}s`} repeatCount="indefinite" path={`M ${x + 40} ${y} Q 400 ${y} ${MILEPAY[0] - 60} ${MILEPAY[1]}`} />
                   </circle>
-                )}
+                ))}
                 <g>
                   <rect x={x - 10} y={y - 16} width="110" height="32" rx="8" fill={a.trabajando ? '#e0f2fe' : '#f1f5f9'} stroke={a.trabajando ? '#0ea5e9' : '#cbd5e1'} />
                   <text x={x + 45} y={y + 5} textAnchor="middle" fontSize="13" fontWeight="700" fill="#0f172a">{a.sitio}</text>
@@ -123,6 +163,18 @@ export default function Agentes() {
               </g>
             )
           })}
+          {/* Agentes buscando info en Gofo y trayéndola a MilePay */}
+          {trabajandoCount > 0 && (
+            <circle cx={GOFO[0]} cy={GOFO[1]} r="58" fill="none" stroke="#059669" strokeWidth="2">
+              <animate attributeName="r" values="54;68;54" dur="3s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.5;0.1;0.5" dur="3s" repeatCount="indefinite" />
+            </circle>
+          )}
+          {totalBuscandoEnGofo > 0 && Array.from({ length: Math.min(totalBuscandoEnGofo, 5) }).map((_, di) => (
+            <circle key={`gofo-${di}`} r="6" fill="#059669">
+              <animateMotion dur={`${5 + (di % 3)}s`} begin={`${-di * 1.1}s`} repeatCount="indefinite" path={`M ${GOFO[0] - 80} ${GOFO[1]} Q 700 ${GOFO[1]} ${MILEPAY[0] + 80} ${MILEPAY[1]}`} />
+            </circle>
+          ))}
           {/* Nodos MilePay y Gofo */}
           <g>
             <rect x={MILEPAY[0] - 70} y={MILEPAY[1] - 40} width="140" height="80" rx="14" fill="#0f172a" />
@@ -135,7 +187,7 @@ export default function Agentes() {
             <text x={GOFO[0]} y={GOFO[1] + 20} textAnchor="middle" fontSize="12" fill="#d1fae5">portal, solo consulta</text>
           </g>
         </svg>
-        <p className="mt-2 text-xs text-slate-500">Leyenda: punto azul moviéndose = agente trabajando en esa ciudad. Línea gris punteada = ciudad sin datos todavía o sin pendientes. Toca una ciudad abajo para ver sus números.</p>
+        <p className="mt-2 text-xs text-slate-500">Leyenda: punto azul moviéndose = agente trabajando en esa ciudad. Punto verde moviéndose entre Gofo y MilePay = agente buscando info en Gofo y trayéndola a MilePay, con halo verde alrededor de Gofo mientras busca. Línea gris punteada = ciudad sin datos todavía o sin pendientes. Toca una ciudad abajo para ver sus números.</p>
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {agentes.map((a) => (
@@ -153,10 +205,19 @@ export default function Agentes() {
               {typeof a.p?.enProgreso === 'number' ? ` · ${a.p.enProgreso} en progreso` : ''}
               {` · ${a.m.enMilePay} en MilePay (${a.m.verificadas} verificadas, ${a.m.enRevision} en revisión)`}
             </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {`Agentes: ${a.lanzados} lanzados en oleadas · ${a.activos} en oleada activa · Cobertura ${a.coberturaTramos}/${tramosTotales} tramos (por entregas ya en MilePay)`}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {a.trabajando ? 'En Gofo ahora: buscando info y trayéndola a MilePay.' : 'En Gofo ahora: sin búsqueda activa en esta ciudad.'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {a.colaTotal !== null ? `Índice (cola) en MilePay: ${a.colaTotal} guías · ${a.pendientesCola} pendientes en cola` : 'Índice (cola): sin índice todavía en esta ciudad'}
+            </p>
           </Card>
         ))}
       </div>
-      <p className="mt-3 text-xs text-slate-500">Nota: los agentes que ves aquí son los trabajos por ciudad en Gofo/MilePay. No se crea una entrega dos veces: cada guía tiene un solo documento en MilePay y los agentes saltan las guías ya escritas.</p>
+      <p className="mt-3 text-xs text-slate-500">Nota: los agentes que ves aquí son los trabajos por ciudad en Gofo/MilePay. El conteo de ciudades trabajando llega hasta 11 (una por ciudad); los agentes lanzados en oleadas y los de la oleada activa vienen del reporte agentesOleadas guardado en los ajustes, y cada ciudad divide su trabajo en {tramosTotales} tramos que las oleadas van tomando en orden y en orden inverso. No se crea una entrega dos veces: cada guía tiene un solo documento en MilePay y los agentes saltan las guías ya escritas.</p>
     </div>
   )
 }
