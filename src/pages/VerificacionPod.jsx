@@ -283,6 +283,12 @@ export default function VerificacionPod() {
   // estado, entregadas, enProgreso, calificadas, total, actualizadas}. Así
   // en MilePay se ve el avance de cada ciudad a la vez, no un solo %.
   const progresoSitios = progresoSitiosEnVivo || ajustes?.analisisPodHoySitios || null
+  // Fecha real de los datos de progreso por ciudad: cada entrada puede
+  // guardar su fecha ('YYYY-MM-DD'); si ninguna la guarda, se dice tal
+  // cual en la tarjeta en vez de presentarla como "hoy".
+  const fechasProgresoSitios = SITIOS_GOFO.map((s) => progresoSitios?.[s]?.fecha).filter((f) => typeof f === 'string' && f.length >= 10)
+  const fechaProgresoDatos = fechasProgresoSitios.length ? fechasProgresoSitios[0] : null
+  const progresoEsDeHoy = fechaProgresoDatos !== null && fechaProgresoDatos === fechaLocal(new Date())
   // PISO 1 (cola, 2026-10-29): totales del índice/cola por sitio, escritos
   // en settings/{companyId}.colaPodHoySitios por el importador de índice.
   const colaSitios = colaSitiosEnVivo || ajustes?.colaPodHoySitios || null
@@ -795,7 +801,13 @@ export default function VerificacionPod() {
           sitio aún no tiene datos, dice "sin datos todavía" y muestra
           cuántas entregas de ese sitio ya están en MilePay. */}
       <Card className="mb-5 p-4">
-        <h2 className="font-bold text-brand-navy dark:text-slate-100">Progreso por ciudad · Hoy, en MilePay</h2>
+        <h2 className="font-bold text-brand-navy dark:text-slate-100">Progreso por ciudad{fechaProgresoDatos ? ` · Datos del ${fechaProgresoDatos}` : ' · En MilePay'}</h2>
+        {fechaProgresoDatos && !progresoEsDeHoy ? (
+          <p className="mt-1 text-xs font-semibold text-amber-600">⚠ Estos datos son del {fechaProgresoDatos}, no de hoy. Cuando empiece el trabajo de hoy, cada ciudad escribirá su avance con la fecha de hoy y esta tarjeta cambiará sola.</p>
+        ) : null}
+        {!fechaProgresoDatos ? (
+          <p className="mt-1 text-xs font-semibold text-amber-600">⚠ Estas entradas de progreso todavía no guardan su fecha: corresponden al último alcance trabajado, no necesariamente a hoy.</p>
+        ) : null}
         <p className="text-xs text-slate-500">Todas las ciudades a la vez. El % y los conteos de cada ciudad se actualizan solos cuando el trabajo por sitios escribe su avance en los ajustes.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {SITIOS_GOFO.map((s) => {
@@ -812,7 +824,7 @@ export default function VerificacionPod() {
                   <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  {p ? `${p.estado || 'En curso'}${typeof p.entregadas === 'number' ? ` · ${p.entregadas} entregadas` : ''}${typeof p.enProgreso === 'number' ? ` · ${p.enProgreso} en progreso` : ''}${typeof p.calificadas === 'number' ? ` · ${p.calificadas} calificadas` : ''}` : 'Sin avance reportado todavía'}
+                  {p ? `${p.estado || 'En curso'}${typeof p.entregadas === 'number' ? ` · ${p.entregadas} entregadas` : ''}${typeof p.enProgreso === 'number' ? ` · ${p.enProgreso} en progreso` : ''}${typeof p.calificadas === 'number' ? ` · ${p.calificadas} calificadas` : ''}${typeof p.fecha === 'string' ? ` · datos del ${p.fecha}` : ''}` : 'Sin avance reportado todavía'}
                   {` · ${enMilePay} en MilePay`}
                 </p>
               </div>
