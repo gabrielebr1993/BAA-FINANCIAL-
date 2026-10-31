@@ -123,7 +123,10 @@ export default function Agentes() {
       : 0
     const colaTotal = typeof colaSitios?.[s]?.total === 'number' ? colaSitios[s].total : null
     const pendientesCola = colaTotal !== null ? Math.max(0, colaTotal - m.enMilePay) : null
-    return { sitio: s, i, p, m, entregadas, calificadas, pct, trabajando, lanzados, activos, coberturaTramos, colaTotal, pendientesCola }
+    const segmentos = Array.isArray(ol?.segmentos)
+      ? ol.segmentos.filter((sg) => sg && typeof sg.n === 'string').map((sg) => ({ n: sg.n, e: sg.e === 'trabajando' ? 'trabajando' : 'cerrado' }))
+      : []
+    return { sitio: s, i, p, m, entregadas, calificadas, pct, trabajando, lanzados, activos, coberturaTramos, colaTotal, pendientesCola, segmentos }
   })
   const trabajandoCount = agentes.filter((a) => a.trabajando).length
   const totalLanzados = agentes.reduce((n, a) => n + (a.lanzados || 0), 0)
@@ -132,13 +135,15 @@ export default function Agentes() {
   const totalCola = agentes.reduce((n, a) => n + (a.colaTotal || 0), 0)
   const totalPendientesCola = agentes.reduce((n, a) => n + (a.pendientesCola || 0), 0)
   const hayCola = agentes.some((a) => a.colaTotal !== null)
+  const haySegmentos = agentes.some((a) => a.segmentos.length > 0)
+  const totalSegmentosTrabajando = agentes.reduce((n, a) => n + a.segmentos.filter((sg) => sg.e === 'trabajando').length, 0)
 
   return (
     <div>
       <PageTitle titulo="Agentes en vivo" subtitulo="Mapa interactivo: Gofo → agentes por ciudad → MilePay. Los puntos se mueven solo en las ciudades que están trabajando; los números son reales, en tiempo real, sin recargar." />
       <Card className="mb-5 p-4">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          <strong>{trabajandoCount} de 11 ciudades trabajando</strong> · {totalBuscandoEnGofo} agentes buscando info en Gofo ahora y trayéndola a MilePay · {totalLanzados} agentes lanzados en oleadas · {totalActivos} en oleada activa · Trabajo dividido en {tramosTotales} tramos por ciudad · {reales.length} entregas en MilePay en total{hayCola ? ` · ${totalCola} guías en el índice (cola) · ${totalPendientesCola} pendientes en cola` : ''} · MilePay en el centro, Gofo a la derecha, cada agente a la izquierda con su camino.
+          <strong>{trabajandoCount} de 11 ciudades trabajando</strong> · {totalBuscandoEnGofo} agentes buscando info en Gofo ahora y trayéndola a MilePay · {totalLanzados} agentes lanzados en oleadas · {totalActivos} en oleada activa{haySegmentos ? ` · ${totalSegmentosTrabajando} segmentos de oficina trabajando` : ''} · Trabajo dividido en {tramosTotales} tramos por ciudad · {reales.length} entregas en MilePay en total{hayCola ? ` · ${totalCola} guías en el índice (cola) · ${totalPendientesCola} pendientes en cola` : ''} · MilePay en el centro, Gofo a la derecha, cada agente a la izquierda con su camino.
         </p>
         {oleadas?.actualizadoEn ? (
           <p className="mt-1 text-xs text-slate-500">Último reporte de oleadas: {String(oleadas.actualizadoEn)}</p>
@@ -208,6 +213,16 @@ export default function Agentes() {
             <p className="mt-1 text-xs text-slate-500">
               {`Agentes: ${a.lanzados} lanzados en oleadas · ${a.activos} en oleada activa · Cobertura ${a.coberturaTramos}/${tramosTotales} tramos (por entregas ya en MilePay)`}
             </p>
+            {a.segmentos.length > 0 ? (
+              <div className="mt-1">
+                <p className="text-xs font-semibold text-slate-500">Segmentos de esta oficina (cada agente tiene el suyo):</p>
+                {a.segmentos.map((sg, si) => (
+                  <p key={si} className="text-xs text-slate-500">
+                    <span className={sg.e === 'trabajando' ? 'text-emerald-500' : 'text-slate-300'}>●</span> {sg.n} · {sg.e === 'trabajando' ? 'trabajando' : 'cerrado'}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             <p className="mt-1 text-xs text-slate-500">
               {a.trabajando ? 'En Gofo ahora: buscando info y trayéndola a MilePay.' : 'En Gofo ahora: sin búsqueda activa en esta ciudad.'}
             </p>
