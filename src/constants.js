@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
-  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank, FileClock, Camera,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank, FileClock, Camera, Bot,
 } from 'lucide-react'
 
 // Marca de color
@@ -130,6 +130,7 @@ export const SECCIONES = [
   { path: '/reporte-manual', label: 'Reporte manual', permiso: 'subirFacturas', icon: FileClock, soloCarrier: 'speedx' },
   { path: '/reclamos', label: 'Reclamos a Gofo', permiso: 'verFinanzas', icon: Scale, soloCarrier: 'gofo' },
   { path: '/verificacion', label: 'Verificación', permiso: 'verFinanzas', icon: Camera, soloCarrier: 'gofo' },
+  { path: '/agentes', label: 'Agentes', permiso: 'verFinanzas', icon: Bot, soloCarrier: 'gofo'},
   { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: AlertTriangle },
   { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: Truck },
   { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: Wallet },
