@@ -105,6 +105,40 @@ export default function Choferes() {
     await reloadDrivers()
   }
 
+  // ── AUDITORÍA DE DELIVERY ID (#4) ──
+  // Nombres que traen 2+ Delivery IDs distintos en las facturas = probablemente
+  // personas DISTINTAS fusionadas por tener el mismo nombre (p. ej. dos "Jose
+  // Rodríguez" de ciudades distintas). Se listan para revisarlas de un vistazo.
+  const idsMultiples = useMemo(() => {
+    const out = []
+    for (const [k, ids] of Object.entries(idGofoDetectado)) {
+      if ((ids || []).length > 1) {
+        const d = driversAll.find((x) => normNombre(x.nombre) === k)
+        out.push({ nombre: d?.nombre || k, ids })
+      }
+    }
+    return out.sort((a, b) => b.ids.length - a.ids.length)
+  }, [idGofoDetectado, driversAll])
+  // Choferes SIN ID guardado pero con UN solo ID detectado → se asocian en masa.
+  const sinIdConUno = useMemo(
+    () => driversAll.filter((d) => !String(d.idGofo || '').trim() && (idGofoDetectado[normNombre(d.nombre)] || []).length === 1),
+    [driversAll, idGofoDetectado]
+  )
+  const [backfillando, setBackfillando] = useState(false)
+  const backfillIds = async () => {
+    if (!sinIdConUno.length) return
+    if (!window.confirm(`${t('Asociar el Delivery ID detectado al perfil de')} ${sinIdConUno.length} ${t('chofer(es)?')}`)) return
+    setBackfillando(true)
+    try {
+      for (let i = 0; i < sinIdConUno.length; i += 400) {
+        const batch = writeBatch(db)
+        for (const d of sinIdConUno.slice(i, i + 400)) batch.update(doc(db, 'drivers', d.id), { idGofo: idGofoDetectado[normNombre(d.nombre)][0] })
+        await batch.commit()
+      }
+      await reloadDrivers()
+    } finally { setBackfillando(false) }
+  }
+
   // Lista de choferes respetando la CIUDAD seleccionada en la barra global:
   //  - Usuario bloqueado a su ciudad: solo los de SU ciudad.
   //  - Cualquiera con una ciudad elegida (≠ Todas): solo los de esa ciudad.
@@ -456,6 +490,39 @@ export default function Choferes() {
           <Boton variant="gold" onClick={agregar} disabled={guardandoAlta}>{guardandoAlta ? t('Guardando…') : t('Agregar')}</Boton>
         </div>
       </Card>
+
+      {/* AUDITORÍA DE DELIVERY ID (#4): nombres con varios IDs (posibles personas
+          distintas) + asociar en masa los IDs ya detectados a los perfiles. */}
+      {(idsMultiples.length > 0 || sinIdConUno.length > 0) && (
+        <Card className="mb-4 p-4">
+          <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Auditoría de Delivery ID')} {idsMultiples.length > 0 && <Badge color="red">{idsMultiples.length}</Badge>}</h3>
+          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+            {t('El Delivery ID de Gofo identifica a cada persona. Aquí se revisa que no haya personas distintas bajo el mismo nombre, y se puede guardar en cada perfil el ID detectado en las facturas.')}
+          </p>
+          {sinIdConUno.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-brand-navy/5 px-3 py-2 dark:bg-brand-gold/10">
+              <span className="text-sm text-slate-600 dark:text-slate-300">{t('Hay')} <b>{sinIdConUno.length}</b> {t('chofer(es) con un Delivery ID detectado que aún NO está guardado en su perfil.')}</span>
+              <Boton variant="gold" className="ml-auto px-3 py-1.5 text-xs" onClick={backfillIds} disabled={backfillando}>{backfillando ? t('Asociando…') : `${t('Asociar los')} ${sinIdConUno.length} ${t('IDs')}`}</Boton>
+            </div>
+          )}
+          {idsMultiples.length > 0 && (
+            <>
+              <div className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-rose-700 dark:text-rose-300">⚠ {t('Nombres con VARIOS Delivery IDs (posibles personas distintas fusionadas):')}</div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                {idsMultiples.map((x) => (
+                  <div key={x.nombre} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
+                    <b className="text-brand-navy dark:text-slate-100">{x.nombre}</b>
+                    {x.ids.map((id) => (
+                      <span key={id} className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">ID {id}</span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-400">{t('Para separarlos: usa «separar (es otro)» al re-subir la factura, o la tarjeta «Nombres unidos» de abajo. El sistema ya evita nuevas fusiones por ID distinto.')}</p>
+            </>
+          )}
+        </Card>
+      )}
 
       {/* AUDITORÍA DE NOMBRES UNIDOS: choferes cuya ficha ABSORBIÓ otros nombres
           (al subir una factura y responder "es el mismo que…"). Permite ver
