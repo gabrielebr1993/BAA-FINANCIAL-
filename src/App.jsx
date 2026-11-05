@@ -54,6 +54,7 @@ const Pagos = lazy(() => import('./pages/Pagos'))
 const Rutas = lazy(() => import('./pages/Rutas'))
 const RutaFicha = lazy(() => import('./pages/RutaFicha'))
 const Performance = lazy(() => import('./pages/Performance'))
+const GananciaSemanal = lazy(() => import('./pages/GananciaSemanal'))
 const Alertas = lazy(() => import('./pages/Alertas'))
 const Comparar = lazy(() => import('./pages/Comparar'))
 const Auditorias = lazy(() => import('./pages/Auditorias'))
@@ -124,6 +125,7 @@ function PackageApp() {
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
             <Route path="/configuracion" element={<Page filtro="gestionarConfiguracion"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
+              <Route path="/ganancia" element={<Page filtro="verFinanzas"><GananciaSemanal /></Page>} />
               <Route path="/cobros" element={<Page filtro="verFinanzas"><Cobros /></Page>} />
               <Route path="/reporte-manual" element={<Page filtro="subirFacturas"><ReporteManual /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
