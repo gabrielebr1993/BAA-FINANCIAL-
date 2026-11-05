@@ -125,7 +125,7 @@ export const SECCIONES = [
   { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: Upload },
   { path: '/historial', label: 'Facturas', permiso: 'subirFacturas', icon: FileText },
   { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign },
-  { path: '/ganancia', label: 'Ganancia semanal', permiso: 'verFinanzas', icon: Gauge, soloCarrier: 'gofo' },
+  { path: '/ganancia', label: 'Ganancia semanal', permiso: 'verFinanzas', icon: Gauge, soloCarrier: 'gofo', soloDueno: true },
   // `soloCarrier`: la sección solo aparece con esa compañía activa (Multi-Company).
   { path: '/cobros', label: 'Cobros y fondo', permiso: 'verFinanzas', icon: PiggyBank, soloCarrier: 'speedx' },
   { path: '/reporte-manual', label: 'Reporte manual', permiso: 'subirFacturas', icon: FileClock, soloCarrier: 'speedx' },

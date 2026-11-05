@@ -170,7 +170,7 @@ function SidebarContent({ onNavigate }) {
   // Filtro por permiso + por compañía activa (secciones con `soloCarrier` solo
   // aparecen en su compañía: p. ej. «Cobros y fondo» en SpeedX, «Reclamos a
   // Gofo» en Gofo).
-  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')))
+  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner'))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
 

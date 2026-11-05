@@ -125,7 +125,7 @@ function PackageApp() {
             <Route path="/historial" element={<Page filtro="subirFacturas"><Facturas /></Page>} />
             <Route path="/configuracion" element={<Page filtro="gestionarConfiguracion"><Configuracion /></Page>} />
               <Route path="/financiero" element={<Page filtro="verFinanzas"><Financiero /></Page>} />
-              <Route path="/ganancia" element={<Page filtro="verFinanzas"><GananciaSemanal /></Page>} />
+              <Route path="/ganancia" element={<Page roles={['owner']}><GananciaSemanal /></Page>} />
               <Route path="/cobros" element={<Page filtro="verFinanzas"><Cobros /></Page>} />
               <Route path="/reporte-manual" element={<Page filtro="subirFacturas"><ReporteManual /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />

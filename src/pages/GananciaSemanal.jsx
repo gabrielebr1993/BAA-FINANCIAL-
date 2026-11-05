@@ -30,14 +30,20 @@ export default function GananciaSemanal() {
     () => (facturaRango ? desgloseGananciaCiudades(facturaRango, claims, drivers, managers, numSemanas, ajustesPorChofer) : []),
     [facturaRango, claims, drivers, managers, numSemanas, ajustesPorChofer]
   )
-  // Totales = suma de las ciudades (consistente con el desglose).
-  const tot = useMemo(() => ciudades.reduce((a, c) => ({
-    ingreso: a.ingreso + c.ingresoNeto,
-    choferes: a.choferes + c.costoChoferes,
-    managers: a.managers + c.costoManagers,
-    ganancia: a.ganancia + c.gananciaReal,
-  }), { ingreso: 0, choferes: 0, managers: 0, ganancia: 0 }), [ciudades])
-  const margen = tot.ingreso > 0 ? tot.ganancia / tot.ingreso : 0
+  // TOTAL = el MISMO cálculo que el Dashboard (una sola llamada, no la suma por
+  // ciudad). Esto incluye los gastos fijos SIN ciudad asignada, que la suma por
+  // ciudad deja afuera; por eso antes daba de más. Así cuadra con Financiero/Dashboard.
+  const gReal = useMemo(
+    () => (facturaRango ? gananciaRealDe(facturaRango, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer) : null),
+    [facturaRango, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer]
+  )
+  const tot = {
+    ingreso: gReal?.ingresoNeto || 0,
+    choferes: gReal?.costoChoferes || 0,
+    managers: (gReal?.costoManagers || 0) + (gReal?.gastosTemporales || 0),
+    ganancia: gReal?.gananciaReal || 0,
+  }
+  const margen = gReal?.margen || 0
   const gastosTot = tot.choferes + tot.managers
   const cubre = tot.ingreso >= gastosTot
 
@@ -45,9 +51,9 @@ export default function GananciaSemanal() {
   const porSemana = useMemo(() => {
     const m = {}
     for (const inv of (invoicesRango || [])) {
-      const filas = desgloseGananciaCiudades(inv, claims, drivers, managers, 1, ajustesPorChofer)
-      const g = filas.reduce((a, c) => a + c.gananciaReal, 0)
-      const ing = filas.reduce((a, c) => a + c.ingresoNeto, 0)
+      const gr = gananciaRealDe(inv, claims, drivers, managers, selectedCity, 1, ajustesPorChofer)
+      const g = gr.gananciaReal
+      const ing = gr.ingresoNeto
       const fi = inv.fechaInicio?.toDate ? inv.fechaInicio.toDate() : (inv.fechaInicio instanceof Date ? inv.fechaInicio : null)
       const k = inv.semana || inv.id
       if (!m[k]) m[k] = { semana: inv.semana || '—', ganancia: 0, ingreso: 0, fecha: fi }
@@ -55,12 +61,16 @@ export default function GananciaSemanal() {
       if (fi && (!m[k].fecha || fi < m[k].fecha)) m[k].fecha = fi
     }
     return Object.values(m).sort((a, b) => (a.fecha && b.fecha) ? a.fecha - b.fecha : String(a.semana).localeCompare(String(b.semana)))
-  }, [invoicesRango, claims, drivers, managers, ajustesPorChofer])
+  }, [invoicesRango, claims, drivers, managers, selectedCity, ajustesPorChofer])
 
   const periodoLabel = selectedCity && selectedCity !== TODAS
     ? (ciudades[0]?.nombreCiudad || selectedCity)
     : t('Todas las ciudades')
 
+  // Diferencia entre la suma por ciudad y el total real = gastos fijos SIN ciudad
+  // asignada (se restan del total pero no se cargan a ninguna ciudad).
+  const sumCiudades = ciudades.reduce((a, c) => a + c.gananciaReal, 0)
+  const gastosSinCiudad = sumCiudades - tot.ganancia
   const maxGan = Math.max(1, ...ciudades.map((c) => Math.abs(c.gananciaReal)))
   const maxSem = Math.max(1, ...porSemana.map((s) => Math.abs(s.ganancia)))
 
@@ -133,6 +143,9 @@ export default function GananciaSemanal() {
                   </button>
                 ))}
               </div>
+              {Math.abs(gastosSinCiudad) > 1 && (
+                <div className="gs-sincity">{t('Gastos fijos sin ciudad asignada')}: <b>−{money(gastosSinCiudad)}</b> · {t('se restan del total pero no se cargan a una ciudad')}</div>
+              )}
             </div>
 
             {/* Tendencia por semana */}
@@ -231,6 +244,8 @@ const CSS = `
 .gs-city-bar span{display:block;height:100%;border-radius:4px}
 .gs-city-sub{display:flex;gap:14px;font-size:11.5px;color:var(--gs-mut);font-family:"IBM Plex Mono",monospace}
 .gs-city-m{margin-left:auto;color:var(--gs-gold);font-weight:700}
+.gs-sincity{margin-top:10px;font-size:11.5px;color:var(--gs-mut);border-top:1px dashed var(--gs-line);padding-top:9px}
+.gs-sincity b{color:var(--gs-orange);font-family:"IBM Plex Mono",monospace}
 .gs-onew{display:flex;flex-direction:column;gap:8px;align-items:flex-start;justify-content:center;min-height:120px}
 .gs-onew-n{font-size:30px;font-weight:800;color:var(--gs-green);text-shadow:0 0 16px rgba(52,229,164,.3)}
 .gs-trend{display:flex;align-items:flex-end;gap:8px;height:200px;padding-top:6px}
