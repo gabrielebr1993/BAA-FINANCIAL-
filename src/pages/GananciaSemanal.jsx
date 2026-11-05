@@ -192,17 +192,32 @@ function Tile({ c, k, v, s, big }) {
 const pctW = (part, whole) => `${Math.max(0, Math.min(100, whole > 0 ? (part / whole) * 100 : 0))}%`
 
 const CSS = `
-.gs-root{--gs-bg:#070b14;--gs-card:#0d1424;--gs-card2:#111a2e;--gs-line:#1b2740;--gs-ink:#e7eefc;--gs-mut:#7f93b8;--gs-faint:#52637f;
-  --gs-cyan:#22d3ee;--gs-pink:#f472d0;--gs-orange:#fb923c;--gs-green:#34e5a4;--gs-red:#fb6a6a;--gs-gold:#e7c25a;
-  background:var(--gs-bg);color:var(--gs-ink);border-radius:18px;padding:20px;margin:-4px 0 8px;
-  font-family:ui-sans-serif,system-ui,sans-serif;box-shadow:inset 0 0 0 1px var(--gs-line),0 20px 60px rgba(0,0,0,.4);
-  background-image:radial-gradient(1200px 400px at 15% -10%,rgba(34,211,238,.10),transparent 60%),radial-gradient(900px 400px at 110% 0%,rgba(244,114,208,.10),transparent 55%);}
+.gs-root{--gs-bg:#060a13;--gs-card:#0a1120;--gs-card2:#0d1525;--gs-line:#1b2a45;--gs-ink:#dde7f7;--gs-mut:#7e93b6;--gs-faint:#4b5d7b;
+  /* Paleta MilePay: dorado = marca/héroe, azul = dato, verde = ganancia, ámbar/slate = costos. */
+  --gs-cyan:#4aa6e8;--gs-pink:#90a6cc;--gs-orange:#e0a64a;--gs-green:#2fe39a;--gs-red:#fb6a6a;--gs-gold:#e7c25a;
+  background:var(--gs-bg);color:var(--gs-ink);border-radius:18px;padding:22px;margin:-4px 0 8px;position:relative;overflow:hidden;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+  background-image:
+    linear-gradient(rgba(231,194,90,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(231,194,90,.035) 1px,transparent 1px),
+    radial-gradient(1000px 420px at 12% -10%,rgba(231,194,90,.12),transparent 60%),
+    radial-gradient(900px 440px at 110% 0%,rgba(74,166,232,.12),transparent 58%);
+  background-size:36px 36px,36px 36px,100% 100%,100% 100%;
+  box-shadow:inset 0 0 0 1px var(--gs-line),inset 0 0 70px rgba(0,0,0,.45),0 24px 70px rgba(0,0,0,.5);}
+.gs-root::after{content:"";position:absolute;left:0;right:0;top:0;height:120px;pointer-events:none;z-index:0;
+  background:linear-gradient(180deg,transparent,rgba(231,194,90,.055),transparent);animation:gsscan 7.5s linear infinite}
+@keyframes gsscan{0%{transform:translateY(-130px)}100%{transform:translateY(900px)}}
+@media (prefers-reduced-motion:reduce){.gs-root::after{display:none}.gs-live i{animation:none}}
+.gs-root>*{position:relative;z-index:1}
+.gs-panel::before,.gs-panel::after{content:"";position:absolute;width:13px;height:13px;border:1.5px solid var(--gs-gold);opacity:.45;pointer-events:none}
+.gs-panel::before{top:7px;left:7px;border-right:0;border-bottom:0}
+.gs-panel::after{bottom:7px;right:7px;border-left:0;border-top:0}
 .gs-root .mono,.gs-tile-v,.gs-city-g,.gs-margen-n,.gs-onew-n,.gs-tval{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .gs-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .gs-live{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--gs-green)}
 .gs-live i{width:7px;height:7px;border-radius:50%;background:var(--gs-green);box-shadow:0 0 8px var(--gs-green);animation:gspulse 1.6s infinite}
 @keyframes gspulse{0%,100%{opacity:1}50%{opacity:.25}}
-.gs-title h1{margin:4px 0 2px;font-size:24px;font-weight:800;letter-spacing:.02em;background:linear-gradient(90deg,var(--gs-cyan),var(--gs-ink));-webkit-background-clip:text;background-clip:text;color:transparent}
+.gs-title h1{margin:4px 0 2px;font-size:24px;font-weight:800;letter-spacing:.06em;background:linear-gradient(90deg,var(--gs-gold),var(--gs-ink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 30px rgba(231,194,90,.15)}
 .gs-sub{font-size:12.5px;color:var(--gs-mut);font-weight:500}
 .gs-margen{text-align:right}
 .gs-margen-n{font-size:30px;font-weight:800;color:var(--gs-gold);text-shadow:0 0 18px rgba(231,194,90,.35);line-height:1}
@@ -221,7 +236,7 @@ const CSS = `
 .gs-tile.big .gs-tile-v{font-size:27px;color:var(--gs-green);text-shadow:0 0 16px rgba(52,229,164,.3)}
 .gs-tile.cyan .gs-tile-v{color:var(--gs-cyan)} .gs-tile.pink .gs-tile-v{color:var(--gs-pink)} .gs-tile.orange .gs-tile-v{color:var(--gs-orange)}
 .gs-tile-s{font-size:11px;color:var(--gs-faint);margin-top:3px;font-weight:500}
-.gs-panel{background:var(--gs-card);border:1px solid var(--gs-line);border-radius:14px;padding:16px 17px;margin-bottom:14px}
+.gs-panel{position:relative;background:var(--gs-card);border:1px solid var(--gs-line);border-radius:14px;padding:16px 17px;margin-bottom:14px}
 .gs-panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:700;margin-bottom:12px;color:var(--gs-ink)}
 .gs-faint{color:var(--gs-faint);font-weight:500;font-size:12px}
 .gs-ok{color:var(--gs-green);font-weight:700;font-size:12.5px} .gs-bad{color:var(--gs-red);font-weight:700;font-size:12.5px}
