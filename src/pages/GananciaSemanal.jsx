@@ -11,10 +11,10 @@
 // Es solo LECTURA: no toca pagos, claims ni facturas. El look oscuro es propio de
 // esta pantalla (no cambia el tema del resto de la app).
 // ============================================================================
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../DataContext'
-import { gananciaRealDe, desgloseGananciaCiudades, TODAS } from '../utils/calc'
+import { gananciaRealDe, desgloseGananciaCiudades, calcularPagos, TODAS } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { useLang } from '../i18n'
 
@@ -63,6 +63,25 @@ export default function GananciaSemanal() {
     return Object.values(m).sort((a, b) => (a.fecha && b.fecha) ? a.fecha - b.fecha : String(a.semana).localeCompare(String(b.semana)))
   }, [invoicesRango, claims, drivers, managers, selectedCity, ajustesPorChofer])
 
+  // Pool de MOVIMIENTOS reales para el log "en vivo" (depósitos, ganancia por
+  // ciudad, nómina por chofer, claims). El log los va mostrando en streaming.
+  const eventos = useMemo(() => {
+    if (!facturaRango) return []
+    const out = []
+    for (const c of ciudades) {
+      out.push({ tag: 'DEPÓSITO', who: c.nombreCiudad, amt: c.ingresoNeto, kind: 'in' })
+      out.push({ tag: 'GANANCIA', who: c.nombreCiudad, amt: c.gananciaReal, kind: 'gan', extra: pct(c.margen) })
+    }
+    try {
+      const pagos = calcularPagos(facturaRango, claims, drivers, selectedCity, ajustesPorChofer)
+      for (const p of [...pagos].sort((a, b) => b.totalPagar - a.totalPagar).slice(0, 40)) {
+        if (p.totalPagar > 0) out.push({ tag: 'NÓMINA', who: p.nombre, amt: -p.totalPagar, kind: 'out', extra: `${num(p.individuales + p.dobles)} pkg` })
+        if (p.descuentoClaims > 0) out.push({ tag: 'CLAIM', who: p.nombre, amt: -p.descuentoClaims, kind: 'claim' })
+      }
+    } catch { /* noop */ }
+    return out
+  }, [facturaRango, ciudades, claims, drivers, selectedCity, ajustesPorChofer])
+
   const periodoLabel = selectedCity && selectedCity !== TODAS
     ? (ciudades[0]?.nombreCiudad || selectedCity)
     : t('Todas las ciudades')
@@ -72,7 +91,6 @@ export default function GananciaSemanal() {
   const sumCiudades = ciudades.reduce((a, c) => a + c.gananciaReal, 0)
   const gastosSinCiudad = sumCiudades - tot.ganancia
   const maxGan = Math.max(1, ...ciudades.map((c) => Math.abs(c.gananciaReal)))
-  const maxSem = Math.max(1, ...porSemana.map((s) => Math.abs(s.ganancia)))
 
   return (
     <div className="gs-root">
@@ -157,20 +175,12 @@ export default function GananciaSemanal() {
                   <div className="gs-faint">{t('Elige un rango de varias semanas arriba para ver la tendencia.')}</div>
                 </div>
               ) : (
-                <div className="gs-trend">
-                  {porSemana.map((s) => (
-                    <div key={s.semana} className="gs-tcol" title={`${s.semana}: ${money(s.ganancia)}`}>
-                      <div className="gs-tbarwrap">
-                        <span className="gs-tbar" style={{ height: pctW(Math.abs(s.ganancia), maxSem), background: s.ganancia >= 0 ? 'var(--gs-green)' : 'var(--gs-red)' }} />
-                      </div>
-                      <div className="gs-tval">{money(s.ganancia).replace('$', '')}</div>
-                      <div className="gs-tlbl">{s.semana}</div>
-                    </div>
-                  ))}
-                </div>
+                <AreaTrend data={porSemana} money={money} />
               )}
             </div>
           </div>
+
+          <LiveLog eventos={eventos} t={t} />
 
           <div className="gs-foot">{t('Solo lectura. Mismos cálculos que Financiero. Toca una ciudad para ver el detalle.')}</div>
         </>
@@ -190,6 +200,85 @@ function Tile({ c, k, v, s, big }) {
 }
 
 const pctW = (part, whole) => `${Math.max(0, Math.min(100, whole > 0 ? (part / whole) * 100 : 0))}%`
+
+// ── Log de movimientos EN VIVO (streaming de eventos reales) ──
+function LiveLog({ eventos, t }) {
+  const [lines, setLines] = useState([])
+  const idx = useRef(0)
+  useEffect(() => {
+    if (!eventos.length) { setLines([]); return }
+    const hora = () => new Date().toLocaleTimeString('es-MX', { hour12: false })
+    const mk = (e) => ({ ...e, ts: hora(), id: Math.random().toString(36).slice(2) })
+    setLines(eventos.slice(0, 7).map(mk).reverse())
+    idx.current = 7 % eventos.length
+    const iv = setInterval(() => {
+      const e = eventos[idx.current % eventos.length]; idx.current++
+      setLines((prev) => [mk(e), ...prev].slice(0, 16))
+    }, 1500)
+    return () => clearInterval(iv)
+  }, [eventos])
+  if (!eventos.length) return null
+  const sign = (n) => (n >= 0 ? '+' : '−') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US')
+  return (
+    <div className="gs-panel gs-log">
+      <div className="gs-panel-h"><span className="gs-logtitle"><i /> {t('Registro en vivo')}</span><span className="gs-faint">{t('movimientos reales')}</span></div>
+      <div className="gs-logbox">
+        {lines.map((l) => (
+          <div key={l.id} className="gs-logline">
+            <span className="gs-lt">{l.ts}</span>
+            <span className={'gs-ltag ' + l.kind}>{l.tag}</span>
+            <span className="gs-lwho">{l.who}</span>
+            {l.extra && <span className="gs-lex">· {l.extra}</span>}
+            <span className={'gs-lamt ' + (l.amt >= 0 ? 'pos' : 'neg')}>{sign(l.amt)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Gráfica de área estilo "trading" (ganancia por semana, con glow) ──
+function AreaTrend({ data, money }) {
+  const W = 560, H = 210, mL = 58, mR = 16, mT = 16, mB = 30
+  const x0 = mL, x1 = W - mR, y0 = mT, y1 = H - mB
+  const vals = data.map((d) => d.ganancia)
+  const vMax = Math.max(0, ...vals), vMin = Math.min(0, ...vals)
+  const pad = (vMax - vMin || 1) * 0.15
+  const hi = vMax + pad, lo = vMin - pad
+  const X = (i) => data.length <= 1 ? (x0 + x1) / 2 : x0 + (i / (data.length - 1)) * (x1 - x0)
+  const Y = (v) => y0 + (hi - v) / (hi - lo) * (y1 - y0)
+  const yZero = Y(0)
+  const pts = data.map((d, i) => [X(i), Y(d.ganancia)])
+  const linePath = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
+  const areaPath = `${linePath} L ${pts[pts.length - 1][0].toFixed(1)} ${yZero} L ${pts[0][0].toFixed(1)} ${yZero} Z`
+  const money0 = (v) => '$' + Math.round(v).toLocaleString('en-US')
+  return (
+    <svg className="gs-area" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Ganancia por semana">
+      <defs>
+        <linearGradient id="gsfill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--gs-gold)" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="var(--gs-gold)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[hi, (hi + lo) / 2, 0, lo].filter((v, i, a) => a.indexOf(v) === i).map((v, i) => (
+        <g key={i}>
+          <line x1={x0} y1={Y(v)} x2={x1} y2={Y(v)} stroke="var(--gs-line)" strokeWidth={v === 0 ? 1.4 : 1} strokeDasharray={v === 0 ? '' : '3 5'} />
+          <text x={x0 - 9} y={Y(v) + 4} textAnchor="end" fill="var(--gs-faint)" fontSize="10.5" fontFamily="IBM Plex Mono, monospace">{money0(v)}</text>
+        </g>
+      ))}
+      <path d={areaPath} fill="url(#gsfill)" />
+      <path d={linePath} fill="none" stroke="var(--gs-gold)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 6px rgba(231,194,90,.55))' }} />
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 5 : 3.2} fill="var(--gs-gold)" stroke="var(--gs-bg)" strokeWidth="1.5" style={i === pts.length - 1 ? { filter: 'drop-shadow(0 0 7px var(--gs-gold))' } : undefined}>
+            <title>{data[i].semana}: {money(data[i].ganancia)}</title>
+          </circle>
+          <text x={p[0]} y={y1 + 18} textAnchor="middle" fill="var(--gs-faint)" fontSize="9.5" fontFamily="Hanken Grotesk, sans-serif">{data[i].semana}</text>
+        </g>
+      ))}
+    </svg>
+  )
+}
 
 const CSS = `
 .gs-root{--gs-bg:#060a13;--gs-card:#0a1120;--gs-card2:#0d1525;--gs-line:#1b2a45;--gs-ink:#dde7f7;--gs-mut:#7e93b6;--gs-faint:#4b5d7b;
@@ -269,6 +358,23 @@ const CSS = `
 .gs-tbar{display:block;width:70%;max-width:38px;border-radius:5px 5px 0 0;min-height:3px;box-shadow:0 0 12px rgba(52,229,164,.25)}
 .gs-tval{font-size:10.5px;color:var(--gs-mut);font-family:"IBM Plex Mono",monospace}
 .gs-tlbl{font-size:9.5px;color:var(--gs-faint);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.gs-area{display:block;width:100%;height:auto;overflow:visible;margin-top:4px}
+.gs-log{margin-top:0}
+.gs-logtitle{display:inline-flex;align-items:center;gap:7px;color:var(--gs-green)}
+.gs-logtitle i{width:7px;height:7px;border-radius:50%;background:var(--gs-green);box-shadow:0 0 8px var(--gs-green);animation:gspulse 1.4s infinite}
+.gs-logbox{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;background:var(--gs-bg);border:1px solid var(--gs-line);border-radius:10px;padding:10px 12px;max-height:270px;overflow:hidden;display:flex;flex-direction:column;gap:3px}
+.gs-logline{display:flex;align-items:center;gap:9px;padding:3px 0;white-space:nowrap;animation:gsin .35s ease}
+@keyframes gsin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.gs-lt{color:var(--gs-faint);font-size:11px;flex:0 0 auto}
+.gs-ltag{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:5px;flex:0 0 auto}
+.gs-ltag.in{color:var(--gs-cyan);background:rgba(74,166,232,.13)}
+.gs-ltag.gan{color:var(--gs-gold);background:rgba(231,194,90,.13)}
+.gs-ltag.out{color:var(--gs-pink);background:rgba(144,166,204,.13)}
+.gs-ltag.claim{color:var(--gs-red);background:rgba(251,106,106,.13)}
+.gs-lwho{color:var(--gs-ink);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.gs-lex{color:var(--gs-faint);font-size:11px;flex:0 0 auto}
+.gs-lamt{margin-left:auto;font-weight:700;flex:0 0 auto}
+.gs-lamt.pos{color:var(--gs-green)} .gs-lamt.neg{color:var(--gs-pink)}
 .gs-foot{font-size:11.5px;color:var(--gs-faint);text-align:center;margin-top:12px}
 @media (max-width:820px){.gs-kpis{grid-template-columns:repeat(2,1fr)}.gs-grid2{grid-template-columns:1fr}}
 @media (max-width:480px){.gs-title h1{font-size:20px}.gs-margen-n{font-size:24px}}
