@@ -14,7 +14,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../DataContext'
-import { gananciaRealDe, desgloseGananciaCiudades, calcularPagos, TODAS } from '../utils/calc'
+import { gananciaRealDe, desgloseGananciaCiudades, calcularPagos, totalesFiltrados, TODAS } from '../utils/calc'
 import { money, num } from '../utils/format'
 import { useLang } from '../i18n'
 
@@ -30,22 +30,28 @@ export default function GananciaSemanal() {
     () => (facturaRango ? desgloseGananciaCiudades(facturaRango, claims, drivers, managers, numSemanas, ajustesPorChofer) : []),
     [facturaRango, claims, drivers, managers, numSemanas, ajustesPorChofer]
   )
-  // TOTAL = el MISMO cálculo que el Dashboard (una sola llamada, no la suma por
-  // ciudad). Esto incluye los gastos fijos SIN ciudad asignada, que la suma por
-  // ciudad deja afuera; por eso antes daba de más. Así cuadra con Financiero/Dashboard.
+  // Números IDÉNTICOS al Dashboard:
+  //   · KPI "Ganancia" del Dashboard = Ingreso − nómina de choferes  (gananciaTotal)
+  //   · Panel "Ganancia Real" del Dashboard = eso − gastos fijos      (gananciaReal)
+  // Se muestran los DOS para que cuadre con cualquiera de los dos del Dashboard.
+  const totF = useMemo(() => (facturaRango ? totalesFiltrados(facturaRango, selectedCity) : null), [facturaRango, selectedCity])
+  const pagosTot = useMemo(
+    () => (facturaRango ? calcularPagos(facturaRango, claims, drivers, selectedCity, ajustesPorChofer) : []),
+    [facturaRango, claims, drivers, selectedCity, ajustesPorChofer]
+  )
   const gReal = useMemo(
     () => (facturaRango ? gananciaRealDe(facturaRango, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer) : null),
     [facturaRango, claims, drivers, managers, selectedCity, numSemanas, ajustesPorChofer]
   )
-  const tot = {
-    ingreso: gReal?.ingresoNeto || 0,
-    choferes: gReal?.costoChoferes || 0,
-    managers: (gReal?.costoManagers || 0) + (gReal?.gastosTemporales || 0),
-    ganancia: gReal?.gananciaReal || 0,
-  }
-  const margen = gReal?.margen || 0
-  const gastosTot = tot.choferes + tot.managers
-  const cubre = tot.ingreso >= gastosTot
+  const ingreso = totF?.ingreso || 0
+  const costoTotal = pagosTot.reduce((a, p) => a + p.totalPagar, 0) // nómina de choferes
+  const gananciaTotal = ingreso - costoTotal                        // = KPI "Ganancia" del Dashboard
+  const gastosFijos = (gReal?.costoManagers || 0) + (gReal?.gastosTemporales || 0)
+  const gananciaReal = gReal?.gananciaReal || 0                     // = panel "Ganancia Real" del Dashboard
+  const tot = { ingreso, choferes: costoTotal, managers: gastosFijos, ganancia: gananciaTotal }
+  const margen = ingreso > 0 ? gananciaTotal / ingreso : 0
+  const gastosTot = costoTotal + gastosFijos
+  const cubre = ingreso >= gastosTot
 
   // Tendencia de ganancia por SEMANA (agrupando las facturas del rango).
   const porSemana = useMemo(() => {
@@ -123,21 +129,26 @@ export default function GananciaSemanal() {
             <Tile c="green" big k={t('Ganancia')} v={money(tot.ganancia)} s={pct(margen) + ' ' + t('de margen')} />
           </div>
 
+          {/* Aclaración de los DOS números del Dashboard */}
+          <div className="gs-aclara">
+            {t('«Ganancia» = Ingreso − nómina de choferes (igual al KPI del Dashboard).')} <b>{t('Ganancia real')}</b> {t('= eso − gastos fijos')} ({money(gastosFijos)}) = <b className="gs-gold">{money(gananciaReal)}</b> ({t('igual al panel «Ganancia Real» del Dashboard')}).
+          </div>
+
           {/* Cobertura: ¿alcanzó el depósito? */}
           <div className="gs-panel gs-cover">
             <div className="gs-panel-h">
               <span>{t('¿Alcanzó el depósito de Gofo?')}</span>
-              <span className={cubre ? 'gs-ok' : 'gs-bad'}>{cubre ? `✓ ${t('SÍ · te sobran')} ${money(tot.ganancia)}` : `✕ ${t('NO · faltan')} ${money(gastosTot - tot.ingreso)}`}</span>
+              <span className={cubre ? 'gs-ok' : 'gs-bad'}>{cubre ? `✓ ${t('SÍ · ganancia real')} ${money(gananciaReal)}` : `✕ ${t('NO · faltan')} ${money(gastosTot - ingreso)}`}</span>
             </div>
             <div className="gs-bar" role="img" aria-label={t('Reparto del ingreso')}>
-              <span className="gs-seg pink" style={{ width: pctW(tot.choferes, tot.ingreso) }} title={t('Nómina')} />
-              <span className="gs-seg orange" style={{ width: pctW(tot.managers, tot.ingreso) }} title={t('Gastos')} />
-              <span className="gs-seg green" style={{ width: pctW(Math.max(0, tot.ganancia), tot.ingreso) }} title={t('Ganancia')} />
+              <span className="gs-seg pink" style={{ width: pctW(costoTotal, ingreso) }} title={t('Nómina')} />
+              <span className="gs-seg orange" style={{ width: pctW(gastosFijos, ingreso) }} title={t('Gastos fijos')} />
+              <span className="gs-seg green" style={{ width: pctW(Math.max(0, gananciaReal), ingreso) }} title={t('Ganancia real')} />
             </div>
             <div className="gs-bar-leg">
-              <span><i className="pink" /> {t('Nómina')} {money(tot.choferes)}</span>
-              <span><i className="orange" /> {t('Gastos')} {money(tot.managers)}</span>
-              <span><i className="green" /> {t('Ganancia')} {money(tot.ganancia)}</span>
+              <span><i className="pink" /> {t('Nómina')} {money(costoTotal)}</span>
+              <span><i className="orange" /> {t('Gastos fijos')} {money(gastosFijos)}</span>
+              <span><i className="green" /> {t('Ganancia real')} {money(gananciaReal)}</span>
             </div>
           </div>
 
@@ -312,6 +323,8 @@ const CSS = `
 .gs-margen-n{font-size:30px;font-weight:800;color:var(--gs-gold);text-shadow:0 0 18px rgba(231,194,90,.35);line-height:1}
 .gs-margen-l{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gs-faint);margin-top:3px}
 .gs-empty{padding:48px 18px;text-align:center;color:var(--gs-mut);font-size:14px}
+.gs-aclara{font-size:12px;color:var(--gs-mut);background:rgba(231,194,90,.06);border:1px solid var(--gs-line);border-radius:10px;padding:9px 12px;margin-bottom:14px;line-height:1.55}
+.gs-aclara b{color:var(--gs-ink)} .gs-gold{color:var(--gs-gold)!important;font-family:"IBM Plex Mono",monospace}
 .gs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
 .gs-tile{background:var(--gs-card);border:1px solid var(--gs-line);border-radius:14px;padding:14px 15px;position:relative;overflow:hidden}
 .gs-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
