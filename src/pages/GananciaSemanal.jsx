@@ -48,8 +48,8 @@ export default function GananciaSemanal() {
   const gananciaTotal = ingreso - costoTotal                        // = KPI "Ganancia" del Dashboard
   const gastosFijos = (gReal?.costoManagers || 0) + (gReal?.gastosTemporales || 0)
   const gananciaReal = gReal?.gananciaReal || 0                     // = panel "Ganancia Real" del Dashboard
-  const tot = { ingreso, choferes: costoTotal, managers: gastosFijos, ganancia: gananciaTotal }
-  const margen = ingreso > 0 ? gananciaTotal / ingreso : 0
+  const tot = { ingreso, choferes: costoTotal, managers: gastosFijos, ganancia: gananciaReal }
+  const margen = ingreso > 0 ? gananciaReal / ingreso : 0
   const gastosTot = costoTotal + gastosFijos
   const cubre = ingreso >= gastosTot
 
@@ -126,12 +126,12 @@ export default function GananciaSemanal() {
             <Tile c="cyan" k={t('Ingreso Gofo')} v={money(tot.ingreso)} s={t('depósito neto')} />
             <Tile c="pink" k={t('Nómina choferes')} v={'−' + money(tot.choferes)} s={t('lo que pagas')} />
             <Tile c="orange" k={t('Gastos fijos')} v={'−' + money(tot.managers)} s={t('managers + fijos')} />
-            <Tile c="green" big k={t('Ganancia')} v={money(tot.ganancia)} s={pct(margen) + ' ' + t('de margen')} />
+            <Tile c="green" big k={t('Ganancia real')} v={money(tot.ganancia)} s={pct(margen) + ' ' + t('de margen')} />
           </div>
 
-          {/* Aclaración de los DOS números del Dashboard */}
+          {/* Aclaración: la ganancia REAL y, de referencia, el KPI del Dashboard. */}
           <div className="gs-aclara">
-            {t('«Ganancia» = Ingreso − nómina de choferes (igual al KPI del Dashboard).')} <b>{t('Ganancia real')}</b> {t('= eso − gastos fijos')} ({money(gastosFijos)}) = <b className="gs-gold">{money(gananciaReal)}</b> ({t('igual al panel «Ganancia Real» del Dashboard')}).
+            <b className="gs-gold">{t('Ganancia real')}</b> {t('= Ingreso − nómina − gastos fijos')} ({money(gastosFijos)}) = <b className="gs-gold">{money(gananciaReal)}</b> · {t('igual al panel «Ganancia Real» de tu Dashboard. El KPI «Ganancia» (sin restar gastos) sería')} {money(gananciaTotal)}.
           </div>
 
           {/* Cobertura: ¿alcanzó el depósito? */}
@@ -278,7 +278,7 @@ function AreaTrend({ data, money }) {
         </g>
       ))}
       <path d={areaPath} fill="url(#gsfill)" />
-      <path d={linePath} fill="none" stroke="var(--gs-gold)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 6px rgba(231,194,90,.55))' }} />
+      <path d={linePath} fill="none" stroke="var(--gs-gold)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" style={{ filter: 'drop-shadow(0 0 6px rgba(201,162,75,.55))' }} />
       {pts.map((p, i) => (
         <g key={i}>
           <circle cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 5 : 3.2} fill="var(--gs-gold)" stroke="var(--gs-bg)" strokeWidth="1.5" style={i === pts.length - 1 ? { filter: 'drop-shadow(0 0 7px var(--gs-gold))' } : undefined}>
@@ -292,20 +292,20 @@ function AreaTrend({ data, money }) {
 }
 
 const CSS = `
-.gs-root{--gs-bg:#060a13;--gs-card:#0a1120;--gs-card2:#0d1525;--gs-line:#1b2a45;--gs-ink:#dde7f7;--gs-mut:#7e93b6;--gs-faint:#4b5d7b;
-  /* Paleta MilePay: dorado = marca/héroe, azul = dato, verde = ganancia, ámbar/slate = costos. */
-  --gs-cyan:#4aa6e8;--gs-pink:#90a6cc;--gs-orange:#e0a64a;--gs-green:#2fe39a;--gs-red:#fb6a6a;--gs-gold:#e7c25a;
+.gs-root{--gs-bg:#0b1628;--gs-card:#13233f;--gs-card2:#0f1d35;--gs-line:#273a5b;--gs-ink:#e8eef8;--gs-mut:#89a0c4;--gs-faint:#5b7398;
+  /* Colores EXACTOS de MilePay: navy #13233f, gold #c9a24b, steel, verde/ámbar/rojo de marca. */
+  --gs-cyan:#6f9fd8;--gs-pink:#8aa0c4;--gs-orange:#d9822b;--gs-green:#3fbd86;--gs-red:#e0533d;--gs-gold:#c9a24b;
   background:var(--gs-bg);color:var(--gs-ink);border-radius:18px;padding:22px;margin:-4px 0 8px;position:relative;overflow:hidden;
   font-family:ui-sans-serif,system-ui,sans-serif;
   background-image:
-    linear-gradient(rgba(231,194,90,.035) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(231,194,90,.035) 1px,transparent 1px),
-    radial-gradient(1000px 420px at 12% -10%,rgba(231,194,90,.12),transparent 60%),
-    radial-gradient(900px 440px at 110% 0%,rgba(74,166,232,.12),transparent 58%);
+    linear-gradient(rgba(201,162,75,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(201,162,75,.035) 1px,transparent 1px),
+    radial-gradient(1000px 420px at 12% -10%,rgba(201,162,75,.12),transparent 60%),
+    radial-gradient(900px 440px at 110% 0%,rgba(111,159,216,.12),transparent 58%);
   background-size:36px 36px,36px 36px,100% 100%,100% 100%;
   box-shadow:inset 0 0 0 1px var(--gs-line),inset 0 0 70px rgba(0,0,0,.45),0 24px 70px rgba(0,0,0,.5);}
 .gs-root::after{content:"";position:absolute;left:0;right:0;top:0;height:120px;pointer-events:none;z-index:0;
-  background:linear-gradient(180deg,transparent,rgba(231,194,90,.055),transparent);animation:gsscan 7.5s linear infinite}
+  background:linear-gradient(180deg,transparent,rgba(201,162,75,.055),transparent);animation:gsscan 7.5s linear infinite}
 @keyframes gsscan{0%{transform:translateY(-130px)}100%{transform:translateY(900px)}}
 @media (prefers-reduced-motion:reduce){.gs-root::after{display:none}.gs-live i{animation:none}}
 .gs-root>*{position:relative;z-index:1}
@@ -317,13 +317,13 @@ const CSS = `
 .gs-live{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--gs-green)}
 .gs-live i{width:7px;height:7px;border-radius:50%;background:var(--gs-green);box-shadow:0 0 8px var(--gs-green);animation:gspulse 1.6s infinite}
 @keyframes gspulse{0%,100%{opacity:1}50%{opacity:.25}}
-.gs-title h1{margin:4px 0 2px;font-size:24px;font-weight:800;letter-spacing:.06em;background:linear-gradient(90deg,var(--gs-gold),var(--gs-ink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 30px rgba(231,194,90,.15)}
+.gs-title h1{margin:4px 0 2px;font-size:24px;font-weight:800;letter-spacing:.06em;background:linear-gradient(90deg,var(--gs-gold),var(--gs-ink));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 30px rgba(201,162,75,.15)}
 .gs-sub{font-size:12.5px;color:var(--gs-mut);font-weight:500}
 .gs-margen{text-align:right}
-.gs-margen-n{font-size:30px;font-weight:800;color:var(--gs-gold);text-shadow:0 0 18px rgba(231,194,90,.35);line-height:1}
+.gs-margen-n{font-size:30px;font-weight:800;color:var(--gs-gold);text-shadow:0 0 18px rgba(201,162,75,.35);line-height:1}
 .gs-margen-l{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gs-faint);margin-top:3px}
 .gs-empty{padding:48px 18px;text-align:center;color:var(--gs-mut);font-size:14px}
-.gs-aclara{font-size:12px;color:var(--gs-mut);background:rgba(231,194,90,.06);border:1px solid var(--gs-line);border-radius:10px;padding:9px 12px;margin-bottom:14px;line-height:1.55}
+.gs-aclara{font-size:12px;color:var(--gs-mut);background:rgba(201,162,75,.06);border:1px solid var(--gs-line);border-radius:10px;padding:9px 12px;margin-bottom:14px;line-height:1.55}
 .gs-aclara b{color:var(--gs-ink)} .gs-gold{color:var(--gs-gold)!important;font-family:"IBM Plex Mono",monospace}
 .gs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
 .gs-tile{background:var(--gs-card);border:1px solid var(--gs-line);border-radius:14px;padding:14px 15px;position:relative;overflow:hidden}
@@ -332,10 +332,10 @@ const CSS = `
 .gs-tile.pink::before{background:var(--gs-pink);box-shadow:0 0 14px var(--gs-pink)}
 .gs-tile.orange::before{background:var(--gs-orange);box-shadow:0 0 14px var(--gs-orange)}
 .gs-tile.green::before{background:var(--gs-green);box-shadow:0 0 14px var(--gs-green)}
-.gs-tile.big{grid-column:span 1;background:linear-gradient(180deg,rgba(52,229,164,.09),var(--gs-card))}
+.gs-tile.big{grid-column:span 1;background:linear-gradient(180deg,rgba(63,189,134,.09),var(--gs-card))}
 .gs-tile-k{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--gs-mut);font-weight:600}
 .gs-tile-v{font-size:22px;font-weight:700;margin-top:7px;letter-spacing:-.01em}
-.gs-tile.big .gs-tile-v{font-size:27px;color:var(--gs-green);text-shadow:0 0 16px rgba(52,229,164,.3)}
+.gs-tile.big .gs-tile-v{font-size:27px;color:var(--gs-green);text-shadow:0 0 16px rgba(63,189,134,.3)}
 .gs-tile.cyan .gs-tile-v{color:var(--gs-cyan)} .gs-tile.pink .gs-tile-v{color:var(--gs-pink)} .gs-tile.orange .gs-tile-v{color:var(--gs-orange)}
 .gs-tile-s{font-size:11px;color:var(--gs-faint);margin-top:3px;font-weight:500}
 .gs-panel{position:relative;background:var(--gs-card);border:1px solid var(--gs-line);border-radius:14px;padding:16px 17px;margin-bottom:14px}
@@ -354,7 +354,7 @@ const CSS = `
 .gs-city:hover{border-color:var(--gs-cyan)} .gs-city:active{transform:translateY(1px)}
 .gs-city-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .gs-city-name{font-weight:700;font-size:13.5px;color:var(--gs-ink)}
-.gs-code{font-style:normal;font-size:10px;font-weight:700;color:var(--gs-cyan);background:rgba(34,211,238,.12);padding:1px 6px;border-radius:999px;margin-left:7px;font-family:"IBM Plex Mono",monospace}
+.gs-code{font-style:normal;font-size:10px;font-weight:700;color:var(--gs-cyan);background:rgba(111,159,216,.12);padding:1px 6px;border-radius:999px;margin-left:7px;font-family:"IBM Plex Mono",monospace}
 .gs-city-g{font-size:14px;font-weight:700}
 .gs-city-g.pos{color:var(--gs-green)} .gs-city-g.neg{color:var(--gs-red)}
 .gs-city-bar{height:6px;border-radius:4px;background:var(--gs-bg);margin:8px 0 7px;overflow:hidden}
@@ -364,11 +364,11 @@ const CSS = `
 .gs-sincity{margin-top:10px;font-size:11.5px;color:var(--gs-mut);border-top:1px dashed var(--gs-line);padding-top:9px}
 .gs-sincity b{color:var(--gs-orange);font-family:"IBM Plex Mono",monospace}
 .gs-onew{display:flex;flex-direction:column;gap:8px;align-items:flex-start;justify-content:center;min-height:120px}
-.gs-onew-n{font-size:30px;font-weight:800;color:var(--gs-green);text-shadow:0 0 16px rgba(52,229,164,.3)}
+.gs-onew-n{font-size:30px;font-weight:800;color:var(--gs-green);text-shadow:0 0 16px rgba(63,189,134,.3)}
 .gs-trend{display:flex;align-items:flex-end;gap:8px;height:200px;padding-top:6px}
 .gs-tcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%}
 .gs-tbarwrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
-.gs-tbar{display:block;width:70%;max-width:38px;border-radius:5px 5px 0 0;min-height:3px;box-shadow:0 0 12px rgba(52,229,164,.25)}
+.gs-tbar{display:block;width:70%;max-width:38px;border-radius:5px 5px 0 0;min-height:3px;box-shadow:0 0 12px rgba(63,189,134,.25)}
 .gs-tval{font-size:10.5px;color:var(--gs-mut);font-family:"IBM Plex Mono",monospace}
 .gs-tlbl{font-size:9.5px;color:var(--gs-faint);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .gs-area{display:block;width:100%;height:auto;overflow:visible;margin-top:4px}
@@ -380,10 +380,10 @@ const CSS = `
 @keyframes gsin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .gs-lt{color:var(--gs-faint);font-size:11px;flex:0 0 auto}
 .gs-ltag{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 7px;border-radius:5px;flex:0 0 auto}
-.gs-ltag.in{color:var(--gs-cyan);background:rgba(74,166,232,.13)}
-.gs-ltag.gan{color:var(--gs-gold);background:rgba(231,194,90,.13)}
-.gs-ltag.out{color:var(--gs-pink);background:rgba(144,166,204,.13)}
-.gs-ltag.claim{color:var(--gs-red);background:rgba(251,106,106,.13)}
+.gs-ltag.in{color:var(--gs-cyan);background:rgba(111,159,216,.13)}
+.gs-ltag.gan{color:var(--gs-gold);background:rgba(201,162,75,.13)}
+.gs-ltag.out{color:var(--gs-pink);background:rgba(138,160,196,.13)}
+.gs-ltag.claim{color:var(--gs-red);background:rgba(224,83,61,.13)}
 .gs-lwho{color:var(--gs-ink);overflow:hidden;text-overflow:ellipsis;min-width:0}
 .gs-lex{color:var(--gs-faint);font-size:11px;flex:0 0 auto}
 .gs-lamt{margin-left:auto;font-weight:700;flex:0 0 auto}
