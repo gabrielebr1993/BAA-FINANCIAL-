@@ -350,6 +350,18 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
     await auditarStaff('worker_grupo', `${w.nombre} → ${grupoId ? (datos.grupos.find((g) => g.id === grupoId)?.nombre || grupoId) : 'sin grupo'}`)
     recargar()
   }
+  // Posición FIJA del perfil: se usa para pagar con archivos que no traen puesto
+  // (p. ej. Homebase). Si está vacía, se usa la última posición del historial.
+  const [posFija, setPosFija] = useState(w.posicion || '')
+  const [guardandoPos, setGuardandoPos] = useState(false)
+  const guardarPosicion = async () => {
+    setGuardandoPos(true)
+    try {
+      await setDoc(refDoc(COL.workers, w.id), { posicion: posFija.trim() || null }, { merge: true })
+      await auditarStaff('worker_posicion', `${w.nombre}: puesto fijo ${posFija.trim() || '(quitado)'}`)
+      recargar()
+    } finally { setGuardandoPos(false) }
+  }
   // "Se paga aparte": sus horas y pagos se registran normal (Finanzas, perfil),
   // pero nunca entra a la creación de cheques en Print Check.
   const cambiarPagoAparte = async (valor) => {
@@ -382,6 +394,7 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
             <div className="text-xl font-black text-brand-navy dark:text-slate-100">{w.nombre}</div>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {w.idEmpleado && <Badge color="navy">ID {w.idEmpleado}</Badge>}
+              {w.posicion && <Badge color="gold">Puesto fijo: {w.posicion}</Badge>}
               {posiciones.map((pos) => <Badge key={pos} color="slate">{pos}</Badge>)}
               {grupoNombre && <Badge color="gold">Grupo: {grupoNombre}</Badge>}
               {(w.alias || []).length > 0 && <Badge color="slate">{w.alias.length} alias</Badge>}
@@ -493,7 +506,13 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
             {datos.grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
           </Select>
         </div>
-        <div className="mt-1 text-[11px] text-slate-400">El ID viene del reporte de asistencia de Gofo (fuente autorizada) o se escribe a mano. El grupo aplica sus tarifas y su regla de OT; la excepción individual sigue mandando.</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500">Puesto fijo (para pagar sin posición, ej. Homebase):</span>
+          <Input className="w-44" list={`pos-${w.id}`} placeholder="p. ej. Forklift" value={posFija} onChange={(e) => setPosFija(e.target.value)} />
+          <datalist id={`pos-${w.id}`}>{posiciones.map((p) => <option key={p} value={p} />)}</datalist>
+          <Boton variant="ghost" disabled={guardandoPos || posFija === (w.posicion || '')} onClick={guardarPosicion}>{guardandoPos ? <Spinner /> : 'Guardar puesto'}</Boton>
+        </div>
+        <div className="mt-1 text-[11px] text-slate-400">El ID viene del reporte de asistencia de Gofo (fuente autorizada) o se escribe a mano. El grupo aplica sus tarifas y su regla de OT; la excepción individual sigue mandando. El <b>puesto fijo</b> se usa cuando el archivo no trae posición (Homebase); si lo dejas vacío se toma la última posición de su historial.</div>
       </Card>
 
       <Card className="mb-4 p-4">

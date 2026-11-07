@@ -14,9 +14,10 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer, Clock } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
+import WhHomebase from './staffing/WhHomebase'
 import WhTrabajadores from './staffing/WhTrabajadores'
 import WhTarifas from './staffing/WhTarifas'
 import WhFinanzasStaff from './staffing/WhFinanzasStaff'
@@ -53,6 +54,7 @@ const TABS = [
   { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
   { id: 'panel', label: 'Dashboard', icono: Gauge },
   { id: 'gofo', label: 'Staffing Gofo', icono: FileSpreadsheet },
+  { id: 'homebase', label: 'Homebase', icono: Clock },
   { id: 'trabajadores', label: 'Trabajadores', icono: UserRound },
   { id: 'tarifas', label: 'Mis tarifas', icono: DollarSign },
   { id: 'finanzas', label: 'Finanzas', icono: BarChart3 },
@@ -205,6 +207,7 @@ function WhShell({ user }) {
         {tab === 'resumen' && <WhResumen irA={setTab} />}
         {tab === 'panel' && <WhPanelStaff irA={setTab} />}
         {tab === 'gofo' && <WhStaffing user={user} />}
+        {tab === 'homebase' && <WhHomebase user={user} />}
         {tab === 'trabajadores' && <WhTrabajadores user={user} perfilInicial={perfilPedido} />}
         {tab === 'tarifas' && <WhTarifas user={user} />}
         {tab === 'finanzas' && <WhFinanzasStaff user={user} />}
