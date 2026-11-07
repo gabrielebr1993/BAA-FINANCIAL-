@@ -16,10 +16,24 @@ import { Upload, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { analizarLibro, POSICIONES_BASE, normalizarNombre } from './parserGofo'
 import { calcularPagos, expandirTarifas } from './calculosStaff'
 import {
-  COL, cargar, cargarPor, auditarStaff, escribirEnLotes, refDoc, resolverWorker, idRegistro, serverTimestamp, setDoc,
+  COL, cargar, cargarPor, auditarStaff, escribirEnLotes, refDoc, resolverWorker, idRegistro, serverTimestamp, setDoc, arrayUnion,
 } from './datosStaff'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+const horasTxt = (n) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h`
+const SIN = '__sin__'
+// Puestos disponibles para clasificar (config + tarifas + perfiles).
+function puestosDe(bd) {
+  const s = new Set([...Object.values(bd.posiciones || {}), ...Object.keys(bd.tarifas || {})])
+  bd.workers.forEach((w) => { if (w.posicion) s.add(w.posicion) })
+  return [...s].filter((x) => x && x !== SIN).sort()
+}
+// Chip de tarifa de un pago (null si falta tarifa). Muestra flat rate.
+function chipTarifa(p) {
+  if (p.pendienteTarifa) return null
+  const ot = p.miTarifaOT === p.miTarifaReg ? 'OT flat (= regular)' : `OT ${dinero(p.miTarifaOT)}`
+  return `${dinero(p.miTarifaReg)}/h · ${ot}`
+}
 
 export default function WhStaffing({ user }) {
   const [bd, setBd] = useState(null) // { periodos:{id→doc}, tarifas:{pos→doc}, workers:[], config }
@@ -28,6 +42,9 @@ export default function WhStaffing({ user }) {
   const [trabajando, setTrabajando] = useState('')
   const [mensaje, setMensaje] = useState(null)
   const [arrastrando, setArrastrando] = useState(false)
+  // decisiones de la vista previa, por período: `${idPeriodo}::${nombreNorm}`
+  const [clasif, setClasif] = useState({}) // → posición elegida para quien no trae
+  const [dupDec, setDupDec] = useState({}) // → 'same' | 'other' para posibles duplicados
 
   const recargarBd = async () => {
     const [periodos, tarifas, workers, configs, gruposLista] = await Promise.all([
@@ -86,9 +103,10 @@ export default function WhStaffing({ user }) {
     setTrabajando(p.idPeriodo)
     setMensaje(null)
     try {
-      // 1) pagos con MIS tarifas vigentes
+      // 1) pagos con MIS tarifas vigentes (aplicando lo que clasificaste en la vista previa)
       const workersMap = Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])]))
-      const pagos = calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos)
+      const filasAj = p.filas.map((f) => { const c = clasif[`${p.idPeriodo}::${f.nombreNorm}`]; return c ? { ...f, posicion: c } : f })
+      const pagos = calcularPagos(filasAj, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos)
       // 2) perfiles: crear los que falten / reutilizar existentes (nunca duplicar)
       // Los IDs de empleado (工号) de la asistencia del MISMO archivo se
       // aplican solos: el perfil nuevo nace con su ID, el existente sin ID lo
@@ -102,8 +120,17 @@ export default function WhStaffing({ user }) {
       for (const fila of pagos) {
         if (workerIdDe[fila.nombreNorm]) continue
         const res = resolverWorker(fila.nombre, [...bd.workers, ...Object.values(nuevosWorkers)])
-        workerIdDe[fila.nombreNorm] = res.id
+        const dd = dupDec[`${p.idPeriodo}::${fila.nombreNorm}`]
+        const posCl = clasif[`${p.idPeriodo}::${fila.nombreNorm}`]
+        const posData = posCl ? { posicion: posCl } : {}
         const infoId = idsPorNombre[fila.nombreNorm]
+        // decidiste que es la MISMA persona que un perfil existente: unir (alias)
+        if (res.nuevo && dd === 'same' && res.posibleDuplicadoDe) {
+          workerIdDe[fila.nombreNorm] = res.posibleDuplicadoDe
+          ops.push({ ref: refDoc(COL.workers, res.posibleDuplicadoDe), merge: true, data: { alias: arrayUnion(fila.nombreNorm), ...posData } })
+          continue
+        }
+        workerIdDe[fila.nombreNorm] = res.id
         if (res.nuevo && !nuevosWorkers[res.id]) {
           nuevosWorkers[res.id] = { id: res.id, nombre: fila.nombre, nombreNorm: fila.nombreNorm, alias: [] }
           ops.push({
@@ -112,17 +139,21 @@ export default function WhStaffing({ user }) {
             data: {
               nombre: fila.nombre, nombreNorm: fila.nombreNorm, alias: [],
               creadoEn: serverTimestamp(), creadoPor: user.email,
-              ...(res.posibleDuplicadoDe ? { posibleDuplicadoDe: res.posibleDuplicadoDe } : {}),
+              ...posData,
+              ...(res.posibleDuplicadoDe && dd !== 'other' ? { posibleDuplicadoDe: res.posibleDuplicadoDe } : {}),
               ...(infoId ? { idEmpleado: infoId.idEmpleado, idEmpleadoFuente: `asistencia ${infoId.hoja}` } : {}),
             },
           })
-        } else if (!res.nuevo && infoId && !idsTratados.has(res.id)) {
-          idsTratados.add(res.id)
-          const w = bd.workers.find((ww) => ww.id === res.id)
-          if (w && !w.idEmpleado) {
-            ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idEmpleado: infoId.idEmpleado, idEmpleadoFuente: `asistencia ${infoId.hoja}` } })
-          } else if (w && w.idEmpleado !== infoId.idEmpleado) {
-            ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idConflicto: `${w.idEmpleado} vs ${infoId.idEmpleado} (${infoId.hoja})`, revisarId: true } })
+        } else if (!res.nuevo) {
+          if (posCl) ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: posData })
+          if (infoId && !idsTratados.has(res.id)) {
+            idsTratados.add(res.id)
+            const w = bd.workers.find((ww) => ww.id === res.id)
+            if (w && !w.idEmpleado) {
+              ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idEmpleado: infoId.idEmpleado, idEmpleadoFuente: `asistencia ${infoId.hoja}` } })
+            } else if (w && w.idEmpleado !== infoId.idEmpleado) {
+              ops.push({ ref: refDoc(COL.workers, res.id), merge: true, data: { idConflicto: `${w.idEmpleado} vs ${infoId.idEmpleado} (${infoId.hoja})`, revisarId: true } })
+            }
           }
         }
       }
@@ -319,6 +350,10 @@ export default function WhStaffing({ user }) {
               onAprobar={() => importar(p, true)}
               onTarifaGuardada={recargarBd}
               user={user}
+              clasifP={Object.fromEntries(Object.entries(clasif).filter(([k]) => k.startsWith(p.idPeriodo + '::')).map(([k, v]) => [k.slice((p.idPeriodo + '::').length), v]))}
+              dupP={Object.fromEntries(Object.entries(dupDec).filter(([k]) => k.startsWith(p.idPeriodo + '::')).map(([k, v]) => [k.slice((p.idPeriodo + '::').length), v]))}
+              onClasificar={(norm, pos) => setClasif((c) => ({ ...c, [`${p.idPeriodo}::${norm}`]: pos }))}
+              onDup={(norm, dec) => setDupDec((d) => ({ ...d, [`${p.idPeriodo}::${norm}`]: dec }))}
             />
           ))}
 
@@ -375,11 +410,40 @@ export default function WhStaffing({ user }) {
   )
 }
 
-function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar, onTarifaGuardada, user }) {
+function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar, onTarifaGuardada, user, clasifP, dupP, onClasificar, onDup }) {
   const [abierto, setAbierto] = useState(cat === 'nuevo' || cat === 'cambios')
+  const [verTabla, setVerTabla] = useState(false)
+  const [grupoAbierto, setGrupoAbierto] = useState({})
   const workersMap = useMemo(() => Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])])), [bd.workers])
-  const pagos = useMemo(() => calcularPagos(p.filas, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos), [p, bd, workersMap])
+  // aplica lo que clasificaste antes de calcular (posición → tarifa)
+  const filasAj = useMemo(() => p.filas.map((f) => { const c = clasifP[f.nombreNorm]; return c ? { ...f, posicion: c } : f }), [p.filas, clasifP])
+  const pagos = useMemo(() => calcularPagos(filasAj, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos), [filasAj, bd, workersMap, p.fin])
+  const meta = useMemo(() => {
+    const m = {}
+    for (const x of pagos) {
+      const r = resolverWorker(x.nombre, bd.workers)
+      m[x.nombreNorm] = { nuevo: r.nuevo && dupP[x.nombreNorm] !== 'same', dupId: r.posibleDuplicadoDe || null, dupNombre: r.posibleDuplicadoDe ? (bd.workers.find((w) => w.id === r.posibleDuplicadoDe)?.nombre || null) : null }
+    }
+    return m
+  }, [pagos, bd.workers, dupP])
+  const grupos = useMemo(() => {
+    const mm = {}
+    for (const x of pagos) { const k = x.posicion || SIN; (mm[k] = mm[k] || { posicion: k, gente: [], horas: 0, pago: 0 }); mm[k].gente.push(x); mm[k].horas += x.horasTotal || 0; mm[k].pago += x.miPago || 0 }
+    return Object.values(mm).sort((a, b) => (a.posicion === SIN ? 1 : b.posicion === SIN ? -1 : a.posicion.localeCompare(b.posicion)))
+  }, [pagos])
+  const puestos = useMemo(() => puestosDe(bd), [bd])
   const sinTarifa = [...new Set(pagos.filter((x) => x.pendienteTarifa).map((x) => x.posicion))]
+  const nNuevos = pagos.filter((x) => meta[x.nombreNorm]?.nuevo).length
+  const nSin = pagos.filter((x) => !x.posicion).length
+  const nDup = pagos.filter((x) => meta[x.nombreNorm]?.dupId && !dupP[x.nombreNorm]).length
+  const reglaDe = (x) => {
+    const w = workersMap[x.nombreNorm]
+    const g = w && w.grupoId ? bd.grupos[w.grupoId] : null
+    const regla = g && g.reglaOT ? g.reglaOT : bd.reglas.reglaOT
+    const umbral = g && g.umbralSemanal ? g.umbralSemanal : bd.reglas.umbralSemanal
+    if (!x.pendienteTarifa && x.miTarifaOT === x.miTarifaReg) return 'flat rate'
+    return regla === 'semanal' ? `OT semanal ${umbral}h` : 'OT según Gofo'
+  }
   const color = cat === 'nuevo' ? 'green' : cat === 'ya' ? 'slate' : cat === 'cambios' ? 'gold' : 'red'
   const etiqueta = cat === 'nuevo' ? 'Listo para importar' : cat === 'ya' ? 'Ya procesado (sin cambios)' : cat === 'cambios' ? 'Cambió desde la importación — requiere revisión' : 'Incompleto / pendiente'
   return (
@@ -415,34 +479,117 @@ function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar,
             </Aviso>
           )}
           {sinTarifa.length > 0 && cat !== 'ya' && (
-            <FaltaTarifa posiciones={sinTarifa} onGuardada={onTarifaGuardada} user={user} />
+            <FaltaTarifa posiciones={sinTarifa.filter((x) => x)} onGuardada={onTarifaGuardada} user={user} />
           )}
 
-          {/* vista previa de personas */}
-          <div className="overflow-x-auto">
-            <table className="min-w-[900px] w-full text-xs">
-              <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
-                <th className="py-1.5 pr-2">Trabajador</th><th className="pr-2">Posición</th><th className="pr-2">Agencia</th><th className="pr-2">WH</th>
-                <th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">OT</th>
-                <th className="pr-2 text-right">Tarifa Gofo</th><th className="pr-2 text-right">Ingreso Gofo</th>
-                <th className="pr-2 text-right">Mi tarifa</th><th className="pr-2 text-right">Mi pago</th>
-              </tr></thead>
-              <tbody>
-                {pagos.map((x, i) => (
-                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{x.nombre}</td>
-                    <td className="pr-2">{x.posicion}{x.posicionRaw && x.posicionRaw !== x.posicion ? <span className="text-slate-400"> ({x.posicionRaw})</span> : ''}</td>
-                    <td className="pr-2">{x.agencia}</td><td className="pr-2">{x.warehouse}</td>
-                    <td className="pr-2 text-right">{x.horasTotal}</td><td className="pr-2 text-right">{x.horasOT || 0}</td>
-                    <td className="pr-2 text-right">{dinero(x.tarifaGofoReg)} / {dinero(x.tarifaGofoOT)}</td>
-                    <td className="pr-2 text-right font-semibold">{dinero(x.importeGofo)}</td>
-                    <td className="pr-2 text-right">{x.pendienteTarifa ? <Badge color="red">sin tarifa</Badge> : `${dinero(x.miTarifaReg)} / ${dinero(x.miTarifaOT)}`}</td>
-                    <td className="pr-2 text-right font-semibold">{x.pendienteTarifa ? '—' : dinero(x.miPago)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* resumen rápido */}
+          {cat !== 'incompleto' && (
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              {nNuevos > 0 && <Badge color="green">{nNuevos} nuevo(s)</Badge>}
+              {nDup > 0 && <Badge color="gold">{nDup} posible(s) duplicado(s)</Badge>}
+              {nSin > 0 && <Badge color="red">{nSin} sin posición</Badge>}
+              <button className="ml-auto font-semibold text-brand-gold hover:underline" onClick={() => setVerTabla((v) => !v)}>
+                {verTabla ? 'ocultar tabla detallada' : 'ver tabla detallada (Gofo)'}
+              </button>
+            </div>
+          )}
+
+          {/* vista previa agrupada por posición */}
+          <div className="space-y-2">
+            {grupos.map((g) => {
+              const esSin = g.posicion === SIN
+              const ab = grupoAbierto[g.posicion] ?? esSin
+              return (
+                <div key={g.posicion} className={`overflow-hidden rounded-xl border ${esSin ? 'border-amber-300 dark:border-amber-500/40' : 'border-slate-200 dark:border-slate-700'}`}>
+                  <button className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setGrupoAbierto({ ...grupoAbierto, [g.posicion]: !ab })}>
+                    {ab ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                    <span className={`inline-block h-2.5 w-2.5 rounded ${esSin ? 'bg-amber-400' : 'bg-brand-gold'}`} />
+                    <span className="text-sm font-bold text-brand-navy dark:text-slate-100">{esSin ? 'Sin clasificar' : g.posicion}</span>
+                    <span className="font-mono text-xs font-semibold text-slate-400">{g.gente.length} · {horasTxt(g.horas)}</span>
+                    <span className="ml-auto font-mono text-xs font-semibold text-brand-navy dark:text-slate-100">{dinero(g.pago)}</span>
+                  </button>
+                  {ab && (
+                    <div className="border-t border-slate-100 dark:border-slate-800">
+                      {g.gente.map((x, i) => {
+                        const mt = meta[x.nombreNorm] || {}
+                        const tarifa = chipTarifa(x)
+                        return (
+                          <div key={x.nombreNorm + i} className="border-b border-slate-100 px-3 py-2 last:border-0 dark:border-slate-800">
+                            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-brand-navy dark:text-slate-100">{x.nombre}</span>
+                                  {mt.nuevo && <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white">nuevo</span>}
+                                  {x.posicionRaw && x.posicionRaw !== x.posicion && <span className="text-[10px] text-slate-400">({x.posicionRaw})</span>}
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {tarifa
+                                    ? <span className="rounded-md bg-amber-100 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">{tarifa}</span>
+                                    : <span className="rounded-md bg-rose-100 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">sin tarifa aún</span>}
+                                  <span className="rounded-md bg-blue-100 px-2 py-0.5 font-mono text-[10.5px] font-semibold text-blue-800 dark:bg-blue-500/15 dark:text-blue-300">{reglaDe(x)}</span>
+                                  <span className="font-mono text-[10.5px] text-slate-400">Gofo {dinero(x.importeGofo)}</span>
+                                </div>
+                              </div>
+                              {esSin ? (
+                                <Select className="w-40" value={clasifP[x.nombreNorm] || ''} onChange={(e) => onClasificar(x.nombreNorm, e.target.value)}>
+                                  <option value="">Clasificar…</option>
+                                  {puestos.map((pp) => <option key={pp} value={pp}>{pp}</option>)}
+                                </Select>
+                              ) : (
+                                <div className="text-right font-mono text-sm">
+                                  <div className="font-semibold text-brand-navy dark:text-slate-100">{horasTxt(x.horasTotal)}{x.horasOT ? <span className="text-[10px] text-slate-400"> (OT {x.horasOT})</span> : ''}</div>
+                                  <div className="text-xs text-slate-400">{x.pendienteTarifa ? '—' : dinero(x.miPago)}</div>
+                                </div>
+                              )}
+                            </div>
+                            {mt.dupId && (
+                              <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-500/40 dark:bg-amber-500/10 ${dupP[x.nombreNorm] ? 'opacity-60' : ''}`}>
+                                <span className="text-xs text-slate-600 dark:text-slate-300">⚠️ Se parece a <b className="text-amber-700 dark:text-amber-300">{mt.dupNombre}</b> que ya existe. ¿Es la misma persona?</span>
+                                {dupP[x.nombreNorm]
+                                  ? <Badge color={dupP[x.nombreNorm] === 'same' ? 'green' : 'slate'}>{dupP[x.nombreNorm] === 'same' ? 'unida al perfil' : 'es otra persona'}</Badge>
+                                  : <span className="flex gap-1.5">
+                                    <button className="rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white" onClick={() => onDup(x.nombreNorm, 'same')}>Es la misma</button>
+                                    <button className="rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:border-slate-600" onClick={() => onDup(x.nombreNorm, 'other')}>Es otra</button>
+                                  </span>}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
+
+          {/* tabla detallada de Gofo (opcional) */}
+          {verTabla && (
+            <div className="overflow-x-auto">
+              <table className="min-w-[900px] w-full text-xs">
+                <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase text-slate-400 dark:border-slate-700">
+                  <th className="py-1.5 pr-2">Trabajador</th><th className="pr-2">Posición</th><th className="pr-2">Agencia</th><th className="pr-2">WH</th>
+                  <th className="pr-2 text-right">Horas</th><th className="pr-2 text-right">OT</th>
+                  <th className="pr-2 text-right">Tarifa Gofo</th><th className="pr-2 text-right">Ingreso Gofo</th>
+                  <th className="pr-2 text-right">Mi tarifa</th><th className="pr-2 text-right">Mi pago</th>
+                </tr></thead>
+                <tbody>
+                  {pagos.map((x, i) => (
+                    <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-1.5 pr-2 font-semibold text-brand-navy dark:text-slate-100">{x.nombre}</td>
+                      <td className="pr-2">{x.posicion}{x.posicionRaw && x.posicionRaw !== x.posicion ? <span className="text-slate-400"> ({x.posicionRaw})</span> : ''}</td>
+                      <td className="pr-2">{x.agencia}</td><td className="pr-2">{x.warehouse}</td>
+                      <td className="pr-2 text-right">{x.horasTotal}</td><td className="pr-2 text-right">{x.horasOT || 0}</td>
+                      <td className="pr-2 text-right">{dinero(x.tarifaGofoReg)} / {dinero(x.tarifaGofoOT)}</td>
+                      <td className="pr-2 text-right font-semibold">{dinero(x.importeGofo)}</td>
+                      <td className="pr-2 text-right">{x.pendienteTarifa ? <Badge color="red">sin tarifa</Badge> : `${dinero(x.miTarifaReg)} / ${dinero(x.miTarifaOT)}`}</td>
+                      <td className="pr-2 text-right font-semibold">{x.pendienteTarifa ? '—' : dinero(x.miPago)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {p.ajustes.length > 0 && (
             <div>
