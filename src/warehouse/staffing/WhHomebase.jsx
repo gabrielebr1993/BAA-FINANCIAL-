@@ -36,6 +36,8 @@ export default function WhHomebase({ user }) {
   const [clasif, setClasif] = useState({}) // nombreNorm → posicion elegida
   const [dup, setDup] = useState({}) // nombreNorm → 'same' | 'other'
   const [abiertos, setAbiertos] = useState({}) // posicion → bool
+  const [sel, setSel] = useState(() => new Set()) // selección múltiple (sin clasificar)
+  const [bulkPos, setBulkPos] = useState('') // puesto a aplicar en lote
 
   const recargarBd = async () => {
     const [periodos, tarifas, workers, configs, gruposLista, registros] = await Promise.all([
@@ -58,7 +60,7 @@ export default function WhHomebase({ user }) {
   const procesar = async (f) => {
     if (!f || !bd) return
     if (!/\.pdf$/i.test(f.name)) { setMensaje({ tipo: 'error', texto: `"${f.name}" no es un PDF. Sube el timesheet de Homebase en PDF.` }); return }
-    setTrabajando('analizando'); setMensaje(null); setClasif({}); setDup({})
+    setTrabajando('analizando'); setMensaje(null); setClasif({}); setDup({}); setSel(new Set()); setBulkPos('')
     try {
       // pdfjs (grande) se carga solo al subir un PDF, no al abrir el módulo
       const { analizarPdfHomebase } = await import('./pdfHomebase')
@@ -288,10 +290,34 @@ export default function WhHomebase({ user }) {
                   </button>
                   {abierto && (
                     <div className="border-t border-slate-100 dark:border-slate-800">
+                      {esSin && g.gente.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-amber-50/50 px-4 py-2.5 dark:border-slate-800 dark:bg-amber-500/5">
+                          <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <input type="checkbox" className="accent-brand-gold"
+                              checked={g.gente.every((p) => sel.has(p.nombreNorm))}
+                              onChange={(e) => { const ns = new Set(sel); g.gente.forEach((p) => e.target.checked ? ns.add(p.nombreNorm) : ns.delete(p.nombreNorm)); setSel(ns) }} />
+                            Seleccionar todos
+                          </label>
+                          <span className="text-xs text-slate-400">{g.gente.filter((p) => sel.has(p.nombreNorm)).length} marcados</span>
+                          <div className="ml-auto flex items-center gap-2">
+                            <Select className="w-40" value={bulkPos} onChange={(e) => setBulkPos(e.target.value)}>
+                              <option value="">Puesto para marcados…</option>
+                              {puestos.map((pp) => <option key={pp} value={pp}>{pp}</option>)}
+                            </Select>
+                            <Boton variant="gold" disabled={!bulkPos || !g.gente.some((p) => sel.has(p.nombreNorm))}
+                              onClick={() => { const c = { ...clasif }; g.gente.forEach((p) => { if (sel.has(p.nombreNorm)) c[p.nombreNorm] = bulkPos }); setClasif(c); setSel(new Set()); setBulkPos('') }}>
+                              Clasificar marcados
+                            </Boton>
+                          </div>
+                        </div>
+                      )}
                       {g.gente.map((p, i) => (
                         <PersonaRow key={p.nombreNorm + i} p={p} esSin={esSin} puestos={puestos}
                           tarifa={tarifaDe(p)} regla={reglaDe(p)}
                           clasifValor={clasif[p.nombreNorm]} dupValor={dup[p.nombreNorm]}
+                          seleccionable={esSin && g.gente.length > 1}
+                          seleccionado={sel.has(p.nombreNorm)}
+                          onToggleSel={() => { const ns = new Set(sel); ns.has(p.nombreNorm) ? ns.delete(p.nombreNorm) : ns.add(p.nombreNorm); setSel(ns) }}
                           onClasificar={(v) => setClasif({ ...clasif, [p.nombreNorm]: v })}
                           onDup={(v) => setDup({ ...dup, [p.nombreNorm]: v })}
                         />
@@ -333,11 +359,14 @@ function ResumenTile({ n, l, destacado, verde, ambar }) {
   )
 }
 
-function PersonaRow({ p, esSin, puestos, tarifa, regla, clasifValor, dupValor, onClasificar, onDup }) {
+function PersonaRow({ p, esSin, puestos, tarifa, regla, clasifValor, dupValor, seleccionable, seleccionado, onToggleSel, onClasificar, onDup }) {
   const resuelto = !!dupValor
   return (
     <div className="border-b border-slate-100 px-4 py-2.5 last:border-0 dark:border-slate-800">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+        {seleccionable && (
+          <input type="checkbox" className="mt-1 accent-brand-gold" checked={!!seleccionado} onChange={onToggleSel} aria-label={`Seleccionar ${p.nombre}`} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-brand-navy dark:text-slate-100">{p.nombre}</span>
