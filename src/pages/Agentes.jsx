@@ -69,6 +69,8 @@ export default function Agentes() {
   const [progresoSitios, setProgresoSitios] = useState(null)
   const [oleadas, setOleadas] = useState(null)
   const [colaSitios, setColaSitios] = useState(null)
+  const [zoom, setZoom] = useState(0.7) // tamaño del mapa (0.4–1.5)
+  const ajustarZoom = (d) => setZoom((z) => Math.min(1.5, Math.max(0.4, Math.round((z + d) * 100) / 100)))
 
   useEffect(() => {
     if (!companyId || carrier !== 'gofo') return undefined
@@ -148,7 +150,14 @@ export default function Agentes() {
         {oleadas?.actualizadoEn ? (
           <p className="mt-1 text-xs text-slate-500">Último reporte de oleadas: {String(oleadas.actualizadoEn)}</p>
         ) : null}
-        <svg viewBox="0 0 1000 560" className="mt-3 w-full rounded-xl bg-slate-50 dark:bg-slate-900" role="img" aria-label="Mapa de agentes entre Gofo y MilePay">
+        <div className="mt-3 flex items-center gap-1.5">
+          <span className="mr-1 text-xs font-semibold text-slate-500">Zoom del mapa</span>
+          <button type="button" onClick={() => ajustarZoom(-0.1)} disabled={zoom <= 0.4} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-base font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Reducir" aria-label="Reducir mapa">−</button>
+          <button type="button" onClick={() => setZoom(0.7)} className="h-7 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Tamaño normal">{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => ajustarZoom(0.1)} disabled={zoom >= 1.5} className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-base font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Ampliar" aria-label="Ampliar mapa">+</button>
+        </div>
+        <div className="mt-2 overflow-x-auto">
+        <svg viewBox="0 0 1000 560" style={{ width: `${zoom * 100}%`, minWidth: zoom <= 1 ? undefined : `${zoom * 100}%` }} className="rounded-xl bg-slate-50 dark:bg-slate-900" role="img" aria-label="Mapa de agentes entre Gofo y MilePay">
           {/* Caminos Gofo -> MilePay y ciudad -> MilePay */}
           {agentes.map((a) => {
             const [x, y] = POS[a.sitio]
@@ -192,6 +201,7 @@ export default function Agentes() {
             <text x={GOFO[0]} y={GOFO[1] + 20} textAnchor="middle" fontSize="12" fill="#d1fae5">portal, solo consulta</text>
           </g>
         </svg>
+        </div>
         <p className="mt-2 text-xs text-slate-500">Leyenda: punto azul moviéndose = agente trabajando en esa ciudad. Punto verde moviéndose entre Gofo y MilePay = agente buscando info en Gofo y trayéndola a MilePay, con halo verde alrededor de Gofo mientras busca. Línea gris punteada = ciudad sin datos todavía o sin pendientes. Toca una ciudad abajo para ver sus números.</p>
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
