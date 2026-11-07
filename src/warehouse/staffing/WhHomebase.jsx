@@ -361,6 +361,7 @@ function ResumenTile({ n, l, destacado, verde, ambar }) {
 
 function PersonaRow({ p, esSin, puestos, tarifa, regla, clasifValor, dupValor, seleccionable, seleccionado, onToggleSel, onClasificar, onDup }) {
   const resuelto = !!dupValor
+  const [editando, setEditando] = useState(false)
   return (
     <div className="border-b border-slate-100 px-4 py-2.5 last:border-0 dark:border-slate-800">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
@@ -395,6 +396,14 @@ function PersonaRow({ p, esSin, puestos, tarifa, regla, clasifValor, dupValor, s
           <div className="text-right font-mono text-sm">
             <div className="font-semibold text-brand-navy dark:text-slate-100">{horas(p.horasTotal)}</div>
             <div className="text-xs text-slate-400">{dinero(p.miPago)}</div>
+            {editando ? (
+              <Select className="mt-1 w-36" value={p.posicion} onChange={(e) => { onClasificar(e.target.value); setEditando(false) }}>
+                {puestos.map((pp) => <option key={pp} value={pp}>{pp}</option>)}
+                <option value="">— Sin clasificar —</option>
+              </Select>
+            ) : (
+              <button className="mt-0.5 text-[10px] font-semibold text-slate-400 hover:text-brand-gold" onClick={() => setEditando(true)}>cambiar puesto</button>
+            )}
           </div>
         )}
       </div>

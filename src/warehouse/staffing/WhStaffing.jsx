@@ -111,7 +111,7 @@ export default function WhStaffing({ user }) {
     try {
       // 1) pagos con MIS tarifas vigentes (aplicando lo que clasificaste en la vista previa)
       const workersMap = Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])]))
-      const filasAj = p.filas.map((f) => { const c = clasif[`${p.idPeriodo}::${f.nombreNorm}`]; return c ? { ...f, posicion: c } : f })
+      const filasAj = p.filas.map((f) => { const c = clasif[`${p.idPeriodo}::${f.nombreNorm}`]; return c != null ? { ...f, posicion: c } : f })
       const pagos = calcularPagos(filasAj, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos)
       // 2) perfiles: crear los que falten / reutilizar existentes (nunca duplicar)
       // Los IDs de empleado (工号) de la asistencia del MISMO archivo se
@@ -420,9 +420,10 @@ function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar,
   const [abierto, setAbierto] = useState(cat === 'nuevo' || cat === 'cambios')
   const [verTabla, setVerTabla] = useState(false)
   const [grupoAbierto, setGrupoAbierto] = useState({})
+  const [editPuesto, setEditPuesto] = useState(null) // nombreNorm en edición de puesto
   const workersMap = useMemo(() => Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])])), [bd.workers])
   // aplica lo que clasificaste antes de calcular (posición → tarifa)
-  const filasAj = useMemo(() => p.filas.map((f) => { const c = clasifP[f.nombreNorm]; return c ? { ...f, posicion: c } : f }), [p.filas, clasifP])
+  const filasAj = useMemo(() => p.filas.map((f) => { const c = clasifP[f.nombreNorm]; return c != null ? { ...f, posicion: c } : f }), [p.filas, clasifP])
   const pagos = useMemo(() => calcularPagos(filasAj, bd.tarifas, workersMap, bd.reglas, p.fin, bd.grupos), [filasAj, bd, workersMap, p.fin])
   const meta = useMemo(() => {
     const m = {}
@@ -545,6 +546,14 @@ function PeriodoPreview({ p, cat, bd, previo, importando, onImportar, onAprobar,
                                 <div className="text-right font-mono text-sm">
                                   <div className="font-semibold text-brand-navy dark:text-slate-100">{horasTxt(x.horasTotal)}{x.horasOT ? <span className="text-[10px] text-slate-400"> (OT {x.horasOT})</span> : ''}</div>
                                   <div className="text-xs text-slate-400">{x.pendienteTarifa ? '—' : dinero(x.miPago)}</div>
+                                  {editPuesto === x.nombreNorm ? (
+                                    <Select className="mt-1 w-36" value={x.posicion} onChange={(e) => { onClasificar(x.nombreNorm, e.target.value); setEditPuesto(null) }}>
+                                      {puestos.map((pp) => <option key={pp} value={pp}>{pp}</option>)}
+                                      <option value="">— Sin clasificar —</option>
+                                    </Select>
+                                  ) : (
+                                    <button className="mt-0.5 text-[10px] font-semibold text-slate-400 hover:text-brand-gold" onClick={() => setEditPuesto(x.nombreNorm)}>cambiar puesto</button>
+                                  )}
                                 </div>
                               )}
                             </div>
