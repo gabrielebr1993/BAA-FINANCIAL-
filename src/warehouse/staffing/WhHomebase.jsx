@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card, PageTitle, Boton, Aviso, Badge, Spinner, Select } from '../../components/ui'
 import { Upload, ChevronDown, ChevronRight, RefreshCw, UserPlus, AlertTriangle, Users } from 'lucide-react'
-import { POSICIONES_BASE, normalizarNombre, hashContenido } from './parserGofo'
+import { POSICIONES_BASE, normalizarNombre, hashContenido, mapearPosicion } from './parserGofo'
 import { calcularPagos, expandirTarifas } from './calculosStaff'
 import { mapaUltimaPosicion, resolverFilasHomebase } from './posicionesStaff'
 import {
@@ -71,13 +71,19 @@ export default function WhHomebase({ user }) {
     } finally { setTrabajando('') }
   }
 
-  // Puestos disponibles para clasificar (config + tarifas + historial).
+  // Puestos para clasificar, en forma CANÓNICA (legible): los de chino y las
+  // variantes se mapean a su nombre en inglés y se de-duplican (nada de dos
+  // "Forklift" ni 分拣工 sueltos en el menú).
   const puestos = useMemo(() => {
     if (!bd) return []
-    const s = new Set([...Object.values(bd.posiciones || {}), ...Object.keys(bd.tarifas || {})])
-    bd.workers.forEach((w) => { if (w.posicion) s.add(w.posicion) })
-    Object.values(bd.ultima?.porId || {}).forEach((p) => s.add(p))
-    return [...s].filter(Boolean).sort()
+    const map = bd.posiciones || {}
+    const s = new Set()
+    const add = (raw) => { const m = mapearPosicion(raw, map); if (m) s.add(m) }
+    Object.values(map).forEach((v) => s.add(v))
+    Object.keys(bd.tarifas || {}).forEach(add)
+    bd.workers.forEach((w) => { if (w.posicion) add(w.posicion) })
+    Object.values(bd.ultima?.porId || {}).forEach(add)
+    return [...s].filter((x) => x && x !== SIN).sort()
   }, [bd])
 
   const workersMap = useMemo(() => (bd ? Object.fromEntries(bd.workers.flatMap((w) => [[w.nombreNorm, w], ...(w.alias || []).map((a) => [a, w])])) : {}), [bd])

@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Spinner } from '../../components/ui'
 import { Upload, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
-import { analizarLibro, POSICIONES_BASE, normalizarNombre } from './parserGofo'
+import { analizarLibro, POSICIONES_BASE, normalizarNombre, mapearPosicion } from './parserGofo'
 import { calcularPagos, expandirTarifas } from './calculosStaff'
 import {
   COL, cargar, cargarPor, auditarStaff, escribirEnLotes, refDoc, resolverWorker, idRegistro, serverTimestamp, setDoc, arrayUnion,
@@ -22,10 +22,16 @@ import {
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const horasTxt = (n) => `${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} h`
 const SIN = '__sin__'
-// Puestos disponibles para clasificar (config + tarifas + perfiles).
+// Puestos disponibles para clasificar, en su forma CANÓNICA (legible): los de
+// chino (分拣工, 叉车工…) y variantes se mapean a su nombre en inglés y se
+// de-duplican, para que el menú no muestre "Forklift" dos veces.
 function puestosDe(bd) {
-  const s = new Set([...Object.values(bd.posiciones || {}), ...Object.keys(bd.tarifas || {})])
-  bd.workers.forEach((w) => { if (w.posicion) s.add(w.posicion) })
+  const map = bd.posiciones || {}
+  const s = new Set()
+  const add = (raw) => { const m = mapearPosicion(raw, map); if (m) s.add(m) }
+  Object.values(map).forEach((v) => s.add(v))
+  Object.keys(bd.tarifas || {}).forEach(add)
+  bd.workers.forEach((w) => { if (w.posicion) add(w.posicion) })
   return [...s].filter((x) => x && x !== SIN).sort()
 }
 // Chip de tarifa de un pago (null si falta tarifa). Muestra flat rate.
