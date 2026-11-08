@@ -11,14 +11,14 @@
 // Respeta tus reglas de días/horas/OT porque reusa calcularPagos.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
-import { Card, PageTitle, Boton, Aviso, Badge, Spinner, Select } from '../../components/ui'
+import { Card, PageTitle, Boton, Aviso, Badge, Spinner, Select, Input } from '../../components/ui'
 import { Upload, ChevronDown, ChevronRight, RefreshCw, UserPlus, AlertTriangle, Users } from 'lucide-react'
 import { POSICIONES_BASE, normalizarNombre, hashContenido, mapearPosicion } from './parserGofo'
 import { calcularPagos, expandirTarifas } from './calculosStaff'
 import { mapaUltimaPosicion, resolverFilasHomebase } from './posicionesStaff'
 import {
   COL, cargar, cargarPor, auditarStaff, escribirEnLotes, refDoc, resolverWorker,
-  idRegistro, serverTimestamp, arrayUnion,
+  idRegistro, serverTimestamp, arrayUnion, setDoc,
 } from './datosStaff'
 
 const dinero = (n) => (n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -40,17 +40,21 @@ export default function WhHomebase({ user }) {
   const [bulkPos, setBulkPos] = useState('') // puesto a aplicar en lote
 
   const recargarBd = async () => {
-    const [periodos, tarifas, workers, configs, gruposLista, registros] = await Promise.all([
-      cargar(COL.periodos), cargar(COL.tarifas), cargar(COL.workers), cargar(COL.config), cargar(COL.grupos), cargar(COL.registros),
+    const [periodos, tarifas, workers, configs, gruposLista, registros, ajustes] = await Promise.all([
+      cargar(COL.periodos), cargar(COL.tarifas), cargar(COL.workers), cargar(COL.config), cargar(COL.grupos), cargar(COL.registros), cargar(COL.ajustes),
     ])
     const posiciones = configs.find((c) => c.id === 'posiciones')?.mapa || POSICIONES_BASE
     const reglas = configs.find((c) => c.id === 'reglas') || { reglaOT: 'gofo', umbralSemanal: 40 }
+    // ingreso de Gofo guardado por período (ajuste sin trabajador: cuenta como ingreso, no como pago)
+    const ingresoPorPeriodo = {}
+    for (const a of ajustes) if (a.id && a.id.endsWith('__ingresoGofo')) ingresoPorPeriodo[a.periodoAplicaId] = a.importe || 0
     setBd({
       periodos: Object.fromEntries(periodos.map((p) => [p.id, p])),
       tarifas: expandirTarifas(Object.fromEntries(tarifas.map((t) => [t.id, t])), posiciones),
       workers, posiciones, reglas,
       grupos: Object.fromEntries(gruposLista.map((g) => [g.id, g])),
       ultima: mapaUltimaPosicion(registros),
+      ingresoPorPeriodo,
     })
   }
   useEffect(() => { recargarBd() }, [])
@@ -344,7 +348,68 @@ export default function WhHomebase({ user }) {
           </div>
         </>
       )}
+
+      <IngresoHomebase bd={bd} user={user} onGuardado={recargarBd} />
     </div>
+  )
+}
+
+// Ingreso de Gofo por período de Homebase (manual). Homebase no trae lo que
+// Gofo te paga, así que aquí lo escribes a mano para que Finanzas calcule la
+// utilidad. Se guarda como un ajuste SIN trabajador (cuenta como ingreso del
+// período, nunca como pago), con id determinista por período.
+function IngresoHomebase({ bd, user, onGuardado }) {
+  const periodos = Object.values(bd.periodos || {}).filter((p) => p.cliente === 'Homebase').sort((a, b) => String(b.inicio).localeCompare(a.inicio))
+  const [valores, setValores] = useState({})
+  const [guardando, setGuardando] = useState('')
+  if (!periodos.length) return null
+  const valorDe = (p) => (valores[p.id] !== undefined ? valores[p.id] : (bd.ingresoPorPeriodo?.[p.id] ?? ''))
+  const guardar = async (p) => {
+    setGuardando(p.id)
+    try {
+      const v = Number(valorDe(p))
+      const ref = refDoc(COL.ajustes, `${p.id}__ingresoGofo`)
+      if (v > 0) {
+        await setDoc(ref, {
+          periodoAplicaId: p.id, concepto: 'Ingreso de Gofo (Homebase)', importe: Math.round(v * 100) / 100,
+          estado: 'aplicado', origen: { fuente: 'homebase_ingreso', archivo: p.archivo || '' },
+          actualizadoEn: serverTimestamp(), actualizadoPor: user.email,
+        }, { merge: true })
+      } else {
+        await escribirEnLotes([{ ref, borrar: true }])
+      }
+      await auditarStaff('homebase_ingreso', `${p.id}: ingreso Gofo ${dinero(v)}`)
+      await onGuardado()
+    } finally { setGuardando('') }
+  }
+  return (
+    <Card className="mt-6 p-4">
+      <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Ingreso de Gofo por período (Homebase)</div>
+      <p className="mb-3 text-xs text-slate-500">El timesheet de Homebase no dice cuánto te paga Gofo. Escribe aquí ese monto por semana y Finanzas calculará la utilidad (ingreso − lo que pagaste − gastos). Se guarda como ingreso del período, no como pago.</p>
+      <div className="space-y-1.5">
+        {periodos.map((p) => {
+          const pago = p.totales?.pago || 0
+          const ing = Number(valorDe(p)) || 0
+          const util = ing - pago
+          return (
+            <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-2 text-xs dark:border-slate-800">
+              <span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{p.inicio} → {p.fin}</span>
+              <span className="text-slate-400">pagaste {dinero(pago)}</span>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-slate-500">Gofo te paga:</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                  <Input type="number" step="0.01" min="0" className="w-32 pl-5" placeholder="0.00"
+                    value={valorDe(p)} onChange={(e) => setValores({ ...valores, [p.id]: e.target.value })} />
+                </div>
+                <Boton variant="gold" disabled={guardando === p.id} onClick={() => guardar(p)}>{guardando === p.id ? <Spinner /> : 'Guardar'}</Boton>
+                {ing > 0 && <span className={`font-mono font-semibold ${util >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>utilidad {dinero(util)}</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }
 
