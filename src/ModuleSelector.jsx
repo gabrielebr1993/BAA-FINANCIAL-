@@ -5,7 +5,7 @@
 // dueño pasa (los demás ven la pantalla de bloqueo); mismo candado en las
 // reglas de Firestore.
 import { useNavigate } from 'react-router-dom'
-import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart, Warehouse } from 'lucide-react'
+import { FileText, Truck, ArrowRight, Route, ArrowLeft, ShoppingCart, Warehouse, Target } from 'lucide-react'
 import { useLang, LangToggle } from './i18n'
 
 export function setModulo(m) { try { localStorage.setItem('mp_module', m) } catch { /* noop */ } }
@@ -99,6 +99,10 @@ export default function ModuleSelector() {
           <OpcionCard
             onClick={() => navigate('/wh')} icon={Warehouse} acento="bg-violet-600" glow="bg-violet-500"
             titulo="Warehouse" desc={t('Clasificación, staffing e inbound/outbound.')}
+          />
+          <OpcionCard
+            onClick={() => navigate('/auto')} icon={Target} acento="bg-brand-gold" glow="bg-amber-400"
+            titulo="Autoasignación" desc={t('Reparto de paquetes por ruta, con aprobación en 3 pasos.')}
           />
         </div>
 

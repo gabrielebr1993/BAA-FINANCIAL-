@@ -775,5 +775,12 @@ service cloud.firestore {
     match /{coleccionWh}/{id} {
       allow read, write: if coleccionWh.matches('wh_.*') && coleccionWh != 'wh_audit' && esDuenoEcom();
     }
+
+    // MÓDULO AUTOASIGNACIÓN — colecciones auto_* (auto_rutas, auto_ordenes):
+    // solo el dueño verificado. La cola de órdenes la leerá también el agente
+    // (Fase 2) con una cuenta de servicio, que ignora estas reglas.
+    match /{coleccionAuto}/{id} {
+      allow read, write: if coleccionAuto.matches('auto_.*') && esDuenoEcom();
+    }
   }
 }

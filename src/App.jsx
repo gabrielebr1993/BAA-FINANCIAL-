@@ -26,6 +26,7 @@ const Home3D = lazy(() => import('./pages/Home3D'))
 const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
 // Módulo WAREHOUSE (en construcción): servicios de almacén. Mismo candado privado.
 const WhApp = lazy(() => import('./warehouse/WhApp'))
+const AutoAsignApp = lazy(() => import('./autoasign/AutoAsignApp'))
 const FirmaQR = lazy(() => import('./warehouse/staffing/printcheck/FirmaQR'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
@@ -192,6 +193,9 @@ function TopBranch() {
   }
   if (pathname === '/wh' || pathname.startsWith('/wh/')) {
     return <Suspense fallback={<Cargando texto="Cargando Warehouse…" />}><WhApp /></Suspense>
+  }
+  if (pathname === '/auto' || pathname.startsWith('/auto/')) {
+    return <Suspense fallback={<Cargando texto="Cargando Autoasignación…" />}><AutoAsignApp /></Suspense>
   }
   // Página para firmar con el iPad/teléfono (QR de Print Check → Firmas).
   if (pathname === '/firma-qr') {
