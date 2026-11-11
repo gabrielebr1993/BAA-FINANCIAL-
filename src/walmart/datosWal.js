@@ -10,7 +10,7 @@
 // ============================================================================
 import {
   collection, getDocs, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy,
-  serverTimestamp, writeBatch,
+  serverTimestamp, writeBatch, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 
@@ -87,6 +87,53 @@ export async function auditar(accion, detalle) {
 // Nombre para mostrar de una persona.
 export const nombreCompleto = (p) => `${p?.nombre || ''} ${p?.apellido || ''}`.trim() || '(sin nombre)'
 
+// ── Semana de pago (lunes a domingo, por fecha local de servicio) ───────────
+// Devuelve la fecha ISO del LUNES de la semana de `fechaISO` (clave de semana).
+export function lunesDe(fechaISO) {
+  const d = new Date(`${fechaISO || hoyISO()}T00:00:00`)
+  const dow = (d.getDay() + 6) % 7 // 0 = lunes
+  d.setDate(d.getDate() - dow)
+  return d.toISOString().slice(0, 10)
+}
+export function domingoDe(fechaISO) {
+  const d = new Date(`${lunesDe(fechaISO)}T00:00:00`); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10)
+}
+export const hoyISO = () => new Date().toISOString().slice(0, 10)
+
+export const BLOQUES = [{ id: 'manana', label: 'Mañana' }, { id: 'tarde', label: 'Tarde' }]
+export const ESTADOS_RUTA = [
+  { id: 'pendiente', label: 'Pendiente', color: 'slate' },
+  { id: 'en_progreso', label: 'En progreso', color: 'blue' },
+  { id: 'completada', label: 'Completada', color: 'green' },
+  { id: 'cancelada', label: 'Cancelada', color: 'red' },
+]
+export const estadoRutaInfo = (id) => ESTADOS_RUTA.find((e) => e.id === id) || ESTADOS_RUTA[0]
+
+// Redondeo monetario a centavos.
+export const money2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+// id determinista de ruta (evita duplicar misma almacén+fecha+bloque+driver).
+export function idRuta(almacenId, fecha, bloque, driverId) {
+  return `r_${almacenId}_${fecha}_${bloque}_${driverId}`.replace(/[^a-zA-Z0-9_]/g, '')
+}
+
+// Suma de bonos/deducciones de una ruta por destino ('walmart' | 'driver').
+function ajustes(r, destino) {
+  const b = (r.bonos || []).filter((x) => x.aplicaA === destino).reduce((a, x) => a + (Number(x.monto) || 0), 0)
+  const d = (r.deducciones || []).filter((x) => x.aplicaA === destino).reduce((a, x) => a + (Number(x.monto) || 0), 0)
+  return money2(b - d)
+}
+// Ingreso que corresponde recibir de Walmart por la ruta (0 si no completada).
+export function ingresoRuta(r) {
+  if (r.estado !== 'completada') return 0
+  return money2((Number(r.tarifaWalmart) || 0) + ajustes(r, 'walmart'))
+}
+// Ganancia bruta del driver por la ruta, antes de Fast Pay (0 si no completada).
+export function gananciaDriver(r) {
+  if (r.estado !== 'completada') return 0
+  return money2((Number(r.tarifaDriver) || 0) + ajustes(r, 'driver'))
+}
+
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.
 export async function sembrarAlmacenes() {
   const existentes = await cargar(COL.almacenes)
@@ -100,4 +147,28 @@ export async function sembrarAlmacenes() {
   for (const a of base) batch.set(doc(collection(db, COL.almacenes)), { ...a, responsable: '', creadoEn: serverTimestamp(), creadoPor: auth.currentUser?.email || '' })
   await batch.commit()
   return base.length
+}
+
+// Cierre del día (transaccional): marca las rutas como cerradas y guarda el
+// resumen. No vuelve a generar movimientos; solo consolida y bloquea edición.
+export async function cerrarDia(almacenId, fecha, rutas, resumen) {
+  const cierreId = `c_${almacenId}_${fecha}`
+  const batch = writeBatch(db)
+  for (const r of rutas) batch.set(refDoc(COL.rutas, r.id), { cerrada: true, cierreId }, { merge: true })
+  batch.set(refDoc(COL.cierres, cierreId), { almacenId, fecha, resumen, estado: 'cerrado', cerradoEn: serverTimestamp(), cerradoPor: auth.currentUser?.email || '' }, { merge: true })
+  await batch.commit()
+  await auditar('dia_cerrado', `${almacenId} ${fecha}: ${rutas.length} rutas`)
+  return cierreId
+}
+// Reabrir un día cerrado (solo dueño), con motivo y rastro de auditoría. No
+// borra pagos ni comprobantes; solo permite corregir con nuevos ajustes.
+export async function reabrirDia(cierreId, rutas, motivo) {
+  const batch = writeBatch(db)
+  for (const r of rutas) batch.set(refDoc(COL.rutas, r.id), { cerrada: false, cierreId: null }, { merge: true })
+  batch.set(refDoc(COL.cierres, cierreId), {
+    estado: 'reabierto',
+    reaperturas: arrayUnion({ fecha: new Date().toISOString(), por: auth.currentUser?.email || '', motivo: motivo || '' }),
+  }, { merge: true })
+  await batch.commit()
+  await auditar('dia_reabierto', `${cierreId}: ${motivo || 'sin motivo'}`)
 }

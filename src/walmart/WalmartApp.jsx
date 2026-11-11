@@ -24,16 +24,19 @@ import { BANCOS_USA } from './bancosUSA'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes,
+  BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
+  hoyISO, lunesDe, cerrarDia, reabrirDia,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
 const hoy = () => new Date().toISOString().slice(0, 10)
+const dinero = (n) => `$${money2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const TABS = [
   { id: 'personas', label: 'Candidatos / Drivers', icono: Users },
   { id: 'almacenes', label: 'Almacenes', icono: WhIcon },
-  { id: 'rutas', label: 'Rutas', icono: RouteIcon, fase: 2 },
-  { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck, fase: 2 },
+  { id: 'rutas', label: 'Rutas', icono: RouteIcon },
+  { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck },
   { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet, fase: 3 },
   { id: 'gastos', label: 'Gastos', icono: Receipt, fase: 4 },
   { id: 'financiero', label: 'Financiero', icono: BarChart3, fase: 4 },
@@ -47,8 +50,14 @@ export default function WalmartApp() {
   const [tab, setTab] = useState('personas')
   const [personas, setPersonas] = useState([])
   const [almacenes, setAlmacenes] = useState([])
+  const [rutas, setRutas] = useState([])
+  const [cierres, setCierres] = useState([])
+  const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
+  useEffect(() => suscribir(COL.rutas, setRutas), [])
+  useEffect(() => suscribir(COL.cierres, setCierres), [])
+  useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
   return (
     <div className="min-h-screen bg-surface-light dark:bg-surface-dark">
@@ -70,8 +79,10 @@ export default function WalmartApp() {
       <main className="mx-auto max-w-5xl px-4 py-5">
         {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} user={user} />}
         {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
+        {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
+        {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
         {tab === 'config' && <TabConfig />}
-        {['rutas', 'cierre', 'pagos', 'gastos', 'financiero', 'contratos'].includes(tab) && (
+        {['pagos', 'gastos', 'financiero', 'contratos'].includes(tab) && (
           <Proximamente tab={TABS.find((t) => t.id === tab)} />
         )}
       </main>
@@ -467,3 +478,224 @@ function TabConfig() {
 function Seccion({ titulo, children }) { return <div className="mb-4 last:mb-0"><div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{titulo}</div>{children}</div> }
 function Grid({ children }) { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{children}</div> }
 function F({ label, children }) { return <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</span>{children}</label> }
+
+// ── RUTAS ───────────────────────────────────────────────────────────────────
+function TabRutas({ rutas, almacenes, personas, tarifas, cierres }) {
+  const [fecha, setFecha] = useState(hoyISO())
+  const [almId, setAlmId] = useState('')
+  const [editar, setEditar] = useState(null)
+  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
+  const diaCerrado = (aId) => cierres.some((c) => c.id === `c_${aId}_${fecha}` && c.estado === 'cerrado')
+  const delDia = useMemo(() => rutas.filter((r) => r.fecha === fecha && (!almId || r.almacenId === almId)).sort((a, b) => `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)), [rutas, fecha, almId])
+
+  if (editar) return <RutaEditor ruta={editar} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
+
+  const totIng = delDia.reduce((a, r) => a + ingresoRuta(r), 0)
+  const totGan = delDia.reduce((a, r) => a + gananciaDriver(r), 0)
+  return (
+    <div>
+      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({ fecha, almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton>}>Rutas</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <div className="ml-auto text-right text-xs text-slate-400">Ingreso Walmart <b className="text-brand-navy dark:text-slate-100">{dinero(totIng)}</b> · Ganancia drivers <b className="text-brand-navy dark:text-slate-100">{dinero(totGan)}</b></div>
+        </div>
+      </Card>
+      {delDia.length === 0 && <div className="text-sm text-slate-400">No hay rutas registradas para ese día{almId ? ` en ${almNombre(almId)}` : ''}. Crea una con “Nueva ruta”.</div>}
+      <div className="space-y-1.5">
+        {delDia.map((r) => {
+          const e = estadoRutaInfo(r.estado)
+          return (
+            <Card key={r.id} className="flex flex-wrap items-center gap-2.5 p-3">
+              <Badge color="navy">{almNombre(r.almacenId)}</Badge>
+              <Badge color="slate">{BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}</Badge>
+              <span className="font-bold text-brand-navy dark:text-slate-100">{r.driverNombre || '(sin driver)'}</span>
+              {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
+              <Badge color={e.color}>{e.label}</Badge>
+              {r.cerrada && <Badge color="slate">día cerrado</Badge>}
+              <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(ingresoRuta(r))} · drv {dinero(gananciaDriver(r))}</span>
+              <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{r.cerrada ? 'ver' : 'editar'}</button>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
+  const bloqueado = !!ruta.cerrada
+  const [r, setR] = useState(() => ({
+    fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
+    vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente',
+    tarifaWalmart: tarifas.ingresoWalmart, tarifaDriver: tarifas.pagoDriverPropio,
+    bonos: [], deducciones: [], notas: '', motivoCancel: '', ...ruta,
+  }))
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k, v) => setR((x) => ({ ...x, [k]: v }))
+  const driversActivos = personas.filter((p) => p.estadoOperativo === 'activo' && (!r.almacenId || p.almacenId === r.almacenId))
+  const elegirDriver = (id) => {
+    const d = personas.find((x) => x.id === id)
+    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaDriver: (d?.propietarioVehiculo === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio) }))
+  }
+  const setProp = (v) => setR((x) => ({ ...x, propietarioVehiculo: v, tarifaDriver: v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio }))
+  const addAj = (tipo) => set(tipo, [...(r[tipo] || []), { concepto: '', monto: '', responsable: '', aplicaA: 'driver' }])
+  const setAj = (tipo, i, k, v) => set(tipo, r[tipo].map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+  const delAj = (tipo, i) => set(tipo, r[tipo].filter((_, j) => j !== i))
+
+  const salvar = async () => {
+    if (!r.driverId) { setErr('Elige el driver.'); return }
+    if (!r.almacenId) { setErr('Elige el almacén.'); return }
+    if (r.estado === 'cancelada' && !r.motivoCancel.trim()) { setErr('Una ruta cancelada necesita motivo.'); return }
+    setErr(''); setGuardando(true)
+    try {
+      const id = ruta.id || idRuta(r.almacenId, r.fecha, r.bloque, r.driverId)
+      const limpio = {
+        ...r, semana: lunesDe(r.fecha),
+        tarifaWalmart: money2(r.tarifaWalmart), tarifaDriver: money2(r.tarifaDriver),
+        bonos: (r.bonos || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
+        deducciones: (r.deducciones || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
+      }
+      await guardar(COL.rutas, id, limpio)
+      await auditar('ruta_guardada', `${r.driverNombre} · ${r.fecha} · ${r.bloque} · ${r.estado}`)
+      onCerrar()
+    } catch (e) { setErr('No se pudo guardar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>{ruta.id ? (bloqueado ? 'Ruta (día cerrado)' : 'Editar ruta') : 'Nueva ruta'}</PageTitle>
+      {bloqueado && <Aviso tipo="warn" className="mb-3">Este día está cerrado. Para corregir, reábrelo en <b>Cierre diario</b> (queda auditado).</Aviso>}
+      <fieldset disabled={bloqueado} className="disabled:opacity-70">
+        <Card className="mb-3 p-4">
+          <Grid>
+            <F label="Fecha de servicio"><Input type="date" value={r.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+            <F label="Almacén"><Select value={r.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">Elegir…</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+            <F label="Driver (activo)"><Select value={r.driverId} onChange={(e) => elegirDriver(e.target.value)}><option value="">Elegir…</option>{driversActivos.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
+            <F label="Identificador (opcional)"><Input value={r.identificador} onChange={(e) => set('identificador', e.target.value)} placeholder="DFW01-140-B" /></F>
+            <F label="Bloque"><Select value={r.bloque} onChange={(e) => set('bloque', e.target.value)}>{BLOQUES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></F>
+            <F label="Vehículo"><Input value={r.vehiculoTipo} onChange={(e) => set('vehiculoTipo', e.target.value)} /></F>
+            <F label="Propietario vehículo"><Select value={r.propietarioVehiculo} onChange={(e) => setProp(e.target.value)}>{PROPIETARIO.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
+            <F label="Estado"><Select value={r.estado} onChange={(e) => set('estado', e.target.value)}>{ESTADOS_RUTA.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
+          </Grid>
+          {r.estado === 'cancelada' && <div className="mt-2"><F label="Motivo de cancelación"><Input value={r.motivoCancel} onChange={(e) => set('motivoCancel', e.target.value)} /></F></div>}
+        </Card>
+        <Card className="mb-3 p-4">
+          <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Tarifas (se guardan en la ruta; cambios futuros no la alteran)</div>
+          <Grid>
+            <F label="Ingreso de Walmart (USD)"><Input type="number" value={r.tarifaWalmart} onChange={(e) => set('tarifaWalmart', e.target.value)} /></F>
+            <F label="Pago al driver (USD)"><Input type="number" value={r.tarifaDriver} onChange={(e) => set('tarifaDriver', e.target.value)} /></F>
+          </Grid>
+          <AjustesEditor titulo="Bonos" tipo="bonos" lista={r.bonos} onAdd={() => addAj('bonos')} onSet={(i, k, v) => setAj('bonos', i, k, v)} onDel={(i) => delAj('bonos', i)} />
+          <AjustesEditor titulo="Deducciones" tipo="deducciones" lista={r.deducciones} onAdd={() => addAj('deducciones')} onSet={(i, k, v) => setAj('deducciones', i, k, v)} onDel={(i) => delAj('deducciones', i)} />
+          <div className="mt-3 flex flex-wrap gap-4 text-sm">
+            <span>Ingreso Walmart de esta ruta: <b className="font-mono text-brand-navy dark:text-slate-100">{dinero(ingresoRuta({ ...r, estado: 'completada' }))}</b></span>
+            <span>Ganancia del driver: <b className="font-mono text-emerald-600">{dinero(gananciaDriver({ ...r, estado: 'completada' }))}</b></span>
+            <span className="text-slate-400">(se cuentan solo si la ruta queda completada)</span>
+          </div>
+        </Card>
+        <Card className="mb-3 p-4"><F label="Notas"><Input value={r.notas} onChange={(e) => set('notas', e.target.value)} /></F></Card>
+      </fieldset>
+      {err && <Aviso tipo="error" className="mb-3">{err}</Aviso>}
+      {!bloqueado && <div className="flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></div>}
+    </div>
+  )
+}
+function AjustesEditor({ titulo, lista, onAdd, onSet, onDel }) {
+  return (
+    <div className="mt-3">
+      <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">{titulo}</div>
+      {(lista || []).map((x, i) => (
+        <div key={i} className="mb-1.5 flex flex-wrap items-center gap-2">
+          <Input className="flex-1 min-w-[120px]" placeholder="Concepto" value={x.concepto} onChange={(e) => onSet(i, 'concepto', e.target.value)} />
+          <Input type="number" className="w-24" placeholder="Monto" value={x.monto} onChange={(e) => onSet(i, 'monto', e.target.value)} />
+          <Select className="w-32" value={x.aplicaA} onChange={(e) => onSet(i, 'aplicaA', e.target.value)}><option value="driver">A ganancia driver</option><option value="walmart">A ingreso Walmart</option></Select>
+          <Input className="w-28" placeholder="Responsable" value={x.responsable} onChange={(e) => onSet(i, 'responsable', e.target.value)} />
+          <button className="text-rose-400 hover:text-rose-600" onClick={() => onDel(i)}><Trash2 size={15} /></button>
+        </div>
+      ))}
+      <button className="inline-flex items-center gap-1 text-xs font-semibold text-brand-gold hover:underline" onClick={onAdd}><Plus size={13} /> Agregar {titulo.toLowerCase()}</button>
+    </div>
+  )
+}
+
+// ── CIERRE DIARIO ───────────────────────────────────────────────────────────
+function TabCierre({ rutas, almacenes, cierres }) {
+  const [fecha, setFecha] = useState(hoyISO())
+  const [almId, setAlmId] = useState('')
+  useEffect(() => { if (!almId && almacenes[0]) setAlmId(almacenes[0].id) }, [almacenes, almId])
+  const [trabajando, setTrabajando] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const dia = useMemo(() => rutas.filter((r) => r.fecha === fecha && r.almacenId === almId), [rutas, fecha, almId])
+  const cierreDoc = cierres.find((c) => c.id === `c_${almId}_${fecha}`)
+  const cerrado = cierreDoc?.estado === 'cerrado'
+  const completadas = dia.filter((r) => r.estado === 'completada')
+  const canceladas = dia.filter((r) => r.estado === 'cancelada')
+  const pendientes = dia.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso')
+  const ingresoWM = dia.reduce((a, r) => a + ingresoRuta(r), 0)
+  const gananciaDrv = dia.reduce((a, r) => a + gananciaDriver(r), 0)
+  const driversUnicos = new Set(dia.map((r) => r.driverId)).size
+
+  const resumen = { registradas: dia.length, completadas: completadas.length, canceladas: canceladas.length, pendientes: pendientes.length, drivers: driversUnicos, ingresoWM: money2(ingresoWM), gananciaDrv: money2(gananciaDrv) }
+
+  const cerrar = async () => {
+    if (pendientes.length) { setMsg({ t: 'error', x: `No puedes cerrar: hay ${pendientes.length} ruta(s) pendientes o en progreso. Complétalas o cancélalas con motivo.` }); return }
+    if (!dia.length) { setMsg({ t: 'error', x: 'No hay rutas ese día.' }); return }
+    if (!window.confirm(`Registraste ${dia.length} ruta(s): ${completadas.length} completadas, ${canceladas.length} canceladas. ¿Confirmas el cierre?`)) return
+    setTrabajando(true); setMsg(null)
+    try { await cerrarDia(almId, fecha, dia, resumen); setMsg({ t: 'ok', x: 'Día cerrado y consolidado.' }) }
+    catch (e) { setMsg({ t: 'error', x: 'No se pudo cerrar: ' + (e.message || e) }) } finally { setTrabajando(false) }
+  }
+  const reabrir = async () => {
+    const motivo = window.prompt('Motivo de la reapertura (queda auditado):')
+    if (motivo == null) return
+    setTrabajando(true); setMsg(null)
+    try { await reabrirDia(cierreDoc.id, dia, motivo); setMsg({ t: 'ok', x: 'Día reabierto. Corrige lo necesario y vuelve a cerrar.' }) }
+    catch (e) { setMsg({ t: 'error', x: 'No se pudo reabrir: ' + (e.message || e) }) } finally { setTrabajando(false) }
+  }
+
+  return (
+    <div>
+      <PageTitle>Cierre diario</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          {cerrado && <Badge color="green">Día cerrado</Badge>}
+        </div>
+      </Card>
+
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Tile n={dia.length} l="Rutas registradas" />
+        <Tile n={completadas.length} l="Completadas" verde />
+        <Tile n={pendientes.length} l="Pendientes / en progreso" ambar={pendientes.length > 0} />
+        <Tile n={canceladas.length} l="Canceladas" />
+      </div>
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <Tile n={driversUnicos} l="Drivers" />
+        <Tile txt={dinero(ingresoWM)} l="Ingreso Walmart" />
+        <Tile txt={dinero(gananciaDrv)} l="Ganancia drivers" verde />
+      </div>
+
+      {msg && <Aviso tipo={msg.t === 'ok' ? 'ok' : 'error'} className="mb-3">{msg.x}</Aviso>}
+      {pendientes.length > 0 && !cerrado && <Aviso tipo="warn" className="mb-3">Hay {pendientes.length} ruta(s) pendientes o en progreso. Complétalas o cancélalas (con motivo) antes de cerrar.</Aviso>}
+
+      {!cerrado ? (
+        <Boton variant="gold" disabled={trabajando || pendientes.length > 0 || !dia.length} onClick={cerrar}>{trabajando ? <Spinner /> : `Cerrar día (${dia.length} rutas)`}</Boton>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge color="green">Cerrado por {cierreDoc.cerradoPor || '—'}</Badge>
+          {(cierreDoc.reaperturas || []).length > 0 && <span className="text-xs text-slate-400">{cierreDoc.reaperturas.length} reapertura(s)</span>}
+          <Boton variant="ghost" disabled={trabajando} onClick={reabrir}>Reabrir día (auditado)</Boton>
+        </div>
+      )}
+      <p className="mt-3 text-xs text-slate-400">Cerrar consolida el día; las rutas quedan bloqueadas. Fast Pay de rutas completadas se podrá hacer antes del cierre (Fase 3) y el cierre no lo vuelve a generar.</p>
+    </div>
+  )
+}
+function Tile({ n, txt, l, verde, ambar }) {
+  const cls = verde ? 'text-emerald-600 dark:text-emerald-400' : ambar ? 'text-amber-600 dark:text-amber-400' : 'text-brand-navy dark:text-slate-100'
+  return <div className="rounded-xl border border-slate-200 bg-surface-card p-3 dark:border-slate-700 dark:bg-surface-dark-card"><div className={`font-mono text-xl font-extrabold ${cls}`}>{txt != null ? txt : n}</div><div className="text-[11px] font-semibold text-slate-500">{l}</div></div>
+}
