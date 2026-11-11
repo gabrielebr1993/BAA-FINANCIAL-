@@ -782,5 +782,14 @@ service cloud.firestore {
     match /{coleccionAuto}/{id} {
       allow read, write: if coleccionAuto.matches('auto_.*') && esDuenoEcom();
     }
+
+    // SUBMÓDULO WALMART — colecciones wal_* (candidatos/drivers, almacenes,
+    // rutas, cierres, pagos, gastos, contratos, config, audit): solo el dueño
+    // verificado por ahora (los permisos finos por rol llegan en una fase
+    // posterior). wal_audit no se edita ni borra.
+    match /wal_audit/{id} { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
+    match /{coleccionWal}/{id} {
+      allow read, write: if coleccionWal.matches('wal_.*') && coleccionWal != 'wal_audit' && esDuenoEcom();
+    }
   }
 }

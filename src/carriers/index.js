@@ -67,6 +67,16 @@ export const CARRIERS = {
     // La fecha queda editable por factura en «Cobros y fondo».
     diasFondo: 14,
   },
+  walmart: {
+    id: 'walmart',
+    nombre: 'Walmart',
+    color: '#0071dc',
+    descripcion: 'Rutas Walmart — operación manual: candidatos, drivers, rutas, cierres, pagos, Fast Pay y contratos.',
+    listo: true,
+    // `operativo`: NO es un carrier de facturas; tiene su propio submódulo con
+    // pantallas y datos propios (wal_*). No usa el adaptador parser.
+    operativo: true,
+  },
 }
 
 export const CARRIER_DEFAULT = 'gofo'

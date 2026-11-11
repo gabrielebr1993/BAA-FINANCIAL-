@@ -10,7 +10,7 @@
 //
 // Los CHOFERES (role=driver) no eligen: van directo a su portal (Gofo).
 // ============================================================================
-import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react'
 import { Zap, ArrowLeftRight, LogOut, ArrowRight } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
@@ -266,5 +266,9 @@ export function CarrierGate({ children }) {
   if (!carrier) return permitidos.length === 1 ? null : <SelectorCompania />
   if (!permitidos.includes(carrier)) return null
   if (!CARRIERS[carrier]?.listo) return <CarrierEnPreparacion id={carrier} />
+  // Carrier OPERATIVO (Walmart): su propio submódulo, no las pantallas de facturas.
+  if (CARRIERS[carrier]?.operativo) return <Suspense fallback={null}><WalmartApp /></Suspense>
   return children
 }
+
+const WalmartApp = lazy(() => import('../walmart/WalmartApp'))
