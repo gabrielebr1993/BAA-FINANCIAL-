@@ -788,8 +788,12 @@ service cloud.firestore {
     // verificado por ahora (los permisos finos por rol llegan en una fase
     // posterior). wal_audit no se edita ni borra.
     match /wal_audit/{id} { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
+    // Datos bancarios CIFRADOS: el navegador puede LEER (para mostrar enmascarado
+    // con los últimos 4; el texto cifrado es inútil sin la llave del servidor),
+    // pero NO escribir: solo la Cloud Function walBankSave escribe (cifrando).
+    match /wal_bank/{id} { allow read: if esDuenoEcom(); allow write: if false; }
     match /{coleccionWal}/{id} {
-      allow read, write: if coleccionWal.matches('wal_.*') && coleccionWal != 'wal_audit' && esDuenoEcom();
+      allow read, write: if coleccionWal.matches('wal_.*') && coleccionWal != 'wal_audit' && coleccionWal != 'wal_bank' && esDuenoEcom();
     }
   }
 }

@@ -2291,3 +2291,77 @@ exports.bulkAlertaGps = onSchedule('every 10 minutes', async () => {
 const plaid = require('./plaid')
 exports.plaidOp = plaid.plaidOp
 exports.plaidSync = plaid.plaidSync
+
+// ============================================================================
+// WALMART · Datos bancarios CIFRADOS (AES-256-GCM).
+// La llave vive SOLO en el servidor (secret WAL_BANK_KEY = 32 bytes en base64);
+// el navegador nunca la ve. El front manda el dato por TLS, la función lo cifra
+// y guarda solo el texto cifrado + los últimos 4 (para enmascarar). Revelar el
+// número completo pasa por otra función que verifica dueño y deja auditoría SIN
+// los números. Guardar NO inicia transferencias; solo almacena para consulta.
+// ============================================================================
+const crypto = require('crypto')
+const WAL_BANK_KEY = defineSecret('WAL_BANK_KEY')
+const DUENOS_WAL = ['gabriele.brandonisio.o@gmail.com']
+const esDuenoReq = (req) => {
+  const e = String(req.auth && req.auth.token && req.auth.token.email || '').toLowerCase()
+  return !!e && DUENOS_WAL.includes(e)
+}
+function walCifrar(txt, keyB64) {
+  const key = Buffer.from(keyB64 || '', 'base64')
+  if (key.length !== 32) throw new HttpsError('failed-precondition', 'La llave WAL_BANK_KEY debe ser de 32 bytes en base64. Configúrala en Cloud Shell.')
+  const iv = crypto.randomBytes(12)
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv)
+  const ct = Buffer.concat([c.update(String(txt), 'utf8'), c.final()])
+  return Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64')
+}
+function walDescifrar(b64, keyB64) {
+  const key = Buffer.from(keyB64 || '', 'base64')
+  const raw = Buffer.from(b64, 'base64')
+  const iv = raw.subarray(0, 12), tag = raw.subarray(12, 28), ct = raw.subarray(28)
+  const d = crypto.createDecipheriv('aes-256-gcm', key, iv)
+  d.setAuthTag(tag)
+  return Buffer.concat([d.update(ct), d.final()]).toString('utf8')
+}
+// Dígito de control ABA del routing (formato); NO confirma titularidad ni cuenta.
+function routingValidoAba(r) {
+  if (!/^\d{9}$/.test(r)) return false
+  const d = r.split('').map(Number)
+  const s = 3 * (d[0] + d[3] + d[6]) + 7 * (d[1] + d[4] + d[7]) + (d[2] + d[5] + d[8])
+  return s % 10 === 0
+}
+const walLast4 = (s) => String(s || '').slice(-4)
+
+exports.walBankSave = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
+  if (!esDuenoReq(req)) throw new HttpsError('permission-denied', 'Solo el dueño puede guardar datos bancarios.')
+  const driverId = String((req.data && req.data.driverId) || '')
+  const titular = String((req.data && req.data.titular) || '').slice(0, 120)
+  const banco = String((req.data && req.data.banco) || '').slice(0, 120)
+  const tipo = String((req.data && req.data.tipo) || '')
+  const routing = String((req.data && req.data.routing) || '').replace(/\D/g, '')
+  const account = String((req.data && req.data.account) || '').replace(/\D/g, '')
+  if (!driverId) throw new HttpsError('invalid-argument', 'Falta driverId.')
+  if (!routing || !account) throw new HttpsError('invalid-argument', 'Routing y número de cuenta son obligatorios.')
+  if (!['checking', 'savings'].includes(tipo)) throw new HttpsError('invalid-argument', 'Tipo de cuenta inválido.')
+  const rv = routingValidoAba(routing)
+  const key = WAL_BANK_KEY.value()
+  await db.collection('wal_bank').doc(driverId).set({
+    titular, banco, tipo,
+    routingEnc: walCifrar(routing, key), accountEnc: walCifrar(account, key),
+    routingLast4: walLast4(routing), accountLast4: walLast4(account), routingValido: rv,
+    actualizadoEn: admin.firestore.FieldValue.serverTimestamp(), actualizadoPor: req.auth.token.email,
+  }, { merge: true })
+  await db.collection('wal_audit').add({ accion: 'bank_guardado', detalle: `driver ${driverId} · ${banco} ••${walLast4(account)} · routing ${rv ? 'válido' : 'formato inválido'}`, correo: req.auth.token.email, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true, routingLast4: walLast4(routing), accountLast4: walLast4(account), routingValido: rv }
+})
+
+exports.walBankReveal = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
+  if (!esDuenoReq(req)) throw new HttpsError('permission-denied', 'Solo el dueño puede ver los números completos.')
+  const driverId = String((req.data && req.data.driverId) || '')
+  if (!driverId) throw new HttpsError('invalid-argument', 'Falta driverId.')
+  const snap = await db.collection('wal_bank').doc(driverId).get()
+  if (!snap.exists) throw new HttpsError('not-found', 'Sin datos bancarios.')
+  const b = snap.data(); const key = WAL_BANK_KEY.value()
+  await db.collection('wal_audit').add({ accion: 'bank_revelado', detalle: `driver ${driverId} · ${b.banco || ''} ••${b.accountLast4 || ''}`, correo: req.auth.token.email, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { titular: b.titular || '', banco: b.banco || '', tipo: b.tipo || '', routing: b.routingEnc ? walDescifrar(b.routingEnc, key) : '', account: b.accountEnc ? walDescifrar(b.accountEnc, key) : '', routingValido: !!b.routingValido }
+})

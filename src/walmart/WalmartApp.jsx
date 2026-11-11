@@ -9,13 +9,18 @@
 // marca). Los datos viven en colecciones wal_* separadas.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { db } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useCarrier } from '../carriers/CarrierContext'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner } from '../components/ui'
 import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
+  CreditCard, Eye, EyeOff, ShieldCheck,
 } from 'lucide-react'
+import { BANCOS_USA } from './bancosUSA'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes,
@@ -269,10 +274,104 @@ function PerfilDriver({ persona, almacenes, onVolver, onEditar }) {
         <Card className="p-4"><div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Vehículo</div><div className="grid grid-cols-2 gap-3">{dato('Tipo', p.tipoVehiculo)}{dato('Marca / Modelo', [p.marca, p.modelo].filter(Boolean).join(' '))}{dato('Año', p.anio)}{dato('Propietario', PROPIETARIO.find((o) => o.id === p.propietarioVehiculo)?.label)}</div></Card>
         <Card className="p-4"><div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Notas</div><div className="text-sm text-slate-600 dark:text-slate-300">{p.notas || '—'}</div></Card>
       </div>
+      <BankSection driverId={p.id} />
+
       <Card className="mt-4 p-4">
         <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Historial, rutas, pagos, Fast Pay, documentos y contratos</div>
         <p className="text-sm text-slate-500">Estas secciones se llenan solas cuando registres rutas y pagos (Fases 2–5). El perfil ya está listo para recibirlas.</p>
       </Card>
+    </div>
+  )
+}
+
+// ── DATOS BANCARIOS (cifrados en el servidor) ───────────────────────────────
+function BankSection({ driverId }) {
+  const [info, setInfo] = useState(undefined) // undefined=cargando · null=sin datos · obj=enmascarado
+  const [editar, setEditar] = useState(false)
+  const [rev, setRev] = useState(null)
+  const [cargRev, setCargRev] = useState(false)
+  useEffect(() => {
+    if (!driverId) { setInfo(null); return }
+    return onSnapshot(doc(db, 'wal_bank', driverId), (s) => setInfo(s.exists() ? s.data() : null), () => setInfo(null))
+  }, [driverId])
+  const revelar = async () => {
+    setCargRev(true)
+    try { const r = await httpsCallable(getFunctions(), 'walBankReveal')({ driverId }); setRev(r.data); setTimeout(() => setRev(null), 25000) }
+    catch (e) { window.alert('No se pudo revelar: ' + (e.message || e)) } finally { setCargRev(false) }
+  }
+  if (editar) return <Card className="mt-4 p-4"><BankEditor driverId={driverId} inicial={info} onCerrar={() => setEditar(false)} /></Card>
+  return (
+    <Card className="mt-4 p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <CreditCard size={16} className="text-brand-gold" />
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Datos bancarios</span>
+        <ShieldCheck size={14} className="text-emerald-500" title="Cifrado en el servidor" />
+        <span className="text-[11px] text-slate-400">cifrado · solo el dueño</span>
+        {info && <button className="ml-auto text-xs font-semibold text-brand-gold hover:underline" onClick={() => setEditar(true)}>editar</button>}
+      </div>
+      {info === undefined && <Spinner />}
+      {info === null && (
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500">Sin datos bancarios.</span>
+          <Boton variant="ghost" onClick={() => setEditar(true)}><Plus size={14} /> Agregar</Boton>
+        </div>
+      )}
+      {info && info !== undefined && (
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+          <Dato l="Titular" v={info.titular} />
+          <Dato l="Banco" v={info.banco} />
+          <Dato l="Tipo" v={info.tipo === 'savings' ? 'Savings' : 'Checking'} />
+          <Dato l="Routing" v={rev ? rev.routing : `•••••${info.routingLast4 || ''}`} badge={info.routingValido ? 'válido' : 'revisar'} />
+          <Dato l="Cuenta" v={rev ? rev.account : `••••••${info.accountLast4 || ''}`} />
+          <div className="flex items-end">
+            <Boton variant="ghost" disabled={cargRev} onClick={rev ? () => setRev(null) : revelar}>
+              {cargRev ? <Spinner /> : rev ? <><EyeOff size={14} /> Ocultar</> : <><Eye size={14} /> Revelar</>}
+            </Boton>
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-slate-400">Se guarda para que un usuario autorizado consulte al registrar al driver en el banco. Guardarlo no inicia transferencias. La validación del routing es de formato, no confirma la cuenta. Cada acceso queda auditado sin los números.</p>
+    </Card>
+  )
+}
+
+function Dato({ l, v, badge }) {
+  return <div><div className="text-[10px] font-bold uppercase text-slate-400">{l}</div><div className="font-mono text-sm text-brand-navy dark:text-slate-100">{v || '—'} {badge && <span className={`ml-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${badge === 'válido' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{badge}</span>}</div></div>
+}
+
+function BankEditor({ driverId, inicial, onCerrar }) {
+  const [f, setF] = useState({ titular: inicial?.titular || '', banco: inicial?.banco || '', tipo: inicial?.tipo || 'checking', routing: '', account: '', account2: '' })
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
+  const salvar = async () => {
+    const routing = f.routing.replace(/\D/g, ''); const account = f.account.replace(/\D/g, '')
+    if (!routing || routing.length !== 9) { setErr('El routing debe tener 9 dígitos.'); return }
+    if (!account) { setErr('Escribe el número de cuenta.'); return }
+    if (account !== f.account2.replace(/\D/g, '')) { setErr('El número de cuenta y su confirmación no coinciden.'); return }
+    setErr(''); setGuardando(true)
+    try {
+      await httpsCallable(getFunctions(), 'walBankSave')({ driverId, titular: f.titular, banco: f.banco, tipo: f.tipo, routing, account })
+      onCerrar()
+    } catch (e) { setErr('No se pudo guardar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><CreditCard size={16} className="text-brand-gold" /> Datos bancarios (se cifran al guardar)</div>
+      <Grid>
+        <F label="Nombre del titular"><Input value={f.titular} onChange={(e) => set('titular', e.target.value)} /></F>
+        <F label="Banco"><Input list="wal-bancos" value={f.banco} onChange={(e) => set('banco', e.target.value)} placeholder="Busca o escribe…" /><datalist id="wal-bancos">{BANCOS_USA.map((b) => <option key={b} value={b} />)}</datalist></F>
+        <F label="Tipo de cuenta"><Select value={f.tipo} onChange={(e) => set('tipo', e.target.value)}><option value="checking">Checking</option><option value="savings">Savings</option></Select></F>
+        <F label="Routing number (9 dígitos)"><Input inputMode="numeric" value={f.routing} onChange={(e) => set('routing', e.target.value)} placeholder="000000000" /></F>
+        <F label="Número de cuenta"><Input inputMode="numeric" value={f.account} onChange={(e) => set('account', e.target.value)} /></F>
+        <F label="Confirmar número de cuenta"><Input inputMode="numeric" value={f.account2} onChange={(e) => set('account2', e.target.value)} /></F>
+      </Grid>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar cifrado'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">Se guardan como texto (conserva ceros iniciales), cifrados en el servidor. No se incluyen en contratos ni comprobantes.</p>
     </div>
   )
 }
