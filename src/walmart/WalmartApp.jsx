@@ -18,14 +18,15 @@ import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner } from '..
 import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
-  CreditCard, Eye, EyeOff, ShieldCheck,
+  CreditCard, Eye, EyeOff, ShieldCheck, Zap,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
-  hoyISO, lunesDe, cerrarDia, reabrirDia,
+  hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
+  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -37,7 +38,7 @@ const TABS = [
   { id: 'almacenes', label: 'Almacenes', icono: WhIcon },
   { id: 'rutas', label: 'Rutas', icono: RouteIcon },
   { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck },
-  { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet, fase: 3 },
+  { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
   { id: 'gastos', label: 'Gastos', icono: Receipt, fase: 4 },
   { id: 'financiero', label: 'Financiero', icono: BarChart3, fase: 4 },
   { id: 'contratos', label: 'Contratos', icono: FileSignature, fase: 5 },
@@ -52,11 +53,13 @@ export default function WalmartApp() {
   const [almacenes, setAlmacenes] = useState([])
   const [rutas, setRutas] = useState([])
   const [cierres, setCierres] = useState([])
+  const [pagos, setPagos] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
   useEffect(() => suscribir(COL.rutas, setRutas), [])
   useEffect(() => suscribir(COL.cierres, setCierres), [])
+  useEffect(() => suscribir(COL.pagos, setPagos), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
   return (
@@ -81,8 +84,9 @@ export default function WalmartApp() {
         {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
         {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
         {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
+        {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
         {tab === 'config' && <TabConfig />}
-        {['pagos', 'gastos', 'financiero', 'contratos'].includes(tab) && (
+        {['gastos', 'financiero', 'contratos'].includes(tab) && (
           <Proximamente tab={TABS.find((t) => t.id === tab)} />
         )}
       </main>
@@ -698,4 +702,182 @@ function TabCierre({ rutas, almacenes, cierres }) {
 function Tile({ n, txt, l, verde, ambar }) {
   const cls = verde ? 'text-emerald-600 dark:text-emerald-400' : ambar ? 'text-amber-600 dark:text-amber-400' : 'text-brand-navy dark:text-slate-100'
   return <div className="rounded-xl border border-slate-200 bg-surface-card p-3 dark:border-slate-700 dark:bg-surface-dark-card"><div className={`font-mono text-xl font-extrabold ${cls}`}>{txt != null ? txt : n}</div><div className="text-[11px] font-semibold text-slate-500">{l}</div></div>
+}
+
+// ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
+function TabPagos({ rutas, pagos, personas, tarifas }) {
+  const [driverId, setDriverId] = useState('')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [fpRuta, setFpRuta] = useState(null)
+  const [pagoAbierto, setPagoAbierto] = useState(false)
+  const semana = lunesDe(fecha)
+  const driver = personas.find((p) => p.id === driverId)
+  const res = driverId ? resumenSemana(rutas, pagos, driverId, semana) : null
+  const driversLista = personas.filter((p) => p.estadoOperativo === 'activo' || rutas.some((r) => r.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+  const badgeEstado = { pendiente: 'red', parcial: 'gold', pagado: 'green' }
+
+  return (
+    <div>
+      <PageTitle>Pagos y Fast Pay</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Elegir…</option>{driversLista.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
+          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+        </div>
+      </Card>
+
+      {!driverId && <div className="text-sm text-slate-400">Elige un driver para ver su semana.</div>}
+      {res && (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Tile txt={dinero(res.totalGanado)} l="Total ganado (antes de FP)" />
+            <Tile txt={dinero(res.liquidadoFP)} l="Bruto liquidado por Fast Pay" />
+            <Tile txt={dinero(res.efectivoFP)} l="Efectivo entregado (FP)" />
+            <Tile txt={dinero(res.comisiones)} l="Comisiones FP (ingreso compañía)" verde />
+            <Tile txt={dinero(res.pagadoNormal)} l="Otros pagos" />
+            <Tile txt={dinero(res.saldo)} l="Saldo pendiente" ambar={res.saldo > 0.005} />
+          </div>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge color={badgeEstado[res.estado]}>{res.estado === 'pagado' ? 'Pagado' : res.estado === 'parcial' ? 'Parcialmente pagado' : 'Pendiente'}</Badge>
+            {res.saldo > 0.005 && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
+          </div>
+
+          <Card className="mb-3 p-0">
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Rutas completadas de la semana</div>
+            {res.rutasSemana.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas completadas esta semana.</div>}
+            {res.rutasSemana.map((r) => {
+              const liq = liquidadoFPruta(pagos, r.id)
+              const bruto = gananciaDriver(r)
+              const resta = money2(bruto - liq)
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                  <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label}</span>
+                  {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
+                  <span className="font-mono font-semibold">{dinero(bruto)}</span>
+                  {liq > 0 && <Badge color="gold">FP {dinero(liq)}</Badge>}
+                  <span className="ml-auto text-xs text-slate-400">resta {dinero(resta)}</span>
+                  {resta > 0.005 && <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => setFpRuta({ ...r, resta })}><Zap size={12} className="mb-0.5 mr-0.5 inline" />Fast Pay</button>}
+                </div>
+              )
+            })}
+          </Card>
+
+          {res.pagos.length > 0 && (
+            <Card className="p-0">
+              <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Movimientos de la semana</div>
+              {res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
+                  <Badge color={p.tipo === 'fastpay' ? 'gold' : 'navy'}>{p.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge>
+                  <span className="font-mono text-xs text-slate-400">{p.fecha}</span>
+                  {p.tipo === 'fastpay'
+                    ? <span className="text-xs">bruto {dinero(p.bruto)} · comisión {dinero(p.comision)} ({p.comisionPct}%) · efectivo <b>{dinero(p.efectivo)}</b></span>
+                    : <span className="text-xs">monto <b>{dinero(p.monto)}</b></span>}
+                  <span className="ml-auto text-xs text-slate-400">{p.metodo}{p.referencia ? ` · ${p.referencia}` : ''}{p.responsable ? ` · ${p.responsable}` : ''}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+        </>
+      )}
+
+      {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pctDefault={tarifas.comisionFastPay} onCerrar={() => setFpRuta(null)} />}
+      {pagoAbierto && res && <PagoModal driver={driver} semana={semana} saldo={res.saldo} onCerrar={() => setPagoAbierto(false)} />}
+    </div>
+  )
+}
+
+function FastPayModal({ ruta, driver, semana, pctDefault, onCerrar }) {
+  const [bruto, setBruto] = useState(ruta.resta)
+  const [pct, setPct] = useState(pctDefault)
+  const [metodo, setMetodo] = useState('Efectivo')
+  const [referencia, setReferencia] = useState('')
+  const [responsable, setResponsable] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const calc = calcularFastPay(bruto, pct)
+  const restante = money2(ruta.resta - calc.bruto)
+  const confirmar = async () => {
+    if (calc.bruto <= 0) { setErr('El bruto debe ser mayor a 0.'); return }
+    if (calc.bruto > ruta.resta + 0.005) { setErr(`No puedes liquidar más que el saldo de la ruta (${dinero(ruta.resta)}).`); return }
+    setErr(''); setGuardando(true)
+    try {
+      await guardar(COL.pagos, null, {
+        tipo: 'fastpay', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, rutaId: ruta.id,
+        bruto: calc.bruto, comisionPct: Number(pct) || 0, comision: calc.comision, efectivo: calc.efectivo,
+        fecha: hoyISO(), metodo, referencia, responsable,
+      })
+      await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
+      onCerrar()
+    } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo="Fast Pay (anticipo de una ruta completada)" onCerrar={onCerrar}>
+      <Grid>
+        <F label="Importe bruto a liquidar"><Input type="number" value={bruto} onChange={(e) => setBruto(e.target.value)} /></F>
+        <F label="Comisión (%)"><Input type="number" step="0.5" value={pct} onChange={(e) => setPct(e.target.value)} /></F>
+        <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
+        <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
+        <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
+      </Grid>
+      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+        <div className="flex justify-between"><span>Bruto liquidado</span><b className="font-mono">{dinero(calc.bruto)}</b></div>
+        <div className="flex justify-between text-amber-700 dark:text-amber-300"><span>Comisión ({pct}%) — ingreso de la compañía</span><b className="font-mono">−{dinero(calc.comision)}</b></div>
+        <div className="flex justify-between border-t border-amber-200 pt-1 dark:border-amber-500/30"><span>Efectivo a entregar al driver</span><b className="font-mono text-emerald-600">{dinero(calc.efectivo)}</b></div>
+        <div className="mt-1 flex justify-between text-xs text-slate-500"><span>Saldo restante de la ruta</span><span className="font-mono">{dinero(restante)}</span></div>
+      </div>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando} onClick={confirmar}>{guardando ? <Spinner /> : 'Confirmar Fast Pay'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+    </Modal>
+  )
+}
+
+function PagoModal({ driver, semana, saldo, onCerrar }) {
+  const [monto, setMonto] = useState(saldo)
+  const [metodo, setMetodo] = useState('Efectivo')
+  const [referencia, setReferencia] = useState('')
+  const [responsable, setResponsable] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const confirmar = async () => {
+    const m = money2(monto)
+    if (m <= 0) { setErr('El monto debe ser mayor a 0.'); return }
+    if (m > saldo + 0.005) { setErr(`No puedes pagar más que el saldo pendiente (${dinero(saldo)}).`); return }
+    setErr(''); setGuardando(true)
+    try {
+      await guardar(COL.pagos, null, { tipo: 'pago', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, monto: m, fecha: hoyISO(), metodo, referencia, responsable })
+      await auditar('pago', `${nombreCompleto(driver)} · semana ${semana} · ${m}`)
+      onCerrar()
+    } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo="Registrar pago del saldo" onCerrar={onCerrar}>
+      <Grid>
+        <F label="Monto (saldo pendiente)"><Input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} /></F>
+        <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
+        <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
+        <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
+      </Grid>
+      <p className="mt-2 text-xs text-slate-400">Puedes pagar parcial. La fecha del pago no cambia la semana en que se ganó el dinero.</p>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando} onClick={confirmar}>{guardando ? <Spinner /> : 'Registrar pago'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+    </Modal>
+  )
+}
+
+function Modal({ titulo, children, onCerrar }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16" onClick={onCerrar}>
+      <div className="w-full max-w-lg rounded-2xl bg-surface-card p-5 shadow-2xl dark:bg-surface-dark-card" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</div>
+        {children}
+      </div>
+    </div>
+  )
 }

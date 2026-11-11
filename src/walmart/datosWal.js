@@ -134,6 +134,38 @@ export function gananciaDriver(r) {
   return money2((Number(r.tarifaDriver) || 0) + ajustes(r, 'driver'))
 }
 
+// ── Pagos y Fast Pay ────────────────────────────────────────────────────────
+export const METODOS_PAGO = ['Efectivo', 'Zelle', 'Transferencia', 'Cheque', 'Otro']
+
+// Importe bruto de una ruta ya liquidado mediante Fast Pay (suma de sus FP).
+export function liquidadoFPruta(pagos, rutaId) {
+  return money2((pagos || []).filter((p) => p.tipo === 'fastpay' && p.rutaId === rutaId).reduce((a, p) => a + (Number(p.bruto) || 0), 0))
+}
+
+// Resumen de una semana para un driver (lunes–domingo por fecha de servicio).
+// Regla Fast Pay: el bruto ya liquidado NO se vuelve a pagar ni a comisionar;
+// la comisión retenida es ingreso de la compañía (aparte), no un saldo.
+export function resumenSemana(rutas, pagos, driverId, semana) {
+  const rs = (rutas || []).filter((r) => r.driverId === driverId && r.semana === semana && r.estado === 'completada')
+  const totalGanado = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
+  const ps = (pagos || []).filter((p) => p.driverId === driverId && p.semana === semana)
+  const fp = ps.filter((p) => p.tipo === 'fastpay')
+  const liquidadoFP = money2(fp.reduce((a, p) => a + (Number(p.bruto) || 0), 0))
+  const comisiones = money2(fp.reduce((a, p) => a + (Number(p.comision) || 0), 0))
+  const efectivoFP = money2(fp.reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+  const pagadoNormal = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+  const saldo = money2(totalGanado - liquidadoFP - pagadoNormal)
+  const estado = saldo <= 0.005 ? 'pagado' : (liquidadoFP + pagadoNormal > 0 ? 'parcial' : 'pendiente')
+  return { rutasSemana: rs, totalGanado, liquidadoFP, comisiones, efectivoFP, pagadoNormal, saldo, estado, pagos: ps }
+}
+
+// Calcula los montos de un Fast Pay (comisión del % sobre el BRUTO liquidado).
+export function calcularFastPay(bruto, comisionPct) {
+  const b = money2(bruto)
+  const comision = money2(b * (Number(comisionPct) || 0) / 100)
+  return { bruto: b, comision, efectivo: money2(b - comision) }
+}
+
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.
 export async function sembrarAlmacenes() {
   const existentes = await cargar(COL.almacenes)
