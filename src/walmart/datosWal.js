@@ -135,6 +135,45 @@ export function gananciaDriver(r) {
   return money2((Number(r.tarifaDriver) || 0) + ajustes(r, 'driver'))
 }
 
+// ── Contratos y plantillas ──────────────────────────────────────────────────
+export const ESTADOS_CONTRATO = [
+  { id: 'borrador', label: 'Borrador', color: 'slate' },
+  { id: 'pendiente_firma', label: 'Pendiente de firma', color: 'gold' },
+  { id: 'firmado', label: 'Firmado', color: 'green' },
+  { id: 'vencido', label: 'Vencido', color: 'red' },
+  { id: 'anulado', label: 'Anulado', color: 'slate' },
+]
+export const estadoContratoInfo = (id) => ESTADOS_CONTRATO.find((e) => e.id === id) || ESTADOS_CONTRATO[0]
+// Campos que una plantilla puede autocompletar desde el perfil (NO bancarios).
+export const CAMPOS_CONTRATO = [
+  { k: 'nombre', l: 'Nombre completo' }, { k: 'direccion', l: 'Dirección' }, { k: 'telefono', l: 'Teléfono' },
+  { k: 'correo', l: 'Correo' }, { k: 'almacen', l: 'Almacén' }, { k: 'vehiculo', l: 'Vehículo' },
+  { k: 'tarifa', l: 'Tarifa acordada' }, { k: 'fecha', l: 'Fecha del contrato' }, { k: 'fechaInicio', l: 'Fecha de inicio' },
+  { k: 'empresa', l: 'Datos de la compañía' },
+]
+// Reemplaza {{campo}} por su valor; deja {{campo}} si falta (campo obligatorio).
+export function renderPlantilla(texto, datos) {
+  return String(texto || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => (datos[k] != null && datos[k] !== '' ? String(datos[k]) : `{{${k}}}`))
+}
+export function faltantesPlantilla(texto, datos) {
+  const req = [...String(texto || '').matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1])
+  return [...new Set(req)].filter((k) => datos[k] == null || datos[k] === '')
+}
+// Token aleatorio para el enlace de firma (no adivinable).
+export function tokenAleatorio(n = 28) {
+  const a = new Uint8Array(n)
+  ;(globalThis.crypto || {}).getRandomValues?.(a)
+  return Array.from(a, (b) => (b % 36).toString(36)).join('')
+}
+// Datos del driver listos para autocompletar una plantilla.
+export function datosDeDriver(driver, almacenNombre, empresa, tarifa) {
+  return {
+    nombre: nombreCompleto(driver), direccion: driver?.direccion || '', telefono: driver?.telefono || '',
+    correo: driver?.correo || '', almacen: almacenNombre || '', vehiculo: [driver?.marca, driver?.modelo, driver?.anio].filter(Boolean).join(' ') || driver?.tipoVehiculo || '',
+    tarifa: tarifa != null ? `$${money2(tarifa)}` : '', fecha: hoyISO(), fechaInicio: hoyISO(), empresa: empresa || 'B&A American Group LLC',
+  }
+}
+
 // ── Pagos y Fast Pay ────────────────────────────────────────────────────────
 export const METODOS_PAGO = ['Efectivo', 'Zelle', 'Transferencia', 'Cheque', 'Otro']
 

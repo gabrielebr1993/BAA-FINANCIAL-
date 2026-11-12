@@ -27,6 +27,7 @@ const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
 // Módulo WAREHOUSE (en construcción): servicios de almacén. Mismo candado privado.
 const WhApp = lazy(() => import('./warehouse/WhApp'))
 const AutoAsignApp = lazy(() => import('./autoasign/AutoAsignApp'))
+const FirmaPublica = lazy(() => import('./walmart/FirmaPublica'))
 const FirmaQR = lazy(() => import('./warehouse/staffing/printcheck/FirmaQR'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
@@ -174,6 +175,10 @@ function TopBranch() {
   // Seguimiento PÚBLICO de una orden (link compartido, sin login): /seguimiento?t=…
   if (pathname === '/seguimiento') {
     return <Suspense fallback={<Cargando texto="Cargando…" />}><SeguimientoPublico /></Suspense>
+  }
+  // Firma PÚBLICA de contrato Walmart (sin login, token en la URL): /wfirma?t=…
+  if (pathname === '/wfirma') {
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><FirmaPublica /></Suspense>
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />

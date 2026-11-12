@@ -2365,3 +2365,45 @@ exports.walBankReveal = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
   await db.collection('wal_audit').add({ accion: 'bank_revelado', detalle: `driver ${driverId} · ${b.banco || ''} ••${b.accountLast4 || ''}`, correo: req.auth.token.email, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
   return { titular: b.titular || '', banco: b.banco || '', tipo: b.tipo || '', routing: b.routingEnc ? walDescifrar(b.routingEnc, key) : '', account: b.accountEnc ? walDescifrar(b.accountEnc, key) : '', routingValido: !!b.routingValido }
 })
+
+// ============================================================================
+// WALMART · Firma de contratos por ENLACE (público, sin login, con token).
+// El token individual es la única llave: da acceso SOLO a ese contrato, nunca a
+// perfiles, datos bancarios ni otros contratos. No se presenta el enlace como
+// verificación de identidad. Cada evento se registra cuando ocurre.
+// ============================================================================
+async function walContratoPorToken(token) {
+  const t = String(token || '')
+  if (t.length < 16) throw new HttpsError('invalid-argument', 'Enlace inválido.')
+  const q = await db.collection('wal_contratos').where('signingToken', '==', t).limit(1).get()
+  if (q.empty) throw new HttpsError('not-found', 'Contrato no encontrado o enlace revocado.')
+  return q.docs[0]
+}
+exports.walFirmaGet = onCall(async (req) => {
+  const d = await walContratoPorToken(req.data && req.data.token)
+  const c = d.data()
+  if (c.estado === 'anulado') throw new HttpsError('failed-precondition', 'Este contrato fue anulado.')
+  if (c.vence && new Date(c.vence) < new Date() && c.estado !== 'firmado') throw new HttpsError('failed-precondition', 'El enlace de firma venció.')
+  // SOLO el contenido de ese contrato — nada más.
+  return { titulo: c.titulo || 'Contrato', texto: c.textoRenderizado || '', estado: c.estado || 'pendiente_firma', yaFirmado: c.estado === 'firmado', driverNombre: c.driverNombre || '', empresa: c.empresa || '' }
+})
+exports.walFirmaSet = onCall(async (req) => {
+  const firma = String((req.data && req.data.firma) || '')
+  const nombreFirmante = String((req.data && req.data.nombreFirmante) || '').slice(0, 120)
+  if (!firma.startsWith('data:image')) throw new HttpsError('invalid-argument', 'Falta la firma.')
+  if (firma.length > 500000) throw new HttpsError('invalid-argument', 'La firma es demasiado grande.')
+  const d = await walContratoPorToken(req.data && req.data.token)
+  const c = d.data()
+  if (c.estado === 'firmado') throw new HttpsError('failed-precondition', 'Este contrato ya fue firmado.')
+  if (c.estado === 'anulado') throw new HttpsError('failed-precondition', 'Contrato anulado.')
+  if (c.vence && new Date(c.vence) < new Date()) throw new HttpsError('failed-precondition', 'El enlace de firma venció.')
+  const rr = req.rawRequest || {}
+  const ip = String((rr.headers && (rr.headers['x-forwarded-for'] || rr.headers['x-appengine-user-ip'])) || rr.ip || '').split(',')[0].slice(0, 60)
+  await d.ref.set({
+    estado: 'firmado', firma, firmanteNombre: nombreFirmante,
+    firmadoEn: admin.firestore.FieldValue.serverTimestamp(),
+    evidencia: { ip, userAgent: String((rr.headers && rr.headers['user-agent']) || '').slice(0, 200), consentimiento: true, fecha: new Date().toISOString() },
+  }, { merge: true })
+  await db.collection('wal_audit').add({ accion: 'contrato_firmado', detalle: `${c.driverNombre || ''} · ${d.id} · ${nombreFirmante}`, correo: '(firma por enlace)', fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true }
+})

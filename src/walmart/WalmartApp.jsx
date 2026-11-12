@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { signOut } from 'firebase/auth'
+import { jsPDF } from 'jspdf'
 import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useCarrier } from '../carriers/CarrierContext'
@@ -30,6 +31,8 @@ import {
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
   CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
+  ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
+  tokenAleatorio, datosDeDriver,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -44,7 +47,7 @@ const TABS = [
   { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
   { id: 'gastos', label: 'Gastos', icono: Receipt },
   { id: 'financiero', label: 'Financiero', icono: BarChart3 },
-  { id: 'contratos', label: 'Contratos', icono: FileSignature, fase: 5 },
+  { id: 'contratos', label: 'Contratos', icono: FileSignature },
   { id: 'config', label: 'Configuración', icono: Settings },
 ]
 
@@ -59,6 +62,8 @@ export default function WalmartApp() {
   const [pagos, setPagos] = useState([])
   const [gastos, setGastos] = useState([])
   const [cobros, setCobros] = useState([])
+  const [contratos, setContratos] = useState([])
+  const [plantillas, setPlantillas] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
@@ -67,6 +72,8 @@ export default function WalmartApp() {
   useEffect(() => suscribir(COL.pagos, setPagos), [])
   useEffect(() => suscribir(COL.gastos, setGastos), [])
   useEffect(() => suscribir(COL.cobros, setCobros), [])
+  useEffect(() => suscribir(COL.contratos, setContratos), [])
+  useEffect(() => suscribir(COL.plantillas, setPlantillas), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
   const contenido = (
@@ -78,8 +85,8 @@ export default function WalmartApp() {
       {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
       {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} />}
       {tab === 'financiero' && <TabFinanciero rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} />}
+      {tab === 'contratos' && <TabContratos contratos={contratos} plantillas={plantillas} personas={personas} almacenes={almacenes} tarifas={tarifas} />}
       {tab === 'config' && <TabConfig />}
-      {['contratos'].includes(tab) && <Proximamente tab={TABS.find((t) => t.id === tab)} />}
     </>
   )
   return (
@@ -795,6 +802,7 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge color={badgeEstado[res.estado]}>{res.estado === 'pagado' ? 'Pagado' : res.estado === 'parcial' ? 'Parcialmente pagado' : 'Pendiente'}</Badge>
             {res.saldo > 0.005 && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
+            {driver && res.rutasSemana.length > 0 && <Boton variant="ghost" onClick={() => pdfPayStub(driver, semana, domingoDe(fecha), res)}>Pay stub PDF</Boton>}
           </div>
 
           <Card className="mb-3 p-0">
@@ -1128,5 +1136,217 @@ function CobroModal({ semana, almacenes, almId, onCerrar }) {
       <p className="mt-2 text-xs text-slate-400">La semana se toma de la fecha del cobro. Vincula el cobro a la semana para el flujo de caja y lo por cobrar.</p>
       <div className="mt-3 flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Registrar cobro'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></div>
     </Modal>
+  )
+}
+
+// Pay stub (comprobante de liquidación) en PDF, basado en la semana del driver.
+function pdfPayStub(driver, semana, hasta, res) {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const M = 56; let y = 70
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC · WALMART', M, y); y += 20
+  doc.setTextColor(19, 35, 63); doc.setFontSize(15); doc.text('Comprobante de liquidación (pay stub)', M, y); y += 24
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
+  doc.text(`Driver: ${nombreCompleto(driver)}`, M, y); y += 16
+  doc.text(`Semana: ${semana} a ${hasta}`, M, y); y += 22
+  const fila = (l, v) => { doc.text(l, M, y); doc.text(v, 440, y, { align: 'right' }); y += 17 }
+  fila('Rutas completadas', String(res.rutasSemana.length))
+  fila('Total ganado (antes de Fast Pay)', dinero(res.totalGanado))
+  fila('Bruto liquidado por Fast Pay', dinero(res.liquidadoFP))
+  fila('Comisiones Fast Pay retenidas', dinero(res.comisiones))
+  fila('Efectivo entregado (Fast Pay)', dinero(res.efectivoFP))
+  fila('Otros pagos', dinero(res.pagadoNormal))
+  y += 4; doc.setDrawColor(220, 220, 220); doc.line(M, y, 480, y); y += 16
+  doc.setFont('helvetica', 'bold'); fila('Saldo pendiente', dinero(res.saldo)); doc.setFont('helvetica', 'normal')
+  y += 18; doc.setTextColor(120, 130, 150); doc.setFontSize(9)
+  doc.text(`Estado: ${res.estado} · generado ${new Date().toLocaleString()}`, M, y)
+  doc.save(`paystub_${nombreCompleto(driver).replace(/\s+/g, '_')}_${semana}.pdf`)
+}
+
+// ── CONTRATOS ───────────────────────────────────────────────────────────────
+function pdfContrato(c, firmado) {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const M = 56, W = doc.internal.pageSize.getWidth() - M * 2
+  let y = 70
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text(String(c.empresa || '').toUpperCase(), M, y); y += 22
+  doc.setTextColor(19, 35, 63); doc.setFontSize(16); doc.text(c.titulo || 'Contrato', M, y); y += 26
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
+  for (const ln of doc.splitTextToSize(c.textoRenderizado || '', W)) { if (y > 720) { doc.addPage(); y = 70 } doc.text(ln, M, y); y += 16 }
+  y += 24
+  if (firmado && c.firma) {
+    if (y > 620) { doc.addPage(); y = 70 }
+    doc.setFontSize(10); doc.setTextColor(120, 130, 150); doc.text('Firma:', M, y); y += 6
+    try { doc.addImage(c.firma, 'PNG', M, y, 180, 70) } catch { /* noop */ }
+    y += 82; doc.setTextColor(40, 54, 80); doc.text(`Firmado por: ${c.firmanteNombre || c.driverNombre || ''}`, M, y); y += 14
+    doc.setTextColor(120, 130, 150); doc.text('Firmado electrónicamente vía enlace seguro.', M, y)
+  }
+  doc.save(`${String(c.titulo || 'contrato').replace(/\s+/g, '_')}${firmado ? '_firmado' : ''}.pdf`)
+}
+
+function TabContratos({ contratos, plantillas, personas, almacenes, tarifas }) {
+  const [vista, setVista] = useState('lista')
+  const nav = [{ id: 'lista', l: 'Contratos' }, { id: 'generar', l: 'Generar' }, { id: 'plantillas', l: 'Plantillas' }]
+  return (
+    <div>
+      <PageTitle>Contratos</PageTitle>
+      <div className="mb-4 inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700">
+        {nav.map((n) => <button key={n.id} onClick={() => setVista(n.id)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${vista === n.id ? 'bg-brand-navy text-white' : 'text-slate-500 hover:text-brand-navy'}`}>{n.l}</button>)}
+      </div>
+      {vista === 'lista' && <VistaContratos contratos={contratos} personas={personas} almacenes={almacenes} />}
+      {vista === 'generar' && <VistaGenerar plantillas={plantillas} personas={personas} almacenes={almacenes} tarifas={tarifas} onIrLista={() => setVista('lista')} onIrPlantillas={() => setVista('plantillas')} />}
+      {vista === 'plantillas' && <VistaPlantillas plantillas={plantillas} />}
+    </div>
+  )
+}
+
+function VistaContratos({ contratos, personas, almacenes }) {
+  const [fEstado, setFEstado] = useState(''); const [fDriver, setFDriver] = useState(''); const [ver, setVer] = useState(null)
+  const estadoVista = (c) => (c.estado !== 'firmado' && c.estado !== 'anulado' && c.vence && new Date(c.vence) < new Date()) ? 'vencido' : c.estado
+  const lista = contratos.filter((c) => (!fEstado || estadoVista(c) === fEstado) && (!fDriver || c.driverId === fDriver)).sort((a, b) => String(b.creadoEn?.seconds || 0) - String(a.creadoEn?.seconds || 0))
+  const copiar = (c) => { navigator.clipboard?.writeText(`${window.location.origin}/wfirma?t=${c.signingToken}`); window.alert('Enlace copiado.') }
+  const anular = async (c) => { if (window.confirm('¿Anular este contrato?')) { await guardar(COL.contratos, c.id, { estado: 'anulado' }); await auditar('contrato_anulado', c.id) } }
+  return (
+    <div>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Estado"><Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}><option value="">Todos</option>{ESTADOS_CONTRATO.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}</Select></F>
+          <F label="Driver"><Select value={fDriver} onChange={(e) => setFDriver(e.target.value)}><option value="">Todos</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+        </div>
+      </Card>
+      {lista.length === 0 && <div className="text-sm text-slate-400">Sin contratos. Genera uno en la pestaña “Generar”.</div>}
+      <div className="space-y-1.5">
+        {lista.map((c) => {
+          const e = estadoContratoInfo(estadoVista(c))
+          return (
+            <Card key={c.id} className="flex flex-wrap items-center gap-2.5 p-3">
+              <FileSignature size={16} className="text-brand-gold" />
+              <span className="font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
+              <span className="text-xs text-slate-400">{c.driverNombre}</span>
+              <Badge color={e.color}>{e.label}</Badge>
+              <div className="ml-auto flex gap-3 text-xs">
+                <button className="font-semibold text-brand-gold hover:underline" onClick={() => setVer(c)}>ver</button>
+                {c.estado !== 'firmado' && c.estado !== 'anulado' && <button className="font-semibold text-slate-500 hover:text-brand-navy" onClick={() => copiar(c)}>copiar enlace</button>}
+                {c.estado !== 'anulado' && <button className="font-semibold text-rose-400 hover:text-rose-600" onClick={() => anular(c)}>anular</button>}
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+      {ver && (
+        <Modal titulo={ver.titulo} onCerrar={() => setVer(null)}>
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40"><pre className="whitespace-pre-wrap font-sans">{ver.textoRenderizado}</pre></div>
+          {ver.estado === 'firmado' && ver.firma && <div className="mt-2 text-xs text-slate-500">Firmado por <b>{ver.firmanteNombre || ver.driverNombre}</b>{ver.evidencia?.fecha ? ` · ${new Date(ver.evidencia.fecha).toLocaleString()}` : ''}<img src={ver.firma} alt="firma" className="mt-1 h-16 rounded border border-slate-200" /></div>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Boton variant="ghost" onClick={() => pdfContrato(ver, false)}>Descargar PDF original</Boton>
+            {ver.estado === 'firmado' && <Boton variant="gold" onClick={() => pdfContrato(ver, true)}>Descargar PDF firmado</Boton>}
+            {ver.estado !== 'firmado' && ver.estado !== 'anulado' && <Boton variant="ghost" onClick={() => copiar(ver)}>Copiar enlace de firma</Boton>}
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+function VistaGenerar({ plantillas, personas, almacenes, tarifas, onIrLista, onIrPlantillas }) {
+  const [plId, setPlId] = useState(''); const [driverId, setDriverId] = useState('')
+  const [datos, setDatos] = useState({}); const [link, setLink] = useState(''); const [guardando, setGuardando] = useState(false)
+  const pl = plantillas.find((p) => p.id === plId); const driver = personas.find((p) => p.id === driverId)
+  const almNombre = almacenes.find((a) => a.id === driver?.almacenId)?.nombre || ''
+  useEffect(() => { if (driver) setDatos(datosDeDriver(driver, almNombre, 'B&A American Group LLC', tarifas.pagoDriverPropio)); else setDatos({}); setLink('') }, [driverId]) // eslint-disable-line
+  const texto = pl ? renderPlantilla(pl.texto, datos) : ''
+  const faltan = pl ? faltantesPlantilla(pl.texto, datos) : []
+  const set = (k, v) => setDatos((x) => ({ ...x, [k]: v }))
+  const generar = async () => {
+    if (!pl || !driver) { window.alert('Elige plantilla y driver.'); return }
+    if (faltan.length) { window.alert('Faltan datos obligatorios: ' + faltan.join(', ')); return }
+    setGuardando(true)
+    try {
+      const token = tokenAleatorio()
+      const id = await guardar(COL.contratos, null, {
+        titulo: pl.titulo, textoRenderizado: texto, templateId: pl.id, templateVersion: pl.version || 1,
+        datos, driverId: driver.id, driverNombre: nombreCompleto(driver), almacenId: driver.almacenId || '',
+        empresa: datos.empresa, estado: 'pendiente_firma', signingToken: token,
+        vence: new Date(Date.now() + 14 * 86400000).toISOString(),
+      })
+      await auditar('contrato_generado', `${nombreCompleto(driver)} · ${pl.titulo}`)
+      setLink(`${window.location.origin}/wfirma?t=${token}`)
+    } finally { setGuardando(false) }
+  }
+  if (!plantillas.length) return <Aviso tipo="info">Primero crea una plantilla en <button className="font-semibold text-brand-gold underline" onClick={onIrPlantillas}>Plantillas</button>.</Aviso>
+  return (
+    <div>
+      <Card className="mb-3 p-4">
+        <Grid>
+          <F label="Plantilla"><Select value={plId} onChange={(e) => setPlId(e.target.value)}><option value="">Elegir…</option>{plantillas.map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}</Select></F>
+          <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Elegir…</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+        </Grid>
+        {driver && (
+          <div className="mt-3">
+            <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Datos (autocompletados del perfil; edítalos si hace falta)</div>
+            <Grid>{CAMPOS_CONTRATO.map((c) => <F key={c.k} label={c.l}><Input value={datos[c.k] || ''} onChange={(e) => set(c.k, e.target.value)} /></F>)}</Grid>
+          </div>
+        )}
+      </Card>
+      {pl && (
+        <Card className="mb-3 p-4">
+          <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Vista previa</div>
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40"><pre className="whitespace-pre-wrap font-sans">{texto}</pre></div>
+          {faltan.length > 0 && <Aviso tipo="warn" className="mt-2">Faltan datos obligatorios: {faltan.join(', ')}</Aviso>}
+        </Card>
+      )}
+      {!link ? (
+        <Boton variant="gold" disabled={guardando || !pl || !driver} onClick={generar}>{guardando ? <Spinner /> : 'Generar contrato y enlace de firma'}</Boton>
+      ) : (
+        <Card className="p-4">
+          <Aviso tipo="ok">Contrato generado. Envíale este enlace al driver para que firme:</Aviso>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Input readOnly value={link} className="flex-1 min-w-[220px] font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Boton variant="gold" onClick={() => { navigator.clipboard?.writeText(link); window.alert('Enlace copiado.') }}>Copiar enlace</Boton>
+            <Boton variant="ghost" onClick={onIrLista}>Ver contratos</Boton>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">Generar o copiar el enlace no significa que se envió, abrió o firmó. El enlace vence en 14 días.</p>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function VistaPlantillas({ plantillas }) {
+  const [edit, setEdit] = useState(null)
+  if (edit) return <PlantillaEditor plantilla={edit} onCerrar={() => setEdit(null)} />
+  return (
+    <div>
+      <div className="mb-3"><Boton variant="gold" onClick={() => setEdit({})}><Plus size={15} /> Nueva plantilla</Boton></div>
+      {plantillas.length === 0 && <div className="text-sm text-slate-400">Sin plantillas. Crea una reutilizable con campos automáticos.</div>}
+      <div className="space-y-1.5">
+        {plantillas.map((p) => (
+          <Card key={p.id} className="flex flex-wrap items-center gap-2 p-3">
+            <span className="font-bold text-brand-navy dark:text-slate-100">{p.titulo}</span>
+            <Badge color="slate">v{p.version || 1}</Badge>
+            <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEdit(p)}>editar</button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+function PlantillaEditor({ plantilla, onCerrar }) {
+  const [p, setP] = useState({ titulo: '', texto: 'Contrato de prestación de servicios\n\nEntre {{empresa}} y {{nombre}}, con dirección {{direccion}}, teléfono {{telefono}}.\n\nAlmacén: {{almacen}}\nVehículo: {{vehiculo}}\nTarifa acordada: {{tarifa}} por ruta\nFecha de inicio: {{fechaInicio}}\n\nFirma del conductor: ______________________\nFecha: {{fecha}}', ...plantilla })
+  const [guardando, setGuardando] = useState(false)
+  const salvar = async () => {
+    if (!p.titulo.trim()) { window.alert('Ponle título.'); return }
+    setGuardando(true)
+    try { await guardar(COL.plantillas, plantilla.id, { titulo: p.titulo.trim(), texto: p.texto, version: (plantilla.version || 0) + 1 }); await auditar('plantilla_guardada', p.titulo); onCerrar() } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <div className="mb-3"><Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton></div>
+      <Card className="p-4">
+        <F label="Título"><Input value={p.titulo} onChange={(e) => setP({ ...p, titulo: e.target.value })} /></F>
+        <div className="mt-3"><F label="Texto (usa {{campo}} para autollenar)"><textarea value={p.texto} onChange={(e) => setP({ ...p, texto: e.target.value })} rows={12} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-800" /></F></div>
+        <div className="mt-2 flex flex-wrap gap-1.5">{CAMPOS_CONTRATO.map((c) => <button key={c.k} onClick={() => setP((x) => ({ ...x, texto: `${x.texto}{{${c.k}}}` }))} className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">{`{{${c.k}}}`}</button>)}</div>
+        <div className="mt-4 flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar plantilla'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>{plantilla.id && <button className="ml-auto text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={async () => { if (window.confirm('¿Borrar plantilla?')) { await borrar(COL.plantillas, plantilla.id); onCerrar() } }}>Borrar</button>}</div>
+        <p className="mt-2 text-[11px] text-slate-400">No incluyas datos bancarios ni sensibles. Los contratos ya emitidos no cambian si editas la plantilla.</p>
+      </Card>
+    </div>
   )
 }
