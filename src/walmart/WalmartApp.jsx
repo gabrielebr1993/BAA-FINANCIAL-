@@ -36,7 +36,7 @@ import {
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
   tokenAleatorio, datosDeDriver,
   ultimasSemanas, receivableNet30, acumuladoDriver,
-  AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda,
+  AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -159,7 +159,7 @@ export default function WalmartApp() {
             })}
           </div>
         </div>
-        <div className="relative mx-auto max-w-[1400px] p-4 sm:p-5 lg:p-6">{contenido}</div>
+        <div className="relative p-4 sm:p-5 lg:p-6">{contenido}</div>
       </div>
     </div>
   )
@@ -258,7 +258,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA }
 const ini = (p) => `${(p?.nombre || '?')[0] || ''}${(p?.apellido || '')[0] || ''}`.toUpperCase() || '?'
 const DIA_LARGO = { Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Dom: 'Domingo' }
 
-function TabAgenda({ personas, almacenes, agenda, irA }) {
+function TabAgenda({ personas, almacenes, agenda }) {
   const [almId, setAlmId] = useState('')
   const [fecha, setFecha] = useState(hoyISO())
   const [q, setQ] = useState('')
@@ -269,12 +269,12 @@ function TabAgenda({ personas, almacenes, agenda, irA }) {
   const semana = lunesDe(fecha)
   useEffect(() => { if (!almId && almacenes.length) setAlmId(almacenes[0].id) }, [almacenes, almId])
   const almSel = almacenes.find((a) => a.id === almId)
-  const necesita = Number(almSel?.necesitaDia) || 6
+  const necesita = necesitaDeAlmacen(almSel) // { manana, tarde }
+  const necTotal = necesita.manana + necesita.tarde
 
   const doc0 = agenda.find((a) => a.id === idAgenda(almId, semana))
   const plan = useMemo(() => planNormalizado(doc0?.plan), [doc0])
 
-  // Drivers del almacén (según filtro de estado) para el panel.
   const delAlmacen = useMemo(() => personas.filter((p) => p.almacenId === almId), [personas, almId])
   const panel = useMemo(() => {
     const txt = q.trim().toLowerCase()
@@ -303,16 +303,10 @@ function TabAgenda({ personas, almacenes, agenda, irA }) {
     guardarPlan(nuevo)
   }
   const limpiarDia = (dia) => { const nuevo = planNormalizado(plan); nuevo[dia] = { manana: [], tarde: [] }; guardarPlan(nuevo) }
+  const guardarNec = (campo, val) => { if (almId) guardar(COL.almacenes, almId, { [campo]: Math.max(0, Number(val) || 0) }) }
 
-  // Huecos para alertas.
-  const huecos = DIAS.map((d) => ({ dia: d, ...huecosAgenda(plan, d, necesita) }))
-    .filter((h) => h.faltan > 0)
-    .map((h) => {
-      const libres = panel.filter((p) => p.estadoOperativo === 'activo' && !plan[h.dia].manana.includes(p.id) && !plan[h.dia].tarde.includes(p.id))
-      return { ...h, libres }
-    })
-
-  const guardarNecesita = (n) => { if (almId) guardar(COL.almacenes, almId, { necesitaDia: Math.max(0, Number(n) || 0) }) }
+  const activos = (dia, turno) => panel.filter((p) => p.estadoOperativo === 'activo' && !plan[dia].manana.includes(p.id) && !plan[dia].tarde.includes(p.id))
+  const huecos = DIAS.map((d) => ({ dia: d, ...huecosAgenda(plan, d, necesita) })).filter((h) => h.faltan > 0)
 
   if (!almacenes.length) {
     return (<div><PageTitle>Agenda semanal</PageTitle><Aviso tipo="info">Primero crea un almacén en la pestaña <b>Almacenes</b>. Cada almacén tiene su propia agenda.</Aviso></div>)
@@ -321,68 +315,92 @@ function TabAgenda({ personas, almacenes, agenda, irA }) {
   return (
     <div>
       <PageTitle>Agenda semanal</PageTitle>
-      <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día: <b className="text-emerald-600">verde = mañana</b>, <b className="text-blue-600">azul = tarde</b>. El sistema avisa si falta gente.</p>
+      <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día — <b className="text-emerald-600">mañana</b> o <b className="text-blue-600">tarde</b>. El sistema avisa si falta gente. Se guarda al instante.</p>
 
       {/* Controles */}
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-          <F label="Necesita / día"><Input type="number" min="0" className="w-24" defaultValue={necesita} key={almId + necesita} onBlur={(e) => guardarNecesita(e.target.value)} /></F>
-          <span className="mb-2 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)} className="min-w-[160px]">{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <F label="Semana"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-[150px]" /></F>
+          <div>
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">Necesita por turno</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                <Sun size={13} className="text-emerald-600" /><Input type="number" min="0" className="w-14 border-0 bg-transparent p-0 text-center" defaultValue={necesita.manana} key={`m${almId}${necesita.manana}`} onBlur={(e) => guardarNec('necesitaManana', e.target.value)} />
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 dark:border-blue-500/30 dark:bg-blue-500/10">
+                <Sunset size={13} className="text-blue-600" /><Input type="number" min="0" className="w-14 border-0 bg-transparent p-0 text-center" defaultValue={necesita.tarde} key={`t${almId}${necesita.tarde}`} onBlur={(e) => guardarNec('necesitaTarde', e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <span className="pb-1.5 text-xs text-slate-400">{semana} → {domingoDe(fecha)} · {necTotal}/día</span>
         </div>
       </Card>
 
-      {/* Cobertura por día */}
-      <div className="mb-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
+      {/* Cobertura por día (por turno) */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         {DIAS.map((d) => {
-          const c = coberturaDia(plan, d); const falta = Math.max(0, necesita - c.total)
+          const c = coberturaDia(plan, d)
+          const fM = Math.max(0, necesita.manana - c.manana), fT = Math.max(0, necesita.tarde - c.tarde)
+          const ok = fM + fT === 0
           return (
-            <div key={d} className={`rounded-xl border p-2 text-center ${falta > 0 ? 'border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10' : 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10'}`}>
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{d}</div>
-              <div className={`text-lg font-extrabold ${falta > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{c.total}/{necesita}</div>
-              <div className="text-[10px] text-slate-400">{c.manana}m · {c.tarde}t</div>
-              <div className={`mt-1 inline-block rounded-full px-2 text-[9px] font-bold ${falta > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>{falta > 0 ? `Faltan ${falta}` : 'Completo'}</div>
+            <div key={d} className={`rounded-xl border p-2 ${ok ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-rose-200 bg-rose-50/60 dark:border-rose-500/30 dark:bg-rose-500/10'}`}>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-brand-navy dark:text-slate-100">{d}</span>
+                <span className={`rounded-full px-1.5 text-[9px] font-bold ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>{ok ? 'OK' : `−${fM + fT}`}</span>
+              </div>
+              <div className="space-y-1">
+                <div className={`flex items-center justify-between rounded-md px-1.5 py-0.5 text-[11px] font-bold ${fM ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}><span className="flex items-center gap-1"><Sun size={11} />Mañ</span><span>{c.manana}/{necesita.manana}</span></div>
+                <div className={`flex items-center justify-between rounded-md px-1.5 py-0.5 text-[11px] font-bold ${fT ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-700'}`}><span className="flex items-center gap-1"><Sunset size={11} />Tar</span><span>{c.tarde}/{necesita.tarde}</span></div>
+              </div>
             </div>
           )
         })}
       </div>
 
-      {/* Alertas de huecos */}
+      {/* Alertas de huecos (por turno) */}
       {huecos.length > 0 && (
         <Card className="mb-3 p-3">
           <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><AlertTriangle size={15} className="text-amber-500" /> Huecos detectados</div>
           <div className="space-y-1.5">
-            {huecos.map((h) => (
-              <div key={h.dia} className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-                <span className="flex-1"><b>{DIA_LARGO[h.dia]}:</b> faltan {h.faltan} de {necesita}.{h.libres.length ? ` Disponibles: ${h.libres.slice(0, 3).map(nombreCompleto).join(', ')}${h.libres.length > 3 ? '…' : ''}` : ' Nadie libre — considera stand-by o turno extra.'}</span>
-              </div>
-            ))}
+            {huecos.map((h) => {
+              const libM = activos(h.dia, 'manana'), libT = activos(h.dia, 'tarde')
+              return (
+                <div key={h.dia} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+                  <b className="text-brand-navy dark:text-slate-100">{DIA_LARGO[h.dia]}:</b>
+                  {h.faltanM > 0 && <span>🟢 Mañana faltan <b>{h.faltanM}</b>{libM.length ? ` (disp: ${libM.slice(0, 2).map(nombreCompleto).join(', ')}${libM.length > 2 ? '…' : ''})` : ' (sin libres)'}</span>}
+                  {h.faltanT > 0 && <span>🔵 Tarde faltan <b>{h.faltanT}</b>{libT.length ? ` (disp: ${libT.slice(0, 2).map(nombreCompleto).join(', ')}${libT.length > 2 ? '…' : ''})` : ' (sin libres)'}</span>}
+                </div>
+              )
+            })}
           </div>
         </Card>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[230px_1fr]">
+      <div className="grid items-start gap-3 lg:grid-cols-[232px_1fr]">
         {/* Panel de drivers */}
-        <Card className="h-max p-3 lg:sticky lg:top-4">
-          <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Drivers</div>
+        <Card className="p-3 lg:sticky lg:top-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Drivers</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{panel.length}</span>
+          </div>
           <div className="relative mb-2"><Search size={14} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className="mb-2">
             <option value="activo">Solo activos</option><option value="standby">Stand-by</option><option value="todos">Todos</option>
           </Select>
-          {sel && <div className="mb-2 rounded-lg bg-brand-navy/5 px-2 py-1.5 text-[11px] text-brand-navy dark:bg-white/5 dark:text-slate-200">Toca un turno para asignar a <b>{nombreDe(sel)}</b> · <button className="underline" onClick={() => setSel(null)}>cancelar</button></div>}
-          <div className="max-h-[56vh] space-y-1.5 overflow-y-auto pr-1">
-            {panel.length === 0 && <div className="py-6 text-center text-xs text-slate-400">Sin drivers para este filtro.</div>}
+          {sel && <div className="mb-2 rounded-lg border border-brand-gold/40 bg-amber-50 px-2 py-1.5 text-[11px] text-brand-navy dark:bg-amber-500/10 dark:text-slate-200">Toca un turno para asignar a <b>{nombreDe(sel)}</b> · <button className="font-semibold underline" onClick={() => setSel(null)}>cancelar</button></div>}
+          <div className="max-h-[62vh] space-y-1.5 overflow-y-auto pr-1">
+            {panel.length === 0 && <div className="py-8 text-center text-xs text-slate-400">Sin drivers para este filtro.<br />Agrégalos en <b>Candidatos / Drivers</b>.</div>}
             {panel.map((p) => {
               const nd = diasAsignado(p.id); const act = sel === p.id
               return (
                 <div key={p.id} draggable
                   onDragStart={(e) => { e.dataTransfer.setData('text/plain', p.id); e.dataTransfer.effectAllowed = 'copy' }}
                   onClick={() => setSel(act ? null : p.id)}
-                  className={`flex cursor-grab items-center gap-2 rounded-xl border px-2 py-1.5 active:cursor-grabbing ${act ? 'border-brand-gold bg-amber-50 dark:bg-amber-500/10' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800'}`}>
+                  className={`flex cursor-grab items-center gap-2 rounded-xl border px-2 py-1.5 transition active:cursor-grabbing ${act ? 'border-brand-gold bg-amber-50 shadow-sm dark:bg-amber-500/10' : 'border-slate-200 bg-white hover:border-brand-gold/50 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800'}`}>
                   <GripVertical size={13} className="shrink-0 text-slate-300" />
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-bold text-brand-gold">{ini(p)}</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span><span className="block truncate text-[10px] text-slate-400">{p.tipoVehiculo || 'Driver'}{nd ? ` · ${nd}d asignado` : ''}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span><span className="block truncate text-[10px] text-slate-400">{p.tipoVehiculo || 'Driver'}{nd ? ` · ${nd}d` : ''}</span></span>
                 </div>
               )
             })}
@@ -390,38 +408,41 @@ function TabAgenda({ personas, almacenes, agenda, irA }) {
         </Card>
 
         {/* Tablero semanal */}
-        <div className="overflow-x-auto">
-          <div className="grid min-w-[760px] grid-cols-7 gap-2">
+        <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[840px] grid-cols-7 gap-2">
             {DIAS.map((d) => (
-              <div key={d} className="flex flex-col rounded-xl border border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-800/50">
-                <div className="flex items-center justify-between border-b border-slate-100 px-2 py-1.5 dark:border-slate-700">
+              <div key={d} className="flex min-h-[300px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-800/50">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
                   <span className="text-xs font-extrabold text-brand-navy dark:text-slate-100">{d}</span>
-                  {(plan[d].manana.length + plan[d].tarde.length) > 0 && <button onClick={() => limpiarDia(d)} title="Vaciar día" className="text-slate-300 hover:text-rose-500"><Trash2 size={12} /></button>}
+                  {(plan[d].manana.length + plan[d].tarde.length) > 0 && <button onClick={() => limpiarDia(d)} title="Vaciar día" className="text-slate-300 transition hover:text-rose-500"><Trash2 size={12} /></button>}
                 </div>
                 {AGENDA_TURNOS.map((t) => {
                   const lista = plan[d][t.id]; const activo = sobre === `${d}|${t.id}`
                   const Ico = t.id === 'manana' ? Sun : Sunset
                   return (
                     <div key={t.id}
-                      onDragOver={(e) => { e.preventDefault(); setSobre(`${d}|${t.id}`) }}
-                      onDragLeave={() => setSobre('')}
+                      onDragOver={(e) => { e.preventDefault(); if (sobre !== `${d}|${t.id}`) setSobre(`${d}|${t.id}`) }}
+                      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setSobre('') }}
                       onDrop={(e) => { e.preventDefault(); setSobre(''); asignar(e.dataTransfer.getData('text/plain'), d, t.id) }}
                       onClick={() => { if (sel) { asignar(sel, d, t.id); setSel(null) } }}
                       style={activo ? { background: t.bg, borderColor: t.br } : undefined}
-                      className={`min-h-[64px] flex-1 border-b border-dashed px-1.5 py-1.5 last:border-b-0 ${sel ? 'cursor-pointer' : ''} ${activo ? '' : 'border-slate-100 dark:border-slate-700/60'}`}>
-                      <div className="mb-1 flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide" style={{ color: t.tx }}><Ico size={10} /> {t.label} · {lista.length}</div>
+                      className={`flex-1 border-b-2 px-1.5 py-1.5 transition last:border-b-0 ${sel ? 'cursor-pointer' : ''} ${activo ? 'ring-1 ring-inset' : 'border-transparent'}`}>
+                      <div className="mb-1 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wide" style={{ color: t.tx }}>
+                        <span className="flex items-center gap-1 truncate"><Ico size={11} className="shrink-0" />{t.label}</span>
+                        <span className="shrink-0 rounded-full px-1" style={{ background: t.bg }}>{lista.length}</span>
+                      </div>
                       <div className="space-y-1">
                         {lista.map((id) => {
                           const p = personaDe(id)
                           return (
-                            <div key={id} className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold" style={{ background: t.bg, color: t.tx, border: `1px solid ${t.br}` }}>
+                            <div key={id} className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-semibold shadow-sm" style={{ background: t.bg, color: t.tx, border: `1px solid ${t.br}` }}>
                               <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white" style={{ background: t.hex }}>{ini(p)}</span>
                               <span className="min-w-0 flex-1 truncate">{p ? nombreCompleto(p) : '—'}</span>
-                              <button onClick={(e) => { e.stopPropagation(); quitar(id, d, t.id) }} className="shrink-0 opacity-60 hover:opacity-100"><X size={11} /></button>
+                              <button onClick={(e) => { e.stopPropagation(); quitar(id, d, t.id) }} className="shrink-0 opacity-50 transition hover:opacity-100"><X size={11} /></button>
                             </div>
                           )
                         })}
-                        {lista.length === 0 && <div className="py-1 text-center text-[10px] text-slate-300">— suelta aquí —</div>}
+                        {lista.length === 0 && <div className="grid h-12 place-items-center rounded-lg border border-dashed border-slate-200 text-[10px] text-slate-300 dark:border-slate-700">suelta aquí</div>}
                       </div>
                     </div>
                   )

@@ -111,6 +111,13 @@ export const AGENDA_TURNOS = [
   { id: 'tarde', label: 'Tarde', color: 'blue', hex: '#2B4C8C', bg: '#eef6ff', br: '#cfe3ff', tx: '#2B4C8C' },
 ]
 export const agendaTurnoInfo = (id) => AGENDA_TURNOS.find((t) => t.id === id) || AGENDA_TURNOS[0]
+// Necesidad por turno por defecto (configurable por almacén): 3 mañana, 2 tarde.
+export const NECESITA_MANANA_DEF = 3
+export const NECESITA_TARDE_DEF = 2
+export const necesitaDeAlmacen = (alm) => ({
+  manana: alm?.necesitaManana != null ? Number(alm.necesitaManana) : NECESITA_MANANA_DEF,
+  tarde: alm?.necesitaTarde != null ? Number(alm.necesitaTarde) : NECESITA_TARDE_DEF,
+})
 // id determinista del documento de agenda (un doc por almacén y semana).
 export const idAgenda = (almacenId, semana) => `ag_${almacenId}_${semana}`.replace(/[^a-zA-Z0-9_]/g, '')
 // Plan vacío: para cada día, una lista de driverIds por turno.
@@ -133,12 +140,15 @@ export function coberturaDia(plan, dia) {
   const unicos = new Set([...p.manana, ...p.tarde])
   return { manana: p.manana.length, tarde: p.tarde.length, total: unicos.size }
 }
-// Huecos: días donde el total de drivers < necesita. Devuelve también quién
-// está disponible (driver activo del almacén, no asignado ese día).
+// Huecos por turno de un día. `necesita` = { manana, tarde }.
+// Devuelve el conteo por turno y cuántos faltan en cada uno.
 export function huecosAgenda(plan, dia, necesita) {
   const cob = coberturaDia(plan, dia)
-  const faltan = Math.max(0, (Number(necesita) || 0) - cob.total)
-  return { ...cob, faltan }
+  const nM = Number(necesita?.manana) || 0
+  const nT = Number(necesita?.tarde) || 0
+  const faltanM = Math.max(0, nM - cob.manana)
+  const faltanT = Math.max(0, nT - cob.tarde)
+  return { ...cob, faltanM, faltanT, faltan: faltanM + faltanT }
 }
 export const ESTADOS_RUTA = [
   { id: 'pendiente', label: 'Pendiente', color: 'slate' },
