@@ -17,8 +17,9 @@ import { useAuth } from '../AuthContext'
 import { useCarrier } from '../carriers/CarrierContext'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, KPI } from '../components/ui'
 
-// Gráfica diferida (recharts no entra en el arranque).
+// Gráficas diferidas (SVG puro; no entran en el arranque).
 const ChartSemanas = lazy(() => import('./ChartSemanas'))
+const ChartComparativa = lazy(() => import('./ChartComparativa'))
 // jsPDF se importa bajo demanda al generar un PDF.
 const cargarJsPDF = async () => (await import('jspdf')).jsPDF
 import {
@@ -1646,6 +1647,13 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
   const prevDesde = sumarDias(prevHasta, -lenDias)
   const finPrev = useMemo(() => financieroRango(rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId), [rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId])
   const tr = (cur, prev) => (prev && isFinite(prev) && prev !== 0 ? (cur - prev) / Math.abs(prev) : null)
+  const comparativa = [
+    { label: 'Ingreso', actual: fin.ingresoRutas, anterior: finPrev.ingresoRutas },
+    { label: 'Costo drivers', actual: fin.costoDrivers, anterior: finPrev.costoDrivers },
+    { label: 'Margen', actual: fin.margen, anterior: finPrev.margen },
+    { label: 'Resultado', actual: fin.resultadoOperativo, anterior: finPrev.resultadoOperativo },
+    { label: 'Flujo', actual: fin.flujoCaja, anterior: finPrev.flujoCaja },
+  ]
 
   return (
     <div>
@@ -1672,6 +1680,14 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />
         <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent={fin.flujoCaja >= 0 ? 'green' : 'red'} trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub={`ant. ${dinero(finPrev.flujoCaja)}`} />
       </div>
+
+      {/* comparativa actual vs anterior */}
+      <Card className="mb-4 p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Este período vs. el anterior</div>
+        <Suspense fallback={<div className="grid h-[230px] place-items-center"><Spinner /></div>}>
+          <ChartComparativa data={comparativa} />
+        </Suspense>
+      </Card>
 
       {/* conteos operativos */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
