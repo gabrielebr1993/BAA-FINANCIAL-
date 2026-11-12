@@ -167,7 +167,7 @@ export default function WalmartApp() {
             })}
           </div>
         </div>
-        <div className="relative p-4 sm:p-5 lg:p-6">{contenido}</div>
+        <div className="relative mx-auto w-full max-w-[1800px] overflow-x-clip p-3 sm:p-5 lg:p-6">{contenido}</div>
       </div>
     </div>
   )
@@ -221,7 +221,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
         </div>
       </Card>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
         <KPI animado label="Drivers activos" value={String(activos)} icon={Users} accent="navy" sub={`${standby} en stand-by`} />
         <KPI animado label="Rutas completadas" value={String(rC)} icon={RouteIcon} accent="green" sub={pend ? `${pend} pendientes` : 'semana'} />
         <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" sub="de la semana" />
