@@ -25,6 +25,7 @@ export const COL = {
   cobros: 'wal_cobros', // dinero que Walmart paga a la compañía
   contratos: 'wal_contratos',
   plantillas: 'wal_plantillas',
+  agenda: 'wal_agenda', // asignación semanal de drivers por almacén y turno
   audit: 'wal_audit',
 }
 
@@ -102,6 +103,43 @@ export function domingoDe(fechaISO) {
 export const hoyISO = () => new Date().toISOString().slice(0, 10)
 
 export const BLOQUES = [{ id: 'manana', label: 'Mañana' }, { id: 'tarde', label: 'Tarde' }]
+
+// ── AGENDA semanal (asignación de drivers por almacén, día y turno) ──────────
+// Turnos con color: mañana = verde, tarde = azul (igual que pidió la operación).
+export const AGENDA_TURNOS = [
+  { id: 'manana', label: 'Mañana', color: 'green', hex: '#2E9E6B', bg: '#e3f4ec', br: '#bfe4d1', tx: '#1f7a52' },
+  { id: 'tarde', label: 'Tarde', color: 'blue', hex: '#2B4C8C', bg: '#eef6ff', br: '#cfe3ff', tx: '#2B4C8C' },
+]
+export const agendaTurnoInfo = (id) => AGENDA_TURNOS.find((t) => t.id === id) || AGENDA_TURNOS[0]
+// id determinista del documento de agenda (un doc por almacén y semana).
+export const idAgenda = (almacenId, semana) => `ag_${almacenId}_${semana}`.replace(/[^a-zA-Z0-9_]/g, '')
+// Plan vacío: para cada día, una lista de driverIds por turno.
+export const planAgendaVacio = () => DIAS.reduce((o, d) => { o[d] = { manana: [], tarde: [] }; return o }, {})
+// Normaliza un plan (por si falta algún día/turno).
+export function planNormalizado(plan) {
+  const base = planAgendaVacio()
+  if (!plan) return base
+  for (const d of DIAS) {
+    base[d] = {
+      manana: Array.isArray(plan[d]?.manana) ? [...plan[d].manana] : [],
+      tarde: Array.isArray(plan[d]?.tarde) ? [...plan[d].tarde] : [],
+    }
+  }
+  return base
+}
+// Cobertura de un día: cuántos en cada turno y total de drivers únicos.
+export function coberturaDia(plan, dia) {
+  const p = planNormalizado(plan)[dia]
+  const unicos = new Set([...p.manana, ...p.tarde])
+  return { manana: p.manana.length, tarde: p.tarde.length, total: unicos.size }
+}
+// Huecos: días donde el total de drivers < necesita. Devuelve también quién
+// está disponible (driver activo del almacén, no asignado ese día).
+export function huecosAgenda(plan, dia, necesita) {
+  const cob = coberturaDia(plan, dia)
+  const faltan = Math.max(0, (Number(necesita) || 0) - cob.total)
+  return { ...cob, faltan }
+}
 export const ESTADOS_RUTA = [
   { id: 'pendiente', label: 'Pendiente', color: 'slate' },
   { id: 'en_progreso', label: 'En progreso', color: 'blue' },
