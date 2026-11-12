@@ -135,6 +135,52 @@ export function gananciaDriver(r) {
   return money2((Number(r.tarifaDriver) || 0) + ajustes(r, 'driver'))
 }
 
+// ── Dashboard: series semanales y cuentas por cobrar (net-30) ───────────────
+// Devuelve las claves (lunes) de las últimas n semanas que terminan en la
+// semana de `fechaRef`.
+export function ultimasSemanas(n, fechaRef) {
+  const base = new Date(`${lunesDe(fechaRef || hoyISO())}T00:00:00`)
+  const out = []
+  for (let i = n - 1; i >= 0; i--) { const d = new Date(base); d.setDate(base.getDate() - i * 7); out.push(d.toISOString().slice(0, 10)) }
+  return out
+}
+
+// Walmart paga NET 30: cada semana se cobra ~30 días después del fin de semana.
+// Calcula lo por cobrar por semana, lo vencido (pasó net-30 sin cobrar) y el
+// próximo cobro estimado.
+export function receivableNet30(rutas, cobros, almId) {
+  const enAlm = (a) => !almId || a === almId
+  const ingresoPorSemana = {}
+  for (const r of rutas || []) { if (r.estado !== 'completada' || !enAlm(r.almacenId)) continue; ingresoPorSemana[r.semana] = money2((ingresoPorSemana[r.semana] || 0) + ingresoRuta(r)) }
+  const hoy = new Date()
+  let totalPorCobrar = 0, vencido = 0, proximo = null
+  const detalle = []
+  for (const [sem, ing] of Object.entries(ingresoPorSemana)) {
+    const cobrado = money2((cobros || []).filter((c) => c.semana === sem && enAlm(c.almacenId)).reduce((a, c) => a + (Number(c.monto) || 0), 0))
+    const pend = money2(ing - cobrado)
+    if (pend <= 0.005) continue
+    const vence = new Date(`${domingoDe(sem)}T00:00:00`); vence.setDate(vence.getDate() + 30)
+    const venceISO = vence.toISOString().slice(0, 10)
+    const esVencido = vence < hoy
+    totalPorCobrar += pend; if (esVencido) vencido += pend
+    if (!esVencido && (!proximo || venceISO < proximo.venceEl)) proximo = { semana: sem, pend, venceEl: venceISO }
+    detalle.push({ semana: sem, ingreso: ing, cobrado, pend, venceEl: venceISO, vencido: esVencido })
+  }
+  return { totalPorCobrar: money2(totalPorCobrar), vencido: money2(vencido), proximo, detalle: detalle.sort((a, b) => a.semana.localeCompare(b.semana)) }
+}
+
+// Acumulados históricos de un driver (todas las semanas): ganado, pagado, saldo.
+export function acumuladoDriver(rutas, pagos, driverId) {
+  const rs = (rutas || []).filter((r) => r.driverId === driverId && r.estado === 'completada')
+  const ganado = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
+  const ps = (pagos || []).filter((p) => p.driverId === driverId)
+  const efectivoFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+  const liquidadoFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.bruto) || 0), 0))
+  const pagadoNormal = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+  const comisiones = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.comision) || 0), 0))
+  return { ganado, liquidadoFP, efectivoFP, pagadoNormal, comisiones, saldo: money2(ganado - liquidadoFP - pagadoNormal), nRutas: rs.length, rutas: rs }
+}
+
 // ── Contratos y plantillas ──────────────────────────────────────────────────
 export const ESTADOS_CONTRATO = [
   { id: 'borrador', label: 'Borrador', color: 'slate' },
