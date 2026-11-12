@@ -34,7 +34,7 @@ import '../styles/cloudmotion.css'
 import './foldable.css'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
-  TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio,
+  TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
@@ -1074,7 +1074,7 @@ function TabAlmacenes({ almacenes, user }) {
 }
 
 function EditorAlmacen({ almacen, user, onCerrar }) {
-  const [a, setA] = useState({ nombre: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', activo: true, ...almacen })
+  const [a, setA] = useState({ nombre: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', tarifaWalmart: '', activo: true, ...almacen })
   const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setA((x) => ({ ...x, [k]: v }))
   const salvar = async () => {
@@ -1091,7 +1091,9 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
         <F label="Estado"><Input value={a.estado} onChange={(e) => set('estado', e.target.value)} placeholder="UT, TX…" /></F>
         <F label="Zona horaria"><Input value={a.zonaHoraria} onChange={(e) => set('zonaHoraria', e.target.value)} placeholder="America/Denver" /></F>
         <F label="Responsable"><Input value={a.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
+        <F label="Ingreso de Walmart por ruta (USD)"><Input type="number" value={a.tarifaWalmart} onChange={(e) => set('tarifaWalmart', e.target.value)} placeholder={`por defecto ${TARIFAS_DEFAULT.ingresoWalmart}`} /></F>
       </Grid>
+      <p className="mt-1 text-[11px] text-slate-400">Este es el precio que paga Walmart por cada ruta de este almacén. Se usa automáticamente al crear rutas aquí.</p>
       <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={a.activo !== false} onChange={(e) => set('activo', e.target.checked)} className="accent-brand-gold" /> Activo</label>
       <div className="mt-3 flex gap-2">
         <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar'}</Boton>
@@ -1122,11 +1124,11 @@ function TabConfig() {
     <div>
       <PageTitle>Configuración de tarifas</PageTitle>
       <Card className="p-4">
-        <p className="mb-3 text-xs text-slate-500">Valores por defecto por ruta. Se usan al registrar rutas (Fase 2) y se <b>guardan en cada ruta</b>, así que cambiarlos luego no altera el historial.</p>
+        <p className="mb-3 text-xs text-slate-500">Estos son <b>valores por defecto</b>. El <b>ingreso por ruta</b> se define ahora en cada <b>almacén</b> y el <b>pago</b> en cada <b>driver</b>; estos solo se usan cuando el almacén o el driver no tienen su propio valor. Cada ruta guarda sus importes, así que cambiarlos luego no altera el historial.</p>
         <Grid>
-          <F label="Ingreso de Walmart por ruta (USD)"><Input type="number" value={t.ingresoWalmart} onChange={(e) => set('ingresoWalmart', e.target.value)} /></F>
-          <F label="Pago al driver con vehículo propio (USD)"><Input type="number" value={t.pagoDriverPropio} onChange={(e) => set('pagoDriverPropio', e.target.value)} /></F>
-          <F label="Pago al driver con vehículo de la compañía (USD)"><Input type="number" value={t.pagoDriverCompania} onChange={(e) => set('pagoDriverCompania', e.target.value)} /></F>
+          <F label="Ingreso de Walmart por ruta — por defecto (USD)"><Input type="number" value={t.ingresoWalmart} onChange={(e) => set('ingresoWalmart', e.target.value)} /></F>
+          <F label="Pago driver propio — por defecto (USD)"><Input type="number" value={t.pagoDriverPropio} onChange={(e) => set('pagoDriverPropio', e.target.value)} /></F>
+          <F label="Pago driver compañía — por defecto (USD)"><Input type="number" value={t.pagoDriverCompania} onChange={(e) => set('pagoDriverCompania', e.target.value)} /></F>
           <F label="Comisión de Fast Pay (%)"><Input type="number" step="0.5" value={t.comisionFastPay} onChange={(e) => set('comisionFastPay', e.target.value)} /></F>
         </Grid>
         <Boton variant="gold" className="mt-4" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar tarifas'}</Boton>
@@ -1198,19 +1200,27 @@ function TabRutas({ rutas, almacenes, personas, tarifas, cierres }) {
 
 function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const bloqueado = !!ruta.cerrada
-  const [r, setR] = useState(() => ({
-    fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
-    vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente',
-    tarifaWalmart: tarifas.ingresoWalmart, tarifaDriver: tarifas.pagoDriverPropio,
-    bonos: [], deducciones: [], notas: '', motivoCancel: '', ...ruta,
-  }))
+  const [r, setR] = useState(() => {
+    const base = {
+      fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
+      vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente',
+      tarifaWalmart: tarifas.ingresoWalmart, tarifaDriver: tarifas.pagoDriverPropio,
+      bonos: [], deducciones: [], notas: '', motivoCancel: '', ...ruta,
+    }
+    if (!ruta.id) { // ruta nueva: toma precio del almacén y pago del driver
+      if (base.almacenId) base.tarifaWalmart = ingresoDeAlmacen(almacenes.find((a) => a.id === base.almacenId), tarifas)
+      if (base.driverId) base.tarifaDriver = tarifaDeDriver(personas.find((p) => p.id === base.driverId), tarifas)
+    }
+    return base
+  })
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
   const set = (k, v) => setR((x) => ({ ...x, [k]: v }))
   const driversActivos = personas.filter((p) => p.estadoOperativo === 'activo' && (!r.almacenId || p.almacenId === r.almacenId))
+  const elegirAlmacen = (id) => setR((x) => ({ ...x, almacenId: id, tarifaWalmart: ingresoDeAlmacen(almacenes.find((a) => a.id === id), tarifas) }))
   const elegirDriver = (id) => {
     const d = personas.find((x) => x.id === id)
-    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaDriver: tarifaDeDriver(d, tarifas) }))
+    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaWalmart: x.almacenId ? x.tarifaWalmart : ingresoDeAlmacen(almacenes.find((a) => a.id === d?.almacenId), tarifas), tarifaDriver: tarifaDeDriver(d, tarifas) }))
   }
   const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio) } })
   const addAj = (tipo) => set(tipo, [...(r[tipo] || []), { concepto: '', monto: '', responsable: '', aplicaA: 'driver' }])
@@ -1244,7 +1254,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
         <Card className="mb-3 p-4">
           <Grid>
             <F label="Fecha de servicio"><Input type="date" value={r.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
-            <F label="Almacén"><Select value={r.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">Elegir…</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+            <F label="Almacén"><Select value={r.almacenId} onChange={(e) => elegirAlmacen(e.target.value)}><option value="">Elegir…</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
             <F label="Driver (activo)"><Select value={r.driverId} onChange={(e) => elegirDriver(e.target.value)}><option value="">Elegir…</option>{driversActivos.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
             <F label="Identificador (opcional)"><Input value={r.identificador} onChange={(e) => set('identificador', e.target.value)} placeholder="DFW01-140-B" /></F>
             <F label="Bloque"><Select value={r.bloque} onChange={(e) => set('bloque', e.target.value)}>{BLOQUES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></F>
@@ -1255,12 +1265,20 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
           {r.estado === 'cancelada' && <div className="mt-2"><F label="Motivo de cancelación"><Input value={r.motivoCancel} onChange={(e) => set('motivoCancel', e.target.value)} /></F></div>}
         </Card>
         <Card className="mb-3 p-4">
-          <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Tarifas (se guardan en la ruta; cambios futuros no la alteran)</div>
-          <Grid>
-            <F label="Ingreso de Walmart (USD)"><Input type="number" value={r.tarifaWalmart} onChange={(e) => set('tarifaWalmart', e.target.value)} /></F>
-            <F label="Pago al driver (USD)"><Input type="number" value={r.tarifaDriver} onChange={(e) => set('tarifaDriver', e.target.value)} /></F>
-          </Grid>
-          {tieneRatePropio(personas.find((x) => x.id === r.driverId)) && <p className="mt-1 text-[11px] font-semibold text-brand-gold">★ Pago tomado de la tarifa personalizada del driver. Puedes ajustarlo solo para esta ruta.</p>}
+          <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Importes (automáticos; se guardan en la ruta)</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+              <div className="text-[10px] font-bold uppercase text-slate-400">Ingreso de Walmart (del almacén)</div>
+              <div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{dinero(r.tarifaWalmart)}</div>
+              <div className="text-[11px] text-slate-400">{r.almacenId ? (almacenes.find((a) => a.id === r.almacenId)?.nombre || '') : 'elige un almacén'}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+              <div className="text-[10px] font-bold uppercase text-slate-400">Pago al driver (de su tarifa)</div>
+              <div className="font-mono text-xl font-extrabold text-emerald-600">{dinero(r.tarifaDriver)}</div>
+              <div className="text-[11px] text-slate-400">{r.driverId ? (tieneRatePropio(personas.find((x) => x.id === r.driverId)) ? 'tarifa personalizada' : 'tarifa por defecto') : 'elige un driver'}</div>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">El <b>precio</b> lo define el <b>almacén</b> y el <b>pago</b> lo define el <b>driver</b>. Para un ajuste solo de esta ruta, usa bonos o deducciones.</p>
           <AjustesEditor titulo="Bonos" tipo="bonos" lista={r.bonos} onAdd={() => addAj('bonos')} onSet={(i, k, v) => setAj('bonos', i, k, v)} onDel={(i) => delAj('bonos', i)} />
           <AjustesEditor titulo="Deducciones" tipo="deducciones" lista={r.deducciones} onAdd={() => addAj('deducciones')} onSet={(i, k, v) => setAj('deducciones', i, k, v)} onDel={(i) => delAj('deducciones', i)} />
           <div className="mt-3 flex flex-wrap gap-4 text-sm">

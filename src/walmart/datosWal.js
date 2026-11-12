@@ -135,6 +135,10 @@ export const tarifaDeDriver = (driver, tarifas) => {
 }
 export const tieneRatePropio = (driver) => driver?.rateDriver != null && driver.rateDriver !== '' && !isNaN(Number(driver.rateDriver))
 
+// Ingreso por ruta que paga Walmart: lo define el ALMACÉN (con tarifa propia),
+// o la tarifa por defecto si el almacén no la tiene configurada.
+export const ingresoDeAlmacen = (alm, tarifas) => money2(alm?.tarifaWalmart != null && alm.tarifaWalmart !== '' && !isNaN(Number(alm.tarifaWalmart)) ? Number(alm.tarifaWalmart) : tarifas?.ingresoWalmart)
+
 // ── Semana de pago (lunes a domingo, por fecha local de servicio) ───────────
 // Devuelve la fecha ISO del LUNES de la semana de `fechaISO` (clave de semana).
 export function lunesDe(fechaISO) {
