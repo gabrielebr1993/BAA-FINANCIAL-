@@ -8,7 +8,7 @@
 // Visualmente usa el mismo diseño del sistema (componentes ui, colores de
 // marca). Los datos viven en colecciones wal_* separadas.
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { signOut } from 'firebase/auth'
@@ -25,6 +25,7 @@ import {
   CalendarDays, X, Sun, Sunset, GripVertical,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
+import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
 import '../styles/cloudmotion.css'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
@@ -86,7 +87,7 @@ export default function WalmartApp() {
 
   const contenido = (
     <>
-      {tab === 'dashboard' && <TabDashboard rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} irA={setTab} />}
+      {tab === 'dashboard' && <TabDashboard rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} irA={setTab} user={user} />}
       {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
       {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} user={user} />}
       {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
@@ -101,6 +102,7 @@ export default function WalmartApp() {
   )
   return (
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
+      <Toaster />
       {/* MENÚ LATERAL (escritorio): mismo estilo que Warehouse/Paquetería */}
       <aside className="sticky top-0 hidden h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 md:flex dark:border-slate-700/60 dark:bg-surface-dark-card">
         <div className="flex items-center gap-3 px-1 pb-3 pt-1">
@@ -166,7 +168,8 @@ export default function WalmartApp() {
 }
 
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
-function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA }) {
+function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, user }) {
+  const nombre = (() => { const n = (user?.email || '').split('@')[0].split(/[.\-_]/)[0]; return n ? n.charAt(0).toUpperCase() + n.slice(1) : '' })()
   const [fecha, setFecha] = useState(hoyISO())
   const [almId, setAlmId] = useState('')
   const semana = lunesDe(fecha)
@@ -187,7 +190,23 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA }
 
   return (
     <div>
-      <PageTitle>Dashboard</PageTitle>
+      {/* HERO */}
+      <div className="relative mb-4 overflow-hidden rounded-2xl p-5 text-white shadow-card sm:p-6" style={{ background: 'linear-gradient(120deg,#0f1d35 0%,#13233f 42%,#2b4c8c 78%,#c9a24b 140%)' }}>
+        <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full" style={{ background: 'radial-gradient(circle,rgba(201,162,75,.35),transparent 65%)' }} />
+        <div className="relative flex flex-wrap items-center gap-5">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium text-white/70">{saludo()}{nombre ? `, ${nombre}` : ''} · <span className="capitalize">{fechaLarga()}</span></div>
+            <div className="mt-0.5 text-2xl font-black tracking-tight sm:text-[28px]">Panel de Walmart</div>
+            <div className="mt-1 text-[13px] text-white/60">Resumen de la semana {semana} → {domingoDe(fecha)}</div>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            <HeroStat label="Drivers activos" valor={activos} dot />
+            <HeroStat label="Rutas completadas" valor={rC} />
+            <HeroStat label="Por cobrar" valor={dinero(net30.totalPorCobrar)} chico />
+          </div>
+        </div>
+      </div>
+
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
@@ -197,14 +216,14 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA }
       </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KPI label="Drivers activos" value={String(activos)} icon={Users} accent="navy" sub={`${standby} en stand-by`} />
-        <KPI label="Rutas completadas" value={String(rC)} icon={RouteIcon} accent="green" sub={pend ? `${pend} pendientes` : 'semana'} />
-        <KPI label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" sub="de la semana" />
-        <KPI label="Ganancia drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />
-        <KPI label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" sub="ingreso de la compañía" />
-        <KPI label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} sub="margen − gastos + comisiones" />
-        <KPI label="Por cobrar a Walmart" value={dinero(net30.totalPorCobrar)} icon={Clock} accent={net30.vencido > 0 ? 'red' : 'gold'} sub={net30.vencido > 0 ? `${dinero(net30.vencido)} vencido` : 'net 30'} />
-        <KPI label="Por pagar a drivers" value={dinero(saldoDrivers)} icon={Wallet} accent={saldoDrivers > 0 ? 'gold' : 'green'} sub="saldo de la semana" />
+        <KPI animado label="Drivers activos" value={String(activos)} icon={Users} accent="navy" sub={`${standby} en stand-by`} />
+        <KPI animado label="Rutas completadas" value={String(rC)} icon={RouteIcon} accent="green" sub={pend ? `${pend} pendientes` : 'semana'} />
+        <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" sub="de la semana" />
+        <KPI animado label="Ganancia drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />
+        <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" sub="ingreso de la compañía" />
+        <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} sub="margen − gastos + comisiones" />
+        <KPI animado label="Por cobrar a Walmart" value={dinero(net30.totalPorCobrar)} icon={Clock} accent={net30.vencido > 0 ? 'red' : 'gold'} sub={net30.vencido > 0 ? `${dinero(net30.vencido)} vencido` : 'net 30'} />
+        <KPI animado label="Por pagar a drivers" value={dinero(saldoDrivers)} icon={Wallet} accent={saldoDrivers > 0 ? 'gold' : 'green'} sub="saldo de la semana" />
       </div>
 
       {alertas.length > 0 && (
@@ -254,6 +273,15 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA }
   )
 }
 
+function HeroStat({ label, valor, dot, chico }) {
+  return (
+    <div className="rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 backdrop-blur-sm">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/60">{dot && <PulseDot color="#34d399" size={7} />}{label}</div>
+      <div className={`mt-0.5 font-black tabular-nums ${chico ? 'text-lg' : 'text-2xl'}`}>{valor}</div>
+    </div>
+  )
+}
+
 // ── AGENDA SEMANAL ──────────────────────────────────────────────────────────
 const ini = (p) => `${(p?.nombre || '?')[0] || ''}${(p?.apellido || '')[0] || ''}`.toUpperCase() || '?'
 const DIA_LARGO = { Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Dom: 'Domingo' }
@@ -288,7 +316,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const personaDe = (id) => personas.find((x) => x.id === id)
   const diasAsignado = (id) => DIAS.filter((d) => plan[d].manana.includes(id) || plan[d].tarde.includes(id)).length
 
-  const guardarPlan = async (nuevo) => { if (almId) await guardar(COL.agenda, idAgenda(almId, semana), { almacenId: almId, semana, plan: nuevo }) }
+  const guardarPlan = async (nuevo) => { if (!almId) return; await guardar(COL.agenda, idAgenda(almId, semana), { almacenId: almId, semana, plan: nuevo }); walToast('Agenda guardada') }
   const asignar = (driverId, dia, turno) => {
     if (!driverId) return
     const nuevo = planNormalizado(plan)
@@ -307,6 +335,17 @@ function TabAgenda({ personas, almacenes, agenda }) {
 
   const activos = (dia, turno) => panel.filter((p) => p.estadoOperativo === 'activo' && !plan[dia].manana.includes(p.id) && !plan[dia].tarde.includes(p.id))
   const huecos = DIAS.map((d) => ({ dia: d, ...huecosAgenda(plan, d, necesita) })).filter((h) => h.faltan > 0)
+
+  // Cobertura semanal (para la dona) y confeti cuando queda al 100%.
+  const cubiertos = DIAS.reduce((a, d) => { const c = coberturaDia(plan, d); return a + Math.min(c.manana, necesita.manana) + Math.min(c.tarde, necesita.tarde) }, 0)
+  const slotsTotal = necTotal * DIAS.length
+  const pctCob = slotsTotal ? cubiertos / slotsTotal : 0
+  const semanaCubierta = slotsTotal > 0 && cubiertos >= slotsTotal
+  const cubiertaRef = useRef(semanaCubierta)
+  useEffect(() => {
+    if (semanaCubierta && !cubiertaRef.current) { confeti(); walToast('¡Semana 100% cubierta!', 'gold') }
+    cubiertaRef.current = semanaCubierta
+  }, [semanaCubierta])
 
   if (!almacenes.length) {
     return (<div><PageTitle>Agenda semanal</PageTitle><Aviso tipo="info">Primero crea un almacén en la pestaña <b>Almacenes</b>. Cada almacén tiene su propia agenda.</Aviso></div>)
@@ -334,6 +373,10 @@ function TabAgenda({ personas, almacenes, agenda }) {
             </div>
           </div>
           <span className="pb-1.5 text-xs text-slate-400">{semana} → {domingoDe(fecha)} · {necTotal}/día</span>
+          <div className="ml-auto flex items-center gap-2 pb-0.5">
+            <Dona pct={pctCob} size={52} color={semanaCubierta ? '#2E9E6B' : pctCob > 0.5 ? '#c9a24b' : '#E0533D'}>{Math.round(pctCob * 100)}%</Dona>
+            <span className="text-[11px] font-semibold text-slate-400">cobertura<br />semanal</span>
+          </div>
         </div>
       </Card>
 
@@ -382,7 +425,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
         <Card className="p-3 lg:sticky lg:top-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Drivers</span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{panel.length}</span>
+            <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{fEstado === 'activo' && panel.length > 0 && <PulseDot size={6} />}{panel.length}</span>
           </div>
           <div className="relative mb-2"><Search size={14} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className="mb-2">
@@ -558,6 +601,7 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
     try {
       const id = await guardar(COL.candidatos, persona.id, p)
       await auditar(nuevo ? 'persona_creada' : 'persona_editada', `${nombreCompleto(p)} · ${p.estadoOperativo}`)
+      walToast(nuevo ? 'Driver creado ✓' : 'Driver guardado ✓')
       onCerrar(id)
     } finally { setGuardando(false) }
   }
@@ -820,7 +864,7 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
   const salvar = async () => {
     if (!a.nombre.trim()) { window.alert('Ponle nombre al almacén.'); return }
     setGuardando(true)
-    try { await guardar(COL.almacenes, almacen.id, a); await auditar('almacen_guardado', a.nombre); onCerrar() } finally { setGuardando(false) }
+    try { await guardar(COL.almacenes, almacen.id, a); await auditar('almacen_guardado', a.nombre); walToast('Almacén guardado ✓'); onCerrar() } finally { setGuardando(false) }
   }
   return (
     <Card className="mb-4 p-4">
@@ -855,6 +899,7 @@ function TabConfig() {
     try {
       await guardar(COL.config, 'tarifas', { ingresoWalmart: num(t.ingresoWalmart), pagoDriverPropio: num(t.pagoDriverPropio), pagoDriverCompania: num(t.pagoDriverCompania), comisionFastPay: num(t.comisionFastPay) })
       await auditar('tarifas_guardadas', `WM ${t.ingresoWalmart} / propio ${t.pagoDriverPropio} / compañía ${t.pagoDriverCompania} / FP ${t.comisionFastPay}%`)
+      walToast('Tarifas guardadas ✓')
     } finally { setGuardando(false) }
   }
   return (
@@ -971,6 +1016,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
       }
       await guardar(COL.rutas, id, limpio)
       await auditar('ruta_guardada', `${r.driverNombre} · ${r.fecha} · ${r.bloque} · ${r.estado}`)
+      walToast('Ruta guardada ✓')
       onCerrar()
     } catch (e) { setErr('No se pudo guardar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
@@ -1056,7 +1102,7 @@ function TabCierre({ rutas, almacenes, cierres }) {
     if (!dia.length) { setMsg({ t: 'error', x: 'No hay rutas ese día.' }); return }
     if (!window.confirm(`Registraste ${dia.length} ruta(s): ${completadas.length} completadas, ${canceladas.length} canceladas. ¿Confirmas el cierre?`)) return
     setTrabajando(true); setMsg(null)
-    try { await cerrarDia(almId, fecha, dia, resumen); setMsg({ t: 'ok', x: 'Día cerrado y consolidado.' }) }
+    try { await cerrarDia(almId, fecha, dia, resumen); setMsg({ t: 'ok', x: 'Día cerrado y consolidado.' }); confeti(); walToast('Día cerrado ✓') }
     catch (e) { setMsg({ t: 'error', x: 'No se pudo cerrar: ' + (e.message || e) }) } finally { setTrabajando(false) }
   }
   const reabrir = async () => {
@@ -1216,6 +1262,7 @@ function FastPayModal({ ruta, driver, semana, pctDefault, onCerrar }) {
         fecha: hoyISO(), metodo, referencia, responsable,
       })
       await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
+      walToast('Fast Pay registrado ✓', 'gold')
       onCerrar()
     } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
@@ -1258,6 +1305,7 @@ function PagoModal({ driver, semana, saldo, onCerrar }) {
     try {
       await guardar(COL.pagos, null, { tipo: 'pago', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, monto: m, fecha: hoyISO(), metodo, referencia, responsable })
       await auditar('pago', `${nombreCompleto(driver)} · semana ${semana} · ${m}`)
+      walToast('Pago registrado ✓')
       onCerrar()
     } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
@@ -1344,6 +1392,7 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
       delete data.mensual
       await guardar(COL.gastos, gasto.id, data)
       await auditar('gasto_guardado', `${g.categoria} · ${g.concepto} · ${money2(g.monto)}`)
+      walToast('Gasto guardado ✓')
       onCerrar()
     } finally { setGuardando(false) }
   }
@@ -1469,6 +1518,7 @@ function CobroModal({ semana, almacenes, almId, onCerrar }) {
     try {
       await guardar(COL.cobros, null, { ...c, monto: money2(c.monto), semana: lunesDe(c.fecha) })
       await auditar('cobro_walmart', `${money2(c.monto)} · ${c.fecha}`)
+      walToast('Cobro registrado ✓', 'gold')
       onCerrar()
     } finally { setGuardando(false) }
   }
@@ -1617,6 +1667,7 @@ function VistaGenerar({ plantillas, personas, almacenes, tarifas, onIrLista, onI
       })
       await auditar('contrato_generado', `${nombreCompleto(driver)} · ${pl.titulo}`)
       setLink(`${window.location.origin}/wfirma?t=${token}`)
+      walToast('Contrato generado ✓')
     } finally { setGuardando(false) }
   }
   if (!plantillas.length) return <Aviso tipo="info">Primero crea una plantilla en <button className="font-semibold text-brand-gold underline" onClick={onIrPlantillas}>Plantillas</button>.</Aviso>
