@@ -26,7 +26,7 @@ import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
-  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy,
+  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
@@ -1253,6 +1253,47 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
   )
 }
 
+// Selector-buscador de driver (todos los activos, sin filtrar por almacén).
+function DriverPicker({ personas, almacenes, value, onPick }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
+  const sel = personas.find((p) => p.id === value)
+  const txt = q.trim().toLowerCase()
+  const lista = personas
+    .filter((p) => p.estadoOperativo === 'activo')
+    .filter((p) => !txt || `${nombreCompleto(p)} ${p.telefono || ''} ${p.ciudad || ''}`.toLowerCase().includes(txt))
+    .sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+        <span className={`flex items-center gap-2 truncate ${sel ? '' : 'text-slate-400'}`}>{sel ? <><Avatar p={sel} size={20} /> {nombreCompleto(sel)}</> : 'Buscar y elegir driver…'}</span>
+        <ChevronDown size={14} className="shrink-0 text-slate-400" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <div className="border-b border-slate-100 p-2 dark:border-slate-700">
+              <div className="relative"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input autoFocus className="pl-8" placeholder="Buscar por nombre…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+            </div>
+            <div className="max-h-60 overflow-y-auto py-1">
+              {lista.length === 0 && <div className="px-3 py-3 text-center text-xs text-slate-400">Sin drivers activos con ese nombre.</div>}
+              {lista.map((p) => (
+                <button key={p.id} type="button" onClick={() => { onPick(p.id); setOpen(false); setQ('') }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700/50 ${p.id === value ? 'bg-amber-50 dark:bg-amber-500/10' : ''}`}>
+                  <Avatar p={p} size={26} />
+                  <span className="min-w-0 flex-1 truncate font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span>
+                  {p.almacenId && <span className="shrink-0 text-[11px] text-slate-400">{almNombre(p.almacenId)}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const bloqueado = !!ruta.cerrada
   const [r, setR] = useState(() => {
@@ -1271,7 +1312,6 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
   const set = (k, v) => setR((x) => ({ ...x, [k]: v }))
-  const driversActivos = personas.filter((p) => p.estadoOperativo === 'activo' && (!r.almacenId || p.almacenId === r.almacenId))
   const elegirAlmacen = (id) => setR((x) => ({ ...x, almacenId: id, tarifaWalmart: ingresoDeAlmacen(almacenes.find((a) => a.id === id), tarifas) }))
   const elegirDriver = (id) => {
     const d = personas.find((x) => x.id === id)
@@ -1310,7 +1350,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
           <Grid>
             <F label="Fecha de servicio"><Input type="date" value={r.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
             <F label="Almacén"><Select value={r.almacenId} onChange={(e) => elegirAlmacen(e.target.value)}><option value="">Elegir…</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-            <F label="Driver (activo)"><Select value={r.driverId} onChange={(e) => elegirDriver(e.target.value)}><option value="">Elegir…</option>{driversActivos.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
+            <F label="Driver (cualquier almacén)"><DriverPicker personas={personas} almacenes={almacenes} value={r.driverId} onPick={elegirDriver} /></F>
             <F label="Identificador (opcional)"><Input value={r.identificador} onChange={(e) => set('identificador', e.target.value)} placeholder="DFW01-140-B" /></F>
             <F label="Bloque"><Select value={r.bloque} onChange={(e) => set('bloque', e.target.value)}>{BLOQUES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></F>
             <F label="Vehículo"><Input value={r.vehiculoTipo} onChange={(e) => set('vehiculoTipo', e.target.value)} /></F>
