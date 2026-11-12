@@ -22,6 +22,7 @@ export const COL = {
   cierres: 'wal_cierres',
   pagos: 'wal_pagos',
   gastos: 'wal_gastos',
+  cobros: 'wal_cobros', // dinero que Walmart paga a la compañía
   contratos: 'wal_contratos',
   plantillas: 'wal_plantillas',
   audit: 'wal_audit',
@@ -164,6 +165,56 @@ export function calcularFastPay(bruto, comisionPct) {
   const b = money2(bruto)
   const comision = money2(b * (Number(comisionPct) || 0) / 100)
   return { bruto: b, comision, efectivo: money2(b - comision) }
+}
+
+// ── Gastos ──────────────────────────────────────────────────────────────────
+export const CATEGORIAS_GASTO = ['Cargo Van (financiamiento)', 'Seguro', 'Gasolina', 'Reparación', 'Mantenimiento', 'Renta', 'Nómina', 'Suministros', 'Otro']
+
+// Distribuye un gasto MENSUAL (desde..hasta) entre semanas por días.
+export function distribuirMensual(monto, desde, hasta) {
+  const m = money2(monto)
+  const d0 = new Date(`${desde}T00:00:00`), d1 = new Date(`${hasta}T00:00:00`)
+  if (isNaN(d0) || isNaN(d1) || d1 < d0) return []
+  const dias = Math.round((d1 - d0) / 86400000) + 1
+  const porDia = m / dias
+  const acc = {}
+  for (let i = 0; i < dias; i++) { const d = new Date(d0); d.setDate(d0.getDate() + i); const s = lunesDe(d.toISOString().slice(0, 10)); acc[s] = (acc[s] || 0) + porDia }
+  return Object.entries(acc).map(([semana, v]) => ({ semana, monto: money2(v) }))
+}
+// Monto de un gasto que corresponde a una semana (distribuido si es mensual).
+export function gastoEnSemana(g, semana) {
+  if (g.periodoDesde && g.periodoHasta) { const p = distribuirMensual(g.monto, g.periodoDesde, g.periodoHasta).find((x) => x.semana === semana); return money2(p ? p.monto : 0) }
+  return (g.semana || lunesDe(g.fecha)) === semana ? money2(g.monto) : 0
+}
+
+// ── Resumen financiero de una semana (opcionalmente filtrado por almacén) ────
+// Fast Pay: la ganancia del driver ANTES de FP es el costo; la comisión es
+// ingreso SEPARADO (no se reduce el costo por la comisión).
+export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId) {
+  const enAlm = (aId) => !almacenId || aId === almacenId
+  const rs = (rutas || []).filter((r) => r.semana === semana && r.estado === 'completada' && enAlm(r.almacenId))
+  const ingresoRutas = money2(rs.reduce((a, r) => a + ingresoRuta(r), 0))
+  const costoDrivers = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
+  const margen = money2(ingresoRutas - costoDrivers)
+  const driversAlm = new Set(rs.map((r) => r.driverId))
+  const ps = (pagos || []).filter((p) => p.semana === semana && (!almacenId || driversAlm.has(p.driverId)))
+  const comisionesFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.comision) || 0), 0))
+  const efectivoFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+  const pagosNormales = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+  const gs = (gastos || []).filter((g) => enAlm(g.almacenId) || !g.almacenId)
+  let gastosOper = 0, gastoFinanc = 0, gastosPagados = 0
+  for (const g of gs) {
+    const m = gastoEnSemana(g, semana)
+    if (m) { if (g.esFinanciamiento) gastoFinanc += m; else gastosOper += m }
+    if (g.estadoPago === 'pagado' && (g.semana || lunesDe(g.fechaPago || g.fecha)) === semana) gastosPagados += Number(g.monto) || 0
+  }
+  gastosOper = money2(gastosOper); gastoFinanc = money2(gastoFinanc); gastosPagados = money2(gastosPagados)
+  const resultadoOperativo = money2(margen - gastosOper + comisionesFP)
+  const cobrado = money2((cobros || []).filter((c) => c.semana === semana && enAlm(c.almacenId)).reduce((a, c) => a + (Number(c.monto) || 0), 0))
+  const porCobrar = money2(ingresoRutas - cobrado)
+  const efectivoADrivers = money2(efectivoFP + pagosNormales)
+  const flujoCaja = money2(cobrado - efectivoADrivers - gastosPagados)
+  return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, cobrado, porCobrar, efectivoADrivers, gastosPagados, flujoCaja, nRutas: rs.length }
 }
 
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.

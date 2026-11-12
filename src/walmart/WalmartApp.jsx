@@ -29,6 +29,7 @@ import {
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
+  CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -41,8 +42,8 @@ const TABS = [
   { id: 'rutas', label: 'Rutas', icono: RouteIcon },
   { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck },
   { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
-  { id: 'gastos', label: 'Gastos', icono: Receipt, fase: 4 },
-  { id: 'financiero', label: 'Financiero', icono: BarChart3, fase: 4 },
+  { id: 'gastos', label: 'Gastos', icono: Receipt },
+  { id: 'financiero', label: 'Financiero', icono: BarChart3 },
   { id: 'contratos', label: 'Contratos', icono: FileSignature, fase: 5 },
   { id: 'config', label: 'Configuración', icono: Settings },
 ]
@@ -56,12 +57,16 @@ export default function WalmartApp() {
   const [rutas, setRutas] = useState([])
   const [cierres, setCierres] = useState([])
   const [pagos, setPagos] = useState([])
+  const [gastos, setGastos] = useState([])
+  const [cobros, setCobros] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
   useEffect(() => suscribir(COL.rutas, setRutas), [])
   useEffect(() => suscribir(COL.cierres, setCierres), [])
   useEffect(() => suscribir(COL.pagos, setPagos), [])
+  useEffect(() => suscribir(COL.gastos, setGastos), [])
+  useEffect(() => suscribir(COL.cobros, setCobros), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
   const contenido = (
@@ -71,8 +76,10 @@ export default function WalmartApp() {
       {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
       {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
+      {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} />}
+      {tab === 'financiero' && <TabFinanciero rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} />}
       {tab === 'config' && <TabConfig />}
-      {['gastos', 'financiero', 'contratos'].includes(tab) && <Proximamente tab={TABS.find((t) => t.id === tab)} />}
+      {['contratos'].includes(tab) && <Proximamente tab={TABS.find((t) => t.id === tab)} />}
     </>
   )
   return (
@@ -926,5 +933,200 @@ function Modal({ titulo, children, onCerrar }) {
         {children}
       </div>
     </div>
+  )
+}
+
+// ── GASTOS ──────────────────────────────────────────────────────────────────
+function TabGastos({ gastos, almacenes, personas }) {
+  const [editar, setEditar] = useState(null)
+  const [fCat, setFCat] = useState('')
+  const [fAlm, setFAlm] = useState('')
+  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || 'General'
+  const lista = useMemo(() => gastos.filter((g) => (!fCat || g.categoria === fCat) && (!fAlm || g.almacenId === fAlm)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, fCat, fAlm])
+  if (editar) return <GastoEditor gasto={editar} almacenes={almacenes} personas={personas} onCerrar={() => setEditar(null)} />
+  const total = lista.reduce((a, g) => a + (Number(g.monto) || 0), 0)
+  return (
+    <div>
+      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({})}><Plus size={15} /> Nuevo gasto</Boton>}>Gastos</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Categoría"><Select value={fCat} onChange={(e) => setFCat(e.target.value)}><option value="">Todas</option>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+          <F label="Almacén"><Select value={fAlm} onChange={(e) => setFAlm(e.target.value)}><option value="">Todos / General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <div className="ml-auto text-right text-xs text-slate-400">Total mostrado <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></div>
+        </div>
+      </Card>
+      {lista.length === 0 && <div className="text-sm text-slate-400">Sin gastos. Agrega el primero con “Nuevo gasto”.</div>}
+      <div className="space-y-1.5">
+        {lista.map((g) => (
+          <Card key={g.id} className="flex flex-wrap items-center gap-2.5 p-3">
+            <Badge color="navy">{g.categoria}</Badge>
+            <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
+            <span className="font-mono text-sm">{dinero(g.monto)}</span>
+            <span className="text-xs text-slate-400">{g.fecha}</span>
+            <Badge color="slate">{almNombre(g.almacenId)}</Badge>
+            {g.periodoDesde && <Badge color="gold">mensual · reparte</Badge>}
+            {g.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
+            <Badge color={g.estadoPago === 'pagado' ? 'green' : 'red'}>{g.estadoPago === 'pagado' ? 'pagado' : 'pendiente'}</Badge>
+            <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(g)}>editar</button>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function GastoEditor({ gasto, almacenes, personas, onCerrar }) {
+  const [g, setG] = useState({ categoria: CATEGORIAS_GASTO[1], concepto: '', monto: '', fecha: hoyISO(), tipo: 'variable', almacenId: '', driverId: '', vehiculo: '', responsable: '', estadoPago: 'pendiente', fechaPago: '', esFinanciamiento: false, periodoDesde: '', periodoHasta: '', ...gasto, mensual: !!gasto.periodoDesde })
+  const [guardando, setGuardando] = useState(false)
+  const set = (k, v) => setG((x) => ({ ...x, [k]: v }))
+  const dist = g.mensual && g.periodoDesde && g.periodoHasta ? distribuirMensual(g.monto, g.periodoDesde, g.periodoHasta) : []
+  const salvar = async () => {
+    if (!g.concepto.trim() || !g.monto) { window.alert('Pon concepto y monto.'); return }
+    setGuardando(true)
+    try {
+      const data = { ...g, monto: money2(g.monto), semana: lunesDe(g.fecha), categoria: g.categoria, esFinanciamiento: g.categoria === 'Cargo Van (financiamiento)' || g.esFinanciamiento }
+      if (!g.mensual) { delete data.periodoDesde; delete data.periodoHasta }
+      delete data.mensual
+      await guardar(COL.gastos, gasto.id, data)
+      await auditar('gasto_guardado', `${g.categoria} · ${g.concepto} · ${money2(g.monto)}`)
+      onCerrar()
+    } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>{gasto.id ? 'Editar gasto' : 'Nuevo gasto'}</PageTitle>
+      <Card className="mb-3 p-4">
+        <Grid>
+          <F label="Categoría"><Select value={g.categoria} onChange={(e) => set('categoria', e.target.value)}>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+          <F label="Concepto"><Input value={g.concepto} onChange={(e) => set('concepto', e.target.value)} /></F>
+          <F label="Monto (USD)"><Input type="number" value={g.monto} onChange={(e) => set('monto', e.target.value)} /></F>
+          <F label="Fecha"><Input type="date" value={g.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+          <F label="Tipo"><Select value={g.tipo} onChange={(e) => set('tipo', e.target.value)}><option value="variable">Variable</option><option value="fijo">Fijo / recurrente</option></Select></F>
+          <F label="Almacén (o General)"><Select value={g.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <F label="Atribuir a driver (opcional)"><Select value={g.driverId} onChange={(e) => set('driverId', e.target.value)}><option value="">—</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+          <F label="Vehículo (opcional)"><Input value={g.vehiculo} onChange={(e) => set('vehiculo', e.target.value)} /></F>
+          <F label="Responsable"><Input value={g.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
+          <F label="Estado de pago"><Select value={g.estadoPago} onChange={(e) => set('estadoPago', e.target.value)}><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></Select></F>
+          {g.estadoPago === 'pagado' && <F label="Fecha de pago"><Input type="date" value={g.fechaPago} onChange={(e) => set('fechaPago', e.target.value)} /></F>}
+        </Grid>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.mensual} onChange={(e) => set('mensual', e.target.checked)} className="accent-brand-gold" /> Es mensual (repartir entre semanas)</label>
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.esFinanciamiento} onChange={(e) => set('esFinanciamiento', e.target.checked)} className="accent-brand-gold" /> Es financiamiento (salida de caja, no gasto operativo)</label>
+        </div>
+        {g.mensual && (
+          <div className="mt-2">
+            <Grid><F label="Período desde"><Input type="date" value={g.periodoDesde} onChange={(e) => set('periodoDesde', e.target.value)} /></F><F label="Período hasta"><Input type="date" value={g.periodoHasta} onChange={(e) => set('periodoHasta', e.target.value)} /></F></Grid>
+            {dist.length > 0 && <div className="mt-2 text-xs text-slate-500">Se reparte: {dist.map((d) => `${d.semana}: ${dinero(d.monto)}`).join(' · ')}</div>}
+          </div>
+        )}
+      </Card>
+      <div className="flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar gasto'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>{gasto.id && <button className="ml-auto text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={async () => { if (window.confirm('¿Borrar gasto?')) { await borrar(COL.gastos, gasto.id); onCerrar() } }}>Borrar</button>}</div>
+      <p className="mt-2 text-[11px] text-slate-400">Atribuir un gasto a un driver es solo costo; NO se le descuenta (las deducciones van en la ruta). Lo mensual se reparte por semanas y no se cuenta doble con el total.</p>
+    </div>
+  )
+}
+
+// ── FINANCIERO + DASHBOARD ──────────────────────────────────────────────────
+function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes }) {
+  const [fecha, setFecha] = useState(hoyISO())
+  const [almId, setAlmId] = useState('')
+  const [cobroOpen, setCobroOpen] = useState(false)
+  const semana = lunesDe(fecha)
+  const fin = useMemo(() => financieroSemana(rutas, pagos, gastos, cobros, semana, almId), [rutas, pagos, gastos, cobros, semana, almId])
+  const nAct = personas.filter((p) => p.estadoOperativo === 'activo').length
+  const nStandby = personas.filter((p) => p.estadoOperativo === 'standby').length
+  const nCand = personas.filter((p) => p.estadoOperativo === 'candidato').length
+  const rsWeek = rutas.filter((r) => r.semana === semana && (!almId || r.almacenId === almId))
+  const rCompl = rsWeek.filter((r) => r.estado === 'completada').length
+  const rCan = rsWeek.filter((r) => r.estado === 'cancelada').length
+  const cobrosSemana = cobros.filter((c) => c.semana === semana && (!almId || c.almacenId === almId)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+
+  return (
+    <div>
+      <PageTitle>Financiero</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+        </div>
+      </Card>
+
+      {/* dashboard rápido */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <Tile n={nAct} l="Drivers activos" />
+        <Tile n={nStandby} l="Stand-by" />
+        <Tile n={nCand} l="Candidatos" />
+        <Tile n={rCompl} l="Rutas completadas" verde />
+        <Tile n={rCan} l="Rutas canceladas" />
+      </div>
+
+      {/* resultado operativo */}
+      <Card className="mb-3 p-4">
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resultado operativo de la semana</div>
+        <FilaFin l="Ingreso de rutas (con ajustes Walmart)" v={fin.ingresoRutas} />
+        <FilaFin l="Costo de drivers (ganancia antes de Fast Pay)" v={-fin.costoDrivers} />
+        <FilaFin l="Margen antes de gastos" v={fin.margen} fuerte />
+        <FilaFin l="Gastos operativos asignados" v={-fin.gastosOper} />
+        <FilaFin l="Comisiones de Fast Pay (ingreso aparte)" v={fin.comisionesFP} verde />
+        <FilaFin l="Resultado operativo" v={fin.resultadoOperativo} fuerte borde />
+        {fin.gastoFinanc > 0 && <p className="mt-2 text-[11px] text-slate-400">+ {dinero(fin.gastoFinanc)} de financiamiento (Cargo Vans): es salida de caja, no entra al resultado operativo.</p>}
+      </Card>
+
+      {/* flujo de caja */}
+      <Card className="mb-3 p-4">
+        <div className="mb-2 flex items-center gap-2"><span className="text-sm font-bold text-brand-navy dark:text-slate-100">Flujo de caja y cobros</span><Boton variant="ghost" className="ml-auto" onClick={() => setCobroOpen(true)}><Plus size={13} /> Registrar cobro de Walmart</Boton></div>
+        <FilaFin l="Cobrado de Walmart" v={fin.cobrado} verde />
+        <FilaFin l="Por cobrar (devengado − cobrado)" v={fin.porCobrar} />
+        <FilaFin l="Efectivo entregado a drivers (FP + pagos)" v={-fin.efectivoADrivers} />
+        <FilaFin l="Gastos pagados en la semana" v={-fin.gastosPagados} />
+        <FilaFin l="Flujo de caja de la semana" v={fin.flujoCaja} fuerte borde />
+        {cobrosSemana.length > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+            <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Cobros de la semana</div>
+            {cobrosSemana.map((c) => <div key={c.id} className="flex flex-wrap gap-2 text-xs text-slate-500"><span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{dinero(c.monto)}</span><span>{c.fecha}</span>{c.referencia && <span>· {c.referencia}</span>}{c.responsable && <span>· {c.responsable}</span>}</div>)}
+          </div>
+        )}
+      </Card>
+      <p className="text-xs text-slate-400">Separa lo devengado (ingreso/costo de la semana ganada) de lo cobrado/pagado (caja). Fast Pay: la ganancia del driver va completa como costo y la comisión como ingreso aparte — nunca se descuenta dos veces.</p>
+
+      {cobroOpen && <CobroModal semana={semana} almacenes={almacenes} almId={almId} onCerrar={() => setCobroOpen(false)} />}
+    </div>
+  )
+}
+function FilaFin({ l, v, fuerte, verde, borde }) {
+  const neg = v < 0
+  return (
+    <div className={`flex items-center justify-between py-1 text-sm ${borde ? 'mt-1 border-t border-slate-200 pt-2 dark:border-slate-700' : ''}`}>
+      <span className={fuerte ? 'font-bold text-brand-navy dark:text-slate-100' : 'text-slate-600 dark:text-slate-300'}>{l}</span>
+      <span className={`font-mono ${fuerte ? 'font-extrabold' : 'font-semibold'} ${verde ? 'text-emerald-600' : neg ? 'text-rose-500' : 'text-brand-navy dark:text-slate-100'}`}>{neg ? '−' : ''}{dinero(Math.abs(v))}</span>
+    </div>
+  )
+}
+function CobroModal({ semana, almacenes, almId, onCerrar }) {
+  const [c, setC] = useState({ fecha: hoyISO(), monto: '', almacenId: almId || '', referencia: '', responsable: '' })
+  const [guardando, setGuardando] = useState(false)
+  const set = (k, v) => setC((x) => ({ ...x, [k]: v }))
+  const salvar = async () => {
+    if (!c.monto) { window.alert('Pon el monto.'); return }
+    setGuardando(true)
+    try {
+      await guardar(COL.cobros, null, { ...c, monto: money2(c.monto), semana: lunesDe(c.fecha) })
+      await auditar('cobro_walmart', `${money2(c.monto)} · ${c.fecha}`)
+      onCerrar()
+    } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo="Registrar cobro de Walmart" onCerrar={onCerrar}>
+      <Grid>
+        <F label="Fecha"><Input type="date" value={c.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+        <F label="Monto (USD)"><Input type="number" value={c.monto} onChange={(e) => set('monto', e.target.value)} /></F>
+        <F label="Almacén"><Select value={c.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+        <F label="Referencia"><Input value={c.referencia} onChange={(e) => set('referencia', e.target.value)} /></F>
+        <F label="Responsable"><Input value={c.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
+      </Grid>
+      <p className="mt-2 text-xs text-slate-400">La semana se toma de la fecha del cobro. Vincula el cobro a la semana para el flujo de caja y lo por cobrar.</p>
+      <div className="mt-3 flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Registrar cobro'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></div>
+    </Modal>
   )
 }
