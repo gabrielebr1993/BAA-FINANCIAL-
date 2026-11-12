@@ -62,6 +62,7 @@ export const COL = {
   plantillas: 'wal_plantillas',
   agenda: 'wal_agenda', // asignación semanal de drivers por almacén y turno
   docs: 'wal_docs', // documentos del driver (foto/licencia/etc.) como dataURL
+  facturas: 'wal_facturas', // facturas mensuales para cobrar a Walmart
   audit: 'wal_audit',
 }
 
@@ -384,6 +385,38 @@ export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId
   const efectivoADrivers = money2(efectivoFP + pagosNormales)
   const flujoCaja = money2(cobrado - efectivoADrivers - gastosPagados)
   return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, cobrado, porCobrar, efectivoADrivers, gastosPagados, flujoCaja, nRutas: rs.length }
+}
+
+// Financiero de un RANGO de fechas: suma las semanas (lunes) que lo cruzan.
+export function financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almacenId) {
+  const campos = ['ingresoRutas', 'costoDrivers', 'margen', 'gastosOper', 'gastoFinanc', 'comisionesFP', 'efectivoFP', 'pagosNormales', 'resultadoOperativo', 'cobrado', 'porCobrar', 'efectivoADrivers', 'gastosPagados', 'flujoCaja', 'nRutas']
+  const acc = Object.fromEntries(campos.map((k) => [k, 0]))
+  let w = lunesDe(desde); const fin = lunesDe(hasta); let guard = 0
+  while (w <= fin && guard < 400) {
+    const f = financieroSemana(rutas, pagos, gastos, cobros, w, almacenId)
+    for (const k of campos) acc[k] = money2(acc[k] + (f[k] || 0))
+    const d = new Date(`${w}T00:00:00`); d.setDate(d.getDate() + 7); w = d.toISOString().slice(0, 10); guard++
+  }
+  return acc
+}
+
+// ── Fechas de mes / rango y facturación ──────────────────────────────────────
+export const mesDe = (fechaISO) => (fechaISO || hoyISO()).slice(0, 7) // 'YYYY-MM'
+export const primerDiaMes = (ym) => `${ym}-01`
+export function ultimoDiaMes(ym) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m, 0); return `${ym}-${String(d.getDate()).padStart(2, '0')}` }
+export function sumarDias(fechaISO, n) { const d = new Date(`${fechaISO}T00:00:00`); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+export const nombreMes = (ym) => { try { return new Date(`${ym}-01T00:00:00`).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) } catch { return ym } }
+export const idFactura = (periodo) => `WM-${String(periodo || '').replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+
+// Factura del período: líneas por almacén (rutas completadas × tarifa Walmart).
+export function facturaDelPeriodo(rutas, desde, hasta, almacenId, almacenes) {
+  const rs = (rutas || []).filter((r) => r.estado === 'completada' && r.fecha >= desde && r.fecha <= hasta && (!almacenId || r.almacenId === almacenId))
+  const porAlm = {}
+  for (const r of rs) { const k = r.almacenId || '—'; if (!porAlm[k]) porAlm[k] = { rutas: 0, importe: 0 }; porAlm[k].rutas += 1; porAlm[k].importe += ingresoRuta(r) }
+  const nombre = (id) => (almacenes || []).find((a) => a.id === id)?.nombre || 'General'
+  const lineas = Object.entries(porAlm).map(([id, v]) => ({ almacenId: id, nombre: nombre(id), rutas: v.rutas, importe: money2(v.importe), tarifaProm: v.rutas ? money2(v.importe / v.rutas) : 0 })).sort((a, b) => b.importe - a.importe)
+  const total = money2(lineas.reduce((a, l) => a + l.importe, 0))
+  return { lineas, total, totalRutas: rs.length }
 }
 
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.

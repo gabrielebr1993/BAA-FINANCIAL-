@@ -22,7 +22,7 @@ import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
-  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download,
+  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
@@ -39,6 +39,7 @@ import {
   ultimasSemanas, receivableNet30, acumuladoDriver,
   AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
+  financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes, idFactura,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -55,6 +56,7 @@ const TABS = [
   { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
   { id: 'gastos', label: 'Gastos', icono: Receipt },
   { id: 'financiero', label: 'Financiero', icono: BarChart3 },
+  { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet },
   { id: 'contratos', label: 'Contratos', icono: FileSignature },
   { id: 'config', label: 'Configuración', icono: Settings },
 ]
@@ -73,6 +75,7 @@ export default function WalmartApp() {
   const [contratos, setContratos] = useState([])
   const [plantillas, setPlantillas] = useState([])
   const [agenda, setAgenda] = useState([])
+  const [facturas, setFacturas] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
@@ -84,6 +87,7 @@ export default function WalmartApp() {
   useEffect(() => suscribir(COL.contratos, setContratos), [])
   useEffect(() => suscribir(COL.plantillas, setPlantillas), [])
   useEffect(() => suscribir(COL.agenda, setAgenda), [])
+  useEffect(() => suscribir(COL.facturas, setFacturas), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
   const contenido = (
@@ -96,7 +100,8 @@ export default function WalmartApp() {
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
       {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
       {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} rutas={rutas} />}
-      {tab === 'financiero' && <TabFinanciero rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} />}
+      {tab === 'financiero' && <TabFinanciero rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} facturas={facturas} />}
+      {tab === 'facturas' && <TabFacturas rutas={rutas} almacenes={almacenes} facturas={facturas} cobros={cobros} />}
       {tab === 'contratos' && <TabContratos contratos={contratos} plantillas={plantillas} personas={personas} almacenes={almacenes} tarifas={tarifas} />}
       {tab === 'config' && <TabConfig />}
     </>
@@ -292,6 +297,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const [fecha, setFecha] = useState(hoyISO())
   const [q, setQ] = useState('')
   const [fEstado, setFEstado] = useState('activo')
+  const [ambito, setAmbito] = useState('almacen') // 'almacen' | 'todos'
   const [sel, setSel] = useState(null) // driverId seleccionado (para tocar y colocar)
   const [sobre, setSobre] = useState('') // "dia|turno" en arrastre encima
 
@@ -304,7 +310,8 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const doc0 = agenda.find((a) => a.id === idAgenda(almId, semana))
   const plan = useMemo(() => planNormalizado(doc0?.plan), [doc0])
 
-  const delAlmacen = useMemo(() => personas.filter((p) => p.almacenId === almId), [personas, almId])
+  // Ámbito: este almacén (incluye sin asignar) o todos. Filtro por estado.
+  const delAlmacen = useMemo(() => (ambito === 'todos' ? personas : personas.filter((p) => p.almacenId === almId || !p.almacenId)), [personas, almId, ambito])
   const panel = useMemo(() => {
     const txt = q.trim().toLowerCase()
     return delAlmacen
@@ -312,6 +319,12 @@ function TabAgenda({ personas, almacenes, agenda }) {
       .filter((p) => !txt || `${nombreCompleto(p)} ${p.ciudad || ''} ${p.telefono || ''}`.toLowerCase().includes(txt))
       .sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   }, [delAlmacen, q, fEstado])
+  // Diagnóstico para el mensaje de panel vacío.
+  const diag = useMemo(() => ({
+    total: personas.length,
+    enAlmacen: personas.filter((p) => p.almacenId === almId || !p.almacenId).length,
+    activosAqui: personas.filter((p) => (p.almacenId === almId || !p.almacenId) && p.estadoOperativo === 'activo').length,
+  }), [personas, almId])
 
   const nombreDe = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
   const personaDe = (id) => personas.find((x) => x.id === id)
@@ -429,12 +442,27 @@ function TabAgenda({ personas, almacenes, agenda }) {
             <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{fEstado === 'activo' && panel.length > 0 && <PulseDot size={6} />}{panel.length}</span>
           </div>
           <div className="relative mb-2"><Search size={14} className="pointer-events-none absolute left-2.5 top-2.5 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)} className="mb-2">
-            <option value="activo">Solo activos</option><option value="standby">Stand-by</option><option value="todos">Todos</option>
-          </Select>
+          <div className="mb-2 grid grid-cols-2 gap-1.5">
+            <Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
+              <option value="activo">Activos</option><option value="standby">Stand-by</option><option value="candidato">Candidatos</option><option value="pendiente_doc">Pend. doc</option><option value="todos">Todo estado</option>
+            </Select>
+            <Select value={ambito} onChange={(e) => setAmbito(e.target.value)}>
+              <option value="almacen">Este almacén</option><option value="todos">Todos</option>
+            </Select>
+          </div>
           {sel && <div className="mb-2 rounded-lg border border-brand-gold/40 bg-amber-50 px-2 py-1.5 text-[11px] text-brand-navy dark:bg-amber-500/10 dark:text-slate-200">Toca un turno para asignar a <b>{nombreDe(sel)}</b> · <button className="font-semibold underline" onClick={() => setSel(null)}>cancelar</button></div>}
           <div className="max-h-[62vh] space-y-1.5 overflow-y-auto pr-1">
-            {panel.length === 0 && <div className="py-8 text-center text-xs text-slate-400">Sin drivers para este filtro.<br />Agrégalos en <b>Candidatos / Drivers</b>.</div>}
+            {panel.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-400 dark:border-slate-700">
+                {diag.total === 0
+                  ? <>No hay drivers creados.<br />Crea uno en <b>Candidatos / Drivers</b>.</>
+                  : diag.activosAqui === 0 && fEstado === 'activo' && diag.enAlmacen > 0
+                    ? <>Tienes <b>{diag.enAlmacen}</b> driver(s) aquí, pero ninguno <b>Activo</b>. Cambia el filtro a <b>“Todo estado”</b> o pon su estado en <b>Activo</b> (en su perfil).</>
+                    : diag.enAlmacen === 0
+                      ? <>Tus drivers están en <b>otro almacén</b>. Cambia el ámbito a <b>“Todos”</b> o elige el otro almacén arriba.</>
+                      : <>Ningún driver con este filtro. Prueba <b>“Todo estado”</b> o <b>“Todos”</b> los almacenes.</>}
+              </div>
+            )}
             {panel.map((p) => {
               const nd = diasAsignado(p.id); const act = sel === p.id
               return (
@@ -1512,28 +1540,47 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
 }
 
 // ── FINANCIERO + DASHBOARD ──────────────────────────────────────────────────
-function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes }) {
+function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, facturas }) {
+  const [modo, setModo] = useState('semana') // semana | mes | rango | factura
   const [fecha, setFecha] = useState(hoyISO())
+  const [mes, setMes] = useState(mesDe(hoyISO()))
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const [facturaId, setFacturaId] = useState('')
   const [almId, setAlmId] = useState('')
   const [cobroOpen, setCobroOpen] = useState(false)
   const semana = lunesDe(fecha)
-  const fin = useMemo(() => financieroSemana(rutas, pagos, gastos, cobros, semana, almId), [rutas, pagos, gastos, cobros, semana, almId])
+  const facturaSel = facturas.find((f) => f.id === facturaId)
+
+  // Período efectivo según el modo.
+  let desde, hasta, etiqueta, esSemana = false
+  if (modo === 'semana') { desde = semana; hasta = domingoDe(fecha); etiqueta = `Semana ${semana} → ${hasta}`; esSemana = true }
+  else if (modo === 'mes') { desde = primerDiaMes(mes); hasta = ultimoDiaMes(mes); etiqueta = nombreMes(mes) }
+  else if (modo === 'factura') { if (facturaSel) { desde = facturaSel.desde; hasta = facturaSel.hasta; etiqueta = `Factura ${facturaSel.numero}` } else { desde = primerDiaMes(mes); hasta = ultimoDiaMes(mes); etiqueta = 'Elige una factura' } }
+  else { desde = d1 <= d2 ? d1 : d2; hasta = d1 <= d2 ? d2 : d1; etiqueta = `${desde} → ${hasta}` }
+
+  const fin = useMemo(() => (esSemana ? financieroSemana(rutas, pagos, gastos, cobros, semana, almId) : financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almId)), [rutas, pagos, gastos, cobros, semana, desde, hasta, almId, esSemana])
   const nAct = personas.filter((p) => p.estadoOperativo === 'activo').length
   const nStandby = personas.filter((p) => p.estadoOperativo === 'standby').length
   const nCand = personas.filter((p) => p.estadoOperativo === 'candidato').length
-  const rsWeek = rutas.filter((r) => r.semana === semana && (!almId || r.almacenId === almId))
-  const rCompl = rsWeek.filter((r) => r.estado === 'completada').length
-  const rCan = rsWeek.filter((r) => r.estado === 'cancelada').length
-  const cobrosSemana = cobros.filter((c) => c.semana === semana && (!almId || c.almacenId === almId)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+  const enPeriodo = (r) => (esSemana ? r.semana === semana : (r.fecha >= desde && r.fecha <= hasta))
+  const rsPer = rutas.filter((r) => enPeriodo(r) && (!almId || r.almacenId === almId))
+  const rCompl = rsPer.filter((r) => r.estado === 'completada').length
+  const rCan = rsPer.filter((r) => r.estado === 'cancelada').length
+  const cobrosPer = cobros.filter((c) => (esSemana ? c.semana === semana : (c.fecha >= desde && c.fecha <= hasta)) && (!almId || c.almacenId === almId)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
 
   return (
     <div>
       <PageTitle>Financiero</PageTitle>
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango de fechas</option><option value="factura">Factura</option></Select></F>
+          {modo === 'semana' && <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
+          {modo === 'rango' && <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          {modo === 'factura' && <F label="Factura"><Select value={facturaId} onChange={(e) => setFacturaId(e.target.value)}><option value="">Elegir…</option>{facturas.map((f) => <option key={f.id} value={f.id}>{f.numero} · {dinero(f.total)}</option>)}</Select></F>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{etiqueta}</span>
         </div>
       </Card>
 
@@ -1548,7 +1595,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes }) {
 
       {/* resultado operativo */}
       <Card className="mb-3 p-4">
-        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resultado operativo de la semana</div>
+        <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resultado operativo · {etiqueta}</div>
         <FilaFin l="Ingreso de rutas (con ajustes Walmart)" v={fin.ingresoRutas} />
         <FilaFin l="Costo de drivers (ganancia antes de Fast Pay)" v={-fin.costoDrivers} />
         <FilaFin l="Margen antes de gastos" v={fin.margen} fuerte />
@@ -1564,16 +1611,16 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes }) {
         <FilaFin l="Cobrado de Walmart" v={fin.cobrado} verde />
         <FilaFin l="Por cobrar (devengado − cobrado)" v={fin.porCobrar} />
         <FilaFin l="Efectivo entregado a drivers (FP + pagos)" v={-fin.efectivoADrivers} />
-        <FilaFin l="Gastos pagados en la semana" v={-fin.gastosPagados} />
-        <FilaFin l="Flujo de caja de la semana" v={fin.flujoCaja} fuerte borde />
-        {cobrosSemana.length > 0 && (
+        <FilaFin l="Gastos pagados" v={-fin.gastosPagados} />
+        <FilaFin l="Flujo de caja del período" v={fin.flujoCaja} fuerte borde />
+        {cobrosPer.length > 0 && (
           <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
-            <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Cobros de la semana</div>
-            {cobrosSemana.map((c) => <div key={c.id} className="flex flex-wrap gap-2 text-xs text-slate-500"><span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{dinero(c.monto)}</span><span>{c.fecha}</span>{c.referencia && <span>· {c.referencia}</span>}{c.responsable && <span>· {c.responsable}</span>}</div>)}
+            <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Cobros del período</div>
+            {cobrosPer.map((c) => <div key={c.id} className="flex flex-wrap gap-2 text-xs text-slate-500"><span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{dinero(c.monto)}</span><span>{c.fecha}</span>{c.referencia && <span>· {c.referencia}</span>}{c.responsable && <span>· {c.responsable}</span>}</div>)}
           </div>
         )}
       </Card>
-      <p className="text-xs text-slate-400">Separa lo devengado (ingreso/costo de la semana ganada) de lo cobrado/pagado (caja). Fast Pay: la ganancia del driver va completa como costo y la comisión como ingreso aparte — nunca se descuenta dos veces.</p>
+      <p className="text-xs text-slate-400">Para <b>facturar a Walmart</b> por mes, usa la pestaña <b>Facturas</b>. Fast Pay: la ganancia del driver va completa como costo y la comisión como ingreso aparte — nunca se descuenta dos veces.</p>
 
       {cobroOpen && <CobroModal semana={semana} almacenes={almacenes} almId={almId} onCerrar={() => setCobroOpen(false)} />}
     </div>
@@ -1638,6 +1685,129 @@ function pdfPayStub(driver, semana, hasta, res) {
   y += 18; doc.setTextColor(120, 130, 150); doc.setFontSize(9)
   doc.text(`Estado: ${res.estado} · generado ${new Date().toLocaleString()}`, M, y)
   doc.save(`paystub_${nombreCompleto(driver).replace(/\s+/g, '_')}_${semana}.pdf`)
+}
+
+// ── FACTURAS (cobro a Walmart) ───────────────────────────────────────────────
+function TabFacturas({ rutas, almacenes, facturas }) {
+  const [modo, setModo] = useState('mes') // mes | rango
+  const [mes, setMes] = useState(mesDe(hoyISO()))
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(ultimoDiaMes(mesDe(hoyISO())))
+  const [almId, setAlmId] = useState('')
+  const [generando, setGenerando] = useState(false)
+
+  const desde = modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
+  const periodo = modo === 'mes' ? mes : `${desde}_${hasta}`
+  const prev = useMemo(() => facturaDelPeriodo(rutas, desde, hasta, almId, almacenes), [rutas, desde, hasta, almId, almacenes])
+  const venceEl = sumarDias(hasta, 30)
+  const almNombre = almId ? (almacenes.find((a) => a.id === almId)?.nombre || '') : 'Todos los almacenes'
+
+  const generar = async () => {
+    if (prev.total <= 0) { window.alert('No hay rutas completadas en ese período para facturar.'); return }
+    setGenerando(true)
+    try {
+      const numero = idFactura(modo === 'mes' ? mes : mesDe(desde))
+      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'B&A American Group LLC' }
+      const id = await guardar(COL.facturas, null, data)
+      await auditar('factura_generada', `${numero} · ${dinero(prev.total)} · ${periodo}`)
+      walToast('Factura generada ✓', 'gold'); confeti()
+      pdfFactura({ ...data, id })
+    } finally { setGenerando(false) }
+  }
+  const marcar = async (f, estado) => { await guardar(COL.facturas, f.id, { estado }); walToast(estado === 'cobrada' ? 'Factura cobrada ✓' : 'Factura reabierta') }
+  const borrarF = async (f) => { if (window.confirm(`¿Borrar la factura ${f.numero}?`)) { await borrar(COL.facturas, f.id); walToast('Factura borrada') } }
+  const lista = [...facturas].sort((a, b) => String(b.emitidaEn || '').localeCompare(String(a.emitidaEn || '')))
+
+  return (
+    <div>
+      <PageTitle>Facturas a Walmart</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Período"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="mes">Mes</option><option value="rango">Rango</option></Select></F>
+          {modo === 'mes'
+            ? <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>
+            : <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+        </div>
+      </Card>
+
+      {/* Vista previa de la factura */}
+      <Card className="mb-4 p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa</span>
+          <span className="text-xs text-slate-400">{desde} → {hasta} · vence {venceEl} (net 30)</span>
+          <Boton variant="gold" className="ml-auto" disabled={generando || prev.total <= 0} onClick={generar}>{generando ? <Spinner /> : <><FileSpreadsheet size={15} /> Generar factura</>}</Boton>
+        </div>
+        {prev.lineas.length === 0
+          ? <Vacio icono={FileSpreadsheet}>No hay rutas completadas en este período. Cierra días con rutas completadas para poder facturar.</Vacio>
+          : (
+            <table className="w-full text-sm">
+              <thead><tr className="text-[11px] uppercase tracking-wide text-slate-400"><th className="py-1 text-left font-bold">Almacén</th><th className="text-right font-bold">Rutas</th><th className="text-right font-bold">Tarifa prom.</th><th className="text-right font-bold">Importe</th></tr></thead>
+              <tbody>{prev.lineas.map((l) => <tr key={l.almacenId} className="border-t border-slate-100 dark:border-slate-800"><td className="py-1.5 text-brand-navy dark:text-slate-100">{l.nombre}</td><td className="text-right font-mono">{l.rutas}</td><td className="text-right font-mono text-slate-500">{dinero(l.tarifaProm)}</td><td className="text-right font-mono font-semibold">{dinero(l.importe)}</td></tr>)}</tbody>
+              <tfoot><tr className="border-t-2 border-slate-200 dark:border-slate-700"><td className="py-2 font-bold text-brand-navy dark:text-slate-100">Total a cobrar</td><td className="text-right font-mono font-bold">{prev.totalRutas}</td><td /><td className="text-right font-mono text-base font-extrabold text-brand-navy dark:text-slate-100">{dinero(prev.total)}</td></tr></tfoot>
+            </table>
+          )}
+      </Card>
+
+      <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Facturas emitidas</div>
+      {lista.length === 0 && <Vacio icono={FileSpreadsheet}>Aún no has generado facturas. Elige un mes arriba y pulsa “Generar factura”.</Vacio>}
+      <div className="space-y-1.5">
+        {lista.map((f) => {
+          const vencida = f.estado !== 'cobrada' && String(f.venceEl) < hoyISO()
+          return (
+            <Card key={f.id} className={FILA}>
+              <FileSpreadsheet size={16} className="text-brand-gold" />
+              <span className="font-mono font-bold text-brand-navy dark:text-slate-100">{f.numero}</span>
+              <Badge color="slate">{f.mes ? nombreMes(f.mes) : `${f.desde} → ${f.hasta}`}</Badge>
+              <span className="text-xs text-slate-400">{f.almacenNombre}</span>
+              <span className="font-mono font-semibold">{dinero(f.total)}</span>
+              <Badge color={f.estado === 'cobrada' ? 'green' : vencida ? 'red' : 'gold'}>{f.estado === 'cobrada' ? 'Cobrada' : vencida ? 'Vencida' : 'Emitida'}</Badge>
+              <span className="text-xs text-slate-400">vence {f.venceEl}</span>
+              <div className="ml-auto flex gap-3 text-xs">
+                <button className="font-semibold text-brand-gold hover:underline" onClick={() => pdfFactura(f)}>PDF</button>
+                {f.estado !== 'cobrada'
+                  ? <button className="font-semibold text-emerald-600 hover:underline" onClick={() => marcar(f, 'cobrada')}>marcar cobrada</button>
+                  : <button className="font-semibold text-slate-400 hover:text-brand-navy" onClick={() => marcar(f, 'emitida')}>reabrir</button>}
+                <button className="font-semibold text-rose-400 hover:text-rose-600" onClick={() => borrarF(f)}>borrar</button>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">La factura suma las rutas <b>completadas</b> del período × tarifa de Walmart de cada ruta. Vence a 30 días (net 30). Para el flujo de caja, registra el cobro real en <b>Financiero → Registrar cobro de Walmart</b>.</p>
+    </div>
+  )
+}
+
+function pdfFactura(f) {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const M = 56, W = doc.internal.pageSize.getWidth()
+  let y = 64
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC', M, y)
+  doc.setTextColor(19, 35, 63); doc.setFontSize(22); doc.text('FACTURA', W - M, y, { align: 'right' }); y += 18
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120, 130, 150)
+  doc.text('Operación Walmart · last-mile', M, y); doc.text(String(f.numero), W - M, y, { align: 'right' }); y += 30
+  doc.setTextColor(40, 54, 80); doc.setFontSize(11)
+  doc.text('Facturar a:  Walmart', M, y)
+  doc.text(`Emitida: ${f.emitidaEn}`, W - M, y, { align: 'right' }); y += 16
+  doc.text(`Período: ${f.mes ? nombreMes(f.mes) : `${f.desde} a ${f.hasta}`}`, M, y)
+  doc.text(`Vence (net 30): ${f.venceEl}`, W - M, y, { align: 'right' }); y += 16
+  doc.text(`Almacén: ${f.almacenNombre || 'Todos'}`, M, y); y += 24
+  doc.setFillColor(19, 35, 63); doc.rect(M, y - 13, W - 2 * M, 22, 'F')
+  doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
+  doc.text('Almacén', M + 10, y + 2); doc.text('Rutas', W - M - 210, y + 2, { align: 'right' }); doc.text('Tarifa prom.', W - M - 110, y + 2, { align: 'right' }); doc.text('Importe', W - M - 10, y + 2, { align: 'right' }); y += 26
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 54, 80); doc.setFontSize(11)
+  for (const l of (f.lineas || [])) {
+    if (y > 700) { doc.addPage(); y = 64 }
+    doc.text(String(l.nombre), M + 10, y); doc.text(String(l.rutas), W - M - 210, y, { align: 'right' }); doc.text(dinero(l.tarifaProm), W - M - 110, y, { align: 'right' }); doc.text(dinero(l.importe), W - M - 10, y, { align: 'right' }); y += 19
+  }
+  y += 6; doc.setDrawColor(200, 200, 200); doc.line(M, y, W - M, y); y += 22
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(19, 35, 63)
+  doc.text('TOTAL A COBRAR', M + 10, y); doc.text(dinero(f.total), W - M - 10, y, { align: 'right' }); y += 26
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120, 130, 150)
+  doc.text(`${f.totalRutas} rutas completadas · condiciones de pago: net 30 (vence ${f.venceEl}).`, M, y)
+  doc.save(`${String(f.numero || 'factura')}.pdf`)
 }
 
 // ── CONTRATOS ───────────────────────────────────────────────────────────────
