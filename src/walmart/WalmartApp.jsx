@@ -512,12 +512,12 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, user }) {
         </div>
       </Card>
 
-      {lista.length === 0 && <div className="text-sm text-slate-400">{personas.length ? 'Ningún resultado con esos filtros.' : 'Aún no hay candidatos. Agrega el primero con “Nuevo”.'}</div>}
+      {lista.length === 0 && <Vacio icono={Users}>{personas.length ? 'Ningún resultado con esos filtros.' : 'Aún no hay candidatos. Agrega el primero con “Nuevo”.'}</Vacio>}
       <div className="space-y-1.5">
         {lista.map((p) => {
           const e = estadoInfo(p.estadoOperativo)
           return (
-            <Card key={p.id} className="flex flex-wrap items-center gap-2.5 p-3">
+            <Card key={p.id} className={FILA}>
               <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-navy text-xs font-bold text-brand-gold">{inic(p)}</div>
               <button className="font-bold text-brand-navy hover:underline dark:text-slate-100" onClick={() => setVer(p)}>{nombreCompleto(p)}</button>
               <Badge color={e.color}>{e.label}</Badge>
@@ -800,7 +800,7 @@ function TabAlmacenes({ almacenes, user }) {
       {edit && <EditorAlmacen almacen={edit} user={user} onCerrar={() => setEdit(null)} />}
       <div className="space-y-2">
         {almacenes.map((a) => (
-          <Card key={a.id} className="flex flex-wrap items-center gap-2 p-3">
+          <Card key={a.id} className={FILA}>
             <span className="grid h-8 w-8 place-items-center rounded-lg text-white" style={{ background: WALMART_AZUL }}><WhIcon size={15} /></span>
             <span className="font-bold text-brand-navy dark:text-slate-100">{a.nombre}</span>
             <span className="text-xs text-slate-400">{[a.ciudad, a.estado].filter(Boolean).join(', ')}{a.zonaHoraria ? ` · ${a.zonaHoraria}` : ''}</span>
@@ -878,6 +878,17 @@ function TabConfig() {
 function Seccion({ titulo, children }) { return <div className="mb-4 last:mb-0"><div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{titulo}</div>{children}</div> }
 function Grid({ children }) { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{children}</div> }
 function F({ label, children }) { return <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</span>{children}</label> }
+// Estado vacío consistente (icono + mensaje) para todas las listas.
+function Vacio({ icono: Ico = Search, children }) {
+  return (
+    <div className="grid place-items-center rounded-2xl border border-dashed border-slate-200 bg-white/50 py-10 text-center dark:border-slate-700 dark:bg-slate-800/30">
+      {Ico && <Ico size={30} className="mb-2 text-slate-300" strokeWidth={1.6} />}
+      <div className="max-w-xs px-4 text-sm text-slate-400">{children}</div>
+    </div>
+  )
+}
+// Clase reutilizable para filas-tarjeta con hover suave.
+const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
 function TabRutas({ rutas, almacenes, personas, tarifas, cierres }) {
@@ -902,12 +913,12 @@ function TabRutas({ rutas, almacenes, personas, tarifas, cierres }) {
           <div className="ml-auto text-right text-xs text-slate-400">Ingreso Walmart <b className="text-brand-navy dark:text-slate-100">{dinero(totIng)}</b> · Ganancia drivers <b className="text-brand-navy dark:text-slate-100">{dinero(totGan)}</b></div>
         </div>
       </Card>
-      {delDia.length === 0 && <div className="text-sm text-slate-400">No hay rutas registradas para ese día{almId ? ` en ${almNombre(almId)}` : ''}. Crea una con “Nueva ruta”.</div>}
+      {delDia.length === 0 && <Vacio icono={RouteIcon}>No hay rutas registradas para ese día{almId ? ` en ${almNombre(almId)}` : ''}. Crea una con “Nueva ruta”.</Vacio>}
       <div className="space-y-1.5">
         {delDia.map((r) => {
           const e = estadoRutaInfo(r.estado)
           return (
-            <Card key={r.id} className="flex flex-wrap items-center gap-2.5 p-3">
+            <Card key={r.id} className={FILA}>
               <Badge color="navy">{almNombre(r.almacenId)}</Badge>
               <Badge color="slate">{BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}</Badge>
               <span className="font-bold text-brand-navy dark:text-slate-100">{r.driverNombre || '(sin driver)'}</span>
@@ -1123,7 +1134,7 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
         </div>
       </Card>
 
-      {!driverId && <div className="text-sm text-slate-400">Elige un driver para ver su semana.</div>}
+      {!driverId && <Vacio icono={Wallet}>Elige un driver para ver su semana de pago, Fast Pay y saldo.</Vacio>}
       {res && (
         <>
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1298,10 +1309,10 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
           <div className="ml-auto text-right text-xs text-slate-400">Total mostrado <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></div>
         </div>
       </Card>
-      {lista.length === 0 && <div className="text-sm text-slate-400">Sin gastos. Agrega el primero con “Nuevo gasto”.</div>}
+      {lista.length === 0 && <Vacio icono={Receipt}>Sin gastos. Agrega el primero con “Nuevo gasto”.</Vacio>}
       <div className="space-y-1.5">
         {lista.map((g) => (
-          <Card key={g.id} className="flex flex-wrap items-center gap-2.5 p-3">
+          <Card key={g.id} className={FILA}>
             <Badge color="navy">{g.categoria}</Badge>
             <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
             <span className="font-mono text-sm">{dinero(g.monto)}</span>
@@ -1549,12 +1560,12 @@ function VistaContratos({ contratos, personas, almacenes }) {
           <F label="Driver"><Select value={fDriver} onChange={(e) => setFDriver(e.target.value)}><option value="">Todos</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
         </div>
       </Card>
-      {lista.length === 0 && <div className="text-sm text-slate-400">Sin contratos. Genera uno en la pestaña “Generar”.</div>}
+      {lista.length === 0 && <Vacio icono={FileSignature}>Sin contratos. Genera uno en la pestaña “Generar”.</Vacio>}
       <div className="space-y-1.5">
         {lista.map((c) => {
           const e = estadoContratoInfo(estadoVista(c))
           return (
-            <Card key={c.id} className="flex flex-wrap items-center gap-2.5 p-3">
+            <Card key={c.id} className={FILA}>
               <FileSignature size={16} className="text-brand-gold" />
               <span className="font-bold text-brand-navy dark:text-slate-100">{c.titulo}</span>
               <span className="text-xs text-slate-400">{c.driverNombre}</span>
