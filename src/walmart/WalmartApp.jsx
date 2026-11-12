@@ -99,7 +99,7 @@ export default function WalmartApp() {
     <>
       {tab === 'dashboard' && <TabDashboard rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} irA={setTab} user={user} />}
       {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
-      {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} tarifas={tarifas} user={user} />}
+      {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} user={user} />}
       {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
       {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
@@ -611,7 +611,7 @@ function Proximamente({ tab }) {
 }
 
 // ── CANDIDATOS / DRIVERS ────────────────────────────────────────────────────
-function TabPersonas({ personas, almacenes, rutas, pagos, contratos, tarifas, user }) {
+function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tarifas, user }) {
   const [editar, setEditar] = useState(null) // persona en edición / {} nuevo
   const [ver, setVer] = useState(null) // perfil abierto
   const [q, setQ] = useState('')
@@ -634,7 +634,7 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, tarifas, us
     }).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   }, [personas, q, fEstado, fAlmacen, fDisp])
 
-  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={(p) => { setVer(null); setEditar(p) }} />
+  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={(p) => { setVer(null); setEditar(p) }} />
   if (editar) return <EditorPersona persona={editar} almacenes={almacenes} user={user} onCerrar={() => setEditar(null)} />
 
   const conteo = (id) => personas.filter((p) => p.estadoOperativo === id).length
@@ -778,9 +778,11 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
   )
 }
 
-function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, tarifas, onVolver, onEditar }) {
+function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, gastos, tarifas, onVolver, onEditar }) {
   const p = persona
   const e = estadoInfo(p.estadoOperativo)
+  const gastosDrv = useMemo(() => (gastos || []).filter((g) => g.driverId === p.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, p.id])
+  const totalGastosDrv = money2(gastosDrv.reduce((a, g) => a + (Number(g.monto) || 0), 0))
   const fotoRef = useRef(null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [editRate, setEditRate] = useState(false)
@@ -885,6 +887,21 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, tarifas, on
           {pagosDrv.map((x, i) => <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-1.5 text-xs last:border-0 dark:border-slate-800/60"><Badge color={x.tipo === 'fastpay' ? 'gold' : 'navy'}>{x.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge><span className="font-mono text-slate-400">{x.fecha}</span><span className="ml-auto font-mono font-semibold">{dinero(x.tipo === 'fastpay' ? x.efectivo : x.monto)}</span></div>)}
         </Card>
       </div>
+
+      <Card className="mt-4 p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><Receipt size={15} className="text-brand-gold" /> Gastos de la compañía atribuidos <span className="ml-auto font-mono text-brand-navy dark:text-slate-100">{dinero(totalGastosDrv)}</span></div>
+        {gastosDrv.length === 0 && <div className="text-sm text-slate-400">Sin gastos atribuidos. Regístralos en <b>Gastos</b> eligiendo este driver.</div>}
+        {gastosDrv.map((g) => (
+          <div key={g.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 py-1.5 text-xs last:border-0 dark:border-slate-800/60">
+            <Badge color="navy">{g.categoria}</Badge>
+            <span className="text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
+            <span className="font-mono text-slate-400">{g.fecha}</span>
+            {g.rutaId && <Badge color="slate">ruta</Badge>}
+            <span className="ml-auto font-mono font-semibold">{dinero(g.monto)}</span>
+          </div>
+        ))}
+        <p className="mt-2 text-[11px] text-slate-400">Costos que cubrió la compañía por este driver (gasolina, etc.). <b>No se le descuentan</b>; si quieres descontarle algo, usa deducciones en la ruta.</p>
+      </Card>
 
       <Card className="mt-4 p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Contratos</div>
