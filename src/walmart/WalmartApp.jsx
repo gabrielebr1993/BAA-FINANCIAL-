@@ -34,7 +34,7 @@ import '../styles/cloudmotion.css'
 import './foldable.css'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
-  TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes,
+  TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
@@ -99,7 +99,7 @@ export default function WalmartApp() {
     <>
       {tab === 'dashboard' && <TabDashboard rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} irA={setTab} user={user} />}
       {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
-      {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} user={user} />}
+      {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} tarifas={tarifas} user={user} />}
       {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
       {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
@@ -611,7 +611,7 @@ function Proximamente({ tab }) {
 }
 
 // ── CANDIDATOS / DRIVERS ────────────────────────────────────────────────────
-function TabPersonas({ personas, almacenes, rutas, pagos, contratos, user }) {
+function TabPersonas({ personas, almacenes, rutas, pagos, contratos, tarifas, user }) {
   const [editar, setEditar] = useState(null) // persona en edición / {} nuevo
   const [ver, setVer] = useState(null) // perfil abierto
   const [q, setQ] = useState('')
@@ -634,7 +634,7 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, user }) {
     }).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   }, [personas, q, fEstado, fAlmacen, fDisp])
 
-  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} onVolver={() => setVer(null)} onEditar={(p) => { setVer(null); setEditar(p) }} />
+  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={(p) => { setVer(null); setEditar(p) }} />
   if (editar) return <EditorPersona persona={editar} almacenes={almacenes} user={user} onCerrar={() => setEditar(null)} />
 
   const conteo = (id) => personas.filter((p) => p.estadoOperativo === id).length
@@ -696,7 +696,7 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
     nombre: '', apellido: '', telefono: '', correo: '', direccion: '', ciudad: '', estado: '',
     fechaRegistro: hoy(), responsable: user?.email || '', notas: '',
     tieneSSN: 'pendiente', tieneLicencia: 'pendiente', disponibilidad: 'ambas', diasDisponibles: [],
-    tipoVehiculo: 'SUV', marca: '', modelo: '', anio: '', propietarioVehiculo: 'driver',
+    tipoVehiculo: 'SUV', marca: '', modelo: '', anio: '', propietarioVehiculo: 'driver', rateDriver: '',
     estadoOperativo: 'candidato', almacenId: '', ...persona,
   }))
   const [guardando, setGuardando] = useState(false)
@@ -754,7 +754,9 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
             <F label="Modelo"><Input value={p.modelo} onChange={(e) => set('modelo', e.target.value)} placeholder="Suburban" /></F>
             <F label="Año"><Input value={p.anio} onChange={(e) => set('anio', e.target.value)} placeholder="2021" /></F>
             <F label="Propietario"><Select value={p.propietarioVehiculo} onChange={(e) => set('propietarioVehiculo', e.target.value)}>{PROPIETARIO.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
+            <F label="Pago por ruta (USD) — opcional"><Input type="number" value={p.rateDriver} onChange={(e) => set('rateDriver', e.target.value)} placeholder={p.propietarioVehiculo === 'compania' ? 'por defecto compañía' : 'por defecto propio'} /></F>
           </Grid>
+          <p className="mt-1 text-[11px] text-slate-400">Si este driver cobra distinto, pon aquí su pago por ruta. Se usará automáticamente al crear sus rutas. Si lo dejas vacío, usa la tarifa por defecto según el propietario del vehículo.</p>
         </Seccion>
         <Seccion titulo="Estado y almacén">
           <Grid>
@@ -776,11 +778,21 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
   )
 }
 
-function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, onVolver, onEditar }) {
+function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, tarifas, onVolver, onEditar }) {
   const p = persona
   const e = estadoInfo(p.estadoOperativo)
   const fotoRef = useRef(null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [editRate, setEditRate] = useState(false)
+  const [rateVal, setRateVal] = useState(p.rateDriver ?? '')
+  const rateEfectivo = tarifaDeDriver(p, tarifas || TARIFAS_DEFAULT)
+  const ratePropio = tieneRatePropio(p)
+  const guardarRate = async () => {
+    const v = rateVal === '' ? '' : money2(rateVal)
+    await guardar(COL.candidatos, p.id, { rateDriver: v })
+    await auditar('rate_driver', `${nombreCompleto(p)} · ${v === '' ? 'por defecto' : dinero(v)}`)
+    walToast('Pago por ruta actualizado ✓'); setEditRate(false)
+  }
   const subirFoto = async (file) => {
     if (!file) return
     setSubiendoFoto(true)
@@ -831,6 +843,30 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, onVolver, o
         <MiniStat l="Pagado (FP + pagos)" v={dinero(acc.liquidadoFP + acc.pagadoNormal)} />
         <MiniStat l="Saldo pendiente" v={dinero(acc.saldo)} ambar={acc.saldo > 0.005} />
       </div>
+
+      {/* Pago por ruta (tarifa del driver) — editable al instante */}
+      <Card className="mt-4 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Wallet size={18} className="text-brand-gold" />
+          <div>
+            <div className="text-[10px] font-bold uppercase text-slate-400">Pago por ruta</div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{dinero(rateEfectivo)}</span>
+              <Badge color={ratePropio ? 'gold' : 'slate'}>{ratePropio ? 'personalizado' : (p.propietarioVehiculo === 'compania' ? 'por defecto compañía' : 'por defecto propio')}</Badge>
+            </div>
+          </div>
+          {!editRate
+            ? <Boton variant="ghost" className="ml-auto" onClick={() => { setRateVal(p.rateDriver ?? ''); setEditRate(true) }}>Cambiar</Boton>
+            : (
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <Input type="number" value={rateVal} onChange={(ev) => setRateVal(ev.target.value)} className="w-28" placeholder="por defecto" />
+                <Boton variant="gold" onClick={guardarRate}>Guardar</Boton>
+                <Boton variant="ghost" onClick={() => setEditRate(false)}>Cancelar</Boton>
+              </div>
+            )}
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Se usa automáticamente al crear rutas de este driver. Déjalo vacío para usar la tarifa por defecto según el propietario del vehículo.</p>
+      </Card>
 
       <BankSection driverId={p.id} />
 
@@ -1174,9 +1210,9 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const driversActivos = personas.filter((p) => p.estadoOperativo === 'activo' && (!r.almacenId || p.almacenId === r.almacenId))
   const elegirDriver = (id) => {
     const d = personas.find((x) => x.id === id)
-    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaDriver: (d?.propietarioVehiculo === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio) }))
+    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaDriver: tarifaDeDriver(d, tarifas) }))
   }
-  const setProp = (v) => setR((x) => ({ ...x, propietarioVehiculo: v, tarifaDriver: v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio }))
+  const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio) } })
   const addAj = (tipo) => set(tipo, [...(r[tipo] || []), { concepto: '', monto: '', responsable: '', aplicaA: 'driver' }])
   const setAj = (tipo, i, k, v) => set(tipo, r[tipo].map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const delAj = (tipo, i) => set(tipo, r[tipo].filter((_, j) => j !== i))
@@ -1224,6 +1260,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
             <F label="Ingreso de Walmart (USD)"><Input type="number" value={r.tarifaWalmart} onChange={(e) => set('tarifaWalmart', e.target.value)} /></F>
             <F label="Pago al driver (USD)"><Input type="number" value={r.tarifaDriver} onChange={(e) => set('tarifaDriver', e.target.value)} /></F>
           </Grid>
+          {tieneRatePropio(personas.find((x) => x.id === r.driverId)) && <p className="mt-1 text-[11px] font-semibold text-brand-gold">★ Pago tomado de la tarifa personalizada del driver. Puedes ajustarlo solo para esta ruta.</p>}
           <AjustesEditor titulo="Bonos" tipo="bonos" lista={r.bonos} onAdd={() => addAj('bonos')} onSet={(i, k, v) => setAj('bonos', i, k, v)} onDel={(i) => delAj('bonos', i)} />
           <AjustesEditor titulo="Deducciones" tipo="deducciones" lista={r.deducciones} onAdd={() => addAj('deducciones')} onSet={(i, k, v) => setAj('deducciones', i, k, v)} onDel={(i) => delAj('deducciones', i)} />
           <div className="mt-3 flex flex-wrap gap-4 text-sm">
@@ -2007,7 +2044,7 @@ function VistaGenerar({ plantillas, personas, almacenes, tarifas, onIrLista, onI
   const [datos, setDatos] = useState({}); const [link, setLink] = useState(''); const [guardando, setGuardando] = useState(false)
   const pl = plantillas.find((p) => p.id === plId); const driver = personas.find((p) => p.id === driverId)
   const almNombre = almacenes.find((a) => a.id === driver?.almacenId)?.nombre || ''
-  useEffect(() => { if (driver) setDatos(datosDeDriver(driver, almNombre, 'B&A American Group LLC', tarifas.pagoDriverPropio)); else setDatos({}); setLink('') }, [driverId]) // eslint-disable-line
+  useEffect(() => { if (driver) setDatos(datosDeDriver(driver, almNombre, 'B&A American Group LLC', tarifaDeDriver(driver, tarifas))); else setDatos({}); setLink('') }, [driverId]) // eslint-disable-line
   const texto = pl ? renderPlantilla(pl.texto, datos) : ''
   const faltan = pl ? faltantesPlantilla(pl.texto, datos) : []
   const set = (k, v) => setDatos((x) => ({ ...x, [k]: v }))

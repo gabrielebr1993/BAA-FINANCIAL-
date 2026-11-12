@@ -53,6 +53,38 @@
   color-scheme: dark;
   color: #f1f5f9;
 }
+/* Texto de los sub-campos (día/mes/año) en WebKit/Blink (Chrome, Safari,
+   Android, iOS): forzar color visible para que SIEMPRE se lean. */
+.wal-content input[type="date"]::-webkit-datetime-edit,
+.wal-content input[type="month"]::-webkit-datetime-edit,
+.wal-content input[type="time"]::-webkit-datetime-edit,
+.wal-content input[type="datetime-local"]::-webkit-datetime-edit {
+  color: #1f2937;
+  -webkit-text-fill-color: #1f2937;
+}
+.wal-content input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.wal-content input[type="date"]::-webkit-datetime-edit-text,
+.wal-content input[type="date"]::-webkit-datetime-edit-month-field,
+.wal-content input[type="date"]::-webkit-datetime-edit-day-field,
+.wal-content input[type="date"]::-webkit-datetime-edit-year-field,
+.wal-content input[type="month"]::-webkit-datetime-edit-month-field,
+.wal-content input[type="month"]::-webkit-datetime-edit-year-field {
+  color: inherit;
+  -webkit-text-fill-color: #1f2937;
+}
+.dark .wal-content input[type="date"]::-webkit-datetime-edit,
+.dark .wal-content input[type="month"]::-webkit-datetime-edit,
+.dark .wal-content input[type="time"]::-webkit-datetime-edit,
+.dark .wal-content input[type="datetime-local"]::-webkit-datetime-edit,
+.dark .wal-content input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.dark .wal-content input[type="date"]::-webkit-datetime-edit-text,
+.dark .wal-content input[type="date"]::-webkit-datetime-edit-month-field,
+.dark .wal-content input[type="date"]::-webkit-datetime-edit-day-field,
+.dark .wal-content input[type="date"]::-webkit-datetime-edit-year-field,
+.dark .wal-content input[type="month"]::-webkit-datetime-edit-month-field,
+.dark .wal-content input[type="month"]::-webkit-datetime-edit-year-field {
+  -webkit-text-fill-color: #f1f5f9;
+}
 /* Icono del calendario siempre visible y clicable */
 .wal-content input[type="date"]::-webkit-calendar-picker-indicator,
 .wal-content input[type="month"]::-webkit-calendar-picker-indicator,

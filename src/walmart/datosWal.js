@@ -126,6 +126,15 @@ export async function auditar(accion, detalle) {
 // Nombre para mostrar de una persona.
 export const nombreCompleto = (p) => `${p?.nombre || ''} ${p?.apellido || ''}`.trim() || '(sin nombre)'
 
+// Pago por ruta de un driver: su tarifa personalizada (rateDriver) si la tiene,
+// o la tarifa por defecto según el propietario del vehículo.
+export const tarifaDeDriver = (driver, tarifas) => {
+  const r = driver?.rateDriver
+  if (r != null && r !== '' && !isNaN(Number(r))) return money2(r)
+  return money2(driver?.propietarioVehiculo === 'compania' ? tarifas?.pagoDriverCompania : tarifas?.pagoDriverPropio)
+}
+export const tieneRatePropio = (driver) => driver?.rateDriver != null && driver.rateDriver !== '' && !isNaN(Number(driver.rateDriver))
+
 // ── Semana de pago (lunes a domingo, por fecha local de servicio) ───────────
 // Devuelve la fecha ISO del LUNES de la semana de `fechaISO` (clave de semana).
 export function lunesDe(fechaISO) {
