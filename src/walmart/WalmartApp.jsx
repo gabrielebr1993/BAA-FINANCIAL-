@@ -25,7 +25,7 @@ import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
-  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet,
+  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
@@ -294,6 +294,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const [ambito, setAmbito] = useState('almacen') // 'almacen' | 'todos'
   const [sel, setSel] = useState(null) // driverId seleccionado (para tocar y colocar)
   const [sobre, setSobre] = useState('') // "dia|turno" en arrastre encima
+  const [repetir, setRepetir] = useState(false)
 
   const semana = lunesDe(fecha)
   useEffect(() => { if (!almId && almacenes.length) setAlmId(almacenes[0].id) }, [almacenes, almId])
@@ -361,7 +362,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
 
   return (
     <div>
-      <PageTitle>Agenda semanal</PageTitle>
+      <PageTitle right={<Boton variant="ghost" onClick={() => setRepetir(true)}><Copy size={14} /> Repetir / copiar</Boton>}>Agenda semanal</PageTitle>
       <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día — <b className="text-emerald-600">mañana</b> o <b className="text-blue-600">tarde</b>. El sistema avisa si falta gente. Se guarda al instante.</p>
 
       {/* Controles */}
@@ -518,7 +519,67 @@ function TabAgenda({ personas, almacenes, agenda }) {
           </div>
         </div>
       </div>
+      {repetir && <RepetirModal almId={almId} semana={semana} plan={plan} onCerrar={() => setRepetir(false)} />}
     </div>
+  )
+}
+
+// Copiar/repetir la agenda a otras semanas o rellenar la semana con un día.
+function RepetirModal({ almId, semana, plan, onCerrar }) {
+  const [modo, setModo] = useState('mes') // mes | proxima | especifica | diaSemana
+  const [fechaDestino, setFechaDestino] = useState(sumarDias(semana, 7))
+  const [diaOrigen, setDiaOrigen] = useState(DIAS[0])
+  const [trabajando, setTrabajando] = useState(false)
+
+  const semanasDelMes = () => {
+    const mes = mesDe(semana), fin = ultimoDiaMes(mes)
+    const out = []; let w = lunesDe(primerDiaMes(mes)); let g = 0
+    while (w <= fin && g < 40) { out.push(w); w = sumarDias(w, 7); g++ }
+    return out
+  }
+
+  const aplicar = async () => {
+    setTrabajando(true)
+    try {
+      if (modo === 'diaSemana') {
+        const base = planNormalizado(plan)[diaOrigen]
+        const nuevo = planNormalizado(plan)
+        for (const d of DIAS) nuevo[d] = { manana: [...base.manana], tarde: [...base.tarde] }
+        await guardar(COL.agenda, idAgenda(almId, semana), { almacenId: almId, semana, plan: nuevo })
+        walToast('Semana rellenada ✓', 'gold'); onCerrar(); return
+      }
+      let destinos = []
+      if (modo === 'mes') destinos = semanasDelMes().filter((w) => w !== semana)
+      else if (modo === 'proxima') destinos = [lunesDe(sumarDias(semana, 7))]
+      else destinos = [lunesDe(fechaDestino)].filter((w) => w !== semana)
+      if (!destinos.length) { onCerrar(); return }
+      if (!window.confirm(`Se copiará esta semana a ${destinos.length} semana(s), reemplazando lo que tengan. ¿Continuar?`)) { setTrabajando(false); return }
+      const base = planNormalizado(plan)
+      for (const w of destinos) await guardar(COL.agenda, idAgenda(almId, w), { almacenId: almId, semana: w, plan: base })
+      walToast(`Copiada a ${destinos.length} semana(s) ✓`, 'gold'); onCerrar()
+    } finally { setTrabajando(false) }
+  }
+
+  const Op = ({ v, children }) => (
+    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-2.5 text-sm dark:border-slate-700">
+      <input type="radio" name="repmodo" checked={modo === v} onChange={() => setModo(v)} className="accent-brand-gold" />
+      <span className="flex flex-1 flex-wrap items-center gap-1.5">{children}</span>
+    </label>
+  )
+  return (
+    <Modal titulo="Repetir / copiar agenda" onCerrar={onCerrar}>
+      <div className="space-y-2">
+        <Op v="mes">Copiar esta semana a <b>todo el mes</b></Op>
+        <Op v="proxima">Copiar a la <b>próxima semana</b></Op>
+        <Op v="especifica">Copiar a una <b>semana específica</b>{modo === 'especifica' && <Input type="date" value={fechaDestino} onChange={(e) => setFechaDestino(e.target.value)} className="ml-1 w-40" />}</Op>
+        <Op v="diaSemana">Rellenar <b>toda esta semana</b> con el día{modo === 'diaSemana' && <Select value={diaOrigen} onChange={(e) => setDiaOrigen(e.target.value)} className="ml-1 w-24">{DIAS.map((d) => <option key={d} value={d}>{d}</option>)}</Select>}</Op>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Boton variant="gold" disabled={trabajando} onClick={aplicar}>{trabajando ? <Spinner /> : 'Aplicar'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">Copiar <b>reemplaza</b> la agenda de las semanas destino, con los mismos drivers en los mismos turnos.</p>
+    </Modal>
   )
 }
 
