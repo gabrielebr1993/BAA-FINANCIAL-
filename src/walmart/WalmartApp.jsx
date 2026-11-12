@@ -519,17 +519,22 @@ function TabAgenda({ personas, almacenes, agenda }) {
           </div>
         </div>
       </div>
-      {repetir && <RepetirModal almId={almId} semana={semana} plan={plan} onCerrar={() => setRepetir(false)} />}
+      {repetir && <RepetirModal almId={almId} semana={semana} plan={plan} agenda={agenda} almacenes={almacenes} onCerrar={() => setRepetir(false)} />}
     </div>
   )
 }
 
-// Copiar/repetir la agenda a otras semanas o rellenar la semana con un día.
-function RepetirModal({ almId, semana, plan, onCerrar }) {
-  const [modo, setModo] = useState('mes') // mes | proxima | especifica | diaSemana
+// Copiar/repetir la agenda: por turnos (ambos/mañana/tarde) a mes, semana,
+// semana específica, otro almacén, o rellenar la semana con un día.
+function RepetirModal({ almId, semana, plan, agenda, almacenes, onCerrar }) {
+  const [turnos, setTurnos] = useState('ambos') // ambos | manana | tarde
+  const [modo, setModo] = useState('mes') // mes | proxima | especifica | almacen | diaSemana
   const [fechaDestino, setFechaDestino] = useState(sumarDias(semana, 7))
+  const [almDest, setAlmDest] = useState(almacenes.find((a) => a.id !== almId)?.id || '')
   const [diaOrigen, setDiaOrigen] = useState(DIAS[0])
   const [trabajando, setTrabajando] = useState(false)
+  const hayOtroAlm = almacenes.filter((a) => a.id !== almId).length > 0
+  const losTurnos = turnos === 'ambos' ? ['manana', 'tarde'] : [turnos]
 
   const semanasDelMes = () => {
     const mes = mesDe(semana), fin = ultimoDiaMes(mes)
@@ -537,48 +542,59 @@ function RepetirModal({ almId, semana, plan, onCerrar }) {
     while (w <= fin && g < 40) { out.push(w); w = sumarDias(w, 7); g++ }
     return out
   }
+  const planDe = (alm, w) => planNormalizado(agenda.find((a) => a.id === idAgenda(alm, w))?.plan)
+  // Copia los turnos elegidos del plan fuente (día a día, o un solo día fuente) al destino, conservando el otro turno.
+  const aplicarA = async (alm, w, diaFuente) => {
+    const dest = planDe(alm, w); const src = planNormalizado(plan)
+    for (const d of DIAS) for (const t of losTurnos) dest[d][t] = [...(diaFuente ? src[diaFuente][t] : src[d][t])]
+    await guardar(COL.agenda, idAgenda(alm, w), { almacenId: alm, semana: w, plan: dest })
+  }
 
   const aplicar = async () => {
     setTrabajando(true)
     try {
-      if (modo === 'diaSemana') {
-        const base = planNormalizado(plan)[diaOrigen]
-        const nuevo = planNormalizado(plan)
-        for (const d of DIAS) nuevo[d] = { manana: [...base.manana], tarde: [...base.tarde] }
-        await guardar(COL.agenda, idAgenda(almId, semana), { almacenId: almId, semana, plan: nuevo })
-        walToast('Semana rellenada ✓', 'gold'); onCerrar(); return
-      }
+      if (modo === 'diaSemana') { await aplicarA(almId, semana, diaOrigen); walToast('Semana rellenada ✓', 'gold'); onCerrar(); return }
       let destinos = []
-      if (modo === 'mes') destinos = semanasDelMes().filter((w) => w !== semana)
-      else if (modo === 'proxima') destinos = [lunesDe(sumarDias(semana, 7))]
-      else destinos = [lunesDe(fechaDestino)].filter((w) => w !== semana)
+      if (modo === 'mes') destinos = semanasDelMes().filter((w) => w !== semana).map((w) => ({ alm: almId, w }))
+      else if (modo === 'proxima') destinos = [{ alm: almId, w: lunesDe(sumarDias(semana, 7)) }]
+      else if (modo === 'especifica') { const w = lunesDe(fechaDestino); if (w !== semana) destinos = [{ alm: almId, w }] }
+      else if (modo === 'almacen') { if (almDest && almDest !== almId) destinos = [{ alm: almDest, w: semana }] }
       if (!destinos.length) { onCerrar(); return }
-      if (!window.confirm(`Se copiará esta semana a ${destinos.length} semana(s), reemplazando lo que tengan. ¿Continuar?`)) { setTrabajando(false); return }
-      const base = planNormalizado(plan)
-      for (const w of destinos) await guardar(COL.agenda, idAgenda(almId, w), { almacenId: almId, semana: w, plan: base })
-      walToast(`Copiada a ${destinos.length} semana(s) ✓`, 'gold'); onCerrar()
+      const quéT = turnos === 'ambos' ? 'ambos turnos' : turnos === 'manana' ? 'solo mañanas' : 'solo tardes'
+      if (!window.confirm(`Se copiará (${quéT}) a ${destinos.length} destino(s), reemplazando esos turnos. ¿Continuar?`)) { setTrabajando(false); return }
+      for (const { alm, w } of destinos) await aplicarA(alm, w)
+      walToast(`Copiado a ${destinos.length} destino(s) ✓`, 'gold'); onCerrar()
     } finally { setTrabajando(false) }
   }
 
   const Op = ({ v, children }) => (
-    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-2.5 text-sm dark:border-slate-700">
-      <input type="radio" name="repmodo" checked={modo === v} onChange={() => setModo(v)} className="accent-brand-gold" />
+    <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-sm dark:border-slate-700">
+      <input type="radio" name="repmodo" checked={modo === v} onChange={() => setModo(v)} className="mt-0.5 accent-brand-gold" />
       <span className="flex flex-1 flex-wrap items-center gap-1.5">{children}</span>
     </label>
   )
+  const Chip = ({ v, children }) => (
+    <button type="button" onClick={() => setTurnos(v)} className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${turnos === v ? 'border-brand-gold bg-amber-50 text-brand-navy dark:bg-amber-500/10 dark:text-amber-200' : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700'}`}>{children}</button>
+  )
   return (
     <Modal titulo="Repetir / copiar agenda" onCerrar={onCerrar}>
+      <div className="mb-3">
+        <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">Qué turnos copiar</div>
+        <div className="flex flex-wrap gap-1.5"><Chip v="ambos">Ambos</Chip><Chip v="manana">Solo mañanas</Chip><Chip v="tarde">Solo tardes</Chip></div>
+      </div>
+      <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">A dónde</div>
       <div className="space-y-2">
-        <Op v="mes">Copiar esta semana a <b>todo el mes</b></Op>
+        <Op v="mes">Copiar a <b>todo el mes</b> (este almacén)</Op>
         <Op v="proxima">Copiar a la <b>próxima semana</b></Op>
-        <Op v="especifica">Copiar a una <b>semana específica</b>{modo === 'especifica' && <Input type="date" value={fechaDestino} onChange={(e) => setFechaDestino(e.target.value)} className="ml-1 w-40" />}</Op>
-        <Op v="diaSemana">Rellenar <b>toda esta semana</b> con el día{modo === 'diaSemana' && <Select value={diaOrigen} onChange={(e) => setDiaOrigen(e.target.value)} className="ml-1 w-24">{DIAS.map((d) => <option key={d} value={d}>{d}</option>)}</Select>}</Op>
+        <Op v="especifica">Copiar a una <b>semana específica</b>{modo === 'especifica' && <Input type="date" value={fechaDestino} onChange={(e) => setFechaDestino(e.target.value)} className="w-40" />}</Op>
+        {hayOtroAlm && <Op v="almacen">Copiar a <b>otro almacén</b> (misma semana){modo === 'almacen' && <Select value={almDest} onChange={(e) => setAlmDest(e.target.value)} className="w-44">{almacenes.filter((a) => a.id !== almId).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select>}</Op>}
+        <Op v="diaSemana">Rellenar <b>la semana</b> con el día{modo === 'diaSemana' && <Select value={diaOrigen} onChange={(e) => setDiaOrigen(e.target.value)} className="w-24">{DIAS.map((d) => <option key={d} value={d}>{d}</option>)}</Select>}</Op>
       </div>
       <div className="mt-4 flex gap-2">
         <Boton variant="gold" disabled={trabajando} onClick={aplicar}>{trabajando ? <Spinner /> : 'Aplicar'}</Boton>
         <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
       </div>
-      <p className="mt-2 text-[11px] text-slate-400">Copiar <b>reemplaza</b> la agenda de las semanas destino, con los mismos drivers en los mismos turnos.</p>
+      <p className="mt-2 text-[11px] text-slate-400">Copiar <b>reemplaza</b> los turnos elegidos en el destino (conserva el otro turno). Usa los mismos drivers.</p>
     </Modal>
   )
 }
