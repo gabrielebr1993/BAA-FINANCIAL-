@@ -30,3 +30,38 @@
 @media (vertical-viewport-segments: 2) {
   .wal-content { padding-bottom: env(viewport-segment-top 0 1) !important; }
 }
+
+/* ===========================================================================
+   Calendarios (input date/month/time): el calendario nativo debe seguir el
+   tema para que SÍ se vean las fechas y los días (antes el texto quedaba del
+   mismo color que el fondo y no se leía). También se fuerza el color del
+   texto y se hace visible el icono del calendario.
+   =========================================================================== */
+.wal-content input[type="date"],
+.wal-content input[type="month"],
+.wal-content input[type="week"],
+.wal-content input[type="time"],
+.wal-content input[type="datetime-local"] {
+  color-scheme: light;
+  color: #1f2937;
+}
+.dark .wal-content input[type="date"],
+.dark .wal-content input[type="month"],
+.dark .wal-content input[type="week"],
+.dark .wal-content input[type="time"],
+.dark .wal-content input[type="datetime-local"] {
+  color-scheme: dark;
+  color: #f1f5f9;
+}
+/* Icono del calendario siempre visible y clicable */
+.wal-content input[type="date"]::-webkit-calendar-picker-indicator,
+.wal-content input[type="month"]::-webkit-calendar-picker-indicator,
+.wal-content input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+  cursor: pointer;
+}
+.dark .wal-content input[type="date"]::-webkit-calendar-picker-indicator,
+.dark .wal-content input[type="month"]::-webkit-calendar-picker-indicator,
+.dark .wal-content input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
