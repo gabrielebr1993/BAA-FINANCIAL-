@@ -69,7 +69,11 @@ const TABS = [
 export default function WalmartApp() {
   const { user } = useAuth()
   const { cambiarCarrier } = useCarrier()
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTabRaw] = useState(() => {
+    try { const t = localStorage.getItem('wal_tab'); if (t && TABS.some((x) => x.id === t)) return t } catch { /* sin storage */ }
+    return 'dashboard'
+  })
+  const setTab = (t) => { setTabRaw(t); try { localStorage.setItem('wal_tab', t) } catch { /* sin storage */ } }
   const [personas, setPersonas] = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [rutas, setRutas] = useState([])
