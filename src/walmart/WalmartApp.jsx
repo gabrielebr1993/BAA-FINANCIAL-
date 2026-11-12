@@ -8,16 +8,19 @@
 // Visualmente usa el mismo diseño del sistema (componentes ui, colores de
 // marca). Los datos viven en colecciones wal_* separadas.
 // ============================================================================
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { signOut } from 'firebase/auth'
-import { jsPDF } from 'jspdf'
 import { db, auth } from '../firebase'
 import { useAuth } from '../AuthContext'
 import { useCarrier } from '../carriers/CarrierContext'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, KPI } from '../components/ui'
+
+// Gráfica diferida (recharts no entra en el arranque).
+const ChartSemanas = lazy(() => import('./ChartSemanas'))
+// jsPDF se importa bajo demanda al generar un PDF.
+const cargarJsPDF = async () => (await import('jspdf')).jsPDF
 import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
@@ -248,19 +251,9 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Ingreso vs resultado (últimas 8 semanas)</div>
-          <div style={{ width: '100%', height: 260 }}>
-            <ResponsiveContainer>
-              <BarChart data={serie} margin={{ top: 6, right: 6, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e3e6ec" vertical={false} />
-                <XAxis dataKey="semana" tick={{ fontSize: 11, fill: '#8a97ac' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#8a97ac' }} />
-                <Tooltip formatter={(v) => dinero(v)} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Ingreso" fill="#13233f" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Resultado" fill="#c9a24b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <Suspense fallback={<div className="grid h-[260px] place-items-center text-xs text-slate-400"><Spinner /></div>}>
+            <ChartSemanas data={serie} />
+          </Suspense>
         </Card>
         <Card className="p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><Clock size={15} className="text-brand-gold" /> Cuentas por cobrar (net 30)</div>
@@ -1665,7 +1658,8 @@ function CobroModal({ semana, almacenes, almId, onCerrar }) {
 }
 
 // Pay stub (comprobante de liquidación) en PDF, basado en la semana del driver.
-function pdfPayStub(driver, semana, hasta, res) {
+async function pdfPayStub(driver, semana, hasta, res) {
+  const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56; let y = 70
   doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC · WALMART', M, y); y += 20
@@ -1780,7 +1774,8 @@ function TabFacturas({ rutas, almacenes, facturas }) {
   )
 }
 
-function pdfFactura(f) {
+async function pdfFactura(f) {
+  const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth()
   let y = 64
@@ -1811,7 +1806,8 @@ function pdfFactura(f) {
 }
 
 // ── CONTRATOS ───────────────────────────────────────────────────────────────
-function pdfContrato(c, firmado) {
+async function pdfContrato(c, firmado) {
+  const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth() - M * 2
   let y = 70
