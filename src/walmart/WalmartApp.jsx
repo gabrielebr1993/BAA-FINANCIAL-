@@ -22,7 +22,7 @@ import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
-  CalendarDays, X, Sun, Sunset, GripVertical,
+  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
@@ -38,6 +38,7 @@ import {
   tokenAleatorio, datosDeDriver,
   ultimasSemanas, receivableNet30, acumuladoDriver,
   AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
+  leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
 } from './datosWal'
 
 const WALMART_AZUL = '#0071dc'
@@ -442,7 +443,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
                   onClick={() => setSel(act ? null : p.id)}
                   className={`flex cursor-grab items-center gap-2 rounded-xl border px-2 py-1.5 transition active:cursor-grabbing ${act ? 'border-brand-gold bg-amber-50 shadow-sm dark:bg-amber-500/10' : 'border-slate-200 bg-white hover:border-brand-gold/50 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800'}`}>
                   <GripVertical size={13} className="shrink-0 text-slate-300" />
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-navy text-[10px] font-bold text-brand-gold">{ini(p)}</span>
+                  <Avatar p={p} size={28} />
                   <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span><span className="block truncate text-[10px] text-slate-400">{p.tipoVehiculo || 'Driver'}{nd ? ` · ${nd}d` : ''}</span></span>
                 </div>
               )
@@ -561,7 +562,7 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, user }) {
           const e = estadoInfo(p.estadoOperativo)
           return (
             <Card key={p.id} className={FILA}>
-              <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-navy text-xs font-bold text-brand-gold">{inic(p)}</div>
+              <Avatar p={p} size={36} />
               <button className="font-bold text-brand-navy hover:underline dark:text-slate-100" onClick={() => setVer(p)}>{nombreCompleto(p)}</button>
               <Badge color={e.color}>{e.label}</Badge>
               {p.almacenId && <span className="text-xs text-slate-400">{almacenNombre(p.almacenId)}</span>}
@@ -580,6 +581,14 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, user }) {
 }
 
 const inic = (p) => `${(p.nombre || '?')[0] || ''}${(p.apellido || '')[0] || ''}`.toUpperCase()
+
+// Avatar: foto real del driver si existe, si no las iniciales.
+function Avatar({ p, size = 36, cuadrado, className = '' }) {
+  const st = { width: size, height: size }
+  const radio = cuadrado ? 'rounded-2xl' : 'rounded-full'
+  if (p?.fotoURL) return <img src={p.fotoURL} alt={nombreCompleto(p)} style={st} className={`shrink-0 object-cover ${radio} ${className}`} />
+  return <span style={{ ...st, fontSize: Math.round(size * 0.36) }} className={`grid shrink-0 place-items-center bg-brand-navy font-bold text-brand-gold ${radio} ${className}`}>{inic(p)}</span>
+}
 
 function EditorPersona({ persona, almacenes, user, onCerrar }) {
   const nuevo = !persona.id
@@ -670,6 +679,18 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
 function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, onVolver, onEditar }) {
   const p = persona
   const e = estadoInfo(p.estadoOperativo)
+  const fotoRef = useRef(null)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const subirFoto = async (file) => {
+    if (!file) return
+    setSubiendoFoto(true)
+    try {
+      const dataURL = await leerImagenRedimensionada(file, 512, 0.82)
+      await guardar(COL.candidatos, p.id, { fotoURL: dataURL })
+      await auditar('foto_driver', nombreCompleto(p))
+      walToast('Foto actualizada ✓')
+    } catch (err) { window.alert('No se pudo subir la foto: ' + (err.message || err)) } finally { setSubiendoFoto(false) }
+  }
   const alm = almacenes.find((a) => a.id === p.almacenId)
   const acc = useMemo(() => acumuladoDriver(rutas || [], pagos || [], p.id), [rutas, pagos, p.id])
   const rutasDrv = useMemo(() => (rutas || []).filter((r) => r.driverId === p.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 12), [rutas, p.id])
@@ -681,7 +702,11 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, onVolver, o
       <PageTitle right={<Boton variant="ghost" onClick={onVolver}><ArrowLeft size={14} /> Volver</Boton>}>Perfil</PageTitle>
       <Card className="mb-4 p-5">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-navy text-2xl font-black text-brand-gold">{inic(p)}</div>
+          <button onClick={() => fotoRef.current?.click()} className="group relative" title="Cambiar foto">
+            <Avatar p={p} size={64} cuadrado />
+            <span className="absolute inset-0 grid place-items-center rounded-2xl bg-black/45 opacity-0 transition group-hover:opacity-100">{subiendoFoto ? <Spinner /> : <Camera size={20} className="text-white" />}</span>
+            <input ref={fotoRef} type="file" accept="image/*" className="hidden" onChange={(ev) => { subirFoto(ev.target.files?.[0]); ev.target.value = '' }} />
+          </button>
           <div className="min-w-0">
             <div className="text-xl font-black text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</div>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -731,8 +756,63 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, onVolver, o
         {contratosDrv.map((c) => { const ec = estadoContratoInfo(c.estado); return <div key={c.id} className="flex items-center gap-2 border-b border-slate-50 py-1.5 text-sm last:border-0 dark:border-slate-800/60"><FileSignature size={14} className="text-brand-gold" /><span className="font-semibold text-brand-navy dark:text-slate-100">{c.titulo}</span><Badge color={ec.color}>{ec.label}</Badge></div> })}
       </Card>
 
-      <p className="mt-3 text-[11px] text-slate-400">Subir foto y documentos (archivos) llega en una mejora con almacenamiento. El resto del perfil ya es completo.</p>
+      <DocsDriver driverId={p.id} nombre={nombreCompleto(p)} />
     </div>
+  )
+}
+
+// Documentos del driver (foto/licencia/ID/seguro…) guardados como dataURL.
+function DocsDriver({ driverId, nombre }) {
+  const [docs, setDocs] = useState([])
+  const [subiendo, setSubiendo] = useState(false)
+  const [tipo, setTipo] = useState('Licencia')
+  const inputRef = useRef(null)
+  useEffect(() => suscribirDocs(driverId, setDocs), [driverId])
+  const subir = async (file) => {
+    if (!file) return
+    setSubiendo(true)
+    try {
+      let dataURL, kind
+      if (/^image\//.test(file.type)) { dataURL = await leerImagenRedimensionada(file, 1400, 0.8); kind = 'image' }
+      else if (file.type === 'application/pdf') { dataURL = await leerArchivoComoDataURL(file); kind = 'pdf' }
+      else throw new Error('Solo imágenes o PDF.')
+      if (dataURL.length > 920000) throw new Error('El archivo es muy grande. Usa una foto o un PDF más pequeño (~650 KB).')
+      await guardar(COL.docs, null, { driverId, nombre: file.name || tipo, tipo, kind, dataURL, size: dataURL.length, fecha: hoyISO() })
+      await auditar('doc_driver', `${nombre} · ${tipo}`)
+      walToast('Documento subido ✓')
+    } catch (err) { window.alert('No se pudo subir: ' + (err.message || err)) } finally { setSubiendo(false) }
+  }
+  const abrir = (d) => { const w = window.open(); if (w) { w.document.title = d.nombre || 'documento'; w.document.body.style.margin = '0'; w.document.body.innerHTML = `<iframe src="${d.dataURL}" style="border:0;width:100vw;height:100vh"></iframe>` } }
+  const bajar = (d) => { const a = document.createElement('a'); a.href = d.dataURL; a.download = d.nombre || 'documento'; a.click() }
+  const quitar = async (d) => { if (window.confirm('¿Borrar este documento?')) { await borrar(COL.docs, d.id); walToast('Documento borrado') } }
+  return (
+    <Card className="mt-4 p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <FileText size={16} className="text-brand-gold" />
+        <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Documentos</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{docs.length}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-32"><option>Licencia</option><option>SSN / ID</option><option>Seguro</option><option>Vehículo</option><option>Otro</option></Select>
+          <Boton variant="ghost" onClick={() => inputRef.current?.click()} disabled={subiendo}>{subiendo ? <Spinner /> : <><Upload size={14} /> Subir</>}</Boton>
+          <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { subir(e.target.files?.[0]); e.target.value = '' }} />
+        </div>
+      </div>
+      {docs.length === 0 && <div className="text-sm text-slate-400">Sin documentos. Sube licencia, ID, seguro… como foto o PDF.</div>}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {docs.map((d) => (
+          <div key={d.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-2 transition hover:border-brand-gold/40 dark:border-slate-700">
+            {d.kind === 'image'
+              ? <img src={d.dataURL} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+              : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-700"><FileText size={18} /></span>}
+            <div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold text-brand-navy dark:text-slate-100">{d.nombre}</div><div className="text-[10px] text-slate-400">{d.tipo} · {d.fecha}</div></div>
+            <button onClick={() => abrir(d)} title="Ver" className="shrink-0 text-slate-400 hover:text-brand-navy dark:hover:text-white"><Eye size={14} /></button>
+            <button onClick={() => bajar(d)} title="Descargar" className="shrink-0 text-slate-400 hover:text-brand-navy dark:hover:text-white"><Download size={14} /></button>
+            <button onClick={() => quitar(d)} title="Borrar" className="shrink-0 text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">Se guardan cifrados por las reglas (solo el dueño). Las fotos se optimizan automáticamente; para PDF usa archivos de hasta ~650 KB.</p>
+    </Card>
   )
 }
 function MiniStat({ l, v, ambar }) {

@@ -9,10 +9,45 @@
 // colecciones (rutas, cierres, pagos, gastos, contratos…) llegan en sus fases.
 // ============================================================================
 import {
-  collection, getDocs, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy,
+  collection, getDocs, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, where,
   serverTimestamp, writeBatch, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
+
+// ── Media: foto/documentos como dataURL (sin Storage; reglas wal_* los cubren) ─
+// Lee una imagen y la redimensiona/comprime a JPEG para que pese poco.
+export function leerImagenRedimensionada(file, max = 512, calidad = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('Sin archivo'))
+    if (!/^image\//.test(file.type)) return reject(new Error('Debe ser una imagen'))
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const esc = Math.min(1, max / Math.max(img.width, img.height))
+      const w = Math.max(1, Math.round(img.width * esc)), h = Math.max(1, Math.round(img.height * esc))
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h
+      cv.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      resolve(cv.toDataURL('image/jpeg', calidad))
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')) }
+    img.src = url
+  })
+}
+export function leerArchivoComoDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result)
+    r.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    r.readAsDataURL(file)
+  })
+}
+// Documentos de UN driver (suscripción en vivo).
+export function suscribirDocs(driverId, cb) {
+  if (!driverId) { cb([]); return () => {} }
+  const q = query(collection(db, COL.docs), where('driverId', '==', driverId))
+  return onSnapshot(q, (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))), () => cb([]))
+}
 
 export const COL = {
   candidatos: 'wal_candidatos', // personas: candidatos + drivers (estado los distingue)
@@ -26,6 +61,7 @@ export const COL = {
   contratos: 'wal_contratos',
   plantillas: 'wal_plantillas',
   agenda: 'wal_agenda', // asignación semanal de drivers por almacén y turno
+  docs: 'wal_docs', // documentos del driver (foto/licencia/etc.) como dataURL
   audit: 'wal_audit',
 }
 
