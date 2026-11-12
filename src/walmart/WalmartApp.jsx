@@ -30,6 +30,7 @@ import {
 import { BANCOS_USA } from './bancosUSA'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
 import '../styles/cloudmotion.css'
+import './foldable.css'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes,
@@ -113,7 +114,7 @@ export default function WalmartApp() {
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
       <Toaster />
       {/* MENÚ LATERAL (escritorio): mismo estilo que Warehouse/Paquetería */}
-      <aside className="sticky top-0 hidden h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 md:flex dark:border-slate-700/60 dark:bg-surface-dark-card">
+      <aside className="wal-aside sticky top-0 hidden h-screen w-64 flex-col gap-1 border-r border-slate-200 bg-white p-4 md:flex dark:border-slate-700/60 dark:bg-surface-dark-card">
         <div className="flex items-center gap-3 px-1 pb-3 pt-1">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
           <div>
@@ -148,7 +149,7 @@ export default function WalmartApp() {
         </div>
       </aside>
 
-      <div className="cm-scope min-w-0 flex-1">
+      <div className="wal-content cm-scope min-w-0 flex-1">
         {/* Cloud Motion: mismas nubes suaves que los otros módulos */}
         <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
         {/* Barra superior con pestañas SOLO en móvil */}

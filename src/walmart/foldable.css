@@ -1,0 +1,32 @@
+/* ===========================================================================
+   Doble pantalla (Surface Duo y similares) con bisagra VERTICAL (abierto en
+   horizontal): el menú lateral ocupa la pantalla izquierda y el contenido la
+   derecha, de modo que ninguna tarjeta queda partida por la bisagra.
+   Mejora progresiva: donde el navegador no soporta estas consultas, se usa el
+   layout responsive normal. En el Dúo CERRADO (una sola pantalla) no aplica
+   nada de esto y se ve como un móvil.
+   =========================================================================== */
+
+/* API moderna (viewport segments) */
+@media (horizontal-viewport-segments: 2) {
+  .wal-aside {
+    width: env(viewport-segment-left 1 0) !important;
+    min-width: env(viewport-segment-left 1 0) !important;
+    display: flex !important;
+  }
+}
+
+/* API anterior (screen-spanning) — Surface Duo con Edge/Chromium */
+@media (spanning: single-fold-vertical) {
+  .wal-aside {
+    width: calc(env(fold-left) + env(fold-width)) !important;
+    min-width: calc(env(fold-left) + env(fold-width)) !important;
+    display: flex !important;
+  }
+}
+
+/* Bisagra HORIZONTAL (abierto en vertical): deja un respiro en el pliegue
+   para que ninguna tarjeta quede justo sobre la bisagra. */
+@media (vertical-viewport-segments: 2) {
+  .wal-content { padding-bottom: env(viewport-segment-top 0 1) !important; }
+}
