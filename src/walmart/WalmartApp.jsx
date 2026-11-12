@@ -9,6 +9,7 @@
 // marca). Los datos viven en colecciones wal_* separadas.
 // ============================================================================
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { signOut } from 'firebase/auth'
@@ -1258,9 +1259,13 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
 }
 
 // Selector-buscador de driver (todos los activos, sin filtrar por almacén).
+// La lista se dibuja en un portal (document.body) para que ninguna tarjeta
+// con efecto "vidrio" (backdrop-filter) la recorte.
 function DriverPicker({ personas, almacenes, value, onPick }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const btnRef = useRef(null)
   const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
   const sel = personas.find((p) => p.id === value)
   const txt = q.trim().toLowerCase()
@@ -1268,20 +1273,31 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
     .filter((p) => p.estadoOperativo === 'activo')
     .filter((p) => !txt || `${nombreCompleto(p)} ${p.telefono || ''} ${p.ciudad || ''}`.toLowerCase().includes(txt))
     .sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+
+  const reposicionar = () => { const r = btnRef.current?.getBoundingClientRect(); if (r) setRect({ left: r.left, top: r.bottom + 4, width: r.width }) }
+  const abrir = () => { reposicionar(); setOpen(true); setQ('') }
+  useEffect(() => {
+    if (!open) return
+    const cerrar = () => setOpen(false)
+    window.addEventListener('scroll', cerrar, true)
+    window.addEventListener('resize', cerrar)
+    return () => { window.removeEventListener('scroll', cerrar, true); window.removeEventListener('resize', cerrar) }
+  }, [open])
+
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+    <div>
+      <button ref={btnRef} type="button" onClick={() => (open ? setOpen(false) : abrir())} className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
         <span className={`flex items-center gap-2 truncate ${sel ? '' : 'text-slate-400'}`}>{sel ? <><Avatar p={sel} size={20} /> {nombreCompleto(sel)}</> : 'Buscar y elegir driver…'}</span>
         <ChevronDown size={14} className="shrink-0 text-slate-400" />
       </button>
-      {open && (
+      {open && rect && createPortal(
         <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[9999] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800" style={{ left: rect.left, top: rect.top, width: Math.max(rect.width, 240) }}>
             <div className="border-b border-slate-100 p-2 dark:border-slate-700">
               <div className="relative"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input autoFocus className="pl-8" placeholder="Buscar por nombre…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             </div>
-            <div className="max-h-60 overflow-y-auto py-1">
+            <div className="max-h-64 overflow-y-auto py-1">
               {lista.length === 0 && <div className="px-3 py-3 text-center text-xs text-slate-400">Sin drivers activos con ese nombre.</div>}
               {lista.map((p) => (
                 <button key={p.id} type="button" onClick={() => { onPick(p.id); setOpen(false); setQ('') }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700/50 ${p.id === value ? 'bg-amber-50 dark:bg-amber-500/10' : ''}`}>
@@ -1292,8 +1308,7 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
               ))}
             </div>
           </div>
-        </>
-      )}
+        </>, document.body)}
     </div>
   )
 }
