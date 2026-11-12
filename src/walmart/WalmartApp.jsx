@@ -1171,34 +1171,72 @@ function Vacio({ icono: Ico = Search, children }) {
 const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
-function TabRutas({ rutas, almacenes, personas, tarifas, cierres }) {
+function TabRutas({ rutas, almacenes, personas, tarifas }) {
+  const [modo, setModo] = useState('dia') // dia | rango
   const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
   const [almId, setAlmId] = useState('')
+  const [driverId, setDriverId] = useState('')
+  const [fEstado, setFEstado] = useState('')
+  const [fBloque, setFBloque] = useState('')
+  const [q, setQ] = useState('')
   const [editar, setEditar] = useState(null)
   const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
-  const diaCerrado = (aId) => cierres.some((c) => c.id === `c_${aId}_${fecha}` && c.estado === 'cerrado')
-  const delDia = useMemo(() => rutas.filter((r) => r.fecha === fecha && (!almId || r.almacenId === almId)).sort((a, b) => `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)), [rutas, fecha, almId])
+
+  const desde = modo === 'dia' ? fecha : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'dia' ? fecha : (d1 <= d2 ? d2 : d1)
+  const lista = useMemo(() => {
+    const txt = q.trim().toLowerCase()
+    return rutas.filter((r) => {
+      if (r.fecha < desde || r.fecha > hasta) return false
+      if (almId && r.almacenId !== almId) return false
+      if (driverId && r.driverId !== driverId) return false
+      if (fEstado && r.estado !== fEstado) return false
+      if (fBloque && r.bloque !== fBloque) return false
+      if (txt && !`${r.driverNombre || ''} ${r.identificador || ''} ${almNombre(r.almacenId)}`.toLowerCase().includes(txt)) return false
+      return true
+    }).sort((a, b) => (b.fecha !== a.fecha ? String(b.fecha).localeCompare(String(a.fecha)) : `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)))
+  }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
   if (editar) return <RutaEditor ruta={editar} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
 
-  const totIng = delDia.reduce((a, r) => a + ingresoRuta(r), 0)
-  const totGan = delDia.reduce((a, r) => a + gananciaDriver(r), 0)
+  const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
+  const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
+  const driversConRutas = personas.filter((p) => rutas.some((r) => r.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+  const hayFiltro = almId || driverId || fEstado || fBloque || q
+  const limpiar = () => { setAlmId(''); setDriverId(''); setFEstado(''); setFBloque(''); setQ('') }
+
   return (
     <div>
-      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({ fecha, almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton>}>Rutas</PageTitle>
+      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({ fecha: modo === 'dia' ? fecha : hoyISO(), almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton>}>Rutas</PageTitle>
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="dia">Día</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'dia'
+            ? <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            : <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <div className="ml-auto text-right text-xs text-slate-400">Ingreso Walmart <b className="text-brand-navy dark:text-slate-100">{dinero(totIng)}</b> · Ganancia drivers <b className="text-brand-navy dark:text-slate-100">{dinero(totGan)}</b></div>
+          <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Todos</option>{driversConRutas.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
+          <F label="Estado"><Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}><option value="">Todos</option>{ESTADOS_RUTA.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
+          <F label="Turno"><Select value={fBloque} onChange={(e) => setFBloque(e.target.value)}><option value="">Todos</option>{BLOQUES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></F>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input className="pl-8" placeholder="Buscar por driver, identificador o almacén…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          {hayFiltro && <button className="text-xs font-semibold text-slate-400 hover:text-brand-navy dark:hover:text-white" onClick={limpiar}>limpiar filtros</button>}
+          <div className="text-right text-xs text-slate-400"><b className="text-brand-navy dark:text-slate-100">{lista.length}</b> rutas · Ingreso <b className="text-brand-navy dark:text-slate-100">{dinero(totIng)}</b> · Pago <b className="text-brand-navy dark:text-slate-100">{dinero(totGan)}</b></div>
         </div>
       </Card>
-      {delDia.length === 0 && <Vacio icono={RouteIcon}>No hay rutas registradas para ese día{almId ? ` en ${almNombre(almId)}` : ''}. Crea una con “Nueva ruta”.</Vacio>}
+      {lista.length === 0 && <Vacio icono={RouteIcon}>No hay rutas con esos filtros. Ajusta la búsqueda{hayFiltro ? ' o ' : ''}{hayFiltro ? <button className="font-semibold text-brand-gold underline" onClick={limpiar}>limpia los filtros</button> : ''}, o crea una con “Nueva ruta”.</Vacio>}
       <div className="space-y-1.5">
-        {delDia.map((r) => {
+        {lista.map((r) => {
           const e = estadoRutaInfo(r.estado)
           return (
             <Card key={r.id} className={FILA}>
+              <span className="font-mono text-xs text-slate-400">{r.fecha}</span>
               <Badge color="navy">{almNombre(r.almacenId)}</Badge>
               <Badge color="slate">{BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}</Badge>
               <span className="font-bold text-brand-navy dark:text-slate-100">{r.driverNombre || '(sin driver)'}</span>
