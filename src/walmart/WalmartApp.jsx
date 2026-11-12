@@ -1640,6 +1640,13 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
   const rCan = rsPer.filter((r) => r.estado === 'cancelada').length
   const cobrosPer = cobros.filter((c) => (esSemana ? c.semana === semana : (c.fecha >= desde && c.fecha <= hasta)) && (!almId || c.almacenId === almId)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
 
+  // Período anterior (mismo tamaño, justo antes) para la comparativa.
+  const prevHasta = sumarDias(desde, -1)
+  const lenDias = Math.max(0, Math.round((new Date(`${hasta}T00:00:00`) - new Date(`${desde}T00:00:00`)) / 86400000))
+  const prevDesde = sumarDias(prevHasta, -lenDias)
+  const finPrev = useMemo(() => financieroRango(rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId), [rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId])
+  const tr = (cur, prev) => (prev && isFinite(prev) && prev !== 0 ? (cur - prev) / Math.abs(prev) : null)
+
   return (
     <div>
       <PageTitle>Financiero</PageTitle>
@@ -1655,7 +1662,18 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         </div>
       </Card>
 
-      {/* dashboard rápido */}
+      {/* KPIs financieros con comparativa vs período anterior */}
+      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Indicadores <span className="font-normal normal-case">· comparado con {prevDesde} → {prevHasta}</span></div>
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" trend={tr(fin.ingresoRutas, finPrev.ingresoRutas)} sub={`ant. ${dinero(finPrev.ingresoRutas)}`} />
+        <KPI animado label="Costo drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />
+        <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} trend={tr(fin.resultadoOperativo, finPrev.resultadoOperativo)} sub={`ant. ${dinero(finPrev.resultadoOperativo)}`} />
+        <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" trend={tr(fin.comisionesFP, finPrev.comisionesFP)} sub="ingreso compañía" />
+        <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />
+        <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent={fin.flujoCaja >= 0 ? 'green' : 'red'} trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub={`ant. ${dinero(finPrev.flujoCaja)}`} />
+      </div>
+
+      {/* conteos operativos */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Tile n={nAct} l="Drivers activos" />
         <Tile n={nStandby} l="Stand-by" />
