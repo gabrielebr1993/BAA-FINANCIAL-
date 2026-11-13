@@ -36,6 +36,7 @@ import './foldable.css'
 import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
+  guardarRutaDocumento,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
@@ -106,7 +107,7 @@ export default function WalmartApp() {
       {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
       {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} user={user} />}
       {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
-      {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
+      {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} pagos={pagos} cierres={cierres} />}
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
       {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
       {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} rutas={rutas} />}
@@ -1176,7 +1177,7 @@ function Vacio({ icono: Ico = Search, children }) {
 const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
-function TabRutas({ rutas, almacenes, personas, tarifas }) {
+function TabRutas({ rutas, almacenes, personas, tarifas, pagos }) {
   const [modo, setModo] = useState('dia') // dia | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -1204,7 +1205,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
     }).sort((a, b) => (b.fecha !== a.fecha ? String(b.fecha).localeCompare(String(a.fecha)) : `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)))
   }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
-  if (editar) return <RutaEditor ruta={editar} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
+  if (editar) return <RutaEditor ruta={editar} rutas={rutas} pagos={pagos} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
 
   const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
   const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
@@ -1313,7 +1314,7 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
   )
 }
 
-function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
+function RutaEditor({ ruta, rutas, pagos, almacenes, personas, tarifas, onCerrar }) {
   const bloqueado = !!ruta.cerrada
   const [r, setR] = useState(() => {
     const base = {
@@ -1345,16 +1346,21 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
     if (!r.driverId) { setErr('Elige el driver.'); return }
     if (!r.almacenId) { setErr('Elige el almacén.'); return }
     if (r.estado === 'cancelada' && !r.motivoCancel.trim()) { setErr('Una ruta cancelada necesita motivo.'); return }
+    const idActual = ruta.id || ''
+    const idNuevo = idRuta(r.almacenId, r.fecha, r.bloque, r.driverId)
+    const duplicada = (rutas || []).find((x) => x.id === idNuevo && x.id !== idActual)
+    if (duplicada) { setErr('Ya existe una ruta para ese almacén, fecha, turno y driver. Edita la ruta existente o cambia alguno de esos datos.'); return }
+    const tienePagos = idActual && (pagos || []).some((p) => p.rutaId === idActual)
+    if (idActual && idActual !== idNuevo && tienePagos) { setErr('Esta ruta ya tiene pagos o Fast Pay registrados. Para no romper el historial, no cambies almacén, fecha, turno ni driver; crea una corrección separada.'); return }
     setErr(''); setGuardando(true)
     try {
-      const id = ruta.id || idRuta(r.almacenId, r.fecha, r.bloque, r.driverId)
       const limpio = {
         ...r, semana: lunesDe(r.fecha),
         tarifaWalmart: money2(r.tarifaWalmart), tarifaDriver: money2(r.tarifaDriver),
         bonos: (r.bonos || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
         deducciones: (r.deducciones || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
       }
-      await guardar(COL.rutas, id, limpio)
+      await guardarRutaDocumento(idActual, idNuevo, limpio)
       await auditar('ruta_guardada', `${r.driverNombre} · ${r.fecha} · ${r.bloque} · ${r.estado}`)
       walToast('Ruta guardada ✓')
       onCerrar()

@@ -119,6 +119,20 @@ export async function guardar(col, id, data) {
 }
 export async function borrar(col, id) { await deleteDoc(refDoc(col, id)) }
 
+export async function guardarRutaDocumento(idActual, idNuevo, data) {
+  const { id: _id, ...sinId } = data || {}
+  const base = { ...sinId, actualizadoEn: serverTimestamp(), actualizadoPor: auth.currentUser?.email || '' }
+  if (!idActual || idActual === idNuevo) {
+    await setDoc(refDoc(COL.rutas, idNuevo), base, { merge: true })
+    return idNuevo
+  }
+  const batch = writeBatch(db)
+  batch.set(refDoc(COL.rutas, idNuevo), base, { merge: true })
+  batch.delete(refDoc(COL.rutas, idActual))
+  await batch.commit()
+  return idNuevo
+}
+
 export async function auditar(accion, detalle) {
   try { await addDoc(collection(db, COL.audit), { accion, detalle: detalle || '', correo: auth.currentUser?.email || '', fecha: serverTimestamp() }) } catch { /* nunca bloquea */ }
 }
