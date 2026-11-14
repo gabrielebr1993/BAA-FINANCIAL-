@@ -1666,28 +1666,88 @@ function Tile({ n, txt, l, verde, ambar }) {
 // ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
 function TabPagos({ rutas, pagos, personas, tarifas }) {
   const [driverId, setDriverId] = useState('')
+  const [modo, setModo] = useState('semana') // semana | rango
   const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const [fEstado, setFEstado] = useState('todos') // todos | pendiente | parcial | pagado
+  const [q, setQ] = useState('')
   const [fpRuta, setFpRuta] = useState(null)
   const [pagoAbierto, setPagoAbierto] = useState(false)
   const semana = lunesDe(fecha)
   const driver = personas.find((p) => p.id === driverId)
   const res = driverId ? resumenSemana(rutas, pagos, driverId, semana) : null
-  const driversLista = personas.filter((p) => p.estadoOperativo === 'activo' || rutas.some((r) => r.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   const badgeEstado = { pendiente: 'red', parcial: 'gold', pagado: 'green' }
+  const etiquetaEstado = { pendiente: 'Pendiente', parcial: 'Parcial', pagado: 'Pagado' }
+
+  // Semanas incluidas en el período (para el modo rango).
+  const semanasRango = () => { const out = []; let w = lunesDe(d1 <= d2 ? d1 : d2); const fin = lunesDe(d1 <= d2 ? d2 : d1); let g = 0; while (w <= fin && g < 120) { out.push(w); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ } return out }
+  const weeks = modo === 'semana' ? [semana] : semanasRango()
+  const resumenPeriodo = (did) => {
+    const acc = { totalGanado: 0, liquidadoFP: 0, efectivoFP: 0, comisiones: 0, pagadoNormal: 0, saldo: 0 }
+    for (const w of weeks) { const r = resumenSemana(rutas, pagos, did, w); for (const k in acc) acc[k] = money2(acc[k] + (r[k] || 0)) }
+    const pagadoAlgo = (acc.liquidadoFP + acc.pagadoNormal) > 0.005
+    acc.estado = acc.saldo <= 0.005 ? (acc.totalGanado > 0.005 ? 'pagado' : 'pendiente') : (pagadoAlgo ? 'parcial' : 'pendiente')
+    acc.pagado = money2(acc.efectivoFP + acc.pagadoNormal)
+    return acc
+  }
+  const lista = useMemo(() => personas.map((p) => ({ p, r: resumenPeriodo(p.id) }))
+    .filter((x) => x.r.totalGanado > 0.005 || x.p.estadoOperativo === 'activo')
+    .filter((x) => fEstado === 'todos' || x.r.estado === fEstado)
+    .filter((x) => !q.trim() || nombreCompleto(x.p).toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => b.r.saldo - a.r.saldo || nombreCompleto(a.p).localeCompare(nombreCompleto(b.p))), [personas, rutas, pagos, weeks.join(','), fEstado, q]) // eslint-disable-line
+  const totPorPagar = money2(lista.reduce((a, x) => a + Math.max(0, x.r.saldo), 0))
+  const nPend = lista.filter((x) => x.r.estado !== 'pagado' && x.r.saldo > 0.005).length
 
   return (
     <div>
       <PageTitle>Pagos y Fast Pay</PageTitle>
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Elegir…</option>{driversLista.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
-          <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-          <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'semana'
+            ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <F label="Estado"><Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}><option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="parcial">Parciales</option><option value="pagado">Pagados</option></Select></F>
+          <div className="relative min-w-[160px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{modo === 'semana' ? `${semana} → ${domingoDe(fecha)}` : `${d1 <= d2 ? d1 : d2} → ${d1 <= d2 ? d2 : d1}`} · Por pagar <b className="text-brand-navy dark:text-slate-100">{dinero(totPorPagar)}</b> · {nPend} pendientes</span>
         </div>
       </Card>
 
-      {!driverId && <Vacio icono={Wallet}>Elige un driver para ver su semana de pago, Fast Pay y saldo.</Vacio>}
-      {res && (
+      {/* LISTA de drivers (cuando no hay uno abierto) */}
+      {!driverId && (
+        <>
+          {lista.length === 0 && <Vacio icono={Wallet}>Sin drivers para este filtro.</Vacio>}
+          <div className="space-y-1.5">
+            {lista.map(({ p, r }) => (
+              <Card key={p.id} className={FILA} onClick={() => { if (modo === 'rango') setFecha(d2); setDriverId(p.id) }}>
+                <Avatar p={p} size={34} />
+                <span className="font-bold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span>
+                <Badge color={badgeEstado[r.estado]}>{etiquetaEstado[r.estado]}</Badge>
+                <span className="text-xs text-slate-400">ganó {dinero(r.totalGanado)} · pagado {dinero(r.pagado)}</span>
+                <span className="ml-auto font-mono text-sm font-bold" style={{ color: r.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{r.saldo > 0.005 ? `saldo ${dinero(r.saldo)}` : 'al día'}</span>
+                <span className="text-xs font-semibold text-brand-gold">ver / pagar →</span>
+              </Card>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Toca un driver para ver sus rutas, hacer Fast Pay o registrar el pago. En modo <b>Rango</b> los pagos se hacen por semana (abre al driver y elige la semana).</p>
+        </>
+      )}
+
+      {/* DETALLE de un driver (semana de la fecha elegida) */}
+      {driverId && (
+        <button className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-steel hover:text-brand-navy dark:hover:text-white" onClick={() => setDriverId('')}><ArrowLeft size={15} /> Volver a la lista</button>
+      )}
+      {driverId && (
+        <Card className="mb-3 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Avatar p={driver} size={32} /><span className="font-bold text-brand-navy dark:text-slate-100">{nombreCompleto(driver)}</span>
+            <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
+          </div>
+        </Card>
+      )}
+      {driverId && res && (
         <>
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Tile txt={dinero(res.totalGanado)} l="Total ganado (antes de FP)" />
