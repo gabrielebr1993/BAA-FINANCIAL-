@@ -482,3 +482,23 @@ export async function reabrirDia(cierreId, rutas, motivo) {
   await batch.commit()
   await auditar('dia_reabierto', `${cierreId}: ${motivo || 'sin motivo'}`)
 }
+
+// Borra una ruta y, si su día estaba cerrado, recalcula el resumen del cierre
+// con las rutas que quedan (no reabre el día; solo lo actualiza).
+export async function borrarRutaActualizandoCierre(ruta, rutasDelDia) {
+  await deleteDoc(refDoc(COL.rutas, ruta.id))
+  if (ruta.cerrada && ruta.cierreId) {
+    const rest = (rutasDelDia || []).filter((r) => r.id !== ruta.id)
+    const completadas = rest.filter((r) => r.estado === 'completada')
+    const canceladas = rest.filter((r) => r.estado === 'cancelada')
+    const pendientes = rest.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso')
+    const resumen = {
+      registradas: rest.length, completadas: completadas.length, canceladas: canceladas.length, pendientes: pendientes.length,
+      drivers: new Set(rest.map((r) => r.driverId)).size,
+      ingresoWM: money2(rest.reduce((a, r) => a + ingresoRuta(r), 0)),
+      gananciaDrv: money2(rest.reduce((a, r) => a + gananciaDriver(r), 0)),
+    }
+    await setDoc(refDoc(COL.cierres, ruta.cierreId), { resumen, actualizadoEn: serverTimestamp() }, { merge: true })
+  }
+  await auditar('ruta_borrada', `${ruta.id}${ruta.cerrada ? ' (día cerrado · cierre actualizado)' : ''}`)
+}

@@ -37,7 +37,7 @@ import {
   COL, ESTADOS, estadoInfo, DISPONIBILIDAD, DIAS, TIPOS_VEHICULO, SI_NO_PEND, PROPIETARIO,
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
-  hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia,
+  hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia, borrarRutaActualizandoCierre,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
   CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
@@ -1220,7 +1220,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
     }).sort((a, b) => (b.fecha !== a.fecha ? String(b.fecha).localeCompare(String(a.fecha)) : `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)))
   }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
-  if (editar) return <RutaEditor ruta={editar} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
+  if (editar) return <RutaEditor ruta={editar} rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
 
   const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
   const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
@@ -1393,8 +1393,16 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
   )
 }
 
-function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
+function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
   const bloqueado = !!ruta.cerrada
+  const eliminarRuta = async () => {
+    const aviso = ruta.cerrada ? '¿Eliminar esta ruta? El día está CERRADO; la ruta se borra y el cierre se actualiza. No se puede deshacer.' : '¿Eliminar esta ruta? No se puede deshacer.'
+    if (!window.confirm(aviso)) return
+    const delDia = (rutas || []).filter((x) => x.fecha === ruta.fecha && x.almacenId === ruta.almacenId)
+    await borrarRutaActualizandoCierre(ruta, delDia)
+    walToast(ruta.cerrada ? 'Ruta eliminada · cierre actualizado' : 'Ruta eliminada')
+    onCerrar()
+  }
   const [r, setR] = useState(() => {
     const base = {
       fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
@@ -1512,13 +1520,12 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
         <Card className="mb-3 p-4"><F label="Notas"><Input value={r.notas} onChange={(e) => set('notas', e.target.value)} /></F></Card>
       </fieldset>
       {err && <Aviso tipo="error" className="mb-3">{err}</Aviso>}
-      {!bloqueado && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton>
-          <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
-          {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={async () => { if (window.confirm('¿Eliminar esta ruta? No se puede deshacer.')) { await borrar(COL.rutas, ruta.id); await auditar('ruta_borrada', `${r.driverNombre || ''} · ${r.fecha}`); walToast('Ruta eliminada'); onCerrar() } }}><Trash2 size={14} /> Eliminar ruta</button>}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {!bloqueado && <><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></>}
+        {bloqueado && <Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}
+        {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={eliminarRuta}><Trash2 size={14} /> Eliminar ruta</button>}
+      </div>
+      {bloqueado && ruta.id && <p className="mt-2 text-[11px] text-slate-400">El día está cerrado. Si eliminas esta ruta, el cierre se actualiza automáticamente (sin reabrir el día).</p>}
     </div>
   )
 }
