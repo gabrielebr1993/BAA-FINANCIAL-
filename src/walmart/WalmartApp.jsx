@@ -1916,8 +1916,12 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
   const [editar, setEditar] = useState(null)
   const [fCat, setFCat] = useState('')
   const [fAlm, setFAlm] = useState('')
+  const [fDrv, setFDrv] = useState('')
   const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || 'General'
-  const lista = useMemo(() => gastos.filter((g) => (!fCat || g.categoria === fCat) && (!fAlm || g.almacenId === fAlm)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, fCat, fAlm])
+  const driverNombre = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
+  const rutaInfo = (id) => { const r = (rutas || []).find((x) => x.id === id); return r ? `${r.fecha} · ${BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}${r.driverNombre ? ` · ${r.driverNombre}` : ''}${r.identificador ? ` · ${r.identificador}` : ''}` : '' }
+  const conGasto = personas.filter((p) => gastos.some((g) => g.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+  const lista = useMemo(() => gastos.filter((g) => (!fCat || g.categoria === fCat) && (!fAlm || g.almacenId === fAlm) && (!fDrv || g.driverId === fDrv)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, fCat, fAlm, fDrv])
   if (editar) return <GastoEditor gasto={editar} almacenes={almacenes} personas={personas} rutas={rutas} onCerrar={() => setEditar(null)} />
   const total = lista.reduce((a, g) => a + (Number(g.monto) || 0), 0)
   return (
@@ -1927,22 +1931,32 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
         <div className="flex flex-wrap items-center gap-2">
           <F label="Categoría"><Select value={fCat} onChange={(e) => setFCat(e.target.value)}><option value="">Todas</option>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
           <F label="Almacén"><Select value={fAlm} onChange={(e) => setFAlm(e.target.value)}><option value="">Todos / General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <F label="Driver"><Select value={fDrv} onChange={(e) => setFDrv(e.target.value)}><option value="">Todos</option>{conGasto.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
           <div className="ml-auto text-right text-xs text-slate-400">Total mostrado <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></div>
         </div>
       </Card>
       {lista.length === 0 && <Vacio icono={Receipt}>Sin gastos. Agrega el primero con “Nuevo gasto”.</Vacio>}
       <div className="space-y-1.5">
         {lista.map((g) => (
-          <Card key={g.id} className={FILA}>
-            <Badge color="navy">{g.categoria}</Badge>
-            <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
-            <span className="font-mono text-sm">{dinero(g.monto)}</span>
-            <span className="text-xs text-slate-400">{g.fecha}</span>
-            <Badge color="slate">{almNombre(g.almacenId)}</Badge>
-            {g.periodoDesde && <Badge color="gold">mensual · reparte</Badge>}
-            {g.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
-            <Badge color={g.estadoPago === 'pagado' ? 'green' : 'red'}>{g.estadoPago === 'pagado' ? 'pagado' : 'pendiente'}</Badge>
-            <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(g)}>editar</button>
+          <Card key={g.id} className="p-3 transition hover:border-brand-gold/40 hover:shadow-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="navy">{g.categoria}</Badge>
+              <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
+              <span className="font-mono text-sm font-bold">{dinero(g.monto)}</span>
+              <Badge color="slate">{almNombre(g.almacenId)}</Badge>
+              {g.periodoDesde && <Badge color="gold">mensual · reparte</Badge>}
+              {g.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
+              <Badge color={g.estadoPago === 'pagado' ? 'green' : 'red'}>{g.estadoPago === 'pagado' ? 'pagado' : 'pendiente'}</Badge>
+              <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(g)}>editar</button>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <span>📅 {g.fecha}</span>
+              {g.driverId && <span>👤 Driver: <b className="text-brand-navy dark:text-slate-200">{driverNombre(g.driverId)}</b></span>}
+              {g.rutaId && rutaInfo(g.rutaId) && <span>🛣️ Ruta: <b className="text-brand-navy dark:text-slate-200">{rutaInfo(g.rutaId)}</b></span>}
+              {g.rutaId && !rutaInfo(g.rutaId) && <span className="text-rose-400">🛣️ Ruta: (eliminada)</span>}
+              {g.vehiculo && <span>🚐 {g.vehiculo}</span>}
+              {g.responsable && <span>· {g.responsable}</span>}
+            </div>
           </Card>
         ))}
       </div>
