@@ -1247,6 +1247,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
               <span className="font-bold text-brand-navy dark:text-slate-100">{r.driverNombre || '(sin driver)'}</span>
               {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
               <Badge color={e.color}>{e.label}</Badge>
+              {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
               {r.cerrada && <Badge color="slate">día cerrado</Badge>}
               <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(ingresoRuta(r))} · drv {dinero(gananciaDriver(r))}</span>
               <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{r.cerrada ? 'ver' : 'editar'}</button>
@@ -1318,7 +1319,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const [r, setR] = useState(() => {
     const base = {
       fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
-      vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente',
+      vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente', goHome: false,
       tarifaWalmart: tarifas.ingresoWalmart, tarifaDriver: tarifas.pagoDriverPropio,
       bonos: [], deducciones: [], notas: '', motivoCancel: '', ...ruta,
     }
@@ -1334,9 +1335,10 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const elegirAlmacen = (id) => setR((x) => ({ ...x, almacenId: id, tarifaWalmart: ingresoDeAlmacen(almacenes.find((a) => a.id === id), tarifas) }))
   const elegirDriver = (id) => {
     const d = personas.find((x) => x.id === id)
-    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaWalmart: x.almacenId ? x.tarifaWalmart : ingresoDeAlmacen(almacenes.find((a) => a.id === d?.almacenId), tarifas), tarifaDriver: tarifaDeDriver(d, tarifas) }))
+    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaWalmart: x.almacenId ? x.tarifaWalmart : ingresoDeAlmacen(almacenes.find((a) => a.id === d?.almacenId), tarifas), tarifaDriver: x.goHome ? x.tarifaDriver : tarifaDeDriver(d, tarifas) }))
   }
-  const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio) } })
+  const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: x.goHome ? x.tarifaDriver : (tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio)) } })
+  const setGoHome = (on) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, goHome: on, tarifaDriver: on ? (x.tarifaDriver || '') : tarifaDeDriver(d, tarifas) } })
   const addAj = (tipo) => set(tipo, [...(r[tipo] || []), { concepto: '', monto: '', responsable: '', aplicaA: 'driver' }])
   const setAj = (tipo, i, k, v) => set(tipo, r[tipo].map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const delAj = (tipo, i) => set(tipo, r[tipo].filter((_, j) => j !== i))
@@ -1379,20 +1381,33 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
           {r.estado === 'cancelada' && <div className="mt-2"><F label="Motivo de cancelación"><Input value={r.motivoCancel} onChange={(e) => set('motivoCancel', e.target.value)} /></F></div>}
         </Card>
         <Card className="mb-3 p-4">
-          <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Importes (automáticos; se guardan en la ruta)</div>
+          {/* GO Home: Walmart paga el ingreso del almacén y tú defines el pago manualmente */}
+          <div className={`mb-3 flex items-center gap-3 rounded-xl border p-3 ${r.goHome ? 'border-brand-gold bg-amber-50 dark:border-brand-gold/50 dark:bg-amber-500/10' : 'border-slate-200 dark:border-slate-700'}`}>
+            <button type="button" role="switch" aria-checked={r.goHome} onClick={() => setGoHome(!r.goHome)} className={`relative h-6 w-11 shrink-0 rounded-full transition ${r.goHome ? 'bg-brand-gold' : 'bg-slate-300 dark:bg-slate-600'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${r.goHome ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100">🏠 GO Home {r.goHome && <Badge color="gold">activo</Badge>}</div>
+              <div className="text-[11px] text-slate-400">Walmart paga el ingreso del almacén (se cobra en el invoice) y <b>tú defines a mano</b> el pago al driver. Ignora su tarifa.</div>
+            </div>
+          </div>
+
+          <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Importes (se guardan en la ruta)</div>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
               <div className="text-[10px] font-bold uppercase text-slate-400">Ingreso de Walmart (del almacén)</div>
               <div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{dinero(r.tarifaWalmart)}</div>
-              <div className="text-[11px] text-slate-400">{r.almacenId ? (almacenes.find((a) => a.id === r.almacenId)?.nombre || '') : 'elige un almacén'}</div>
+              <div className="text-[11px] text-slate-400">{r.almacenId ? (almacenes.find((a) => a.id === r.almacenId)?.nombre || '') : 'elige un almacén'}{r.goHome ? ' · se cobra a Walmart' : ''}</div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/40">
-              <div className="text-[10px] font-bold uppercase text-slate-400">Pago al driver (de su tarifa)</div>
-              <div className="font-mono text-xl font-extrabold text-emerald-600">{dinero(r.tarifaDriver)}</div>
-              <div className="text-[11px] text-slate-400">{r.driverId ? (tieneRatePropio(personas.find((x) => x.id === r.driverId)) ? 'tarifa personalizada' : 'tarifa por defecto') : 'elige un driver'}</div>
+            <div className={`rounded-xl border p-3 ${r.goHome ? 'border-brand-gold bg-amber-50/60 dark:border-brand-gold/50 dark:bg-amber-500/10' : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40'}`}>
+              <div className="text-[10px] font-bold uppercase text-slate-400">Pago al driver {r.goHome ? '(GO Home · manual)' : '(de su tarifa)'}</div>
+              {r.goHome
+                ? <Input type="number" value={r.tarifaDriver} onChange={(e) => set('tarifaDriver', e.target.value)} className="mt-1 w-32 font-mono text-lg font-bold" placeholder="0.00" />
+                : <div className="font-mono text-xl font-extrabold text-emerald-600">{dinero(r.tarifaDriver)}</div>}
+              <div className="text-[11px] text-slate-400">{r.goHome ? 'lo que le ofreciste (lo pagas tú)' : (r.driverId ? (tieneRatePropio(personas.find((x) => x.id === r.driverId)) ? 'tarifa personalizada' : 'tarifa por defecto') : 'elige un driver')}</div>
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400">El <b>precio</b> lo define el <b>almacén</b> y el <b>pago</b> lo define el <b>driver</b>. Para un ajuste solo de esta ruta, usa bonos o deducciones.</p>
+          <p className="mt-2 text-[11px] text-slate-400">{r.goHome ? <>En <b>GO Home</b>, Walmart te paga el ingreso del almacén (entra al Financiero y al invoice) y el pago al driver lo pones a mano.</> : <>El <b>precio</b> lo define el <b>almacén</b> y el <b>pago</b> lo define el <b>driver</b>. Para un ajuste solo de esta ruta, usa bonos o deducciones.</>}</p>
           <AjustesEditor titulo="Bonos" tipo="bonos" lista={r.bonos} onAdd={() => addAj('bonos')} onSet={(i, k, v) => setAj('bonos', i, k, v)} onDel={(i) => delAj('bonos', i)} />
           <AjustesEditor titulo="Deducciones" tipo="deducciones" lista={r.deducciones} onAdd={() => addAj('deducciones')} onSet={(i, k, v) => setAj('deducciones', i, k, v)} onDel={(i) => delAj('deducciones', i)} />
           <div className="mt-3 flex flex-wrap gap-4 text-sm">
@@ -1808,6 +1823,8 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
   const rsPer = rutas.filter((r) => enPeriodo(r) && (!almId || r.almacenId === almId))
   const rCompl = rsPer.filter((r) => r.estado === 'completada').length
   const rCan = rsPer.filter((r) => r.estado === 'cancelada').length
+  const rsGoHome = rsPer.filter((r) => r.goHome && r.estado === 'completada')
+  const goHomeIngreso = money2(rsGoHome.reduce((a, r) => a + ingresoRuta(r), 0))
   const cobrosPer = cobros.filter((c) => (esSemana ? c.semana === semana : (c.fecha >= desde && c.fecha <= hasta)) && (!almId || c.almacenId === almId)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
 
   // Período anterior (mismo tamaño, justo antes) para la comparativa.
@@ -1859,12 +1876,13 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
       </Card>
 
       {/* conteos operativos */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Tile n={nAct} l="Drivers activos" />
         <Tile n={nStandby} l="Stand-by" />
         <Tile n={nCand} l="Candidatos" />
         <Tile n={rCompl} l="Rutas completadas" verde />
         <Tile n={rCan} l="Rutas canceladas" />
+        <Tile n={rsGoHome.length} l={`GO Home · ${dinero(goHomeIngreso)}`} />
       </div>
 
       {/* resultado operativo */}
