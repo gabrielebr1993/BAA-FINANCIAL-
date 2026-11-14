@@ -186,14 +186,23 @@ export default function WalmartApp() {
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
 function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, user }) {
   const nombre = (() => { const n = (user?.email || '').split('@')[0].split(/[.\-_]/)[0]; return n ? n.charAt(0).toUpperCase() + n.slice(1) : '' })()
+  const [modo, setModo] = useState('semana') // semana | mes | rango
   const [fecha, setFecha] = useState(hoyISO())
+  const [mes, setMes] = useState(mesDe(hoyISO()))
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
   const [almId, setAlmId] = useState('')
   const semana = lunesDe(fecha)
-  const fin = useMemo(() => financieroSemana(rutas, pagos, gastos, cobros, semana, almId), [rutas, pagos, gastos, cobros, semana, almId])
+  let desde, hasta, etiqueta, esSemana = false
+  if (modo === 'semana') { desde = semana; hasta = domingoDe(fecha); etiqueta = `Semana ${semana} → ${hasta}`; esSemana = true }
+  else if (modo === 'mes') { desde = primerDiaMes(mes); hasta = ultimoDiaMes(mes); etiqueta = nombreMes(mes) }
+  else { desde = d1 <= d2 ? d1 : d2; hasta = d1 <= d2 ? d2 : d1; etiqueta = `${desde} → ${hasta}` }
+  const fin = useMemo(() => (esSemana ? financieroSemana(rutas, pagos, gastos, cobros, semana, almId) : financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almId)), [rutas, pagos, gastos, cobros, semana, desde, hasta, almId, esSemana])
   const net30 = useMemo(() => receivableNet30(rutas, cobros, almId), [rutas, cobros, almId])
   const activos = personas.filter((p) => p.estadoOperativo === 'activo').length
   const standby = personas.filter((p) => p.estadoOperativo === 'standby').length
-  const rWeek = rutas.filter((r) => lunesDe(r.fecha) === semana && (!almId || r.almacenId === almId))
+  const enPeriodo = (r) => (esSemana ? lunesDe(r.fecha) === semana : (r.fecha >= desde && r.fecha <= hasta))
+  const rWeek = rutas.filter((r) => enPeriodo(r) && (!almId || r.almacenId === almId))
   const rC = rWeek.filter((r) => r.estado === 'completada').length
   const pend = rWeek.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso').length
   const driversSemana = [...new Set(rWeek.filter((r) => r.estado === 'completada').map((r) => r.driverId))]
@@ -213,7 +222,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium text-white/70">{saludo()}{nombre ? `, ${nombre}` : ''} · <span className="capitalize">{fechaLarga()}</span></div>
             <div className="mt-0.5 text-2xl font-black tracking-tight sm:text-[28px]">Panel de Walmart</div>
-            <div className="mt-1 text-[13px] text-white/60">Resumen de la semana {semana} → {domingoDe(fecha)}</div>
+            <div className="mt-1 text-[13px] text-white/60">{etiqueta}</div>
           </div>
           <div className="flex flex-wrap gap-2.5">
             <HeroStat label="Drivers activos" valor={activos} dot />
@@ -224,10 +233,13 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
       </div>
 
       <Card className="mb-4 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'semana' && <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
+          {modo === 'rango' && <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{etiqueta}</span>
         </div>
       </Card>
 
@@ -1531,75 +1543,118 @@ function AjustesEditor({ titulo, lista, onAdd, onSet, onDel }) {
 // ── CIERRE DIARIO ───────────────────────────────────────────────────────────
 function TabCierre({ rutas, almacenes, cierres }) {
   const [fecha, setFecha] = useState(hoyISO())
-  const [almId, setAlmId] = useState('')
-  useEffect(() => { if (!almId && almacenes[0]) setAlmId(almacenes[0].id) }, [almacenes, almId])
+  const [selAlms, setSelAlms] = useState([])
+  const [filtro, setFiltro] = useState('todos') // todos | abiertos | cerrados | pendientes
   const [trabajando, setTrabajando] = useState(false)
   const [msg, setMsg] = useState(null)
+  const activos = almacenes.filter((a) => a.activo !== false)
+  const initRef = useRef(false)
+  useEffect(() => { if (!initRef.current && activos.length) { setSelAlms(activos.map((a) => a.id)); initRef.current = true } }, [almacenes]) // eslint-disable-line
 
-  const dia = useMemo(() => rutas.filter((r) => r.fecha === fecha && r.almacenId === almId), [rutas, fecha, almId])
-  const cierreDoc = cierres.find((c) => c.id === `c_${almId}_${fecha}`)
-  const cerrado = cierreDoc?.estado === 'cerrado'
-  const completadas = dia.filter((r) => r.estado === 'completada')
-  const canceladas = dia.filter((r) => r.estado === 'cancelada')
-  const pendientes = dia.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso')
-  const ingresoWM = dia.reduce((a, r) => a + ingresoRuta(r), 0)
-  const gananciaDrv = dia.reduce((a, r) => a + gananciaDriver(r), 0)
-  const driversUnicos = new Set(dia.map((r) => r.driverId)).size
-
-  const resumen = { registradas: dia.length, completadas: completadas.length, canceladas: canceladas.length, pendientes: pendientes.length, drivers: driversUnicos, ingresoWM: money2(ingresoWM), gananciaDrv: money2(gananciaDrv) }
-
-  const cerrar = async () => {
-    if (pendientes.length) { setMsg({ t: 'error', x: `No puedes cerrar: hay ${pendientes.length} ruta(s) pendientes o en progreso. Complétalas o cancélalas con motivo.` }); return }
-    if (!dia.length) { setMsg({ t: 'error', x: 'No hay rutas ese día.' }); return }
-    if (!window.confirm(`Registraste ${dia.length} ruta(s): ${completadas.length} completadas, ${canceladas.length} canceladas. ¿Confirmas el cierre?`)) return
-    setTrabajando(true); setMsg(null)
-    try { await cerrarDia(almId, fecha, dia, resumen); setMsg({ t: 'ok', x: 'Día cerrado y consolidado.' }); confeti(); walToast('Día cerrado ✓') }
-    catch (e) { setMsg({ t: 'error', x: 'No se pudo cerrar: ' + (e.message || e) }) } finally { setTrabajando(false) }
+  const datosAlm = (almId) => {
+    const dia = rutas.filter((r) => r.fecha === fecha && r.almacenId === almId)
+    const cierreDoc = cierres.find((c) => c.id === `c_${almId}_${fecha}`)
+    const cerrado = cierreDoc?.estado === 'cerrado'
+    const completadas = dia.filter((r) => r.estado === 'completada')
+    const canceladas = dia.filter((r) => r.estado === 'cancelada')
+    const pendientes = dia.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso')
+    const ingresoWM = money2(dia.reduce((a, r) => a + ingresoRuta(r), 0))
+    const gananciaDrv = money2(dia.reduce((a, r) => a + gananciaDriver(r), 0))
+    const drivers = new Set(dia.map((r) => r.driverId)).size
+    return { almId, nombre: almacenes.find((a) => a.id === almId)?.nombre || '', dia, cierreDoc, cerrado, completadas, canceladas, pendientes, ingresoWM, gananciaDrv, drivers, puedeCerrar: dia.length > 0 && pendientes.length === 0 && !cerrado }
   }
-  const reabrir = async () => {
-    const motivo = window.prompt('Motivo de la reapertura (queda auditado):')
+  const seleccionados = activos.filter((a) => selAlms.includes(a.id)).map((a) => datosAlm(a.id))
+  const visibles = seleccionados.filter((d) => filtro === 'todos' || (filtro === 'abiertos' && !d.cerrado) || (filtro === 'cerrados' && d.cerrado) || (filtro === 'pendientes' && d.pendientes.length > 0))
+  const totIng = money2(seleccionados.reduce((a, d) => a + d.ingresoWM, 0))
+  const totGan = money2(seleccionados.reduce((a, d) => a + d.gananciaDrv, 0))
+  const totRutas = seleccionados.reduce((a, d) => a + d.dia.length, 0)
+  const totPend = seleccionados.reduce((a, d) => a + d.pendientes.length, 0)
+  const cerrables = seleccionados.filter((d) => d.puedeCerrar)
+
+  const toggleAlm = (id) => setSelAlms((x) => x.includes(id) ? x.filter((y) => y !== id) : [...x, id])
+  const resumenDe = (d) => ({ registradas: d.dia.length, completadas: d.completadas.length, canceladas: d.canceladas.length, pendientes: d.pendientes.length, drivers: d.drivers, ingresoWM: d.ingresoWM, gananciaDrv: d.gananciaDrv })
+
+  const cerrarUno = async (d) => {
+    if (!d.puedeCerrar) return
+    setTrabajando(true); setMsg(null)
+    try { await cerrarDia(d.almId, fecha, d.dia, resumenDe(d)); walToast(`${d.nombre} cerrado ✓`) }
+    catch (e) { setMsg({ t: 'error', x: `No se pudo cerrar ${d.nombre}: ${e.message || e}` }) } finally { setTrabajando(false) }
+  }
+  const reabrirUno = async (d) => {
+    const motivo = window.prompt(`Motivo de la reapertura de ${d.nombre} (queda auditado):`)
     if (motivo == null) return
     setTrabajando(true); setMsg(null)
-    try { await reabrirDia(cierreDoc.id, dia, motivo); setMsg({ t: 'ok', x: 'Día reabierto. Corrige lo necesario y vuelve a cerrar.' }) }
-    catch (e) { setMsg({ t: 'error', x: 'No se pudo reabrir: ' + (e.message || e) }) } finally { setTrabajando(false) }
+    try { await reabrirDia(d.cierreDoc.id, d.dia, motivo); walToast(`${d.nombre} reabierto`) }
+    catch (e) { setMsg({ t: 'error', x: `No se pudo reabrir ${d.nombre}: ${e.message || e}` }) } finally { setTrabajando(false) }
+  }
+  const cerrarTodos = async () => {
+    if (!cerrables.length) { setMsg({ t: 'error', x: 'No hay almacenes listos para cerrar (revisa rutas pendientes o si ya están cerrados).' }); return }
+    if (!window.confirm(`Se cerrará el día de ${cerrables.length} almacén(es): ${cerrables.map((d) => d.nombre).join(', ')}. ¿Confirmas?`)) return
+    setTrabajando(true); setMsg(null)
+    try {
+      for (const d of cerrables) await cerrarDia(d.almId, fecha, d.dia, resumenDe(d))
+      confeti(); walToast(`${cerrables.length} almacén(es) cerrados ✓`, 'gold')
+      setMsg({ t: 'ok', x: `Cerrados: ${cerrables.map((d) => d.nombre).join(', ')}.` })
+    } catch (e) { setMsg({ t: 'error', x: 'No se pudo cerrar todo: ' + (e.message || e) }) } finally { setTrabajando(false) }
   }
 
   return (
     <div>
       <PageTitle>Cierre diario</PageTitle>
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Fecha"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          {cerrado && <Badge color="green">Día cerrado</Badge>}
+          <F label="Mostrar"><Select value={filtro} onChange={(e) => setFiltro(e.target.value)}><option value="todos">Todos</option><option value="abiertos">Solo abiertos</option><option value="cerrados">Solo cerrados</option><option value="pendientes">Con pendientes</option></Select></F>
+          <div>
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">Almacenes (multiselección)</span>
+            <div className="flex flex-wrap gap-1.5">
+              {activos.map((a) => { const on = selAlms.includes(a.id); return <button key={a.id} type="button" onClick={() => toggleAlm(a.id)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${on ? 'border-brand-gold bg-amber-50 text-brand-navy dark:bg-amber-500/10 dark:text-amber-200' : 'border-slate-200 text-slate-400 hover:border-slate-300 dark:border-slate-700'}`}>{on ? '✓ ' : ''}{a.nombre}</button> })}
+              {activos.length > 1 && <button type="button" onClick={() => setSelAlms(selAlms.length === activos.length ? [] : activos.map((a) => a.id))} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-brand-gold hover:underline">{selAlms.length === activos.length ? 'Ninguno' : 'Todos'}</button>}
+            </div>
+          </div>
         </div>
       </Card>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Tile n={dia.length} l="Rutas registradas" />
-        <Tile n={completadas.length} l="Completadas" verde />
-        <Tile n={pendientes.length} l="Pendientes / en progreso" ambar={pendientes.length > 0} />
-        <Tile n={canceladas.length} l="Canceladas" />
-      </div>
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Tile n={driversUnicos} l="Drivers" />
-        <Tile txt={dinero(ingresoWM)} l="Ingreso Walmart" />
-        <Tile txt={dinero(gananciaDrv)} l="Ganancia drivers" verde />
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <Tile n={totRutas} l="Rutas (selección)" />
+        <Tile n={totPend} l="Pendientes" ambar={totPend > 0} />
+        <Tile txt={dinero(totIng)} l="Ingreso Walmart" />
+        <Tile txt={dinero(totGan)} l="Ganancia drivers" verde />
+        <Tile n={cerrables.length} l="Listos para cerrar" />
       </div>
 
       {msg && <Aviso tipo={msg.t === 'ok' ? 'ok' : 'error'} className="mb-3">{msg.x}</Aviso>}
-      {pendientes.length > 0 && !cerrado && <Aviso tipo="warn" className="mb-3">Hay {pendientes.length} ruta(s) pendientes o en progreso. Complétalas o cancélalas (con motivo) antes de cerrar.</Aviso>}
 
-      {!cerrado ? (
-        <Boton variant="gold" disabled={trabajando || pendientes.length > 0 || !dia.length} onClick={cerrar}>{trabajando ? <Spinner /> : `Cerrar día (${dia.length} rutas)`}</Boton>
-      ) : (
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge color="green">Cerrado por {cierreDoc.cerradoPor || '—'}</Badge>
-          {(cierreDoc.reaperturas || []).length > 0 && <span className="text-xs text-slate-400">{cierreDoc.reaperturas.length} reapertura(s)</span>}
-          <Boton variant="ghost" disabled={trabajando} onClick={reabrir}>Reabrir día (auditado)</Boton>
-        </div>
-      )}
-      <p className="mt-3 text-xs text-slate-400">Cerrar consolida el día; las rutas quedan bloqueadas. Fast Pay de rutas completadas se podrá hacer antes del cierre (Fase 3) y el cierre no lo vuelve a generar.</p>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Boton variant="gold" disabled={trabajando || !cerrables.length} onClick={cerrarTodos}>{trabajando ? <Spinner /> : `Cerrar seleccionados (${cerrables.length})`}</Boton>
+        <span className="text-xs text-slate-400">Cierra a la vez todos los almacenes listos del día.</span>
+      </div>
+
+      <div className="space-y-2">
+        {visibles.length === 0 && <Vacio icono={ClipboardCheck}>Sin almacenes para este filtro/selección.</Vacio>}
+        {visibles.map((d) => (
+          <Card key={d.almId} className="p-4">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg text-white" style={{ background: WALMART_AZUL }}><WhIcon size={15} /></span>
+              <span className="font-bold text-brand-navy dark:text-slate-100">{d.nombre}</span>
+              {d.cerrado ? <Badge color="green">Cerrado</Badge> : d.pendientes.length > 0 ? <Badge color="red">{d.pendientes.length} pendientes</Badge> : d.dia.length ? <Badge color="gold">Listo</Badge> : <Badge color="slate">Sin rutas</Badge>}
+              <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(d.ingresoWM)} · drv {dinero(d.gananciaDrv)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Tile n={d.dia.length} l="Rutas" />
+              <Tile n={d.completadas.length} l="Completadas" verde />
+              <Tile n={d.pendientes.length} l="Pendientes" ambar={d.pendientes.length > 0} />
+              <Tile n={d.canceladas.length} l="Canceladas" />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {!d.cerrado
+                ? <Boton variant="ghost" disabled={trabajando || !d.puedeCerrar} onClick={() => cerrarUno(d)}>{d.puedeCerrar ? `Cerrar ${d.nombre}` : (d.pendientes.length ? 'Hay pendientes' : 'Sin rutas')}</Boton>
+                : <><Badge color="green">Cerrado por {d.cierreDoc.cerradoPor || '—'}</Badge>{(d.cierreDoc.reaperturas || []).length > 0 && <span className="text-xs text-slate-400">{d.cierreDoc.reaperturas.length} reapertura(s)</span>}<Boton variant="ghost" disabled={trabajando} onClick={() => reabrirUno(d)}>Reabrir (auditado)</Boton></>}
+            </div>
+          </Card>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-slate-400">Cerrar consolida el día y bloquea las rutas de ese almacén. Con "Cerrar seleccionados" cierras varios almacenes a la vez.</p>
     </div>
   )
 }
