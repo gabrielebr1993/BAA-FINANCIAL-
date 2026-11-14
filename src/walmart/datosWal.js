@@ -141,17 +141,22 @@ export const tieneRatePropio = (driver) => driver?.rateDriver != null && driver.
 // o la tarifa por defecto si el almacén no la tiene configurada.
 export const ingresoDeAlmacen = (alm, tarifas) => money2(alm?.tarifaWalmart != null && alm.tarifaWalmart !== '' && !isNaN(Number(alm.tarifaWalmart)) ? Number(alm.tarifaWalmart) : tarifas?.ingresoWalmart)
 
-// ── Semana de pago (lunes a domingo, por fecha local de servicio) ───────────
-// Devuelve la fecha ISO del LUNES de la semana de `fechaISO` (clave de semana).
-export function lunesDe(fechaISO) {
+// ── Semana operativa de Walmart: SÁBADO (Día 1) → VIERNES (Día 7) ────────────
+// La clave de semana (`semana`) es la fecha ISO del SÁBADO de inicio.
+// Nota: `lunesDe`/`domingoDe` se conservan por compatibilidad de nombres, pero
+// ahora devuelven el SÁBADO de inicio y el VIERNES de cierre de la semana.
+export function inicioSemana(fechaISO) {
   const d = new Date(`${fechaISO || hoyISO()}T00:00:00`)
-  const dow = (d.getDay() + 6) % 7 // 0 = lunes
+  const dow = (d.getDay() + 1) % 7 // 0 = sábado (getDay: dom0..sáb6)
   d.setDate(d.getDate() - dow)
   return d.toISOString().slice(0, 10)
 }
-export function domingoDe(fechaISO) {
-  const d = new Date(`${lunesDe(fechaISO)}T00:00:00`); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10)
+export function finSemana(fechaISO) {
+  const d = new Date(`${inicioSemana(fechaISO)}T00:00:00`); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10)
 }
+// Aliases de compatibilidad (todo el sistema los usa como clave de semana).
+export const lunesDe = inicioSemana
+export const domingoDe = finSemana
 export const hoyISO = () => new Date().toISOString().slice(0, 10)
 
 export const BLOQUES = [{ id: 'manana', label: 'Mañana' }, { id: 'tarde', label: 'Tarde' }]

@@ -225,7 +225,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
 
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
         </div>
@@ -375,7 +375,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)} className="min-w-[160px]">{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <F label="Semana"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-[150px]" /></F>
+          <F label="Semana"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-[150px]" /></F>
           <div>
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">Necesita por turno</span>
             <div className="flex items-center gap-2">
@@ -592,7 +592,7 @@ function RepetirModal({ almId, semana, plan, agenda, almacenes, onCerrar }) {
       <div className="space-y-2">
         <Op v="mes">Copiar a <b>todo el mes</b> (este almacén)</Op>
         <Op v="proxima">Copiar a la <b>próxima semana</b></Op>
-        <Op v="especifica">Copiar a una <b>semana específica</b>{modo === 'especifica' && <Input type="date" value={fechaDestino} onChange={(e) => setFechaDestino(e.target.value)} className="w-40" />}</Op>
+        <Op v="especifica">Copiar a una <b>semana específica</b>{modo === 'especifica' && <DateField value={fechaDestino} onChange={(e) => setFechaDestino(e.target.value)} className="w-40" />}</Op>
         {hayOtroAlm && <Op v="almacen">Copiar a <b>otro almacén</b> (misma semana){modo === 'almacen' && <Select value={almDest} onChange={(e) => setAlmDest(e.target.value)} className="w-44">{almacenes.filter((a) => a.id !== almId).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select>}</Op>}
         <Op v="diaSemana">Rellenar <b>la semana</b> con el día{modo === 'diaSemana' && <Select value={diaOrigen} onChange={(e) => setDiaOrigen(e.target.value)} className="w-24">{DIAS.map((d) => <option key={d} value={d}>{d}</option>)}</Select>}</Op>
       </div>
@@ -732,7 +732,7 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
             <F label="Dirección"><Input value={p.direccion} onChange={(e) => set('direccion', e.target.value)} /></F>
             <F label="Ciudad"><Input value={p.ciudad} onChange={(e) => set('ciudad', e.target.value)} /></F>
             <F label="Estado"><Input value={p.estado} onChange={(e) => set('estado', e.target.value)} placeholder="TX, UT…" /></F>
-            <F label="Fecha de registro"><Input type="date" value={p.fechaRegistro} onChange={(e) => set('fechaRegistro', e.target.value)} /></F>
+            <F label="Fecha de registro"><DateField value={p.fechaRegistro} onChange={(e) => set('fechaRegistro', e.target.value)} /></F>
           </Grid>
         </Seccion>
         <Seccion titulo="Documentación">
@@ -1222,8 +1222,8 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="dia">Día</option><option value="rango">Rango de fechas</option></Select></F>
           {modo === 'dia'
-            ? <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-            : <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+            ? <F label="Fecha"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Todos</option>{driversConRutas.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
           <F label="Estado"><Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}><option value="">Todos</option>{ESTADOS_RUTA.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
@@ -1260,6 +1260,68 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
         })}
       </div>
     </div>
+  )
+}
+
+// ── Calendario propio (reemplaza al date picker nativo del navegador) ────────
+const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const DOW_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+function DateField({ value, onChange, className = '' }) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const [vm, setVm] = useState('') // 'YYYY-MM' en vista
+  const btnRef = useRef(null)
+  const hoy = hoyISO()
+  const abrir = () => { const r = btnRef.current?.getBoundingClientRect(); if (r) setRect({ left: r.left, top: r.bottom + 6, width: r.width }); setVm((value || hoy).slice(0, 7)); setOpen(true) }
+  useEffect(() => {
+    if (!open) return
+    const cerrar = () => setOpen(false)
+    window.addEventListener('scroll', cerrar, true); window.addEventListener('resize', cerrar)
+    return () => { window.removeEventListener('scroll', cerrar, true); window.removeEventListener('resize', cerrar) }
+  }, [open])
+
+  const [y, m] = (vm || hoy.slice(0, 7)).split('-').map(Number)
+  const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7 // lunes = 0
+  const diasMes = new Date(y, m, 0).getDate()
+  const celdas = []
+  for (let i = 0; i < offset; i++) celdas.push(null)
+  for (let d = 1; d <= diasMes; d++) celdas.push(d)
+  const iso = (d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const cambiarMes = (delta) => { const dd = new Date(y, m - 1 + delta, 1); setVm(`${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}`) }
+  const elegir = (isoStr) => { onChange({ target: { value: isoStr } }); setOpen(false) }
+  const mostrar = value ? (() => { const [yy, mm, dd] = value.split('-'); return `${dd} ${MESES_ES[Number(mm) - 1]?.slice(0, 3)} ${yy}` })() : 'Elegir fecha'
+  const anchoPop = 300
+  const left = rect ? Math.max(8, Math.min(rect.left, (typeof window !== 'undefined' ? window.innerWidth : 9999) - anchoPop - 8)) : 0
+
+  return (
+    <>
+      <button ref={btnRef} type="button" onClick={() => (open ? setOpen(false) : abrir())} className={`flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 ${className}`}>
+        <span className={value ? '' : 'text-slate-400'}>{mostrar}</span>
+        <CalendarDays size={16} className="shrink-0 text-brand-gold" />
+      </button>
+      {open && rect && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[9999] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-slate-800" style={{ left, top: rect.top, width: anchoPop }}>
+            <div className="mb-2 flex items-center justify-between">
+              <button type="button" onClick={() => cambiarMes(-1)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><ChevronDown size={18} className="rotate-90" /></button>
+              <div className="text-sm font-bold capitalize text-brand-navy dark:text-slate-100">{MESES_ES[m - 1]} {y}</div>
+              <button type="button" onClick={() => cambiarMes(1)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><ChevronDown size={18} className="-rotate-90" /></button>
+            </div>
+            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-slate-400">{DOW_ES.map((d) => <div key={d}>{d}</div>)}</div>
+            <div className="grid grid-cols-7 gap-1">
+              {celdas.map((d, i) => d === null ? <div key={i} /> : (() => {
+                const is = iso(d); const esSel = value === is; const esHoy = hoy === is
+                return <button key={i} type="button" onClick={() => elegir(is)} className={`grid h-9 place-items-center rounded-lg text-sm font-semibold transition ${esSel ? 'bg-brand-gold text-brand-navy shadow' : esHoy ? 'text-brand-navy ring-1 ring-brand-gold dark:text-slate-100' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>{d}</button>
+              })())}
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-xs dark:border-slate-700">
+              <button type="button" onClick={() => elegir(hoy)} className="font-semibold text-brand-gold hover:underline">Hoy</button>
+              <button type="button" onClick={() => setOpen(false)} className="font-semibold text-slate-400 hover:text-brand-navy dark:hover:text-white">Cerrar</button>
+            </div>
+          </div>
+        </>, document.body)}
+    </>
   )
 }
 
@@ -1376,7 +1438,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
       <fieldset disabled={bloqueado} className="disabled:opacity-70">
         <Card className="mb-3 p-4">
           <Grid>
-            <F label="Fecha de servicio"><Input type="date" value={r.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+            <F label="Fecha de servicio"><DateField value={r.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
             <F label="Almacén"><Select value={r.almacenId} onChange={(e) => elegirAlmacen(e.target.value)}><option value="">Elegir…</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
             <F label="Driver (cualquier almacén)"><DriverPicker personas={personas} almacenes={almacenes} value={r.driverId} onPick={elegirDriver} /></F>
             <F label="Identificador (opcional)"><Input value={r.identificador} onChange={(e) => set('identificador', e.target.value)} placeholder="DFW01-140-B" /></F>
@@ -1436,7 +1498,13 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
         <Card className="mb-3 p-4"><F label="Notas"><Input value={r.notas} onChange={(e) => set('notas', e.target.value)} /></F></Card>
       </fieldset>
       {err && <Aviso tipo="error" className="mb-3">{err}</Aviso>}
-      {!bloqueado && <div className="flex gap-2"><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></div>}
+      {!bloqueado && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton>
+          <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+          {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={async () => { if (window.confirm('¿Eliminar esta ruta? No se puede deshacer.')) { await borrar(COL.rutas, ruta.id); await auditar('ruta_borrada', `${r.driverNombre || ''} · ${r.fecha}`); walToast('Ruta eliminada'); onCerrar() } }}><Trash2 size={14} /> Eliminar ruta</button>}
+        </div>
+      )}
     </div>
   )
 }
@@ -1499,7 +1567,7 @@ function TabCierre({ rutas, almacenes, cierres }) {
       <PageTitle>Cierre diario</PageTitle>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <F label="Fecha"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Fecha"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           {cerrado && <Badge color="green">Día cerrado</Badge>}
         </div>
@@ -1556,7 +1624,7 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <F label="Driver"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Elegir…</option>{driversLista.map((d) => <option key={d.id} value={d.id}>{nombreCompleto(d)}</option>)}</Select></F>
-          <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
           <span className="mt-4 text-xs text-slate-400">Semana {semana} → {domingoDe(fecha)}</span>
         </div>
       </Card>
@@ -1785,7 +1853,7 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
           <F label="Categoría"><Select value={g.categoria} onChange={(e) => set('categoria', e.target.value)}>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
           <F label="Concepto"><Input value={g.concepto} onChange={(e) => set('concepto', e.target.value)} /></F>
           <F label="Monto (USD)"><Input type="number" value={g.monto} onChange={(e) => set('monto', e.target.value)} /></F>
-          <F label="Fecha"><Input type="date" value={g.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+          <F label="Fecha"><DateField value={g.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
           <F label="Tipo"><Select value={g.tipo} onChange={(e) => set('tipo', e.target.value)}><option value="variable">Variable</option><option value="fijo">Fijo / recurrente</option></Select></F>
           <F label="Almacén (o General)"><Select value={g.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           <F label="Atribuir a driver (opcional)"><Select value={g.driverId} onChange={(e) => set('driverId', e.target.value)}><option value="">—</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
@@ -1793,7 +1861,7 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
           <F label="Vehículo (opcional)"><Input value={g.vehiculo} onChange={(e) => set('vehiculo', e.target.value)} /></F>
           <F label="Responsable"><Input value={g.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
           <F label="Estado de pago"><Select value={g.estadoPago} onChange={(e) => set('estadoPago', e.target.value)}><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></Select></F>
-          {g.estadoPago === 'pagado' && <F label="Fecha de pago"><Input type="date" value={g.fechaPago} onChange={(e) => set('fechaPago', e.target.value)} /></F>}
+          {g.estadoPago === 'pagado' && <F label="Fecha de pago"><DateField value={g.fechaPago} onChange={(e) => set('fechaPago', e.target.value)} /></F>}
         </Grid>
         <div className="mt-3 flex flex-wrap gap-4">
           <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.mensual} onChange={(e) => set('mensual', e.target.checked)} className="accent-brand-gold" /> Es mensual (repartir entre semanas)</label>
@@ -1801,7 +1869,7 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
         </div>
         {g.mensual && (
           <div className="mt-2">
-            <Grid><F label="Período desde"><Input type="date" value={g.periodoDesde} onChange={(e) => set('periodoDesde', e.target.value)} /></F><F label="Período hasta"><Input type="date" value={g.periodoHasta} onChange={(e) => set('periodoHasta', e.target.value)} /></F></Grid>
+            <Grid><F label="Período desde"><DateField value={g.periodoDesde} onChange={(e) => set('periodoDesde', e.target.value)} /></F><F label="Período hasta"><DateField value={g.periodoHasta} onChange={(e) => set('periodoHasta', e.target.value)} /></F></Grid>
             {dist.length > 0 && <div className="mt-2 text-xs text-slate-500">Se reparte: {dist.map((d) => `${d.semana}: ${dinero(d.monto)}`).join(' · ')}</div>}
           </div>
         )}
@@ -1864,9 +1932,9 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango de fechas</option><option value="factura">Factura</option></Select></F>
-          {modo === 'semana' && <F label="Semana (cualquier día)"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'semana' && <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
           {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
-          {modo === 'rango' && <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          {modo === 'rango' && <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           {modo === 'factura' && <F label="Factura"><Select value={facturaId} onChange={(e) => setFacturaId(e.target.value)}><option value="">Elegir…</option>{facturas.map((f) => <option key={f.id} value={f.id}>{f.numero} · {dinero(f.total)}</option>)}</Select></F>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           <span className="pb-1.5 text-xs font-semibold text-slate-400">{etiqueta}</span>
@@ -1961,7 +2029,7 @@ function CobroModal({ semana, almacenes, almId, onCerrar }) {
   return (
     <Modal titulo="Registrar cobro de Walmart" onCerrar={onCerrar}>
       <Grid>
-        <F label="Fecha"><Input type="date" value={c.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+        <F label="Fecha"><DateField value={c.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
         <F label="Monto (USD)"><Input type="number" value={c.monto} onChange={(e) => set('monto', e.target.value)} /></F>
         <F label="Almacén"><Select value={c.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
         <F label="Referencia"><Input value={c.referencia} onChange={(e) => set('referencia', e.target.value)} /></F>
@@ -1999,16 +2067,17 @@ async function pdfPayStub(driver, semana, hasta, res) {
 
 // ── FACTURAS (cobro a Walmart) ───────────────────────────────────────────────
 function TabFacturas({ rutas, almacenes, facturas }) {
-  const [modo, setModo] = useState('mes') // mes | rango
+  const [modo, setModo] = useState('semana') // semana | mes | rango
+  const [fecha, setFecha] = useState(hoyISO())
   const [mes, setMes] = useState(mesDe(hoyISO()))
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
   const [d2, setD2] = useState(ultimoDiaMes(mesDe(hoyISO())))
   const [almId, setAlmId] = useState('')
   const [generando, setGenerando] = useState(false)
 
-  const desde = modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
-  const hasta = modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
-  const periodo = modo === 'mes' ? mes : `${desde}_${hasta}`
+  const desde = modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
+  const periodo = modo === 'semana' ? desde : modo === 'mes' ? mes : `${desde}_${hasta}`
   const prev = useMemo(() => facturaDelPeriodo(rutas, desde, hasta, almId, almacenes), [rutas, desde, hasta, almId, almacenes])
   const venceEl = sumarDias(hasta, 30)
   const almNombre = almId ? (almacenes.find((a) => a.id === almId)?.nombre || '') : 'Todos los almacenes'
@@ -2034,11 +2103,12 @@ function TabFacturas({ rutas, almacenes, facturas }) {
       <PageTitle>Facturas a Walmart</PageTitle>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <F label="Período"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="mes">Mes</option><option value="rango">Rango</option></Select></F>
-          {modo === 'mes'
-            ? <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>
-            : <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <F label="Período"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (Sáb–Vie)</option><option value="mes">Mes</option><option value="rango">Rango</option></Select></F>
+          {modo === 'semana' && <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
+          {modo === 'rango' && <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{modo === 'semana' ? `Sáb ${desde} → Vie ${hasta}` : `${desde} → ${hasta}`}</span>
         </div>
       </Card>
 
