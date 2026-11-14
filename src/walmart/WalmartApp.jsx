@@ -193,7 +193,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
   const net30 = useMemo(() => receivableNet30(rutas, cobros, almId), [rutas, cobros, almId])
   const activos = personas.filter((p) => p.estadoOperativo === 'activo').length
   const standby = personas.filter((p) => p.estadoOperativo === 'standby').length
-  const rWeek = rutas.filter((r) => r.semana === semana && (!almId || r.almacenId === almId))
+  const rWeek = rutas.filter((r) => lunesDe(r.fecha) === semana && (!almId || r.almacenId === almId))
   const rC = rWeek.filter((r) => r.estado === 'completada').length
   const pend = rWeek.filter((r) => r.estado === 'pendiente' || r.estado === 'en_progreso').length
   const driversSemana = [...new Set(rWeek.filter((r) => r.estado === 'completada').map((r) => r.driverId))]
@@ -1906,7 +1906,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
   const nAct = personas.filter((p) => p.estadoOperativo === 'activo').length
   const nStandby = personas.filter((p) => p.estadoOperativo === 'standby').length
   const nCand = personas.filter((p) => p.estadoOperativo === 'candidato').length
-  const enPeriodo = (r) => (esSemana ? r.semana === semana : (r.fecha >= desde && r.fecha <= hasta))
+  const enPeriodo = (r) => (esSemana ? lunesDe(r.fecha) === semana : (r.fecha >= desde && r.fecha <= hasta))
   const rsPer = rutas.filter((r) => enPeriodo(r) && (!almId || r.almacenId === almId))
   const rCompl = rsPer.filter((r) => r.estado === 'completada').length
   const rCan = rsPer.filter((r) => r.estado === 'cancelada').length

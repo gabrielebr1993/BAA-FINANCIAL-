@@ -342,7 +342,7 @@ export function liquidadoFPruta(pagos, rutaId) {
 // Regla Fast Pay: el bruto ya liquidado NO se vuelve a pagar ni a comisionar;
 // la comisión retenida es ingreso de la compañía (aparte), no un saldo.
 export function resumenSemana(rutas, pagos, driverId, semana) {
-  const rs = (rutas || []).filter((r) => r.driverId === driverId && r.semana === semana && r.estado === 'completada')
+  const rs = (rutas || []).filter((r) => r.driverId === driverId && lunesDe(r.fecha) === semana && r.estado === 'completada')
   const totalGanado = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
   const ps = (pagos || []).filter((p) => p.driverId === driverId && p.semana === semana)
   const fp = ps.filter((p) => p.tipo === 'fastpay')
@@ -379,7 +379,7 @@ export function distribuirMensual(monto, desde, hasta) {
 // Monto de un gasto que corresponde a una semana (distribuido si es mensual).
 export function gastoEnSemana(g, semana) {
   if (g.periodoDesde && g.periodoHasta) { const p = distribuirMensual(g.monto, g.periodoDesde, g.periodoHasta).find((x) => x.semana === semana); return money2(p ? p.monto : 0) }
-  return (g.semana || lunesDe(g.fecha)) === semana ? money2(g.monto) : 0
+  return lunesDe(g.fecha) === semana ? money2(g.monto) : 0
 }
 
 // ── Resumen financiero de una semana (opcionalmente filtrado por almacén) ────
@@ -387,7 +387,7 @@ export function gastoEnSemana(g, semana) {
 // ingreso SEPARADO (no se reduce el costo por la comisión).
 export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId) {
   const enAlm = (aId) => !almacenId || aId === almacenId
-  const rs = (rutas || []).filter((r) => r.semana === semana && r.estado === 'completada' && enAlm(r.almacenId))
+  const rs = (rutas || []).filter((r) => lunesDe(r.fecha) === semana && r.estado === 'completada' && enAlm(r.almacenId))
   const ingresoRutas = money2(rs.reduce((a, r) => a + ingresoRuta(r), 0))
   const costoDrivers = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
   const margen = money2(ingresoRutas - costoDrivers)
@@ -401,11 +401,11 @@ export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId
   for (const g of gs) {
     const m = gastoEnSemana(g, semana)
     if (m) { if (g.esFinanciamiento) gastoFinanc += m; else gastosOper += m }
-    if (g.estadoPago === 'pagado' && (g.semana || lunesDe(g.fechaPago || g.fecha)) === semana) gastosPagados += Number(g.monto) || 0
+    if (g.estadoPago === 'pagado' && lunesDe(g.fechaPago || g.fecha) === semana) gastosPagados += Number(g.monto) || 0
   }
   gastosOper = money2(gastosOper); gastoFinanc = money2(gastoFinanc); gastosPagados = money2(gastosPagados)
   const resultadoOperativo = money2(margen - gastosOper + comisionesFP)
-  const cobrado = money2((cobros || []).filter((c) => c.semana === semana && enAlm(c.almacenId)).reduce((a, c) => a + (Number(c.monto) || 0), 0))
+  const cobrado = money2((cobros || []).filter((c) => lunesDe(c.fecha) === semana && enAlm(c.almacenId)).reduce((a, c) => a + (Number(c.monto) || 0), 0))
   const porCobrar = money2(ingresoRutas - cobrado)
   const efectivoADrivers = money2(efectivoFP + pagosNormales)
   const flujoCaja = money2(cobrado - efectivoADrivers - gastosPagados)
