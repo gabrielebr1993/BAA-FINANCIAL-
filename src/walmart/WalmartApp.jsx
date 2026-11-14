@@ -1935,6 +1935,25 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
           <div className="ml-auto text-right text-xs text-slate-400">Total mostrado <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></div>
         </div>
       </Card>
+      {(() => {
+        const porDrv = {}
+        for (const g of lista) { const k = g.driverId || '__none'; porDrv[k] = (porDrv[k] || 0) + (Number(g.monto) || 0) }
+        const filas = Object.entries(porDrv).map(([k, v]) => ({ k, v: money2(v), nombre: k === '__none' ? 'Sin driver' : driverNombre(k) })).sort((a, b) => b.v - a.v)
+        if (filas.length <= 1) return null
+        return (
+          <Card className="mb-3 p-3">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Gasto por driver (lo mostrado)</div>
+            <div className="flex flex-wrap gap-2">
+              {filas.map((f) => (
+                <button key={f.k} type="button" onClick={() => setFDrv(f.k === '__none' ? '' : (fDrv === f.k ? '' : f.k))} className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition ${fDrv === f.k ? 'border-brand-gold bg-amber-50 dark:bg-amber-500/10' : 'border-slate-200 hover:border-brand-gold/50 dark:border-slate-700'}`}>
+                  <span className="font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</span>
+                  <span className="font-mono font-bold text-brand-gold">{dinero(f.v)}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )
+      })()}
       {lista.length === 0 && <Vacio icono={Receipt}>Sin gastos. Agrega el primero con “Nuevo gasto”.</Vacio>}
       <div className="space-y-1.5">
         {lista.map((g) => (
