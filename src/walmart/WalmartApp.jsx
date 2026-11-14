@@ -312,7 +312,7 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const plan = useMemo(() => planNormalizado(doc0?.plan), [doc0])
 
   // Ámbito: este almacén (incluye sin asignar) o todos. Filtro por estado.
-  const delAlmacen = useMemo(() => (ambito === 'todos' ? personas : personas.filter((p) => p.almacenId === almId || !p.almacenId)), [personas, almId, ambito])
+  const delAlmacen = useMemo(() => (ambito === 'todos' ? personas : personas.filter((p) => p.almacenId === almId || !p.almacenId || p.almacenId === 'ambos')), [personas, almId, ambito])
   const panel = useMemo(() => {
     const txt = q.trim().toLowerCase()
     return delAlmacen
@@ -323,8 +323,8 @@ function TabAgenda({ personas, almacenes, agenda }) {
   // Diagnóstico para el mensaje de panel vacío.
   const diag = useMemo(() => ({
     total: personas.length,
-    enAlmacen: personas.filter((p) => p.almacenId === almId || !p.almacenId).length,
-    activosAqui: personas.filter((p) => (p.almacenId === almId || !p.almacenId) && p.estadoOperativo === 'activo').length,
+    enAlmacen: personas.filter((p) => p.almacenId === almId || !p.almacenId || p.almacenId === 'ambos').length,
+    activosAqui: personas.filter((p) => (p.almacenId === almId || !p.almacenId || p.almacenId === 'ambos') && p.estadoOperativo === 'activo').length,
   }), [personas, almId])
 
   const nombreDe = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
@@ -624,12 +624,12 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tar
   const [fAlmacen, setFAlmacen] = useState('')
   const [fDisp, setFDisp] = useState('')
 
-  const almacenNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
+  const almacenNombre = (id) => id === 'ambos' ? 'Ambos' : (almacenes.find((a) => a.id === id)?.nombre || '')
   const lista = useMemo(() => {
     const txt = q.trim().toLowerCase()
     return personas.filter((p) => {
       if (fEstado && p.estadoOperativo !== fEstado) return false
-      if (fAlmacen && p.almacenId !== fAlmacen) return false
+      if (fAlmacen && p.almacenId !== fAlmacen && p.almacenId !== 'ambos') return false
       if (fDisp && p.disponibilidad !== fDisp) return false
       if (txt) {
         const hay = `${nombreCompleto(p)} ${p.ciudad || ''} ${p.estado || ''} ${p.telefono || ''} ${p.tipoVehiculo || ''}`.toLowerCase()
@@ -766,7 +766,7 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
         <Seccion titulo="Estado y almacén">
           <Grid>
             <F label="Estado operativo"><Select value={p.estadoOperativo} onChange={(e) => set('estadoOperativo', e.target.value)}>{ESTADOS.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}</Select></F>
-            <F label="Almacén asignado"><Select value={p.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">— sin asignar —</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+            <F label="Almacén asignado"><Select value={p.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">— sin asignar —</option><option value="ambos">Ambos almacenes</option>{almacenes.filter((a) => a.activo !== false).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           </Grid>
           {p.estadoOperativo === 'activo' && !p.almacenId && <p className="mt-1 text-[11px] text-amber-600">Un driver activo necesita un almacén para recibir rutas.</p>}
         </Seccion>
@@ -831,6 +831,7 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, gastos, tar
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <Badge color={e.color}>{e.label}</Badge>
               {alm && <Badge color="navy">{alm.nombre}</Badge>}
+              {p.almacenId === 'ambos' && <Badge color="navy">Ambos almacenes</Badge>}
               {p.tipoVehiculo && <Badge color="slate">{p.tipoVehiculo}{p.marca ? ` · ${p.marca} ${p.modelo}` : ''}</Badge>}
             </div>
           </div>
@@ -1190,7 +1191,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
   const [fBloque, setFBloque] = useState('')
   const [q, setQ] = useState('')
   const [editar, setEditar] = useState(null)
-  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
+  const almNombre = (id) => id === 'ambos' ? 'Ambos' : (almacenes.find((a) => a.id === id)?.nombre || '')
 
   const desde = modo === 'dia' ? fecha : (d1 <= d2 ? d1 : d2)
   const hasta = modo === 'dia' ? fecha : (d1 <= d2 ? d2 : d1)
@@ -1333,7 +1334,7 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState(null)
   const btnRef = useRef(null)
-  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || ''
+  const almNombre = (id) => id === 'ambos' ? 'Ambos' : (almacenes.find((a) => a.id === id)?.nombre || '')
   const sel = personas.find((p) => p.id === value)
   const txt = q.trim().toLowerCase()
   const lista = personas
@@ -1402,7 +1403,8 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   const elegirAlmacen = (id) => setR((x) => ({ ...x, almacenId: id, tarifaWalmart: ingresoDeAlmacen(almacenes.find((a) => a.id === id), tarifas) }))
   const elegirDriver = (id) => {
     const d = personas.find((x) => x.id === id)
-    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || d?.almacenId || '', tarifaWalmart: x.almacenId ? x.tarifaWalmart : ingresoDeAlmacen(almacenes.find((a) => a.id === d?.almacenId), tarifas), tarifaDriver: x.goHome ? x.tarifaDriver : tarifaDeDriver(d, tarifas) }))
+    const homeAlm = d?.almacenId && d.almacenId !== 'ambos' ? d.almacenId : ''
+    setR((x) => ({ ...x, driverId: id, driverNombre: d ? nombreCompleto(d) : '', vehiculoTipo: d?.tipoVehiculo || x.vehiculoTipo, propietarioVehiculo: d?.propietarioVehiculo || x.propietarioVehiculo, almacenId: x.almacenId || homeAlm, tarifaWalmart: x.almacenId ? x.tarifaWalmart : ingresoDeAlmacen(almacenes.find((a) => a.id === homeAlm), tarifas), tarifaDriver: x.goHome ? x.tarifaDriver : tarifaDeDriver(d, tarifas) }))
   }
   const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: x.goHome ? x.tarifaDriver : (tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio)) } })
   const setGoHome = (on) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, goHome: on, tarifaDriver: on ? (x.tarifaDriver || '') : tarifaDeDriver(d, tarifas) } })
