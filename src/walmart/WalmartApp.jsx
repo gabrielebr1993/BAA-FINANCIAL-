@@ -1129,7 +1129,7 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
 // ── CONFIG (tarifas) ────────────────────────────────────────────────────────
 function TabConfig() {
   const [t, setT] = useState(null)
-  useEffect(() => suscribir(COL.config, (docs) => setT(docs.find((d) => d.id === 'tarifas') || { id: 'tarifas', ...TARIFAS_DEFAULT })), [])
+  useEffect(() => suscribir(COL.config, (docs) => setT({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}), id: 'tarifas' })), [])
   const [guardando, setGuardando] = useState(false)
   if (!t) return <Spinner />
   const set = (k, v) => setT((x) => ({ ...x, [k]: v }))
@@ -1137,8 +1137,8 @@ function TabConfig() {
   const salvar = async () => {
     setGuardando(true)
     try {
-      await guardar(COL.config, 'tarifas', { ingresoWalmart: num(t.ingresoWalmart), pagoDriverPropio: num(t.pagoDriverPropio), pagoDriverCompania: num(t.pagoDriverCompania), comisionFastPay: num(t.comisionFastPay) })
-      await auditar('tarifas_guardadas', `WM ${t.ingresoWalmart} / propio ${t.pagoDriverPropio} / compañía ${t.pagoDriverCompania} / FP ${t.comisionFastPay}%`)
+      await guardar(COL.config, 'tarifas', { ingresoWalmart: num(t.ingresoWalmart), pagoDriverPropio: num(t.pagoDriverPropio), pagoDriverCompania: num(t.pagoDriverCompania), comisionFastPay: num(t.comisionFastPay), otIngreso: num(t.otIngreso), otPago: num(t.otPago) })
+      await auditar('tarifas_guardadas', `WM ${t.ingresoWalmart} / propio ${t.pagoDriverPropio} / compañía ${t.pagoDriverCompania} / FP ${t.comisionFastPay}% / OT ${t.otIngreso}·${t.otPago}`)
       walToast('Tarifas guardadas ✓')
     } finally { setGuardando(false) }
   }
@@ -1152,7 +1152,10 @@ function TabConfig() {
           <F label="Pago driver propio — por defecto (USD)"><Input type="number" value={t.pagoDriverPropio} onChange={(e) => set('pagoDriverPropio', e.target.value)} /></F>
           <F label="Pago driver compañía — por defecto (USD)"><Input type="number" value={t.pagoDriverCompania} onChange={(e) => set('pagoDriverCompania', e.target.value)} /></F>
           <F label="Comisión de Fast Pay (%)"><Input type="number" step="0.5" value={t.comisionFastPay} onChange={(e) => set('comisionFastPay', e.target.value)} /></F>
+          <F label="OT — Walmart paga por OT (USD)"><Input type="number" value={t.otIngreso} onChange={(e) => set('otIngreso', e.target.value)} /></F>
+          <F label="OT — pago al driver por OT (USD)"><Input type="number" value={t.otPago} onChange={(e) => set('otPago', e.target.value)} /></F>
         </Grid>
+        <p className="mt-2 text-[11px] text-slate-400">OT (overtime): por cada OT, Walmart te paga el primer valor y tú le pagas al driver el segundo. Se aplica al poner OT en una ruta y entra al Financiero y al invoice.</p>
         <Boton variant="gold" className="mt-4" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar tarifas'}</Boton>
       </Card>
     </div>
@@ -1248,6 +1251,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
               {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
               <Badge color={e.color}>{e.label}</Badge>
               {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
+              {(Number(r.otUnidades) || 0) > 0 && <Badge color="blue">OT ×{r.otUnidades}</Badge>}
               {r.cerrada && <Badge color="slate">día cerrado</Badge>}
               <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(ingresoRuta(r))} · drv {dinero(gananciaDriver(r))}</span>
               <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{r.cerrada ? 'ver' : 'editar'}</button>
@@ -1321,6 +1325,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
       fecha: hoyISO(), almacenId: '', driverId: '', driverNombre: '', identificador: '', bloque: 'manana',
       vehiculoTipo: '', propietarioVehiculo: 'driver', estado: 'pendiente', goHome: false,
       tarifaWalmart: tarifas.ingresoWalmart, tarifaDriver: tarifas.pagoDriverPropio,
+      otUnidades: 0, otIngreso: 0, otPago: 0,
       bonos: [], deducciones: [], notas: '', motivoCancel: '', ...ruta,
     }
     if (!ruta.id) { // ruta nueva: toma precio del almacén y pago del driver
@@ -1339,6 +1344,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
   }
   const setProp = (v) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, propietarioVehiculo: v, tarifaDriver: x.goHome ? x.tarifaDriver : (tieneRatePropio(d) ? tarifaDeDriver(d, tarifas) : (v === 'compania' ? tarifas.pagoDriverCompania : tarifas.pagoDriverPropio)) } })
   const setGoHome = (on) => setR((x) => { const d = personas.find((y) => y.id === x.driverId); return { ...x, goHome: on, tarifaDriver: on ? (x.tarifaDriver || '') : tarifaDeDriver(d, tarifas) } })
+  const setOT = (u) => setR((x) => { const n = Math.max(0, Number(u) || 0); return { ...x, otUnidades: u, otIngreso: money2(n * (Number(tarifas.otIngreso) || 0)), otPago: money2(n * (Number(tarifas.otPago) || 0)) } })
   const addAj = (tipo) => set(tipo, [...(r[tipo] || []), { concepto: '', monto: '', responsable: '', aplicaA: 'driver' }])
   const setAj = (tipo, i, k, v) => set(tipo, r[tipo].map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const delAj = (tipo, i) => set(tipo, r[tipo].filter((_, j) => j !== i))
@@ -1353,6 +1359,7 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
       const limpio = {
         ...r, semana: lunesDe(r.fecha),
         tarifaWalmart: money2(r.tarifaWalmart), tarifaDriver: money2(r.tarifaDriver),
+        otUnidades: Math.max(0, Number(r.otUnidades) || 0), otIngreso: money2(r.otIngreso), otPago: money2(r.otPago),
         bonos: (r.bonos || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
         deducciones: (r.deducciones || []).filter((b) => b.concepto && b.monto).map((b) => ({ ...b, monto: money2(b.monto) })),
       }
@@ -1408,6 +1415,16 @@ function RutaEditor({ ruta, almacenes, personas, tarifas, onCerrar }) {
             </div>
           </div>
           <p className="mt-2 text-[11px] text-slate-400">{r.goHome ? <>En <b>GO Home</b>, Walmart te paga el ingreso del almacén (entra al Financiero y al invoice) y el pago al driver lo pones a mano.</> : <>El <b>precio</b> lo define el <b>almacén</b> y el <b>pago</b> lo define el <b>driver</b>. Para un ajuste solo de esta ruta, usa bonos o deducciones.</>}</p>
+
+          {/* Overtime (OT): Walmart paga otIngreso por OT, al driver se le paga otPago */}
+          <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <F label="OT (overtime)"><Input type="number" min="0" value={r.otUnidades} onChange={(e) => setOT(e.target.value)} className="w-24" /></F>
+            <div className="pb-1.5 text-xs">
+              {(Number(r.otUnidades) || 0) > 0
+                ? <span className="text-slate-500 dark:text-slate-300">OT: Walmart paga <b className="text-brand-navy dark:text-slate-100">{dinero(r.otIngreso)}</b> · driver recibe <b className="text-emerald-600">{dinero(r.otPago)}</b> <span className="text-slate-400">(${tarifas.otIngreso}/${tarifas.otPago} por OT)</span></span>
+                : <span className="text-slate-400">Sin OT. Cada OT: Walmart <b>${tarifas.otIngreso}</b> · driver <b>${tarifas.otPago}</b> (se configura en Configuración).</span>}
+            </div>
+          </div>
           <AjustesEditor titulo="Bonos" tipo="bonos" lista={r.bonos} onAdd={() => addAj('bonos')} onSet={(i, k, v) => setAj('bonos', i, k, v)} onDel={(i) => delAj('bonos', i)} />
           <AjustesEditor titulo="Deducciones" tipo="deducciones" lista={r.deducciones} onAdd={() => addAj('deducciones')} onSet={(i, k, v) => setAj('deducciones', i, k, v)} onDel={(i) => delAj('deducciones', i)} />
           <div className="mt-3 flex flex-wrap gap-4 text-sm">

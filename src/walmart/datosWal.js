@@ -99,6 +99,8 @@ export const TARIFAS_DEFAULT = {
   pagoDriverPropio: 250, // USD al driver con vehículo propio
   pagoDriverCompania: 150, // USD al driver con vehículo de la compañía (configurable)
   comisionFastPay: 5, // % del importe bruto liquidado por Fast Pay
+  otIngreso: 30, // USD que Walmart paga por cada OT (overtime)
+  otPago: 15, // USD que pagamos al driver por cada OT
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -222,15 +224,20 @@ function ajustes(r, destino) {
   const d = (r.deducciones || []).filter((x) => x.aplicaA === destino).reduce((a, x) => a + (Number(x.monto) || 0), 0)
   return money2(b - d)
 }
+// OT (overtime) de la ruta: total que paga Walmart y total que paga la compañía al driver.
+export const otIngresoRuta = (r) => money2(Number(r?.otIngreso) || 0)
+export const otPagoRuta = (r) => money2(Number(r?.otPago) || 0)
 // Ingreso que corresponde recibir de Walmart por la ruta (0 si no completada).
+// Incluye el OT (overtime) que Walmart paga.
 export function ingresoRuta(r) {
   if (r.estado !== 'completada') return 0
-  return money2((Number(r.tarifaWalmart) || 0) + ajustes(r, 'walmart'))
+  return money2((Number(r.tarifaWalmart) || 0) + otIngresoRuta(r) + ajustes(r, 'walmart'))
 }
 // Ganancia bruta del driver por la ruta, antes de Fast Pay (0 si no completada).
+// Incluye el OT que se le paga al driver.
 export function gananciaDriver(r) {
   if (r.estado !== 'completada') return 0
-  return money2((Number(r.tarifaDriver) || 0) + ajustes(r, 'driver'))
+  return money2((Number(r.tarifaDriver) || 0) + otPagoRuta(r) + ajustes(r, 'driver'))
 }
 
 // ── Dashboard: series semanales y cuentas por cobrar (net-30) ───────────────
