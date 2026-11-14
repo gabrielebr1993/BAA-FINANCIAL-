@@ -362,6 +362,15 @@ export function calcularFastPay(bruto, comisionPct) {
   return { bruto: b, comision, efectivo: money2(b - comision) }
 }
 
+export function pagosRelacionadosRuta(ruta, pagos = []) {
+  if (!ruta?.id) return []
+  const semanaRuta = ruta.semana || lunesDe(ruta.fecha)
+  return (pagos || []).filter((p) => (
+    p.rutaId === ruta.id ||
+    (ruta.estado === 'completada' && p.driverId === ruta.driverId && p.semana === semanaRuta)
+  ))
+}
+
 // ── Gastos ──────────────────────────────────────────────────────────────────
 export const CATEGORIAS_GASTO = ['Cargo Van (financiamiento)', 'Seguro', 'Gasolina', 'Reparación', 'Mantenimiento', 'Renta', 'Nómina', 'Suministros', 'Otro']
 
@@ -485,7 +494,11 @@ export async function reabrirDia(cierreId, rutas, motivo) {
 
 // Borra una ruta y, si su día estaba cerrado, recalcula el resumen del cierre
 // con las rutas que quedan (no reabre el día; solo lo actualiza).
-export async function borrarRutaActualizandoCierre(ruta, rutasDelDia) {
+export async function borrarRutaActualizandoCierre(ruta, rutasDelDia, pagos = []) {
+  const pagosBloqueantes = pagosRelacionadosRuta(ruta, pagos)
+  if (pagosBloqueantes.length) {
+    throw new Error('No se puede eliminar una ruta con pagos o Fast Pay registrados.')
+  }
   await deleteDoc(refDoc(COL.rutas, ruta.id))
   if (ruta.cerrada && ruta.cierreId) {
     const rest = (rutasDelDia || []).filter((r) => r.id !== ruta.id)

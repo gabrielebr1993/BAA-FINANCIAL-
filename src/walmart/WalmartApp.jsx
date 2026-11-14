@@ -38,7 +38,7 @@ import {
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia, borrarRutaActualizandoCierre,
-  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
+  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay, pagosRelacionadosRuta,
   CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
   tokenAleatorio, datosDeDriver,
@@ -106,7 +106,7 @@ export default function WalmartApp() {
       {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
       {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} user={user} />}
       {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
-      {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
+      {tab === 'rutas' && <TabRutas rutas={rutas} pagos={pagos} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
       {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
       {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
       {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} rutas={rutas} />}
@@ -1192,7 +1192,7 @@ function Vacio({ icono: Ico = Search, children }) {
 const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
-function TabRutas({ rutas, almacenes, personas, tarifas }) {
+function TabRutas({ rutas, pagos, almacenes, personas, tarifas }) {
   const [modo, setModo] = useState('dia') // dia | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -1220,7 +1220,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
     }).sort((a, b) => (b.fecha !== a.fecha ? String(b.fecha).localeCompare(String(a.fecha)) : `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)))
   }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
-  if (editar) return <RutaEditor ruta={editar} rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
+  if (editar) return <RutaEditor ruta={editar} rutas={rutas} pagos={pagos} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
 
   const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
   const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
@@ -1393,13 +1393,18 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
   )
 }
 
-function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
+function RutaEditor({ ruta, rutas, pagos, almacenes, personas, tarifas, onCerrar }) {
   const bloqueado = !!ruta.cerrada
+  const pagosRuta = pagosRelacionadosRuta(ruta, pagos)
   const eliminarRuta = async () => {
+    if (pagosRuta.length) {
+      window.alert('No se puede eliminar esta ruta porque ya tiene pagos o Fast Pay registrados. Corrige esos movimientos antes de borrar la ruta para no descuadrar los balances.')
+      return
+    }
     const aviso = ruta.cerrada ? '¿Eliminar esta ruta? El día está CERRADO; la ruta se borra y el cierre se actualiza. No se puede deshacer.' : '¿Eliminar esta ruta? No se puede deshacer.'
     if (!window.confirm(aviso)) return
     const delDia = (rutas || []).filter((x) => x.fecha === ruta.fecha && x.almacenId === ruta.almacenId)
-    await borrarRutaActualizandoCierre(ruta, delDia)
+    await borrarRutaActualizandoCierre(ruta, delDia, pagos)
     walToast(ruta.cerrada ? 'Ruta eliminada · cierre actualizado' : 'Ruta eliminada')
     onCerrar()
   }
@@ -1523,8 +1528,9 @@ function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
       <div className="flex flex-wrap items-center gap-2">
         {!bloqueado && <><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></>}
         {bloqueado && <Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}
-        {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={eliminarRuta}><Trash2 size={14} /> Eliminar ruta</button>}
+        {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50" disabled={pagosRuta.length > 0} onClick={eliminarRuta}><Trash2 size={14} /> Eliminar ruta</button>}
       </div>
+      {pagosRuta.length > 0 && <p className="mt-2 text-[11px] font-semibold text-rose-500">Esta ruta tiene {pagosRuta.length} pago(s) o Fast Pay relacionado(s); no se puede borrar sin corregir esos movimientos primero.</p>}
       {bloqueado && ruta.id && <p className="mt-2 text-[11px] text-slate-400">El día está cerrado. Si eliminas esta ruta, el cierre se actualiza automáticamente (sin reabrir el día).</p>}
     </div>
   )
