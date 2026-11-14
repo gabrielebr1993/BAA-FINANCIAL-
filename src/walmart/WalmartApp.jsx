@@ -816,7 +816,7 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, gastos, tar
     if (!file) return
     setSubiendoFoto(true)
     try {
-      const dataURL = await leerImagenRedimensionada(file, 512, 0.82)
+      const dataURL = await leerImagenRedimensionada(file, 200, 0.74) // avatar liviano (~10-20KB) para que la lista cargue rápido
       await guardar(COL.candidatos, p.id, { fotoURL: dataURL })
       await auditar('foto_driver', nombreCompleto(p))
       walToast('Foto actualizada ✓')
