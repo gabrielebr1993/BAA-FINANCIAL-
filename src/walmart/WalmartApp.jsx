@@ -1294,7 +1294,10 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   const [contratos, setContratos] = useState([])
   const [sec, setSec] = useState('resumen') // resumen | rutas | pagos | docs | contratos
   const [firmar, setFirmar] = useState(null) // contrato a firmar
+  const [modo, setModo] = useState('semana') // semana | rango
   const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
   useEffect(() => suscribirMiFicha(driverId, setFicha), [driverId])
   useEffect(() => suscribirPorDriver(COL.rutas, driverId, setRutas), [driverId])
   useEffect(() => suscribirPorDriver(COL.pagos, driverId, setPagos), [driverId])
@@ -1302,11 +1305,45 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   useEffect(() => suscribirPorDriver(COL.contratos, driverId, setContratos), [driverId])
 
   const semana = lunesDe(fecha)
-  const res = driverId ? resumenSemana(rutas, pagos, driverId, semana) : null
+  // Período efectivo (semana sábado→viernes, o rango de fechas). Agrega las
+  // semanas que cruza el rango y junta rutas + movimientos.
+  const detDesde = modo === 'semana' ? semana : (d1 <= d2 ? d1 : d2)
+  const detHasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  const weeks = useMemo(() => {
+    if (modo === 'semana') return [semana]
+    const out = []; let w = lunesDe(d1 <= d2 ? d1 : d2); const fin = lunesDe(d1 <= d2 ? d2 : d1); let g = 0
+    while (w <= fin && g < 160) { out.push(w); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ }
+    return out
+  }, [modo, semana, d1, d2])
+  const res = useMemo(() => {
+    if (!driverId) return null
+    const acc = { totalGanado: 0, liquidadoFP: 0, efectivoFP: 0, comisiones: 0, enProcesoFP: 0, pagadoNormal: 0, saldo: 0 }
+    let rutasSemana = [], pagosAll = []
+    for (const w of weeks) {
+      const r = resumenSemana(rutas, pagos, driverId, w)
+      for (const k in acc) acc[k] = money2(acc[k] + (r[k] || 0))
+      rutasSemana = rutasSemana.concat(r.rutasSemana); pagosAll = pagosAll.concat(r.pagos)
+    }
+    rutasSemana.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+    return { ...acc, rutasSemana, pagos: pagosAll }
+  }, [driverId, rutas, pagos, weeks]) // eslint-disable-line
   const nombre = ficha ? nombreCompleto(ficha) : (email || 'Chofer')
-  const rutasSem = (rutas || []).filter((r) => lunesDe(r.fecha) === semana).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+  const rutasSem = res ? res.rutasSemana : []
+  const pagosPeriodo = res ? res.pagos : []
   const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
   const contratosPend = (contratos || []).filter((c) => c.estado === 'pendiente_firma')
+  // Control de período reutilizable (semana sábado→viernes o rango).
+  const FiltroPeriodo = (
+    <Card className="mb-3 p-3">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+        <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
+        {modo === 'semana'
+          ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+          : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+        <span className="pb-1.5 text-xs font-semibold text-slate-400">{detDesde} → {detHasta}</span>
+      </div>
+    </Card>
+  )
 
   if (!driverId) {
     return (
@@ -1362,24 +1399,23 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <Boton variant="gold" className="ml-auto" onClick={() => setFirmar(contratosPend[0])}>Revisar y firmar</Boton>
               </Card>
             )}
-            <div className="mb-3 flex items-center gap-2">
-              <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-              <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
-            </div>
+            {FiltroPeriodo}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Tile txt={String(res.rutasSemana.length)} l="Rutas de la semana" />
+              <Tile txt={String(res.rutasSemana.length)} l="Rutas del período" />
               <Tile txt={dinero(res.totalGanado)} l="Total ganado" />
               <Tile txt={dinero(res.efectivoFP)} l="Adelantado (Fast Pay)" />
               <Tile txt={dinero(res.saldo)} l="Por cobrar" ambar={res.saldo > 0.005} />
             </div>
-            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación semanal. Si un Fast Pay está <b>pendiente</b>, aún no se ha confirmado el pago.</p>
+            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado. Si un Fast Pay está <b>pendiente</b>, aún no se ha confirmado el pago.</p>
           </>
         )}
 
         {sec === 'rutas' && (
+          <>
+          {FiltroPeriodo}
           <Card className="p-0">
-            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis rutas · semana {semana}</div>
-            {rutasSem.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas esta semana.</div>}
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis rutas · {detDesde} → {detHasta}</div>
+            {rutasSem.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas en el período.</div>}
             {rutasSem.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
                 <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}</span>
@@ -1390,27 +1426,25 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               </div>
             ))}
           </Card>
+          </>
         )}
 
         {sec === 'pagos' && (
           <>
-            <div className="mb-3 flex items-center gap-2">
-              <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-              <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
-            </div>
+            {FiltroPeriodo}
             {res && (
               <Card className="mb-3 p-3 text-sm">
-                <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">Liquidación de la semana</div>
+                <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">Liquidación del período</div>
                 <div className="flex justify-between"><span className="text-slate-500">Total ganado</span><b className="font-mono">{dinero(res.totalGanado)}</b></div>
                 <div className="flex justify-between"><span className="text-slate-500">Adelantado por Fast Pay (efectivo)</span><b className="font-mono">{dinero(res.efectivoFP)}</b></div>
                 <div className="flex justify-between"><span className="text-slate-500">Otros pagos recibidos</span><b className="font-mono">{dinero(res.pagadoNormal)}</b></div>
-                <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar esta semana</span><b className="font-mono" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</b></div>
+                <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar</span><b className="font-mono" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</b></div>
               </Card>
             )}
             <Card className="p-0">
               <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis recibos y movimientos</div>
-              {(pagos || []).filter((p) => p.semana === semana).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin movimientos esta semana.</div>}
-              {(pagos || []).filter((p) => p.semana === semana).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
+              {pagosPeriodo.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin movimientos en el período.</div>}
+              {pagosPeriodo.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
                 const est = p.tipo === 'fastpay' ? estadoFP(p) : null
                 return (
                   <div key={p.id || i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
