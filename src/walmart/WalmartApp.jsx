@@ -1293,6 +1293,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   const [docs, setDocs] = useState([])
   const [contratos, setContratos] = useState([])
   const [sec, setSec] = useState('resumen') // resumen | rutas | pagos | docs | contratos
+  const [firmar, setFirmar] = useState(null) // contrato a firmar
   const [fecha, setFecha] = useState(hoyISO())
   useEffect(() => suscribirMiFicha(driverId, setFicha), [driverId])
   useEffect(() => suscribirPorDriver(COL.rutas, driverId, setRutas), [driverId])
@@ -1305,6 +1306,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   const nombre = ficha ? nombreCompleto(ficha) : (email || 'Chofer')
   const rutasSem = (rutas || []).filter((r) => lunesDe(r.fecha) === semana).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
   const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
+  const contratosPend = (contratos || []).filter((c) => c.estado === 'pendiente_firma')
 
   if (!driverId) {
     return (
@@ -1353,6 +1355,13 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <div className="text-xs text-slate-400">{ficha?.telefono || email}{ficha?.almacen ? ` · ${ficha.almacen}` : ''}</div>
               </div>
             </Card>
+            {contratosPend.length > 0 && (
+              <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-brand-gold p-3">
+                <FileSignature size={16} className="text-brand-gold" />
+                <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">Tienes {contratosPend.length} contrato(s) <b>pendiente(s) de firma</b>.</span>
+                <Boton variant="gold" className="ml-auto" onClick={() => setFirmar(contratosPend[0])}>Revisar y firmar</Boton>
+              </Card>
+            )}
             <div className="mb-3 flex items-center gap-2">
               <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
               <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
@@ -1438,20 +1447,99 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
           <Card className="p-0">
             <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis contratos</div>
             {(contratos || []).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin contratos.</div>}
-            {(contratos || []).map((c) => (
-              <div key={c.id} className="flex items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
-                <FileSignature size={15} className="text-slate-400" />
-                <span className="font-semibold text-brand-navy dark:text-slate-100">{c.titulo || c.plantillaNombre || 'Contrato'}</span>
-                <Badge color={c.estado === 'firmado' ? 'green' : 'slate'}>{c.estado || 'pendiente'}</Badge>
-                <span className="ml-auto text-xs text-slate-400">{c.fecha || c.creadoFecha || ''}</span>
-              </div>
-            ))}
+            {(contratos || []).map((c) => {
+              const pend = c.estado === 'pendiente_firma'
+              const firmado = c.estado === 'firmado'
+              return (
+                <div key={c.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                  <FileSignature size={15} className="text-slate-400" />
+                  <span className="font-semibold text-brand-navy dark:text-slate-100">{c.titulo || 'Contrato'}</span>
+                  <Badge color={firmado ? 'green' : c.estado === 'anulado' ? 'slate' : 'gold'}>{firmado ? 'Firmado' : c.estado === 'anulado' ? 'Anulado' : 'Pendiente de firma'}</Badge>
+                  <div className="ml-auto flex items-center gap-3">
+                    {pend && <Boton variant="gold" onClick={() => setFirmar(c)}><FileSignature size={13} /> Revisar y firmar</Boton>}
+                    {firmado && <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => pdfContrato(c, true)}>descargar PDF firmado</button>}
+                    {!pend && !firmado && <button className="text-xs font-semibold text-slate-500 hover:text-brand-navy" onClick={() => setFirmar(c)}>ver</button>}
+                  </div>
+                </div>
+              )
+            })}
           </Card>
         )}
       </div>
+      {firmar && <FirmarContratoModal contrato={firmar} nombreDefault={nombre} onCerrar={() => setFirmar(null)} />}
     </div>
   )
 }
+
+// Firma de un contrato DESDE el portal del chofer. Reutiliza el MISMO flujo
+// existente (Cloud Function walFirmaSet con el token del contrato); no crea otro
+// generador. Si faltan datos de la plantilla (quedan {{campos}} sin rellenar),
+// se avisa y NO se permite firmar.
+function FirmarContratoModal({ contrato, nombreDefault, onCerrar }) {
+  const [nombre, setNombre] = useState(contrato.firmanteNombre || nombreDefault || contrato.driverNombre || '')
+  const [acepto, setAcepto] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [err, setErr] = useState('')
+  const [ok, setOk] = useState(contrato.estado === 'firmado')
+  const canvasRef = useRef(null)
+  const yaFirmado = contrato.estado === 'firmado' || ok
+  const texto = contrato.textoRenderizado || ''
+  const faltan = (texto.match(/\{\{\s*[\w.]+\s*\}\}/g) || []) // placeholders sin rellenar
+  const limpiarFirma = () => { const cv = canvasRef.current; if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height) }
+  const firmar = async () => {
+    const cv = canvasRef.current
+    if (faltan.length) { setErr('Faltan datos obligatorios en el contrato. Pide al administrador que los complete antes de firmar.'); return }
+    if (!cv || lienzoVacio(cv)) { setErr('Dibuja tu firma en el recuadro.'); return }
+    if (!nombre.trim()) { setErr('Escribe tu nombre.'); return }
+    if (!acepto) { setErr('Marca la casilla de consentimiento.'); return }
+    if (!contrato.signingToken) { setErr('Este contrato no tiene enlace de firma. Pide al administrador que lo regenere.'); return }
+    setErr(''); setEnviando(true)
+    try {
+      await httpsCallable(getFunctions(), 'walFirmaSet')({ token: contrato.signingToken, firma: cv.toDataURL('image/png'), nombreFirmante: nombre.trim() })
+      setOk(true)
+      walToast('Contrato firmado ✓', 'gold')
+    } catch (e) { setErr(e?.message || 'No se pudo firmar.') } finally { setEnviando(false) }
+  }
+  return (
+    <Modal titulo={contrato.titulo || 'Contrato'} onCerrar={onCerrar}>
+      {contrato.empresa && <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-brand-gold">{contrato.empresa}</div>}
+      <div className="mb-3 max-h-[46vh] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed dark:border-slate-700 dark:bg-slate-800/40">
+        <pre className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-200">{texto}</pre>
+      </div>
+      {yaFirmado ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="font-bold text-emerald-700 dark:text-emerald-300">✅ Contrato firmado</div>
+          {contrato.firma && <img src={contrato.firma} alt="firma" className="mt-2 h-16 rounded border border-slate-200 bg-white" />}
+          <div className="mt-2"><Boton variant="ghost" onClick={() => pdfContrato({ ...contrato, estado: 'firmado' }, true)}>Descargar PDF firmado</Boton></div>
+        </div>
+      ) : (
+        <>
+          {faltan.length > 0 && <Aviso tipo="warn" className="mb-2">Faltan datos obligatorios en el contrato. No puedes firmarlo hasta que el administrador los complete.</Aviso>}
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Tu firma</div>
+          <p className="mb-1 text-xs text-slate-400">Dibújala con el dedo o el mouse.</p>
+          <canvas ref={canvasRef} width={600} height={180} className="w-full rounded-xl border border-dashed border-brand-gold bg-white" style={{ height: 150, touchAction: 'none' }}
+            onMouseDown={(e) => lienzoStart(e, canvasRef)} onMouseMove={(e) => lienzoMove(e, canvasRef)} onMouseUp={() => lienzoEnd()} onMouseLeave={() => lienzoEnd()}
+            onTouchStart={(e) => lienzoStart(e, canvasRef)} onTouchMove={(e) => lienzoMove(e, canvasRef)} onTouchEnd={() => lienzoEnd()} />
+          <button type="button" onClick={limpiarFirma} className="mt-1 text-xs font-semibold text-slate-400 hover:text-slate-600">Borrar firma</button>
+          <div className="mt-3"><F label="Tu nombre"><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></F></div>
+          <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /> He revisado el documento completo y acepto firmarlo electrónicamente.</label>
+          {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+          <div className="mt-3 flex gap-2">
+            <Boton variant="gold" disabled={enviando || faltan.length > 0} onClick={firmar}>{enviando ? <Spinner /> : 'Firmar y finalizar'}</Boton>
+            <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+          </div>
+        </>
+      )}
+    </Modal>
+  )
+}
+// Lienzo de firma (compartido): estado de dibujo a nivel de módulo.
+let _lienzoDibujando = false
+function lienzoPos(e, cv) { const r = cv.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: (t.clientX - r.left) * (cv.width / r.width), y: (t.clientY - r.top) * (cv.height / r.height) } }
+function lienzoStart(e, ref) { e.preventDefault(); _lienzoDibujando = true; const cv = ref.current; const ctx = cv.getContext('2d'); const p = lienzoPos(e, cv); ctx.beginPath(); ctx.moveTo(p.x, p.y) }
+function lienzoMove(e, ref) { if (!_lienzoDibujando) return; e.preventDefault(); const cv = ref.current; const ctx = cv.getContext('2d'); const p = lienzoPos(e, cv); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#13233f'; ctx.lineTo(p.x, p.y); ctx.stroke() }
+function lienzoEnd() { _lienzoDibujando = false }
+function lienzoVacio(cv) { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false; return true }
 
 // ── USUARIOS Y PERMISOS (Walmart) ─────────────────────────────────────────────
 function TabUsuariosWal({ almacenes, personas, perm }) {
@@ -1504,6 +1592,8 @@ function WalUsuarioModal({ inicial, almacenes, personas, editor, onCerrar }) {
   const [warehouses, setWarehouses] = useState(Array.isArray(inicial.warehouses) ? inicial.warehouses : [])
   const [driverId, setDriverId] = useState(inicial.driverId || '')
   const drivers = (personas || []).filter((p) => p.estadoOperativo === 'activo' || p.id === inicial.driverId)
+  const [password, setPassword] = useState('')
+  const [verPass, setVerPass] = useState(false)
   const [verResumen, setVerResumen] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
@@ -1547,14 +1637,27 @@ function WalUsuarioModal({ inicial, almacenes, personas, editor, onCerrar }) {
     const payload = { rol, activo, permisos: rol === 'driver' ? {} : normalizarPermisos(permisos), warehouses, driverId: rol === 'driver' ? driverId : '' }
     const v = validarCambioPermisos(editor, { uid: inicial.uid, email: correo }, payload, idsAlm)
     if (!v.ok) { setErr(v.motivo); return }
+    if (password && password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
     setErr(''); setGuardando(true)
     try {
-      // Auditoría: quién, cuándo, valores anteriores → nuevos.
+      // 1) Si se escribió una contraseña, crea/actualiza la CUENTA de login
+      //    (correo + clave) vía la Cloud Function. Si las funciones no están
+      //    desplegadas, se avisa pero NO se pierde la asignación de permisos.
+      if (password) {
+        try {
+          await httpsCallable(getFunctions(), 'walUsuarioCrear')({ email: correo, password, nombre: '' })
+        } catch (e) {
+          setGuardando(false)
+          setErr('No se pudo crear la cuenta de login: ' + (e?.message || e) + '  ·  Si no has desplegado las funciones (firebase deploy --only functions), crea la contraseña en Firebase Console → Authentication. Los permisos sí puedes guardarlos sin contraseña.')
+          return
+        }
+      }
+      // 2) Guarda rol/permisos/almacenes (con sus reglas).
       const antes = esNuevo ? '(nuevo)' : `${inicial.rol}/${Object.keys(normalizarPermisos(inicial.permisos)).length}perm/${(inicial.warehouses || []).length}alm/activo=${inicial.activo !== false}`
       const despues = `${rol}/${Object.keys(payload.permisos).length}perm/${warehouses.length}alm/activo=${activo}`
       await guardarUsuarioWal(correo, payload)
       await auditar('wal_usuario_permisos', `${correo} · ${antes} → ${despues} · por ${editor.email || 'dueño'}`)
-      walToast('Usuario guardado ✓', 'gold')
+      walToast(password ? 'Usuario y clave guardados ✓' : 'Usuario guardado ✓', 'gold')
       onCerrar()
     } catch (e) { setErr('No se pudo guardar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
@@ -1567,7 +1670,16 @@ function WalUsuarioModal({ inicial, almacenes, personas, editor, onCerrar }) {
         <F label="Correo (correo de inicio de sesión)"><Input value={email} disabled={!esNuevo} onChange={(e) => setEmail(e.target.value)} placeholder="persona@correo.com" /></F>
         <F label="Rol (plantilla inicial)"><Select value={rol} onChange={(e) => aplicarPlantilla(e.target.value)}>{ROLES_WAL.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</Select></F>
       </div>
-      <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-brand-navy dark:text-slate-200"><input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} /> Usuario activo</label>
+      <div className="mt-3">
+        <F label={esNuevo ? 'Contraseña de acceso' : 'Nueva contraseña (opcional)'}>
+          <div className="relative">
+            <Input type={verPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={esNuevo ? 'mínimo 6 caracteres' : 'dejar vacío para no cambiarla'} className="pr-10" />
+            <button type="button" onClick={() => setVerPass((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600">{verPass ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+          </div>
+        </F>
+        <p className="mt-1 text-[11px] text-slate-400">Al escribir una contraseña se crea (o actualiza) la cuenta de inicio de sesión de esta persona. La persona entra en <b>milepay.io/walmart</b> con su correo y esta clave (puede cambiarla luego con “¿Olvidaste tu contraseña?”).</p>
+      </div>
+      <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-brand-navy dark:text-slate-200"><input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} /> Usuario activo</label>
       <p className="mt-1 text-[11px] text-slate-400">{rolWalInfo(rol).desc}</p>
 
       {/* Alcance: warehouses */}
@@ -1817,12 +1929,17 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
 
   const reposicionar = () => { const r = btnRef.current?.getBoundingClientRect(); if (r) setRect({ left: r.left, top: r.bottom + 4, width: r.width }) }
   const abrir = () => { reposicionar(); setOpen(true); setQ('') }
+  const popRef = useRef(null)
   useEffect(() => {
     if (!open) return
+    // Al hacer scroll reposicionamos el panel (NO lo cerramos), para que el
+    // scroll DENTRO de la lista de drivers funcione. Ignoramos los scrolls que
+    // nacen dentro del propio panel.
+    const onScroll = (e) => { if (popRef.current && popRef.current.contains(e.target)) return; reposicionar() }
     const cerrar = () => setOpen(false)
-    window.addEventListener('scroll', cerrar, true)
+    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('resize', cerrar)
-    return () => { window.removeEventListener('scroll', cerrar, true); window.removeEventListener('resize', cerrar) }
+    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', cerrar) }
   }, [open])
 
   return (
@@ -1834,7 +1951,7 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
       {open && rect && createPortal(
         <>
           <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
-          <div className="fixed z-[9999] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800" style={{ left: rect.left, top: rect.top, width: Math.max(rect.width, 240) }}>
+          <div ref={popRef} className="fixed z-[9999] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800" style={{ left: rect.left, top: rect.top, width: Math.max(rect.width, 240) }}>
             <div className="border-b border-slate-100 p-2 dark:border-slate-700">
               <div className="relative"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input autoFocus className="pl-8" placeholder="Buscar por nombre…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             </div>
@@ -2150,13 +2267,31 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
   const [pagoAbierto, setPagoAbierto] = useState(false)
   const semana = lunesDe(fecha)
   const driver = personas.find((p) => p.id === driverId)
-  const res = driverId ? resumenSemana(rutas, pagos, driverId, semana) : null
   const badgeEstado = { pendiente: 'red', parcial: 'gold', pagado: 'green' }
   const etiquetaEstado = { pendiente: 'Pendiente', parcial: 'Parcial', pagado: 'Pagado' }
 
   // Semanas incluidas en el período (para el modo rango).
   const semanasRango = () => { const out = []; let w = lunesDe(d1 <= d2 ? d1 : d2); const fin = lunesDe(d1 <= d2 ? d2 : d1); let g = 0; while (w <= fin && g < 120) { out.push(w); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ } return out }
   const weeks = modo === 'semana' ? [semana] : semanasRango()
+  // Período efectivo del detalle (mismo que el filtro de arriba).
+  const detDesde = modo === 'semana' ? semana : (d1 <= d2 ? d1 : d2)
+  const detHasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  // Resumen del DETALLE sobre TODO el período (no una sola semana): agrega las
+  // semanas del rango y junta todas las rutas y movimientos.
+  const res = useMemo(() => {
+    if (!driverId) return null
+    const acc = { totalGanado: 0, liquidadoFP: 0, efectivoFP: 0, comisiones: 0, enProcesoFP: 0, pagadoNormal: 0, saldo: 0 }
+    let rutasSemana = [], pagosAll = []
+    for (const w of weeks) {
+      const r = resumenSemana(rutas, pagos, driverId, w)
+      for (const k in acc) acc[k] = money2(acc[k] + (r[k] || 0))
+      rutasSemana = rutasSemana.concat(r.rutasSemana)
+      pagosAll = pagosAll.concat(r.pagos)
+    }
+    rutasSemana.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+    const estado = acc.saldo <= 0.005 ? (acc.totalGanado > 0.005 ? 'pagado' : 'pendiente') : ((acc.liquidadoFP + acc.pagadoNormal) > 0.005 ? 'parcial' : 'pendiente')
+    return { ...acc, estado, rutasSemana, pagos: pagosAll }
+  }, [driverId, rutas, pagos, weeks.join(',')]) // eslint-disable-line
   const resumenPeriodo = (did) => {
     const acc = { totalGanado: 0, liquidadoFP: 0, efectivoFP: 0, comisiones: 0, pagadoNormal: 0, saldo: 0 }
     for (const w of weeks) { const r = resumenSemana(rutas, pagos, did, w); for (const k in acc) acc[k] = money2(acc[k] + (r[k] || 0)) }
@@ -2234,8 +2369,9 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
         <Card className="mb-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Avatar p={driver} size={32} /><span className="font-bold text-brand-navy dark:text-slate-100">{nombreCompleto(driver)}</span>
-            <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-            <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
+            {modo === 'semana'
+              ? <><F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F><span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span></>
+              : <span className="pb-1 text-xs font-semibold text-slate-400">Período {detDesde} → {detHasta} <span className="font-normal">· cambia las fechas en el filtro de arriba</span></span>}
           </div>
         </Card>
       )}
@@ -2251,17 +2387,18 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
             <Tile txt={dinero(res.saldo)} l="Saldo pendiente" ambar={res.saldo > 0.005} />
           </div>
           <Card className="mb-3 p-3 text-xs text-slate-500 dark:text-slate-400">
-            <b className="text-brand-navy dark:text-slate-100">Conciliación de la semana:</b> {res.rutasSemana.length} rutas · bruto generado {dinero(res.totalGanado)} · liquidado por Fast Pay {dinero(res.liquidadoFP)} · comisiones {dinero(res.comisiones)} (ingreso aparte, <b>no</b> se resta del saldo) · otros pagos {dinero(res.pagadoNormal)} → <b>saldo pendiente {dinero(res.saldo)}</b>.
+            <b className="text-brand-navy dark:text-slate-100">Conciliación del período:</b> {res.rutasSemana.length} rutas · bruto generado {dinero(res.totalGanado)} · liquidado por Fast Pay {dinero(res.liquidadoFP)} · comisiones {dinero(res.comisiones)} (ingreso aparte, <b>no</b> se resta del saldo) · otros pagos {dinero(res.pagadoNormal)} → <b>saldo pendiente {dinero(res.saldo)}</b>.
           </Card>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge color={badgeEstado[res.estado]}>{res.estado === 'pagado' ? 'Pagado' : res.estado === 'parcial' ? 'Parcialmente pagado' : 'Pendiente'}</Badge>
-            {res.saldo > 0.005 && pPagaSemanal && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
-            {driver && res.rutasSemana.length > 0 && <Boton variant="ghost" onClick={() => pdfPayStub(driver, semana, domingoDe(fecha), res)}>Pay stub PDF</Boton>}
+            {res.saldo > 0.005 && pPagaSemanal && modo === 'semana' && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
+            {res.saldo > 0.005 && modo === 'rango' && <span className="text-xs text-slate-400">Para pagar: usa <b>Fast Pay</b> en cada ruta (abajo), o cambia a modo <b>Semana</b> para registrar el pago del saldo.</span>}
+            {driver && res.rutasSemana.length > 0 && <Boton variant="ghost" onClick={() => pdfPayStub(driver, detDesde, detHasta, res)}>Pay stub PDF</Boton>}
           </div>
 
           <Card className="mb-3 p-0">
-            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Rutas completadas de la semana</div>
-            {res.rutasSemana.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas completadas esta semana.</div>}
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Rutas completadas del período</div>
+            {res.rutasSemana.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas completadas en el período.</div>}
             {res.rutasSemana.map((r) => {
               const liq = liquidadoFPruta(pagos, r.id)
               const bruto = gananciaDriver(r)
@@ -2292,7 +2429,7 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
 
           {res.pagos.length > 0 && (
             <Card className="p-0">
-              <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Movimientos de la semana</div>
+              <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Movimientos del período</div>
               {res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
                 const est = p.tipo === 'fastpay' ? estadoFP(p) : null
                 return (
@@ -2350,7 +2487,7 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar =
       // este navegador) escribe el MISMO documento en vez de duplicar el pago.
       const idDet = `fp_${ruta.id}`.replace(/[^a-zA-Z0-9_]/g, '')
       await guardar(COL.pagos, idDet, {
-        tipo: 'fastpay', estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver), semana, rutaId: ruta.id, almacenId: ruta.almacenId || '',
+        tipo: 'fastpay', estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver), semana: lunesDe(ruta.fecha), rutaId: ruta.id, almacenId: ruta.almacenId || '',
         bruto: calc.bruto, comisionPct: Number(pct) || 0, comision: calc.comision, efectivo: calc.efectivo,
         fecha: hoyISO(), metodo, referencia, responsable, comprobante,
       })
@@ -2361,16 +2498,16 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar =
   }
   return (
     <Modal titulo="Fast Pay (anticipo de una ruta completada)" onCerrar={onCerrar}>
-      {yaBloqueada && <Aviso tipo="warn" className="mb-2">Esta ruta ya tiene un Fast Pay en proceso o liquidado. No se puede volver a pagar.</Aviso>}
-      <Grid>
+      {yaBloqueada && <Aviso tipo="warn" className="mb-3">Esta ruta ya tiene un Fast Pay en proceso o liquidado. No se puede volver a pagar.</Aviso>}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <F label="Importe bruto a liquidar"><Input type="number" value={bruto} onChange={(e) => setBruto(e.target.value)} /></F>
         <F label="Comisión (%)"><Input type="number" step="0.5" value={pct} onChange={(e) => setPct(e.target.value)} /></F>
         <F label="Estado del pago"><Select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value)} disabled={!puedeEjecutar}>{puedeEjecutar && <option value="confirmado">Confirmado (pagado ahora)</option>}<option value="pendiente">Pendiente (en proceso)</option></Select></F>
         <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
         <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
         <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
-        <F label="Comprobante (nota / # recibo)"><Input value={comprobante} onChange={(e) => setComprobante(e.target.value)} /></F>
-      </Grid>
+        <div className="sm:col-span-2"><F label="Comprobante (nota / # recibo)"><Input value={comprobante} onChange={(e) => setComprobante(e.target.value)} /></F></div>
+      </div>
       <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
         <div className="flex justify-between"><span>Bruto liquidado</span><b className="font-mono">{dinero(calc.bruto)}</b></div>
         <div className="flex justify-between text-amber-700 dark:text-amber-300"><span>Comisión ({pct}%) — ingreso de la compañía</span><b className="font-mono">−{dinero(calc.comision)}</b></div>
@@ -2424,12 +2561,15 @@ function PagoModal({ driver, semana, saldo, onCerrar }) {
   )
 }
 
-function Modal({ titulo, children, onCerrar }) {
+function Modal({ titulo, children, onCerrar, ancho = 'max-w-lg' }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16" onClick={onCerrar}>
-      <div className="w-full max-w-lg rounded-2xl bg-surface-card p-5 shadow-2xl dark:bg-surface-dark-card" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</div>
-        {children}
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 pt-8 sm:p-4 sm:pt-16" onClick={onCerrar}>
+      <div className={`flex max-h-[calc(100vh-4rem)] w-full ${ancho} flex-col overflow-hidden rounded-2xl bg-surface-card shadow-2xl dark:bg-surface-dark-card`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+          <div className="text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</div>
+          <button onClick={onCerrar} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto overflow-x-hidden px-5 py-4">{children}</div>
       </div>
     </div>
   )

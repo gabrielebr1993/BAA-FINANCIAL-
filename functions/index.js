@@ -2407,3 +2407,39 @@ exports.walFirmaSet = onCall(async (req) => {
   await db.collection('wal_audit').add({ accion: 'contrato_firmado', detalle: `${c.driverNombre || ''} · ${d.id} · ${nombreFirmante}`, correo: '(firma por enlace)', fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
   return { ok: true }
 })
+
+// ── Crear/actualizar la CUENTA de login de un usuario Walmart (correo+clave) ──
+// Permite al dueño (o a quien tenga el permiso usuarios_crear) crear la cuenta
+// de inicio de sesión DIRECTO desde el panel "Usuarios y permisos". SOLO maneja
+// la cuenta de Auth (correo + contraseña); los permisos se guardan aparte en
+// wal_usuarios (con sus reglas). Aislado al módulo Walmart.
+exports.walUsuarioCrear = onCall(async (req) => {
+  let permitido = esDuenoReq(req)
+  const correoActor = String((req.auth && req.auth.token && req.auth.token.email) || '').toLowerCase()
+  if (!permitido && correoActor) {
+    try {
+      const d = await db.collection('wal_usuarios').doc(correoActor).get()
+      const u = d.exists ? d.data() : null
+      permitido = !!u && u.activo !== false && u.permisos && u.permisos.usuarios_crear === true
+    } catch { /* noop */ }
+  }
+  if (!permitido) throw new HttpsError('permission-denied', 'No tienes permiso para crear usuarios de Walmart.')
+  const email = String((req.data && req.data.email) || '').trim().toLowerCase()
+  const password = String((req.data && req.data.password) || '')
+  const nombre = String((req.data && req.data.nombre) || '').slice(0, 120)
+  if (!/.+@.+\..+/.test(email)) throw new HttpsError('invalid-argument', 'Correo inválido.')
+  if (password.length < 6) throw new HttpsError('invalid-argument', 'La contraseña debe tener al menos 6 caracteres.')
+  let uid, creado = false
+  try {
+    const u = await admin.auth().createUser({ email, password, displayName: nombre || undefined })
+    uid = u.uid; creado = true
+  } catch (e) {
+    if (e && e.code === 'auth/email-already-exists') {
+      const ex = await admin.auth().getUserByEmail(email)
+      await admin.auth().updateUser(ex.uid, { password, ...(nombre ? { displayName: nombre } : {}) })
+      uid = ex.uid
+    } else { throw new HttpsError('internal', 'No se pudo crear la cuenta: ' + ((e && e.message) || e)) }
+  }
+  await db.collection('wal_audit').add({ accion: creado ? 'wal_cuenta_creada' : 'wal_clave_actualizada', detalle: email, correo: correoActor || 'dueño', fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true, uid, creado }
+})
