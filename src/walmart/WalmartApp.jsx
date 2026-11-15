@@ -69,6 +69,7 @@ const TABS = [
   { id: 'rutas', label: 'Rutas', icono: RouteIcon },
   { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck },
   { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
+  { id: 'fastpay', label: 'Fast Pay', icono: Zap },
   { id: 'gastos', label: 'Gastos', icono: Receipt },
   { id: 'financiero', label: 'Financiero', icono: BarChart3 },
   { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet },
@@ -86,6 +87,7 @@ const PERM_TAB = {
   rutas: 'rutas_ver',
   cierre: 'liq_preparar',
   pagos: 'pagos_ver',
+  fastpay: 'fp_ver',
   gastos: 'fin_costos_ver',
   financiero: 'fin_dashboard_ver',
   facturas: 'fin_ingresos_ver',
@@ -188,6 +190,7 @@ export default function WalmartApp() {
       {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
       {tab === 'pagos' && puede('pagos_ver') && <TabPagos rutas={rutasV} pagos={pagos} personas={personasV} tarifas={tarifas} perm={perm} />}
+      {tab === 'fastpay' && puede('fp_ver') && <TabFastPay rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} />}
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
@@ -1531,6 +1534,36 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
 
 // W-9 del chofer: autocompletado desde su ficha + firma propia, independiente
 // del contrato. Genera el PDF en el navegador y lo guarda vía Cloud Function.
+// Rellena el W-9 OFICIAL del IRS (public/w9/fw9.pdf) con los campos reales del
+// formulario + firma y fecha dibujadas sobre la línea. Devuelve el PDF en base64.
+async function generarW9OficialBase64({ nombre, businessName, clasificacion, direccion, ciudadEstadoZip, ssn, firmante, fecha }) {
+  const { PDFDocument, StandardFonts } = await import('pdf-lib')
+  const bytes = await fetch('/w9/fw9.pdf').then((r) => { if (!r.ok) throw new Error('No se encontró el formulario oficial del IRS.'); return r.arrayBuffer() })
+  const pdf = await PDFDocument.load(bytes)
+  const form = pdf.getForm()
+  const P = 'topmostSubform[0].Page1[0].'
+  const setT = (n, v) => { try { form.getTextField(n).setText(v || '') } catch { /* campo ausente */ } }
+  const chk = (n) => { try { form.getCheckBox(n).check() } catch { /* ausente */ } }
+  setT(P + 'f1_01[0]', nombre)
+  setT(P + 'f1_02[0]', businessName)
+  const idx = { 'Individual / sole proprietor': 0, 'C Corporation': 1, 'S Corporation': 2, 'Partnership': 3, 'Trust/estate': 4, 'LLC': 5, 'Other': 6 }[clasificacion]
+  chk(P + `Boxes3a-b_ReadOrder[0].c1_1[${idx == null ? 0 : idx}]`)
+  setT(P + 'Address_ReadOrder[0].f1_07[0]', direccion)
+  setT(P + 'Address_ReadOrder[0].f1_08[0]', ciudadEstadoZip)
+  const d = String(ssn).replace(/\D/g, '')
+  setT(P + 'f1_11[0]', d.slice(0, 3)); setT(P + 'f1_12[0]', d.slice(3, 5)); setT(P + 'f1_13[0]', d.slice(5, 9))
+  const page = pdf.getPages()[0]
+  const fo = await pdf.embedFont(StandardFonts.HelveticaOblique)
+  const fn = await pdf.embedFont(StandardFonts.Helvetica)
+  page.drawText(String(firmante || nombre || ''), { x: 140, y: 212, size: 12, font: fo })
+  page.drawText(String(fecha || ''), { x: 430, y: 212, size: 11, font: fn })
+  form.flatten()
+  const outBytes = await pdf.save()
+  let bin = ''; const u = new Uint8Array(outBytes); const CH = 0x8000
+  for (let i = 0; i < u.length; i += CH) bin += String.fromCharCode.apply(null, u.subarray(i, i + CH))
+  return btoa(bin)
+}
+
 function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
   const dirDefault = ficha?.direccion || ''
   const czDefault = [ficha?.ciudad, ficha?.estado, ficha?.zip || ficha?.codigoPostal].filter(Boolean).join(', ')
@@ -1561,10 +1594,10 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
     if (!acepto) { setErr('Marca la casilla de certificación para firmar.'); return }
     setErr(''); setEnviando(true)
     try {
-      const base64 = await generarW9Base64({
+      const base64 = await generarW9OficialBase64({
         nombre: f.nombre.trim(), businessName: f.businessName.trim(), clasificacion: f.clasificacion,
         direccion: f.direccion.trim(), ciudadEstadoZip: f.ciudadEstadoZip.trim(),
-        ssn: ssnFmt(ssnDig), ssnFormateado: ssnFmt(ssnDig), firma: f.nombre.trim(), fecha: new Date().toLocaleDateString(),
+        ssn: ssnDig, firmante: f.nombre.trim(), fecha: new Date().toLocaleDateString(),
       })
       const dataURL = `data:application/pdf;base64,${base64}`
       await httpsCallable(getFunctions(), 'walW9Set')({ driverId, dataURL, nombreFirmante: f.nombre.trim(), ssnLast4: ssnDig.slice(-4) })
@@ -2600,6 +2633,106 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
 
       {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pagos={pagos} pctDefault={tarifas.comisionFastPay} puedeEjecutar={pEjecutaFP} onCerrar={() => setFpRuta(null)} />}
       {pagoAbierto && res && <PagoModal driver={driver} semana={semana} saldo={res.saldo} onCerrar={() => setPagoAbierto(false)} />}
+    </div>
+  )
+}
+
+// ── FAST PAY (consola dedicada) ───────────────────────────────────────────────
+// Lista TODAS las rutas disponibles para adelantar (de todos los choferes), con
+// su botón de Fast Pay, confirmaciones y un resumen. Reutiliza FastPayModal.
+function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm }) {
+  const pPreparaFP = !perm || perm.owner || perm.permisos?.fp_preparar
+  const pEjecutaFP = !perm || perm.owner || perm.permisos?.fp_ejecutar
+  const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
+  const [modo, setModo] = useState('semana')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const [almId, setAlmId] = useState('')
+  const [q, setQ] = useState('')
+  const [vista, setVista] = useState('disponibles') // disponibles | en_proceso | liquidadas
+  const [fpRuta, setFpRuta] = useState(null)
+  const desde = modo === 'semana' ? lunesDe(fecha) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  const driverNombre = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
+  const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
+
+  const cambiarEstadoFP = async (p, nuevo, extra = {}) => {
+    try { await guardar(COL.pagos, p.id, { estado: nuevo, ...extra }); await auditar('fastpay-estado', `${p.driverNombre || ''} · ruta ${p.rutaId} · ${estadoFP(p)} → ${nuevo}`); walToast(`Fast Pay: ${ESTADO_FP_LABEL[nuevo]} ✓`, nuevo === 'confirmado' ? 'gold' : 'navy') } catch (e) { walToast('No se pudo: ' + (e.message || e), 'red') }
+  }
+  const anularFP = async (p) => { const nota = window.prompt('Anular este Fast Pay confirmado.\n\n¿Cómo RECUPERASTE el dinero adelantado? (obligatorio)'); if (nota == null) return; if (!nota.trim()) { walToast('Debes registrar la recuperación.', 'red'); return } await cambiarEstadoFP(p, 'anulado', { recuperacion: nota.trim(), anuladoEn: hoyISO() }) }
+
+  const txt = q.trim().toLowerCase()
+  const items = useMemo(() => rutas
+    .filter((r) => r.estado === 'completada' && r.fecha >= desde && r.fecha <= hasta && (!almId || r.almacenId === almId))
+    .filter((r) => !txt || `${r.driverNombre || driverNombre(r.driverId)} ${r.identificador || ''}`.toLowerCase().includes(txt))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+    .map((r) => {
+      const liq = liquidadoFPruta(pagos, r.id)
+      const bruto = gananciaDriver(r)
+      const resta = money2(bruto - liq)
+      const fp = pagos.find((p) => p.rutaId === r.id && (estadoFP(p) === 'pendiente' || estadoFP(p) === 'confirmado')) || null
+      const est = fp ? estadoFP(fp) : (resta > 0.005 ? 'disponible' : 'nada')
+      return { r, bruto, liq, resta, fp, est }
+    }), [rutas, pagos, desde, hasta, almId, txt, personas]) // eslint-disable-line
+  const disponibles = items.filter((x) => x.est === 'disponible')
+  const enProceso = items.filter((x) => x.est === 'pendiente')
+  const liquidadas = items.filter((x) => x.est === 'confirmado')
+  const totDisp = money2(disponibles.reduce((a, x) => a + x.resta, 0))
+  const totProceso = money2(enProceso.reduce((a, x) => a + (Number(x.fp.bruto) || 0), 0))
+  const totLiq = money2(liquidadas.reduce((a, x) => a + (Number(x.fp.efectivo) || 0), 0))
+  const totComis = money2(liquidadas.reduce((a, x) => a + (Number(x.fp.comision) || 0), 0))
+  const lista = vista === 'disponibles' ? disponibles : vista === 'en_proceso' ? enProceso : liquidadas
+  const VISTAS = [{ id: 'disponibles', l: `Disponibles (${disponibles.length})` }, { id: 'en_proceso', l: `En proceso (${enProceso.length})` }, { id: 'liquidadas', l: `Liquidadas (${liquidadas.length})` }]
+
+  return (
+    <div>
+      <PageTitle>Fast Pay · adelantos por ruta</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'semana'
+            ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <div className="relative min-w-[160px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{desde} → {hasta}</span>
+        </div>
+      </Card>
+
+      <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <KPI animado label="Disponible para FP" value={dinero(totDisp)} icon={Zap} accent="gold" sub={`${disponibles.length} rutas`} />
+        <KPI animado label="En proceso (pendiente)" value={dinero(totProceso)} icon={Clock} accent="navy" sub={`${enProceso.length} rutas`} />
+        <KPI animado label="Adelantado (confirmado)" value={dinero(totLiq)} icon={Wallet} accent="green" sub={`${liquidadas.length} rutas`} />
+        <KPI animado label="Comisiones (utilidad)" value={dinero(totComis)} icon={TrendingUp} accent="green" sub="ingreso compañía" />
+      </div>
+
+      <div className="mb-2 flex gap-1">
+        {VISTAS.map((v) => <button key={v.id} onClick={() => setVista(v.id)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${vista === v.id ? 'bg-brand-navy text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>{v.l}</button>)}
+      </div>
+
+      <Card className="p-0">
+        {lista.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-400">{vista === 'disponibles' ? 'No hay rutas disponibles para Fast Pay en este período.' : vista === 'en_proceso' ? 'Sin Fast Pay en proceso.' : 'Sin Fast Pay liquidados.'}</div>}
+        {lista.map(({ r, bruto, resta, fp }) => (
+          <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-navy/10 text-[10px] font-bold text-brand-navy dark:bg-white/10 dark:text-slate-100">{(driverNombre(r.driverId) || '?').slice(0, 2).toUpperCase()}</div>
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-brand-navy dark:text-slate-100">{driverNombre(r.driverId)}</div>
+              <div className="font-mono text-[11px] text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}{r.identificador ? ` · ${r.identificador}` : ''}</div>
+            </div>
+            {fp && <Badge color={fpBadge[estadoFP(fp)]}>{ESTADO_FP_LABEL[estadoFP(fp)]} {dinero(fp.bruto)}</Badge>}
+            <span className="ml-auto font-mono font-semibold">{dinero(bruto)}</span>
+            {vista === 'disponibles' && pPreparaFP && <Boton variant="gold" onClick={() => setFpRuta({ ...r, resta })}><Zap size={13} /> Fast Pay</Boton>}
+            {vista === 'en_proceso' && fp && (pEjecutaFP
+              ? <span className="flex items-center gap-2"><button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(fp, 'confirmado')}>Confirmar</button><button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(fp, 'fallido')}>Falló</button></span>
+              : <span className="text-xs text-slate-400">en proceso</span>)}
+            {vista === 'liquidadas' && fp && <span className="text-xs text-slate-400">efectivo {dinero(fp.efectivo)} · com. {dinero(fp.comision)}{pAnula && <button className="ml-2 font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(fp)}>anular</button>}</span>}
+          </div>
+        ))}
+      </Card>
+      <p className="mt-3 text-[11px] text-slate-400">Fast Pay adelanta el pago de una ruta completada con una comisión ({tarifas.comisionFastPay}%) que es tu <b>utilidad por financiamiento</b>. "Disponibles" son rutas sin adelanto; una ruta no se puede pagar dos veces.</p>
+
+      {fpRuta && <FastPayModal ruta={fpRuta} driver={personas.find((p) => p.id === fpRuta.driverId)} semana={lunesDe(fpRuta.fecha)} pagos={pagos} pctDefault={tarifas.comisionFastPay} puedeEjecutar={pEjecutaFP} onCerrar={() => setFpRuta(null)} />}
     </div>
   )
 }
