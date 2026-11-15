@@ -1539,6 +1539,7 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
     direccion: dirDefault, ciudadEstadoZip: czDefault, ssn: '',
   })
   const [acepto, setAcepto] = useState(false)
+  const [editando, setEditando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [err, setErr] = useState('')
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
@@ -1564,14 +1565,31 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
   }
   return (
     <Modal titulo="Formulario W-9 · certificación fiscal" onCerrar={onCerrar}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="sm:col-span-2"><F label="Nombre (como en tu declaración de impuestos)"><Input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} /></F></div>
-        <F label="Nombre de negocio (si aplica)"><Input value={f.businessName} onChange={(e) => set('businessName', e.target.value)} /></F>
-        <F label="Clasificación fiscal"><Select value={f.clasificacion} onChange={(e) => set('clasificacion', e.target.value)}>{['Individual / sole proprietor', 'C Corporation', 'S Corporation', 'Partnership', 'LLC', 'Trust/estate', 'Other'].map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
-        <div className="sm:col-span-2"><F label="Dirección (número y calle)"><Input value={f.direccion} onChange={(e) => set('direccion', e.target.value)} /></F></div>
-        <div className="sm:col-span-2"><F label="Ciudad, estado y código postal"><Input value={f.ciudadEstadoZip} onChange={(e) => set('ciudadEstadoZip', e.target.value)} /></F></div>
-        <F label="Número de Seguro Social (SSN)"><Input value={f.ssn} onChange={(e) => set('ssn', ssnFmt(e.target.value))} placeholder="000-00-0000" inputMode="numeric" /></F>
+      {/* Datos que YA están en tu perfil (confirmación, no se vuelven a pedir) */}
+      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/40">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Tus datos (de tu perfil)</span>
+          <button type="button" onClick={() => setEditando((v) => !v)} className="ml-auto text-xs font-semibold text-brand-gold hover:underline">{editando ? 'ocultar' : 'corregir'}</button>
+        </div>
+        {!editando ? (
+          <div className="space-y-0.5 text-slate-600 dark:text-slate-300">
+            <div><b className="text-brand-navy dark:text-slate-100">{f.nombre || '—'}</b></div>
+            <div className="text-xs">{f.direccion || '(sin dirección)'}{f.ciudadEstadoZip ? ` · ${f.ciudadEstadoZip}` : ''}</div>
+            <div className="text-xs">{f.clasificacion}</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2"><F label="Nombre (como en tu declaración)"><Input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} /></F></div>
+            <F label="Nombre de negocio (si aplica)"><Input value={f.businessName} onChange={(e) => set('businessName', e.target.value)} /></F>
+            <F label="Clasificación fiscal"><Select value={f.clasificacion} onChange={(e) => set('clasificacion', e.target.value)}>{['Individual / sole proprietor', 'C Corporation', 'S Corporation', 'Partnership', 'LLC', 'Trust/estate', 'Other'].map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+            <div className="sm:col-span-2"><F label="Dirección (número y calle)"><Input value={f.direccion} onChange={(e) => set('direccion', e.target.value)} /></F></div>
+            <div className="sm:col-span-2"><F label="Ciudad, estado y código postal"><Input value={f.ciudadEstadoZip} onChange={(e) => set('ciudadEstadoZip', e.target.value)} placeholder="Houston, TX 77001" /></F></div>
+          </div>
+        )}
       </div>
+      {/* Lo único que falta: el SSN (no se guarda en el perfil, por privacidad) */}
+      <F label="Número de Seguro Social (SSN) — requerido para el W-9"><Input value={f.ssn} onChange={(e) => set('ssn', ssnFmt(e.target.value))} placeholder="000-00-0000" inputMode="numeric" /></F>
+      <p className="mt-1 text-[11px] text-slate-400">Tu SSN no está guardado en el sistema (por seguridad); escríbelo solo aquí para tu W-9.</p>
       <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /> <span>Bajo pena de perjurio, certifico que la información es correcta, que el número es mi identificación fiscal y que soy una persona de EE. UU. Firmo con mi nombre.</span></label>
       <p className="mt-2 text-[11px] text-slate-400">¿Prefieres el PDF oficial del IRS? <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="font-semibold text-brand-gold hover:underline">Ábrelo aquí</a> y súbelo como documento.</p>
       {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
