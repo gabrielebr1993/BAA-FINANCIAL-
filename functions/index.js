@@ -2476,3 +2476,49 @@ exports.walW9Set = onCall(async (req) => {
   await db.collection('wal_audit').add({ accion: 'w9_firmado', detalle: `driver ${driverId} · ${nombreFirmante} · ••${ssnLast4}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
   return { ok: true }
 })
+
+// ── SSN del chofer CIFRADO (AES-256-GCM, misma llave que los datos bancarios) ──
+// Se guarda cifrado en wal_tax/{driverId}; nadie lo lee en claro desde la base
+// (el texto cifrado es inútil sin la llave del servidor). walTaxReveal lo
+// descifra solo para el DUEÑO o el propio chofer vinculado. Así el W-9 se
+// autocompleta sin volver a pedir el número.
+async function walUsuarioDe(req) {
+  const correo = String((req.auth && req.auth.token && req.auth.token.email) || '').toLowerCase()
+  if (!correo) return { correo: '', u: null }
+  try { const d = await db.collection('wal_usuarios').doc(correo).get(); return { correo, u: d.exists ? d.data() : null } } catch { return { correo, u: null } }
+}
+exports.walTaxSave = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
+  const { correo, u } = await walUsuarioDe(req)
+  if (!correo) throw new HttpsError('unauthenticated', 'Inicia sesión.')
+  let driverId = String((req.data && req.data.driverId) || '')
+  const esChoferVinc = !!u && u.activo !== false && u.rol === 'driver' && !!u.driverId
+  if (esChoferVinc) driverId = u.driverId
+  else {
+    const staffSube = !!u && u.activo !== false && u.permisos && u.permisos.docs_subir === true
+    if (!esDuenoReq(req) && !staffSube) throw new HttpsError('permission-denied', 'No autorizado.')
+  }
+  if (!driverId) throw new HttpsError('invalid-argument', 'Falta el chofer.')
+  const ssn = String((req.data && req.data.ssn) || '').replace(/\D/g, '')
+  if (ssn.length !== 9) throw new HttpsError('invalid-argument', 'El SSN debe tener 9 dígitos.')
+  const key = WAL_BANK_KEY.value()
+  await db.collection('wal_tax').doc(driverId).set({
+    ssnEnc: walCifrar(ssn, key), ssnLast4: ssn.slice(-4),
+    actualizadoEn: admin.firestore.FieldValue.serverTimestamp(), actualizadoPor: correo,
+  }, { merge: true })
+  await db.collection('wal_audit').add({ accion: 'ssn_guardado', detalle: `driver ${driverId} · ••${ssn.slice(-4)}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true, ssnLast4: ssn.slice(-4) }
+})
+exports.walTaxReveal = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
+  const { correo, u } = await walUsuarioDe(req)
+  if (!correo) throw new HttpsError('unauthenticated', 'Inicia sesión.')
+  let driverId = String((req.data && req.data.driverId) || '')
+  const esChoferVinc = !!u && u.activo !== false && u.rol === 'driver' && !!u.driverId
+  if (esChoferVinc) driverId = u.driverId
+  else if (!esDuenoReq(req)) throw new HttpsError('permission-denied', 'Solo el dueño o el propio chofer pueden ver el SSN.')
+  if (!driverId) throw new HttpsError('invalid-argument', 'Falta el chofer.')
+  const d = await db.collection('wal_tax').doc(driverId).get()
+  if (!d.exists) return { ssn: '', ssnLast4: '' }
+  const t = d.data()
+  await db.collection('wal_audit').add({ accion: 'ssn_revelado', detalle: `driver ${driverId} · ••${t.ssnLast4 || ''}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ssn: walDescifrar(t.ssnEnc, WAL_BANK_KEY.value()), ssnLast4: t.ssnLast4 || '' }
+})

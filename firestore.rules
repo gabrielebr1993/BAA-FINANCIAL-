@@ -821,6 +821,9 @@ service cloud.firestore {
     match /wal_audit/{id} { allow read: if esDuenoEcom() || walPerm('historial_ver'); allow create: if esDuenoEcom() || walActivo(); allow update, delete: if false; }
     // Datos bancarios CIFRADOS: leer dueño; escribir solo la Cloud Function.
     match /wal_bank/{id} { allow read: if esDuenoEcom(); allow write: if false; }
+    // SSN CIFRADO (wal_tax): el texto cifrado es inútil sin la llave; solo la
+    // Cloud Function escribe y descifra. Lectura directa solo el dueño.
+    match /wal_tax/{id} { allow read: if esDuenoEcom(); allow write: if false; }
 
     // Drivers/candidatos (con alcance de almacén; 'ambos' = visible para todos).
     match /wal_candidatos/{id} {

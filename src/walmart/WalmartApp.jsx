@@ -1402,13 +1402,14 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               </Card>
             )}
             {FiltroPeriodo}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Tile txt={String(res.rutasSemana.length)} l="Rutas del período" />
-              <Tile txt={dinero(res.totalGanado)} l="Total ganado" />
-              <Tile txt={dinero(res.efectivoFP)} l="Adelantado (Fast Pay)" />
-              <Tile txt={dinero(res.saldo)} l="Por cobrar" ambar={res.saldo > 0.005} />
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <KPI animado label="Rutas del período" value={String(res.rutasSemana.length)} icon={RouteIcon} accent="navy" />
+              <KPI animado label="Total ganado" value={dinero(res.totalGanado)} icon={DollarSign} accent="green" />
+              <KPI animado label="Adelantado (Fast Pay)" value={dinero(res.efectivoFP)} icon={Zap} accent="gold" sub="ya entregado" />
+              <KPI animado label="Por cobrar" value={dinero(res.saldo)} icon={Clock} accent={res.saldo > 0.005 ? 'gold' : 'green'} sub={res.saldo > 0.005 ? 'en la liquidación' : 'al día'} />
             </div>
-            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado. Si un Fast Pay está <b>pendiente</b>, aún no se ha confirmado el pago.</p>
+            {res.enProcesoFP > 0.005 && <Card className="mt-2 flex items-center gap-2 border-l-4 border-l-amber-400 p-3 text-xs text-slate-500"><Clock size={14} className="text-amber-500" /> Tienes <b className="text-brand-navy dark:text-slate-100">{dinero(res.enProcesoFP)}</b> en Fast Pay <b>pendiente</b> (aún sin confirmar).</Card>}
+            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado.</p>
           </>
         )}
 
@@ -1544,6 +1545,14 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
   const [err, setErr] = useState('')
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
   const ssnFmt = (s) => { const d = String(s).replace(/\D/g, '').slice(0, 9); return d.length > 5 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : d }
+  const [ssnRecordado, setSsnRecordado] = useState(false)
+  // Si el SSN ya está guardado (cifrado), lo prellenamos para no pedirlo de nuevo.
+  useEffect(() => {
+    if (!driverId) return
+    httpsCallable(getFunctions(), 'walTaxReveal')({ driverId })
+      .then((r) => { if (r?.data?.ssn) { setF((x) => ({ ...x, ssn: ssnFmt(r.data.ssn) })); setSsnRecordado(true) } })
+      .catch(() => { /* sin SSN guardado o función no desplegada: se pide normal */ })
+  }, [driverId]) // eslint-disable-line
   const guardar = async () => {
     const ssnDig = String(f.ssn).replace(/\D/g, '')
     if (!f.nombre.trim()) { setErr('Escribe tu nombre completo.'); return }
@@ -1559,6 +1568,8 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
       })
       const dataURL = `data:application/pdf;base64,${base64}`
       await httpsCallable(getFunctions(), 'walW9Set')({ driverId, dataURL, nombreFirmante: f.nombre.trim(), ssnLast4: ssnDig.slice(-4) })
+      // Guarda el SSN CIFRADO para que el próximo W-9 salga automático.
+      try { await httpsCallable(getFunctions(), 'walTaxSave')({ driverId, ssn: ssnDig }) } catch { /* no bloquea el W-9 */ }
       walToast('W-9 firmado y guardado ✓', 'gold')
       onCerrar()
     } catch (e) { setErr(e?.message || 'No se pudo guardar el W-9.') } finally { setEnviando(false) }
@@ -1587,9 +1598,9 @@ function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
           </div>
         )}
       </div>
-      {/* Lo único que falta: el SSN (no se guarda en el perfil, por privacidad) */}
-      <F label="Número de Seguro Social (SSN) — requerido para el W-9"><Input value={f.ssn} onChange={(e) => set('ssn', ssnFmt(e.target.value))} placeholder="000-00-0000" inputMode="numeric" /></F>
-      <p className="mt-1 text-[11px] text-slate-400">Tu SSN no está guardado en el sistema (por seguridad); escríbelo solo aquí para tu W-9.</p>
+      {/* SSN: se guarda CIFRADO para autocompletar el próximo W-9 */}
+      <F label={`Número de Seguro Social (SSN)${ssnRecordado ? ' · guardado ✓' : ''}`}><Input value={f.ssn} onChange={(e) => { set('ssn', ssnFmt(e.target.value)); setSsnRecordado(false) }} placeholder="000-00-0000" inputMode="numeric" /></F>
+      <p className="mt-1 text-[11px] text-slate-400">{ssnRecordado ? 'Tu SSN está guardado cifrado; solo se usa para generar tu W-9.' : 'Se guarda cifrado (como los datos bancarios) y se usa solo para tu W-9; la próxima vez saldrá automático.'}</p>
       <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /> <span>Bajo pena de perjurio, certifico que la información es correcta, que el número es mi identificación fiscal y que soy una persona de EE. UU. Firmo con mi nombre.</span></label>
       <p className="mt-2 text-[11px] text-slate-400">¿Prefieres el PDF oficial del IRS? <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="font-semibold text-brand-gold hover:underline">Ábrelo aquí</a> y súbelo como documento.</p>
       {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
