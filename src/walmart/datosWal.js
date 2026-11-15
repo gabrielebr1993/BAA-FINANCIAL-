@@ -99,6 +99,19 @@ export async function guardarUsuarioWal(email, data) {
 }
 export async function borrarUsuarioWal(email) { return borrar(COL.usuarios, idUsuarioWal(email)) }
 
+// ── Portal del chofer: consultas limitadas a SUS propios datos ────────────────
+// Suscribe a los documentos de una colección donde driverId == el del chofer.
+export function suscribirPorDriver(col, driverId, cb) {
+  if (!driverId) { cb([]); return () => {} }
+  const q = query(collection(db, col), where('driverId', '==', driverId))
+  return onSnapshot(q, (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => cb([]))
+}
+// Suscribe al documento del propio chofer (su ficha en wal_candidatos).
+export function suscribirMiFicha(driverId, cb) {
+  if (!driverId) { cb(null); return () => {} }
+  return onSnapshot(refDoc(COL.candidatos, driverId), (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null), () => cb(null))
+}
+
 // Estados operativos del candidato/driver (independientes de otros módulos).
 export const ESTADOS = [
   { id: 'candidato', label: 'Candidato', color: 'slate' },

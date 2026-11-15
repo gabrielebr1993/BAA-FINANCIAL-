@@ -803,6 +803,10 @@ service cloud.firestore {
     function walEnAlm(aid) {
       return walActivo() && (walDoc().warehouses.size() == 0 || (aid != null && aid in walDoc().warehouses));
     }
+    // Driver (chofer): acceso de SOLO LECTURA a SUS propios datos (driverId ligado).
+    function walEsDriverDe(did) {
+      return walActivo() && walDoc().rol == 'driver' && did != null && ('driverId' in walDoc()) && did == walDoc().driverId;
+    }
 
     // wal_usuarios: el dueño todo; cada quien LEE su propio doc; quien administra
     // usuarios puede leer/escribir, pero NADIE edita SU PROPIO doc (anti auto-elevación).
@@ -820,14 +824,14 @@ service cloud.firestore {
 
     // Drivers/candidatos (con alcance de almacén; 'ambos' = visible para todos).
     match /wal_candidatos/{id} {
-      allow read:   if esDuenoEcom() || (walPerm('drivers_ver') && (resource.data.almacen == 'ambos' || walEnAlm(resource.data.almacenId)));
+      allow read:   if esDuenoEcom() || walEsDriverDe(id) || (walPerm('drivers_ver') && (resource.data.almacen == 'ambos' || walEnAlm(resource.data.almacenId)));
       allow create: if esDuenoEcom() || (walPerm('drivers_crear') && (request.resource.data.almacen == 'ambos' || walEnAlm(request.resource.data.almacenId)));
       allow update: if esDuenoEcom() || (walPerm('drivers_editar') && (resource.data.almacen == 'ambos' || walEnAlm(resource.data.almacenId)));
       allow delete: if esDuenoEcom() || walPerm('drivers_editar');
     }
     // Rutas (alcance de almacén en cada acción).
     match /wal_rutas/{id} {
-      allow read:   if esDuenoEcom() || (walPerm('rutas_ver')    && walEnAlm(resource.data.almacenId));
+      allow read:   if esDuenoEcom() || walEsDriverDe(resource.data.driverId) || (walPerm('rutas_ver')    && walEnAlm(resource.data.almacenId));
       allow create: if esDuenoEcom() || (walPerm('rutas_crear')  && walEnAlm(request.resource.data.almacenId));
       allow update: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId) && walEnAlm(request.resource.data.almacenId));
       allow delete: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId));
@@ -844,7 +848,7 @@ service cloud.firestore {
     }
     // Pagos y Fast Pay (separa ver / preparar / ejecutar / anular por tipo).
     match /wal_pagos/{id} {
-      allow read:   if esDuenoEcom() || walPerm('pagos_ver') || walPerm('fp_ver');
+      allow read:   if esDuenoEcom() || walEsDriverDe(resource.data.driverId) || walPerm('pagos_ver') || walPerm('fp_ver');
       allow create: if esDuenoEcom()
                      || (request.resource.data.tipo == 'fastpay' && (walPerm('fp_preparar') || walPerm('fp_ejecutar')))
                      || (request.resource.data.tipo == 'pago' && walPerm('pagos_ejecutar'));
@@ -868,14 +872,14 @@ service cloud.firestore {
     }
     // Documentos del driver (ver / subir / descargar es lectura).
     match /wal_docs/{id} {
-      allow read:   if esDuenoEcom() || walPerm('docs_ver');
+      allow read:   if esDuenoEcom() || walEsDriverDe(resource.data.driverId) || walPerm('docs_ver');
       allow create: if esDuenoEcom() || walPerm('docs_subir');
       allow update: if esDuenoEcom() || walPerm('docs_subir');
       allow delete: if esDuenoEcom() || walPerm('docs_subir');
     }
     // Contratos y plantillas.
     match /wal_contratos/{id} {
-      allow read:  if esDuenoEcom() || walPerm('contratos_ver');
+      allow read:  if esDuenoEcom() || walEsDriverDe(resource.data.driverId) || walPerm('contratos_ver');
       allow write: if esDuenoEcom() || walPerm('contratos_gestionar');
     }
     match /wal_plantillas/{id} {

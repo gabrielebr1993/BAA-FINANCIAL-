@@ -113,6 +113,29 @@ test('wal_usuarios: cada quien LEE su propio doc; no el de otro (si no administr
   await assertFails(getDoc(doc(manager(), 'wal_usuarios', 'otro@test.com')))
 })
 
+test('DRIVER: lee SOLO sus propios datos, no los de otros, y no escribe', async () => {
+  await seedBase()
+  await sembrar('wal_usuarios', 'drv@test.com', { email: 'drv@test.com', rol: 'driver', activo: true, permisos: {}, warehouses: [], driverId: 'd1' })
+  await sembrar('wal_candidatos', 'd1', { nombre: 'Ana', almacenId: 'alm1' })
+  await sembrar('wal_candidatos', 'd2', { nombre: 'Beto', almacenId: 'alm2' })
+  await sembrar('wal_pagos', 'pg_d1', { tipo: 'pago', driverId: 'd1', monto: 50, semana: '2026-11-14' })
+  await sembrar('wal_pagos', 'pg_d2', { tipo: 'pago', driverId: 'd2', monto: 50, semana: '2026-11-14' })
+  const drv = ctx('drv', 'drv@test.com')
+  // lee su ruta, su ficha y su pago
+  await assertSucceeds(getDoc(doc(drv, 'wal_rutas', 'r_alm1')))      // driverId d1
+  await assertSucceeds(getDoc(doc(drv, 'wal_candidatos', 'd1')))
+  await assertSucceeds(getDoc(doc(drv, 'wal_pagos', 'pg_d1')))
+  // NO lee lo de otro driver
+  await assertFails(getDoc(doc(drv, 'wal_rutas', 'r_alm2')))         // driverId d2
+  await assertFails(getDoc(doc(drv, 'wal_candidatos', 'd2')))
+  await assertFails(getDoc(doc(drv, 'wal_pagos', 'pg_d2')))
+  // NO lee finanzas de la empresa
+  await assertFails(getDoc(doc(drv, 'wal_cobros', 'c1')))
+  // NO escribe (portal es solo lectura)
+  await assertFails(updateDoc(doc(drv, 'wal_rutas', 'r_alm1'), { estado: 'cancelada' }))
+  await assertFails(setDoc(doc(drv, 'wal_pagos', 'nuevo'), { tipo: 'pago', driverId: 'd1', monto: 999 }))
+})
+
 test('INACTIVO: un usuario desactivado pierde el acceso', async () => {
   await seedBase()
   await sembrar('wal_usuarios', 'mgr@test.com', {

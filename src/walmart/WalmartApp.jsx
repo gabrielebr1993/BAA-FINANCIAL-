@@ -48,6 +48,7 @@ import {
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
   financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes, idFactura,
   suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
+  suscribirPorDriver, suscribirMiFicha,
 } from './datosWal'
 import {
   ROLES_WAL, rolWalInfo, CATEGORIAS_PERM, TODOS_PERMISOS, DEP_DE, LABEL_PERM, PLANTILLA_ROL,
@@ -190,7 +191,7 @@ export default function WalmartApp() {
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
       {tab === 'contratos' && puede('contratos_ver') && <TabContratos contratos={contratos} plantillas={plantillas} personas={personasV} almacenes={almacenesV} tarifas={tarifas} />}
-      {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} perm={perm} />}
+      {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} personas={personas} perm={perm} />}
       {tab === 'config' && esDueno && <TabConfig />}
     </>
   )
@@ -199,6 +200,10 @@ export default function WalmartApp() {
   const sinAcceso = !esDueno && miWal !== undefined && tabsVisibles.length === 0
   if (miWal === undefined && !esDueno) {
     return <div className="grid min-h-screen place-items-center bg-surface dark:bg-surface-dark"><Spinner /></div>
+  }
+  // DRIVER (chofer): su portal propio, solo su información (antes de "sin acceso").
+  if (!esDueno && perm.rol === 'driver') {
+    return <WalmartDriverPortal driverId={miWal?.driverId} email={user?.email} tarifas={tarifas} onSalir={() => signOut(auth)} onCambiar={cambiarCarrier} />
   }
   if (sinAcceso) {
     return (
@@ -1275,8 +1280,179 @@ function TabConfig() {
   )
 }
 
+// ── PORTAL DEL CHOFER (Walmart) ───────────────────────────────────────────────
+// Solo lectura de SU propia información: rutas, pagos/Fast Pay + recibos,
+// documentos, contratos y perfil. Consultas limitadas por driverId (las reglas
+// de Firestore impiden ver datos de otros).
+function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
+  const [ficha, setFicha] = useState(null)
+  const [rutas, setRutas] = useState([])
+  const [pagos, setPagos] = useState([])
+  const [docs, setDocs] = useState([])
+  const [contratos, setContratos] = useState([])
+  const [sec, setSec] = useState('resumen') // resumen | rutas | pagos | docs | contratos
+  const [fecha, setFecha] = useState(hoyISO())
+  useEffect(() => suscribirMiFicha(driverId, setFicha), [driverId])
+  useEffect(() => suscribirPorDriver(COL.rutas, driverId, setRutas), [driverId])
+  useEffect(() => suscribirPorDriver(COL.pagos, driverId, setPagos), [driverId])
+  useEffect(() => suscribirPorDriver(COL.docs, driverId, setDocs), [driverId])
+  useEffect(() => suscribirPorDriver(COL.contratos, driverId, setContratos), [driverId])
+
+  const semana = lunesDe(fecha)
+  const res = driverId ? resumenSemana(rutas, pagos, driverId, semana) : null
+  const nombre = ficha ? nombreCompleto(ficha) : (email || 'Chofer')
+  const rutasSem = (rutas || []).filter((r) => lunesDe(r.fecha) === semana).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+  const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
+
+  if (!driverId) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-surface px-6 dark:bg-surface-dark">
+        <div className="max-w-md text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl text-white" style={{ background: WALMART_AZUL }}><Users size={26} /></div>
+          <h1 className="mt-4 text-xl font-extrabold text-brand-navy dark:text-slate-100">Portal del chofer</h1>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">Tu cuenta aún no está vinculada a un perfil de chofer. Pide al administrador que te asocie.</p>
+          <button onClick={onSalir} className="mx-auto mt-6 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 hover:text-slate-600"><LogOut size={15} /> Cerrar sesión</button>
+        </div>
+      </div>
+    )
+  }
+  const SECCIONES = [
+    { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
+    { id: 'rutas', label: 'Mis rutas', icono: RouteIcon },
+    { id: 'pagos', label: 'Mis pagos', icono: Wallet },
+    { id: 'docs', label: 'Documentos', icono: FileText },
+    { id: 'contratos', label: 'Contratos', icono: FileSignature },
+  ]
+  return (
+    <div className="min-h-screen bg-surface dark:bg-surface-dark">
+      <Toaster />
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/70 bg-white/85 px-4 py-3 backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/80">
+        <div className="grid h-9 w-9 place-items-center rounded-xl text-sm font-extrabold text-white" style={{ background: WALMART_AZUL }}>W</div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-extrabold text-brand-navy dark:text-slate-100">Hola, {String(nombre).split(' ')[0]}</div>
+          <div className="text-[11px] text-slate-400">Portal del chofer · Walmart</div>
+        </div>
+        <button onClick={onSalir} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={16} /></button>
+      </header>
+
+      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200/70 bg-white px-3 py-2 dark:border-slate-700/60 dark:bg-slate-900/60">
+        {SECCIONES.map((s) => { const I = s.icono; return (
+          <button key={s.id} onClick={() => setSec(s.id)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${sec === s.id ? 'text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`} style={sec === s.id ? { background: WALMART_AZUL } : undefined}><I size={14} /> {s.label}</button>
+        ) })}
+      </nav>
+
+      <div className="mx-auto w-full max-w-3xl p-3 sm:p-5">
+        {sec === 'resumen' && res && (
+          <>
+            <Card className="mb-3 flex items-center gap-3 p-4">
+              <Avatar p={ficha || { nombre }} size={52} />
+              <div className="min-w-0">
+                <div className="truncate text-lg font-extrabold text-brand-navy dark:text-slate-100">{nombre}</div>
+                <div className="text-xs text-slate-400">{ficha?.telefono || email}{ficha?.almacen ? ` · ${ficha.almacen}` : ''}</div>
+              </div>
+            </Card>
+            <div className="mb-3 flex items-center gap-2">
+              <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+              <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Tile txt={String(res.rutasSemana.length)} l="Rutas de la semana" />
+              <Tile txt={dinero(res.totalGanado)} l="Total ganado" />
+              <Tile txt={dinero(res.efectivoFP)} l="Adelantado (Fast Pay)" />
+              <Tile txt={dinero(res.saldo)} l="Por cobrar" ambar={res.saldo > 0.005} />
+            </div>
+            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación semanal. Si un Fast Pay está <b>pendiente</b>, aún no se ha confirmado el pago.</p>
+          </>
+        )}
+
+        {sec === 'rutas' && (
+          <Card className="p-0">
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis rutas · semana {semana}</div>
+            {rutasSem.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas esta semana.</div>}
+            {rutasSem.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}</span>
+                {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
+                <Badge color={estadoRutaInfo(r.estado).color === 'green' ? 'green' : estadoRutaInfo(r.estado).color === 'red' ? 'red' : 'slate'}>{estadoRutaInfo(r.estado).label}</Badge>
+                {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
+                <span className="ml-auto font-mono font-semibold">{dinero(gananciaDriver(r))}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {sec === 'pagos' && (
+          <>
+            <div className="mb-3 flex items-center gap-2">
+              <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+              <span className="pb-1 text-xs text-slate-400">{semana} → {domingoDe(fecha)}</span>
+            </div>
+            {res && (
+              <Card className="mb-3 p-3 text-sm">
+                <div className="mb-2 font-bold text-brand-navy dark:text-slate-100">Liquidación de la semana</div>
+                <div className="flex justify-between"><span className="text-slate-500">Total ganado</span><b className="font-mono">{dinero(res.totalGanado)}</b></div>
+                <div className="flex justify-between"><span className="text-slate-500">Adelantado por Fast Pay (efectivo)</span><b className="font-mono">{dinero(res.efectivoFP)}</b></div>
+                <div className="flex justify-between"><span className="text-slate-500">Otros pagos recibidos</span><b className="font-mono">{dinero(res.pagadoNormal)}</b></div>
+                <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar esta semana</span><b className="font-mono" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</b></div>
+              </Card>
+            )}
+            <Card className="p-0">
+              <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis recibos y movimientos</div>
+              {(pagos || []).filter((p) => p.semana === semana).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin movimientos esta semana.</div>}
+              {(pagos || []).filter((p) => p.semana === semana).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
+                const est = p.tipo === 'fastpay' ? estadoFP(p) : null
+                return (
+                  <div key={p.id || i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
+                    <Badge color={p.tipo === 'fastpay' ? 'gold' : 'navy'}>{p.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge>
+                    {est && <Badge color={fpBadge[est]}>{ESTADO_FP_LABEL[est]}</Badge>}
+                    <span className="font-mono text-xs text-slate-400">{p.fecha}</span>
+                    {p.tipo === 'fastpay'
+                      ? <span className="text-xs">recibiste <b>{dinero(p.efectivo)}</b> <span className="text-slate-400">(de {dinero(p.bruto)}, comisión {dinero(p.comision)})</span></span>
+                      : <span className="text-xs">recibiste <b>{dinero(p.monto)}</b></span>}
+                    {p.comprobante && <span className="text-xs italic text-slate-400">· {p.comprobante}</span>}
+                  </div>
+                )
+              })}
+            </Card>
+          </>
+        )}
+
+        {sec === 'docs' && (
+          <Card className="p-0">
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis documentos</div>
+            {(docs || []).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin documentos.</div>}
+            {(docs || []).map((d) => (
+              <div key={d.id} className="flex items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                <FileText size={15} className="text-slate-400" />
+                <span className="font-semibold text-brand-navy dark:text-slate-100">{d.nombre || d.tipo || 'Documento'}</span>
+                <span className="text-xs text-slate-400">{d.fecha}</span>
+                {d.dataURL && <a href={d.dataURL} download={d.nombre || 'documento'} className="ml-auto text-xs font-bold text-brand-gold hover:underline">descargar</a>}
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {sec === 'contratos' && (
+          <Card className="p-0">
+            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis contratos</div>
+            {(contratos || []).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin contratos.</div>}
+            {(contratos || []).map((c) => (
+              <div key={c.id} className="flex items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                <FileSignature size={15} className="text-slate-400" />
+                <span className="font-semibold text-brand-navy dark:text-slate-100">{c.titulo || c.plantillaNombre || 'Contrato'}</span>
+                <Badge color={c.estado === 'firmado' ? 'green' : 'slate'}>{c.estado || 'pendiente'}</Badge>
+                <span className="ml-auto text-xs text-slate-400">{c.fecha || c.creadoFecha || ''}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── USUARIOS Y PERMISOS (Walmart) ─────────────────────────────────────────────
-function TabUsuariosWal({ almacenes, perm }) {
+function TabUsuariosWal({ almacenes, personas, perm }) {
   const [usuarios, setUsuarios] = useState([])
   const [cargando, setCargando] = useState(true)
   const [editar, setEditar] = useState(null) // usuario a editar, o {} para nuevo
@@ -1312,18 +1488,20 @@ function TabUsuariosWal({ almacenes, perm }) {
           })}
         </div>
       )}
-      {editar && <WalUsuarioModal inicial={editar} almacenes={almacenes} editor={perm} onCerrar={() => setEditar(null)} />}
+      {editar && <WalUsuarioModal inicial={editar} almacenes={almacenes} personas={personas} editor={perm} onCerrar={() => setEditar(null)} />}
     </div>
   )
 }
 
-function WalUsuarioModal({ inicial, almacenes, editor, onCerrar }) {
+function WalUsuarioModal({ inicial, almacenes, personas, editor, onCerrar }) {
   const esNuevo = !!inicial.nuevo
   const [email, setEmail] = useState(inicial.email || '')
   const [rol, setRol] = useState(inicial.rol || 'manager')
   const [activo, setActivo] = useState(inicial.activo !== false)
   const [permisos, setPermisos] = useState(() => normalizarPermisos(inicial.permisos))
   const [warehouses, setWarehouses] = useState(Array.isArray(inicial.warehouses) ? inicial.warehouses : [])
+  const [driverId, setDriverId] = useState(inicial.driverId || '')
+  const drivers = (personas || []).filter((p) => p.estadoOperativo === 'activo' || p.id === inicial.driverId)
   const [verResumen, setVerResumen] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
@@ -1363,7 +1541,8 @@ function WalUsuarioModal({ inicial, almacenes, editor, onCerrar }) {
   const guardar2 = async () => {
     const correo = idUsuarioWal(email)
     if (!correo || !/.+@.+\..+/.test(correo)) { setErr('Correo válido requerido.'); return }
-    const payload = { rol, activo, permisos: rol === 'driver' ? {} : normalizarPermisos(permisos), warehouses }
+    if (rol === 'driver' && !driverId) { setErr('Elige a qué chofer (perfil) corresponde esta cuenta.'); return }
+    const payload = { rol, activo, permisos: rol === 'driver' ? {} : normalizarPermisos(permisos), warehouses, driverId: rol === 'driver' ? driverId : '' }
     const v = validarCambioPermisos(editor, { uid: inicial.uid, email: correo }, payload, idsAlm)
     if (!v.ok) { setErr(v.motivo); return }
     setErr(''); setGuardando(true)
@@ -1403,7 +1582,10 @@ function WalUsuarioModal({ inicial, almacenes, editor, onCerrar }) {
 
       {/* Matriz de permisos (oculta para driver) */}
       {rol === 'driver' ? (
-        <Aviso tipo="info" className="mt-3">El <b>driver</b> solo accede a su portal y a su propia información (sus rutas, pagos, Fast Pay, recibos, documentos, contratos y perfil). No usa el panel de permisos.</Aviso>
+        <div className="mt-3">
+          <F label="Perfil de chofer vinculado"><Select value={driverId} onChange={(e) => setDriverId(e.target.value)}><option value="">Elegir chofer…</option>{drivers.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+          <Aviso tipo="info" className="mt-2">El <b>driver</b> solo accede a su portal y a su propia información (sus rutas, pagos, Fast Pay, recibos, documentos, contratos y perfil). No usa el panel de permisos. Debe quedar vinculado a su perfil de chofer para ver sus datos.</Aviso>
+        </div>
       ) : (
         <div className="mt-3 max-h-[42vh] overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-slate-700">
           {CATEGORIAS_PERM.map((cat) => (

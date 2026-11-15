@@ -28,6 +28,9 @@ const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
 const WhApp = lazy(() => import('./warehouse/WhApp'))
 const AutoAsignApp = lazy(() => import('./autoasign/AutoAsignApp'))
 const FirmaPublica = lazy(() => import('./walmart/FirmaPublica'))
+// Acceso DIRECTO a Walmart (enlace compartible): login propio → Walmart sin
+// pasar por el selector de módulos. Redirección por rol dentro de WalmartApp.
+const WalmartAcceso = lazy(() => import('./walmart/WalmartAcceso'))
 const FirmaQR = lazy(() => import('./warehouse/staffing/printcheck/FirmaQR'))
 const SeguimientoPublico = lazy(() => import('./pages/SeguimientoPublico'))
 // Sitio público de marketing: páginas por función + "Por qué MilePay". Rutas
@@ -179,6 +182,10 @@ function TopBranch() {
   // Firma PÚBLICA de contrato Walmart (sin login, token en la URL): /wfirma?t=…
   if (pathname === '/wfirma') {
     return <Suspense fallback={<Cargando texto="Cargando…" />}><FirmaPublica /></Suspense>
+  }
+  // Acceso DIRECTO a Walmart (enlace para managers y choferes): /walmart.
+  if (pathname === '/walmart' || pathname.startsWith('/walmart/')) {
+    return <Suspense fallback={<Cargando texto="Cargando Walmart…" />}><WalmartAcceso /></Suspense>
   }
   // Selección de módulo / login: en /elegir (a donde llevan los botones de la landing).
   if (pathname === '/elegir') return <ModuleSelector />
