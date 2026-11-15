@@ -2443,3 +2443,36 @@ exports.walUsuarioCrear = onCall(async (req) => {
   await db.collection('wal_audit').add({ accion: creado ? 'wal_cuenta_creada' : 'wal_clave_actualizada', detalle: email, correo: correoActor || 'dueño', fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
   return { ok: true, uid, creado }
 })
+
+// ── W-9 del chofer: guardar el PDF firmado en sus documentos ──────────────────
+// Flujo INDEPENDIENTE del contrato. El chofer llena y firma su W-9 en el portal;
+// el PDF (con el SSN dentro) se genera en el navegador y se guarda aquí en
+// wal_docs ligado a SU driverId. El chofer no escribe en la base directamente.
+exports.walW9Set = onCall(async (req) => {
+  const correo = String((req.auth && req.auth.token && req.auth.token.email) || '').toLowerCase()
+  if (!correo) throw new HttpsError('unauthenticated', 'Inicia sesión.')
+  let driverId = String((req.data && req.data.driverId) || '')
+  // Autoriza: el chofer vinculado (para SU propio W-9), o dueño/staff con docs_subir.
+  let u = null
+  try { const ud = await db.collection('wal_usuarios').doc(correo).get(); u = ud.exists ? ud.data() : null } catch { /* noop */ }
+  const esChoferVinc = !!u && u.activo !== false && u.rol === 'driver' && !!u.driverId
+  if (esChoferVinc) { driverId = u.driverId } // el chofer solo puede subir el suyo
+  else {
+    const esDueno = esDuenoReq(req)
+    const staffSube = !!u && u.activo !== false && u.permisos && u.permisos.docs_subir === true
+    if (!esDueno && !staffSube) throw new HttpsError('permission-denied', 'No autorizado para subir el W-9.')
+  }
+  if (!driverId) throw new HttpsError('invalid-argument', 'Falta el chofer.')
+  const dataURL = String((req.data && req.data.dataURL) || '')
+  if (!dataURL.startsWith('data:application/pdf')) throw new HttpsError('invalid-argument', 'El PDF no es válido.')
+  if (dataURL.length > 1400000) throw new HttpsError('invalid-argument', 'El PDF es demasiado grande.')
+  const nombreFirmante = String((req.data && req.data.nombreFirmante) || '').slice(0, 120)
+  const ssnLast4 = String((req.data && req.data.ssnLast4) || '').replace(/\D/g, '').slice(-4)
+  await db.collection('wal_docs').add({
+    driverId, tipo: 'W-9', nombre: 'W-9 (firmado)', dataURL, firmanteNombre: nombreFirmante, ssnLast4,
+    estado: 'firmado', fecha: new Date().toISOString().slice(0, 10),
+    creadoEn: admin.firestore.FieldValue.serverTimestamp(), creadoPor: correo,
+  })
+  await db.collection('wal_audit').add({ accion: 'w9_firmado', detalle: `driver ${driverId} · ${nombreFirmante} · ••${ssnLast4}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true }
+})

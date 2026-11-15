@@ -30,6 +30,7 @@ import {
   CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
+import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
 import '../styles/cloudmotion.css'
 import './foldable.css'
@@ -1294,6 +1295,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   const [contratos, setContratos] = useState([])
   const [sec, setSec] = useState('resumen') // resumen | rutas | pagos | docs | contratos
   const [firmar, setFirmar] = useState(null) // contrato a firmar
+  const [w9Open, setW9Open] = useState(false)
   const [modo, setModo] = useState('semana') // semana | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -1462,20 +1464,40 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
           </>
         )}
 
-        {sec === 'docs' && (
-          <Card className="p-0">
-            <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis documentos</div>
-            {(docs || []).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin documentos.</div>}
-            {(docs || []).map((d) => (
-              <div key={d.id} className="flex items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
-                <FileText size={15} className="text-slate-400" />
-                <span className="font-semibold text-brand-navy dark:text-slate-100">{d.nombre || d.tipo || 'Documento'}</span>
-                <span className="text-xs text-slate-400">{d.fecha}</span>
-                {d.dataURL && <a href={d.dataURL} download={d.nombre || 'documento'} className="ml-auto text-xs font-bold text-brand-gold hover:underline">descargar</a>}
-              </div>
-            ))}
-          </Card>
-        )}
+        {sec === 'docs' && (() => {
+          const w9 = (docs || []).find((d) => d.tipo === 'W-9')
+          return (
+            <>
+              {/* W-9 — flujo independiente (autocompletado + firma propia) */}
+              <Card className="mb-3 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <FileText size={16} className="text-brand-gold" />
+                  <span className="font-bold text-brand-navy dark:text-slate-100">Formulario W-9</span>
+                  {w9 ? <Badge color="green">Firmado</Badge> : <Badge color="gold">Pendiente</Badge>}
+                  <div className="ml-auto flex items-center gap-2">
+                    {w9 && w9.dataURL && <a href={w9.dataURL} download="W-9.pdf" className="text-xs font-bold text-brand-gold hover:underline">descargar</a>}
+                    <Boton variant={w9 ? 'ghost' : 'gold'} onClick={() => setW9Open(true)}>{w9 ? 'Firmar de nuevo' : 'Completar y firmar'}</Boton>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">El W-9 es tu certificación fiscal (nombre, dirección y número de identificación/SSN). Es <b>independiente</b> del contrato: llénalo y fírmalo aquí. {w9 ? `Última firma: ${w9.fecha || ''}${w9.ssnLast4 ? ` · SSN ••${w9.ssnLast4}` : ''}.` : ''}</p>
+              </Card>
+
+              <Card className="p-0">
+                <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis documentos</div>
+                {(docs || []).length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin documentos.</div>}
+                {(docs || []).map((d) => (
+                  <div key={d.id} className="flex items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                    <FileText size={15} className="text-slate-400" />
+                    <span className="font-semibold text-brand-navy dark:text-slate-100">{d.nombre || d.tipo || 'Documento'}</span>
+                    {d.tipo === 'W-9' && <Badge color="green">W-9</Badge>}
+                    <span className="text-xs text-slate-400">{d.fecha}</span>
+                    {d.dataURL && <a href={d.dataURL} download={d.nombre || 'documento'} className="ml-auto text-xs font-bold text-brand-gold hover:underline">descargar</a>}
+                  </div>
+                ))}
+              </Card>
+            </>
+          )
+        })()}
 
         {sec === 'contratos' && (
           <Card className="p-0">
@@ -1501,7 +1523,63 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
         )}
       </div>
       {firmar && <FirmarContratoModal contrato={firmar} nombreDefault={nombre} onCerrar={() => setFirmar(null)} />}
+      {w9Open && <W9Modal ficha={ficha} driverId={driverId} nombreDefault={nombre} onCerrar={() => setW9Open(false)} />}
     </div>
+  )
+}
+
+// W-9 del chofer: autocompletado desde su ficha + firma propia, independiente
+// del contrato. Genera el PDF en el navegador y lo guarda vía Cloud Function.
+function W9Modal({ ficha, driverId, nombreDefault, onCerrar }) {
+  const dirDefault = ficha?.direccion || ''
+  const czDefault = [ficha?.ciudad, ficha?.estado, ficha?.zip || ficha?.codigoPostal].filter(Boolean).join(', ')
+  const [f, setF] = useState({
+    nombre: nombreDefault || (ficha ? nombreCompleto(ficha) : ''),
+    businessName: '', clasificacion: 'Individual / sole proprietor',
+    direccion: dirDefault, ciudadEstadoZip: czDefault, ssn: '',
+  })
+  const [acepto, setAcepto] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
+  const ssnFmt = (s) => { const d = String(s).replace(/\D/g, '').slice(0, 9); return d.length > 5 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : d }
+  const guardar = async () => {
+    const ssnDig = String(f.ssn).replace(/\D/g, '')
+    if (!f.nombre.trim()) { setErr('Escribe tu nombre completo.'); return }
+    if (!f.direccion.trim() || !f.ciudadEstadoZip.trim()) { setErr('Completa tu dirección, ciudad, estado y código postal.'); return }
+    if (ssnDig.length !== 9) { setErr('El SSN debe tener 9 dígitos.'); return }
+    if (!acepto) { setErr('Marca la casilla de certificación para firmar.'); return }
+    setErr(''); setEnviando(true)
+    try {
+      const base64 = await generarW9Base64({
+        nombre: f.nombre.trim(), businessName: f.businessName.trim(), clasificacion: f.clasificacion,
+        direccion: f.direccion.trim(), ciudadEstadoZip: f.ciudadEstadoZip.trim(),
+        ssn: ssnFmt(ssnDig), ssnFormateado: ssnFmt(ssnDig), firma: f.nombre.trim(), fecha: new Date().toLocaleDateString(),
+      })
+      const dataURL = `data:application/pdf;base64,${base64}`
+      await httpsCallable(getFunctions(), 'walW9Set')({ driverId, dataURL, nombreFirmante: f.nombre.trim(), ssnLast4: ssnDig.slice(-4) })
+      walToast('W-9 firmado y guardado ✓', 'gold')
+      onCerrar()
+    } catch (e) { setErr(e?.message || 'No se pudo guardar el W-9.') } finally { setEnviando(false) }
+  }
+  return (
+    <Modal titulo="Formulario W-9 · certificación fiscal" onCerrar={onCerrar}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2"><F label="Nombre (como en tu declaración de impuestos)"><Input value={f.nombre} onChange={(e) => set('nombre', e.target.value)} /></F></div>
+        <F label="Nombre de negocio (si aplica)"><Input value={f.businessName} onChange={(e) => set('businessName', e.target.value)} /></F>
+        <F label="Clasificación fiscal"><Select value={f.clasificacion} onChange={(e) => set('clasificacion', e.target.value)}>{['Individual / sole proprietor', 'C Corporation', 'S Corporation', 'Partnership', 'LLC', 'Trust/estate', 'Other'].map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+        <div className="sm:col-span-2"><F label="Dirección (número y calle)"><Input value={f.direccion} onChange={(e) => set('direccion', e.target.value)} /></F></div>
+        <div className="sm:col-span-2"><F label="Ciudad, estado y código postal"><Input value={f.ciudadEstadoZip} onChange={(e) => set('ciudadEstadoZip', e.target.value)} /></F></div>
+        <F label="Número de Seguro Social (SSN)"><Input value={f.ssn} onChange={(e) => set('ssn', ssnFmt(e.target.value))} placeholder="000-00-0000" inputMode="numeric" /></F>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} className="mt-0.5" /> <span>Bajo pena de perjurio, certifico que la información es correcta, que el número es mi identificación fiscal y que soy una persona de EE. UU. Firmo con mi nombre.</span></label>
+      <p className="mt-2 text-[11px] text-slate-400">¿Prefieres el PDF oficial del IRS? <a href={W9_OFICIAL_URL} target="_blank" rel="noreferrer" className="font-semibold text-brand-gold hover:underline">Ábrelo aquí</a> y súbelo como documento.</p>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={enviando} onClick={guardar}>{enviando ? <Spinner /> : 'Generar, firmar y guardar W-9'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+    </Modal>
   )
 }
 
