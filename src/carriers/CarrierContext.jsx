@@ -250,10 +250,18 @@ function CarrierEnPreparacion({ id }) {
 // Compañía LISTA (Gofo o SpeedX) → las MISMAS rutas/pantallas de siempre: el
 // aislamiento y el algoritmo cambian por debajo (DataContext + parsers).
 export function CarrierGate({ children }) {
-  const { user, cargando, esDriver } = useAuth()
+  const { user, cargando, esDriver, perfil, esSuperAdmin } = useAuth()
   const { carrier, setCarrier, cambiarCarrier } = useCarrier()
   const permitidos = useCarriersPermitidos()
   const activo = !cargando && !!user && !esDriver
+  // Usuario que SOLO existe en Walmart (cuenta de login sin perfil del sistema
+  // general y que no es súper-admin): su experiencia es Walmart directo — sin
+  // selector de módulos y sin acceso a otros módulos. WalmartApp decide portal
+  // del chofer / operación / "sin acceso" según sus permisos (wal_usuarios).
+  // No afecta a usuarios de Gofo/Speedex (que SÍ tienen perfil) ni al dueño.
+  if (activo && !esSuperAdmin && !perfil) {
+    return <Suspense fallback={null}><WalmartApp /></Suspense>
+  }
   // ACCESO POR USUARIO: si la compañía elegida (p. ej. quedó guardada en este
   // navegador por otro usuario) NO está permitida para esta cuenta, se limpia;
   // y si el usuario solo tiene UNA compañía permitida, entra directo sin selector.
