@@ -38,7 +38,8 @@ import {
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia, borrarRutaActualizandoCierre,
-  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay,
+  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay, conciliacionSemana, utilidadFinanciamiento,
+  ESTADOS_FP, ESTADO_FP_LABEL, ESTADO_FP_COLOR, estadoFP, fpLiquida, fpBloquea, rutaBloqueadaFP, fpDeRuta,
   CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
   tokenAleatorio, datosDeDriver,
@@ -1706,6 +1707,24 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
   const totPorPagar = money2(lista.reduce((a, x) => a + Math.max(0, x.r.saldo), 0))
   const nPend = lista.filter((x) => x.r.estado !== 'pagado' && x.r.saldo > 0.005).length
 
+  // Colores de badge por estado Fast Pay.
+  const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
+  // Cambia el estado de un pago Fast Pay (confirmar / marcar fallido).
+  const cambiarEstadoFP = async (p, nuevo, extra = {}) => {
+    try {
+      await guardar(COL.pagos, p.id, { estado: nuevo, ...extra })
+      await auditar('fastpay-estado', `${p.driverNombre || ''} · ruta ${p.rutaId} · ${estadoFP(p)} → ${nuevo}`)
+      walToast(`Fast Pay: ${ESTADO_FP_LABEL[nuevo]} ✓`, nuevo === 'confirmado' ? 'gold' : 'navy')
+    } catch (e) { walToast('No se pudo actualizar: ' + (e.message || e), 'red') }
+  }
+  // Anula un Fast Pay confirmado: exige registrar cómo se recuperó el dinero.
+  const anularFP = async (p) => {
+    const nota = window.prompt('Anular este Fast Pay confirmado.\n\nEscribe cómo se RECUPERÓ el dinero adelantado al driver (obligatorio):')
+    if (nota == null) return
+    if (!nota.trim()) { walToast('Debes registrar la recuperación para poder anular.', 'red'); return }
+    await cambiarEstadoFP(p, 'anulado', { recuperacion: nota.trim(), anuladoEn: hoyISO() })
+  }
+
   return (
     <div>
       <PageTitle>Pagos y Fast Pay</PageTitle>
@@ -1762,8 +1781,12 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
             <Tile txt={dinero(res.efectivoFP)} l="Efectivo entregado (FP)" />
             <Tile txt={dinero(res.comisiones)} l="Comisiones FP (ingreso compañía)" verde />
             <Tile txt={dinero(res.pagadoNormal)} l="Otros pagos" />
+            {res.enProcesoFP > 0.005 && <Tile txt={dinero(res.enProcesoFP)} l="En proceso (FP pendiente)" ambar />}
             <Tile txt={dinero(res.saldo)} l="Saldo pendiente" ambar={res.saldo > 0.005} />
           </div>
+          <Card className="mb-3 p-3 text-xs text-slate-500 dark:text-slate-400">
+            <b className="text-brand-navy dark:text-slate-100">Conciliación de la semana:</b> {res.rutasSemana.length} rutas · bruto generado {dinero(res.totalGanado)} · liquidado por Fast Pay {dinero(res.liquidadoFP)} · comisiones {dinero(res.comisiones)} (ingreso aparte, <b>no</b> se resta del saldo) · otros pagos {dinero(res.pagadoNormal)} → <b>saldo pendiente {dinero(res.saldo)}</b>.
+          </Card>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge color={badgeEstado[res.estado]}>{res.estado === 'pagado' ? 'Pagado' : res.estado === 'parcial' ? 'Parcialmente pagado' : 'Pendiente'}</Badge>
             {res.saldo > 0.005 && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
@@ -1777,14 +1800,23 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
               const liq = liquidadoFPruta(pagos, r.id)
               const bruto = gananciaDriver(r)
               const resta = money2(bruto - liq)
+              const fpPend = pagos.find((p) => p.rutaId === r.id && estadoFP(p) === 'pendiente') || null
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
                   <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label}</span>
                   {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
                   <span className="font-mono font-semibold">{dinero(bruto)}</span>
-                  {liq > 0 && <Badge color="gold">FP {dinero(liq)}</Badge>}
+                  {liq > 0 && <Badge color="green">FP liquidado {dinero(liq)}</Badge>}
+                  {fpPend && <Badge color="gold">FP en proceso {dinero(fpPend.bruto)}</Badge>}
                   <span className="ml-auto text-xs text-slate-400">resta {dinero(resta)}</span>
-                  {resta > 0.005 && <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => setFpRuta({ ...r, resta })}><Zap size={12} className="mb-0.5 mr-0.5 inline" />Fast Pay</button>}
+                  {fpPend ? (
+                    <span className="flex items-center gap-2">
+                      <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'confirmado')}>Confirmar</button>
+                      <button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'fallido')}>Falló</button>
+                    </span>
+                  ) : resta > 0.005 ? (
+                    <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => setFpRuta({ ...r, resta })}><Zap size={12} className="mb-0.5 mr-0.5 inline" />Fast Pay</button>
+                  ) : null}
                 </div>
               )
             })}
@@ -1793,70 +1825,93 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
           {res.pagos.length > 0 && (
             <Card className="p-0">
               <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Movimientos de la semana</div>
-              {res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
+              {res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
+                const est = p.tipo === 'fastpay' ? estadoFP(p) : null
+                return (
+                <div key={p.id || i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
                   <Badge color={p.tipo === 'fastpay' ? 'gold' : 'navy'}>{p.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge>
+                  {est && <Badge color={fpBadge[est]}>{ESTADO_FP_LABEL[est]}</Badge>}
                   <span className="font-mono text-xs text-slate-400">{p.fecha}</span>
                   {p.tipo === 'fastpay'
                     ? <span className="text-xs">bruto {dinero(p.bruto)} · comisión {dinero(p.comision)} ({p.comisionPct}%) · efectivo <b>{dinero(p.efectivo)}</b></span>
                     : <span className="text-xs">monto <b>{dinero(p.monto)}</b></span>}
+                  {p.recuperacion && <span className="text-xs italic text-slate-400">recuperación: {p.recuperacion}</span>}
                   <span className="ml-auto text-xs text-slate-400">{p.metodo}{p.referencia ? ` · ${p.referencia}` : ''}{p.responsable ? ` · ${p.responsable}` : ''}</span>
+                  {est === 'pendiente' && (
+                    <span className="flex items-center gap-2">
+                      <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(p, 'confirmado')}>Confirmar</button>
+                      <button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(p, 'fallido')}>Falló</button>
+                    </span>
+                  )}
+                  {est === 'confirmado' && <button className="text-xs font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(p)}>Anular</button>}
                 </div>
-              ))}
+                )
+              })}
             </Card>
           )}
         </>
       )}
 
-      {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pctDefault={tarifas.comisionFastPay} onCerrar={() => setFpRuta(null)} />}
+      {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pagos={pagos} pctDefault={tarifas.comisionFastPay} onCerrar={() => setFpRuta(null)} />}
       {pagoAbierto && res && <PagoModal driver={driver} semana={semana} saldo={res.saldo} onCerrar={() => setPagoAbierto(false)} />}
     </div>
   )
 }
 
-function FastPayModal({ ruta, driver, semana, pctDefault, onCerrar }) {
+function FastPayModal({ ruta, driver, semana, pagos, pctDefault, onCerrar }) {
   const [bruto, setBruto] = useState(ruta.resta)
   const [pct, setPct] = useState(pctDefault)
   const [metodo, setMetodo] = useState('Efectivo')
   const [referencia, setReferencia] = useState('')
   const [responsable, setResponsable] = useState('')
+  const [comprobante, setComprobante] = useState('')
+  const [estadoIni, setEstadoIni] = useState('confirmado') // confirmado | pendiente
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
   const calc = calcularFastPay(bruto, pct)
   const restante = money2(ruta.resta - calc.bruto)
+  const yaBloqueada = rutaBloqueadaFP(pagos || [], ruta.id) // anti doble pago
   const confirmar = async () => {
+    if (yaBloqueada) { setErr('Esta ruta ya tiene un Fast Pay en proceso o liquidado. No se puede pagar dos veces.'); return }
     if (calc.bruto <= 0) { setErr('El bruto debe ser mayor a 0.'); return }
     if (calc.bruto > ruta.resta + 0.005) { setErr(`No puedes liquidar más que el saldo de la ruta (${dinero(ruta.resta)}).`); return }
     setErr(''); setGuardando(true)
     try {
-      await guardar(COL.pagos, null, {
-        tipo: 'fastpay', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, rutaId: ruta.id,
+      // id determinista por ruta → un segundo intento (incluso simultáneo desde
+      // este navegador) escribe el MISMO documento en vez de duplicar el pago.
+      const idDet = `fp_${ruta.id}`.replace(/[^a-zA-Z0-9_]/g, '')
+      await guardar(COL.pagos, idDet, {
+        tipo: 'fastpay', estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver), semana, rutaId: ruta.id, almacenId: ruta.almacenId || '',
         bruto: calc.bruto, comisionPct: Number(pct) || 0, comision: calc.comision, efectivo: calc.efectivo,
-        fecha: hoyISO(), metodo, referencia, responsable,
+        fecha: hoyISO(), metodo, referencia, responsable, comprobante,
       })
-      await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
-      walToast('Fast Pay registrado ✓', 'gold')
+      await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · ${estadoIni} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
+      walToast(estadoIni === 'confirmado' ? 'Fast Pay confirmado ✓' : 'Fast Pay iniciado (pendiente)', 'gold')
       onCerrar()
     } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
   return (
     <Modal titulo="Fast Pay (anticipo de una ruta completada)" onCerrar={onCerrar}>
+      {yaBloqueada && <Aviso tipo="warn" className="mb-2">Esta ruta ya tiene un Fast Pay en proceso o liquidado. No se puede volver a pagar.</Aviso>}
       <Grid>
         <F label="Importe bruto a liquidar"><Input type="number" value={bruto} onChange={(e) => setBruto(e.target.value)} /></F>
         <F label="Comisión (%)"><Input type="number" step="0.5" value={pct} onChange={(e) => setPct(e.target.value)} /></F>
+        <F label="Estado del pago"><Select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value)}><option value="confirmado">Confirmado (pagado ahora)</option><option value="pendiente">Pendiente (en proceso)</option></Select></F>
         <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
         <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
         <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
+        <F label="Comprobante (nota / # recibo)"><Input value={comprobante} onChange={(e) => setComprobante(e.target.value)} /></F>
       </Grid>
       <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
         <div className="flex justify-between"><span>Bruto liquidado</span><b className="font-mono">{dinero(calc.bruto)}</b></div>
         <div className="flex justify-between text-amber-700 dark:text-amber-300"><span>Comisión ({pct}%) — ingreso de la compañía</span><b className="font-mono">−{dinero(calc.comision)}</b></div>
         <div className="flex justify-between border-t border-amber-200 pt-1 dark:border-amber-500/30"><span>Efectivo a entregar al driver</span><b className="font-mono text-emerald-600">{dinero(calc.efectivo)}</b></div>
         <div className="mt-1 flex justify-between text-xs text-slate-500"><span>Saldo restante de la ruta</span><span className="font-mono">{dinero(restante)}</span></div>
+        <div className="mt-1 text-[11px] text-slate-500">{estadoIni === 'confirmado' ? 'Se liquida la ruta de inmediato y la comisión cuenta como utilidad por financiamiento.' : 'La ruta queda bloqueada (no se puede volver a pagar) pero NO se liquida hasta confirmar.'}</div>
       </div>
       {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
       <div className="mt-3 flex gap-2">
-        <Boton variant="gold" disabled={guardando} onClick={confirmar}>{guardando ? <Spinner /> : 'Confirmar Fast Pay'}</Boton>
+        <Boton variant="gold" disabled={guardando || yaBloqueada} onClick={confirmar}>{guardando ? <Spinner /> : (estadoIni === 'confirmado' ? 'Confirmar Fast Pay' : 'Iniciar (pendiente)')}</Boton>
         <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
       </div>
     </Modal>
@@ -2074,6 +2129,8 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
   const lenDias = Math.max(0, Math.round((new Date(`${hasta}T00:00:00`) - new Date(`${desde}T00:00:00`)) / 86400000))
   const prevDesde = sumarDias(prevHasta, -lenDias)
   const finPrev = useMemo(() => financieroRango(rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId), [rutas, pagos, gastos, cobros, prevDesde, prevHasta, almId])
+  // Utilidad por financiamiento (Fast Pay): concepto independiente; solo confirmados.
+  const uf = useMemo(() => utilidadFinanciamiento(pagos, rutas, desde, hasta, { almacenId: almId }), [pagos, rutas, desde, hasta, almId])
   const tr = (cur, prev) => (prev && isFinite(prev) && prev !== 0 ? (cur - prev) / Math.abs(prev) : null)
   const comparativa = [
     { label: 'Ingreso', actual: fin.ingresoRutas, anterior: finPrev.ingresoRutas },
@@ -2137,6 +2194,18 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         <FilaFin l="Comisiones de Fast Pay (ingreso aparte)" v={fin.comisionesFP} verde />
         <FilaFin l="Resultado operativo" v={fin.resultadoOperativo} fuerte borde />
         {fin.gastoFinanc > 0 && <p className="mt-2 text-[11px] text-slate-400">+ {dinero(fin.gastoFinanc)} de financiamiento (Cargo Vans): es salida de caja, no entra al resultado operativo.</p>}
+      </Card>
+
+      {/* utilidad por financiamiento (Fast Pay) — concepto independiente */}
+      <Card className="mb-3 p-4">
+        <div className="mb-2 flex items-center gap-2"><Zap size={15} className="text-brand-gold" /><span className="text-sm font-bold text-brand-navy dark:text-slate-100">Utilidad por financiamiento · Fast Pay</span><Badge color="gold">solo confirmados</Badge></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Tile txt={dinero(uf.comision)} l="Utilidad (comisiones)" verde />
+          <Tile txt={dinero(uf.bruto)} l="Bruto financiado" />
+          <Tile txt={dinero(uf.desembolsado)} l="Neto desembolsado" />
+          <Tile txt={`${uf.nPagos} · ${uf.nRutas} rutas`} l="Pagos confirmados" />
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Es la ganancia del servicio Fast Pay, <b>independiente</b> del resultado operativo. Solo cuenta pagos <b>confirmados</b>; los anulados y fallidos no suman. {almId ? 'Filtrado por el almacén elegido.' : 'Todos los almacenes.'}</p>
       </Card>
 
       {/* flujo de caja */}

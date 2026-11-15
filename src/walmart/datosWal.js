@@ -13,6 +13,15 @@ import {
   serverTimestamp, writeBatch, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../firebase'
+// Núcleo de cálculo PURO (sin Firebase) — se re-exporta para el resto de la app.
+import {
+  money2, hoyISO, inicioSemana, finSemana, lunesDe, domingoDe,
+  otIngresoRuta, otPagoRuta, ingresoRuta, gananciaDriver,
+  METODOS_PAGO, ESTADOS_FP, ESTADO_FP_LABEL, ESTADO_FP_COLOR,
+  estadoFP, fpLiquida, fpBloquea, rutaBloqueadaFP, fpDeRuta, liquidadoFPruta,
+  resumenSemana, conciliacionSemana, calcularFastPay, utilidadFinanciamiento,
+} from './wmcalc'
+export * from './wmcalc'
 
 // ── Media: foto/documentos como dataURL (sin Storage; reglas wal_* los cubren) ─
 // Lee una imagen y la redimensiona/comprime a JPEG para que pese poco.
@@ -142,22 +151,8 @@ export const tieneRatePropio = (driver) => driver?.rateDriver != null && driver.
 export const ingresoDeAlmacen = (alm, tarifas) => money2(alm?.tarifaWalmart != null && alm.tarifaWalmart !== '' && !isNaN(Number(alm.tarifaWalmart)) ? Number(alm.tarifaWalmart) : tarifas?.ingresoWalmart)
 
 // ── Semana operativa de Walmart: SÁBADO (Día 1) → VIERNES (Día 7) ────────────
-// La clave de semana (`semana`) es la fecha ISO del SÁBADO de inicio.
-// Nota: `lunesDe`/`domingoDe` se conservan por compatibilidad de nombres, pero
-// ahora devuelven el SÁBADO de inicio y el VIERNES de cierre de la semana.
-export function inicioSemana(fechaISO) {
-  const d = new Date(`${fechaISO || hoyISO()}T00:00:00`)
-  const dow = (d.getDay() + 1) % 7 // 0 = sábado (getDay: dom0..sáb6)
-  d.setDate(d.getDate() - dow)
-  return d.toISOString().slice(0, 10)
-}
-export function finSemana(fechaISO) {
-  const d = new Date(`${inicioSemana(fechaISO)}T00:00:00`); d.setDate(d.getDate() + 6); return d.toISOString().slice(0, 10)
-}
-// Aliases de compatibilidad (todo el sistema los usa como clave de semana).
-export const lunesDe = inicioSemana
-export const domingoDe = finSemana
-export const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+// `inicioSemana`/`finSemana`/`lunesDe`/`domingoDe`/`hoyISO` viven en wmcalc.js
+// (núcleo puro) y se re-exportan arriba.
 
 export const BLOQUES = [{ id: 'manana', label: 'Mañana' }, { id: 'tarde', label: 'Tarde' }]
 
@@ -215,35 +210,15 @@ export const ESTADOS_RUTA = [
 ]
 export const estadoRutaInfo = (id) => ESTADOS_RUTA.find((e) => e.id === id) || ESTADOS_RUTA[0]
 
-// Redondeo monetario a centavos.
-export const money2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+// `money2` vive en wmcalc.js (núcleo puro) y se re-exporta arriba.
 
 // id determinista de ruta (evita duplicar misma almacén+fecha+bloque+driver).
 export function idRuta(almacenId, fecha, bloque, driverId) {
   return `r_${almacenId}_${fecha}_${bloque}_${driverId}`.replace(/[^a-zA-Z0-9_]/g, '')
 }
 
-// Suma de bonos/deducciones de una ruta por destino ('walmart' | 'driver').
-function ajustes(r, destino) {
-  const b = (r.bonos || []).filter((x) => x.aplicaA === destino).reduce((a, x) => a + (Number(x.monto) || 0), 0)
-  const d = (r.deducciones || []).filter((x) => x.aplicaA === destino).reduce((a, x) => a + (Number(x.monto) || 0), 0)
-  return money2(b - d)
-}
-// OT (overtime) de la ruta: total que paga Walmart y total que paga la compañía al driver.
-export const otIngresoRuta = (r) => money2(Number(r?.otIngreso) || 0)
-export const otPagoRuta = (r) => money2(Number(r?.otPago) || 0)
-// Ingreso que corresponde recibir de Walmart por la ruta (0 si no completada).
-// Incluye el OT (overtime) que Walmart paga.
-export function ingresoRuta(r) {
-  if (r.estado !== 'completada') return 0
-  return money2((Number(r.tarifaWalmart) || 0) + otIngresoRuta(r) + ajustes(r, 'walmart'))
-}
-// Ganancia bruta del driver por la ruta, antes de Fast Pay (0 si no completada).
-// Incluye el OT que se le paga al driver.
-export function gananciaDriver(r) {
-  if (r.estado !== 'completada') return 0
-  return money2((Number(r.tarifaDriver) || 0) + otPagoRuta(r) + ajustes(r, 'driver'))
-}
+// `otIngresoRuta`/`otPagoRuta`/`ingresoRuta`/`gananciaDriver` (y `ajustes`
+// interno) viven en wmcalc.js (núcleo puro) y se re-exportan arriba.
 
 // ── Dashboard: series semanales y cuentas por cobrar (net-30) ───────────────
 // Devuelve las claves (lunes) de las últimas n semanas que terminan en la
@@ -331,36 +306,10 @@ export function datosDeDriver(driver, almacenNombre, empresa, tarifa) {
 }
 
 // ── Pagos y Fast Pay ────────────────────────────────────────────────────────
-export const METODOS_PAGO = ['Efectivo', 'Zelle', 'Transferencia', 'Cheque', 'Otro']
-
-// Importe bruto de una ruta ya liquidado mediante Fast Pay (suma de sus FP).
-export function liquidadoFPruta(pagos, rutaId) {
-  return money2((pagos || []).filter((p) => p.tipo === 'fastpay' && p.rutaId === rutaId).reduce((a, p) => a + (Number(p.bruto) || 0), 0))
-}
-
-// Resumen de una semana para un driver (lunes–domingo por fecha de servicio).
-// Regla Fast Pay: el bruto ya liquidado NO se vuelve a pagar ni a comisionar;
-// la comisión retenida es ingreso de la compañía (aparte), no un saldo.
-export function resumenSemana(rutas, pagos, driverId, semana) {
-  const rs = (rutas || []).filter((r) => r.driverId === driverId && lunesDe(r.fecha) === semana && r.estado === 'completada')
-  const totalGanado = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
-  const ps = (pagos || []).filter((p) => p.driverId === driverId && p.semana === semana)
-  const fp = ps.filter((p) => p.tipo === 'fastpay')
-  const liquidadoFP = money2(fp.reduce((a, p) => a + (Number(p.bruto) || 0), 0))
-  const comisiones = money2(fp.reduce((a, p) => a + (Number(p.comision) || 0), 0))
-  const efectivoFP = money2(fp.reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
-  const pagadoNormal = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
-  const saldo = money2(totalGanado - liquidadoFP - pagadoNormal)
-  const estado = saldo <= 0.005 ? 'pagado' : (liquidadoFP + pagadoNormal > 0 ? 'parcial' : 'pendiente')
-  return { rutasSemana: rs, totalGanado, liquidadoFP, comisiones, efectivoFP, pagadoNormal, saldo, estado, pagos: ps }
-}
-
-// Calcula los montos de un Fast Pay (comisión del % sobre el BRUTO liquidado).
-export function calcularFastPay(bruto, comisionPct) {
-  const b = money2(bruto)
-  const comision = money2(b * (Number(comisionPct) || 0) / 100)
-  return { bruto: b, comision, efectivo: money2(b - comision) }
-}
+// `METODOS_PAGO`, los estados Fast Pay (ESTADOS_FP, estadoFP, fpLiquida,
+// fpBloquea, rutaBloqueadaFP, fpDeRuta, liquidadoFPruta), `resumenSemana`,
+// `conciliacionSemana`, `calcularFastPay` y `utilidadFinanciamiento` viven en
+// wmcalc.js (núcleo puro, probado con Node) y se re-exportan arriba.
 
 // ── Gastos ──────────────────────────────────────────────────────────────────
 export const CATEGORIAS_GASTO = ['Cargo Van (financiamiento)', 'Seguro', 'Gasolina', 'Reparación', 'Mantenimiento', 'Renta', 'Nómina', 'Suministros', 'Otro']
@@ -393,8 +342,8 @@ export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId
   const margen = money2(ingresoRutas - costoDrivers)
   const driversAlm = new Set(rs.map((r) => r.driverId))
   const ps = (pagos || []).filter((p) => p.semana === semana && (!almacenId || driversAlm.has(p.driverId)))
-  const comisionesFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.comision) || 0), 0))
-  const efectivoFP = money2(ps.filter((p) => p.tipo === 'fastpay').reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+  const comisionesFP = money2(ps.filter(fpLiquida).reduce((a, p) => a + (Number(p.comision) || 0), 0))
+  const efectivoFP = money2(ps.filter(fpLiquida).reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
   const pagosNormales = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
   const gs = (gastos || []).filter((g) => enAlm(g.almacenId) || !g.almacenId)
   let gastosOper = 0, gastoFinanc = 0, gastosPagados = 0
@@ -424,6 +373,8 @@ export function financieroRango(rutas, pagos, gastos, cobros, desde, hasta, alma
   }
   return acc
 }
+
+// `utilidadFinanciamiento` vive en wmcalc.js (núcleo puro) y se re-exporta arriba.
 
 // ── Fechas de mes / rango y facturación ──────────────────────────────────────
 export const mesDe = (fechaISO) => (fechaISO || hoyISO()).slice(0, 7) // 'YYYY-MM'
