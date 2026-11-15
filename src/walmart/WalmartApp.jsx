@@ -733,7 +733,9 @@ function Proximamente({ tab }) {
 }
 
 // ── CANDIDATOS / DRIVERS ────────────────────────────────────────────────────
-function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tarifas, user }) {
+function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tarifas, user, perm }) {
+  const puedeCrear = !perm || perm.owner || perm.permisos?.drivers_crear
+  const puedeEditar = !perm || perm.owner || perm.permisos?.drivers_editar
   const [editar, setEditar] = useState(null) // persona en edición / {} nuevo
   const [ver, setVer] = useState(null) // perfil abierto
   const [q, setQ] = useState('')
@@ -756,13 +758,13 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tar
     }).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   }, [personas, q, fEstado, fAlmacen, fDisp])
 
-  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={(p) => { setVer(null); setEditar(p) }} />
+  if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={puedeEditar ? (p) => { setVer(null); setEditar(p) } : undefined} />
   if (editar) return <EditorPersona persona={editar} almacenes={almacenes} user={user} onCerrar={() => setEditar(null)} />
 
   const conteo = (id) => personas.filter((p) => p.estadoOperativo === id).length
   return (
     <div>
-      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({})}><Plus size={15} /> Nuevo</Boton>}>Candidatos y Drivers</PageTitle>
+      <PageTitle right={puedeCrear ? <Boton variant="gold" onClick={() => setEditar({})}><Plus size={15} /> Nuevo</Boton> : null}>Candidatos y Drivers</PageTitle>
       <div className="mb-3 flex flex-wrap gap-2">
         {ESTADOS.map((e) => <Badge key={e.id} color={e.color}>{e.label}: {conteo(e.id)}</Badge>)}
       </div>
@@ -792,7 +794,7 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tar
               {p.tipoVehiculo && <Badge color="slate">{p.tipoVehiculo}</Badge>}
               <div className="ml-auto flex gap-3 text-xs">
                 <button className="font-semibold text-brand-gold hover:underline" onClick={() => setVer(p)}>ver perfil</button>
-                <button className="font-semibold text-slate-400 hover:text-brand-navy" onClick={() => setEditar(p)}>editar</button>
+                {puedeEditar && <button className="font-semibold text-slate-400 hover:text-brand-navy" onClick={() => setEditar(p)}>editar</button>}
               </div>
             </Card>
           )
@@ -1649,7 +1651,9 @@ function Vacio({ icono: Ico = Search, children }) {
 const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
-function TabRutas({ rutas, almacenes, personas, tarifas }) {
+function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
+  const puedeCrear = !perm || perm.owner || perm.permisos?.rutas_crear
+  const puedeEditar = !perm || perm.owner || perm.permisos?.rutas_editar
   const [modo, setModo] = useState('dia') // dia | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -1677,7 +1681,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
     }).sort((a, b) => (b.fecha !== a.fecha ? String(b.fecha).localeCompare(String(a.fecha)) : `${a.almacenId}${a.bloque}`.localeCompare(`${b.almacenId}${b.bloque}`)))
   }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
-  if (editar) return <RutaEditor ruta={editar} rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} />
+  if (editar) return <RutaEditor ruta={editar} rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} soloLectura={editar.id ? !puedeEditar : false} puedeEliminar={puedeEditar} />
 
   const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
   const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
@@ -1687,7 +1691,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
 
   return (
     <div>
-      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({ fecha: modo === 'dia' ? fecha : hoyISO(), almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton>}>Rutas</PageTitle>
+      <PageTitle right={puedeCrear ? <Boton variant="gold" onClick={() => setEditar({ fecha: modo === 'dia' ? fecha : hoyISO(), almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton> : null}>Rutas</PageTitle>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="dia">Día</option><option value="rango">Rango de fechas</option></Select></F>
@@ -1724,7 +1728,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas }) {
               {(Number(r.otUnidades) || 0) > 0 && <Badge color="blue">OT ×{r.otUnidades}</Badge>}
               {r.cerrada && <Badge color="slate">día cerrado</Badge>}
               <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(ingresoRuta(r))} · drv {dinero(gananciaDriver(r))}</span>
-              <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{r.cerrada ? 'ver' : 'editar'}</button>
+              <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{(r.cerrada || !puedeEditar) ? 'ver' : 'editar'}</button>
             </Card>
           )
         })}
@@ -1850,8 +1854,8 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
   )
 }
 
-function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
-  const bloqueado = !!ruta.cerrada
+function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar, soloLectura = false, puedeEliminar = true }) {
+  const bloqueado = !!ruta.cerrada || soloLectura
   const eliminarRuta = async () => {
     const aviso = ruta.cerrada ? '¿Eliminar esta ruta? El día está CERRADO; la ruta se borra y el cierre se actualiza. No se puede deshacer.' : '¿Eliminar esta ruta? No se puede deshacer.'
     if (!window.confirm(aviso)) return
@@ -1913,7 +1917,8 @@ function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
   return (
     <div>
       <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>{ruta.id ? (bloqueado ? 'Ruta (día cerrado)' : 'Editar ruta') : 'Nueva ruta'}</PageTitle>
-      {bloqueado && <Aviso tipo="warn" className="mb-3">Este día está cerrado. Para corregir, reábrelo en <b>Cierre diario</b> (queda auditado).</Aviso>}
+      {ruta.cerrada && <Aviso tipo="warn" className="mb-3">Este día está cerrado. Para corregir, reábrelo en <b>Cierre diario</b> (queda auditado).</Aviso>}
+      {soloLectura && !ruta.cerrada && <Aviso tipo="info" className="mb-3">Vista de solo lectura: no tienes permiso para editar rutas.</Aviso>}
       <fieldset disabled={bloqueado} className="disabled:opacity-70">
         <Card className="mb-3 p-4">
           <Grid>
@@ -1980,7 +1985,7 @@ function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar }) {
       <div className="flex flex-wrap items-center gap-2">
         {!bloqueado && <><Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ruta'}</Boton><Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton></>}
         {bloqueado && <Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}
-        {ruta.id && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={eliminarRuta}><Trash2 size={14} /> Eliminar ruta</button>}
+        {ruta.id && puedeEliminar && <button className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={eliminarRuta}><Trash2 size={14} /> Eliminar ruta</button>}
       </div>
       {bloqueado && ruta.id && <p className="mt-2 text-[11px] text-slate-400">El día está cerrado. Si eliminas esta ruta, el cierre se actualiza automáticamente (sin reabrir el día).</p>}
     </div>
@@ -2557,7 +2562,12 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
 }
 
 // ── FINANCIERO + DASHBOARD ──────────────────────────────────────────────────
-function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, facturas }) {
+function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, facturas, perm }) {
+  // Permiso por indicador: el dashboard no habilita automáticamente todos los datos.
+  const vIng = !perm || perm.owner || perm.permisos?.fin_ingresos_ver
+  const vCos = !perm || perm.owner || perm.permisos?.fin_costos_ver
+  const vOper = !perm || perm.owner || perm.permisos?.fin_utilidad_oper_ver
+  const vFin = !perm || perm.owner || perm.permisos?.fin_utilidad_fin_ver
   const [modo, setModo] = useState('semana') // semana | mes | rango | factura
   const [fecha, setFecha] = useState(hoyISO())
   const [mes, setMes] = useState(mesDe(hoyISO()))
@@ -2622,21 +2632,23 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
       {/* KPIs financieros con comparativa vs período anterior */}
       <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Indicadores <span className="font-normal normal-case">· comparado con {prevDesde} → {prevHasta}</span></div>
       <div className="mb-4 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" trend={tr(fin.ingresoRutas, finPrev.ingresoRutas)} sub={`ant. ${dinero(finPrev.ingresoRutas)}`} />
-        <KPI animado label="Costo drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />
-        <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} trend={tr(fin.resultadoOperativo, finPrev.resultadoOperativo)} sub={`ant. ${dinero(finPrev.resultadoOperativo)}`} />
-        <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" trend={tr(fin.comisionesFP, finPrev.comisionesFP)} sub="ingreso compañía" />
-        <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />
-        <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent={fin.flujoCaja >= 0 ? 'green' : 'red'} trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub={`ant. ${dinero(finPrev.flujoCaja)}`} />
+        {vIng && <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" trend={tr(fin.ingresoRutas, finPrev.ingresoRutas)} sub={`ant. ${dinero(finPrev.ingresoRutas)}`} />}
+        {vCos && <KPI animado label="Costo drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />}
+        {vOper && <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} trend={tr(fin.resultadoOperativo, finPrev.resultadoOperativo)} sub={`ant. ${dinero(finPrev.resultadoOperativo)}`} />}
+        {vFin && <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" trend={tr(fin.comisionesFP, finPrev.comisionesFP)} sub="ingreso compañía" />}
+        {vIng && <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />}
+        {vOper && <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent={fin.flujoCaja >= 0 ? 'green' : 'red'} trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub={`ant. ${dinero(finPrev.flujoCaja)}`} />}
       </div>
 
       {/* comparativa actual vs anterior */}
+      {vOper && (
       <Card className="mb-4 p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Este período vs. el anterior</div>
         <Suspense fallback={<div className="grid h-[230px] place-items-center"><Spinner /></div>}>
           <ChartComparativa data={comparativa} />
         </Suspense>
       </Card>
+      )}
 
       {/* conteos operativos */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -2649,6 +2661,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
       </div>
 
       {/* resultado operativo */}
+      {vOper && (
       <Card className="mb-3 p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Resultado operativo · {etiqueta}</div>
         <FilaFin l="Ingreso de rutas (con ajustes Walmart)" v={fin.ingresoRutas} />
@@ -2659,8 +2672,10 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         <FilaFin l="Resultado operativo" v={fin.resultadoOperativo} fuerte borde />
         {fin.gastoFinanc > 0 && <p className="mt-2 text-[11px] text-slate-400">+ {dinero(fin.gastoFinanc)} de financiamiento (Cargo Vans): es salida de caja, no entra al resultado operativo.</p>}
       </Card>
+      )}
 
       {/* utilidad por financiamiento (Fast Pay) — concepto independiente */}
+      {vFin && (
       <Card className="mb-3 p-4">
         <div className="mb-2 flex items-center gap-2"><Zap size={15} className="text-brand-gold" /><span className="text-sm font-bold text-brand-navy dark:text-slate-100">Utilidad por financiamiento · Fast Pay</span><Badge color="gold">solo confirmados</Badge></div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -2671,8 +2686,10 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         </div>
         <p className="mt-2 text-[11px] text-slate-400">Es la ganancia del servicio Fast Pay, <b>independiente</b> del resultado operativo. Solo cuenta pagos <b>confirmados</b>; los anulados y fallidos no suman. {almId ? 'Filtrado por el almacén elegido.' : 'Todos los almacenes.'}</p>
       </Card>
+      )}
 
       {/* flujo de caja */}
+      {vIng && (
       <Card className="mb-3 p-4">
         <div className="mb-2 flex items-center gap-2"><span className="text-sm font-bold text-brand-navy dark:text-slate-100">Flujo de caja y cobros</span><Boton variant="ghost" className="ml-auto" onClick={() => setCobroOpen(true)}><Plus size={13} /> Registrar cobro de Walmart</Boton></div>
         <FilaFin l="Cobrado de Walmart" v={fin.cobrado} verde />
@@ -2687,6 +2704,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
           </div>
         )}
       </Card>
+      )}
       <p className="text-xs text-slate-400">Para <b>facturar a Walmart</b> por mes, usa la pestaña <b>Facturas</b>. Fast Pay: la ganancia del driver va completa como costo y la comisión como ingreso aparte — nunca se descuenta dos veces.</p>
 
       {cobroOpen && <CobroModal semana={semana} almacenes={almacenes} almId={almId} onCerrar={() => setCobroOpen(false)} />}
