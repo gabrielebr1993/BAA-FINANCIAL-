@@ -72,8 +72,32 @@ export const COL = {
   agenda: 'wal_agenda', // asignación semanal de drivers por almacén y turno
   docs: 'wal_docs', // documentos del driver (foto/licencia/etc.) como dataURL
   facturas: 'wal_facturas', // facturas mensuales para cobrar a Walmart
+  usuarios: 'wal_usuarios', // roles/permisos de usuarios de Walmart (aislado)
   audit: 'wal_audit',
 }
+
+// ── Usuarios de Walmart (roles/permisos) — colección aislada wal_usuarios ─────
+// Documento por correo (en minúsculas) para que el cliente Y las reglas de
+// Firestore puedan localizarlo por request.auth.token.email.
+export const idUsuarioWal = (email) => String(email || '').trim().toLowerCase()
+// Suscripción EN VIVO al propio documento de usuario Walmart: así, si el dueño
+// retira un permiso, el cambio llega a la sesión activa sin cerrar sesión.
+export function suscribirMiUsuarioWal(email, cb) {
+  const id = idUsuarioWal(email)
+  if (!id) { cb(null); return () => {} }
+  return onSnapshot(refDoc(COL.usuarios, id), (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null), () => cb(null))
+}
+// Suscripción a TODOS los usuarios de Walmart (para el panel de administración).
+export function suscribirUsuariosWal(cb) {
+  return onSnapshot(collection(db, COL.usuarios), (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => cb([]))
+}
+// Guarda/actualiza un usuario Walmart (merge). El id es el correo en minúsculas.
+export async function guardarUsuarioWal(email, data) {
+  const id = idUsuarioWal(email)
+  if (!id) throw new Error('Correo requerido')
+  return guardar(COL.usuarios, id, { email: id, ...data })
+}
+export async function borrarUsuarioWal(email) { return borrar(COL.usuarios, idUsuarioWal(email)) }
 
 // Estados operativos del candidato/driver (independientes de otros módulos).
 export const ESTADOS = [

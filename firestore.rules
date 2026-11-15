@@ -783,17 +783,121 @@ service cloud.firestore {
       allow read, write: if coleccionAuto.matches('auto_.*') && esDuenoEcom();
     }
 
-    // SUBMÓDULO WALMART — colecciones wal_* (candidatos/drivers, almacenes,
-    // rutas, cierres, pagos, gastos, contratos, config, audit): solo el dueño
-    // verificado por ahora (los permisos finos por rol llegan en una fase
-    // posterior). wal_audit no se edita ni borra.
-    match /wal_audit/{id} { allow read, create: if esDuenoEcom(); allow update, delete: if false; }
-    // Datos bancarios CIFRADOS: el navegador puede LEER (para mostrar enmascarado
-    // con los últimos 4; el texto cifrado es inútil sin la llave del servidor),
-    // pero NO escribir: solo la Cloud Function walBankSave escribe (cifrando).
+    // ════════════════════════════════════════════════════════════════════
+    // SUBMÓDULO WALMART — colecciones wal_* con PERMISOS POR USUARIO.
+    //
+    // El DUEÑO verificado (esDuenoEcom) SIEMPRE tiene acceso total: es la
+    // primera condición de cada regla, así nunca queda bloqueado aunque algo
+    // falle. Los demás usuarios obtienen acceso según su documento en
+    // wal_usuarios/{correo} (rol, permisos{} y warehouses[]). Aislado: no
+    // toca users/ ni los permisos de Gofo/Speedex/Freight/Warehouse.
+    // ════════════════════════════════════════════════════════════════════
+    function walCorreo()  { return request.auth.token.email.lower(); }
+    function walRef()     { return /databases/$(database)/documents/wal_usuarios/$(walCorreo()); }
+    function walExiste()  { return signedIn() && request.auth.token.email != null && exists(walRef()); }
+    function walDoc()     { return get(walRef()).data; }
+    function walActivo()  { return walExiste() && walDoc().activo != false; }
+    // ¿Tiene el permiso p? (los docs siempre traen el mapa permisos{}).
+    function walPerm(p)   { return walActivo() && walDoc().permisos[p] == true; }
+    // ¿Dentro del alcance de almacén? (sin warehouses = todos).
+    function walEnAlm(aid) {
+      return walActivo() && (walDoc().warehouses.size() == 0 || (aid != null && aid in walDoc().warehouses));
+    }
+
+    // wal_usuarios: el dueño todo; cada quien LEE su propio doc; quien administra
+    // usuarios puede leer/escribir, pero NADIE edita SU PROPIO doc (anti auto-elevación).
+    match /wal_usuarios/{correo} {
+      allow read: if esDuenoEcom() || (signedIn() && request.auth.token.email != null && walCorreo() == correo)
+                     || walPerm('usuarios_crear') || walPerm('historial_ver');
+      allow create, update, delete: if esDuenoEcom()
+                     || (walPerm('usuarios_roles') && walCorreo() != correo);
+    }
+
+    // Auditoría: el dueño lee; quien ve historial también. Crea cualquier staff activo. No se edita ni borra.
+    match /wal_audit/{id} { allow read: if esDuenoEcom() || walPerm('historial_ver'); allow create: if esDuenoEcom() || walActivo(); allow update, delete: if false; }
+    // Datos bancarios CIFRADOS: leer dueño; escribir solo la Cloud Function.
     match /wal_bank/{id} { allow read: if esDuenoEcom(); allow write: if false; }
+
+    // Drivers/candidatos (con alcance de almacén; 'ambos' = visible para todos).
+    match /wal_candidatos/{id} {
+      allow read:   if esDuenoEcom() || (walPerm('drivers_ver') && (resource.data.almacen == 'ambos' || walEnAlm(resource.data.almacenId)));
+      allow create: if esDuenoEcom() || (walPerm('drivers_crear') && (request.resource.data.almacen == 'ambos' || walEnAlm(request.resource.data.almacenId)));
+      allow update: if esDuenoEcom() || (walPerm('drivers_editar') && (resource.data.almacen == 'ambos' || walEnAlm(resource.data.almacenId)));
+      allow delete: if esDuenoEcom() || walPerm('drivers_editar');
+    }
+    // Rutas (alcance de almacén en cada acción).
+    match /wal_rutas/{id} {
+      allow read:   if esDuenoEcom() || (walPerm('rutas_ver')    && walEnAlm(resource.data.almacenId));
+      allow create: if esDuenoEcom() || (walPerm('rutas_crear')  && walEnAlm(request.resource.data.almacenId));
+      allow update: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId) && walEnAlm(request.resource.data.almacenId));
+      allow delete: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId));
+    }
+    // Agenda semanal (alcance de almacén).
+    match /wal_agenda/{id} {
+      allow read:  if esDuenoEcom() || (walPerm('rutas_ver') && walEnAlm(resource.data.almacenId));
+      allow write: if esDuenoEcom() || ((walPerm('rutas_editar') || walPerm('rutas_asignar_driver')) && walEnAlm(request.resource.data.almacenId));
+    }
+    // Cierres diarios (preparar liquidación).
+    match /wal_cierres/{id} {
+      allow read:  if esDuenoEcom() || ((walPerm('pagos_ver') || walPerm('rutas_ver')) && walEnAlm(resource.data.almacenId));
+      allow write: if esDuenoEcom() || (walPerm('liq_preparar') && walEnAlm(request.resource.data.almacenId));
+    }
+    // Pagos y Fast Pay (separa ver / preparar / ejecutar / anular por tipo).
+    match /wal_pagos/{id} {
+      allow read:   if esDuenoEcom() || walPerm('pagos_ver') || walPerm('fp_ver');
+      allow create: if esDuenoEcom()
+                     || (request.resource.data.tipo == 'fastpay' && (walPerm('fp_preparar') || walPerm('fp_ejecutar')))
+                     || (request.resource.data.tipo == 'pago' && walPerm('pagos_ejecutar'));
+      allow update: if esDuenoEcom() || walPerm('fp_ejecutar') || walPerm('pagos_ejecutar') || walPerm('pagos_anular');
+      allow delete: if esDuenoEcom() || walPerm('pagos_anular');
+    }
+    // Cobros a Walmart (ingresos) — financiero.
+    match /wal_cobros/{id} {
+      allow read:  if esDuenoEcom() || walPerm('fin_ingresos_ver');
+      allow write: if esDuenoEcom() || walPerm('fin_ingresos_ver');
+    }
+    // Facturas a Walmart (ingresos).
+    match /wal_facturas/{id} {
+      allow read:  if esDuenoEcom() || walPerm('fin_ingresos_ver');
+      allow write: if esDuenoEcom() || walPerm('fin_ingresos_ver');
+    }
+    // Gastos (costos).
+    match /wal_gastos/{id} {
+      allow read:  if esDuenoEcom() || walPerm('fin_costos_ver');
+      allow write: if esDuenoEcom() || walPerm('fin_costos_ver');
+    }
+    // Documentos del driver (ver / subir / descargar es lectura).
+    match /wal_docs/{id} {
+      allow read:   if esDuenoEcom() || walPerm('docs_ver');
+      allow create: if esDuenoEcom() || walPerm('docs_subir');
+      allow update: if esDuenoEcom() || walPerm('docs_subir');
+      allow delete: if esDuenoEcom() || walPerm('docs_subir');
+    }
+    // Contratos y plantillas.
+    match /wal_contratos/{id} {
+      allow read:  if esDuenoEcom() || walPerm('contratos_ver');
+      allow write: if esDuenoEcom() || walPerm('contratos_gestionar');
+    }
+    match /wal_plantillas/{id} {
+      allow read:  if esDuenoEcom() || walPerm('contratos_ver');
+      allow write: if esDuenoEcom();
+    }
+    // Almacenes: lectura para cualquier staff activo (se necesitan para operar);
+    // escritura solo dueño (configuración de almacenes y tarifa Walmart).
+    match /wal_almacenes/{id} {
+      allow read:  if esDuenoEcom() || walActivo();
+      allow write: if esDuenoEcom();
+    }
+    // Configuración/tarifas por defecto: lectura staff activo; escritura dueño.
+    match /wal_config/{id} {
+      allow read:  if esDuenoEcom() || walActivo();
+      allow write: if esDuenoEcom();
+    }
+    // Cualquier otra colección wal_* no contemplada: solo el dueño.
     match /{coleccionWal}/{id} {
-      allow read, write: if coleccionWal.matches('wal_.*') && coleccionWal != 'wal_audit' && coleccionWal != 'wal_bank' && esDuenoEcom();
+      allow read, write: if coleccionWal.matches('wal_.*')
+        && !(coleccionWal in ['wal_audit','wal_bank','wal_usuarios','wal_candidatos','wal_rutas','wal_agenda','wal_cierres','wal_pagos','wal_cobros','wal_facturas','wal_gastos','wal_docs','wal_contratos','wal_plantillas','wal_almacenes','wal_config'])
+        && esDuenoEcom();
     }
   }
 }

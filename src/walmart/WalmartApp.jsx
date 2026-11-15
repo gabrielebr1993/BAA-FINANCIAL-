@@ -8,7 +8,7 @@
 // Visualmente usa el mismo diseño del sistema (componentes ui, colores de
 // marca). Los datos viven en colecciones wal_* separadas.
 // ============================================================================
-import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -47,7 +47,13 @@ import {
   AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
   financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes, idFactura,
+  suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
 } from './datosWal'
+import {
+  ROLES_WAL, rolWalInfo, CATEGORIAS_PERM, TODOS_PERMISOS, DEP_DE, LABEL_PERM, PLANTILLA_ROL,
+  normalizarPermisos, permisosConcedibles, warehousesAsignables, validarCambioPermisos,
+  tienePermisoWal, enAlcanceAlmacen, resumenPermisos,
+} from './wmperms'
 
 const WALMART_AZUL = '#0071dc'
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -65,17 +71,68 @@ const TABS = [
   { id: 'financiero', label: 'Financiero', icono: BarChart3 },
   { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet },
   { id: 'contratos', label: 'Contratos', icono: FileSignature },
+  { id: 'usuarios', label: 'Usuarios y permisos', icono: ShieldCheck },
   { id: 'config', label: 'Configuración', icono: Settings },
 ]
 
+// Permiso mínimo para VER cada pestaña. '__owner__' = solo dueño/súper-admin.
+const PERM_TAB = {
+  dashboard: 'fin_dashboard_ver',
+  agenda: 'rutas_ver',
+  personas: 'drivers_ver',
+  almacenes: 'rutas_ver',
+  rutas: 'rutas_ver',
+  cierre: 'liq_preparar',
+  pagos: 'pagos_ver',
+  gastos: 'fin_costos_ver',
+  financiero: 'fin_dashboard_ver',
+  facturas: 'fin_ingresos_ver',
+  contratos: 'contratos_ver',
+  usuarios: 'usuarios_crear',
+  config: '__owner__',
+}
+
 export default function WalmartApp() {
-  const { user } = useAuth()
+  const { user, esSuperAdmin, perfil } = useAuth()
   const { cambiarCarrier } = useCarrier()
+  // Dueño/súper-admin: acceso total (preserva a los administradores globales).
+  const esDueno = esSuperAdmin || perfil?.role === 'owner'
+  // Documento de permisos Walmart del usuario actual (EN VIVO: retirar un permiso
+  // afecta la sesión activa sin cerrar sesión).
+  const [miWal, setMiWal] = useState(undefined) // undefined = cargando
+  useEffect(() => {
+    if (esDueno) { setMiWal(null); return }
+    if (!user?.email) { setMiWal(null); return }
+    return suscribirMiUsuarioWal(user.email, setMiWal)
+  }, [esDueno, user?.email])
+  // Perfil de permisos normalizado para esta sesión.
+  const perm = useMemo(() => ({
+    owner: esDueno,
+    uid: user?.uid || '', email: (user?.email || '').toLowerCase(),
+    rol: esDueno ? 'owner' : (miWal?.rol || null),
+    permisos: esDueno ? {} : (miWal?.permisos || {}),
+    warehouses: esDueno ? [] : (Array.isArray(miWal?.warehouses) ? miWal.warehouses : []),
+    activo: esDueno ? true : (!!miWal && miWal.activo !== false),
+  }), [esDueno, user, miWal])
+  const puede = useCallback((key, opts) => tienePermisoWal(perm, key, opts), [perm])
+  // Pestañas visibles según permisos (el dueño ve todas).
+  const tabsVisibles = useMemo(() => TABS.filter((t) => {
+    if (esDueno) return true
+    const req = PERM_TAB[t.id]
+    if (req === '__owner__') return false
+    return puede(req)
+  }), [esDueno, puede])
+
   const [tab, setTabRaw] = useState(() => {
     try { const t = localStorage.getItem('wal_tab'); if (t && TABS.some((x) => x.id === t)) return t } catch { /* sin storage */ }
     return 'dashboard'
   })
   const setTab = (t) => { setTabRaw(t); try { localStorage.setItem('wal_tab', t) } catch { /* sin storage */ } }
+  // Si la pestaña activa no está permitida, cae a la primera visible.
+  useEffect(() => {
+    if (miWal === undefined && !esDueno) return
+    if (tabsVisibles.length && !tabsVisibles.some((t) => t.id === tab)) setTabRaw(tabsVisibles[0].id)
+  }, [tabsVisibles, tab, miWal, esDueno])
   const [personas, setPersonas] = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [rutas, setRutas] = useState([])
@@ -101,22 +158,64 @@ export default function WalmartApp() {
   useEffect(() => suscribir(COL.facturas, setFacturas), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
 
+  // ── Alcance por almacén: el dueño ve TODO; un usuario con warehouses asignados
+  // solo ve los datos de esos almacenes. (La aplicación REAL es por reglas de
+  // Firestore; esto además limita lo que la UI muestra.)
+  const enAlc = useCallback((almacenId) => enAlcanceAlmacen(perm, almacenId), [perm])
+  const porAlm = useCallback((arr, campo = 'almacenId') => (esDueno ? arr : (arr || []).filter((x) => !x[campo] || enAlc(x[campo]))), [esDueno, enAlc])
+  const almacenesV = esDueno ? almacenes : almacenes.filter((a) => enAlc(a.id))
+  const rutasV = porAlm(rutas)
+  const cierresV = porAlm(cierres)
+  const gastosV = porAlm(gastos)
+  const cobrosV = porAlm(cobros)
+  const agendaV = porAlm(agenda)
+  const facturasV = porAlm(facturas)
+  // Personas en alcance: con route en un almacén permitido, o asignadas a él / 'ambos'.
+  const personasV = useMemo(() => {
+    if (esDueno) return personas
+    const ids = new Set(rutasV.map((r) => r.driverId))
+    return personas.filter((p) => ids.has(p.id) || p.almacen === 'ambos' || enAlc(p.almacenId))
+  }, [esDueno, personas, rutasV, enAlc])
+
   const contenido = (
     <>
-      {tab === 'dashboard' && <TabDashboard rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} irA={setTab} user={user} />}
-      {tab === 'agenda' && <TabAgenda personas={personas} almacenes={almacenes} agenda={agenda} irA={setTab} />}
-      {tab === 'personas' && <TabPersonas personas={personas} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} user={user} />}
-      {tab === 'almacenes' && <TabAlmacenes almacenes={almacenes} user={user} />}
-      {tab === 'rutas' && <TabRutas rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} cierres={cierres} />}
-      {tab === 'cierre' && <TabCierre rutas={rutas} almacenes={almacenes} cierres={cierres} esDueno />}
-      {tab === 'pagos' && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} />}
-      {tab === 'gastos' && <TabGastos gastos={gastos} almacenes={almacenes} personas={personas} rutas={rutas} />}
-      {tab === 'financiero' && <TabFinanciero rutas={rutas} pagos={pagos} gastos={gastos} cobros={cobros} personas={personas} almacenes={almacenes} facturas={facturas} />}
-      {tab === 'facturas' && <TabFacturas rutas={rutas} almacenes={almacenes} facturas={facturas} cobros={cobros} />}
-      {tab === 'contratos' && <TabContratos contratos={contratos} plantillas={plantillas} personas={personas} almacenes={almacenes} tarifas={tarifas} />}
-      {tab === 'config' && <TabConfig />}
+      {tab === 'dashboard' && puede('fin_dashboard_ver') && <TabDashboard rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} irA={setTab} user={user} perm={perm} />}
+      {tab === 'agenda' && puede('rutas_ver') && <TabAgenda personas={personasV} almacenes={almacenesV} agenda={agendaV} irA={setTab} />}
+      {tab === 'personas' && puede('drivers_ver') && <TabPersonas personas={personasV} almacenes={almacenesV} rutas={rutasV} pagos={pagos} contratos={contratos} gastos={gastosV} tarifas={tarifas} user={user} perm={perm} />}
+      {tab === 'almacenes' && puede('rutas_ver') && <TabAlmacenes almacenes={almacenesV} user={user} />}
+      {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
+      {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
+      {tab === 'pagos' && puede('pagos_ver') && <TabPagos rutas={rutasV} pagos={pagos} personas={personasV} tarifas={tarifas} perm={perm} />}
+      {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
+      {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
+      {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
+      {tab === 'contratos' && puede('contratos_ver') && <TabContratos contratos={contratos} plantillas={plantillas} personas={personasV} almacenes={almacenesV} tarifas={tarifas} />}
+      {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} perm={perm} />}
+      {tab === 'config' && esDueno && <TabConfig />}
     </>
   )
+
+  // Usuario sin NINGÚN acceso a Walmart (ni dueño ni permisos): pantalla clara.
+  const sinAcceso = !esDueno && miWal !== undefined && tabsVisibles.length === 0
+  if (miWal === undefined && !esDueno) {
+    return <div className="grid min-h-screen place-items-center bg-surface dark:bg-surface-dark"><Spinner /></div>
+  }
+  if (sinAcceso) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-surface px-6 dark:bg-surface-dark">
+        <div className="w-full max-w-md text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand-navy text-brand-gold"><ShieldCheck size={26} /></div>
+          <h1 className="mt-4 text-xl font-extrabold text-brand-navy dark:text-slate-100">Sin acceso a Walmart</h1>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">Tu cuenta ({user?.email}) no tiene permisos activos en el módulo Walmart. Pide al administrador que te asigne un rol y almacenes.</p>
+          <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2">
+            <button onClick={cambiarCarrier} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"><ArrowLeftRight size={16} /> Cambiar de compañía</button>
+            <button onClick={() => signOut(auth)} className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 transition hover:text-slate-600"><LogOut size={15} /> Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  const rolEtiqueta = esDueno ? 'dueño' : (rolWalInfo(perm.rol).label)
   return (
     <div className="flex min-h-screen bg-surface dark:bg-surface-dark">
       <Toaster />
@@ -130,7 +229,7 @@ export default function WalmartApp() {
           </div>
         </div>
         <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto">
-          {TABS.map((tdef) => {
+          {tabsVisibles.map((tdef) => {
             const Icono = tdef.icono; const activo = tab === tdef.id
             return (
               <button key={tdef.id} onClick={() => setTab(tdef.id)}
@@ -146,7 +245,7 @@ export default function WalmartApp() {
         </nav>
         <div className="border-t border-slate-200 pt-3 dark:border-slate-700/60">
           <div className="truncate px-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{user?.email}</div>
-          <div className="px-1 text-[11px] text-slate-400">usuario · dueño</div>
+          <div className="px-1 text-[11px] text-slate-400">usuario · {rolEtiqueta}{!esDueno && perm.warehouses.length ? ` · ${perm.warehouses.length} almacén(es)` : ''}</div>
           <button onClick={cambiarCarrier} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
             <ArrowLeftRight size={15} /> Cambiar de compañía
           </button>
@@ -167,7 +266,7 @@ export default function WalmartApp() {
             <div className="ml-auto"><button onClick={() => signOut(auth)} className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800" title="Cerrar sesión"><LogOut size={15} /></button></div>
           </div>
           <div className="flex gap-1 overflow-x-auto px-4 pb-2">
-            {TABS.map((tdef) => {
+            {tabsVisibles.map((tdef) => {
               const Icono = tdef.icono
               return (
                 <button key={tdef.id} onClick={() => setTab(tdef.id)}
@@ -1176,6 +1275,181 @@ function TabConfig() {
   )
 }
 
+// ── USUARIOS Y PERMISOS (Walmart) ─────────────────────────────────────────────
+function TabUsuariosWal({ almacenes, perm }) {
+  const [usuarios, setUsuarios] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [editar, setEditar] = useState(null) // usuario a editar, o {} para nuevo
+  useEffect(() => suscribirUsuariosWal((u) => { setUsuarios(u); setCargando(false) }), [])
+  const nombreAlm = Object.fromEntries(almacenes.map((a) => [a.id, a.nombre]))
+  const puedeCrear = perm.owner || perm.permisos?.usuarios_crear
+  const puedeEditar = perm.owner || perm.permisos?.usuarios_editar
+  return (
+    <div>
+      <PageTitle>Usuarios y permisos de Walmart</PageTitle>
+      <Aviso tipo="info" className="mb-3">Estos usuarios y permisos son <b>exclusivos de Walmart</b> (no afectan a otros módulos). La aplicación real se hace también en el backend (reglas de Firestore). El dueño siempre tiene acceso total.</Aviso>
+      <div className="mb-3 flex items-center gap-2">
+        {puedeCrear && <Boton variant="gold" onClick={() => setEditar({ nuevo: true, rol: 'manager', permisos: { ...PLANTILLA_ROL.manager }, warehouses: [], activo: true })}><Plus size={14} /> Agregar usuario</Boton>}
+        <span className="text-xs text-slate-400">{usuarios.length} usuario(s)</span>
+      </div>
+      {cargando ? <Spinner /> : (
+        <div className="space-y-1.5">
+          {usuarios.length === 0 && <Vacio icono={ShieldCheck}>Aún no hay usuarios de Walmart. Agrega managers o administradores y define sus permisos.</Vacio>}
+          {usuarios.map((u) => {
+            const r = resumenPermisos(u, nombreAlm)
+            return (
+              <Card key={u.id} className="flex flex-wrap items-center gap-2 p-3">
+                <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-navy/10 text-xs font-bold text-brand-navy dark:bg-white/10 dark:text-slate-100">{(u.email || '?').slice(0, 2).toUpperCase()}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-bold text-brand-navy dark:text-slate-100">{u.email}</div>
+                  <div className="text-[11px] text-slate-400">{rolWalInfo(u.rol).label} · {r.warehouses.join(', ')}</div>
+                </div>
+                <Badge color={u.activo === false ? 'slate' : 'green'}>{u.activo === false ? 'Inactivo' : 'Activo'}</Badge>
+                <span className="text-xs text-slate-400">{u.rol === 'driver' ? 'portal del chofer' : `${r.nActivos} permisos`}</span>
+                {puedeEditar && <button className="ml-auto text-xs font-bold text-brand-gold hover:underline" onClick={() => setEditar({ ...u })}>editar</button>}
+              </Card>
+            )
+          })}
+        </div>
+      )}
+      {editar && <WalUsuarioModal inicial={editar} almacenes={almacenes} editor={perm} onCerrar={() => setEditar(null)} />}
+    </div>
+  )
+}
+
+function WalUsuarioModal({ inicial, almacenes, editor, onCerrar }) {
+  const esNuevo = !!inicial.nuevo
+  const [email, setEmail] = useState(inicial.email || '')
+  const [rol, setRol] = useState(inicial.rol || 'manager')
+  const [activo, setActivo] = useState(inicial.activo !== false)
+  const [permisos, setPermisos] = useState(() => normalizarPermisos(inicial.permisos))
+  const [warehouses, setWarehouses] = useState(Array.isArray(inicial.warehouses) ? inicial.warehouses : [])
+  const [verResumen, setVerResumen] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const idsAlm = almacenes.map((a) => a.id)
+  const concedibles = useMemo(() => new Set(permisosConcedibles(editor)), [editor])
+  const whAsignables = useMemo(() => new Set(warehousesAsignables(editor, idsAlm)), [editor, idsAlm.join(',')]) // eslint-disable-line
+  const nombreAlm = Object.fromEntries(almacenes.map((a) => [a.id, a.nombre]))
+
+  // Alternar un permiso, respetando dependencias (encender dep al encender hijo;
+  // apagar hijos al apagar el padre).
+  const toggle = (id) => setPermisos((prev) => {
+    const n = { ...prev }
+    if (n[id]) {
+      delete n[id]
+      // apaga los que dependían de este
+      for (const k of TODOS_PERMISOS) if (DEP_DE[k] === id && n[k]) delete n[k]
+    } else {
+      n[id] = true
+      // enciende la cadena de dependencias
+      let dep = DEP_DE[id]
+      let g = 0
+      while (dep && g < 6) { if (concedibles.has(dep)) n[dep] = true; dep = DEP_DE[dep]; g++ }
+    }
+    return normalizarPermisos(n)
+  })
+  const aplicarPlantilla = (nuevoRol) => {
+    setRol(nuevoRol)
+    if (nuevoRol === 'driver') { setPermisos({}); return }
+    // Solo enciende de la plantilla lo que el editor puede conceder.
+    const base = normalizarPermisos(PLANTILLA_ROL[nuevoRol] || {})
+    const filtrado = {}
+    for (const k of Object.keys(base)) if (concedibles.has(k)) filtrado[k] = true
+    setPermisos(normalizarPermisos(filtrado))
+  }
+  const toggleWh = (id) => setWarehouses((w) => w.includes(id) ? w.filter((x) => x !== id) : [...w, id])
+
+  const guardar2 = async () => {
+    const correo = idUsuarioWal(email)
+    if (!correo || !/.+@.+\..+/.test(correo)) { setErr('Correo válido requerido.'); return }
+    const payload = { rol, activo, permisos: rol === 'driver' ? {} : normalizarPermisos(permisos), warehouses }
+    const v = validarCambioPermisos(editor, { uid: inicial.uid, email: correo }, payload, idsAlm)
+    if (!v.ok) { setErr(v.motivo); return }
+    setErr(''); setGuardando(true)
+    try {
+      // Auditoría: quién, cuándo, valores anteriores → nuevos.
+      const antes = esNuevo ? '(nuevo)' : `${inicial.rol}/${Object.keys(normalizarPermisos(inicial.permisos)).length}perm/${(inicial.warehouses || []).length}alm/activo=${inicial.activo !== false}`
+      const despues = `${rol}/${Object.keys(payload.permisos).length}perm/${warehouses.length}alm/activo=${activo}`
+      await guardarUsuarioWal(correo, payload)
+      await auditar('wal_usuario_permisos', `${correo} · ${antes} → ${despues} · por ${editor.email || 'dueño'}`)
+      walToast('Usuario guardado ✓', 'gold')
+      onCerrar()
+    } catch (e) { setErr('No se pudo guardar: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+
+  const resumen = resumenPermisos({ permisos, warehouses }, nombreAlm)
+
+  return (
+    <Modal titulo={esNuevo ? 'Nuevo usuario de Walmart' : `Editar · ${inicial.email}`} onCerrar={onCerrar}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <F label="Correo (correo de inicio de sesión)"><Input value={email} disabled={!esNuevo} onChange={(e) => setEmail(e.target.value)} placeholder="persona@correo.com" /></F>
+        <F label="Rol (plantilla inicial)"><Select value={rol} onChange={(e) => aplicarPlantilla(e.target.value)}>{ROLES_WAL.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</Select></F>
+      </div>
+      <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-brand-navy dark:text-slate-200"><input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} /> Usuario activo</label>
+      <p className="mt-1 text-[11px] text-slate-400">{rolWalInfo(rol).desc}</p>
+
+      {/* Alcance: warehouses */}
+      <div className="mt-3">
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Almacenes asignados {warehouses.length === 0 && <span className="font-normal normal-case text-slate-400">· (ninguno = todos los que administras)</span>}</div>
+        <div className="flex flex-wrap gap-1.5">
+          {almacenes.map((a) => {
+            const puede = whAsignables.has(a.id)
+            const on = warehouses.includes(a.id)
+            return <button key={a.id} type="button" disabled={!puede} onClick={() => toggleWh(a.id)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${on ? 'bg-brand-navy text-white' : puede ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200' : 'cursor-not-allowed bg-slate-50 text-slate-300 dark:bg-slate-800'}`}>{a.nombre}</button>
+          })}
+        </div>
+      </div>
+
+      {/* Matriz de permisos (oculta para driver) */}
+      {rol === 'driver' ? (
+        <Aviso tipo="info" className="mt-3">El <b>driver</b> solo accede a su portal y a su propia información (sus rutas, pagos, Fast Pay, recibos, documentos, contratos y perfil). No usa el panel de permisos.</Aviso>
+      ) : (
+        <div className="mt-3 max-h-[42vh] overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-slate-700">
+          {CATEGORIAS_PERM.map((cat) => (
+            <div key={cat.id} className="mb-2 last:mb-0">
+              <div className="mb-1 px-1 text-[11px] font-bold uppercase tracking-wide text-brand-steel">{cat.label}</div>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                {cat.perms.map((p) => {
+                  const puedeConceder = concedibles.has(p.id)
+                  const dep = p.dep
+                  const depFalta = dep && !permisos[dep]
+                  return (
+                    <label key={p.id} className={`flex items-center gap-2 rounded-lg px-2 py-1 text-sm ${puedeConceder ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`} title={!puedeConceder ? 'No puedes conceder un permiso que tú no tienes' : (dep ? `Requiere: ${LABEL_PERM[dep]}` : '')}>
+                      <input type="checkbox" disabled={!puedeConceder} checked={!!permisos[p.id]} onChange={() => toggle(p.id)} />
+                      <span>{p.label}{dep && <span className="ml-1 text-[10px] text-slate-400">↳ req. {LABEL_PERM[dep]}</span>}{depFalta && permisos[p.id] && <span className="ml-1 text-[10px] text-rose-400">(falta dep.)</span>}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Resumen antes de guardar */}
+      {verResumen && (
+        <div className="mt-3 rounded-xl border border-brand-gold/40 bg-brand-gold/5 p-3 text-sm">
+          <div className="mb-1 font-bold text-brand-navy dark:text-slate-100">Resumen de accesos</div>
+          <div className="text-xs text-slate-500">Rol: <b>{rolWalInfo(rol).label}</b> · Estado: <b>{activo ? 'Activo' : 'Inactivo'}</b> · Almacenes: <b>{resumen.warehouses.join(', ')}</b></div>
+          {rol !== 'driver' && (resumen.porCat.length ? resumen.porCat.map((c) => (
+            <div key={c.cat} className="mt-1 text-xs"><b className="text-brand-steel">{c.cat}:</b> {c.perms.join(', ')}</div>
+          )) : <div className="mt-1 text-xs text-slate-400">Sin permisos marcados.</div>)}
+        </div>
+      )}
+
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!verResumen
+          ? <Boton variant="gold" onClick={() => setVerResumen(true)}>Revisar y guardar</Boton>
+          : <Boton variant="gold" disabled={guardando} onClick={guardar2}>{guardando ? <Spinner /> : 'Confirmar y guardar'}</Boton>}
+        {verResumen && <Boton variant="ghost" onClick={() => setVerResumen(false)}>Seguir editando</Boton>}
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+    </Modal>
+  )
+}
+
 // ── mini UI helpers ─────────────────────────────────────────────────────────
 function Seccion({ titulo, children }) { return <div className="mb-4 last:mb-0"><div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{titulo}</div>{children}</div> }
 function Grid({ children }) { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{children}</div> }
@@ -1672,7 +1946,12 @@ function Tile({ n, txt, l, verde, ambar }) {
 }
 
 // ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
-function TabPagos({ rutas, pagos, personas, tarifas }) {
+function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
+  // Permisos de acción (separar ver de ejecutar/confirmar/anular). Dueño = todo.
+  const pPreparaFP = !perm || perm.owner || perm.permisos?.fp_preparar
+  const pEjecutaFP = !perm || perm.owner || perm.permisos?.fp_ejecutar
+  const pPagaSemanal = !perm || perm.owner || perm.permisos?.pagos_ejecutar
+  const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
   const [driverId, setDriverId] = useState('')
   const [modo, setModo] = useState('semana') // semana | rango
   const [fecha, setFecha] = useState(hoyISO())
@@ -1789,7 +2068,7 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
           </Card>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge color={badgeEstado[res.estado]}>{res.estado === 'pagado' ? 'Pagado' : res.estado === 'parcial' ? 'Parcialmente pagado' : 'Pendiente'}</Badge>
-            {res.saldo > 0.005 && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
+            {res.saldo > 0.005 && pPagaSemanal && <Boton variant="gold" onClick={() => setPagoAbierto(true)}><Wallet size={14} /> Registrar pago del saldo</Boton>}
             {driver && res.rutasSemana.length > 0 && <Boton variant="ghost" onClick={() => pdfPayStub(driver, semana, domingoDe(fecha), res)}>Pay stub PDF</Boton>}
           </div>
 
@@ -1810,11 +2089,13 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
                   {fpPend && <Badge color="gold">FP en proceso {dinero(fpPend.bruto)}</Badge>}
                   <span className="ml-auto text-xs text-slate-400">resta {dinero(resta)}</span>
                   {fpPend ? (
-                    <span className="flex items-center gap-2">
-                      <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'confirmado')}>Confirmar</button>
-                      <button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'fallido')}>Falló</button>
-                    </span>
-                  ) : resta > 0.005 ? (
+                    pEjecutaFP ? (
+                      <span className="flex items-center gap-2">
+                        <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'confirmado')}>Confirmar</button>
+                        <button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(fpPend, 'fallido')}>Falló</button>
+                      </span>
+                    ) : <span className="text-xs text-slate-400">en proceso</span>
+                  ) : resta > 0.005 && pPreparaFP ? (
                     <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => setFpRuta({ ...r, resta })}><Zap size={12} className="mb-0.5 mr-0.5 inline" />Fast Pay</button>
                   ) : null}
                 </div>
@@ -1837,13 +2118,13 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
                     : <span className="text-xs">monto <b>{dinero(p.monto)}</b></span>}
                   {p.recuperacion && <span className="text-xs italic text-slate-400">recuperación: {p.recuperacion}</span>}
                   <span className="ml-auto text-xs text-slate-400">{p.metodo}{p.referencia ? ` · ${p.referencia}` : ''}{p.responsable ? ` · ${p.responsable}` : ''}</span>
-                  {est === 'pendiente' && (
+                  {est === 'pendiente' && pEjecutaFP && (
                     <span className="flex items-center gap-2">
                       <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(p, 'confirmado')}>Confirmar</button>
                       <button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(p, 'fallido')}>Falló</button>
                     </span>
                   )}
-                  {est === 'confirmado' && <button className="text-xs font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(p)}>Anular</button>}
+                  {est === 'confirmado' && pAnula && <button className="text-xs font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(p)}>Anular</button>}
                 </div>
                 )
               })}
@@ -1852,20 +2133,21 @@ function TabPagos({ rutas, pagos, personas, tarifas }) {
         </>
       )}
 
-      {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pagos={pagos} pctDefault={tarifas.comisionFastPay} onCerrar={() => setFpRuta(null)} />}
+      {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pagos={pagos} pctDefault={tarifas.comisionFastPay} puedeEjecutar={pEjecutaFP} onCerrar={() => setFpRuta(null)} />}
       {pagoAbierto && res && <PagoModal driver={driver} semana={semana} saldo={res.saldo} onCerrar={() => setPagoAbierto(false)} />}
     </div>
   )
 }
 
-function FastPayModal({ ruta, driver, semana, pagos, pctDefault, onCerrar }) {
+function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar = true, onCerrar }) {
   const [bruto, setBruto] = useState(ruta.resta)
   const [pct, setPct] = useState(pctDefault)
   const [metodo, setMetodo] = useState('Efectivo')
   const [referencia, setReferencia] = useState('')
   const [responsable, setResponsable] = useState('')
   const [comprobante, setComprobante] = useState('')
-  const [estadoIni, setEstadoIni] = useState('confirmado') // confirmado | pendiente
+  // Quien solo puede PREPARAR (no ejecutar) deja el pago en 'pendiente'.
+  const [estadoIni, setEstadoIni] = useState(puedeEjecutar ? 'confirmado' : 'pendiente')
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
   const calc = calcularFastPay(bruto, pct)
@@ -1896,7 +2178,7 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, onCerrar }) {
       <Grid>
         <F label="Importe bruto a liquidar"><Input type="number" value={bruto} onChange={(e) => setBruto(e.target.value)} /></F>
         <F label="Comisión (%)"><Input type="number" step="0.5" value={pct} onChange={(e) => setPct(e.target.value)} /></F>
-        <F label="Estado del pago"><Select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value)}><option value="confirmado">Confirmado (pagado ahora)</option><option value="pendiente">Pendiente (en proceso)</option></Select></F>
+        <F label="Estado del pago"><Select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value)} disabled={!puedeEjecutar}>{puedeEjecutar && <option value="confirmado">Confirmado (pagado ahora)</option>}<option value="pendiente">Pendiente (en proceso)</option></Select></F>
         <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
         <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
         <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
