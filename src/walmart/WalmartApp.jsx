@@ -1435,6 +1435,7 @@ const ACCION_LABEL = {
   rate_driver: 'Pago por ruta cambiado', foto_driver: 'Foto de driver', doc_driver: 'Documento de driver',
   almacen_guardado: 'Almacén guardado', tarifas_guardadas: 'Tarifas guardadas',
   factura_generada: 'Factura generada', pago_masivo: 'Pago masivo', rutas_generadas: 'Rutas generadas desde agenda',
+  rutas_importadas: 'Rutas importadas de Walmart', fastpay: 'Fast Pay',
 }
 function fechaAudit(f) {
   try { const d = f?.toDate ? f.toDate() : (f?.seconds ? new Date(f.seconds * 1000) : null); return d ? d.toLocaleString('es-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—' } catch { return '—' }
@@ -2279,6 +2280,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
   const [fBloque, setFBloque] = useState('')
   const [q, setQ] = useState('')
   const [editar, setEditar] = useState(null)
+  const [importar, setImportar] = useState(false)
   const almNombre = (id) => id === 'ambos' ? 'Ambos' : (almacenes.find((a) => a.id === id)?.nombre || '')
 
   const desde = modo === 'dia' ? fecha : (d1 <= d2 ? d1 : d2)
@@ -2297,6 +2299,7 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
   }, [rutas, desde, hasta, almId, driverId, fEstado, fBloque, q]) // eslint-disable-line
 
   if (editar) return <RutaEditor ruta={editar} rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setEditar(null)} soloLectura={editar.id ? !puedeEditar : false} puedeEliminar={puedeEditar} />
+  if (importar) return <ImportarWalmart rutas={rutas} almacenes={almacenes} personas={personas} tarifas={tarifas} onCerrar={() => setImportar(false)} />
 
   const totIng = lista.reduce((a, r) => a + ingresoRuta(r), 0)
   const totGan = lista.reduce((a, r) => a + gananciaDriver(r), 0)
@@ -2306,7 +2309,10 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
 
   return (
     <div>
-      <PageTitle right={puedeCrear ? <Boton variant="gold" onClick={() => setEditar({ fecha: modo === 'dia' ? fecha : hoyISO(), almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton> : null}>Rutas</PageTitle>
+      <PageTitle right={puedeCrear ? <>
+        <Boton variant="ghost" onClick={() => setImportar(true)}><Upload size={15} /> Importar de Walmart</Boton>
+        <Boton variant="gold" onClick={() => setEditar({ fecha: modo === 'dia' ? fecha : hoyISO(), almacenId: almId })}><Plus size={15} /> Nueva ruta</Boton>
+      </> : null}>Rutas</PageTitle>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="dia">Día</option><option value="rango">Rango de fechas</option></Select></F>
@@ -2470,6 +2476,269 @@ function DriverPicker({ personas, almacenes, value, onPick }) {
             </div>
           </div>
         </>, document.body)}
+    </div>
+  )
+}
+
+// ── IMPORTADOR DE WALMART (CSV) ──────────────────────────────────────────────
+// Lee el reporte de Walmart y crea rutas: una por chofer + día + turno (no cuenta
+// paradas). Ignora filas sin chofer. NUNCA toca lo que ya existe (protege lo
+// pagado): si una ruta chofer+fecha+turno ya está, la salta. No crea ni modifica
+// pagos, gastos, bonos, deducciones ni choferes. Aislado al módulo Walmart.
+const normNom = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+function fechaBloqueWal(s) {
+  const p = String(s).trim().split(/\s+/)
+  const m = (p[0] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!m) return ['', '']
+  const fecha = `${m[3]}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`
+  let h = parseInt((p[1] || '0').split(':')[0], 10) || 0
+  const ap = (p[2] || '').toUpperCase()
+  if (ap === 'PM' && h !== 12) h += 12
+  if (ap === 'AM' && h === 12) h = 0
+  return [fecha, h < 12 ? 'manana' : 'tarde']
+}
+function parseCSVWal(text) {
+  const rows = []; let row = [], field = '', inq = false, i = 0
+  while (i < text.length) {
+    const c = text[i]
+    if (inq) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue } inq = false; i++; continue }
+      field += c; i++; continue
+    }
+    if (c === '"') { inq = true; i++; continue }
+    if (c === ',') { row.push(field); field = ''; i++; continue }
+    if (c === '\r') { i++; continue }
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue }
+    field += c; i++
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  return rows
+}
+function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
+  const [paso, setPaso] = useState(1)
+  const [parsed, setParsed] = useState(null)
+  const [alias, setAlias] = useState({})
+  const [tiendaMap, setTiendaMap] = useState({})
+  const [err, setErr] = useState('')
+  const [creando, setCreando] = useState(false)
+  const [hechas, setHechas] = useState(null)
+  const cfgRef = useRef({})
+  useEffect(() => suscribir(COL.config, (docs) => { cfgRef.current = docs.find((d) => d.id === 'importwalmart') || {} }), [])
+  const activos = useMemo(() => personas.filter((p) => p.estadoOperativo !== 'archivado').sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))), [personas])
+
+  const onFile = (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return
+    const rd = new FileReader()
+    rd.onload = () => { try { procesar(String(rd.result || '')) } catch (ex) { setErr('No se pudo leer el archivo: ' + (ex.message || ex)) } }
+    rd.onerror = () => setErr('No se pudo leer el archivo.')
+    rd.readAsText(f)
+  }
+  function procesar(text) {
+    text = text.replace(/^﻿/, '')
+    const rows = parseCSVWal(text)
+    if (rows.length < 2) { setErr('El archivo está vacío o no es un CSV válido.'); return }
+    const H = rows[0].map((x) => x.trim())
+    const iDrv = H.indexOf('driverName'), iTime = H.indexOf('pickupStartTime'), iStore = H.indexOf('pickupBusinessName'), iJob = H.indexOf('jobId')
+    if (iDrv < 0 || iTime < 0 || iStore < 0) { setErr('No reconozco las columnas de este archivo. ¿Es el reporte de rutas de Walmart?'); return }
+    const G = new Map(), nombres = new Map(), tiendas = new Map(); let sinChofer = 0
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r]; if (!row || row.length <= iTime) continue
+      const drv = (row[iDrv] || '').trim(); const t = (row[iTime] || '').trim(); if (!t) continue
+      if (!drv) { sinChofer++; continue }
+      const [fecha, bloque] = fechaBloqueWal(t); if (!fecha) continue
+      const store = (row[iStore] || '').trim(); const job = iJob >= 0 ? (row[iJob] || '') : ''
+      const key = fecha + '|' + drv + '|' + bloque
+      if (!G.has(key)) G.set(key, { fecha, driverRaw: drv, bloque, store: new Map(), lotes: new Set() })
+      const g = G.get(key); g.store.set(store, (g.store.get(store) || 0) + 1); if (job) g.lotes.add(job)
+      nombres.set(drv, (nombres.get(drv) || 0) + 1)
+      if (store) tiendas.set(store, (tiendas.get(store) || 0) + 1)
+    }
+    const grupos = [...G.values()].map((g) => ({ fecha: g.fecha, driverRaw: g.driverRaw, bloque: g.bloque, store: [...g.store.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '', lotes: g.lotes.size }))
+    grupos.sort((a, b) => a.fecha !== b.fecha ? a.fecha.localeCompare(b.fecha) : a.driverRaw.localeCompare(b.driverRaw))
+    const savedA = cfgRef.current.alias || {}, savedT = cfgRef.current.tiendas || {}
+    const al = {}
+    for (const [n] of nombres) {
+      if (savedA[n] != null && (savedA[n] === '__ignorar__' || personas.some((p) => p.id === savedA[n]))) { al[n] = savedA[n]; continue }
+      const m = personas.find((p) => normNom(nombreCompleto(p)) === normNom(n))
+      al[n] = m ? m.id : ''
+    }
+    const tm = {}
+    for (const [s] of tiendas) { tm[s] = (savedT[s] != null && (savedT[s] === '' || almacenes.some((a) => a.id === savedT[s]))) ? savedT[s] : (almacenes.find((a) => normNom(a.nombre) && normNom(s).includes(normNom(a.nombre)))?.id || '') }
+    setParsed({ grupos, nombres: [...nombres.entries()].sort((a, b) => b[1] - a[1]), tiendas: [...tiendas.entries()].sort((a, b) => b[1] - a[1]), sinChofer })
+    setAlias(al); setTiendaMap(tm); setErr(''); setPaso(2)
+  }
+  const didDe = (n) => { const v = alias[n]; return v && v !== '__ignorar__' ? v : '' }
+  const preview = useMemo(() => {
+    if (!parsed) return []
+    return parsed.grupos.map((g) => {
+      const did = didDe(g.driverRaw), almId = tiendaMap[g.store]
+      let estado = 'crear', motivo = ''
+      if (!did) { estado = 'ignorado'; motivo = alias[g.driverRaw] === '__ignorar__' ? 'chofer ignorado' : 'chofer sin asociar' }
+      else if (!almId) { estado = 'ignorado'; motivo = 'almacén sin asociar' }
+      else { const ya = rutas.find((r) => r.driverId === did && r.fecha === g.fecha && r.bloque === g.bloque); if (ya) { estado = 'existe'; motivo = estadoRutaInfo(ya.estado).label } }
+      return { ...g, did, almId, estado, motivo }
+    })
+  }, [parsed, alias, tiendaMap, rutas]) // eslint-disable-line
+  const nCrear = preview.filter((x) => x.estado === 'crear').length
+  const nExiste = preview.filter((x) => x.estado === 'existe').length
+  const nIgnora = preview.filter((x) => x.estado === 'ignorado').length
+  const nombresReconocidos = parsed ? parsed.nombres.filter(([n]) => didDe(n)).length : 0
+  const nombresFaltan = parsed ? parsed.nombres.length - nombresReconocidos : 0
+
+  const crear = async () => {
+    setCreando(true); setErr('')
+    try {
+      let n = 0
+      for (const x of preview) {
+        if (x.estado !== 'crear') continue
+        const driver = personas.find((p) => p.id === x.did), alm = almacenes.find((a) => a.id === x.almId)
+        if (!driver || !alm) continue
+        await guardar(COL.rutas, idRuta(x.almId, x.fecha, x.bloque, x.did), {
+          fecha: x.fecha, semana: lunesDe(x.fecha), almacenId: x.almId, driverId: x.did, driverNombre: nombreCompleto(driver),
+          identificador: 'Walmart', bloque: x.bloque, vehiculoTipo: driver.tipoVehiculo || '', propietarioVehiculo: driver.propietarioVehiculo || 'driver',
+          estado: 'completada', goHome: false, tarifaWalmart: ingresoDeAlmacen(alm, tarifas), tarifaDriver: tarifaDeDriver(driver, tarifas),
+          otUnidades: 0, otIngreso: 0, otPago: 0, bonos: [], deducciones: [], notas: 'Importada de Walmart', motivoCancel: '',
+        }); n++
+      }
+      // Guardar los alias (nombres/almacenes) para la próxima vez. No es crítico:
+      // solo el dueño puede escribir la configuración, así que si falla (un manager),
+      // el import igual queda hecho.
+      try { await guardar(COL.config, 'importwalmart', { alias, tiendas: tiendaMap }) } catch { /* noop */ }
+      await auditar('rutas_importadas', `Walmart · ${n} creadas · ${nExiste} ya existían · ${nIgnora} ignoradas`)
+      walToast(`${n} ruta(s) importada(s) ✓`, 'gold'); confeti()
+      setHechas({ n, existe: nExiste, ignora: nIgnora }); setPaso(5)
+    } catch (e) { setErr('No se pudo completar: ' + (e.message || e)) } finally { setCreando(false) }
+  }
+
+  const Stepper = () => (
+    <div className="mb-4 flex flex-wrap gap-1.5">
+      {[[1, 'Subir'], [2, 'Nombres'], [3, 'Almacenes'], [4, 'Verificar']].map(([n, l]) => (
+        <span key={n} className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${paso === n ? 'border-brand-azul bg-brand-azul text-white' : paso > n ? 'border-emerald-300 text-emerald-600' : 'border-slate-200 text-slate-400 dark:border-slate-700'}`} style={paso === n ? { background: WALMART_AZUL, borderColor: WALMART_AZUL } : {}}>
+          <span className="grid h-4 w-4 place-items-center rounded-full bg-black/10 text-[10px]">{paso > n ? '✓' : n}</span>{l}
+        </span>
+      ))}
+    </div>
+  )
+  const diaLargo = (iso) => { try { const d = new Date(iso + 'T12:00'); return `${iso.slice(8)}/${iso.slice(5, 7)} · ${['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()]}` } catch { return iso } }
+
+  return (
+    <div>
+      <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>Importar de Walmart</PageTitle>
+      <Stepper />
+      {err && <Aviso tipo="error" className="mb-3">{err}</Aviso>}
+
+      {paso === 1 && (
+        <>
+          <Card className="mb-3 p-4">
+            <h3 className="mb-1 font-bold text-brand-navy dark:text-slate-100">Sube el reporte de Walmart (CSV)</h3>
+            <p className="mb-3 text-xs text-slate-500">El archivo que descargas de Walmart. Creamos <b>una ruta por chofer, día y turno</b> (mañana/tarde). No contamos paradas. Las filas sin chofer se ignoran.</p>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm font-semibold text-slate-500 hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800/40">
+              <Upload size={18} /> Elegir archivo CSV…
+              <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+            </label>
+          </Card>
+          <Aviso tipo="info">Nada se crea en este paso. Primero verás los nombres por asociar y la lista de rutas; solo creas al final, cuando confirmes.</Aviso>
+        </>
+      )}
+
+      {paso === 2 && parsed && (
+        <>
+          <Card className="mb-3 p-4">
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Tile txt={String(preview.length)} l="Rutas detectadas" />
+              <Tile txt={String(parsed.grupos.filter((g) => g.bloque === 'manana').length)} l="Turnos mañana" />
+              <Tile txt={String(parsed.grupos.filter((g) => g.bloque === 'tarde').length)} l="Turnos tarde" />
+              <Tile txt={String(parsed.sinChofer)} l="Filas sin chofer (ignoradas)" />
+            </div>
+            <h3 className="font-bold text-brand-navy dark:text-slate-100">Asociar nombres <span className="text-xs font-semibold text-slate-400">· {nombresReconocidos} reconocidos, {nombresFaltan} por asociar</span></h3>
+            <p className="mb-2 text-xs text-slate-500">Empareja cada nombre del archivo con <b>tu chofer</b>. Se guarda para la próxima vez. Siempre quedan <b>tus nombres</b>; el del archivo solo sirve para emparejar.</p>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {parsed.nombres.map(([n, c]) => (
+                <div key={n} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <span className="text-slate-500 dark:text-slate-300">{n.replace(/\s+/g, ' ')}</span>
+                  <span className="text-[10px] text-slate-400">· {c} paradas</span>
+                  <ArrowLeftRight size={12} className="text-slate-300" />
+                  <select value={alias[n] ?? ''} onChange={(e) => setAlias((x) => ({ ...x, [n]: e.target.value }))} className="ml-auto max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800">
+                    <option value="">— elegir chofer —</option>
+                    {activos.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}
+                    <option value="__ignorar__">(ignorar este nombre)</option>
+                  </select>
+                  {didDe(n) ? <Badge color="green">ok</Badge> : <Badge color={alias[n] === '__ignorar__' ? 'slate' : 'gold'}>{alias[n] === '__ignorar__' ? 'ignora' : 'falta'}</Badge>}
+                </div>
+              ))}
+            </div>
+          </Card>
+          <div className="flex gap-2"><Boton variant="ghost" onClick={() => setPaso(1)}><ArrowLeft size={14} /> Atrás</Boton><Boton variant="gold" onClick={() => setPaso(3)}>Siguiente: almacenes</Boton></div>
+        </>
+      )}
+
+      {paso === 3 && parsed && (
+        <>
+          <Card className="mb-3 p-4">
+            <h3 className="font-bold text-brand-navy dark:text-slate-100">Asociar almacenes</h3>
+            <p className="mb-2 text-xs text-slate-500">Cada tienda de Walmart se asocia a tu almacén. Se guarda para la próxima.</p>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {parsed.tiendas.map(([s, c]) => (
+                <div key={s} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
+                  <span className="font-semibold text-brand-navy dark:text-slate-100">{s}</span>
+                  <span className="text-[10px] text-slate-400">· {c} paradas</span>
+                  <ArrowLeftRight size={12} className="text-slate-300" />
+                  <select value={tiendaMap[s] ?? ''} onChange={(e) => setTiendaMap((x) => ({ ...x, [s]: e.target.value }))} className="ml-auto max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800">
+                    <option value="">— elegir almacén —</option>
+                    {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                  </select>
+                  {tiendaMap[s] ? <Badge color="green">ok</Badge> : <Badge color="gold">falta</Badge>}
+                </div>
+              ))}
+            </div>
+          </Card>
+          <div className="flex gap-2"><Boton variant="ghost" onClick={() => setPaso(2)}><ArrowLeft size={14} /> Atrás</Boton><Boton variant="gold" onClick={() => setPaso(4)}>Siguiente: verificar</Boton></div>
+        </>
+      )}
+
+      {paso === 4 && parsed && (
+        <>
+          <Card className="mb-3 p-4">
+            <h3 className="mb-2 font-bold text-brand-navy dark:text-slate-100">Verificar antes de crear</h3>
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+              ✅ <b>{nCrear}</b> nuevas se crearán · <b>{nExiste}</b> ya existen (se saltan, no se tocan las pagadas) · <b>{nIgnora}</b> ignoradas
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto pr-1">
+              {(() => { let cur = ''; const out = []
+                for (const x of preview) {
+                  if (x.fecha !== cur) { cur = x.fecha; out.push(<div key={'d' + cur} className="mb-1 mt-3 text-xs font-bold text-slate-400 first:mt-0">{diaLargo(cur)}</div>) }
+                  const drvN = x.did ? nombreCompleto(personas.find((p) => p.id === x.did)) : x.driverRaw
+                  out.push(
+                    <div key={x.fecha + x.driverRaw + x.bloque} className={`mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800 ${x.estado !== 'crear' ? 'opacity-60' : ''}`}>
+                      <Badge color={x.almId ? 'navy' : 'slate'}>{x.almId ? (almacenes.find((a) => a.id === x.almId)?.nombre || '—') : '—'}</Badge>
+                      <Badge color={x.bloque === 'manana' ? 'green' : 'blue'}>{x.bloque === 'manana' ? 'Mañana' : 'Tarde'}</Badge>
+                      <span className="font-semibold text-brand-navy dark:text-slate-100">{drvN}</span>
+                      {x.lotes > 1 && <span className="text-[10px] text-slate-400">junta {x.lotes} lotes</span>}
+                      {x.estado === 'crear' && <Badge color="green" >nueva</Badge>}
+                      {x.estado === 'existe' && <span className="ml-auto text-xs text-slate-400">🔒 ya existe · {x.motivo}</span>}
+                      {x.estado === 'ignorado' && <span className="ml-auto text-xs text-amber-500">ignorada · {x.motivo}</span>}
+                    </div>
+                  )
+                }
+                return out })()}
+            </div>
+          </Card>
+          <div className="flex gap-2">
+            <Boton variant="ghost" onClick={() => setPaso(3)}><ArrowLeft size={14} /> Atrás</Boton>
+            <Boton variant="gold" disabled={creando || nCrear === 0} onClick={crear}>{creando ? <Spinner /> : `Crear ${nCrear} ruta(s)`}</Boton>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">No se crean pagos, gastos, bonos ni deducciones. Lo que ya existe no se toca. Ningún chofer se borra ni modifica.</p>
+        </>
+      )}
+
+      {paso === 5 && hechas && (
+        <Card className="p-6 text-center">
+          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-600 dark:bg-emerald-500/15">✓</div>
+          <h3 className="text-lg font-black text-brand-navy dark:text-slate-100">{hechas.n} rutas importadas</h3>
+          <p className="mt-1 text-sm text-slate-500">Todas como <b>Completada</b>. {hechas.existe} ya existían (se saltaron) y {hechas.ignora} se ignoraron. Los nombres y almacenes quedaron guardados para la próxima.</p>
+          <div className="mt-4 flex justify-center gap-2"><Boton variant="gold" onClick={onCerrar}>Ver mis rutas</Boton></div>
+        </Card>
+      )}
     </div>
   )
 }
