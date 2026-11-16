@@ -2522,9 +2522,33 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
   const [err, setErr] = useState('')
   const [creando, setCreando] = useState(false)
   const [hechas, setHechas] = useState(null)
+  const [nuevos, setNuevos] = useState([]) // choferes creados aquí mismo (por si aún no refresca la suscripción)
   const cfgRef = useRef({})
   useEffect(() => suscribir(COL.config, (docs) => { cfgRef.current = docs.find((d) => d.id === 'importwalmart') || {} }), [])
-  const activos = useMemo(() => personas.filter((p) => p.estadoOperativo !== 'archivado').sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))), [personas])
+  const activos = useMemo(() => {
+    const base = personas.filter((p) => p.estadoOperativo !== 'archivado')
+    const extra = nuevos.filter((x) => !base.some((p) => p.id === x.id))
+    return [...base, ...extra].sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+  }, [personas, nuevos])
+  const nombreDeId = (id) => { const p = personas.find((x) => x.id === id) || nuevos.find((x) => x.id === id); return p ? nombreCompleto(p) : '' }
+  // Crea un chofer nuevo con el nombre del archivo y lo asocia. Requiere permiso
+  // para crear drivers (el dueño siempre puede).
+  const crearChofer = async (n) => {
+    const parts = n.trim().split(/\s+/)
+    const nombre = parts[0] || n, apellido = parts.slice(1).join(' ')
+    try {
+      const id = await guardar(COL.candidatos, null, {
+        nombre, apellido, telefono: '', correo: '', direccion: '', ciudad: '', estado: '',
+        fechaRegistro: hoyISO(), notas: 'Creado al importar de Walmart', tieneSSN: 'pendiente', tieneLicencia: 'pendiente',
+        disponibilidad: 'ambas', diasDisponibles: [], tipoVehiculo: 'SUV', propietarioVehiculo: 'driver', rateDriver: '',
+        estadoOperativo: 'activo', almacenId: '',
+      })
+      await auditar('persona_creada', `${nombre} ${apellido} · desde import Walmart`)
+      setNuevos((x) => [...x, { id, nombre, apellido }])
+      setAlias((x) => ({ ...x, [n]: id }))
+      walToast(`Chofer "${nombre} ${apellido}" creado ✓`, 'gold')
+    } catch (e) { setErr(`No se pudo crear el chofer "${n}": ${e.message || e}. ¿Tienes permiso para crear drivers?`) }
+  }
 
   const onFile = (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return
@@ -2658,9 +2682,10 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
                   <span className="text-slate-500 dark:text-slate-300">{n.replace(/\s+/g, ' ')}</span>
                   <span className="text-[10px] text-slate-400">· {c} paradas</span>
                   <ArrowLeftRight size={12} className="text-slate-300" />
-                  <select value={alias[n] ?? ''} onChange={(e) => setAlias((x) => ({ ...x, [n]: e.target.value }))} className="ml-auto max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800">
+                  <select value={alias[n] ?? ''} onChange={(e) => { const v = e.target.value; if (v === '__crear__') crearChofer(n); else setAlias((x) => ({ ...x, [n]: v })) }} className="ml-auto max-w-[220px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800">
                     <option value="">— elegir chofer —</option>
                     {activos.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}
+                    <option value="__crear__">➕ Crear chofer nuevo con este nombre</option>
                     <option value="__ignorar__">(ignorar este nombre)</option>
                   </select>
                   {didDe(n) ? <Badge color="green">ok</Badge> : <Badge color={alias[n] === '__ignorar__' ? 'slate' : 'gold'}>{alias[n] === '__ignorar__' ? 'ignora' : 'falta'}</Badge>}
@@ -2707,7 +2732,7 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
               {(() => { let cur = ''; const out = []
                 for (const x of preview) {
                   if (x.fecha !== cur) { cur = x.fecha; out.push(<div key={'d' + cur} className="mb-1 mt-3 text-xs font-bold text-slate-400 first:mt-0">{diaLargo(cur)}</div>) }
-                  const drvN = x.did ? nombreCompleto(personas.find((p) => p.id === x.did)) : x.driverRaw
+                  const drvN = x.did ? (nombreDeId(x.did) || x.driverRaw) : x.driverRaw
                   out.push(
                     <div key={x.fecha + x.driverRaw + x.bloque} className={`mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800 ${x.estado !== 'crear' ? 'opacity-60' : ''}`}>
                       <Badge color={x.almId ? 'navy' : 'slate'}>{x.almId ? (almacenes.find((a) => a.id === x.almId)?.nombre || '—') : '—'}</Badge>
