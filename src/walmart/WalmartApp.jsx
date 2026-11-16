@@ -2522,7 +2522,7 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
   const [err, setErr] = useState('')
   const [creando, setCreando] = useState(false)
   const [hechas, setHechas] = useState(null)
-  const [estadoImport, setEstadoImport] = useState('completada') // completada | en_progreso
+  const [estadoImport, setEstadoImport] = useState('auto') // auto | completada | en_progreso
   const [nuevos, setNuevos] = useState([]) // choferes creados aquí mismo (por si aún no refresca la suscripción)
   const cfgRef = useRef({})
   useEffect(() => suscribir(COL.config, (docs) => { cfgRef.current = docs.find((d) => d.id === 'importwalmart') || {} }), [])
@@ -2573,8 +2573,11 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
     const rows = parseCSVWal(text)
     if (rows.length < 2) { setErr('El archivo está vacío o no es un CSV válido.'); return }
     const H = rows[0].map((x) => x.trim())
-    const iDrv = H.indexOf('driverName'), iTime = H.indexOf('pickupStartTime'), iStore = H.indexOf('pickupBusinessName'), iJob = H.indexOf('jobId')
+    const iDrv = H.indexOf('driverName'), iTime = H.indexOf('pickupStartTime'), iStore = H.indexOf('pickupBusinessName'), iJob = H.indexOf('jobId'), iStat = H.indexOf('jobStatus')
     if (iDrv < 0 || iTime < 0 || iStore < 0) { setErr('No reconozco las columnas de este archivo. ¿Es el reporte de rutas de Walmart?'); return }
+    // Estado "terminado": entregada, devuelta, cancelada o fallida. Si NO es ninguno
+    // de esos (va en camino: enroute/arrived/assigned…), la parada está activa.
+    const esTerminal = (s) => /COMPLETE|RETURN|CANCEL|FAIL|DELIVER/i.test(String(s || ''))
     const G = new Map(), nombres = new Map(), tiendas = new Map(); let sinChofer = 0
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r]; if (!row || row.length <= iTime) continue
@@ -2582,13 +2585,14 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
       if (!drv) { sinChofer++; continue }
       const [fecha, bloque] = fechaBloqueWal(t); if (!fecha) continue
       const store = (row[iStore] || '').trim(); const job = iJob >= 0 ? (row[iJob] || '') : ''
+      const activa = iStat >= 0 && !esTerminal(row[iStat])
       const key = fecha + '|' + drv + '|' + bloque
-      if (!G.has(key)) G.set(key, { fecha, driverRaw: drv, bloque, store: new Map(), lotes: new Set() })
-      const g = G.get(key); g.store.set(store, (g.store.get(store) || 0) + 1); if (job) g.lotes.add(job)
+      if (!G.has(key)) G.set(key, { fecha, driverRaw: drv, bloque, store: new Map(), lotes: new Set(), activo: false })
+      const g = G.get(key); g.store.set(store, (g.store.get(store) || 0) + 1); if (job) g.lotes.add(job); if (activa) g.activo = true
       nombres.set(drv, (nombres.get(drv) || 0) + 1)
       if (store) tiendas.set(store, (tiendas.get(store) || 0) + 1)
     }
-    const grupos = [...G.values()].map((g) => ({ fecha: g.fecha, driverRaw: g.driverRaw, bloque: g.bloque, store: [...g.store.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '', lotes: g.lotes.size }))
+    const grupos = [...G.values()].map((g) => ({ fecha: g.fecha, driverRaw: g.driverRaw, bloque: g.bloque, store: [...g.store.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '', lotes: g.lotes.size, estadoAuto: g.activo ? 'en_progreso' : 'completada' }))
     grupos.sort((a, b) => a.fecha !== b.fecha ? a.fecha.localeCompare(b.fecha) : a.driverRaw.localeCompare(b.driverRaw))
     const savedA = cfgRef.current.alias || {}, savedT = cfgRef.current.tiendas || {}
     const al = {}
@@ -2603,6 +2607,8 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
     setAlias(al); setTiendaMap(tm); setErr(''); setPaso(2)
   }
   const didDe = (n) => { const v = alias[n]; return v && v !== '__ignorar__' ? v : '' }
+  // Estado efectivo de una ruta: "auto" usa lo que dice Walmart; si no, se fuerza.
+  const estadoDe = (g) => estadoImport === 'auto' ? (g.estadoAuto || 'completada') : estadoImport
   const preview = useMemo(() => {
     if (!parsed) return []
     return parsed.grupos.map((g) => {
@@ -2614,24 +2620,28 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
       return { ...g, did, almId, estado, motivo }
     })
   }, [parsed, alias, tiendaMap, rutas]) // eslint-disable-line
-  const nCrear = preview.filter((x) => x.estado === 'crear').length
+  const aCrear = preview.filter((x) => x.estado === 'crear')
+  const nCrear = aCrear.length
   const nExiste = preview.filter((x) => x.estado === 'existe').length
   const nIgnora = preview.filter((x) => x.estado === 'ignorado').length
+  const nCompl = aCrear.filter((x) => estadoDe(x) === 'completada').length
+  const nProg = aCrear.filter((x) => estadoDe(x) === 'en_progreso').length
   const nombresReconocidos = parsed ? parsed.nombres.filter(([n]) => didDe(n)).length : 0
   const nombresFaltan = parsed ? parsed.nombres.length - nombresReconocidos : 0
 
   const crear = async () => {
     setCreando(true); setErr('')
     try {
-      let n = 0
+      let n = 0, cCompl = 0, cProg = 0
       for (const x of preview) {
         if (x.estado !== 'crear') continue
         const driver = personas.find((p) => p.id === x.did), alm = almacenes.find((a) => a.id === x.almId)
         if (!driver || !alm) continue
+        if (estadoDe(x) === 'en_progreso') cProg++; else cCompl++
         await guardar(COL.rutas, idRuta(x.almId, x.fecha, x.bloque, x.did), {
           fecha: x.fecha, semana: lunesDe(x.fecha), almacenId: x.almId, driverId: x.did, driverNombre: nombreCompleto(driver),
           identificador: 'Walmart', bloque: x.bloque, vehiculoTipo: driver.tipoVehiculo || '', propietarioVehiculo: driver.propietarioVehiculo || 'driver',
-          estado: estadoImport, goHome: false, tarifaWalmart: ingresoDeAlmacen(alm, tarifas), tarifaDriver: tarifaDeDriver(driver, tarifas),
+          estado: estadoDe(x), goHome: false, tarifaWalmart: ingresoDeAlmacen(alm, tarifas), tarifaDriver: tarifaDeDriver(driver, tarifas),
           otUnidades: 0, otIngreso: 0, otPago: 0, bonos: [], deducciones: [], notas: 'Importada de Walmart', motivoCancel: '',
         }); n++
       }
@@ -2639,9 +2649,9 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
       // solo el dueño puede escribir la configuración, así que si falla (un manager),
       // el import igual queda hecho.
       try { await guardar(COL.config, 'importwalmart', { alias, tiendas: tiendaMap }) } catch { /* noop */ }
-      await auditar('rutas_importadas', `Walmart · ${n} creadas · ${nExiste} ya existían · ${nIgnora} ignoradas`)
+      await auditar('rutas_importadas', `Walmart · ${n} creadas (${cCompl} compl., ${cProg} en prog.) · ${nExiste} ya existían · ${nIgnora} ignoradas`)
       walToast(`${n} ruta(s) importada(s) ✓`, 'gold'); confeti()
-      setHechas({ n, existe: nExiste, ignora: nIgnora }); setPaso(5)
+      setHechas({ n, existe: nExiste, ignora: nIgnora, compl: cCompl, prog: cProg }); setPaso(5)
     } catch (e) { setErr('No se pudo completar: ' + (e.message || e)) } finally { setCreando(false) }
   }
 
@@ -2672,12 +2682,13 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
             </label>
             <div className="mt-3">
-              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-400">¿Cómo marco estas rutas?</span>
+              <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-400">Estado de las rutas</span>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setEstadoImport('completada')} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${estadoImport === 'completada' ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>✓ Completadas</button>
-                <button type="button" onClick={() => setEstadoImport('en_progreso')} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${estadoImport === 'en_progreso' ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>⏳ En progreso</button>
+                <button type="button" onClick={() => setEstadoImport('auto')} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${estadoImport === 'auto' ? 'border-brand-gold bg-amber-50 text-brand-navy dark:bg-amber-500/10 dark:text-slate-100' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>✨ Automático (según Walmart)</button>
+                <button type="button" onClick={() => setEstadoImport('completada')} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${estadoImport === 'completada' ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>✓ Todas completadas</button>
+                <button type="button" onClick={() => setEstadoImport('en_progreso')} className={`rounded-xl border px-3 py-2 text-sm font-semibold ${estadoImport === 'en_progreso' ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>⏳ Todas en progreso</button>
               </div>
-              <p className="mt-1.5 text-[11px] text-slate-400">Usa <b>Completadas</b> para el reporte de rutas terminadas, y <b>En progreso</b> cuando subas el reporte de rutas activas.</p>
+              <p className="mt-1.5 text-[11px] text-slate-400"><b>Automático</b> (recomendado): leo la columna de estado de Walmart y marco cada ruta como corresponde — entregada/devuelta/cancelada → <b>Completada</b>; en camino → <b>En progreso</b>. Las otras dos opciones fuerzan todas al mismo estado.</p>
             </div>
           </Card>
           <Aviso tipo="info">Nada se crea en este paso. Primero verás los nombres por asociar y la lista de rutas; solo creas al final, cuando confirmes.</Aviso>
@@ -2749,7 +2760,9 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span>Se crearán como:</span>
-              <Badge color={estadoImport === 'completada' ? 'green' : 'blue'}>{estadoImport === 'completada' ? 'Completadas' : 'En progreso'}</Badge>
+              {estadoImport === 'auto'
+                ? <>{nCompl > 0 && <Badge color="green">{nCompl} completadas</Badge>}{nProg > 0 && <Badge color="blue">{nProg} en progreso</Badge>}<span className="text-[11px]">· automático (según Walmart)</span></>
+                : <Badge color={estadoImport === 'completada' ? 'green' : 'blue'}>{estadoImport === 'completada' ? 'Completadas' : 'En progreso'}</Badge>}
               <button className="font-semibold text-brand-gold hover:underline" onClick={() => setPaso(1)}>cambiar</button>
             </div>
             {nCrear === 0 && (
@@ -2787,7 +2800,7 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
         <Card className="p-6 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-600 dark:bg-emerald-500/15">✓</div>
           <h3 className="text-lg font-black text-brand-navy dark:text-slate-100">{hechas.n} rutas importadas</h3>
-          <p className="mt-1 text-sm text-slate-500">Todas como <b>{estadoImport === 'completada' ? 'Completada' : 'En progreso'}</b>. {hechas.existe} ya existían (se saltaron) y {hechas.ignora} se ignoraron. Los nombres y almacenes quedaron guardados para la próxima.</p>
+          <p className="mt-1 text-sm text-slate-500">{hechas.compl > 0 && <><b>{hechas.compl}</b> completadas</>}{hechas.compl > 0 && hechas.prog > 0 && ' · '}{hechas.prog > 0 && <><b>{hechas.prog}</b> en progreso</>}. {hechas.existe} ya existían (se saltaron) y {hechas.ignora} se ignoraron. Los nombres y almacenes quedaron guardados para la próxima.</p>
           <div className="mt-4 flex justify-center gap-2"><Boton variant="gold" onClick={onCerrar}>Ver mis rutas</Boton></div>
         </Card>
       )}
