@@ -71,8 +71,7 @@ const TABS = [
   { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck, grupo: 'Operación' },
   { id: 'personas', label: 'Drivers', icono: Users, grupo: 'Equipo' },
   { id: 'contratos', label: 'Contratos', icono: FileSignature, grupo: 'Equipo' },
-  { id: 'pagos', label: 'Pagos', icono: Wallet, grupo: 'Pagos' },
-  { id: 'fastpay', label: 'Fast Pay', icono: Zap, grupo: 'Pagos' },
+  { id: 'pagos', label: 'Pagos y Fast Pay', icono: Wallet, grupo: 'Pagos' },
   { id: 'gastos', label: 'Gastos', icono: Receipt, grupo: 'Pagos' },
   { id: 'financiero', label: 'Financiero', icono: BarChart3, grupo: 'Finanzas' },
   { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet, grupo: 'Finanzas' },
@@ -90,8 +89,7 @@ const PERM_TAB = {
   almacenes: 'rutas_ver',
   rutas: 'rutas_ver',
   cierre: 'liq_preparar',
-  pagos: 'pagos_ver',
-  fastpay: 'fp_ver',
+  pagos: 'pagos_ver', // el hub muestra Fast Pay si además tiene fp_ver
   gastos: 'fin_costos_ver',
   financiero: 'fin_dashboard_ver',
   facturas: 'fin_ingresos_ver',
@@ -126,6 +124,7 @@ export default function WalmartApp() {
   // Pestañas visibles según permisos (el dueño ve todas).
   const tabsVisibles = useMemo(() => TABS.filter((t) => {
     if (esDueno) return true
+    if (t.id === 'pagos') return puede('pagos_ver') || puede('fp_ver') // hub: liquidaciones o fast pay
     const req = PERM_TAB[t.id]
     if (req === '__owner__') return false
     return puede(req)
@@ -208,14 +207,13 @@ export default function WalmartApp() {
 
   const contenido = (
     <>
-      {tab === 'dashboard' && puede('fin_dashboard_ver') && <TabDashboard rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} irA={setTab} user={user} perm={perm} />}
+      {tab === 'dashboard' && puede('fin_dashboard_ver') && <TabDashboard rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} contratos={contratos} solPend={solPendientes.length} irA={setTab} user={user} perm={perm} />}
       {tab === 'agenda' && puede('rutas_ver') && <TabAgenda personas={personasV} almacenes={almacenesV} agenda={agendaV} irA={setTab} />}
       {tab === 'personas' && puede('drivers_ver') && <TabPersonas personas={personasV} almacenes={almacenesV} rutas={rutasV} pagos={pagos} contratos={contratos} gastos={gastosV} tarifas={tarifas} user={user} perm={perm} />}
       {tab === 'almacenes' && puede('rutas_ver') && <TabAlmacenes almacenes={almacenesV} user={user} />}
       {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
-      {tab === 'pagos' && puede('pagos_ver') && <TabPagos rutas={rutasV} pagos={pagos} personas={personasV} tarifas={tarifas} perm={perm} />}
-      {tab === 'fastpay' && puede('fp_ver') && <TabFastPay rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
+      {tab === 'pagos' && (puede('pagos_ver') || puede('fp_ver')) && <TabPagosHub rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
@@ -279,7 +277,7 @@ export default function WalmartApp() {
                         : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
                       <Icono size={18} strokeWidth={1.8} className="flex-shrink-0" />
                       <span className="flex-1">{tdef.label}</span>
-                      {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
+                      {tdef.id === 'pagos' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
                     </button>
                   )
                 })}
@@ -322,7 +320,7 @@ export default function WalmartApp() {
                   style={tab === tdef.id ? { background: WALMART_AZUL, color: '#fff' } : undefined}
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? '' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Icono size={14} /> {tdef.label}
-                  {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{solPendientes.length}</span>}
+                  {tdef.id === 'pagos' && solPendientes.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{solPendientes.length}</span>}
                 </button>
               )
             })}
@@ -335,7 +333,7 @@ export default function WalmartApp() {
 }
 
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
-function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, user }) {
+function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contratos = [], solPend = 0, irA, user }) {
   const nombre = (() => { const n = (user?.email || '').split('@')[0].split(/[.\-_]/)[0]; return n ? n.charAt(0).toUpperCase() + n.slice(1) : '' })()
   const [modo, setModo] = useState('semana') // semana | mes | rango
   const [fecha, setFecha] = useState(hoyISO())
@@ -359,10 +357,13 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
   const driversSemana = [...new Set(rWeek.filter((r) => r.estado === 'completada').map((r) => r.driverId))]
   const saldoDrivers = money2(driversSemana.reduce((a, did) => a + resumenSemana(rutas, pagos, did, semana).saldo, 0))
   const serie = useMemo(() => ultimasSemanas(8, fecha).map((s) => { const f = financieroSemana(rutas, pagos, gastos, cobros, s, almId); return { semana: s.slice(5), Ingreso: f.ingresoRutas, Resultado: f.resultadoOperativo } }), [rutas, pagos, gastos, cobros, almId, fecha])
+  const contratosSinFirmar = (contratos || []).filter((c) => c.estado === 'pendiente_firma').length
   const alertas = []
+  if (solPend > 0) alertas.push({ t: `${solPend} solicitud(es) de Fast Pay de choferes esperando`, tab: 'pagos', urgente: true })
   if (pend > 0) alertas.push({ t: `${pend} ruta(s) pendientes o en progreso esta semana — ciérralas o cancélalas`, tab: 'cierre' })
-  if (net30.vencido > 0) alertas.push({ t: `${dinero(net30.vencido)} vencido: Walmart ya pasó net-30 sin cobrar`, tab: 'financiero' })
   if (saldoDrivers > 0) alertas.push({ t: `${dinero(saldoDrivers)} por pagar a drivers esta semana`, tab: 'pagos' })
+  if (contratosSinFirmar > 0) alertas.push({ t: `${contratosSinFirmar} contrato(s) sin firmar`, tab: 'contratos' })
+  if (net30.vencido > 0) alertas.push({ t: `${dinero(net30.vencido)} vencido: Walmart ya pasó net-30 sin cobrar`, tab: 'financiero' })
 
   return (
     <div>
@@ -405,17 +406,20 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, irA, 
         <KPI animado label="Por pagar a drivers" value={dinero(saldoDrivers)} icon={Wallet} accent={saldoDrivers > 0 ? 'gold' : 'green'} sub="saldo de la semana" />
       </div>
 
-      {alertas.length > 0 && (
+      {alertas.length > 0 ? (
         <Card className="mb-4 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><AlertTriangle size={16} className="text-amber-500" /> Alertas</div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><AlertTriangle size={16} className="text-amber-500" /> Centro de pendientes <span className="ml-auto text-xs font-normal text-slate-400">{alertas.length} por atender</span></div>
           <div className="space-y-1.5">
             {alertas.map((a, i) => (
-              <button key={i} onClick={() => irA(a.tab)} className="flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              <button key={i} onClick={() => irA(a.tab)} className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${a.urgente ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200' : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'}`}>
+                {a.urgente && <Zap size={14} className="shrink-0" />}
                 <span className="flex-1">{a.t}</span><ArrowLeft size={13} className="rotate-180" />
               </button>
             ))}
           </div>
         </Card>
+      ) : (
+        <Card className="mb-4 flex items-center gap-2 p-4 text-sm text-slate-500"><span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/15 text-emerald-600">✓</span> Todo al día — no hay pendientes por atender.</Card>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
@@ -2569,6 +2573,33 @@ function Tile({ n, txt, l, verde, ambar }) {
 }
 
 // ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
+// Hub de Pagos: una sola pantalla con sub-pestañas "Liquidaciones" y "Fast Pay".
+function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicitudes }) {
+  const verLiq = !perm || perm.owner || perm.permisos?.pagos_ver
+  const verFP = !perm || perm.owner || perm.permisos?.fp_ver
+  const subs = []
+  if (verLiq) subs.push({ id: 'liq', l: 'Liquidaciones' })
+  if (verFP) subs.push({ id: 'fp', l: 'Fast Pay' })
+  const [sub, setSub] = useState(() => { try { const s = localStorage.getItem('wal_pagos_sub'); if (subs.some((x) => x.id === s)) return s } catch { /* noop */ } return subs[0]?.id || 'liq' })
+  const cambiar = (id) => { setSub(id); try { localStorage.setItem('wal_pagos_sub', id) } catch { /* noop */ } }
+  const solPend = (solicitudes || []).filter((s) => s.estado === 'solicitada' && !rutaBloqueadaFP(pagos, s.rutaId))
+  return (
+    <div>
+      {subs.length > 1 && (
+        <div className="mb-3 inline-flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
+          {subs.map((s) => (
+            <button key={s.id} onClick={() => cambiar(s.id)} style={sub === s.id ? { background: WALMART_AZUL, color: '#fff' } : undefined} className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${sub === s.id ? 'shadow-sm' : 'text-slate-500 hover:text-brand-navy dark:text-slate-300'}`}>
+              {s.l}{s.id === 'fp' && solPend.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{solPend.length}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {sub === 'liq' && verLiq && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} perm={perm} />}
+      {sub === 'fp' && verFP && <TabFastPay rutas={rutas} pagos={pagos} personas={personas} almacenes={almacenes} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
+    </div>
+  )
+}
+
 function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
   // Permisos de acción (separar ver de ejecutar/confirmar/anular). Dueño = todo.
   const pPreparaFP = !perm || perm.owner || perm.permisos?.fp_preparar
