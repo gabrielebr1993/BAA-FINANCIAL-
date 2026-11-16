@@ -2575,9 +2575,18 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
     const H = rows[0].map((x) => x.trim())
     const iDrv = H.indexOf('driverName'), iTime = H.indexOf('pickupStartTime'), iStore = H.indexOf('pickupBusinessName'), iJob = H.indexOf('jobId'), iStat = H.indexOf('jobStatus')
     if (iDrv < 0 || iTime < 0 || iStore < 0) { setErr('No reconozco las columnas de este archivo. ¿Es el reporte de rutas de Walmart?'); return }
-    // Estado "terminado": entregada, devuelta, cancelada o fallida. Si NO es ninguno
-    // de esos (va en camino: enroute/arrived/assigned…), la parada está activa.
-    const esTerminal = (s) => /COMPLETE|RETURN|CANCEL|FAIL|DELIVER/i.test(String(s || ''))
+    // Estado de la parada:
+    //  • TERMINADA (→ Completada): entregada, devuelta, cancelada o fallida.
+    //  • EN PROGRESO: algo sigue en curso (devolución en progreso, en camino,
+    //    asignada, aceptada, pendiente, creada).
+    // Primero se revisa lo terminado (así "CANCELED_BY_REASSIGN" no se confunde
+    // con "assigned"); lo desconocido se trata como terminado por seguridad.
+    const esTerminal = (s) => {
+      const u = String(s || '').toUpperCase()
+      if (/COMPLETE|CANCEL|FAIL|DELIVERED|RETURNED/.test(u)) return true
+      if (/IN_PROGRESS|ENROUTE|ARRIVED|ASSIGNED|ACCEPTED|PENDING|CREATED/.test(u)) return false
+      return true
+    }
     const G = new Map(), nombres = new Map(), tiendas = new Map(); let sinChofer = 0
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r]; if (!row || row.length <= iTime) continue
