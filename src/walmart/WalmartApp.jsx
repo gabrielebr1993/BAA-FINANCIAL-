@@ -3186,7 +3186,9 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
     return acc
   }
   const lista = useMemo(() => personas.map((p) => ({ p, r: resumenPeriodo(p.id) }))
-    .filter((x) => x.r.totalGanado > 0.005 || x.p.estadoOperativo === 'activo')
+    // En Pagos solo tiene sentido ver a quien tuvo actividad en el período
+    // (ganó algo); los que están en $0 no se muestran.
+    .filter((x) => x.r.totalGanado > 0.005)
     .filter((x) => fEstado === 'todos' || x.r.estado === fEstado)
     .filter((x) => !q.trim() || nombreCompleto(x.p).toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => b.r.saldo - a.r.saldo || nombreCompleto(a.p).localeCompare(nombreCompleto(b.p))), [personas, rutas, pagos, weeks.join(','), fEstado, q]) // eslint-disable-line
