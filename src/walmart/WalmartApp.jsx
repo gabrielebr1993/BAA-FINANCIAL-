@@ -1362,6 +1362,37 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     else walToast('No se pudieron activar: ' + r.motivo, 'red')
   }
 
+  // ACUMULADO HASTA HOY (todas sus rutas, no solo el período).
+  const hist = useMemo(() => {
+    const rc = (rutas || []).filter((r) => r.estado === 'completada')
+    const totalGanado = money2(rc.reduce((a, r) => a + gananciaDriver(r), 0))
+    const liquidadoFP = money2((pagos || []).filter(fpLiquida).reduce((a, p) => a + (Number(p.bruto) || 0), 0))
+    const efectivoFP = money2((pagos || []).filter(fpLiquida).reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+    const pagadoNormal = money2((pagos || []).filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+    const saldo = money2(totalGanado - liquidadoFP - pagadoNormal)
+    return { totalGanado, liquidadoFP, efectivoFP, pagadoNormal, saldo, nRutas: rc.length }
+  }, [rutas, pagos])
+
+  // Rutas que el chofer puede pedir por Fast Pay (todas, sin adelanto ni solicitud).
+  const disponible = useMemo(() => {
+    const pedibles = (rutas || []).filter((r) => {
+      if (r.estado !== 'completada') return false
+      const liq = liquidadoFPruta(pagos, r.id)
+      if (rutaBloqueadaFP(pagos, r.id) || liq > 0.005) return false
+      if ((misSol || []).some((s) => s.rutaId === r.id && s.estado === 'solicitada')) return false
+      return money2(gananciaDriver(r) - liq) > 0.005
+    })
+    const total = money2(pedibles.reduce((a, r) => a + (gananciaDriver(r) - liquidadoFPruta(pagos, r.id)), 0))
+    return { pedibles, total }
+  }, [rutas, pagos, misSol])
+  const pedirTodo = async () => {
+    if (!disponible.pedibles.length) return
+    try {
+      for (const r of disponible.pedibles) await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha)
+      walToast(`Solicitud de Fast Pay enviada por ${disponible.pedibles.length} ruta(s) ✓`, 'gold')
+    } catch (e) { walToast('No se pudo enviar: ' + (e?.message || e), 'red') }
+  }
+
   const semana = lunesDe(fecha)
   // Período efectivo (semana sábado→viernes, o rango de fechas). Agrega las
   // semanas que cruza el rango y junta rutas + movimientos.
@@ -1480,9 +1511,32 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <Boton variant="gold" className="ml-auto" onClick={() => setFirmar(contratosPend[0])}>Revisar y firmar</Boton>
               </Card>
             )}
+            {/* Pedir Fast Pay de TODO lo disponible (todas las rutas acumuladas) */}
+            {disponible.total > 0.005 && (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl p-4 text-white shadow-lg" style={{ background: 'linear-gradient(120deg,#0071dc,#004f9a)' }}>
+                <Zap size={20} className="shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-sm font-extrabold">Pedir Fast Pay de todo</div>
+                  <div className="text-[11px] text-white/80">{disponible.pedibles.length} ruta(s) sin adelanto · disponible <b className="font-mono">{dinero(disponible.total)}</b></div>
+                </div>
+                <button onClick={pedirTodo} className="ml-auto rounded-xl bg-white px-4 py-2 text-sm font-extrabold" style={{ color: WALMART_AZUL }}>Pedir todo</button>
+              </div>
+            )}
             {FiltroPeriodo}
             {res.enProcesoFP > 0.005 && <Card className="mb-3 flex items-center gap-2 border-l-4 border-l-amber-400 p-3 text-xs text-slate-500"><Clock size={14} className="text-amber-500" /> Tienes <b className="text-brand-navy dark:text-slate-100">{dinero(res.enProcesoFP)}</b> en Fast Pay <b>pendiente</b> (aún sin confirmar).</Card>}
-            <p className="text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado. Pide un Fast Pay desde <b>Mis rutas</b>.</p>
+
+            {/* ACUMULADO HASTA HOY (todo el historial del chofer) */}
+            <Card className="mb-3 p-4">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Acumulado hasta hoy <span className="font-normal normal-case">· todo tu historial</span></div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div><div className="font-mono text-lg font-extrabold text-brand-navy dark:text-slate-100">{dinero(hist.totalGanado)}</div><div className="text-[10px] text-slate-400">Total ganado</div></div>
+                <div><div className="font-mono text-lg font-extrabold text-amber-600">{dinero(hist.efectivoFP)}</div><div className="text-[10px] text-slate-400">Adelantado (Fast Pay)</div></div>
+                <div><div className="font-mono text-lg font-extrabold" style={{ color: hist.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(hist.saldo)}</div><div className="text-[10px] text-slate-400">Saldo por cobrar</div></div>
+                <div><div className="font-mono text-lg font-extrabold text-brand-navy dark:text-slate-100">{hist.nRutas}</div><div className="text-[10px] text-slate-400">Rutas totales</div></div>
+              </div>
+            </Card>
+
+            <p className="text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. Arriba ves el período elegido; <b>“Acumulado hasta hoy”</b> es todo tu historial. Pide Fast Pay de una ruta en <b>Mis rutas</b>, o de todo con el botón azul.</p>
           </>
         )}
 
