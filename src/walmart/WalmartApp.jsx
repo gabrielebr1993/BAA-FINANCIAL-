@@ -2533,20 +2533,30 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
   const nombreDeId = (id) => { const p = personas.find((x) => x.id === id) || nuevos.find((x) => x.id === id); return p ? nombreCompleto(p) : '' }
   // Crea un chofer nuevo con el nombre del archivo y lo asocia. Requiere permiso
   // para crear drivers (el dueño siempre puede).
+  // Almacén para un chofer nuevo, según las tiendas donde trabajó en el archivo:
+  // una sola tienda → ese almacén; dos → "Ambos"; sin mapear aún → "Ambos".
+  const almacenDeChofer = (n) => {
+    const stores = [...new Set((parsed?.grupos || []).filter((g) => g.driverRaw === n).map((g) => g.store))]
+    const ids = [...new Set(stores.map((s) => tiendaMap[s]).filter(Boolean))]
+    if (ids.length === 1) return ids[0]
+    return 'ambos'
+  }
   const crearChofer = async (n) => {
     const parts = n.trim().split(/\s+/)
     const nombre = parts[0] || n, apellido = parts.slice(1).join(' ')
+    const almacenId = almacenDeChofer(n)
+    const almNom = almacenId === 'ambos' ? 'Ambos almacenes' : (almacenes.find((a) => a.id === almacenId)?.nombre || 'Ambos almacenes')
     try {
       const id = await guardar(COL.candidatos, null, {
         nombre, apellido, telefono: '', correo: '', direccion: '', ciudad: '', estado: '',
         fechaRegistro: hoyISO(), notas: 'Creado al importar de Walmart', tieneSSN: 'pendiente', tieneLicencia: 'pendiente',
         disponibilidad: 'ambas', diasDisponibles: [], tipoVehiculo: 'SUV', propietarioVehiculo: 'driver', rateDriver: '',
-        estadoOperativo: 'activo', almacenId: '',
+        estadoOperativo: 'activo', almacenId,
       })
-      await auditar('persona_creada', `${nombre} ${apellido} · desde import Walmart`)
+      await auditar('persona_creada', `${nombre} ${apellido} · desde import Walmart · ${almNom}`)
       setNuevos((x) => [...x, { id, nombre, apellido }])
       setAlias((x) => ({ ...x, [n]: id }))
-      walToast(`Chofer "${nombre} ${apellido}" creado ✓`, 'gold')
+      walToast(`Chofer "${nombre} ${apellido}" creado en ${almNom} ✓`, 'gold')
     } catch (e) { setErr(`No se pudo crear el chofer "${n}": ${e.message || e}. ¿Tienes permiso para crear drivers?`) }
   }
 
