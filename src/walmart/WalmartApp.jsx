@@ -75,6 +75,7 @@ const TABS = [
   { id: 'gastos', label: 'Gastos', icono: Receipt, grupo: 'Pagos' },
   { id: 'financiero', label: 'Financiero', icono: BarChart3, grupo: 'Finanzas' },
   { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet, grupo: 'Finanzas' },
+  { id: 'reportes', label: 'Reportes', icono: Download, grupo: 'Finanzas' },
   { id: 'almacenes', label: 'Almacenes', icono: WhIcon, grupo: 'Ajustes' },
   { id: 'usuarios', label: 'Usuarios y permisos', icono: ShieldCheck, grupo: 'Ajustes' },
   { id: 'config', label: 'Configuración', icono: Settings, grupo: 'Ajustes' },
@@ -93,6 +94,7 @@ const PERM_TAB = {
   gastos: 'fin_costos_ver',
   financiero: 'fin_dashboard_ver',
   facturas: 'fin_ingresos_ver',
+  reportes: 'reportes_exportar',
   contratos: 'contratos_ver',
   usuarios: 'usuarios_crear',
   config: '__owner__',
@@ -217,6 +219,7 @@ export default function WalmartApp() {
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
+      {tab === 'reportes' && puede('reportes_exportar') && <TabReportes rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} solicitudes={solicitudes} tarifas={tarifas} />}
       {tab === 'contratos' && puede('contratos_ver') && <TabContratos contratos={contratos} plantillas={plantillas} personas={personasV} almacenes={almacenesV} tarifas={tarifas} />}
       {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} personas={personas} perm={perm} />}
       {tab === 'config' && esDueno && <TabConfig />}
@@ -3185,6 +3188,163 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
 }
 
 // ── FINANCIERO + DASHBOARD ──────────────────────────────────────────────────
+// ── REPORTES (descargas CSV / Excel) ─────────────────────────────────────────
+function aCSV(rows) {
+  if (!rows || !rows.length) return ''
+  const cols = Object.keys(rows[0])
+  const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+  return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\r\n')
+}
+function descargarArchivo(nombre, contenido, tipo) {
+  const blob = contenido instanceof Blob ? contenido : new Blob(['﻿' + contenido], { type: tipo || 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 3000)
+}
+async function descargarXLSX(nombre, rows) {
+  const XLSX = await import('xlsx')
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  descargarArchivo(nombre, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+}
+
+function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, facturas, solicitudes, tarifas }) {
+  const [tipo, setTipo] = useState('fastpay')
+  const [modo, setModo] = useState('mes') // semana | mes | rango | todo
+  const [fecha, setFecha] = useState(hoyISO())
+  const [mes, setMes] = useState(mesDe(hoyISO()))
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const [almId, setAlmId] = useState('')
+  const [drvId, setDrvId] = useState('')
+  const [generando, setGenerando] = useState(false)
+
+  const desde = modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : modo === 'rango' ? (d1 <= d2 ? d1 : d2) : '0000-00-00'
+  const hasta = modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : modo === 'rango' ? (d1 <= d2 ? d2 : d1) : '9999-99-99'
+  const nombreDrv = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : (id || '') }
+  const nombreAlm = (id) => almacenes.find((a) => a.id === id)?.nombre || (id || '')
+  const enRango = (f) => (f || '') >= desde && (f || '') <= hasta
+  const okAlm = (aId) => !almId || aId === almId
+  const okDrv = (dId) => !drvId || dId === drvId
+
+  const REPORTES = {
+    fastpay: {
+      label: 'Fast Pay (adelantos por chofer)', periodico: true,
+      filas: () => pagos.filter((p) => p.tipo === 'fastpay' && enRango(p.fecha) && okDrv(p.driverId) && okAlm(p.almacenId || ''))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((p) => ({ Fecha: p.fecha, Chofer: p.driverNombre || nombreDrv(p.driverId), Almacén: nombreAlm(p.almacenId || ''), Ruta: p.rutaId || '', Bruto: money2(p.bruto), 'Comisión %': p.comisionPct || '', Comisión: money2(p.comision), 'Efectivo entregado': money2(p.efectivo), Estado: ESTADO_FP_LABEL[estadoFP(p)] || '', Método: p.metodo || '', Referencia: p.referencia || '', Responsable: p.responsable || '', Comprobante: p.comprobante || '', Recuperación: p.recuperacion || '' })),
+    },
+    pagos: {
+      label: 'Pagos normales a choferes', periodico: true,
+      filas: () => pagos.filter((p) => p.tipo === 'pago' && enRango(p.fecha) && okDrv(p.driverId))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((p) => ({ Fecha: p.fecha, Chofer: p.driverNombre || nombreDrv(p.driverId), Semana: p.semana || '', Monto: money2(p.monto), Método: p.metodo || '', Referencia: p.referencia || '', Responsable: p.responsable || '' })),
+    },
+    rutas: {
+      label: 'Historial de rutas', periodico: true,
+      filas: () => rutas.filter((r) => enRango(r.fecha) && okAlm(r.almacenId) && okDrv(r.driverId))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((r) => ({ Fecha: r.fecha, Almacén: nombreAlm(r.almacenId), Chofer: r.driverNombre || nombreDrv(r.driverId), Turno: BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque, Identificador: r.identificador || '', Estado: r.estado, 'GO Home': r.goHome ? 'Sí' : '', OT: r.otUnidades || 0, 'Tarifa Walmart': money2(r.tarifaWalmart), 'Tarifa Driver': money2(r.tarifaDriver), 'Ingreso Walmart': money2(ingresoRuta(r)), 'Ganancia Driver': money2(gananciaDriver(r)) })),
+    },
+    gastos: {
+      label: 'Gastos', periodico: true,
+      filas: () => gastos.filter((g) => enRango(g.fecha) && okAlm(g.almacenId || ''))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((g) => ({ Fecha: g.fecha, Categoría: g.categoria || '', Almacén: nombreAlm(g.almacenId || ''), Chofer: g.driverId ? nombreDrv(g.driverId) : '', Monto: money2(g.monto), Descripción: g.descripcion || g.concepto || '', Responsable: g.responsable || '', 'Estado pago': g.estadoPago || '' })),
+    },
+    cobros: {
+      label: 'Cobros de Walmart (ingresos)', periodico: true,
+      filas: () => cobros.filter((c) => enRango(c.fecha) && okAlm(c.almacenId || ''))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((c) => ({ Fecha: c.fecha, Almacén: nombreAlm(c.almacenId || ''), Monto: money2(c.monto), Referencia: c.referencia || '', Responsable: c.responsable || '' })),
+    },
+    solicitudes: {
+      label: 'Solicitudes de Fast Pay', periodico: true,
+      filas: () => (solicitudes || []).filter((s) => enRango(s.fecha) && okDrv(s.driverId))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+        .map((s) => ({ Fecha: s.fecha, Chofer: s.driverNombre || nombreDrv(s.driverId), Ruta: s.rutaId || '', Bruto: money2(s.bruto), Estado: s.estado, Nota: s.nota || '' })),
+    },
+    financiero: {
+      label: 'Financiero por semana', periodico: true,
+      filas: () => { const out = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let g = 0; while (w <= fin && g < 200) { const f = financieroSemana(rutas, pagos, gastos, cobros, w, almId); out.push({ Semana: w, 'Ingreso Walmart': f.ingresoRutas, 'Costo drivers': f.costoDrivers, Margen: f.margen, 'Gastos operativos': f.gastosOper, 'Comisiones FP': f.comisionesFP, 'Resultado operativo': f.resultadoOperativo, Cobrado: f.cobrado, 'Por cobrar': f.porCobrar, 'Flujo de caja': f.flujoCaja, Rutas: f.nRutas }); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ } return out },
+    },
+    drivers: {
+      label: 'Lista de drivers', periodico: false,
+      filas: () => personas.filter((p) => okAlm(p.almacenId) || p.almacen === 'ambos').map((p) => ({ Nombre: nombreCompleto(p), Teléfono: p.telefono || '', Correo: p.correo || '', Ciudad: p.ciudad || '', Estado: p.estado || '', Almacén: p.almacenId === 'ambos' ? 'Ambos' : nombreAlm(p.almacenId), Vehículo: [p.marca, p.modelo, p.anio].filter(Boolean).join(' ') || p.tipoVehiculo || '', Propietario: p.propietarioVehiculo || '', 'Pago por ruta': p.rateDriver || '', 'Estado operativo': p.estadoOperativo || '' })),
+    },
+    facturas: {
+      label: 'Facturas a Walmart', periodico: false,
+      filas: () => (facturas || []).sort((a, b) => String(b.desde).localeCompare(String(a.desde))).map((f) => ({ Número: f.numero || f.id, Desde: f.desde, Hasta: f.hasta, Total: money2(f.total), Estado: f.estado || '', Emitida: f.fecha || '' })),
+    },
+  }
+
+  const def = REPORTES[tipo]
+  const filas = useMemo(() => { try { return def.filas() } catch { return [] } }, [tipo, pagos, rutas, gastos, cobros, personas, solicitudes, facturas, desde, hasta, almId, drvId]) // eslint-disable-line
+  const total = filas.reduce((a, r) => a + (Number(r.Bruto || r.Monto || r.Total || r['Ingreso Walmart'] || 0) || 0), 0)
+  const periodoTxt = def.periodico ? (modo === 'todo' ? 'todo el historial' : `${desde} → ${hasta}`) : 'todos'
+  const nombreBase = `walmart_${tipo}_${def.periodico && modo !== 'todo' ? `${desde}_${hasta}` : 'todo'}`
+
+  const bajar = async (fmt) => {
+    if (!filas.length) { walToast('No hay datos para ese reporte/filtro.', 'red'); return }
+    setGenerando(true)
+    try {
+      if (fmt === 'xlsx') await descargarXLSX(`${nombreBase}.xlsx`, filas)
+      else descargarArchivo(`${nombreBase}.csv`, aCSV(filas))
+      await auditar('reporte_descargado', `${tipo} · ${periodoTxt} · ${filas.length} filas · ${fmt}`)
+      walToast(`Reporte descargado (${filas.length} filas) ✓`, 'gold')
+    } catch (e) { walToast('No se pudo generar: ' + (e?.message || e), 'red') } finally { setGenerando(false) }
+  }
+
+  const cols = filas.length ? Object.keys(filas[0]) : []
+  return (
+    <div>
+      <PageTitle>Reportes y descargas</PageTitle>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Reporte"><Select value={tipo} onChange={(e) => setTipo(e.target.value)}>{Object.entries(REPORTES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</Select></F>
+          {def.periodico && (
+            <>
+              <F label="Período"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango</option><option value="todo">Todo</option></Select></F>
+              {modo === 'semana' && <F label="Semana"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+              {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
+              {modo === 'rango' && <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+            </>
+          )}
+          <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          {tipo !== 'financiero' && tipo !== 'cobros' && tipo !== 'facturas' && <F label="Chofer"><Select value={drvId} onChange={(e) => setDrvId(e.target.value)}><option value="">Todos</option>{personas.slice().sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))).map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>}
+        </div>
+      </Card>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold text-slate-500"><b className="text-brand-navy dark:text-slate-100">{filas.length}</b> filas · {periodoTxt}{total > 0 ? <> · total <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></> : ''}</span>
+        <div className="ml-auto flex gap-2">
+          <Boton variant="gold" disabled={generando || !filas.length} onClick={() => bajar('xlsx')}><Download size={14} /> Excel</Boton>
+          <Boton variant="ghost" disabled={generando || !filas.length} onClick={() => bajar('csv')}><Download size={14} /> CSV</Boton>
+        </div>
+      </div>
+
+      <Card className="p-0">
+        {!filas.length && <div className="px-4 py-8 text-center text-sm text-slate-400">No hay datos para este reporte con los filtros elegidos.</div>}
+        {!!filas.length && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-slate-100 dark:border-slate-800">{cols.map((c) => <th key={c} className="whitespace-nowrap px-3 py-2 font-bold uppercase tracking-wide text-slate-400">{c}</th>)}</tr></thead>
+              <tbody>
+                {filas.slice(0, 50).map((r, i) => (
+                  <tr key={i} className="border-b border-slate-50 last:border-0 dark:border-slate-800/60">{cols.map((c) => <td key={c} className="whitespace-nowrap px-3 py-1.5 text-slate-600 dark:text-slate-300">{String(r[c] == null ? '' : r[c])}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+            {filas.length > 50 && <div className="px-3 py-2 text-[11px] text-slate-400">Vista previa de 50 de {filas.length} filas. La descarga incluye todas.</div>}
+          </div>
+        )}
+      </Card>
+      <p className="mt-3 text-[11px] text-slate-400">Elige el reporte, el período y los filtros, y descarga en <b>Excel</b> o <b>CSV</b>. Incluye: Fast Pay por chofer, pagos, historial de rutas, gastos, cobros, solicitudes, financiero por semana, lista de drivers y facturas.</p>
+    </div>
+  )
+}
+
 function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, facturas, perm }) {
   // Permiso por indicador: el dashboard no habilita automáticamente todos los datos.
   const vIng = !perm || perm.owner || perm.permisos?.fin_ingresos_ver
