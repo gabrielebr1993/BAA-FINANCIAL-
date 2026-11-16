@@ -742,8 +742,9 @@ function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA
           </div>
         </Card>
 
-        {/* Tablero semanal */}
-        <div className="overflow-x-auto pb-1">
+        {/* Tablero semanal — min-w-0 deja que esta columna del grid se encoja y
+            haga scroll interno en vez de desbordarse sobre el panel de Drivers. */}
+        <div className="min-w-0 overflow-x-auto pb-1">
           <div className="grid min-w-[840px] grid-cols-7 gap-2">
             {DIAS.map((d) => (
               <div key={d} className="flex min-h-[300px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-800/50">
