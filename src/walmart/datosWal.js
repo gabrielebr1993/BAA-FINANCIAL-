@@ -73,7 +73,31 @@ export const COL = {
   docs: 'wal_docs', // documentos del driver (foto/licencia/etc.) como dataURL
   facturas: 'wal_facturas', // facturas mensuales para cobrar a Walmart
   usuarios: 'wal_usuarios', // roles/permisos de usuarios de Walmart (aislado)
+  solicitudes: 'wal_solicitudes', // solicitudes de Fast Pay enviadas por los choferes
   audit: 'wal_audit',
+}
+
+// ── Solicitudes de Fast Pay (el chofer las pide desde su portal) ──────────────
+// El chofer CREA una solicitud de su propia ruta; el dueño/staff la ve, la
+// atiende (hace el Fast Pay) o la rechaza. estado: solicitada | atendida | rechazada.
+export async function solicitarFastPay(ruta, driver, nota) {
+  const id = `sol_${ruta.id}`.replace(/[^a-zA-Z0-9_]/g, '') // una por ruta (evita duplicar)
+  return guardar(COL.solicitudes, id, {
+    tipo: 'fastpay', estado: 'solicitada', rutaId: ruta.id, fecha: ruta.fecha, almacenId: ruta.almacenId || '',
+    driverId: driver?.id || ruta.driverId || '', driverNombre: nombreCompleto(driver) || ruta.driverNombre || '',
+    bruto: Number(ruta.bruto) || 0, nota: String(nota || '').slice(0, 300), creadoEn: serverTimestamp(),
+  })
+}
+export function suscribirSolicitudes(cb) {
+  return onSnapshot(collection(db, COL.solicitudes), (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => cb([]))
+}
+export function suscribirMisSolicitudes(driverId, cb) {
+  if (!driverId) { cb([]); return () => {} }
+  const q = query(collection(db, COL.solicitudes), where('driverId', '==', driverId))
+  return onSnapshot(q, (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => cb([]))
+}
+export async function atenderSolicitud(id, estado, extra = {}) {
+  return guardar(COL.solicitudes, id, { estado, atendidaEn: serverTimestamp(), ...extra })
 }
 
 // ── Usuarios de Walmart (roles/permisos) — colección aislada wal_usuarios ─────

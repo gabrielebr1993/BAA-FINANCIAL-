@@ -50,6 +50,7 @@ import {
   financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes, idFactura,
   suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
   suscribirPorDriver, suscribirMiFicha,
+  solicitarFastPay, suscribirSolicitudes, suscribirMisSolicitudes, atenderSolicitud,
 } from './datosWal'
 import {
   ROLES_WAL, rolWalInfo, CATEGORIAS_PERM, TODOS_PERMISOS, DEP_DE, LABEL_PERM, PLANTILLA_ROL,
@@ -148,6 +149,7 @@ export default function WalmartApp() {
   const [plantillas, setPlantillas] = useState([])
   const [agenda, setAgenda] = useState([])
   const [facturas, setFacturas] = useState([])
+  const [solicitudes, setSolicitudes] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
@@ -161,6 +163,17 @@ export default function WalmartApp() {
   useEffect(() => suscribir(COL.agenda, setAgenda), [])
   useEffect(() => suscribir(COL.facturas, setFacturas), [])
   useEffect(() => suscribir(COL.config, (docs) => setTarifas({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}) })), [])
+  // Solicitudes de Fast Pay de los choferes (solo las lee dueño/staff con fp_ver).
+  useEffect(() => suscribirSolicitudes(setSolicitudes), [])
+  // Pendientes = solicitadas cuya ruta AÚN no tiene Fast Pay (al hacerlo o
+  // rechazarla, desaparecen solas del contador y la lista).
+  const solPendientes = useMemo(() => solicitudes.filter((s) => s.estado === 'solicitada' && !rutaBloqueadaFP(pagos, s.rutaId)), [solicitudes, pagos])
+  // Notificación EN VIVO: avisa cuando entra una solicitud nueva.
+  const solRef = useRef(solPendientes.length)
+  useEffect(() => {
+    if (solPendientes.length > solRef.current) walToast(`⚡ Nueva solicitud de Fast Pay (${solPendientes.length} pendiente${solPendientes.length !== 1 ? 's' : ''})`, 'gold')
+    solRef.current = solPendientes.length
+  }, [solPendientes.length])
 
   // ── Alcance por almacén: el dueño ve TODO; un usuario con warehouses asignados
   // solo ve los datos de esos almacenes. (La aplicación REAL es por reglas de
@@ -190,7 +203,7 @@ export default function WalmartApp() {
       {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
       {tab === 'pagos' && puede('pagos_ver') && <TabPagos rutas={rutasV} pagos={pagos} personas={personasV} tarifas={tarifas} perm={perm} />}
-      {tab === 'fastpay' && puede('fp_ver') && <TabFastPay rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} />}
+      {tab === 'fastpay' && puede('fp_ver') && <TabFastPay rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
@@ -247,6 +260,7 @@ export default function WalmartApp() {
                   : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
                 <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
                 <span className="flex-1">{tdef.label}</span>
+                {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
                 {tdef.fase && <span className="rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-500 dark:bg-slate-700">F{tdef.fase}</span>}
               </button>
             )
@@ -281,6 +295,7 @@ export default function WalmartApp() {
                 <button key={tdef.id} onClick={() => setTab(tdef.id)}
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Icono size={14} /> {tdef.label}
+                  {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{solPendientes.length}</span>}
                 </button>
               )
             })}
@@ -1308,6 +1323,12 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   useEffect(() => suscribirPorDriver(COL.pagos, driverId, setPagos), [driverId])
   useEffect(() => suscribirPorDriver(COL.docs, driverId, setDocs), [driverId])
   useEffect(() => suscribirPorDriver(COL.contratos, driverId, setContratos), [driverId])
+  const [misSol, setMisSol] = useState([])
+  useEffect(() => suscribirMisSolicitudes(driverId, setMisSol), [driverId])
+  const pedirFP = async (r) => {
+    try { await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha); walToast('Solicitud de Fast Pay enviada ✓', 'gold') }
+    catch (e) { walToast('No se pudo enviar la solicitud: ' + (e?.message || e), 'red') }
+  }
 
   const semana = lunesDe(fecha)
   // Período efectivo (semana sábado→viernes, o rango de fechas). Agrega las
@@ -1390,13 +1411,27 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-5">
         {sec === 'resumen' && res && (
           <>
-            <Card className="mb-3 flex items-center gap-3 p-4">
-              <Avatar p={ficha || { nombre }} size={52} />
-              <div className="min-w-0">
-                <div className="truncate text-lg font-extrabold text-brand-navy dark:text-slate-100">{nombre}</div>
-                <div className="text-xs text-slate-400">{ficha?.telefono || email}{ficha?.almacen ? ` · ${ficha.almacen}` : ''}</div>
+            {/* HERO estilo "Tarjeta": gradiente con saludo + tarjeta blanca con el total */}
+            <div className="relative mb-3">
+              <div className="rounded-3xl px-5 pb-12 pt-5 text-white shadow-lg" style={{ background: 'linear-gradient(150deg,#0071dc,#004f9a)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-full bg-white/20 text-sm font-extrabold text-white">{(nombre || 'NE').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}</div>
+                  <div className="min-w-0">
+                    <div className="truncate text-lg font-extrabold leading-tight">Hola, {String(nombre).split(' ')[0]} 👋</div>
+                    <div className="text-[11px] text-white/80">{detDesde} → {detHasta}</div>
+                  </div>
+                </div>
               </div>
-            </Card>
+              <Card className="relative -mt-8 mx-2 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Total ganado</div>
+                <div className="font-mono text-[34px] font-extrabold leading-none text-brand-navy dark:text-slate-100">{dinero(res.totalGanado)}</div>
+                <div className="mt-3 flex gap-5 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <div><div className="font-mono text-base font-bold text-amber-600">{dinero(res.efectivoFP)}</div><div className="text-[10px] text-slate-400">Adelantado FP</div></div>
+                  <div><div className="font-mono text-base font-bold" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</div><div className="text-[10px] text-slate-400">Por cobrar</div></div>
+                  <div><div className="font-mono text-base font-bold text-brand-navy dark:text-slate-100">{res.rutasSemana.length}</div><div className="text-[10px] text-slate-400">Rutas</div></div>
+                </div>
+              </Card>
+            </div>
             {contratosPend.length > 0 && (
               <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-brand-gold p-3">
                 <FileSignature size={16} className="text-brand-gold" />
@@ -1405,14 +1440,8 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               </Card>
             )}
             {FiltroPeriodo}
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              <KPI animado label="Rutas del período" value={String(res.rutasSemana.length)} icon={RouteIcon} accent="navy" />
-              <KPI animado label="Total ganado" value={dinero(res.totalGanado)} icon={DollarSign} accent="green" />
-              <KPI animado label="Adelantado (Fast Pay)" value={dinero(res.efectivoFP)} icon={Zap} accent="gold" sub="ya entregado" />
-              <KPI animado label="Por cobrar" value={dinero(res.saldo)} icon={Clock} accent={res.saldo > 0.005 ? 'gold' : 'green'} sub={res.saldo > 0.005 ? 'en la liquidación' : 'al día'} />
-            </div>
-            {res.enProcesoFP > 0.005 && <Card className="mt-2 flex items-center gap-2 border-l-4 border-l-amber-400 p-3 text-xs text-slate-500"><Clock size={14} className="text-amber-500" /> Tienes <b className="text-brand-navy dark:text-slate-100">{dinero(res.enProcesoFP)}</b> en Fast Pay <b>pendiente</b> (aún sin confirmar).</Card>}
-            <p className="mt-3 text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado.</p>
+            {res.enProcesoFP > 0.005 && <Card className="mb-3 flex items-center gap-2 border-l-4 border-l-amber-400 p-3 text-xs text-slate-500"><Clock size={14} className="text-amber-500" /> Tienes <b className="text-brand-navy dark:text-slate-100">{dinero(res.enProcesoFP)}</b> en Fast Pay <b>pendiente</b> (aún sin confirmar).</Card>}
+            <p className="text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. La <b>semana</b> va de sábado a viernes; o elige un <b>rango de fechas</b> para ver lo acumulado. Pide un Fast Pay desde <b>Mis rutas</b>.</p>
           </>
         )}
 
@@ -1422,15 +1451,25 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
           <Card className="p-0">
             <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis rutas · {detDesde} → {detHasta}</div>
             {rutasSem.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin rutas en el período.</div>}
-            {rutasSem.map((r) => (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
-                <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}</span>
-                {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
-                <Badge color={estadoRutaInfo(r.estado).color === 'green' ? 'green' : estadoRutaInfo(r.estado).color === 'red' ? 'red' : 'slate'}>{estadoRutaInfo(r.estado).label}</Badge>
-                {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
-                <span className="ml-auto font-mono font-semibold">{dinero(gananciaDriver(r))}</span>
-              </div>
-            ))}
+            {rutasSem.map((r) => {
+              const liq = liquidadoFPruta(pagos, r.id)
+              const bloqueado = rutaBloqueadaFP(pagos, r.id) || liq > 0.005
+              const sol = misSol.find((s) => s.rutaId === r.id)
+              const puedePedir = r.estado === 'completada' && !bloqueado && money2(gananciaDriver(r) - liq) > 0.005
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                  <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}</span>
+                  {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
+                  <Badge color={estadoRutaInfo(r.estado).color === 'green' ? 'green' : estadoRutaInfo(r.estado).color === 'red' ? 'red' : 'slate'}>{estadoRutaInfo(r.estado).label}</Badge>
+                  {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
+                  <span className="ml-auto font-mono font-semibold">{dinero(gananciaDriver(r))}</span>
+                  {bloqueado ? <Badge color="green">adelantado ✓</Badge>
+                    : sol ? <Badge color={sol.estado === 'rechazada' ? 'red' : sol.estado === 'atendida' ? 'green' : 'gold'}>{sol.estado === 'solicitada' ? 'Fast Pay solicitado' : sol.estado === 'atendida' ? 'Aprobado' : 'Rechazado'}</Badge>
+                    : puedePedir ? <button onClick={() => pedirFP(r)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ background: WALMART_AZUL }}><Zap size={12} /> Pedir Fast Pay</button>
+                    : null}
+                </div>
+              )
+            })}
           </Card>
           </>
         )}
@@ -2640,10 +2679,13 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
 // ── FAST PAY (consola dedicada) ───────────────────────────────────────────────
 // Lista TODAS las rutas disponibles para adelantar (de todos los choferes), con
 // su botón de Fast Pay, confirmaciones y un resumen. Reutiliza FastPayModal.
-function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm }) {
+function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm, solicitudes = [] }) {
   const pPreparaFP = !perm || perm.owner || perm.permisos?.fp_preparar
   const pEjecutaFP = !perm || perm.owner || perm.permisos?.fp_ejecutar
   const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
+  // Solicitudes de los choferes aún sin atender (ruta sin Fast Pay).
+  const solPend = (solicitudes || []).filter((s) => s.estado === 'solicitada' && !rutaBloqueadaFP(pagos, s.rutaId))
+  const rechazar = async (s) => { if (!window.confirm('¿Rechazar esta solicitud de Fast Pay?')) return; try { await atenderSolicitud(s.id, 'rechazada'); walToast('Solicitud rechazada') } catch (e) { walToast('No se pudo: ' + (e?.message || e), 'red') } }
   const [modo, setModo] = useState('semana')
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -2688,6 +2730,36 @@ function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm }) {
   return (
     <div>
       <PageTitle>Fast Pay · adelantos por ruta</PageTitle>
+
+      {/* Solicitudes de los choferes (notificación + atención) */}
+      {solPend.length > 0 && (
+        <Card className="mb-3 border-l-4 border-l-rose-400 p-0">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+            <Zap size={15} className="text-rose-500" />
+            <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Solicitudes de Fast Pay</span>
+            <Badge color="red">{solPend.length} nueva{solPend.length !== 1 ? 's' : ''}</Badge>
+          </div>
+          {solPend.map((s) => {
+            const r = rutas.find((x) => x.id === s.rutaId)
+            const bruto = r ? gananciaDriver(r) : (Number(s.bruto) || 0)
+            const resta = r ? money2(bruto - liquidadoFPruta(pagos, r.id)) : bruto
+            return (
+              <div key={s.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-500/10 text-[10px] font-bold text-rose-500">{(s.driverNombre || '?').slice(0, 2).toUpperCase()}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-brand-navy dark:text-slate-100">{s.driverNombre || driverNombre(s.driverId)}</div>
+                  <div className="font-mono text-[11px] text-slate-400">{s.fecha}{r ? ` · ${BLOQUES.find((b) => b.id === r.bloque)?.label || ''}` : ''}{s.nota ? ` · "${s.nota}"` : ''}</div>
+                </div>
+                <span className="ml-auto font-mono font-semibold">{dinero(bruto)}</span>
+                {r && pPreparaFP && resta > 0.005 && <Boton variant="gold" onClick={() => setFpRuta({ ...r, resta })}><Zap size={13} /> Hacer Fast Pay</Boton>}
+                {!r && <span className="text-xs text-slate-400">ruta no encontrada</span>}
+                <button className="text-xs font-semibold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => rechazar(s)}>rechazar</button>
+              </div>
+            )
+          })}
+        </Card>
+      )}
+
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>

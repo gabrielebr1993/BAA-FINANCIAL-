@@ -858,6 +858,15 @@ service cloud.firestore {
       allow update: if esDuenoEcom() || walPerm('fp_ejecutar') || walPerm('pagos_ejecutar') || walPerm('pagos_anular');
       allow delete: if esDuenoEcom() || walPerm('pagos_anular');
     }
+    // Solicitudes de Fast Pay: el chofer crea la suya (su ruta); dueño/staff la
+    // ve y la atiende. El chofer no puede ponerse otro estado ni otro driverId.
+    match /wal_solicitudes/{id} {
+      allow read:   if esDuenoEcom() || walEsDriverDe(resource.data.driverId) || walPerm('fp_ver');
+      allow create: if esDuenoEcom() || walPerm('fp_preparar')
+                     || (walActivo() && walDoc().rol == 'driver' && request.resource.data.driverId == walDoc().driverId && request.resource.data.estado == 'solicitada');
+      allow update: if esDuenoEcom() || walPerm('fp_ver');
+      allow delete: if esDuenoEcom();
+    }
     // Cobros a Walmart (ingresos) — financiero.
     match /wal_cobros/{id} {
       allow read:  if esDuenoEcom() || walPerm('fin_ingresos_ver');

@@ -136,6 +136,23 @@ test('DRIVER: lee SOLO sus propios datos, no los de otros, y no escribe', async 
   await assertFails(setDoc(doc(drv, 'wal_pagos', 'nuevo'), { tipo: 'pago', driverId: 'd1', monto: 999 }))
 })
 
+test('SOLICITUD Fast Pay: el chofer crea la SUYA, no la de otro; el dueño la lee', async () => {
+  await seedBase()
+  await sembrar('wal_usuarios', 'drv@test.com', { email: 'drv@test.com', rol: 'driver', activo: true, permisos: {}, warehouses: [], driverId: 'd1' })
+  const drv = ctx('drv', 'drv@test.com')
+  // crea solicitud de SU ruta (driverId d1)
+  await assertSucceeds(setDoc(doc(drv, 'wal_solicitudes', 'sol_r1'), { tipo: 'fastpay', estado: 'solicitada', driverId: 'd1', rutaId: 'r_alm1', fecha: '2026-11-16' }))
+  // NO puede crear para otro driver
+  await assertFails(setDoc(doc(drv, 'wal_solicitudes', 'sol_x'), { tipo: 'fastpay', estado: 'solicitada', driverId: 'd2', rutaId: 'r_alm2', fecha: '2026-11-16' }))
+  // NO puede auto-aprobarse (estado != solicitada)
+  await assertFails(setDoc(doc(drv, 'wal_solicitudes', 'sol_y'), { tipo: 'fastpay', estado: 'atendida', driverId: 'd1', rutaId: 'r_alm1' }))
+  // el dueño la lee y la atiende
+  await assertSucceeds(getDoc(doc(owner(), 'wal_solicitudes', 'sol_r1')))
+  await assertSucceeds(setDoc(doc(owner(), 'wal_solicitudes', 'sol_r1'), { estado: 'atendida' }, { merge: true }))
+  // el chofer lee la suya
+  await assertSucceeds(getDoc(doc(drv, 'wal_solicitudes', 'sol_r1')))
+})
+
 test('INACTIVO: un usuario desactivado pierde el acceso', async () => {
   await seedBase()
   await sembrar('wal_usuarios', 'mgr@test.com', {
