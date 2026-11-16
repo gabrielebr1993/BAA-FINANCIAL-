@@ -3872,6 +3872,18 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
       label: 'Lista de drivers', periodico: false,
       filas: () => personas.filter((p) => okAlm(p.almacenId) || p.almacen === 'ambos').map((p) => ({ Nombre: nombreCompleto(p), Teléfono: p.telefono || '', Correo: p.correo || '', Ciudad: p.ciudad || '', Estado: p.estado || '', Almacén: p.almacenId === 'ambos' ? 'Ambos' : nombreAlm(p.almacenId), Vehículo: [p.marca, p.modelo, p.anio].filter(Boolean).join(' ') || p.tipoVehiculo || '', Propietario: p.propietarioVehiculo || '', 'Pago por ruta': p.rateDriver || '', 'Estado operativo': p.estadoOperativo || '' })),
     },
+    drivers_full: {
+      label: 'Info completa de drivers (todos)', periodico: false,
+      filas: () => personas.slice().sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))).map((p) => ({
+        Nombre: p.nombre || '', Apellido: p.apellido || '', 'Nombre completo': nombreCompleto(p),
+        Teléfono: p.telefono || '', Correo: p.correo || '', Dirección: p.direccion || '', Ciudad: p.ciudad || '', Estado: p.estado || '',
+        'Fecha registro': p.fechaRegistro || '', 'Tiene SSN': p.tieneSSN || '', 'Tiene licencia': p.tieneLicencia || '',
+        Disponibilidad: p.disponibilidad || '', 'Días disponibles': Array.isArray(p.diasDisponibles) ? p.diasDisponibles.join(' ') : '',
+        'Tipo de vehículo': p.tipoVehiculo || '', Marca: p.marca || '', Modelo: p.modelo || '', Año: p.anio || '',
+        'Propietario del vehículo': p.propietarioVehiculo || '', 'Pago por ruta': p.rateDriver || '',
+        Almacén: p.almacenId === 'ambos' ? 'Ambos' : nombreAlm(p.almacenId), 'Estado operativo': p.estadoOperativo || '', Notas: p.notas || '',
+      })),
+    },
     facturas: {
       label: 'Facturas a Walmart', periodico: false,
       filas: () => (facturas || []).sort((a, b) => String(b.desde).localeCompare(String(a.desde))).map((f) => ({ Número: f.numero || f.id, Desde: f.desde, Hasta: f.hasta, Total: money2(f.total), Estado: f.estado || '', Emitida: f.fecha || '' })),
