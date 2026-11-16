@@ -1486,11 +1486,12 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 </div>
               </div>
               <Card className="relative -mt-8 mx-2 p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Total ganado</div>
-                <div className="font-mono text-[34px] font-extrabold leading-none text-brand-navy dark:text-slate-100">{dinero(res.totalGanado)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pendiente por cobrar</div>
+                <div className="font-mono text-[34px] font-extrabold leading-none" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</div>
+                <div className="mt-1 text-[11px] text-slate-400">{res.saldo > 0.005 ? 'Es lo que falta que te paguen este período.' : 'Estás al día este período ✓'}</div>
                 <div className="mt-3 flex gap-5 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <div><div className="font-mono text-base font-bold text-brand-navy dark:text-slate-100">{dinero(res.totalGanado)}</div><div className="text-[10px] text-slate-400">Total ganado</div></div>
                   <div><div className="font-mono text-base font-bold text-amber-600">{dinero(res.efectivoFP)}</div><div className="text-[10px] text-slate-400">Adelantado FP</div></div>
-                  <div><div className="font-mono text-base font-bold" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</div><div className="text-[10px] text-slate-400">Por cobrar</div></div>
                   <div><div className="font-mono text-base font-bold text-brand-navy dark:text-slate-100">{res.rutasSemana.length}</div><div className="text-[10px] text-slate-400">Rutas</div></div>
                 </div>
               </Card>
