@@ -63,22 +63,24 @@ const WALMART_AZUL = '#0071dc'
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const dinero = (n) => `$${money2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+// Pestañas en ORDEN y agrupadas por sección (grupo). Menos ruido, más jerarquía.
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard', icono: LayoutDashboard },
-  { id: 'agenda', label: 'Agenda semanal', icono: CalendarDays },
-  { id: 'personas', label: 'Candidatos / Drivers', icono: Users },
-  { id: 'almacenes', label: 'Almacenes', icono: WhIcon },
-  { id: 'rutas', label: 'Rutas', icono: RouteIcon },
-  { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck },
-  { id: 'pagos', label: 'Pagos / Fast Pay', icono: Wallet },
-  { id: 'fastpay', label: 'Fast Pay', icono: Zap },
-  { id: 'gastos', label: 'Gastos', icono: Receipt },
-  { id: 'financiero', label: 'Financiero', icono: BarChart3 },
-  { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet },
-  { id: 'contratos', label: 'Contratos', icono: FileSignature },
-  { id: 'usuarios', label: 'Usuarios y permisos', icono: ShieldCheck },
-  { id: 'config', label: 'Configuración', icono: Settings },
+  { id: 'dashboard', label: 'Dashboard', icono: LayoutDashboard, grupo: 'Inicio' },
+  { id: 'agenda', label: 'Agenda semanal', icono: CalendarDays, grupo: 'Operación' },
+  { id: 'rutas', label: 'Rutas', icono: RouteIcon, grupo: 'Operación' },
+  { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck, grupo: 'Operación' },
+  { id: 'personas', label: 'Drivers', icono: Users, grupo: 'Equipo' },
+  { id: 'contratos', label: 'Contratos', icono: FileSignature, grupo: 'Equipo' },
+  { id: 'pagos', label: 'Pagos', icono: Wallet, grupo: 'Pagos' },
+  { id: 'fastpay', label: 'Fast Pay', icono: Zap, grupo: 'Pagos' },
+  { id: 'gastos', label: 'Gastos', icono: Receipt, grupo: 'Pagos' },
+  { id: 'financiero', label: 'Financiero', icono: BarChart3, grupo: 'Finanzas' },
+  { id: 'facturas', label: 'Facturas', icono: FileSpreadsheet, grupo: 'Finanzas' },
+  { id: 'almacenes', label: 'Almacenes', icono: WhIcon, grupo: 'Ajustes' },
+  { id: 'usuarios', label: 'Usuarios y permisos', icono: ShieldCheck, grupo: 'Ajustes' },
+  { id: 'config', label: 'Configuración', icono: Settings, grupo: 'Ajustes' },
 ]
+const GRUPOS_ORDEN = ['Inicio', 'Operación', 'Equipo', 'Pagos', 'Finanzas', 'Ajustes']
 
 // Permiso mínimo para VER cada pestaña. '__owner__' = solo dueño/súper-admin.
 const PERM_TAB = {
@@ -260,20 +262,28 @@ export default function WalmartApp() {
             <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Walmart</div>
           </div>
         </div>
-        <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto">
-          {tabsVisibles.map((tdef) => {
-            const Icono = tdef.icono; const activo = tab === tdef.id
+        <nav className="mt-1 flex flex-1 flex-col gap-0.5 overflow-y-auto">
+          {GRUPOS_ORDEN.map((g) => {
+            const items = tabsVisibles.filter((t) => t.grupo === g)
+            if (!items.length) return null
             return (
-              <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                style={activo ? { borderLeftColor: WALMART_AZUL, background: 'rgba(0,113,220,0.10)', color: WALMART_AZUL } : undefined}
-                className={`group relative flex items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${activo
-                  ? 'font-semibold'
-                  : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
-                <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
-                <span className="flex-1">{tdef.label}</span>
-                {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
-                {tdef.fase && <span className="rounded bg-slate-200 px-1 text-[9px] font-bold text-slate-500 dark:bg-slate-700">F{tdef.fase}</span>}
-              </button>
+              <div key={g} className="mb-0.5">
+                <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{g}</div>
+                {items.map((tdef) => {
+                  const Icono = tdef.icono; const activo = tab === tdef.id
+                  return (
+                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                      style={activo ? { borderLeftColor: WALMART_AZUL, background: 'rgba(0,113,220,0.10)', color: WALMART_AZUL } : undefined}
+                      className={`group relative flex w-full items-center gap-3 rounded-xl border-l-2 py-2 pl-3 pr-3 text-left text-sm transition-all duration-150 ${activo
+                        ? 'font-semibold'
+                        : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
+                      <Icono size={18} strokeWidth={1.8} className="flex-shrink-0" />
+                      <span className="flex-1">{tdef.label}</span>
+                      {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
+                    </button>
+                  )
+                })}
+              </div>
             )
           })}
         </nav>
