@@ -2587,22 +2587,33 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
       if (/IN_PROGRESS|ENROUTE|ARRIVED|ASSIGNED|ACCEPTED|PENDING|CREATED/.test(u)) return false
       return true
     }
-    const G = new Map(), nombres = new Map(), tiendas = new Map(); let sinChofer = 0
+    // Una ruta = un LOTE de Walmart (jobId). El estado se decide por TURNO: si
+    // cualquier parada del chofer ese día/turno sigue en progreso, TODOS sus
+    // lotes de ese turno quedan "en progreso" (opción B).
+    const L = new Map(), nombres = new Map(), tiendas = new Map(), turnoActivo = new Set(); let sinChofer = 0
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r]; if (!row || row.length <= iTime) continue
       const drv = (row[iDrv] || '').trim(); const t = (row[iTime] || '').trim(); if (!t) continue
       if (!drv) { sinChofer++; continue }
       const [fecha, bloque] = fechaBloqueWal(t); if (!fecha) continue
-      const store = (row[iStore] || '').trim(); const job = iJob >= 0 ? (row[iJob] || '') : ''
-      const activa = iStat >= 0 && !esTerminal(row[iStat])
-      const key = fecha + '|' + drv + '|' + bloque
-      if (!G.has(key)) G.set(key, { fecha, driverRaw: drv, bloque, store: new Map(), lotes: new Set(), activo: false })
-      const g = G.get(key); g.store.set(store, (g.store.get(store) || 0) + 1); if (job) g.lotes.add(job); if (activa) g.activo = true
+      const store = (row[iStore] || '').trim()
+      const job = ((iJob >= 0 ? (row[iJob] || '') : '').trim()) || `${drv}|${fecha}|${bloque}`
+      if (iStat >= 0 && !esTerminal(row[iStat])) turnoActivo.add(drv + '|' + fecha + '|' + bloque)
+      if (!L.has(job)) L.set(job, { job, driver: new Map(), fecha: new Map(), bloque: new Map(), store: new Map() })
+      const l = L.get(job)
+      l.driver.set(drv, (l.driver.get(drv) || 0) + 1)
+      l.fecha.set(fecha, (l.fecha.get(fecha) || 0) + 1)
+      l.bloque.set(bloque, (l.bloque.get(bloque) || 0) + 1)
+      if (store) l.store.set(store, (l.store.get(store) || 0) + 1)
       nombres.set(drv, (nombres.get(drv) || 0) + 1)
       if (store) tiendas.set(store, (tiendas.get(store) || 0) + 1)
     }
-    const grupos = [...G.values()].map((g) => ({ fecha: g.fecha, driverRaw: g.driverRaw, bloque: g.bloque, store: [...g.store.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '', lotes: g.lotes.size, estadoAuto: g.activo ? 'en_progreso' : 'completada' }))
-    grupos.sort((a, b) => a.fecha !== b.fecha ? a.fecha.localeCompare(b.fecha) : a.driverRaw.localeCompare(b.driverRaw))
+    const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || ''
+    const grupos = [...L.values()].map((l) => {
+      const driverRaw = top(l.driver), fecha = top(l.fecha), bloque = top(l.bloque)
+      return { job: l.job, fecha, driverRaw, bloque, store: top(l.store), lotes: 1, estadoAuto: turnoActivo.has(driverRaw + '|' + fecha + '|' + bloque) ? 'en_progreso' : 'completada' }
+    })
+    grupos.sort((a, b) => a.fecha !== b.fecha ? a.fecha.localeCompare(b.fecha) : (a.driverRaw.localeCompare(b.driverRaw) || a.bloque.localeCompare(b.bloque)))
     const savedA = cfgRef.current.alias || {}, savedT = cfgRef.current.tiendas || {}
     const al = {}
     for (const [n] of nombres) {
@@ -2618,6 +2629,8 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
   const didDe = (n) => { const v = alias[n]; return v && v !== '__ignorar__' ? v : '' }
   // Estado efectivo de una ruta: "auto" usa lo que dice Walmart; si no, se fuerza.
   const estadoDe = (g) => estadoImport === 'auto' ? (g.estadoAuto || 'completada') : estadoImport
+  // Id determinista por LOTE (jobId) → reimportar el mismo lote no duplica.
+  const idLote = (job) => ('wm_' + String(job || '')).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 480)
   const preview = useMemo(() => {
     if (!parsed) return []
     return parsed.grupos.map((g) => {
@@ -2625,7 +2638,7 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
       let estado = 'crear', motivo = ''
       if (!did) { estado = 'ignorado'; motivo = alias[g.driverRaw] === '__ignorar__' ? 'chofer ignorado' : 'chofer sin asociar' }
       else if (!almId) { estado = 'ignorado'; motivo = 'almacén sin asociar' }
-      else { const ya = rutas.find((r) => r.driverId === did && r.fecha === g.fecha && r.bloque === g.bloque); if (ya) { estado = 'existe'; motivo = estadoRutaInfo(ya.estado).label } }
+      else { const docId = idLote(g.job); const ya = rutas.find((r) => r.id === docId || (g.job && r.identificador === g.job && r.driverId === did)); if (ya) { estado = 'existe'; motivo = estadoRutaInfo(ya.estado).label } }
       return { ...g, did, almId, estado, motivo }
     })
   }, [parsed, alias, tiendaMap, rutas]) // eslint-disable-line
@@ -2647,9 +2660,9 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
         const driver = personas.find((p) => p.id === x.did), alm = almacenes.find((a) => a.id === x.almId)
         if (!driver || !alm) continue
         if (estadoDe(x) === 'en_progreso') cProg++; else cCompl++
-        await guardar(COL.rutas, idRuta(x.almId, x.fecha, x.bloque, x.did), {
+        await guardar(COL.rutas, idLote(x.job), {
           fecha: x.fecha, semana: lunesDe(x.fecha), almacenId: x.almId, driverId: x.did, driverNombre: nombreCompleto(driver),
-          identificador: 'Walmart', bloque: x.bloque, vehiculoTipo: driver.tipoVehiculo || '', propietarioVehiculo: driver.propietarioVehiculo || 'driver',
+          identificador: x.job || 'Walmart', bloque: x.bloque, vehiculoTipo: driver.tipoVehiculo || '', propietarioVehiculo: driver.propietarioVehiculo || 'driver',
           estado: estadoDe(x), goHome: false, tarifaWalmart: ingresoDeAlmacen(alm, tarifas), tarifaDriver: tarifaDeDriver(driver, tarifas),
           otUnidades: 0, otIngreso: 0, otPago: 0, bonos: [], deducciones: [], notas: 'Importada de Walmart', motivoCancel: '',
         }); n++
@@ -2783,12 +2796,11 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
                   if (x.fecha !== cur) { cur = x.fecha; out.push(<div key={'d' + cur} className="mb-1 mt-3 text-xs font-bold text-slate-400 first:mt-0">{diaLargo(cur)}</div>) }
                   const drvN = x.did ? (nombreDeId(x.did) || x.driverRaw) : x.driverRaw
                   out.push(
-                    <div key={x.fecha + x.driverRaw + x.bloque} className={`mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800 ${x.estado !== 'crear' ? 'opacity-60' : ''}`}>
+                    <div key={x.job || (x.fecha + x.driverRaw + x.bloque)} className={`mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800 ${x.estado !== 'crear' ? 'opacity-60' : ''}`}>
                       <Badge color={x.almId ? 'navy' : 'slate'}>{x.almId ? (almacenes.find((a) => a.id === x.almId)?.nombre || '—') : '—'}</Badge>
                       <Badge color={x.bloque === 'manana' ? 'green' : 'blue'}>{x.bloque === 'manana' ? 'Mañana' : 'Tarde'}</Badge>
                       <span className="font-semibold text-brand-navy dark:text-slate-100">{drvN}</span>
-                      {x.lotes > 1 && <span className="text-[10px] text-slate-400">junta {x.lotes} lotes</span>}
-                      {x.estado === 'crear' && <Badge color="green" >nueva</Badge>}
+                      {x.estado === 'crear' && <><Badge color="green">nueva</Badge><Badge color={estadoDe(x) === 'en_progreso' ? 'blue' : 'slate'}>{estadoDe(x) === 'en_progreso' ? 'En progreso' : 'Completada'}</Badge></>}
                       {x.estado === 'existe' && <span className="ml-auto text-xs text-slate-400">🔒 ya existe · {x.motivo}</span>}
                       {x.estado === 'ignorado' && <span className="ml-auto text-xs text-amber-500">ignorada · {x.motivo}</span>}
                     </div>
