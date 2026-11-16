@@ -143,6 +143,7 @@ export const ESTADOS = [
   { id: 'standby', label: 'Stand-by', color: 'blue' },
   { id: 'activo', label: 'Activo', color: 'green' },
   { id: 'inactivo', label: 'Inactivo', color: 'red' },
+  { id: 'archivado', label: 'Archivado', color: 'slate' },
 ]
 export const estadoInfo = (id) => ESTADOS.find((e) => e.id === id) || ESTADOS[0]
 

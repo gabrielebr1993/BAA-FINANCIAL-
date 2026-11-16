@@ -2444,6 +2444,67 @@ exports.walUsuarioCrear = onCall(async (req) => {
   return { ok: true, uid, creado }
 })
 
+// ── Fast Pay anti-doble-pago (transacción en el servidor) ─────────────────────
+// Crea el adelanto Fast Pay de UNA ruta con una transacción sobre un documento de
+// id determinista (fp_<rutaId>). Si ya existe un Fast Pay NO anulado para esa
+// ruta, rechaza: así ni dos pulsaciones simultáneas ni dos dispositivos pueden
+// pagar la misma ruta dos veces. Aislado al módulo Walmart (colección wal_pagos).
+const _m2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+exports.walFastPayCrear = onCall(async (req) => {
+  const correo = String((req.auth && req.auth.token && req.auth.token.email) || '').toLowerCase()
+  if (!correo) throw new HttpsError('unauthenticated', 'Inicia sesión.')
+  const d = req.data || {}
+  const rutaId = String(d.rutaId || '')
+  if (!rutaId) throw new HttpsError('invalid-argument', 'Falta la ruta.')
+  const estado = d.estado === 'pendiente' ? 'pendiente' : 'confirmado'
+  // Permisos: dueño siempre; staff necesita fp_preparar, y fp_ejecutar para confirmar.
+  let permOk = esDuenoReq(req)
+  if (!permOk) {
+    try {
+      const ud = await db.collection('wal_usuarios').doc(correo).get()
+      const u = ud.exists ? ud.data() : null
+      const p = (u && u.activo !== false && u.permisos) || {}
+      permOk = estado === 'confirmado' ? (p.fp_ejecutar === true) : (p.fp_preparar === true || p.fp_ejecutar === true)
+    } catch { /* noop */ }
+  }
+  if (!permOk) throw new HttpsError('permission-denied', estado === 'confirmado' ? 'No tienes permiso para confirmar Fast Pay.' : 'No tienes permiso para preparar Fast Pay.')
+  const bruto = _m2(d.bruto)
+  if (bruto <= 0) throw new HttpsError('invalid-argument', 'El bruto debe ser mayor a 0.')
+  const comisionPct = Math.max(0, Number(d.comisionPct) || 0)
+  const comision = _m2(bruto * comisionPct / 100)
+  const efectivo = _m2(bruto - comision)
+  const detId = ('fp_' + rutaId).replace(/[^a-zA-Z0-9_]/g, '')
+  const ref = db.collection('wal_pagos').doc(detId)
+  // Pre-chequeo de documentos LEGADOS con id aleatorio (no se pueden consultar
+  // dentro de la transacción). Bloquea si hay otro Fast Pay no anulado de la ruta.
+  const legado = await db.collection('wal_pagos').where('rutaId', '==', rutaId).where('tipo', '==', 'fastpay').limit(5).get().catch(() => null)
+  if (legado && !legado.empty) {
+    const vivo = legado.docs.find((x) => x.id !== detId && (x.data().estado || 'confirmado') !== 'anulado')
+    if (vivo) throw new HttpsError('already-exists', 'Esta ruta ya tiene un Fast Pay. No se puede pagar dos veces.')
+  }
+  const resultado = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    if (snap.exists && (snap.data().estado || 'confirmado') !== 'anulado') {
+      throw new HttpsError('already-exists', 'Esta ruta ya tiene un Fast Pay en proceso o liquidado. No se puede pagar dos veces.')
+    }
+    const doc = {
+      tipo: 'fastpay', estado,
+      driverId: String(d.driverId || ''), driverNombre: String(d.driverNombre || '').slice(0, 160),
+      semana: String(d.semana || ''), rutaId, almacenId: String(d.almacenId || ''),
+      bruto, comisionPct, comision, efectivo,
+      fecha: String(d.fecha || ''), metodo: String(d.metodo || 'Efectivo').slice(0, 40),
+      referencia: String(d.referencia || '').slice(0, 200), responsable: String(d.responsable || correo).slice(0, 160),
+      comprobante: String(d.comprobante || '').slice(0, 200),
+      creadoPor: correo, actualizadoPor: correo,
+      creadoEn: admin.firestore.FieldValue.serverTimestamp(), actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    tx.set(ref, doc)
+    return { id: detId, comision, efectivo }
+  })
+  await db.collection('wal_audit').add({ accion: 'fastpay', detalle: `ruta ${rutaId} · ${estado} · bruto ${bruto} · comisión ${resultado.comision} · efectivo ${resultado.efectivo}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+  return { ok: true, ...resultado }
+})
+
 // ── W-9 del chofer: guardar el PDF firmado en sus documentos ──────────────────
 // Flujo INDEPENDIENTE del contrato. El chofer llena y firma su W-9 en el portal;
 // el PDF (con el SSN dentro) se genera en el navegador y se guarda aquí en

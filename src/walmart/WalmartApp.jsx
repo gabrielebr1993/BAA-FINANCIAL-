@@ -28,6 +28,7 @@ import {
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
   CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
+  Smartphone, Share, History,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
@@ -63,6 +64,43 @@ const WALMART_AZUL = '#0071dc'
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const dinero = (n) => `$${money2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+// ── Instalar la app en el teléfono (Add to Home Screen / PWA) ────────────────
+// En Android/Chrome capturamos el evento 'beforeinstallprompt' y mostramos un
+// botón nativo. En iPhone (Safari) no existe ese evento, así que mostramos las
+// instrucciones (Compartir → Añadir a pantalla de inicio). Se oculta si ya está
+// instalada (display-mode: standalone) o si el usuario lo descartó.
+function InstalarApp({ compacto = false }) {
+  const [evt, setEvt] = useState(null)
+  const [cerrado, setCerrado] = useState(() => { try { return localStorage.getItem('wal_install_off') === '1' } catch { return false } })
+  const instalada = typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone)
+  const esIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream
+  useEffect(() => {
+    const h = (e) => { e.preventDefault(); setEvt(e) }
+    window.addEventListener('beforeinstallprompt', h)
+    const done = () => { setEvt(null); try { localStorage.setItem('wal_install_off', '1') } catch { /* noop */ } }
+    window.addEventListener('appinstalled', done)
+    return () => { window.removeEventListener('beforeinstallprompt', h); window.removeEventListener('appinstalled', done) }
+  }, [])
+  const descartar = () => { setCerrado(true); try { localStorage.setItem('wal_install_off', '1') } catch { /* noop */ } }
+  if (instalada || cerrado) return null
+  // Mostrar solo si hay evento (Android) o si es iOS (instrucciones manuales).
+  if (!evt && !esIOS) return null
+  const instalar = async () => { if (!evt) return; evt.prompt(); try { await evt.userChoice } catch { /* noop */ } setEvt(null) }
+  return (
+    <div className={`flex items-center gap-2 rounded-xl border border-brand-gold/40 bg-brand-gold/10 px-3 ${compacto ? 'py-2' : 'py-2.5'}`}>
+      <Smartphone size={compacto ? 16 : 18} className="shrink-0 text-brand-gold" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[12.5px] font-bold text-brand-navy dark:text-slate-100">Instala la app en tu teléfono</div>
+        {esIOS && !evt
+          ? <div className="text-[11px] text-slate-500 dark:text-slate-400">Toca <Share size={11} className="inline" /> <b>Compartir</b> y luego <b>Añadir a pantalla de inicio</b>.</div>
+          : <div className="text-[11px] text-slate-500 dark:text-slate-400">Ábrela como una app, sin abrir el navegador.</div>}
+      </div>
+      {evt && <button type="button" onClick={instalar} className="shrink-0 rounded-lg bg-brand-gold px-3 py-1.5 text-xs font-bold text-white">Instalar</button>}
+      <button type="button" onClick={descartar} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Cerrar"><X size={16} /></button>
+    </div>
+  )
+}
+
 // Pestañas en ORDEN y agrupadas por sección (grupo). Menos ruido, más jerarquía.
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icono: LayoutDashboard, grupo: 'Inicio' },
@@ -78,6 +116,7 @@ const TABS = [
   { id: 'reportes', label: 'Reportes', icono: Download, grupo: 'Finanzas' },
   { id: 'almacenes', label: 'Almacenes', icono: WhIcon, grupo: 'Ajustes' },
   { id: 'usuarios', label: 'Usuarios y permisos', icono: ShieldCheck, grupo: 'Ajustes' },
+  { id: 'historial', label: 'Historial de cambios', icono: History, grupo: 'Ajustes' },
   { id: 'config', label: 'Configuración', icono: Settings, grupo: 'Ajustes' },
 ]
 const GRUPOS_ORDEN = ['Inicio', 'Operación', 'Equipo', 'Pagos', 'Finanzas', 'Ajustes']
@@ -97,6 +136,7 @@ const PERM_TAB = {
   reportes: 'reportes_exportar',
   contratos: 'contratos_ver',
   usuarios: 'usuarios_crear',
+  historial: 'historial_ver',
   config: '__owner__',
 }
 
@@ -210,7 +250,7 @@ export default function WalmartApp() {
   const contenido = (
     <>
       {tab === 'dashboard' && puede('fin_dashboard_ver') && <TabDashboard rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} contratos={contratos} solPend={solPendientes.length} irA={setTab} user={user} perm={perm} />}
-      {tab === 'agenda' && puede('rutas_ver') && <TabAgenda personas={personasV} almacenes={almacenesV} agenda={agendaV} irA={setTab} />}
+      {tab === 'agenda' && puede('rutas_ver') && <TabAgenda personas={personasV} almacenes={almacenesV} agenda={agendaV} rutas={rutasV} tarifas={tarifas} perm={perm} irA={setTab} />}
       {tab === 'personas' && puede('drivers_ver') && <TabPersonas personas={personasV} almacenes={almacenesV} rutas={rutasV} pagos={pagos} contratos={contratos} gastos={gastosV} tarifas={tarifas} user={user} perm={perm} />}
       {tab === 'almacenes' && puede('rutas_ver') && <TabAlmacenes almacenes={almacenesV} user={user} />}
       {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
@@ -222,6 +262,7 @@ export default function WalmartApp() {
       {tab === 'reportes' && puede('reportes_exportar') && <TabReportes rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} solicitudes={solicitudes} tarifas={tarifas} />}
       {tab === 'contratos' && puede('contratos_ver') && <TabContratos contratos={contratos} plantillas={plantillas} personas={personasV} almacenes={almacenesV} tarifas={tarifas} />}
       {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} personas={personas} perm={perm} />}
+      {tab === 'historial' && (esDueno || puede('historial_ver')) && <TabHistorial />}
       {tab === 'config' && esDueno && <TabConfig />}
     </>
   )
@@ -296,6 +337,7 @@ export default function WalmartApp() {
               {pushOn ? '🔔 Avisos activados ✓' : '🔔 Activar avisos de Fast Pay'}
             </button>
           )}
+          <div className="mt-2"><InstalarApp compacto /></div>
           <button onClick={cambiarCarrier} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
             <ArrowLeftRight size={15} /> Cambiar de compañía
           </button>
@@ -462,7 +504,12 @@ function HeroStat({ label, valor, dot, chico }) {
 const ini = (p) => `${(p?.nombre || '?')[0] || ''}${(p?.apellido || '')[0] || ''}`.toUpperCase() || '?'
 const DIA_LARGO = { Lun: 'Lunes', Mar: 'Martes', 'Mié': 'Miércoles', Jue: 'Jueves', Vie: 'Viernes', 'Sáb': 'Sábado', Dom: 'Domingo' }
 
-function TabAgenda({ personas, almacenes, agenda }) {
+// Orden real de los días DESDE el inicio de la semana operativa (sábado).
+// 'semana' (lunesDe) es el sábado, así que la fecha de cada día = sábado + offset.
+const ORDEN_SEMANA_DESDE_SABADO = ['Sáb', 'Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie']
+const fechaDeDiaSemana = (semanaISO, dia) => sumarDias(semanaISO, Math.max(0, ORDEN_SEMANA_DESDE_SABADO.indexOf(dia)))
+
+function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA }) {
   const [almId, setAlmId] = useState('')
   const [fecha, setFecha] = useState(hoyISO())
   const [q, setQ] = useState('')
@@ -518,6 +565,48 @@ function TabAgenda({ personas, almacenes, agenda }) {
   const limpiarDia = (dia) => { const nuevo = planNormalizado(plan); nuevo[dia] = { manana: [], tarde: [] }; guardarPlan(nuevo) }
   const guardarNec = (campo, val) => { if (almId) guardar(COL.almacenes, almId, { [campo]: Math.max(0, Number(val) || 0) }) }
 
+  // ── Generar rutas desde la agenda (un clic) ──────────────────────────────────
+  // Crea una ruta por cada driver asignado en cada día/turno de la semana. El id
+  // es determinista (almacén+fecha+turno+driver), así que volver a generar NO
+  // duplica: salta las que ya existen (incluidas las de días ya cerrados).
+  const pCrearRutas = !perm || perm.owner || perm.permisos?.rutas_crear
+  const [generando, setGenerando] = useState(false)
+  const planAsignados = () => {
+    const out = []
+    for (const d of DIAS) {
+      for (const turno of ['manana', 'tarde']) {
+        for (const did of (plan[d]?.[turno] || [])) out.push({ dia: d, turno, did, fecha: fechaDeDiaSemana(semana, d) })
+      }
+    }
+    return out
+  }
+  const asignados = planAsignados()
+  const yaExiste = (f, turno, did) => rutas.some((r) => r.id === idRuta(almId, f, turno, did) || (r.almacenId === almId && r.fecha === f && r.bloque === turno && r.driverId === did))
+  const porCrear = asignados.filter((a) => !yaExiste(a.fecha, a.turno, a.did))
+  const generarRutasSemana = async () => {
+    if (!almId || !porCrear.length) return
+    if (!window.confirm(`¿Crear ${porCrear.length} ruta(s) de esta semana (${semana} → ${domingoDe(fecha)}) para ${almSel?.nombre || 'este almacén'}?\n\nLas que ya existan no se tocan. Podrás editarlas en Rutas.`)) return
+    setGenerando(true)
+    try {
+      const alm = almacenes.find((a) => a.id === almId)
+      let n = 0
+      for (const a of porCrear) {
+        const d = personas.find((p) => p.id === a.did)
+        if (!d) continue
+        const id = idRuta(almId, a.fecha, a.turno, a.did)
+        const data = {
+          fecha: a.fecha, semana: lunesDe(a.fecha), almacenId: almId, driverId: a.did, driverNombre: nombreCompleto(d),
+          identificador: '', bloque: a.turno, vehiculoTipo: d.tipoVehiculo || '', propietarioVehiculo: d.propietarioVehiculo || 'driver',
+          estado: 'pendiente', goHome: false, tarifaWalmart: ingresoDeAlmacen(alm, tarifas), tarifaDriver: tarifaDeDriver(d, tarifas),
+          otUnidades: 0, otIngreso: 0, otPago: 0, bonos: [], deducciones: [], notas: 'Generada desde agenda', motivoCancel: '',
+        }
+        await guardar(COL.rutas, id, data); n++
+      }
+      await auditar('rutas_generadas', `${alm?.nombre || ''} · ${semana} · ${n} rutas`)
+      walToast(`${n} ruta(s) creada(s) ✓`, 'gold'); confeti()
+    } catch (e) { walToast('No se pudo generar: ' + (e?.message || e), 'red') } finally { setGenerando(false) }
+  }
+
   const activos = (dia, turno) => panel.filter((p) => p.estadoOperativo === 'activo' && !plan[dia].manana.includes(p.id) && !plan[dia].tarde.includes(p.id))
   const huecos = DIAS.map((d) => ({ dia: d, ...huecosAgenda(plan, d, necesita) })).filter((h) => h.faltan > 0)
 
@@ -538,8 +627,11 @@ function TabAgenda({ personas, almacenes, agenda }) {
 
   return (
     <div>
-      <PageTitle right={<Boton variant="ghost" onClick={() => setRepetir(true)}><Copy size={14} /> Repetir / copiar</Boton>}>Agenda semanal</PageTitle>
-      <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día — <b className="text-emerald-600">mañana</b> o <b className="text-blue-600">tarde</b>. El sistema avisa si falta gente. Se guarda al instante.</p>
+      <PageTitle right={<>
+        {pCrearRutas && <Boton variant="gold" disabled={generando || porCrear.length === 0} onClick={generarRutasSemana}>{generando ? <Spinner /> : <><RouteIcon size={14} /> Generar rutas{porCrear.length ? ` (${porCrear.length})` : ''}</>}</Boton>}
+        <Boton variant="ghost" onClick={() => setRepetir(true)}><Copy size={14} /> Repetir / copiar</Boton>
+      </>}>Agenda semanal</PageTitle>
+      <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día — <b className="text-emerald-600">mañana</b> o <b className="text-blue-600">tarde</b>. El sistema avisa si falta gente. Se guarda al instante. Con <b className="text-brand-gold">Generar rutas</b> creas de una vez todas las rutas de la semana asignadas aquí{asignados.length ? ` (${asignados.length} asignadas, ${porCrear.length} por crear)` : ''}.</p>
 
       {/* Controles */}
       <Card className="mb-3 p-3">
@@ -812,7 +904,7 @@ function TabPersonas({ personas, almacenes, rutas, pagos, contratos, gastos, tar
   }, [personas, q, fEstado, fAlmacen, fDisp])
 
   if (ver) return <PerfilDriver persona={personas.find((p) => p.id === ver.id) || ver} almacenes={almacenes} rutas={rutas} pagos={pagos} contratos={contratos} gastos={gastos} tarifas={tarifas} onVolver={() => setVer(null)} onEditar={puedeEditar ? (p) => { setVer(null); setEditar(p) } : undefined} />
-  if (editar) return <EditorPersona persona={editar} almacenes={almacenes} user={user} onCerrar={() => setEditar(null)} />
+  if (editar) return <EditorPersona persona={editar} almacenes={almacenes} user={user} rutas={rutas} onCerrar={() => setEditar(null)} />
 
   const conteo = (id) => personas.filter((p) => p.estadoOperativo === id).length
   return (
@@ -867,7 +959,7 @@ function Avatar({ p, size = 36, cuadrado, className = '' }) {
   return <span style={{ ...st, fontSize: Math.round(size * 0.36) }} className={`grid shrink-0 place-items-center bg-brand-navy font-bold text-brand-gold ${radio} ${className}`}>{inic(p)}</span>
 }
 
-function EditorPersona({ persona, almacenes, user, onCerrar }) {
+function EditorPersona({ persona, almacenes, user, rutas = [], onCerrar }) {
   const nuevo = !persona.id
   const [p, setP] = useState(() => ({
     nombre: '', apellido: '', telefono: '', correo: '', direccion: '', ciudad: '', estado: '',
@@ -889,6 +981,35 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
       await auditar(nuevo ? 'persona_creada' : 'persona_editada', `${nombreCompleto(p)} · ${p.estadoOperativo}`)
       walToast(nuevo ? 'Driver creado ✓' : 'Driver guardado ✓')
       onCerrar(id)
+    } finally { setGuardando(false) }
+  }
+  // Rutas asociadas a este driver: si tiene, NO se borra (perderíamos su historial
+  // de pagos y liquidaciones) — se archiva en su lugar.
+  const nRutas = useMemo(() => (persona.id ? (rutas || []).filter((r) => r.driverId === persona.id).length : 0), [rutas, persona.id])
+  const archivar = async () => {
+    if (!persona.id) return
+    if (!window.confirm(`¿Archivar a ${nombreCompleto(p)}?\n\nDeja de aparecer en listas activas y agenda, pero se conserva todo su historial de rutas y pagos. Puedes reactivarlo cambiando su estado.`)) return
+    setGuardando(true)
+    try {
+      await guardar(COL.candidatos, persona.id, { ...p, estadoOperativo: 'archivado', almacenId: '' })
+      await auditar('persona_archivada', `${nombreCompleto(p)} · ${nRutas} rutas`)
+      walToast('Driver archivado ✓')
+      onCerrar(persona.id)
+    } finally { setGuardando(false) }
+  }
+  const eliminar = async () => {
+    if (!persona.id) return
+    if (nRutas > 0) {
+      window.alert(`No se puede borrar a ${nombreCompleto(p)}: tiene ${nRutas} ruta(s) registradas y se perdería su historial de pagos.\n\nUsa "Archivar" en su lugar.`)
+      return
+    }
+    if (!window.confirm(`¿Borrar definitivamente a ${nombreCompleto(p)}? No tiene rutas, así que es seguro. Esta acción no se puede deshacer.`)) return
+    setGuardando(true)
+    try {
+      await borrar(COL.candidatos, persona.id)
+      await auditar('persona_borrada', nombreCompleto(p))
+      walToast('Driver borrado')
+      onCerrar()
     } finally { setGuardando(false) }
   }
   return (
@@ -946,10 +1067,17 @@ function EditorPersona({ persona, almacenes, user, onCerrar }) {
           <textarea value={p.notas} onChange={(e) => set('notas', e.target.value)} rows={2} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm dark:border-slate-700 dark:bg-slate-800" />
         </Seccion>
       </Card>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Boton variant="gold" disabled={guardando || !puedeActivar} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar'}</Boton>
         <Boton variant="ghost" onClick={() => onCerrar()}>Cancelar</Boton>
+        {!nuevo && p.estadoOperativo !== 'archivado' && (
+          <button type="button" disabled={guardando} className="ml-auto text-sm font-semibold text-slate-500 hover:text-brand-navy disabled:opacity-50 dark:hover:text-white" onClick={archivar}>Archivar</button>
+        )}
+        {!nuevo && (
+          <button type="button" disabled={guardando} className={`text-sm font-semibold text-rose-400 hover:text-rose-600 disabled:opacity-50 ${p.estadoOperativo === 'archivado' ? 'ml-auto' : ''}`} onClick={eliminar}>Borrar</button>
+        )}
       </div>
+      {!nuevo && nRutas > 0 && <p className="mt-2 text-[11px] text-slate-400">Este driver tiene <b>{nRutas}</b> ruta(s) en el historial. Por eso no se puede borrar: usa <b>Archivar</b> para sacarlo de las listas activas sin perder sus pagos.</p>}
       <p className="mt-3 text-[11px] text-slate-400">Datos bancarios, foto, documentos y contratos se agregan desde el perfil en fases siguientes (con cifrado y permisos).</p>
     </div>
   )
@@ -1300,6 +1428,52 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
 }
 
 // ── CONFIG (tarifas) ────────────────────────────────────────────────────────
+// ── HISTORIAL DE CAMBIOS (auditoría) ─────────────────────────────────────────
+// Muestra el registro de wal_audit: quién hizo qué y cuándo. Solo lectura.
+const ACCION_LABEL = {
+  persona_creada: 'Driver creado', persona_editada: 'Driver editado', persona_archivada: 'Driver archivado', persona_borrada: 'Driver borrado',
+  rate_driver: 'Pago por ruta cambiado', foto_driver: 'Foto de driver', doc_driver: 'Documento de driver',
+  almacen_guardado: 'Almacén guardado', tarifas_guardadas: 'Tarifas guardadas',
+  factura_generada: 'Factura generada', pago_masivo: 'Pago masivo', rutas_generadas: 'Rutas generadas desde agenda',
+}
+function fechaAudit(f) {
+  try { const d = f?.toDate ? f.toDate() : (f?.seconds ? new Date(f.seconds * 1000) : null); return d ? d.toLocaleString('es-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—' } catch { return '—' }
+}
+function TabHistorial() {
+  const [docs, setDocs] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => suscribir(COL.audit, setDocs), [])
+  const lista = useMemo(() => {
+    const txt = q.trim().toLowerCase()
+    return (docs || [])
+      .filter((d) => !txt || `${ACCION_LABEL[d.accion] || d.accion} ${d.detalle || ''} ${d.correo || ''}`.toLowerCase().includes(txt))
+      .sort((a, b) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0))
+      .slice(0, 400)
+  }, [docs, q])
+  if (docs === null) return <Spinner />
+  return (
+    <div>
+      <PageTitle>Historial de cambios</PageTitle>
+      <Card className="mb-3 flex flex-wrap items-center gap-2 p-3">
+        <div className="relative flex-1"><Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por acción, detalle o usuario…" className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm dark:border-slate-700 dark:bg-slate-800" /></div>
+        <span className="text-xs text-slate-400">{lista.length} registro(s)</span>
+      </Card>
+      {lista.length === 0 && <Vacio icono={History}>Sin registros para este filtro.</Vacio>}
+      <div className="space-y-1.5">
+        {lista.map((d) => (
+          <Card key={d.id} className="flex flex-wrap items-center gap-2 p-3">
+            <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-brand-navy dark:bg-slate-700 dark:text-slate-100">{ACCION_LABEL[d.accion] || d.accion}</span>
+            {d.detalle && <span className="text-sm text-slate-600 dark:text-slate-300">{d.detalle}</span>}
+            <span className="ml-auto text-xs text-slate-400">{d.correo || '—'}</span>
+            <span className="font-mono text-[11px] text-slate-400">{fechaAudit(d.fecha)}</span>
+          </Card>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">Se muestran los últimos 400 cambios. El registro es solo lectura.</p>
+    </div>
+  )
+}
+
 function TabConfig() {
   const [t, setT] = useState(null)
   useEffect(() => suscribir(COL.config, (docs) => setT({ ...TARIFAS_DEFAULT, ...(docs.find((d) => d.id === 'tarifas') || {}), id: 'tarifas' })), [])
@@ -1522,6 +1696,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 </div>
               </Card>
             )}
+            <div className="mb-3"><InstalarApp /></div>
             {contratosPend.length > 0 && (
               <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-brand-gold p-3">
                 <FileSignature size={16} className="text-brand-gold" />
@@ -1597,6 +1772,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <div className="flex justify-between"><span className="text-slate-500">Adelantado por Fast Pay (efectivo)</span><b className="font-mono">{dinero(res.efectivoFP)}</b></div>
                 <div className="flex justify-between"><span className="text-slate-500">Otros pagos recibidos</span><b className="font-mono">{dinero(res.pagadoNormal)}</b></div>
                 <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar</span><b className="font-mono" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</b></div>
+                {ficha && res.rutasSemana.length > 0 && <Boton variant="ghost" className="mt-3" onClick={() => pdfPayStub(ficha, detDesde, detHasta, res)}><Download size={14} /> Descargar comprobante (PDF)</Boton>}
               </Card>
             )}
             <Card className="p-0">
@@ -1613,6 +1789,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                       ? <span className="text-xs">recibiste <b>{dinero(p.efectivo)}</b> <span className="text-slate-400">(de {dinero(p.bruto)}, comisión {dinero(p.comision)})</span></span>
                       : <span className="text-xs">recibiste <b>{dinero(p.monto)}</b></span>}
                     {p.comprobante && <span className="text-xs italic text-slate-400">· {p.comprobante}</span>}
+                    {p.tipo === 'fastpay' && est === 'confirmado' && <button onClick={() => pdfReciboFP(p, ficha)} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-brand-gold hover:underline"><Download size={12} /> recibo</button>}
                   </div>
                 )
               })}
@@ -2661,6 +2838,33 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
   const totPorPagar = money2(lista.reduce((a, x) => a + Math.max(0, x.r.saldo), 0))
   const nPend = lista.filter((x) => x.r.estado !== 'pagado' && x.r.saldo > 0.005).length
 
+  // ── Multiselección para PAGAR A VARIOS a la vez y marcarlos pagados ──────────
+  const [sel, setSel] = useState(() => new Set())
+  const conSaldo = lista.filter((x) => x.r.saldo > 0.005)
+  const toggleSel = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const todosSel = conSaldo.length > 0 && conSaldo.every((x) => sel.has(x.p.id))
+  const selTodos = () => setSel(todosSel ? new Set() : new Set(conSaldo.map((x) => x.p.id)))
+  const selItems = conSaldo.filter((x) => sel.has(x.p.id))
+  const totalSel = money2(selItems.reduce((a, x) => a + x.r.saldo, 0))
+  const [pagandoMasivo, setPagandoMasivo] = useState(false)
+  const pagarSeleccionados = async () => {
+    if (!selItems.length) return
+    if (!window.confirm(`Marcar como PAGADO el saldo de ${selItems.length} chofer(es) por ${dinero(totalSel)}?\n\nSe registra un pago por cada semana con saldo. No se puede deshacer en bloque.`)) return
+    setPagandoMasivo(true)
+    try {
+      let n = 0
+      for (const { p } of selItems) {
+        for (const w of weeks) {
+          const rw = resumenSemana(rutas, pagos, p.id, w)
+          if (rw.saldo > 0.005) { await guardar(COL.pagos, null, { tipo: 'pago', driverId: p.id, driverNombre: nombreCompleto(p), semana: w, monto: rw.saldo, fecha: hoyISO(), metodo: 'Efectivo', referencia: 'Pago masivo', responsable: perm?.email || 'dueño' }); n++ }
+        }
+      }
+      await auditar('pago_masivo', `${selItems.length} choferes · ${dinero(totalSel)} · ${n} pagos`)
+      walToast(`Pagados ${selItems.length} chofer(es) ✓`, 'gold')
+      setSel(new Set())
+    } catch (e) { walToast('No se pudo completar: ' + (e?.message || e), 'red') } finally { setPagandoMasivo(false) }
+  }
+
   // Colores de badge por estado Fast Pay.
   const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
   // Cambia el estado de un pago Fast Pay (confirmar / marcar fallido).
@@ -2698,19 +2902,43 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
       {!driverId && (
         <>
           {lista.length === 0 && <Vacio icono={Wallet}>Sin drivers para este filtro.</Vacio>}
+
+          {/* Barra de selección múltiple: pagar a varios de una vez. */}
+          {pPagaSemanal && conSaldo.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-brand-gold/40 bg-brand-gold/5 px-3 py-2">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-brand-navy dark:text-slate-100">
+                <input type="checkbox" className="h-4 w-4 accent-brand-gold" checked={todosSel} onChange={selTodos} />
+                Seleccionar todos con saldo ({conSaldo.length})
+              </label>
+              {selItems.length > 0
+                ? <span className="text-xs text-slate-500 dark:text-slate-400"><b>{selItems.length}</b> seleccionado(s) · total <b className="text-brand-navy dark:text-slate-100">{dinero(totalSel)}</b></span>
+                : <span className="text-xs text-slate-400">Marca los choferes que vas a pagar</span>}
+              <Boton variant="gold" className="ml-auto" disabled={!selItems.length || pagandoMasivo} onClick={pagarSeleccionados}>
+                {pagandoMasivo ? 'Pagando…' : <><Wallet size={14} /> Pagar seleccionados {selItems.length ? `(${selItems.length})` : ''}</>}
+              </Boton>
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            {lista.map(({ p, r }) => (
-              <Card key={p.id} className={FILA} onClick={() => { if (modo === 'rango') setFecha(d2); setDriverId(p.id) }}>
-                <Avatar p={p} size={34} />
-                <span className="font-bold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span>
-                <Badge color={badgeEstado[r.estado]}>{etiquetaEstado[r.estado]}</Badge>
-                <span className="text-xs text-slate-400">ganó {dinero(r.totalGanado)} · pagado {dinero(r.pagado)}</span>
-                <span className="ml-auto font-mono text-sm font-bold" style={{ color: r.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{r.saldo > 0.005 ? `saldo ${dinero(r.saldo)}` : 'al día'}</span>
-                <span className="text-xs font-semibold text-brand-gold">ver / pagar →</span>
-              </Card>
-            ))}
+            {lista.map(({ p, r }) => {
+              const marcable = pPagaSemanal && r.saldo > 0.005
+              const marcado = sel.has(p.id)
+              return (
+                <Card key={p.id} className={`${FILA} ${marcado ? 'ring-2 ring-brand-gold' : ''}`} onClick={() => { if (modo === 'rango') setFecha(d2); setDriverId(p.id) }}>
+                  {marcable
+                    ? <input type="checkbox" className="h-4 w-4 shrink-0 accent-brand-gold" checked={marcado} onClick={(e) => e.stopPropagation()} onChange={() => toggleSel(p.id)} title="Seleccionar para pago masivo" />
+                    : <span className="w-4 shrink-0" />}
+                  <Avatar p={p} size={34} />
+                  <span className="font-bold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span>
+                  <Badge color={badgeEstado[r.estado]}>{etiquetaEstado[r.estado]}</Badge>
+                  <span className="text-xs text-slate-400">ganó {dinero(r.totalGanado)} · pagado {dinero(r.pagado)}</span>
+                  <span className="ml-auto font-mono text-sm font-bold" style={{ color: r.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{r.saldo > 0.005 ? `saldo ${dinero(r.saldo)}` : 'al día'}</span>
+                  <span className="text-xs font-semibold text-brand-gold">ver / pagar →</span>
+                </Card>
+              )
+            })}
           </div>
-          <p className="mt-3 text-[11px] text-slate-400">Toca un driver para ver sus rutas, hacer Fast Pay o registrar el pago. En modo <b>Rango</b> los pagos se hacen por semana (abre al driver y elige la semana).</p>
+          <p className="mt-3 text-[11px] text-slate-400">Marca varios y usa <b>Pagar seleccionados</b> para liquidar a todos de una vez, o toca un driver para ver sus rutas y hacer Fast Pay. En modo <b>Rango</b> el pago masivo registra un pago por cada semana con saldo.</p>
         </>
       )}
 
@@ -2938,7 +3166,7 @@ function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm, solicitu
             {vista === 'en_proceso' && fp && (pEjecutaFP
               ? <span className="flex items-center gap-2"><button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(fp, 'confirmado')}>Confirmar</button><button className="text-xs font-bold text-rose-500 hover:underline" onClick={() => cambiarEstadoFP(fp, 'fallido')}>Falló</button></span>
               : <span className="text-xs text-slate-400">en proceso</span>)}
-            {vista === 'liquidadas' && fp && <span className="text-xs text-slate-400">efectivo {dinero(fp.efectivo)} · com. {dinero(fp.comision)}{pAnula && <button className="ml-2 font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(fp)}>anular</button>}</span>}
+            {vista === 'liquidadas' && fp && <span className="flex items-center gap-2 text-xs text-slate-400">efectivo {dinero(fp.efectivo)} · com. {dinero(fp.comision)}<button className="inline-flex items-center gap-1 font-semibold text-brand-gold hover:underline" onClick={() => pdfReciboFP(fp, personas.find((p) => p.id === r.driverId))}><Download size={12} /> recibo</button>{pAnula && <button className="font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(fp)}>anular</button>}</span>}
           </div>
         ))}
       </Card>
@@ -2968,19 +3196,35 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar =
     if (calc.bruto <= 0) { setErr('El bruto debe ser mayor a 0.'); return }
     if (calc.bruto > ruta.resta + 0.005) { setErr(`No puedes liquidar más que el saldo de la ruta (${dinero(ruta.resta)}).`); return }
     setErr(''); setGuardando(true)
+    const idDet = `fp_${ruta.id}`.replace(/[^a-zA-Z0-9_]/g, '')
+    const payload = {
+      rutaId: ruta.id, estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver),
+      semana: lunesDe(ruta.fecha), almacenId: ruta.almacenId || '',
+      bruto: calc.bruto, comisionPct: Number(pct) || 0, fecha: hoyISO(), metodo, referencia, responsable, comprobante,
+    }
     try {
-      // id determinista por ruta → un segundo intento (incluso simultáneo desde
-      // este navegador) escribe el MISMO documento en vez de duplicar el pago.
-      const idDet = `fp_${ruta.id}`.replace(/[^a-zA-Z0-9_]/g, '')
-      await guardar(COL.pagos, idDet, {
-        tipo: 'fastpay', estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver), semana: lunesDe(ruta.fecha), rutaId: ruta.id, almacenId: ruta.almacenId || '',
-        bruto: calc.bruto, comisionPct: Number(pct) || 0, comision: calc.comision, efectivo: calc.efectivo,
-        fecha: hoyISO(), metodo, referencia, responsable, comprobante,
-      })
-      await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · ${estadoIni} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
+      // 1) Vía preferida: Cloud Function con TRANSACCIÓN (anti doble pago real,
+      // incluso entre dos dispositivos a la vez).
+      await httpsCallable(getFunctions(), 'walFastPayCrear')(payload)
       walToast(estadoIni === 'confirmado' ? 'Fast Pay confirmado ✓' : 'Fast Pay iniciado (pendiente)', 'gold')
       onCerrar()
-    } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
+    } catch (e) {
+      const code = e?.code || ''
+      if (code === 'functions/already-exists') { setErr('Esta ruta ya tiene un Fast Pay. No se puede pagar dos veces.'); setGuardando(false); return }
+      if (code === 'functions/permission-denied') { setErr(e.message || 'No tienes permiso para este Fast Pay.'); setGuardando(false); return }
+      // 2) Respaldo (si la función aún no está desplegada): escritura directa con
+      // id determinista. Sigue evitando duplicados de documento en este navegador.
+      try {
+        await guardar(COL.pagos, idDet, {
+          tipo: 'fastpay', estado: estadoIni, driverId: driver.id, driverNombre: nombreCompleto(driver), semana: lunesDe(ruta.fecha), rutaId: ruta.id, almacenId: ruta.almacenId || '',
+          bruto: calc.bruto, comisionPct: Number(pct) || 0, comision: calc.comision, efectivo: calc.efectivo,
+          fecha: hoyISO(), metodo, referencia, responsable, comprobante,
+        })
+        await auditar('fastpay', `${nombreCompleto(driver)} · ruta ${ruta.id} · ${estadoIni} · bruto ${calc.bruto} · comisión ${calc.comision} · efectivo ${calc.efectivo}`)
+        walToast(estadoIni === 'confirmado' ? 'Fast Pay confirmado ✓' : 'Fast Pay iniciado (pendiente)', 'gold')
+        onCerrar()
+      } catch (e2) { setErr('No se pudo registrar: ' + (e2.message || e2)) }
+    } finally { setGuardando(false) }
   }
   return (
     <Modal titulo="Fast Pay (anticipo de una ruta completada)" onCerrar={onCerrar}>
@@ -3554,6 +3798,29 @@ async function pdfPayStub(driver, semana, hasta, res) {
   y += 18; doc.setTextColor(120, 130, 150); doc.setFontSize(9)
   doc.text(`Estado: ${res.estado} · generado ${new Date().toLocaleString()}`, M, y)
   doc.save(`paystub_${nombreCompleto(driver).replace(/\s+/g, '_')}_${semana}.pdf`)
+}
+
+// Recibo individual de un adelanto Fast Pay (una ruta / un pago).
+async function pdfReciboFP(pago, driver) {
+  const jsPDF = await cargarJsPDF()
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const M = 56; let y = 70
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC · WALMART', M, y); y += 20
+  doc.setTextColor(19, 35, 63); doc.setFontSize(15); doc.text('Recibo de Fast Pay (adelanto)', M, y); y += 24
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
+  if (driver) { doc.text(`Driver: ${nombreCompleto(driver)}`, M, y); y += 16 }
+  doc.text(`Fecha del adelanto: ${pago.fecha || '—'}`, M, y); y += 16
+  if (pago.rutaId) { doc.text(`Ruta: ${pago.rutaId}`, M, y); y += 16 }
+  const est = estadoFP(pago)
+  doc.text(`Estado: ${ESTADO_FP_LABEL[est] || est}`, M, y); y += 22
+  const fila = (l, v) => { doc.text(l, M, y); doc.text(v, 440, y, { align: 'right' }); y += 17 }
+  fila('Bruto de la ruta', dinero(pago.bruto))
+  fila(`Comisión Fast Pay${pago.comisionPct != null ? ` (${pago.comisionPct}%)` : ''}`, `− ${dinero(pago.comision)}`)
+  y += 4; doc.setDrawColor(220, 220, 220); doc.line(M, y, 480, y); y += 16
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); fila('Efectivo entregado', dinero(pago.efectivo)); doc.setFont('helvetica', 'normal'); doc.setFontSize(11)
+  y += 20; doc.setTextColor(120, 130, 150); doc.setFontSize(9)
+  doc.text(`Método: ${pago.metodo || 'Efectivo'} · generado ${new Date().toLocaleString()}`, M, y)
+  doc.save(`fastpay_${(driver ? nombreCompleto(driver) : 'driver').replace(/\s+/g, '_')}_${pago.fecha || ''}.pdf`)
 }
 
 // ── FACTURAS (cobro a Walmart) ───────────────────────────────────────────────
