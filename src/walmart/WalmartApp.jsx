@@ -4031,7 +4031,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         {vOper && <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} trend={tr(fin.resultadoOperativo, finPrev.resultadoOperativo)} sub={`ant. ${dinero(finPrev.resultadoOperativo)}`} />}
         {vFin && <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" trend={tr(fin.comisionesFP, finPrev.comisionesFP)} sub="ingreso compañía" />}
         {vIng && <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />}
-        {vOper && <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent={fin.flujoCaja >= 0 ? 'green' : 'red'} trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub={`ant. ${dinero(finPrev.flujoCaja)}`} />}
+        {vOper && <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent="navy" trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub="gastos + bonos" />}
       </div>
 
       {/* comparativa actual vs anterior */}
@@ -4088,9 +4088,10 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         <div className="mb-2 flex items-center gap-2"><span className="text-sm font-bold text-brand-navy dark:text-slate-100">Flujo de caja y cobros</span><Boton variant="ghost" className="ml-auto" onClick={() => setCobroOpen(true)}><Plus size={13} /> Registrar cobro de Walmart</Boton></div>
         <FilaFin l="Cobrado de Walmart" v={fin.cobrado} verde />
         <FilaFin l="Por cobrar (devengado − cobrado)" v={fin.porCobrar} />
-        <FilaFin l="Efectivo entregado a drivers (FP + pagos)" v={-fin.efectivoADrivers} />
-        <FilaFin l="Gastos pagados" v={-fin.gastosPagados} />
-        <FilaFin l="Flujo de caja del período" v={fin.flujoCaja} fuerte borde />
+        <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+        <FilaFin l="Gastos del período" v={fin.gastosOper + fin.gastoFinanc} />
+        <FilaFin l="Bonos agregados (driver / ruta)" v={fin.bonosTotal} />
+        <FilaFin l="Flujo de caja (solo gastos + bonos)" v={fin.flujoCaja} fuerte borde />
         {cobrosPer.length > 0 && (
           <div className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
             <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Cobros del período</div>

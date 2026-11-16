@@ -419,13 +419,17 @@ export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId
   const cobrado = money2((cobros || []).filter((c) => lunesDe(c.fecha) === semana && enAlm(c.almacenId)).reduce((a, c) => a + (Number(c.monto) || 0), 0))
   const porCobrar = money2(ingresoRutas - cobrado)
   const efectivoADrivers = money2(efectivoFP + pagosNormales)
-  const flujoCaja = money2(cobrado - efectivoADrivers - gastosPagados)
-  return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, cobrado, porCobrar, efectivoADrivers, gastosPagados, flujoCaja, nRutas: rs.length }
+  // Bonos agregados a las rutas (extra al driver/ruta) del período.
+  const bonosTotal = money2(rs.reduce((a, r) => a + (Array.isArray(r.bonos) ? r.bonos.reduce((x, b) => x + (Number(b.monto) || 0), 0) : 0), 0))
+  // Flujo de caja = SOLO los gastos del período + los bonos. No incluye Fast Pay
+  // ni los pagos regulares a choferes.
+  const flujoCaja = money2(gastosOper + gastoFinanc + bonosTotal)
+  return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, cobrado, porCobrar, efectivoADrivers, gastosPagados, bonosTotal, flujoCaja, nRutas: rs.length }
 }
 
 // Financiero de un RANGO de fechas: suma las semanas (lunes) que lo cruzan.
 export function financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almacenId) {
-  const campos = ['ingresoRutas', 'costoDrivers', 'margen', 'gastosOper', 'gastoFinanc', 'comisionesFP', 'efectivoFP', 'pagosNormales', 'resultadoOperativo', 'cobrado', 'porCobrar', 'efectivoADrivers', 'gastosPagados', 'flujoCaja', 'nRutas']
+  const campos = ['ingresoRutas', 'costoDrivers', 'margen', 'gastosOper', 'gastoFinanc', 'comisionesFP', 'efectivoFP', 'pagosNormales', 'resultadoOperativo', 'cobrado', 'porCobrar', 'efectivoADrivers', 'gastosPagados', 'bonosTotal', 'flujoCaja', 'nRutas']
   const acc = Object.fromEntries(campos.map((k) => [k, 0]))
   let w = lunesDe(desde); const fin = lunesDe(hasta); let guard = 0
   while (w <= fin && guard < 400) {
