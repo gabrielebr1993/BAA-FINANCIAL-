@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
-import { navVisible } from './nav'
+import { navVisible, GRUPOS_ORDEN } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
 import { etiquetaRol } from './domain/permisos'
 import { useAutoAsignacion } from './data/useAutoAsignacion'
@@ -98,13 +98,25 @@ export default function BulkLayout({ children }) {
           </div>
         </div>
         <nav className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-          {items.map((i) => (
-            <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
-              className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
-              <i.icon size={17} strokeWidth={1.9} /> {t(i.label)}
-              {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
-            </NavLink>
-          ))}
+          {GRUPOS_ORDEN.map((grupo) => {
+            const g = items.filter((i) => i.grupo === grupo)
+            if (!g.length) return null
+            return (
+              <div key={grupo} className="mb-1">
+                <div className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{t(grupo)}</div>
+                {g.map((i) => (
+                  <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
+                    className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                    {({ isActive }) => (<>
+                      {isActive && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-amber-400" />}
+                      <i.icon size={17} strokeWidth={1.9} className={isActive ? 'text-amber-500' : ''} /> {t(i.label)}
+                      {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
+                    </>)}
+                  </NavLink>
+                ))}
+              </div>
+            )
+          })}
         </nav>
         <div className="mt-2 flex-shrink-0 border-t border-slate-200 pt-2 dark:border-slate-800">
           <div className="px-3 py-1.5"><LangToggle /></div>

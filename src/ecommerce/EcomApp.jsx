@@ -37,18 +37,19 @@ export async function auditarEcom(accion, detalle) {
   } catch { /* la auditoría nunca bloquea la operación */ }
 }
 
+const GRUPOS_ORDEN = ['Inicio', 'Catálogo', 'Ventas', 'Finanzas', 'Ajustes']
 const TABS = [
-  { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
-  { id: 'catalogo', label: 'Catálogo', icono: Tags },
-  { id: 'precios', label: 'Precios', icono: Wallet },
-  { id: 'tienda', label: 'Tienda', icono: Store },
-  { id: 'pedidos', label: 'Pedidos', icono: ShoppingCart },
-  { id: 'compras', label: 'Compras a proveedor', icono: PackageSearch },
-  { id: 'finanzas', label: 'Finanzas', icono: Wallet },
-  { id: 'tickets', label: 'Soporte', icono: LifeBuoy },
-  { id: 'equipo', label: 'Equipo y permisos', icono: Users },
-  { id: 'integraciones', label: 'Integraciones', icono: Plug },
-  { id: 'config', label: 'Configuración', icono: Settings },
+  { id: 'resumen', label: 'Resumen', icono: LayoutDashboard, grupo: 'Inicio' },
+  { id: 'catalogo', label: 'Catálogo', icono: Tags, grupo: 'Catálogo' },
+  { id: 'precios', label: 'Precios', icono: Wallet, grupo: 'Catálogo' },
+  { id: 'tienda', label: 'Tienda', icono: Store, grupo: 'Catálogo' },
+  { id: 'pedidos', label: 'Pedidos', icono: ShoppingCart, grupo: 'Ventas' },
+  { id: 'compras', label: 'Compras a proveedor', icono: PackageSearch, grupo: 'Ventas' },
+  { id: 'tickets', label: 'Soporte', icono: LifeBuoy, grupo: 'Ventas' },
+  { id: 'finanzas', label: 'Finanzas', icono: Wallet, grupo: 'Finanzas' },
+  { id: 'equipo', label: 'Equipo y permisos', icono: Users, grupo: 'Ajustes' },
+  { id: 'integraciones', label: 'Integraciones', icono: Plug, grupo: 'Ajustes' },
+  { id: 'config', label: 'Configuración', icono: Settings, grupo: 'Ajustes' },
 ]
 
 export default function EcomApp() {
@@ -151,20 +152,30 @@ function EcomShell({ user }) {
             <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ecommerce</div>
           </div>
         </div>
-        <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto">
-          {TABS.map((tdef) => {
-            const Icono = tdef.icono
-            const activo = tab === tdef.id
+        <nav className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto">
+          {GRUPOS_ORDEN.map((grupo) => {
+            const items = TABS.filter((t) => t.grupo === grupo)
+            if (!items.length) return null
             return (
-              <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                className={`group relative flex items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
-                  activo
-                    ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
-                    : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
-                }`}>
-                <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
-                <span className="flex-1">{tdef.label}</span>
-              </button>
+              <div key={grupo} className="mb-1">
+                <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{grupo}</div>
+                {items.map((tdef) => {
+                  const Icono = tdef.icono
+                  const activo = tab === tdef.id
+                  return (
+                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                      className={`group relative flex w-full items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
+                        activo
+                          ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
+                          : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
+                      }`}>
+                      {activo && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-gold" />}
+                      <Icono size={19} strokeWidth={1.8} className={`flex-shrink-0 ${activo ? 'text-brand-gold' : ''}`} />
+                      <span className="flex-1">{tdef.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             )
           })}
         </nav>

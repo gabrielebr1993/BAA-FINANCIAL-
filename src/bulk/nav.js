@@ -10,31 +10,33 @@ import {
 import { BULK_ROLES as R } from './domain/constants'
 import { permKey, MODULO_POR_KEY } from './domain/permisos'
 
+// Secciones del menú, en orden. Cada ítem del NAV indica su `grupo`.
+export const GRUPOS_ORDEN = ['Inicio', 'Operación', 'Comercial', 'Comunicación', 'Finanzas', 'Catálogos', 'Ajustes']
 // modulo = clave del catálogo de permisos. `path` es relativo a /bulk.
 export const NAV = [
-  { modulo: 'dashboard', path: '', label: 'Dashboard', icon: LayoutDashboard, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'ordenes', path: 'ordenes', label: 'Órdenes / Cola', icon: ClipboardList, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'mapa', path: 'mapa', label: 'Mapa en vivo', icon: Navigation, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'mensajes', path: 'mensajes', label: 'Mensajes', icon: MessageSquare, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'reuniones', path: 'reuniones', label: 'Reuniones', icon: Video, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'jobs', path: 'jobs', label: 'Trabajos (Jobs)', icon: Layers, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'clientes', path: 'clientes', label: 'Clientes y Plantas', icon: Building2, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'transportistas', path: 'transportistas', label: 'Transportistas', icon: Truck, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'choferes', path: 'choferes', label: 'Choferes', icon: Contact, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'facturacion', path: 'facturacion', label: 'Facturación', icon: FileText, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'fastpay', path: 'fastpay', label: 'Fast Pay', icon: Zap, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'incidencias', path: 'incidencias', label: 'Incidencias', icon: AlertTriangle, roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
-  { modulo: 'documentos', path: 'documentos', label: 'Documentos', icon: FileWarning, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'geocercas', path: 'geocercas', label: 'Geocercas', icon: MapPin, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'dashboard', path: '', label: 'Dashboard', icon: LayoutDashboard, grupo: 'Inicio', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'ordenes', path: 'ordenes', label: 'Órdenes / Cola', icon: ClipboardList, grupo: 'Operación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'mapa', path: 'mapa', label: 'Mapa en vivo', icon: Navigation, grupo: 'Operación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'jobs', path: 'jobs', label: 'Trabajos (Jobs)', icon: Layers, grupo: 'Operación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'incidencias', path: 'incidencias', label: 'Incidencias', icon: AlertTriangle, grupo: 'Operación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'geocercas', path: 'geocercas', label: 'Geocercas', icon: MapPin, grupo: 'Operación', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'clientes', path: 'clientes', label: 'Clientes y Plantas', icon: Building2, grupo: 'Comercial', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'transportistas', path: 'transportistas', label: 'Transportistas', icon: Truck, grupo: 'Comercial', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'choferes', path: 'choferes', label: 'Choferes', icon: Contact, grupo: 'Comercial', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'mensajes', path: 'mensajes', label: 'Mensajes', icon: MessageSquare, grupo: 'Comunicación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'reuniones', path: 'reuniones', label: 'Reuniones', icon: Video, grupo: 'Comunicación', roles: [R.SUPER_ADMIN, R.ADMIN, R.DISPATCHER] },
+  { modulo: 'correo', path: 'correo', label: 'Correo (CRM)', icon: Inbox, grupo: 'Comunicación', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'correos', path: 'correos', label: 'Correos del dominio', icon: Mail, grupo: 'Comunicación', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'facturacion', path: 'facturacion', label: 'Facturación', icon: FileText, grupo: 'Finanzas', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'fastpay', path: 'fastpay', label: 'Fast Pay', icon: Zap, grupo: 'Finanzas', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'documentos', path: 'documentos', label: 'Documentos', icon: FileWarning, grupo: 'Catálogos', roles: [R.SUPER_ADMIN, R.ADMIN] },
   // El motor de tarifas ahora vive DENTRO del perfil de cada cliente (Clientes y Plantas).
-  { modulo: 'materiales', path: 'materiales', label: 'Materiales', icon: Boxes, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'equipos', path: 'equipos', label: 'Tipos de equipo', icon: Package, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'usuarios', path: 'usuarios', label: 'Usuarios', icon: Users, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'correo', path: 'correo', label: 'Correo (CRM)', icon: Inbox, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'correos', path: 'correos', label: 'Correos del dominio', icon: Mail, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'roles', path: 'roles', label: 'Roles y permisos', icon: ShieldCheck, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'diagnostico', path: 'diagnostico', label: 'Diagnóstico', icon: Stethoscope, roles: [R.SUPER_ADMIN, R.ADMIN] },
-  { modulo: 'demo', path: 'demo', label: 'Modo test', icon: FlaskConical, roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'materiales', path: 'materiales', label: 'Materiales', icon: Boxes, grupo: 'Catálogos', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'equipos', path: 'equipos', label: 'Tipos de equipo', icon: Package, grupo: 'Catálogos', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'usuarios', path: 'usuarios', label: 'Usuarios', icon: Users, grupo: 'Ajustes', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'roles', path: 'roles', label: 'Roles y permisos', icon: ShieldCheck, grupo: 'Ajustes', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'diagnostico', path: 'diagnostico', label: 'Diagnóstico', icon: Stethoscope, grupo: 'Ajustes', roles: [R.SUPER_ADMIN, R.ADMIN] },
+  { modulo: 'demo', path: 'demo', label: 'Modo test', icon: FlaskConical, grupo: 'Ajustes', roles: [R.SUPER_ADMIN, R.ADMIN] },
 ]
 
 // Respaldo (compat): filtrado por rol. El filtro real es por permiso (ver abajo).
