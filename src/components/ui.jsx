@@ -122,11 +122,11 @@ export function PageTitle({ children, right }) {
 
 // --- Botón ------------------------------------------------------------------
 const BTN = {
-  primary: 'bg-brand-navy text-white hover:bg-brand-navy-700',
-  gold: 'bg-brand-gold text-brand-navy hover:brightness-105',
+  primary: 'bg-brand-navy text-white shadow-sm hover:bg-brand-navy-700 hover:shadow',
+  gold: 'bg-brand-gold text-brand-navy shadow-sm hover:brightness-105 hover:shadow',
   ghost: 'border border-slate-300 bg-transparent text-brand-navy hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50',
-  danger: 'bg-rose-500 text-white hover:bg-rose-600',
-  success: 'bg-emerald-500 text-white hover:bg-emerald-600',
+  danger: 'bg-rose-500 text-white shadow-sm hover:bg-rose-600 hover:shadow',
+  success: 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 hover:shadow',
 }
 export function Boton({ children, onClick, variant = 'primary', disabled, className = '', type = 'button' }) {
   return (
@@ -134,7 +134,7 @@ export function Boton({ children, onClick, variant = 'primary', disabled, classN
       type={type}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${BTN[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${BTN[variant]} ${className}`}
     >
       {children}
     </button>
@@ -143,7 +143,7 @@ export function Boton({ children, onClick, variant = 'primary', disabled, classN
 
 // --- Inputs -----------------------------------------------------------------
 const FIELD =
-  'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+  'rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
 
 export function Input({ className = '', ...rest }) {
   return <input className={`${FIELD} ${className}`} {...rest} />
@@ -175,13 +175,13 @@ export function Badge({ children, color = 'navy', title }) {
 
 // --- Aviso ------------------------------------------------------------------
 const AVISO = {
-  info: 'bg-brand-steel/10 text-brand-steel dark:bg-brand-steel/15 dark:text-brand-steel-soft',
-  warn: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300',
-  error: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
-  ok: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+  info: 'border-brand-steel/40 bg-brand-steel/10 text-brand-steel dark:bg-brand-steel/15 dark:text-brand-steel-soft',
+  warn: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300',
+  error: 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300',
+  ok: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300',
 }
 export function Aviso({ tipo = 'info', children, className = '' }) {
-  return <div className={`mb-3 rounded-lg px-4 py-3 text-sm ${AVISO[tipo]} ${className}`}>{children}</div>
+  return <div className={`mb-3 rounded-xl border-l-4 px-4 py-3 text-sm ${AVISO[tipo]} ${className}`}>{children}</div>
 }
 
 // --- Spinner ----------------------------------------------------------------
@@ -227,9 +227,9 @@ export function Tabla({ columns, rows, renderCell, emptyText = 'Sin datos.', min
     <div className="scroll-thin overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700/60">
       <table className={`w-full border-collapse text-sm ${minWidth}`}>
         <thead>
-          <tr className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          <tr className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
             {columns.map((c) => (
-              <th key={c.key} className={`px-3 py-2.5 font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'}`}>
+              <th key={c.key} className={`px-3 py-2.5 font-bold whitespace-nowrap ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'}`}>
                 {c.label}
               </th>
             ))}
