@@ -12,7 +12,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const app = initializeApp(firebaseConfig)
+export const app = initializeApp(firebaseConfig)
+export const firebaseConfigPublic = firebaseConfig
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 // Storage: SOLO para documentos de verificación del chofer (licencia, W-9). Con

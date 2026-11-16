@@ -824,6 +824,12 @@ service cloud.firestore {
     // SSN CIFRADO (wal_tax): el texto cifrado es inútil sin la llave; solo la
     // Cloud Function escribe y descifra. Lectura directa solo el dueño.
     match /wal_tax/{id} { allow read: if esDuenoEcom(); allow write: if false; }
+    // Tokens push (wal_push): cada usuario guarda el token de SU dispositivo.
+    // La Cloud Function (admin) los lee para enviar avisos; nadie los lee desde el cliente.
+    match /wal_push/{uid} {
+      allow read: if false;
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
 
     // Drivers/candidatos (con alcance de almacén; 'ambos' = visible para todos).
     match /wal_candidatos/{id} {

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
+import { activarPush, escucharPush } from './push'
 import { Toaster, walToast, confeti, Dona, PulseDot, saludo, fechaLarga } from './wow'
 import '../styles/cloudmotion.css'
 import './foldable.css'
@@ -174,6 +175,15 @@ export default function WalmartApp() {
     if (solPendientes.length > solRef.current) walToast(`⚡ Nueva solicitud de Fast Pay (${solPendientes.length} pendiente${solPendientes.length !== 1 ? 's' : ''})`, 'gold')
     solRef.current = solPendientes.length
   }, [solPendientes.length])
+  // Notificaciones push al teléfono (aviso aunque la app esté cerrada).
+  const [pushOn, setPushOn] = useState(() => { try { return localStorage.getItem('wal_push_on') === '1' } catch { return false } })
+  useEffect(() => { let unsub; escucharPush((payload) => { const n = payload?.notification; walToast('⚡ ' + (n?.title || 'Nueva solicitud'), 'gold') }).then((u) => { unsub = u }); return () => { if (typeof unsub === 'function') unsub() } }, [])
+  const activarAvisos = async () => {
+    walToast('Activando avisos…', 'navy')
+    const r = await activarPush(user?.uid, user?.email)
+    if (r.ok) { setPushOn(true); try { localStorage.setItem('wal_push_on', '1') } catch { /* noop */ } walToast('Avisos activados en este dispositivo ✓', 'gold') }
+    else walToast('No se pudieron activar: ' + r.motivo, 'red')
+  }
 
   // ── Alcance por almacén: el dueño ve TODO; un usuario con warehouses asignados
   // solo ve los datos de esos almacenes. (La aplicación REAL es por reglas de
@@ -269,6 +279,11 @@ export default function WalmartApp() {
         <div className="border-t border-slate-200 pt-3 dark:border-slate-700/60">
           <div className="truncate px-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{user?.email}</div>
           <div className="px-1 text-[11px] text-slate-400">usuario · {rolEtiqueta}{!esDueno && perm.warehouses.length ? ` · ${perm.warehouses.length} almacén(es)` : ''}</div>
+          {(esDueno || puede('fp_ver')) && (
+            <button onClick={activarAvisos} className={`mt-2 flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-xs font-semibold transition ${pushOn ? 'border-emerald-200 text-emerald-600 dark:border-emerald-500/30' : 'border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40'}`}>
+              {pushOn ? '🔔 Avisos activados ✓' : '🔔 Activar avisos de Fast Pay'}
+            </button>
+          )}
           <button onClick={cambiarCarrier} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700/40">
             <ArrowLeftRight size={15} /> Cambiar de compañía
           </button>
@@ -1325,6 +1340,12 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   useEffect(() => suscribirPorDriver(COL.contratos, driverId, setContratos), [driverId])
   const [misSol, setMisSol] = useState([])
   useEffect(() => suscribirMisSolicitudes(driverId, setMisSol), [driverId])
+  // La app del chofer SIEMPRE arranca y regresa al día actual (semana de hoy).
+  useEffect(() => {
+    const alDia = () => { if (document.visibilityState === 'visible') { setModo('semana'); setFecha(hoyISO()) } }
+    document.addEventListener('visibilitychange', alDia)
+    return () => document.removeEventListener('visibilitychange', alDia)
+  }, [])
   const pedirFP = async (r) => {
     try { await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha); walToast('Solicitud de Fast Pay enviada ✓', 'gold') }
     catch (e) { walToast('No se pudo enviar la solicitud: ' + (e?.message || e), 'red') }

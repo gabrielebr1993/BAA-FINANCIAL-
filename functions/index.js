@@ -2522,3 +2522,35 @@ exports.walTaxReveal = onCall({ secrets: [WAL_BANK_KEY] }, async (req) => {
   await db.collection('wal_audit').add({ accion: 'ssn_revelado', detalle: `driver ${driverId} · ••${t.ssnLast4 || ''}`, correo, fecha: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {})
   return { ssn: walDescifrar(t.ssnEnc, WAL_BANK_KEY.value()), ssnLast4: t.ssnLast4 || '' }
 })
+
+// ── PUSH: aviso al teléfono cuando un chofer pide Fast Pay ────────────────────
+// Trigger al crear una solicitud. Envía notificación FCM a los tokens guardados
+// en wal_push de los destinatarios autorizados: el/los dueño(s) y los usuarios
+// de Walmart con permiso fp_ver. Los tokens los registra la app al activar los
+// avisos en cada dispositivo.
+exports.walSolicitudPush = onDocumentCreated('wal_solicitudes/{id}', async (event) => {
+  const s = event.data && event.data.data()
+  if (!s || s.estado !== 'solicitada') return
+  const [pushSnap, usuSnap] = await Promise.all([
+    db.collection('wal_push').get(),
+    db.collection('wal_usuarios').get(),
+  ])
+  const permitidos = new Set(DUENOS_WAL.map((e) => e.toLowerCase()))
+  usuSnap.forEach((d) => { const u = d.data(); if (u && u.activo !== false && u.permisos && u.permisos.fp_ver === true) permitidos.add(String(d.id).toLowerCase()) })
+  const tokens = []
+  const idPorToken = {}
+  pushSnap.forEach((d) => { const p = d.data(); if (p && p.token && permitidos.has(String(p.email || '').toLowerCase())) { tokens.push(p.token); idPorToken[p.token] = d.id } })
+  if (!tokens.length) return
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: { title: '⚡ Nueva solicitud de Fast Pay', body: `${s.driverNombre || 'Un chofer'} pidió un adelanto${s.bruto ? ` de $${Number(s.bruto).toFixed(2)}` : ''}` },
+    data: { tipo: 'fastpay_solicitud', rutaId: String(s.rutaId || ''), driverId: String(s.driverId || '') },
+    webpush: { fcmOptions: { link: 'https://www.milepay.io/walmart' }, notification: { icon: 'https://www.milepay.io/icon-192.png' } },
+  }).catch(() => null)
+  // Limpia tokens inválidos (desinstalados / expirados).
+  if (res && res.responses) {
+    const borrar = []
+    res.responses.forEach((r, i) => { if (!r.success) { const code = r.error && r.error.code; if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') { const id = idPorToken[tokens[i]]; if (id) borrar.push(id) } } })
+    await Promise.all(borrar.map((id) => db.collection('wal_push').doc(id).delete().catch(() => {})))
+  }
+})
