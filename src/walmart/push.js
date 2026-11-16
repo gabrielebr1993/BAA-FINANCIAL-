@@ -24,7 +24,10 @@ export async function activarPush(uid, email) {
       apiKey: c.apiKey || '', authDomain: c.authDomain || '', projectId: c.projectId || '',
       senderId: c.messagingSenderId || '', appId: c.appId || '',
     }).toString()
-    const reg = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${qs}`)
+    // Ámbito PROPIO para NO chocar con el service worker de la PWA (que controla
+    // "/"). Si usaran el mismo ámbito, uno reemplazaría al otro y la app podría
+    // quedarse en blanco al actualizar.
+    const reg = await navigator.serviceWorker.register(`/firebase-messaging-sw.js?${qs}`, { scope: '/firebase-cloud-messaging-push-scope/' })
     const messaging = getMessaging(app)
     const token = await getToken(messaging, { vapidKey: VAPID, serviceWorkerRegistration: reg })
     if (!token) return { ok: false, motivo: 'No se pudo obtener el token del dispositivo.' }

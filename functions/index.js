@@ -2554,3 +2554,36 @@ exports.walSolicitudPush = onDocumentCreated('wal_solicitudes/{id}', async (even
     await Promise.all(borrar.map((id) => db.collection('wal_push').doc(id).delete().catch(() => {})))
   }
 })
+
+// Reusa tokens por lista de correos permitidos y envía la notificación.
+async function walEnviarPush(emailsSet, titulo, cuerpo, data) {
+  if (!emailsSet || !emailsSet.size) return
+  const pushSnap = await db.collection('wal_push').get()
+  const tokens = []; const idPorToken = {}
+  pushSnap.forEach((d) => { const p = d.data(); if (p && p.token && emailsSet.has(String(p.email || '').toLowerCase())) { tokens.push(p.token); idPorToken[p.token] = d.id } })
+  if (!tokens.length) return
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: { title: titulo, body: cuerpo },
+    data: data || {},
+    webpush: { fcmOptions: { link: 'https://www.milepay.io/walmart' }, notification: { icon: 'https://www.milepay.io/icon-192.png' } },
+  }).catch(() => null)
+  if (res && res.responses) {
+    const borrar = []
+    res.responses.forEach((r, i) => { if (!r.success) { const c = r.error && r.error.code; if (c === 'messaging/registration-token-not-registered' || c === 'messaging/invalid-argument') { const id = idPorToken[tokens[i]]; if (id) borrar.push(id) } } })
+    await Promise.all(borrar.map((id) => db.collection('wal_push').doc(id).delete().catch(() => {})))
+  }
+}
+
+// Avisa al CHOFER cuando su Fast Pay pasa a CONFIRMADO.
+exports.walFastPayConfirmadoPush = onDocumentWritten('wal_pagos/{id}', async (event) => {
+  const before = event.data && event.data.before && event.data.before.data()
+  const after = event.data && event.data.after && event.data.after.data()
+  if (!after || after.tipo !== 'fastpay') return
+  const paso = (!before || before.estado !== 'confirmado') && after.estado === 'confirmado'
+  if (!paso || !after.driverId) return
+  const usu = await db.collection('wal_usuarios').where('driverId', '==', after.driverId).limit(10).get()
+  const emails = new Set()
+  usu.forEach((d) => { const u = d.data(); if (u && u.rol === 'driver' && u.activo !== false) emails.add(String(d.id).toLowerCase()) })
+  await walEnviarPush(emails, '✅ Fast Pay confirmado', `Tu adelanto de $${Number(after.efectivo || 0).toFixed(2)} fue confirmado`, { tipo: 'fastpay_confirmado', rutaId: String(after.rutaId || '') })
+})

@@ -265,8 +265,9 @@ export default function WalmartApp() {
             const Icono = tdef.icono; const activo = tab === tdef.id
             return (
               <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                style={activo ? { borderLeftColor: WALMART_AZUL, background: 'rgba(0,113,220,0.10)', color: WALMART_AZUL } : undefined}
                 className={`group relative flex items-center gap-3 rounded-xl border-l-2 py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${activo
-                  ? 'border-transparent bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
+                  ? 'font-semibold'
                   : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
                 <Icono size={19} strokeWidth={1.8} className="flex-shrink-0" />
                 <span className="flex-1">{tdef.label}</span>
@@ -308,7 +309,8 @@ export default function WalmartApp() {
               const Icono = tdef.icono
               return (
                 <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                  style={tab === tdef.id ? { background: WALMART_AZUL, color: '#fff' } : undefined}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${tab === tdef.id ? '' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
                   <Icono size={14} /> {tdef.label}
                   {tdef.id === 'fastpay' && solPendientes.length > 0 && <span className="grid h-4 min-w-[16px] place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{solPendientes.length}</span>}
                 </button>
@@ -1350,6 +1352,15 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     try { await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha); walToast('Solicitud de Fast Pay enviada ✓', 'gold') }
     catch (e) { walToast('No se pudo enviar la solicitud: ' + (e?.message || e), 'red') }
   }
+  const [pushOn, setPushOn] = useState(() => { try { return localStorage.getItem('wal_push_on') === '1' } catch { return false } })
+  const [pushCerrado, setPushCerrado] = useState(() => { try { return localStorage.getItem('wal_push_ban') === '0' } catch { return false } })
+  useEffect(() => { let unsub; escucharPush((payload) => { const n = payload?.notification; walToast((n?.title || 'Aviso') + (n?.body ? ' · ' + n.body : ''), 'gold') }).then((u) => { unsub = u }); return () => { if (typeof unsub === 'function') unsub() } }, [])
+  const activarAvisosChofer = async () => {
+    walToast('Activando avisos…', 'navy')
+    const r = await activarPush(auth.currentUser?.uid, email)
+    if (r.ok) { setPushOn(true); try { localStorage.setItem('wal_push_on', '1') } catch { /* noop */ } walToast('Avisos activados ✓ — te avisaremos de tus pagos', 'gold') }
+    else walToast('No se pudieron activar: ' + r.motivo, 'red')
+  }
 
   const semana = lunesDe(fecha)
   // Período efectivo (semana sábado→viernes, o rango de fechas). Agrega las
@@ -1453,6 +1464,15 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 </div>
               </Card>
             </div>
+            {!pushOn && !pushCerrado && (
+              <Card className="mb-3 flex flex-wrap items-center gap-2 p-3">
+                <span className="text-sm">🔔 <b className="text-brand-navy dark:text-slate-100">Activa las notificaciones</b> para saber cuándo te pagan y te aprueban el Fast Pay.</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={() => { setPushCerrado(true); try { localStorage.setItem('wal_push_ban', '0') } catch { /* noop */ } }} className="text-xs font-semibold text-slate-400 hover:text-slate-600">ahora no</button>
+                  <button onClick={activarAvisosChofer} className="rounded-lg px-3 py-1.5 text-xs font-bold text-white" style={{ background: WALMART_AZUL }}>Activar</button>
+                </div>
+              </Card>
+            )}
             {contratosPend.length > 0 && (
               <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-brand-gold p-3">
                 <FileSignature size={16} className="text-brand-gold" />
