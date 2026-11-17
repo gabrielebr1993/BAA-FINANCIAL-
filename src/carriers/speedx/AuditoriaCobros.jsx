@@ -260,133 +260,13 @@ export default function AuditoriaCobros({ embebido = false }) {
         </Aviso>
       )}
 
-      {analisis?.depositos?.length > 0 && concSem && conc && (
+      {analisis?.depositos?.length > 0 && concSem && (
         <>
-          {/* Selector de vista + exportar */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">{t('Ver por:')}</span>
-            <div className="inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700">
-              <button onClick={() => setModo('semana')} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${modo === 'semana' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500'}`}><CalendarDays size={14} /> {t('Semana')}</button>
-              <button onClick={() => setModo('factura')} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${modo === 'factura' ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500'}`}><Receipt size={14} /> {t('Factura (detalle)')}</button>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Boton variant="ghost" onClick={exportarXls}><FileSpreadsheet size={16} /> {t('Excel')}</Boton>
-              <Boton variant="ghost" onClick={exportarPdf}><Download size={16} /> {t('PDF')}</Boton>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Boton variant="ghost" onClick={exportarXls}><FileSpreadsheet size={16} /> {t('Excel')}</Boton>
+            <Boton variant="ghost" onClick={exportarPdf}><Download size={16} /> {t('PDF')}</Boton>
           </div>
-
-          {modo === 'semana' ? (
-            <VistaSemana c={concSem} nDep={analisis.depositos.length} t={t} />
-          ) : (
-          <>
-          {/* KPIs por factura */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <KPI label={t('Te pagaron (SpeedX)')} value={money(conc.totales.montoDepositado)} icon={ScanSearch} accent="navy" sub={`${num(conc.totales.nDepositos)} ${t('depósitos')}`} />
-            <KPI label={t('Cuadran')} value={num(conc.totales.nCuadran + conc.totales.nBloques)} icon={CheckCircle2} accent="green" sub={conc.totales.nBloques ? `${num(conc.totales.nBloques)} ${t('en bloque')}` : money(conc.totales.montoCuadran)} />
-            <KPI label={t('Diferencia')} value={num(conc.totales.nDiferencia)} icon={AlertTriangle} accent={conc.totales.nDiferencia ? 'gold' : 'navy'} sub={conc.totales.nDiferencia ? signo(conc.totales.totalDiferencias) : t('ninguna')} />
-            <KPI label={t('Sin pagar')} value={num(conc.totales.nSinPagar)} icon={XCircle} accent={conc.totales.nSinPagar ? 'red' : 'navy'} sub={money(conc.totales.montoSinPagar)} />
-            <KPI label={t('Pago sin factura')} value={num(conc.totales.nSinFactura)} icon={HelpCircle} accent={conc.totales.nSinFactura ? 'gold' : 'navy'} sub={money(conc.totales.montoSinFactura)} />
-          </div>
-
-          {/* Secciones */}
-          <Seccion color="green" icono={CheckCircle2} titulo={t('Pagadas y cuadran')} n={conc.cuadran.length} unidad={t('facturas')}>
-            <Tabla
-              columns={[
-                { key: 'factura', label: t('Factura') }, { key: 'semana', label: t('Semana') },
-                { key: 'facturado', label: t('Facturado'), align: 'right' }, { key: 'pagado', label: t('Te pagaron'), align: 'right' },
-                { key: 'fecha', label: t('Fecha pago'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'right' },
-              ]}
-              rows={conc.cuadran}
-              emptyText={t('Ninguna.')}
-              renderCell={(x, k) => {
-                if (k === 'factura') return <b>{x.factura.etiqueta}</b>
-                if (k === 'semana') return <span className="text-slate-500">{x.factura.semana}</span>
-                if (k === 'facturado') return <span className="tabular-nums">{money(x.factura.monto)}</span>
-                if (k === 'pagado') return <span className="tabular-nums font-semibold">{money(x.deposito.monto)}</span>
-                if (k === 'fecha') return <span className="text-slate-500">{fmtFecha(x.deposito.fecha)}</span>
-                return Math.abs(x.dif) < 0.005
-                  ? <Badge color="green">{t('exacto')}</Badge>
-                  : <Badge color="green">{signo(x.dif)}</Badge>
-              }}
-            />
-          </Seccion>
-
-          {conc.bloques.length > 0 && (
-            <Seccion color="blue" icono={Layers} titulo={t('Un pago cubre varias facturas')} n={conc.bloques.length} unidad={t('pagos')}>
-              <div className="space-y-3">
-                {conc.bloques.map((b, i) => (
-                  <div key={i} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700/60">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <span className="font-semibold text-brand-navy dark:text-slate-100">{fmtFecha(b.deposito.fecha)} · {money(b.deposito.monto)}</span>
-                      <Badge color={Math.abs(b.dif) < 0.005 ? 'green' : 'gold'}>{t('cubre')} {b.facturas.length} {t('facturas')} · {t('dif.')} {signo(b.dif)}</Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {b.facturas.map((f, j) => (
-                        <span key={j} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs dark:bg-slate-700/50">
-                          <b>{f.etiqueta}</b> <span className="text-slate-500">{f.semana}</span> · <span className="tabular-nums">{money(f.monto)}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Seccion>
-          )}
-
-          <Seccion color="gold" icono={AlertTriangle} titulo={t('Pagadas pero el monto no coincide')} n={conc.diferencia.length} unidad={t('facturas')}>
-            <Tabla
-              columns={[
-                { key: 'factura', label: t('Factura') }, { key: 'semana', label: t('Semana') },
-                { key: 'facturado', label: t('Facturado'), align: 'right' }, { key: 'pagado', label: t('Te pagaron'), align: 'right' },
-                { key: 'dif', label: t('Diferencia'), align: 'right' },
-              ]}
-              rows={conc.diferencia}
-              emptyText={t('Ninguna.')}
-              renderCell={(x, k) => {
-                if (k === 'factura') return <b>{x.factura.etiqueta}</b>
-                if (k === 'semana') return <span className="text-slate-500">{x.factura.semana}</span>
-                if (k === 'facturado') return <span className="tabular-nums">{money(x.factura.monto)}</span>
-                if (k === 'pagado') return <span className="tabular-nums font-semibold">{money(x.deposito.monto)}</span>
-                return <span className={`tabular-nums font-bold ${x.dif >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>{signo(x.dif)}</span>
-              }}
-            />
-          </Seccion>
-
-          <Seccion color="red" icono={XCircle} titulo={t('Sin pagar')} n={conc.sinPagar.length} unidad={t('facturas')}>
-            <Tabla
-              columns={[
-                { key: 'factura', label: t('Factura') }, { key: 'semana', label: t('Semana') },
-                { key: 'facturado', label: t('Facturado'), align: 'right' }, { key: 'estado', label: t('Estado'), align: 'right' },
-              ]}
-              rows={conc.sinPagar}
-              emptyText={t('Todo pagado. 🎉')}
-              renderCell={(x, k) => {
-                if (k === 'factura') return <b>{x.factura.etiqueta}</b>
-                if (k === 'semana') return <span className="text-slate-500">{x.factura.semana}</span>
-                if (k === 'facturado') return <span className="tabular-nums font-semibold">{money(x.factura.monto)}</span>
-                return <Badge color="red">{t('no aparece en el banco')}</Badge>
-              }}
-            />
-          </Seccion>
-
-          <Seccion color="gray" icono={HelpCircle} titulo={t('Pago sin factura')} n={conc.sinFactura.length} unidad={t('pagos')}>
-            {conc.sinFactura.length > 0 && <div className="mb-2 text-xs text-slate-500">{t('SpeedX te pagó esto pero no hay factura cargada que le corresponda. Quizá falta subir esa factura, o es un pago adelantado.')}</div>}
-            <Tabla
-              columns={[
-                { key: 'fecha', label: t('Fecha') }, { key: 'desc', label: t('Descripción en el banco'), wrap: true },
-                { key: 'monto', label: t('Monto'), align: 'right' },
-              ]}
-              rows={conc.sinFactura}
-              emptyText={t('Ninguno.')}
-              renderCell={(x, k) => {
-                if (k === 'fecha') return <b>{fmtFecha(x.deposito.fecha)}</b>
-                if (k === 'desc') return <span className="text-slate-500">{x.deposito.descripcion}</span>
-                return <span className="tabular-nums font-semibold">{money(x.deposito.monto)}</span>
-              }}
-            />
-          </Seccion>
-          </>
-          )}
+          <VistaSemana c={concSem} t={t} />
         </>
       )}
 
@@ -401,88 +281,106 @@ export default function AuditoriaCobros({ embebido = false }) {
   )
 }
 
-// ---- VISTA POR SEMANA (como SpeedX paga de verdad) -------------------------
-function VistaSemana({ c, nDep, t }) {
+// Parsea "MMDD-MMDD" y arma un rango legible "17 oct – 30 oct".
+const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+function parseSemana(s) {
+  const m = String(s || '').match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/)
+  if (!m) return null
+  return { ini: { mes: +m[1], dia: +m[2] }, fin: { mes: +m[3], dia: +m[4] } }
+}
+function rangoSemanas(lista) {
+  const parts = lista.map((p) => parseSemana(p.semana)).filter(Boolean)
+  if (!parts.length) return ''
+  const key = (x) => x.mes * 100 + x.dia
+  let ini = parts[0].ini, fin = parts[0].fin
+  for (const p of parts) { if (key(p.ini) < key(ini)) ini = p.ini; if (key(p.fin) > key(fin)) fin = p.fin }
+  const f = (x) => `${x.dia} ${MESES_ES[x.mes - 1] || ''}`
+  return `${f(ini)} – ${f(fin)}`
+}
+
+// ---- VISTA SIMPLE POR SEMANA ------------------------------------------------
+function VistaSemana({ c, t }) {
   const T = c.totales
+  const debe = T.totalPendiente
+  const rango = rangoSemanas(c.pendientes)
+  const hayManual = c.pagadas.some((p) => p.esManual) || c.pendientes.some((p) => p.esManual)
   return (
     <>
-      <Aviso tipo="info">
-        {t('SpeedX te paga por SEMANA, juntando todas las facturas de esa semana (todas las ciudades) en una o dos transferencias, a veces con un pequeño descuento. Aquí cada fila es una semana completa.')}
-      </Aviso>
-      {(c.pagadas.some((p) => p.esManual) || c.pendientes.some((p) => p.esManual)) && (
-        <Aviso tipo="warn">
-          {t('Las semanas marcadas con “manual” vienen del Reporte manual (facturas provisionales). Su monto es el ingreso estimado que registraste; cuando subas la factura oficial de esa semana, se reemplaza por el valor real.')}
-        </Aviso>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KPI label={t('Te pagaron (SpeedX)')} value={money(T.totalPagado)} icon={ScanSearch} accent="navy" sub={`${num(nDep)} ${t('depósitos')}`} />
-        <KPI label={t('Facturado')} value={money(T.totalFacturado)} icon={Receipt} accent="slate" sub={`${num(T.nSemanas)} ${t('semanas')}`} />
-        <KPI label={t('Pendiente por cobrar')} value={money(T.totalPendiente)} icon={XCircle} accent={T.nPendientes ? 'red' : 'green'} sub={`${num(T.nPendientes)} ${t('semanas')}`} />
-        <KPI label={t('Semanas pagadas')} value={num(T.nPagadas)} icon={CheckCircle2} accent="green" sub={`${num(T.nCuadran)} ${t('exactas')} · ${num(T.nConAjuste)} ${t('con ajuste')}`} />
+      {/* Lo más importante, bien grande: cuánto te deben */}
+      <div className={`rounded-2xl p-5 text-white shadow-md ${debe > 0.005 ? 'bg-gradient-to-br from-rose-600 to-rose-500' : 'bg-gradient-to-br from-emerald-600 to-emerald-500'}`}>
+        <div className="text-sm font-semibold opacity-90">{debe > 0.005 ? t('SpeedX te debe') : t('SpeedX está al día')}</div>
+        <div className="font-mono text-4xl font-extrabold tabular-nums">{money(debe)}</div>
+        {debe > 0.005
+          ? <div className="mt-1 text-sm opacity-90">{num(T.nPendientes)} {t('semanas sin pagar')}{rango ? ` · ${rango}` : ''}</div>
+          : <div className="mt-1 text-sm opacity-90">{t('No te deben nada pendiente ✓')}</div>}
       </div>
 
-      <Seccion color="green" icono={CheckCircle2} titulo={t('Semanas pagadas')} n={c.pagadas.length} unidad={t('semanas')}>
+      {/* 2 datos de apoyo */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-800">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t('Te pagaron')}</div>
+          <div className="font-mono text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{money(T.totalPagado)}</div>
+          <div className="text-xs text-slate-400">{num(T.nPagadas)} {t('semanas pagadas')}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-800">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t('Facturado (total)')}</div>
+          <div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{money(T.totalFacturado)}</div>
+          <div className="text-xs text-slate-400">{num(T.nSemanas)} {t('semanas')}</div>
+        </div>
+      </div>
+
+      {hayManual && (
+        <Aviso tipo="warn">{t('Las semanas con “manual” vienen del Reporte manual (monto estimado). Al subir la factura oficial se reemplaza por el valor real.')}</Aviso>
+      )}
+
+      {/* TE DEBEN (lo que importa, primero) */}
+      <Seccion color="red" icono={XCircle} titulo={t('Te deben (sin pagar)')} n={c.pendientes.length} unidad={t('semanas')}>
+        {c.pendientes.length > 0 && <div className="mb-2 text-xs text-slate-500">{t('Si son las semanas más recientes, es normal: SpeedX paga con unas semanas de retraso.')}</div>}
+        <Tabla
+          columns={[
+            { key: 'semana', label: t('Semana') },
+            { key: 'ciudades', label: t('Facturas'), wrap: true },
+            { key: 'monto', label: t('Te deben'), align: 'right' },
+          ]}
+          rows={c.pendientes}
+          emptyText={t('Nada pendiente. 🎉')}
+          renderCell={(p, k) => {
+            if (k === 'semana') return <span className="inline-flex items-center gap-1.5"><b>{p.semana}</b>{p.esManual && <Badge color="slate">{t('manual')}</Badge>}</span>
+            if (k === 'ciudades') return <span className="text-slate-500">{p.facturas.map((f) => f.etiqueta).join(' · ')}</span>
+            return <span className="tabular-nums font-bold text-rose-600 dark:text-rose-400">{money(p.total)}</span>
+          }}
+        />
+      </Seccion>
+
+      {/* PAGADAS */}
+      <Seccion color="green" icono={CheckCircle2} titulo={t('Pagadas')} n={c.pagadas.length} unidad={t('semanas')}>
         <Tabla
           columns={[
             { key: 'semana', label: t('Semana') },
             { key: 'facturado', label: t('Facturado'), align: 'right' },
             { key: 'pagado', label: t('Te pagaron'), align: 'right' },
-            { key: 'ajuste', label: t('Ajuste SpeedX'), align: 'right' },
-            { key: 'transf', label: t('Transferencias'), align: 'right' },
+            { key: 'ajuste', label: t('Ajuste'), align: 'right' },
           ]}
           rows={c.pagadas}
-          emptyText={t('Ninguna cuadra todavía.')}
+          emptyText={t('Ninguna todavía.')}
           renderCell={(p, k) => {
             if (k === 'semana') return <span className="inline-flex items-center gap-1.5"><b>{p.semana}</b>{p.esManual && <Badge color="slate">{t('manual')}</Badge>}</span>
             if (k === 'facturado') return <span className="tabular-nums">{money(p.total)}</span>
             if (k === 'pagado') return <span className="tabular-nums font-semibold">{money(p.totalPagado)}</span>
-            if (k === 'ajuste') {
-              if (Math.abs(p.dif) < 0.005) return <Badge color="green">{t('exacto')}</Badge>
-              if (p.dif < 0) return <Badge color="gold">{t('SpeedX descontó')} {money(-p.dif)}</Badge>
-              return <Badge color="blue">+{money(p.dif)}</Badge>
-            }
-            return <span className="text-xs text-slate-500">{p.pagos.map((d) => fmtFecha(d.fecha)).join(' + ')}</span>
-          }}
-        />
-      </Seccion>
-
-      <Seccion color="red" icono={XCircle} titulo={t('Semanas sin pagar (pendientes)')} n={c.pendientes.length} unidad={t('semanas')}>
-        {c.pendientes.length > 0 && <div className="mb-2 text-xs text-slate-500">{t('Estas semanas no aparecen en ningún estado de cuenta. Si son las más recientes, es normal: SpeedX paga con unas semanas de retraso.')}</div>}
-        <Tabla
-          columns={[
-            { key: 'semana', label: t('Semana') },
-            { key: 'facturado', label: t('Facturado'), align: 'right' },
-            { key: 'ciudades', label: t('Facturas'), wrap: true },
-            { key: 'estado', label: t('Estado'), align: 'right' },
-          ]}
-          rows={c.pendientes}
-          emptyText={t('Todo pagado. 🎉')}
-          renderCell={(p, k) => {
-            if (k === 'semana') return <span className="inline-flex items-center gap-1.5"><b>{p.semana}</b>{p.esManual && <Badge color="slate">{t('manual')}</Badge>}</span>
-            if (k === 'facturado') return <span className="tabular-nums font-semibold">{money(p.total)}</span>
-            if (k === 'ciudades') return <span className="text-slate-500">{p.facturas.map((f) => `${f.etiqueta} (${money(f.monto)})`).join(' · ')}</span>
-            return <Badge color="red">{t('aún no pagada')}</Badge>
+            if (Math.abs(p.dif) < 0.005) return <Badge color="green">{t('exacto')}</Badge>
+            if (p.dif < 0) return <Badge color="gold">−{money(-p.dif)}</Badge>
+            return <Badge color="blue">+{money(p.dif)}</Badge>
           }}
         />
       </Seccion>
 
       {c.pagosSinSemana.length > 0 && (
-        <Seccion color="gray" icono={HelpCircle} titulo={t('Pagos sin asignar')} n={c.pagosSinSemana.length} unidad={t('pagos')}>
-          <div className="mb-2 text-xs text-slate-500">{t('SpeedX te transfirió esto pero no encontré una semana facturada que cuadre. Quizá falta cargar esa factura, o es un pago adelantado.')}</div>
+        <Seccion color="gray" icono={HelpCircle} titulo={t('Pagos que no cuadran con ninguna factura')} n={c.pagosSinSemana.length} unidad={t('pagos')}>
           <Tabla
-            columns={[
-              { key: 'fecha', label: t('Fecha') },
-              { key: 'desc', label: t('Descripción en el banco'), wrap: true },
-              { key: 'monto', label: t('Monto'), align: 'right' },
-            ]}
+            columns={[{ key: 'fecha', label: t('Fecha') }, { key: 'monto', label: t('Monto'), align: 'right' }]}
             rows={c.pagosSinSemana}
             emptyText={t('Ninguno.')}
-            renderCell={(d, k) => {
-              if (k === 'fecha') return <b>{fmtFecha(d.fecha)}</b>
-              if (k === 'desc') return <span className="text-slate-500">{d.descripcion}</span>
-              return <span className="tabular-nums font-semibold">{money(d.monto)}</span>
-            }}
+            renderCell={(d, k) => (k === 'fecha' ? <b>{fmtFecha(d.fecha)}</b> : <span className="tabular-nums font-semibold">{money(d.monto)}</span>)}
           />
         </Seccion>
       )}
