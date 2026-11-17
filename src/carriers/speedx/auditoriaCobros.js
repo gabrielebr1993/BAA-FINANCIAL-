@@ -303,9 +303,10 @@ export function conciliarSemana(depositos, facturas, opts = {}) {
     const m = r2(Number(f.montoACobrar) || 0)
     if (m <= 0) continue
     const sem = f.semana || f.semanaSpeedX || '—'
-    if (!mapa[sem]) mapa[sem] = { semana: sem, facturas: [], total: 0 }
+    if (!mapa[sem]) mapa[sem] = { semana: sem, facturas: [], total: 0, esManual: false }
     mapa[sem].facturas.push({ ...f, monto: m, etiqueta: f.ciudad || f.ciudadNombre || f.fleet || '—' })
     mapa[sem].total = r2(mapa[sem].total + m)
+    if (f.manual) mapa[sem].esManual = true
   }
   const semanas = Object.values(mapa).sort((a, b) => (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0))
 
@@ -338,13 +339,13 @@ export function conciliarSemana(depositos, facturas, opts = {}) {
       m.pagos.forEach((d) => { d.usado = true })
       s._done = true
       const totalPagado = r2(m.pagos.reduce((a, d) => a + d.monto, 0))
-      pagadas.push({ semana: s.semana, facturas: s.facturas, total: s.total, pagos: m.pagos, totalPagado, dif: r2(totalPagado - s.total) })
+      pagadas.push({ semana: s.semana, facturas: s.facturas, total: s.total, pagos: m.pagos, totalPagado, dif: r2(totalPagado - s.total), esManual: s.esManual })
     }
   }
   asignar(tol)        // 1º los exactos
   asignar(bandaDe)    // 2º los que tienen ajuste de SpeedX
 
-  const pendientes = semanas.filter((s) => !s._done).map((s) => ({ semana: s.semana, facturas: s.facturas, total: s.total }))
+  const pendientes = semanas.filter((s) => !s._done).map((s) => ({ semana: s.semana, facturas: s.facturas, total: s.total, esManual: s.esManual }))
   const pagosSinSemana = deps.filter((d) => !d.usado)
   pagadas.sort((a, b) => (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0))
 

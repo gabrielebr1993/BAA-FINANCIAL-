@@ -27,7 +27,7 @@ const signo = (n) => (n > 0 ? `+${money(n)}` : money(n))
 
 export default function AuditoriaCobros({ embebido = false }) {
   const { t } = useLang()
-  const { invoices } = useData()
+  const { invoices, provisionales } = useData()
   const inputRef = useRef(null)
 
   const [cargando, setCargando] = useState(false)
@@ -45,19 +45,36 @@ export default function AuditoriaCobros({ embebido = false }) {
     origIds: idsTxt.split(',').map((s) => s.trim()).filter(Boolean),
   }), [nombresTxt, idsTxt])
 
-  // Facturas de SpeedX activas (ya filtradas por carrier en useData).
-  const facturas = useMemo(() => (invoices || [])
-    .filter((i) => (i.carrier || 'gofo') === 'speedx')
-    .map((i) => ({
+  // Facturas de SpeedX a comparar: las OFICIALES + las del REPORTE MANUAL
+  // (provisionales), sin duplicar una semana/ciudad que ya tenga oficial.
+  const normClave = (sem, ciu) => `${(sem || '').trim()}||${(ciu || '').trim().toUpperCase()}`
+  const facturas = useMemo(() => {
+    const oficiales = (invoices || []).filter((i) => (i.carrier || 'gofo') === 'speedx')
+    const claves = new Set(oficiales.map((i) => normClave(i.semanaSpeedX || i.semana, i.ciudad || i.ciudadNombre)))
+    const ofMapeadas = oficiales.map((i) => ({
       id: i.id,
       montoACobrar: Number(i.montoACobrar) || Number(i.verificacion?.gofo?.totalGofo) || Number(i.verificacion?.netoCalculado) || Number(i.ingresoTotal) || 0,
       ciudad: i.ciudadNombre || i.ciudad || '',
       fleet: i.fleet || '',
       semana: i.semanaSpeedX || i.semana || '',
-      fechaFin: i.fechaFin || null,
       estadoCobro: i.estadoCobro || 'pendiente',
+      manual: false,
     }))
-    .filter((f) => f.montoACobrar > 0), [invoices])
+    // Provisionales (reporte manual): se usa el ingreso estimado de SpeedX.
+    const provMapeadas = (provisionales || [])
+      .filter((p) => (p.carrier || 'gofo') === 'speedx')
+      .filter((p) => !claves.has(normClave(p.semana || p.semanaSpeedX, p.ciudad)))
+      .map((p) => ({
+        id: p.id,
+        montoACobrar: Number(p.ingresoEstimado) || Number(p.montoACobrar) || 0,
+        ciudad: p.ciudad || '',
+        fleet: p.fleet || '',
+        semana: p.semana || p.semanaSpeedX || '',
+        estadoCobro: p.estadoCobro || 'pendiente',
+        manual: true,
+      }))
+    return [...ofMapeadas, ...provMapeadas].filter((f) => f.montoACobrar > 0)
+  }, [invoices, provisionales])
 
   // Analiza TODA la lista de archivos acumulados (varios estados de cuenta).
   const analizar = useCallback(async (lista) => {
@@ -392,6 +409,11 @@ function VistaSemana({ c, nDep, t }) {
       <Aviso tipo="info">
         {t('SpeedX te paga por SEMANA, juntando todas las facturas de esa semana (todas las ciudades) en una o dos transferencias, a veces con un pequeño descuento. Aquí cada fila es una semana completa.')}
       </Aviso>
+      {(c.pagadas.some((p) => p.esManual) || c.pendientes.some((p) => p.esManual)) && (
+        <Aviso tipo="warn">
+          {t('Las semanas marcadas con “manual” vienen del Reporte manual (facturas provisionales). Su monto es el ingreso estimado que registraste; cuando subas la factura oficial de esa semana, se reemplaza por el valor real.')}
+        </Aviso>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KPI label={t('Te pagaron (SpeedX)')} value={money(T.totalPagado)} icon={ScanSearch} accent="navy" sub={`${num(nDep)} ${t('depósitos')}`} />
@@ -412,7 +434,7 @@ function VistaSemana({ c, nDep, t }) {
           rows={c.pagadas}
           emptyText={t('Ninguna cuadra todavía.')}
           renderCell={(p, k) => {
-            if (k === 'semana') return <b>{p.semana}</b>
+            if (k === 'semana') return <span className="inline-flex items-center gap-1.5"><b>{p.semana}</b>{p.esManual && <Badge color="slate">{t('manual')}</Badge>}</span>
             if (k === 'facturado') return <span className="tabular-nums">{money(p.total)}</span>
             if (k === 'pagado') return <span className="tabular-nums font-semibold">{money(p.totalPagado)}</span>
             if (k === 'ajuste') {
@@ -437,7 +459,7 @@ function VistaSemana({ c, nDep, t }) {
           rows={c.pendientes}
           emptyText={t('Todo pagado. 🎉')}
           renderCell={(p, k) => {
-            if (k === 'semana') return <b>{p.semana}</b>
+            if (k === 'semana') return <span className="inline-flex items-center gap-1.5"><b>{p.semana}</b>{p.esManual && <Badge color="slate">{t('manual')}</Badge>}</span>
             if (k === 'facturado') return <span className="tabular-nums font-semibold">{money(p.total)}</span>
             if (k === 'ciudades') return <span className="text-slate-500">{p.facturas.map((f) => `${f.etiqueta} (${money(f.monto)})`).join(' · ')}</span>
             return <Badge color="red">{t('aún no pagada')}</Badge>
