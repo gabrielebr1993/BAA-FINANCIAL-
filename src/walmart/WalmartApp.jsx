@@ -28,7 +28,7 @@ import {
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
   CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
-  Smartphone, Share, History,
+  Smartphone, Share, History, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
@@ -1614,16 +1614,41 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   const pagosPeriodo = res ? res.pagos : []
   const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
   const contratosPend = (contratos || []).filter((c) => c.estado === 'pendiente_firma')
-  // Control de período reutilizable (semana sábado→viernes o rango).
+  // Control de período para el chofer: chips rápidos + flechas de semana. Más
+  // fácil de tocar en el teléfono que los selectores de formulario.
+  const semActual = lunesDe(fecha)
+  const esEstaSem = modo === 'semana' && semActual === lunesDe(hoyISO())
+  const esSemPasada = modo === 'semana' && semActual === lunesDe(sumarDias(hoyISO(), -7))
+  const esEsteMes = modo === 'rango' && d1 === primerDiaMes(mesDe(hoyISO())) && d2 === hoyISO()
+  const esPersonal = modo === 'rango' && !esEsteMes
+  const chipPer = (label, on, onClick) => (
+    <button type="button" onClick={onClick} className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-bold transition ${on ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`} style={on ? { background: WALMART_AZUL } : undefined}>{label}</button>
+  )
+  const fmtCorto = (iso) => { try { const d = new Date(iso + 'T12:00'); return d.toLocaleDateString('es-US', { day: 'numeric', month: 'short' }) } catch { return iso } }
   const FiltroPeriodo = (
     <Card className="mb-3 p-3">
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-        <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
-        {modo === 'semana'
-          ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-          : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
-        <span className="pb-1.5 text-xs font-semibold text-slate-400">{detDesde} → {detHasta}</span>
+      <div className="mb-2.5 flex flex-wrap gap-1.5">
+        {chipPer('Esta semana', esEstaSem, () => { setModo('semana'); setFecha(hoyISO()) })}
+        {chipPer('Semana pasada', esSemPasada, () => { setModo('semana'); setFecha(sumarDias(hoyISO(), -7)) })}
+        {chipPer('Este mes', esEsteMes, () => { setModo('rango'); setD1(primerDiaMes(mesDe(hoyISO()))); setD2(hoyISO()) })}
+        {chipPer('Personalizado', esPersonal, () => { setModo('rango') })}
       </div>
+      {modo === 'semana' ? (
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-2 py-1.5 dark:bg-slate-800/60">
+          <button type="button" onClick={() => setFecha(sumarDias(fecha, -7))} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white hover:text-brand-navy dark:hover:bg-slate-700 dark:hover:text-white" aria-label="Semana anterior"><ChevronLeft size={20} /></button>
+          <div className="text-center leading-tight">
+            <div className="text-[14px] font-extrabold text-brand-navy dark:text-slate-100">{fmtCorto(detDesde)} – {fmtCorto(detHasta)}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Semana · sáb → vie</div>
+          </div>
+          <button type="button" onClick={() => setFecha(sumarDias(fecha, 7))} disabled={semActual >= lunesDe(hoyISO())} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white hover:text-brand-navy disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-700 dark:hover:text-white" aria-label="Semana siguiente"><ChevronRight size={20} /></button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F>
+          <F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F>
+          <span className="pb-2 text-xs font-semibold text-slate-400">{fmtCorto(detDesde)} – {fmtCorto(detHasta)}</span>
+        </div>
+      )}
     </Card>
   )
 
