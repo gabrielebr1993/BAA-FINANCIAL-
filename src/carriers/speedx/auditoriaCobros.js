@@ -281,3 +281,88 @@ function buscarSubconjunto(items, objetivo, tol, maxN) {
   combinar(0, [], 0)
   return mejor ? mejor.items : null
 }
+
+// ----------------------------------------------------------------------------
+// 3) CONCILIAR POR SEMANA — así es como SpeedX paga de verdad: una (o dos)
+//    transferencias por semana que CUBREN TODAS las facturas de esa semana
+//    (todas las ciudades/flotas juntas), a veces con un pequeño descuento.
+//    Agrupa las facturas por semana y casa el TOTAL de la semana contra la(s)
+//    transferencia(s), tolerando el ajuste de SpeedX.
+//      opts.tol        : margen para "cuadra exacto" (default 5)
+//      opts.ajustePct  : % máximo que SpeedX puede descontar/ajustar (default 0.04)
+//      opts.ajusteMax  : tope en $ de ese ajuste (default 2500)
+// ----------------------------------------------------------------------------
+export function conciliarSemana(depositos, facturas, opts = {}) {
+  const tol = opts.tol != null ? Number(opts.tol) : 5
+  const ajustePct = opts.ajustePct != null ? Number(opts.ajustePct) : 0.04
+  const ajusteMax = opts.ajusteMax != null ? Number(opts.ajusteMax) : 2500
+
+  // Agrupar facturas por semana.
+  const mapa = {}
+  for (const f of facturas || []) {
+    const m = r2(Number(f.montoACobrar) || 0)
+    if (m <= 0) continue
+    const sem = f.semana || f.semanaSpeedX || '—'
+    if (!mapa[sem]) mapa[sem] = { semana: sem, facturas: [], total: 0 }
+    mapa[sem].facturas.push({ ...f, monto: m, etiqueta: f.ciudad || f.ciudadNombre || f.fleet || '—' })
+    mapa[sem].total = r2(mapa[sem].total + m)
+  }
+  const semanas = Object.values(mapa).sort((a, b) => (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0))
+
+  const deps = (depositos || []).map((d, i) => ({ ...d, _id: 'd' + i, usado: false, monto: r2(d.monto) }))
+  const bandaDe = (total) => Math.max(tol, Math.min(ajusteMax, Math.abs(total) * ajustePct))
+
+  // Mejor grupo de depósitos libres (1 solo o combo 2-3) cuya suma ≈ objetivo.
+  function mejorGrupo(objetivo, banda) {
+    const libres = deps.filter((d) => !d.usado)
+    let best = null
+    for (const d of libres) {
+      const dif = Math.abs(d.monto - objetivo)
+      if (dif <= banda && (!best || dif < best.adif)) best = { pagos: [d], adif: dif }
+    }
+    const combo = buscarSubconjunto(libres, objetivo, banda, 3)
+    if (combo) {
+      const suma = r2(combo.reduce((a, d) => a + d.monto, 0))
+      const dif = Math.abs(suma - objetivo)
+      if (!best || dif < best.adif) best = { pagos: combo, adif: dif }
+    }
+    return best
+  }
+
+  const pagadas = []
+  const asignar = (banda) => {
+    for (const s of semanas) {
+      if (s._done) continue
+      const m = mejorGrupo(s.total, typeof banda === 'function' ? banda(s.total) : banda)
+      if (!m) continue
+      m.pagos.forEach((d) => { d.usado = true })
+      s._done = true
+      const totalPagado = r2(m.pagos.reduce((a, d) => a + d.monto, 0))
+      pagadas.push({ semana: s.semana, facturas: s.facturas, total: s.total, pagos: m.pagos, totalPagado, dif: r2(totalPagado - s.total) })
+    }
+  }
+  asignar(tol)        // 1º los exactos
+  asignar(bandaDe)    // 2º los que tienen ajuste de SpeedX
+
+  const pendientes = semanas.filter((s) => !s._done).map((s) => ({ semana: s.semana, facturas: s.facturas, total: s.total }))
+  const pagosSinSemana = deps.filter((d) => !d.usado)
+  pagadas.sort((a, b) => (a.semana < b.semana ? -1 : a.semana > b.semana ? 1 : 0))
+
+  const sum = (arr, sel) => r2(arr.reduce((a, x) => a + sel(x), 0))
+  const cuadran = pagadas.filter((p) => Math.abs(p.dif) <= tol)
+  const conAjuste = pagadas.filter((p) => Math.abs(p.dif) > tol)
+  const totales = {
+    nSemanas: semanas.length,
+    totalFacturado: sum(semanas, (s) => s.total),
+    totalPagado: sum(deps.filter((d) => d.usado), (d) => d.monto),
+    nPagadas: pagadas.length,
+    nCuadran: cuadran.length,
+    nConAjuste: conAjuste.length,
+    nPendientes: pendientes.length,
+    totalPendiente: sum(pendientes, (s) => s.total),
+    totalAjustes: sum(pagadas, (p) => p.dif), // negativo = SpeedX descontó
+    nPagosSinSemana: pagosSinSemana.length,
+    totalPagosSinSemana: sum(pagosSinSemana, (d) => d.monto),
+  }
+  return { pagadas, cuadran, conAjuste, pendientes, pagosSinSemana, semanas, totales, tol }
+}
