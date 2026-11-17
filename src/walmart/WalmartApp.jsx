@@ -380,7 +380,7 @@ export default function WalmartApp() {
 // ── DASHBOARD ───────────────────────────────────────────────────────────────
 function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contratos = [], solPend = 0, irA, user }) {
   const nombre = (() => { const n = (user?.email || '').split('@')[0].split(/[.\-_]/)[0]; return n ? n.charAt(0).toUpperCase() + n.slice(1) : '' })()
-  const [modo, setModo] = useState('semana') // semana | mes | rango
+  const [modo, setModo] = useState('dia') // dia | semana | mes | rango — por defecto HOY
   const [fecha, setFecha] = useState(hoyISO())
   const [mes, setMes] = useState(mesDe(hoyISO()))
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -388,10 +388,23 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contr
   const [almId, setAlmId] = useState('')
   const semana = lunesDe(fecha)
   let desde, hasta, etiqueta, esSemana = false
-  if (modo === 'semana') { desde = semana; hasta = domingoDe(fecha); etiqueta = `Semana ${semana} → ${hasta}`; esSemana = true }
+  if (modo === 'dia') { desde = fecha; hasta = fecha; etiqueta = `Día · ${fecha}` }
+  else if (modo === 'semana') { desde = semana; hasta = domingoDe(fecha); etiqueta = `Semana ${semana} → ${hasta}`; esSemana = true }
   else if (modo === 'mes') { desde = primerDiaMes(mes); hasta = ultimoDiaMes(mes); etiqueta = nombreMes(mes) }
   else { desde = d1 <= d2 ? d1 : d2; hasta = d1 <= d2 ? d2 : d1; etiqueta = `${desde} → ${hasta}` }
-  const fin = useMemo(() => (esSemana ? financieroSemana(rutas, pagos, gastos, cobros, semana, almId) : financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almId)), [rutas, pagos, gastos, cobros, semana, desde, hasta, almId, esSemana])
+  const subPer = modo === 'dia' ? 'de hoy' : modo === 'mes' ? 'del mes' : modo === 'rango' ? 'del período' : 'de la semana'
+  // Financiero del DÍA: se calcula sobre las rutas/gastos de esa fecha exacta
+  // (las funciones financieroSemana/Rango son por semana, no por día).
+  const finDia = (f) => {
+    const rs = (rutas || []).filter((r) => r.fecha === f && r.estado === 'completada' && (!almId || r.almacenId === almId))
+    const ingresoRutas = money2(rs.reduce((a, r) => a + ingresoRuta(r), 0))
+    const costoDrivers = money2(rs.reduce((a, r) => a + gananciaDriver(r), 0))
+    const comisionesFP = money2((pagos || []).filter((p) => p.fecha === f && fpLiquida(p) && (!almId || !p.almacenId || p.almacenId === almId)).reduce((a, p) => a + (Number(p.comision) || 0), 0))
+    const gastosOper = money2((gastos || []).filter((g) => g.fecha === f && (!almId || !g.almacenId || g.almacenId === almId) && !g.esFinanciamiento).reduce((a, g) => a + (Number(g.monto) || 0), 0))
+    const bonosTotal = money2(rs.reduce((a, r) => a + (Array.isArray(r.bonos) ? r.bonos.reduce((x, b) => x + (Number(b.monto) || 0), 0) : 0), 0))
+    return { ingresoRutas, costoDrivers, margen: money2(ingresoRutas - costoDrivers), gastosOper, gastoFinanc: 0, comisionesFP, efectivoFP: 0, pagosNormales: 0, resultadoOperativo: money2(ingresoRutas - costoDrivers - gastosOper + comisionesFP), cobrado: 0, porCobrar: 0, efectivoADrivers: 0, gastosPagados: 0, bonosTotal, flujoCaja: money2(gastosOper + bonosTotal), nRutas: rs.length }
+  }
+  const fin = useMemo(() => (modo === 'dia' ? finDia(fecha) : esSemana ? financieroSemana(rutas, pagos, gastos, cobros, semana, almId) : financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almId)), [rutas, pagos, gastos, cobros, semana, desde, hasta, almId, esSemana, modo, fecha]) // eslint-disable-line
   const net30 = useMemo(() => receivableNet30(rutas, cobros, almId), [rutas, cobros, almId])
   const activos = personas.filter((p) => p.estadoOperativo === 'activo').length
   const standby = personas.filter((p) => p.estadoOperativo === 'standby').length
@@ -431,22 +444,24 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contr
 
       <Card className="mb-4 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango de fechas</option></Select></F>
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="dia">Día (hoy)</option><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'dia' && <F label="Día"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
           {modo === 'semana' && <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
           {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
           {modo === 'rango' && <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          {modo === 'dia' && fecha !== hoyISO() && <button className="pb-1.5 text-xs font-semibold text-brand-gold hover:underline" onClick={() => setFecha(hoyISO())}>↺ Hoy</button>}
           <span className="pb-1.5 text-xs font-semibold text-slate-400">{etiqueta}</span>
         </div>
       </Card>
 
       <div className="mb-4 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
         <KPI animado label="Drivers activos" value={String(activos)} icon={Users} accent="navy" sub={`${standby} en stand-by`} />
-        <KPI animado label="Rutas completadas" value={String(rC)} icon={RouteIcon} accent="green" sub={pend ? `${pend} pendientes` : 'semana'} />
-        <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" sub="de la semana" />
+        <KPI animado label="Rutas completadas" value={String(rC)} icon={RouteIcon} accent="green" sub={pend ? `${pend} pendientes` : subPer} />
+        <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" sub={subPer} />
         <KPI animado label="Ganancia drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />
         <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" sub="ingreso de la compañía" />
-        <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} sub="margen − gastos + comisiones" />
+        <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} sub={`margen − gastos + comisiones · ${subPer}`} />
         <KPI animado label="Por cobrar a Walmart" value={dinero(net30.totalPorCobrar)} icon={Clock} accent={net30.vencido > 0 ? 'red' : 'gold'} sub={net30.vencido > 0 ? `${dinero(net30.vencido)} vencido` : 'net 30'} />
         <KPI animado label="Por pagar a drivers" value={dinero(saldoDrivers)} icon={Wallet} accent={saldoDrivers > 0 ? 'gold' : 'green'} sub="saldo de la semana" />
       </div>
@@ -1692,22 +1707,20 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-5">
         {sec === 'resumen' && res && (
           <>
-            {/* HERO estilo "Tarjeta": gradiente con saludo + tarjeta blanca con el total */}
-            <div className="relative mb-3">
-              <div className="rounded-3xl px-5 pb-12 pt-5 text-white shadow-lg" style={{ background: 'linear-gradient(150deg,#0071dc,#004f9a)' }}>
-                <div className="flex items-center gap-3">
-                  <div className="grid h-11 w-11 place-items-center rounded-full bg-white/20 text-sm font-extrabold text-white">{(nombre || 'NE').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}</div>
-                  <div className="min-w-0">
-                    <div className="truncate text-lg font-extrabold leading-tight">Hola, {String(nombre).split(' ')[0]} 👋</div>
-                    <div className="text-[11px] text-white/80">Portal del chofer</div>
-                  </div>
+            {/* HERO "tarjeta de pago" (opción C): una sola tarjeta azul con el saludo
+                dentro y el pendiente grande. Sin números negativos. */}
+            <div className="relative mb-3 overflow-hidden rounded-3xl p-5 text-white shadow-lg" style={{ background: 'linear-gradient(135deg,#0b2a4a,#0071dc)' }}>
+              <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+              <div className="relative mb-4 flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-white/20 text-sm font-extrabold text-white">{(nombre || 'NE').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}</div>
+                <div className="min-w-0">
+                  <div className="truncate text-base font-extrabold leading-tight">Hola, {String(nombre).split(' ')[0]} 👋</div>
+                  <div className="text-[11px] text-white/75">Portal del chofer</div>
                 </div>
               </div>
-              <Card className="relative -mt-8 mx-2 p-5">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pendiente por cobrar</div>
-                <div className="font-mono text-[40px] font-extrabold leading-none" style={{ color: Math.max(0, hist.saldo) > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(Math.max(0, hist.saldo))}</div>
-                <div className="mt-1.5 text-[12px] text-slate-500">{Math.max(0, hist.saldo) > 0.005 ? 'Es lo que falta que te paguen.' : 'No tienes nada pendiente ✓'}</div>
-              </Card>
+              <div className="relative text-[10px] font-bold uppercase tracking-wide text-white/70">Pendiente por cobrar</div>
+              <div className="relative font-mono text-[42px] font-extrabold leading-none">{dinero(Math.max(0, hist.saldo))}</div>
+              <div className="relative mt-1.5 text-[12px] text-white/80">{Math.max(0, hist.saldo) > 0.005 ? 'Es lo que falta que te paguen.' : 'No tienes nada pendiente ✓'}</div>
             </div>
             {!pushOn && !pushCerrado && (
               <Card className="mb-3 flex flex-wrap items-center gap-2 p-3">
