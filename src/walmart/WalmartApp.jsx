@@ -1707,10 +1707,6 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pendiente por cobrar</div>
                 <div className="font-mono text-[40px] font-extrabold leading-none" style={{ color: Math.max(0, hist.saldo) > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(Math.max(0, hist.saldo))}</div>
                 <div className="mt-1.5 text-[12px] text-slate-500">{Math.max(0, hist.saldo) > 0.005 ? 'Es lo que falta que te paguen.' : 'No tienes nada pendiente ✓'}</div>
-                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 dark:border-slate-800">
-                  <span className="text-[11px] font-semibold text-slate-400">Ya liquidado (recibido)</span>
-                  <span className="font-mono text-sm font-bold text-emerald-600">{dinero(money2(hist.efectivoFP + hist.pagadoNormal))}</span>
-                </div>
               </Card>
             </div>
             {!pushOn && !pushCerrado && (
