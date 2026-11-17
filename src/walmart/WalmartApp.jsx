@@ -3612,7 +3612,7 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar =
         <F label="Estado del pago"><Select value={estadoIni} onChange={(e) => setEstadoIni(e.target.value)} disabled={!puedeEjecutar}>{puedeEjecutar && <option value="confirmado">Confirmado (pagado ahora)</option>}<option value="pendiente">Pendiente (en proceso)</option></Select></F>
         <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
         <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
-        <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
+        <F label="Responsable"><Select value={responsable} onChange={(e) => setResponsable(e.target.value)}><option value="">— elegir —</option><option value="Gabriele">Gabriele</option><option value="Carlos">Carlos</option></Select></F>
         <div className="sm:col-span-2"><F label="Comprobante (nota / # recibo)"><Input value={comprobante} onChange={(e) => setComprobante(e.target.value)} /></F></div>
       </div>
       <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
@@ -3656,7 +3656,7 @@ function PagoModal({ driver, semana, saldo, onCerrar }) {
         <F label="Monto (saldo pendiente)"><Input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} /></F>
         <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
         <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
-        <F label="Responsable"><Input value={responsable} onChange={(e) => setResponsable(e.target.value)} /></F>
+        <F label="Responsable"><Select value={responsable} onChange={(e) => setResponsable(e.target.value)}><option value="">— elegir —</option><option value="Gabriele">Gabriele</option><option value="Carlos">Carlos</option></Select></F>
       </Grid>
       <p className="mt-2 text-xs text-slate-400">Puedes pagar parcial. La fecha del pago no cambia la semana en que se ganó el dinero.</p>
       {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
