@@ -1705,7 +1705,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               </div>
               <Card className="relative -mt-8 mx-2 p-5">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pendiente por cobrar</div>
-                <div className="font-mono text-[40px] font-extrabold leading-none" style={{ color: hist.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(hist.saldo)}</div>
+                <div className="font-mono text-[40px] font-extrabold leading-none" style={{ color: hist.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(Math.max(0, hist.saldo))}</div>
                 <div className="mt-1.5 text-[12px] text-slate-500">{hist.saldo > 0.005 ? 'Es lo que falta que te paguen.' : 'Estás al día ✓'}</div>
               </Card>
             </div>
