@@ -1699,19 +1699,14 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                   <div className="grid h-11 w-11 place-items-center rounded-full bg-white/20 text-sm font-extrabold text-white">{(nombre || 'NE').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}</div>
                   <div className="min-w-0">
                     <div className="truncate text-lg font-extrabold leading-tight">Hola, {String(nombre).split(' ')[0]} 👋</div>
-                    <div className="text-[11px] text-white/80">{detDesde} → {detHasta}</div>
+                    <div className="text-[11px] text-white/80">Portal del chofer</div>
                   </div>
                 </div>
               </div>
-              <Card className="relative -mt-8 mx-2 p-4">
+              <Card className="relative -mt-8 mx-2 p-5">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pendiente por cobrar</div>
-                <div className="font-mono text-[34px] font-extrabold leading-none" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</div>
-                <div className="mt-1 text-[11px] text-slate-400">{res.saldo > 0.005 ? 'Es lo que falta que te paguen este período.' : 'Estás al día este período ✓'}</div>
-                <div className="mt-3 flex gap-5 border-t border-slate-100 pt-3 dark:border-slate-800">
-                  <div><div className="font-mono text-base font-bold text-brand-navy dark:text-slate-100">{dinero(res.totalGanado)}</div><div className="text-[10px] text-slate-400">Total ganado</div></div>
-                  <div><div className="font-mono text-base font-bold text-amber-600">{dinero(res.efectivoFP)}</div><div className="text-[10px] text-slate-400">Adelantado FP</div></div>
-                  <div><div className="font-mono text-base font-bold text-brand-navy dark:text-slate-100">{res.rutasSemana.length}</div><div className="text-[10px] text-slate-400">Rutas</div></div>
-                </div>
+                <div className="font-mono text-[40px] font-extrabold leading-none" style={{ color: hist.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(hist.saldo)}</div>
+                <div className="mt-1.5 text-[12px] text-slate-500">{hist.saldo > 0.005 ? 'Es lo que falta que te paguen.' : 'Estás al día ✓'}</div>
               </Card>
             </div>
             {!pushOn && !pushCerrado && (
@@ -1742,21 +1737,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <button onClick={pedirTodo} className="ml-auto rounded-xl bg-white px-4 py-2 text-sm font-extrabold" style={{ color: WALMART_AZUL }}>Pedir todo</button>
               </div>
             )}
-            {FiltroPeriodo}
-            {res.enProcesoFP > 0.005 && <Card className="mb-3 flex items-center gap-2 border-l-4 border-l-amber-400 p-3 text-xs text-slate-500"><Clock size={14} className="text-amber-500" /> Tienes <b className="text-brand-navy dark:text-slate-100">{dinero(res.enProcesoFP)}</b> en Fast Pay <b>pendiente</b> (aún sin confirmar).</Card>}
-
-            {/* ACUMULADO HASTA HOY (todo el historial del chofer) */}
-            <Card className="mb-3 p-4">
-              <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Acumulado hasta hoy <span className="font-normal normal-case">· todo tu historial</span></div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div><div className="font-mono text-lg font-extrabold text-brand-navy dark:text-slate-100">{dinero(hist.totalGanado)}</div><div className="text-[10px] text-slate-400">Total ganado</div></div>
-                <div><div className="font-mono text-lg font-extrabold text-amber-600">{dinero(hist.efectivoFP)}</div><div className="text-[10px] text-slate-400">Adelantado (Fast Pay)</div></div>
-                <div><div className="font-mono text-lg font-extrabold" style={{ color: hist.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(hist.saldo)}</div><div className="text-[10px] text-slate-400">Saldo por cobrar</div></div>
-                <div><div className="font-mono text-lg font-extrabold text-brand-navy dark:text-slate-100">{hist.nRutas}</div><div className="text-[10px] text-slate-400">Rutas totales</div></div>
-              </div>
-            </Card>
-
-            <p className="text-[11px] text-slate-400">El <b>adelantado por Fast Pay</b> ya se te entregó; el <b>por cobrar</b> es lo que falta en la liquidación. Arriba ves el período elegido; <b>“Acumulado hasta hoy”</b> es todo tu historial. Pide Fast Pay de una ruta en <b>Mis rutas</b>, o de todo con el botón azul.</p>
+            <p className="px-1 text-[11px] text-slate-400">Pide Fast Pay de una ruta en <b>Mis rutas</b>. En <b>Mis pagos</b> ves el detalle por semana.</p>
           </>
         )}
 
@@ -1805,7 +1786,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
             <Card className="p-0">
               <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Mis recibos y movimientos</div>
               {pagosPeriodo.length === 0 && <div className="px-4 py-3 text-sm text-slate-400">Sin movimientos en el período.</div>}
-              {pagosPeriodo.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
+              {pagosPeriodo.filter((p) => !(p.tipo === 'fastpay' && (estadoFP(p) === 'anulado' || estadoFP(p) === 'fallido'))).slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
                 const est = p.tipo === 'fastpay' ? estadoFP(p) : null
                 return (
                   <div key={p.id || i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
