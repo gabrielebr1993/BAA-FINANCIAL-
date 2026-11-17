@@ -1783,7 +1783,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <div className="flex justify-between"><span className="text-slate-500">Total ganado</span><b className="font-mono">{dinero(res.totalGanado)}</b></div>
                 <div className="flex justify-between"><span className="text-slate-500">Adelantado por Fast Pay (efectivo)</span><b className="font-mono">{dinero(res.efectivoFP)}</b></div>
                 <div className="flex justify-between"><span className="text-slate-500">Otros pagos recibidos</span><b className="font-mono">{dinero(res.pagadoNormal)}</b></div>
-                <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar</span><b className="font-mono" style={{ color: res.saldo > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(res.saldo)}</b></div>
+                <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 dark:border-slate-700"><span className="font-semibold">Por cobrar</span><b className="font-mono" style={{ color: Math.max(0, res.saldo) > 0.005 ? '#D9822B' : '#2E9E6B' }}>{dinero(Math.max(0, res.saldo))}</b></div>
                 {ficha && res.rutasSemana.length > 0 && <Boton variant="ghost" className="mt-3" onClick={() => pdfPayStub(ficha, detDesde, detHasta, res)}><Download size={14} /> Descargar comprobante (PDF)</Boton>}
               </Card>
             )}
