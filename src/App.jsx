@@ -48,7 +48,6 @@ const Configuracion = lazy(() => import('./pages/Configuracion'))
 const Financiero = lazy(() => import('./pages/Financiero'))
 const Cobros = lazy(() => import('./pages/Cobros'))
 const ReporteManual = lazy(() => import('./carriers/speedx/ReporteManual'))
-const AuditoriaCobros = lazy(() => import('./carriers/speedx/AuditoriaCobros'))
 const ReclamosGofo = lazy(() => import('./pages/ReclamosGofo'))
 const VerificacionPod = lazy(() => import('./pages/VerificacionPod'))
 const Agentes = lazy(() => import('./pages/Agentes'))
@@ -134,7 +133,6 @@ function PackageApp() {
               <Route path="/ganancia" element={<Page roles={['owner']}><GananciaSemanal /></Page>} />
               <Route path="/cobros" element={<Page filtro="verFinanzas"><Cobros /></Page>} />
               <Route path="/reporte-manual" element={<Page filtro="subirFacturas"><ReporteManual /></Page>} />
-              <Route path="/auditoria-cobros" element={<Page filtro="verFinanzas"><AuditoriaCobros /></Page>} />
               <Route path="/reclamos" element={<Page filtro="verFinanzas"><ReclamosGofo /></Page>} />
               <Route path="/verificacion" element={<Page filtro="verFinanzas"><VerificacionPod /></Page>} />
               <Route path="/agentes" element={<Page filtro="verFinanzas"><Agentes /></Page>} />

@@ -4,7 +4,7 @@
 // contra tus facturas (invoices): cuadran, diferencia, pago en bloque, sin
 // pagar y pago sin factura. NO escribe nada en la base de datos.
 // ============================================================================
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useData } from '../../DataContext'
 import { useLang } from '../../i18n'
 import { money, num } from '../../utils/format'
@@ -25,13 +25,14 @@ const fmtFecha = (iso) => {
 }
 const signo = (n) => (n > 0 ? `+${money(n)}` : money(n))
 
-export default function AuditoriaCobros() {
+export default function AuditoriaCobros({ embebido = false }) {
   const { t } = useLang()
   const { invoices } = useData()
   const inputRef = useRef(null)
 
   const [cargando, setCargando] = useState(false)
   const [analisis, setAnalisis] = useState(null)
+  const [archivos, setArchivos] = useState([])
   const [arrastrando, setArrastrando] = useState(false)
   const [tol, setTol] = useState(5)
   const [avanzado, setAvanzado] = useState(false)
@@ -57,12 +58,12 @@ export default function AuditoriaCobros() {
     }))
     .filter((f) => f.montoACobrar > 0), [invoices])
 
-  const procesar = useCallback(async (files) => {
-    const arr = Array.from(files || []).filter(Boolean)
-    if (!arr.length) return
+  // Analiza TODA la lista de archivos acumulados (varios estados de cuenta).
+  const analizar = useCallback(async (lista) => {
+    if (!lista.length) { setAnalisis(null); return }
     setCargando(true)
     try {
-      const res = await analizarArchivos(arr, { marcadores })
+      const res = await analizarArchivos(lista, { marcadores })
       setAnalisis(res)
     } catch (e) {
       setAnalisis({ error: e.message || String(e), depositos: [], avisos: [] })
@@ -70,6 +71,28 @@ export default function AuditoriaCobros() {
       setCargando(false)
     }
   }, [marcadores])
+
+  // Agrega archivos nuevos (sin duplicar) y vuelve a cruzar todo junto.
+  const procesar = useCallback((files) => {
+    const arr = Array.from(files || []).filter(Boolean)
+    if (!arr.length) return
+    const existentes = new Set(archivos.map((f) => f.name + '|' + f.size))
+    const nuevos = arr.filter((f) => !existentes.has(f.name + '|' + f.size))
+    if (!nuevos.length) return
+    const todos = [...archivos, ...nuevos]
+    setArchivos(todos)
+    analizar(todos)
+    if (inputRef.current) inputRef.current.value = ''
+  }, [archivos, analizar])
+
+  const quitarArchivo = (idx) => {
+    const todos = archivos.filter((_, i) => i !== idx)
+    setArchivos(todos)
+    analizar(todos)
+  }
+
+  // Si cambian los identificadores de SpeedX, re-cruza los archivos ya cargados.
+  useEffect(() => { if (archivos.length) analizar(archivos) }, [marcadores]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDrop = useCallback((e) => {
     e.preventDefault(); setArrastrando(false)
@@ -81,7 +104,7 @@ export default function AuditoriaCobros() {
     return conciliar(analisis.depositos, facturas, { tol: Number(tol) || 0 })
   }, [analisis, facturas, tol])
 
-  const limpiar = () => { setAnalisis(null); if (inputRef.current) inputRef.current.value = '' }
+  const limpiar = () => { setArchivos([]); setAnalisis(null); if (inputRef.current) inputRef.current.value = '' }
 
   // ---- Exportar --------------------------------------------------------------
   function filasExport() {
@@ -113,9 +136,13 @@ export default function AuditoriaCobros() {
 
   return (
     <div className="space-y-4">
-      <PageTitle right={analisis && <Boton variant="ghost" onClick={limpiar}><X size={16} /> {t('Limpiar')}</Boton>}>
-        <span className="inline-flex items-center gap-2"><ScanSearch size={22} /> {t('Auditoría de cobros')} <Badge color="navy">SpeedX</Badge></span>
-      </PageTitle>
+      {embebido ? (
+        analisis && <div className="flex justify-end"><Boton variant="ghost" onClick={limpiar}><X size={16} /> {t('Limpiar')}</Boton></div>
+      ) : (
+        <PageTitle right={analisis && <Boton variant="ghost" onClick={limpiar}><X size={16} /> {t('Limpiar')}</Boton>}>
+          <span className="inline-flex items-center gap-2"><ScanSearch size={22} /> {t('Auditoría de cobros')} <Badge color="navy">SpeedX</Badge></span>
+        </PageTitle>
+      )}
 
       <Aviso tipo="info">
         {t('Sube los estados de cuenta (PDF de Chase, Excel o CSV) y el sistema cruza lo que SpeedX te pagó contra tus facturas. Esta pantalla es solo de lectura: no modifica nada.')}
@@ -131,15 +158,33 @@ export default function AuditoriaCobros() {
         <div className="flex flex-col items-center gap-2 py-4">
           <UploadCloud size={30} className="text-brand-gold" />
           <div className="font-semibold text-brand-navy dark:text-slate-100">{t('Arrastra tus estados de cuenta aquí')}</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">{t('PDF de Chase, Excel o CSV · puedes subir varios a la vez')}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{t('PDF de Chase, Excel o CSV · puedes subir varios a la vez (y seguir agregando)')}</div>
           <input ref={inputRef} type="file" accept=".pdf,.xlsx,.xls,.csv" multiple className="hidden" onChange={(e) => procesar(e.target.files)} />
           <div className="mt-2 flex items-center gap-2">
             <Boton variant="gold" onClick={() => inputRef.current?.click()} disabled={cargando}>
-              {cargando ? <><Spinner /> {t('Leyendo…')}</> : <><FileText size={16} /> {t('Elegir archivos')}</>}
+              {cargando ? <><Spinner /> {t('Leyendo…')}</> : <><FileText size={16} /> {archivos.length ? t('Agregar más archivos') : t('Elegir archivos')}</>}
             </Boton>
           </div>
         </div>
       </Card>
+
+      {/* Lista de estados de cuenta cargados */}
+      {archivos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">{t('Cargados')} ({archivos.length}):</span>
+          {archivos.map((f, i) => {
+            const info = analisis?.fuentes?.find((x) => x.nombre === f.name)
+            return (
+              <span key={f.name + i} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs dark:border-slate-700/60 dark:bg-slate-800">
+                <FileText size={12} className="text-brand-steel" />
+                <span className="max-w-[180px] truncate" title={f.name}>{f.name}</span>
+                {info && <Badge color={info.nSpeedX ? 'green' : 'slate'}>{info.nSpeedX} {t('SpeedX')}</Badge>}
+                <button onClick={() => quitarArchivo(i)} title={t('Quitar')} className="text-slate-400 hover:text-rose-500"><X size={13} /></button>
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* Configuración (margen + identificadores) */}
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">

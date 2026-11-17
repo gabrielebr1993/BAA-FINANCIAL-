@@ -15,9 +15,11 @@ import { ACCIONES, limpiarAuditoria } from '../utils/auditoria'
 import { money } from '../utils/format'
 import { Card, KPI, PageTitle, Boton, Badge, Aviso, EstadoVacio, Spinner } from '../components/ui'
 import HistorialReconciliacion from '../components/HistorialReconciliacion'
-import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText, FileSpreadsheet } from 'lucide-react'
+import { ShieldCheck, Landmark, ScrollText, Activity, Upload, CheckCircle2, AlertTriangle, TrendingDown, FileText, FileSpreadsheet, ScanSearch } from 'lucide-react'
 import { useLang } from '../i18n'
 import { conCarrier } from '../utils/carrierTexto'
+import { useCarrier } from '../carriers/CarrierContext'
+import AuditoriaCobros from '../carriers/speedx/AuditoriaCobros'
 
 // Lee un extracto (Excel o CSV) a matriz de filas. Usa SheetJS y, si el CSV no se
 // interpreta, cae a un parseo de texto simple (comillas + comas).
@@ -55,12 +57,18 @@ const TABS = [
 
 export default function Auditorias() {
   const { t } = useLang()
-  const [tab, setTab] = useState('financiera')
+  const { carrier } = useCarrier()
+  const esSpeedx = carrier === 'speedx'
+  // Con SpeedX se antepone la pestaña de conciliación de cobros (estados de
+  // cuenta vs facturas) y queda como pestaña por defecto, que es lo que el
+  // usuario busca aquí.
+  const tabs = esSpeedx ? [{ key: 'cobros', label: 'Cobros SpeedX', icon: ScanSearch }, ...TABS] : TABS
+  const [tab, setTab] = useState(esSpeedx ? 'cobros' : 'financiera')
   return (
     <div>
       <PageTitle right={<span className="inline-flex items-center gap-1.5 text-sm text-slate-400"><ShieldCheck size={16} className="text-brand-gold" /> {t('Confianza de datos')}</span>}>{t('Auditorías')}</PageTitle>
       <div className="mb-5 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700/60">
-        {TABS.map((tabItem) => {
+        {tabs.map((tabItem) => {
           const Icon = tabItem.icon
           const on = tab === tabItem.key
           return (
@@ -74,6 +82,7 @@ export default function Auditorias() {
           )
         })}
       </div>
+      {tab === 'cobros' && <AuditoriaCobros embebido />}
       {tab === 'financiera' && <TabFinanciera />}
       {tab === 'registro' && <TabRegistro />}
       {tab === 'datos' && <TabDatos />}
