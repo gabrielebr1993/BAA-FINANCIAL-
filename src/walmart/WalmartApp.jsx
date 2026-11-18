@@ -181,6 +181,10 @@ export default function WalmartApp() {
     return 'dashboard'
   })
   const setTab = (t) => { setTabRaw(t); try { localStorage.setItem('wal_tab', t) } catch { /* sin storage */ } }
+  // Menú lateral en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
+  const grupoActivoWal = TABS.find((x) => x.id === tab)?.grupo
+  const [grpWal, setGrpWal] = useState(grupoActivoWal || 'Operación')
+  useEffect(() => { if (grupoActivoWal) setGrpWal(grupoActivoWal) }, [grupoActivoWal])
   // Si la pestaña activa no está permitida, cae a la primera visible.
   useEffect(() => {
     if (miWal === undefined && !esDueno) return
@@ -313,23 +317,32 @@ export default function WalmartApp() {
           {GRUPOS_ORDEN.map((g) => {
             const items = tabsVisibles.filter((t) => t.grupo === g)
             if (!items.length) return null
+            const Fila = (tdef) => {
+              const Icono = tdef.icono; const activo = tab === tdef.id
+              return (
+                <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                  style={activo ? { borderLeftColor: WALMART_AZUL, background: 'rgba(0,113,220,0.10)', color: WALMART_AZUL } : undefined}
+                  className={`group relative flex w-full items-center gap-3 rounded-xl border-l-2 py-2 pl-3 pr-3 text-left text-sm transition-all duration-150 ${activo
+                    ? 'font-semibold'
+                    : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
+                  <Icono size={18} strokeWidth={1.8} className="flex-shrink-0" />
+                  <span className="flex-1">{tdef.label}</span>
+                  {tdef.id === 'pagos' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
+                </button>
+              )
+            }
+            // "Inicio" siempre visible; los demás grupos, plegables (solo el activo abierto).
+            if (g === 'Inicio') return <div key={g} className="mb-0.5">{items.map(Fila)}</div>
+            const abierto = grpWal === g
+            const badgeG = !abierto && items.some((t) => t.id === 'pagos') && solPendientes.length > 0
             return (
               <div key={g} className="mb-0.5">
-                <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{g}</div>
-                {items.map((tdef) => {
-                  const Icono = tdef.icono; const activo = tab === tdef.id
-                  return (
-                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                      style={activo ? { borderLeftColor: WALMART_AZUL, background: 'rgba(0,113,220,0.10)', color: WALMART_AZUL } : undefined}
-                      className={`group relative flex w-full items-center gap-3 rounded-xl border-l-2 py-2 pl-3 pr-3 text-left text-sm transition-all duration-150 ${activo
-                        ? 'font-semibold'
-                        : 'border-transparent font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'}`}>
-                      <Icono size={18} strokeWidth={1.8} className="flex-shrink-0" />
-                      <span className="flex-1">{tdef.label}</span>
-                      {tdef.id === 'pagos' && solPendientes.length > 0 && <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{solPendientes.length}</span>}
-                    </button>
-                  )
-                })}
+                <button onClick={() => setGrpWal(abierto ? '' : g)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                  <span className="flex-1 text-left">{g}</span>
+                  {badgeG && <span className="h-2 w-2 rounded-full bg-rose-500" />}
+                  <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+                </button>
+                {abierto && <div className="flex flex-col gap-0.5">{items.map(Fila)}</div>}
               </div>
             )
           })}

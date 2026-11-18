@@ -14,7 +14,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
 import { Card, KPI, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
-import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer, Clock } from 'lucide-react'
+import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer, Clock, ChevronDown } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
 import WhHomebase from './staffing/WhHomebase'
@@ -127,6 +127,10 @@ function WhShell({ user }) {
     setTabEstado(id)
     try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
   }
+  // Menú en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
+  const grupoActivoWh = TABS.find((x) => x.id === tab)?.grupo
+  const [grpWh, setGrpWh] = useState(grupoActivoWh || 'Operación')
+  useEffect(() => { if (grupoActivoWh) setGrpWh(grupoActivoWh) }, [grupoActivoWh])
   // "abrir el perfil de este trabajador" desde cualquier pestaña (p. ej. al
   // tocar un nombre en Print Check): evento global → pestaña Trabajadores.
   const [perfilPedido, setPerfilPedido] = useState(null)
@@ -151,25 +155,31 @@ function WhShell({ user }) {
           {GRUPOS_ORDEN.map((grupo) => {
             const items = TABS.filter((t) => t.grupo === grupo)
             if (!items.length) return null
+            const Fila = (tdef) => {
+              const Icono = tdef.icono
+              const activo = tab === tdef.id
+              return (
+                <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                  className={`group relative flex w-full items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
+                    activo
+                      ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
+                      : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
+                  }`}>
+                  {activo && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-gold" />}
+                  <Icono size={19} strokeWidth={1.8} className={`flex-shrink-0 ${activo ? 'text-brand-gold' : ''}`} />
+                  <span className="flex-1">{tdef.label}</span>
+                </button>
+              )
+            }
+            if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{items.map(Fila)}</div>
+            const abierto = grpWh === grupo
             return (
               <div key={grupo} className="mb-1">
-                <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{grupo}</div>
-                {items.map((tdef) => {
-                  const Icono = tdef.icono
-                  const activo = tab === tdef.id
-                  return (
-                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                      className={`group relative flex w-full items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
-                        activo
-                          ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
-                          : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
-                      }`}>
-                      {activo && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-gold" />}
-                      <Icono size={19} strokeWidth={1.8} className={`flex-shrink-0 ${activo ? 'text-brand-gold' : ''}`} />
-                      <span className="flex-1">{tdef.label}</span>
-                    </button>
-                  )
-                })}
+                <button onClick={() => setGrpWh(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                  <span className="flex-1 text-left">{grupo}</span>
+                  <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+                </button>
+                {abierto && <div className="flex flex-col gap-0.5">{items.map(Fila)}</div>}
               </div>
             )
           })}

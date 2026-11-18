@@ -1,6 +1,6 @@
 // Layout principal: sidebar claro minimalista (estilo Mercury) con iconos Lucide,
 // buscador global, badge de alertas, selector de empresa y toggle de tema.
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal, LayoutGrid, ArrowLeftRight } from 'lucide-react'
 import { useCarrier, useCarriersPermitidos } from '../carriers/CarrierContext'
@@ -9,7 +9,7 @@ import { useAuth } from '../AuthContext'
 import { useTheme } from '../ThemeContext'
 import { useData } from '../DataContext'
 import { useLang, LangToggle } from '../i18n'
-import { SECCIONES } from '../constants'
+import { SECCIONES, GRUPOS_SECCIONES } from '../constants'
 import CampanaAlertas from './CampanaAlertas'
 import GlobalFilterBar from './GlobalFilterBar'
 
@@ -173,6 +173,11 @@ function SidebarContent({ onNavigate }) {
   const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner'))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
   const esDueno = esSuperAdmin || perfil?.role === 'owner'
+  // Menú en ACORDEÓN: agrupa por `grupo` y abre solo el grupo activo.
+  const porGrupo = useMemo(() => { const m = {}; for (const s of secciones) (m[s.grupo || 'Operación'] ||= []).push(s); return m }, [secciones])
+  const grupoActivo = secciones.find((s) => s.path === location.pathname)?.grupo
+  const [grpAbierto, setGrpAbierto] = useState(grupoActivo || 'Operación')
+  useEffect(() => { if (grupoActivo) setGrpAbierto(grupoActivo) }, [grupoActivo])
 
   return (
     <aside className="pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
@@ -188,9 +193,36 @@ function SidebarContent({ onNavigate }) {
       <CompanySwitcher />
 
       <nav className="scroll-thin -mr-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-2">
-        {secciones.map((s) => (
-          <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={s.path === '/alertas' ? numAlertas : 0} />
+        {/* Inicio: siempre visible */}
+        {(porGrupo['Inicio'] || []).map((s) => (
+          <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={0} />
         ))}
+        {/* Grupos plegables: solo el activo abierto */}
+        {GRUPOS_SECCIONES.filter((g) => g !== 'Inicio' && (porGrupo[g] || []).length).map((g) => {
+          const items = porGrupo[g]
+          const abierto = grpAbierto === g
+          const badgeGrupo = !abierto && items.some((s) => s.path === '/alertas' && numAlertas > 0)
+          return (
+            <div key={g}>
+              <button
+                onClick={() => setGrpAbierto(abierto ? '' : g)}
+                className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white"
+              >
+                <span className="flex-1 text-left">{t(g)}</span>
+                {badgeGrupo && <span className="h-2 w-2 rounded-full bg-rose-500" />}
+                <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+              </button>
+              {abierto && (
+                <div className="flex flex-col gap-0.5">
+                  {items.map((s) => (
+                    <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={s.path === '/alertas' ? numAlertas : 0} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {/* Avanzado (dueño/súper-admin) */}
         {esDueno && (
           <ItemMenu s={{ path: '/proyeccion', label: 'Proyección', icon: SlidersHorizontal }} activo={location.pathname === '/proyeccion'} onNavigate={onNavigate} badge={0} />
         )}

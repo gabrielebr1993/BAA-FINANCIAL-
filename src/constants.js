@@ -119,32 +119,40 @@ export const PERMISOS = [
 // portal y ProtectedRoute). Nunca ve finanzas, otros choferes ni gestión.
 export const ROLES = ['owner', 'admin', 'manager', 'driver']
 
+// Orden de los grupos del menú lateral (acordeón: solo el grupo activo abierto).
+export const GRUPOS_SECCIONES = ['Inicio', 'Operación', 'Equipo', 'Facturación', 'Finanzas', 'Ajustes']
+
 // Secciones del menú lateral. Cada una gated por su permiso. Iconos = Lucide.
+// `grupo` = acordeón del menú. `soloCarrier` = solo con esa compañía activa.
 export const SECCIONES = [
-  { path: '/dashboard', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard },
-  { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: Upload },
-  { path: '/historial', label: 'Facturas', permiso: 'subirFacturas', icon: FileText },
-  { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign },
-  { path: '/ganancia', label: 'Ganancia semanal', permiso: 'verFinanzas', icon: Gauge, soloCarrier: 'gofo', soloDueno: true },
-  // `soloCarrier`: la sección solo aparece con esa compañía activa (Multi-Company).
-  { path: '/cobros', label: 'Cobros y fondo', permiso: 'verFinanzas', icon: PiggyBank, soloCarrier: 'speedx' },
-  { path: '/reporte-manual', label: 'Reporte manual', permiso: 'subirFacturas', icon: FileClock, soloCarrier: 'speedx' },
-  { path: '/reclamos', label: 'Reclamos a Gofo', permiso: 'verFinanzas', icon: Scale, soloCarrier: 'gofo' },
-  { path: '/verificacion', label: 'Verificación', permiso: 'verFinanzas', icon: Camera, soloCarrier: 'gofo' },
-  { path: '/agentes', label: 'Agentes', permiso: 'verFinanzas', icon: Bot, soloCarrier: 'gofo'},
-  { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: AlertTriangle },
-  { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: Truck },
-  { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: Wallet },
-  { path: '/stripe', label: 'Stripe', permiso: 'gestionarConfiguracion', icon: CreditCard },
-  { path: '/rutas', label: 'Rutas', permiso: 'verDashboard', icon: Route },
-  { path: '/flota', label: 'Flota (GPS)', permiso: 'verDashboard', icon: MapPin },
-  { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: TrendingUp },
-  { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: BarChart3 },
-  { path: '/auditorias', label: 'Auditorías', permiso: 'verFinanzas', icon: ShieldCheck },
-  { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell },
-  { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users },
-  { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings },
-  { path: '/backups', label: 'Backups', permiso: 'gestionarConfiguracion', icon: DatabaseBackup },
+  { path: '/dashboard', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard, grupo: 'Inicio' },
+
+  { path: '/rutas', label: 'Rutas', permiso: 'verDashboard', icon: Route, grupo: 'Operación' },
+  { path: '/flota', label: 'Flota (GPS)', permiso: 'verDashboard', icon: MapPin, grupo: 'Operación' },
+  { path: '/verificacion', label: 'Verificación', permiso: 'verFinanzas', icon: Camera, soloCarrier: 'gofo', grupo: 'Operación' },
+  { path: '/claims', label: 'Claims', permiso: 'verClaims', icon: AlertTriangle, grupo: 'Operación' },
+  { path: '/performance', label: 'Performance', permiso: 'verDashboard', icon: TrendingUp, grupo: 'Operación' },
+  { path: '/comparar', label: 'Comparar semanas', permiso: 'verDashboard', icon: BarChart3, grupo: 'Operación' },
+  { path: '/alertas', label: 'Alertas', permiso: 'verDashboard', icon: Bell, grupo: 'Operación' },
+
+  { path: '/choferes', label: 'Choferes y Tarifas', permiso: 'gestionarChoferes', icon: Truck, grupo: 'Equipo' },
+
+  { path: '/facturas', label: 'Cargar Factura', permiso: 'subirFacturas', icon: Upload, grupo: 'Facturación' },
+  { path: '/historial', label: 'Facturas', permiso: 'subirFacturas', icon: FileText, grupo: 'Facturación' },
+  { path: '/reporte-manual', label: 'Reporte manual', permiso: 'subirFacturas', icon: FileClock, soloCarrier: 'speedx', grupo: 'Facturación' },
+
+  { path: '/financiero', label: 'Financiero', permiso: 'verFinanzas', icon: DollarSign, grupo: 'Finanzas' },
+  { path: '/pagos', label: 'Pagos', permiso: 'verPagos', icon: Wallet, grupo: 'Finanzas' },
+  { path: '/cobros', label: 'Cobros y fondo', permiso: 'verFinanzas', icon: PiggyBank, soloCarrier: 'speedx', grupo: 'Finanzas' },
+  { path: '/ganancia', label: 'Ganancia semanal', permiso: 'verFinanzas', icon: Gauge, soloCarrier: 'gofo', soloDueno: true, grupo: 'Finanzas' },
+  { path: '/reclamos', label: 'Reclamos a Gofo', permiso: 'verFinanzas', icon: Scale, soloCarrier: 'gofo', grupo: 'Finanzas' },
+  { path: '/agentes', label: 'Agentes', permiso: 'verFinanzas', icon: Bot, soloCarrier: 'gofo', grupo: 'Finanzas' },
+  { path: '/auditorias', label: 'Auditorías', permiso: 'verFinanzas', icon: ShieldCheck, grupo: 'Finanzas' },
+
+  { path: '/stripe', label: 'Stripe', permiso: 'gestionarConfiguracion', icon: CreditCard, grupo: 'Ajustes' },
+  { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users, grupo: 'Ajustes' },
+  { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings, grupo: 'Ajustes' },
+  { path: '/backups', label: 'Backups', permiso: 'gestionarConfiguracion', icon: DatabaseBackup, grupo: 'Ajustes' },
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.

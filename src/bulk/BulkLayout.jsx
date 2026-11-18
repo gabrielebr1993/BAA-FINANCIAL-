@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Truck, LogOut, Grid2x2, PanelLeftClose, PanelLeft, ChevronDown } from 'lucide-react'
 import { useBulkAuth } from './BulkAuthContext'
 import { navVisible, GRUPOS_ORDEN } from './nav'
 import { BULK_ROLES_LABEL } from './domain/constants'
@@ -27,6 +27,12 @@ export default function BulkLayout({ children }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const items = useMemo(() => navVisible(puede), [puede])
+  // Menú en ACORDEÓN: solo el grupo de la ruta activa queda abierto.
+  const ubic = useLocation()
+  const subRuta = ubic.pathname.replace(/^\/bulk\/?/, '')
+  const grupoActivoBulk = (items.find((i) => i.path === subRuta) || items.find((i) => i.path === ''))?.grupo
+  const [grpBulk, setGrpBulk] = useState(grupoActivoBulk || GRUPOS_ORDEN[1])
+  useEffect(() => { if (grupoActivoBulk) setGrpBulk(grupoActivoBulk) }, [grupoActivoBulk])
   const [verClave, setVerClave] = useState(false)
   // Foto de perfil propia (cada usuario puede ponerla/cambiarla/quitarla). Preview local
   // instantáneo (undefined = usar la guardada; null = quitada; dataUrl = nueva).
@@ -101,19 +107,27 @@ export default function BulkLayout({ children }) {
           {GRUPOS_ORDEN.map((grupo) => {
             const g = items.filter((i) => i.grupo === grupo)
             if (!g.length) return null
+            const Fila = (i) => (
+              <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
+                className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                {({ isActive }) => (<>
+                  {isActive && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-amber-400" />}
+                  <i.icon size={17} strokeWidth={1.9} className={isActive ? 'text-amber-500' : ''} /> {t(i.label)}
+                  {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
+                </>)}
+              </NavLink>
+            )
+            if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{g.map(Fila)}</div>
+            const abierto = grpBulk === grupo
+            const badgeG = !abierto && g.some((i) => i.path === 'mensajes') && noLeidos > 0
             return (
               <div key={grupo} className="mb-1">
-                <div className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{t(grupo)}</div>
-                {g.map((i) => (
-                  <NavLink key={i.path} to={`/bulk/${i.path}`} end={i.path === ''}
-                    className={({ isActive }) => `relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white' : 'font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
-                    {({ isActive }) => (<>
-                      {isActive && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-amber-400" />}
-                      <i.icon size={17} strokeWidth={1.9} className={isActive ? 'text-amber-500' : ''} /> {t(i.label)}
-                      {i.path === 'mensajes' && noLeidos > 0 && <span className="ml-auto grid h-5 min-w-[20px] place-items-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{noLeidos}</span>}
-                    </>)}
-                  </NavLink>
-                ))}
+                <button onClick={() => setGrpBulk(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800">
+                  <span className="flex-1 text-left">{t(grupo)}</span>
+                  {badgeG && <span className="h-2 w-2 rounded-full bg-rose-500" />}
+                  <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+                </button>
+                {abierto && <div className="space-y-0.5">{g.map(Fila)}</div>}
               </div>
             )
           })}

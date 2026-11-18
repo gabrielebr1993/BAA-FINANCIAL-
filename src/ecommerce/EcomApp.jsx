@@ -21,7 +21,7 @@ import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'fireba
 import { auth, db } from '../firebase'
 import { esDuenoEcom, CONFIG_DEFAULT } from './datos'
 import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando } from '../components/ui'
-import { ShoppingCart, Store, Tags, PackageSearch, Wallet, LifeBuoy, Users, Plug, Settings, LayoutDashboard, LogOut, ArrowLeft, Lock } from 'lucide-react'
+import { ShoppingCart, Store, Tags, PackageSearch, Wallet, LifeBuoy, Users, Plug, Settings, LayoutDashboard, LogOut, ArrowLeft, Lock, ChevronDown } from 'lucide-react'
 import EcomCatalogo, { EcomPrecios } from './EcomCatalogo'
 import EcomTienda from './EcomTienda'
 import { EcomPedidos, EcomCompras, EcomFinanzas, EcomTickets } from './EcomOperacion'
@@ -120,6 +120,10 @@ function EcomShell({ user }) {
     setTabEstado(id)
     try { window.history.replaceState(null, '', '#' + id) } catch { /* sin historial */ }
   }
+  // Menú en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
+  const grupoActivoEc = TABS.find((x) => x.id === tab)?.grupo
+  const [grpEc, setGrpEc] = useState(grupoActivoEc || 'Ventas')
+  useEffect(() => { if (grupoActivoEc) setGrpEc(grupoActivoEc) }, [grupoActivoEc])
   const [config, setConfig] = useState(null)
   const [guardandoCfg, setGuardandoCfg] = useState(false)
   const recargarConfig = async () => {
@@ -156,25 +160,31 @@ function EcomShell({ user }) {
           {GRUPOS_ORDEN.map((grupo) => {
             const items = TABS.filter((t) => t.grupo === grupo)
             if (!items.length) return null
+            const Fila = (tdef) => {
+              const Icono = tdef.icono
+              const activo = tab === tdef.id
+              return (
+                <button key={tdef.id} onClick={() => setTab(tdef.id)}
+                  className={`group relative flex w-full items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
+                    activo
+                      ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
+                      : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
+                  }`}>
+                  {activo && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-gold" />}
+                  <Icono size={19} strokeWidth={1.8} className={`flex-shrink-0 ${activo ? 'text-brand-gold' : ''}`} />
+                  <span className="flex-1">{tdef.label}</span>
+                </button>
+              )
+            }
+            if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{items.map(Fila)}</div>
+            const abierto = grpEc === grupo
             return (
               <div key={grupo} className="mb-1">
-                <div className="px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">{grupo}</div>
-                {items.map((tdef) => {
-                  const Icono = tdef.icono
-                  const activo = tab === tdef.id
-                  return (
-                    <button key={tdef.id} onClick={() => setTab(tdef.id)}
-                      className={`group relative flex w-full items-center gap-3 rounded-xl py-2.5 pl-3 pr-3 text-left text-sm transition-all duration-150 ${
-                        activo
-                          ? 'bg-slate-100 font-semibold text-brand-navy dark:bg-slate-700/50 dark:text-white'
-                          : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-brand-navy dark:text-slate-300 dark:hover:bg-slate-700/40 dark:hover:text-white'
-                      }`}>
-                      {activo && <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-brand-gold" />}
-                      <Icono size={19} strokeWidth={1.8} className={`flex-shrink-0 ${activo ? 'text-brand-gold' : ''}`} />
-                      <span className="flex-1">{tdef.label}</span>
-                    </button>
-                  )
-                })}
+                <button onClick={() => setGrpEc(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                  <span className="flex-1 text-left">{grupo}</span>
+                  <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+                </button>
+                {abierto && <div className="flex flex-col gap-0.5">{items.map(Fila)}</div>}
               </div>
             )
           })}
