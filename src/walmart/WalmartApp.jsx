@@ -3146,19 +3146,112 @@ function Tile({ n, txt, l, verde, ambar }) {
 }
 
 // ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
-// Hub de Pagos: una sola pantalla con sub-pestañas "Liquidaciones" y "Fast Pay".
+// Hub de Pagos: UN filtro de fecha (sáb→vie), dos números grandes (Por pagar /
+// Ya pagado) y 2 pestañas claras. El Fast Pay (consola de adelantos) queda como
+// pestaña aparte para no perder suspensión/huérfanos/confirmaciones.
 function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicitudes }) {
   const verLiq = !perm || perm.owner || perm.permisos?.pagos_ver
   const verFP = !perm || perm.owner || perm.permisos?.fp_ver
   const subs = []
-  if (verLiq) subs.push({ id: 'liq', l: 'Liquidaciones' })
+  if (verLiq) subs.push({ id: 'porpagar', l: 'Por pagar' })
+  if (verLiq || verFP) subs.push({ id: 'yapagado', l: 'Ya pagado' })
   if (verFP) subs.push({ id: 'fp', l: 'Fast Pay' })
-  if (verLiq || verFP) subs.push({ id: 'pagado', l: 'Todo lo pagado' })
-  const [sub, setSub] = useState(() => { try { const s = localStorage.getItem('wal_pagos_sub'); if (subs.some((x) => x.id === s)) return s } catch { /* noop */ } return subs[0]?.id || 'liq' })
-  const cambiar = (id) => { setSub(id); try { localStorage.setItem('wal_pagos_sub', id) } catch { /* noop */ } }
+  const [sub, setSub] = useState(() => { try { const s = localStorage.getItem('wal_pagos_sub2'); if (subs.some((x) => x.id === s)) return s } catch { /* noop */ } return subs[0]?.id })
+  const cambiar = (id) => { setSub(id); try { localStorage.setItem('wal_pagos_sub2', id) } catch { /* noop */ } }
   const solPend = (solicitudes || []).filter((s) => s.estado === 'solicitada' && !rutaBloqueadaFP(pagos, s.rutaId))
+
+  // ── Período COMPARTIDO (sábado→viernes) ──────────────────────────────────
+  const [modo, setModo] = useState('semana')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const desde = modo === 'semana' ? lunesDe(fecha) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  const weeks = useMemo(() => {
+    const out = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let g = 0
+    while (w <= fin && g < 200) { out.push(w); const dd = new Date(w + 'T00:00:00'); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ }
+    return out
+  }, [desde, hasta])
+  const periodo = { modo, setModo, fecha, setFecha, d1, setD1, d2, setD2, desde, hasta, weeks }
+
+  // Dos números grandes.
+  const porPagar = useMemo(() => {
+    let tot = 0, n = 0
+    for (const p of (personas || [])) {
+      let s = 0; for (const w of weeks) s = money2(s + resumenSemana(rutas, pagos, p.id, w).saldo)
+      if (s > 0.005) { tot = money2(tot + s); n++ }
+    }
+    return { tot, n }
+  }, [personas, rutas, pagos, weeks])
+  const yaPagado = useMemo(() => {
+    const ps = (pagos || []).filter((p) => weeks.includes(p.semana))
+    const fp = money2(ps.filter((p) => p.tipo === 'fastpay' && estadoFP(p) === 'confirmado').reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+    const liq = money2(ps.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+    return { fp, liq, tot: money2(fp + liq) }
+  }, [pagos, weeks])
+
+  // Chips de período (sáb→vie).
+  const semActual = lunesDe(fecha)
+  const esEstaSem = modo === 'semana' && semActual === lunesDe(hoyISO())
+  const esSemPasada = modo === 'semana' && semActual === lunesDe(sumarDias(hoyISO(), -7))
+  const esEsteMes = modo === 'rango' && d1 === primerDiaMes(mesDe(hoyISO())) && d2 === hoyISO()
+  const esPerson = modo === 'rango' && !esEsteMes
+  const fmtCorto = (iso) => { try { return new Date(iso + 'T12:00').toLocaleDateString('es-US', { day: 'numeric', month: 'short' }) } catch { return iso } }
+  const chip = (label, on, onClick) => (
+    <button type="button" onClick={onClick} style={on ? { background: WALMART_AZUL, color: '#fff' } : undefined} className={`rounded-full px-3.5 py-1.5 text-[13px] font-bold transition ${on ? 'shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}>{label}</button>
+  )
+
   return (
     <div>
+      <PageTitle>Pagos a choferes</PageTitle>
+
+      {/* UN solo filtro de fecha (sáb→vie) */}
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Período:</span>
+          {chip('Esta semana', esEstaSem, () => { setModo('semana'); setFecha(hoyISO()) })}
+          {chip('Semana pasada', esSemPasada, () => { setModo('semana'); setFecha(sumarDias(hoyISO(), -7)) })}
+          {chip('Este mes', esEsteMes, () => { setModo('rango'); setD1(primerDiaMes(mesDe(hoyISO()))); setD2(hoyISO()) })}
+          {chip('Personalizado', esPerson, () => setModo('rango'))}
+          {modo === 'semana' ? (
+            <div className="ml-auto flex items-center gap-1 rounded-xl bg-slate-50 px-2 py-1 dark:bg-slate-800/60">
+              <button type="button" onClick={() => setFecha(sumarDias(fecha, -7))} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-white hover:text-brand-navy dark:hover:bg-slate-700"><ChevronLeft size={18} /></button>
+              <b className="px-1 text-[13px] text-brand-navy dark:text-slate-100">{fmtCorto(desde)} – {fmtCorto(hasta)}</b>
+              <button type="button" onClick={() => setFecha(sumarDias(fecha, 7))} disabled={semActual >= lunesDe(hoyISO())} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-white hover:text-brand-navy disabled:opacity-30 dark:hover:bg-slate-700"><ChevronRight size={18} /></button>
+            </div>
+          ) : (
+            <div className="ml-auto flex items-end gap-2">
+              <F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F>
+              <F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Dos números grandes */}
+      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <button type="button" onClick={() => cambiar('porpagar')} className="rounded-2xl p-4 text-left text-white shadow-md transition active:scale-[0.99]" style={{ background: 'linear-gradient(135deg,#b23b3b,#d64545)' }}>
+          <div className="text-[12px] font-bold uppercase tracking-wide opacity-85">🔴 Por pagar</div>
+          <div className="font-mono text-[32px] font-extrabold leading-tight">{dinero(porPagar.tot)}</div>
+          <div className="text-[12px] opacity-90">{porPagar.n} chofer(es) esperan su pago</div>
+        </button>
+        <button type="button" onClick={() => cambiar('yapagado')} className="rounded-2xl p-4 text-left text-white shadow-md transition active:scale-[0.99]" style={{ background: 'linear-gradient(135deg,#12663c,#1a7f4b)' }}>
+          <div className="text-[12px] font-bold uppercase tracking-wide opacity-85">🟢 Ya pagado</div>
+          <div className="font-mono text-[32px] font-extrabold leading-tight">{dinero(yaPagado.tot)}</div>
+          <div className="text-[12px] opacity-90">⚡ Fast Pay {dinero(yaPagado.fp)} · 💵 Liquidación {dinero(yaPagado.liq)}</div>
+        </button>
+      </div>
+
+      {/* Aviso de solicitudes de Fast Pay */}
+      {verFP && solPend.length > 0 && (
+        <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-rose-400 bg-rose-50 p-3 dark:bg-rose-500/10">
+          <Zap size={15} className="text-rose-500" />
+          <span className="text-sm font-semibold text-brand-navy dark:text-slate-100"><b>{solPend.length}</b> chofer(es) pidieron Fast Pay (adelanto).</span>
+          <button onClick={() => cambiar('fp')} className="ml-auto text-sm font-bold text-rose-600 hover:underline">Revisar →</button>
+        </Card>
+      )}
+
+      {/* Pestañas */}
       {subs.length > 1 && (
         <div className="mb-3 inline-flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
           {subs.map((s) => (
@@ -3168,28 +3261,34 @@ function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicit
           ))}
         </div>
       )}
-      {sub === 'liq' && verLiq && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} perm={perm} />}
+      {sub === 'porpagar' && verLiq && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} perm={perm} periodo={periodo} />}
+      {sub === 'yapagado' && <TabTodoPagado rutas={rutas} pagos={pagos} personas={personas} periodo={periodo} />}
       {sub === 'fp' && verFP && <TabFastPay rutas={rutas} pagos={pagos} personas={personas} almacenes={almacenes} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
-      {sub === 'pagado' && <TabTodoPagado rutas={rutas} pagos={pagos} personas={personas} />}
     </div>
   )
 }
 
 // ── TODO LO PAGADO: Fast Pay (efectivo) + liquidaciones (pagos) en una lista ──
-function TabTodoPagado({ rutas, pagos, personas }) {
-  const [modo, setModo] = useState('semana')
-  const [fecha, setFecha] = useState(hoyISO())
-  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
-  const [d2, setD2] = useState(hoyISO())
+function TabTodoPagado({ rutas, pagos, personas, periodo }) {
+  const [modoL, setModoL] = useState('semana')
+  const [fechaL, setFechaL] = useState(hoyISO())
+  const [d1L, setD1L] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2L, setD2L] = useState(hoyISO())
   const [q, setQ] = useState('')
   const [tipo, setTipo] = useState('todos') // todos | fastpay | pago
-  const desde = modo === 'semana' ? lunesDe(fecha) : (d1 <= d2 ? d1 : d2)
-  const hasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  // Período: controlado por el hub si viene `periodo`, si no, local.
+  const modo = periodo ? periodo.modo : modoL, setModo = periodo ? periodo.setModo : setModoL
+  const fecha = periodo ? periodo.fecha : fechaL, setFecha = periodo ? periodo.setFecha : setFechaL
+  const d1 = periodo ? periodo.d1 : d1L, setD1 = periodo ? periodo.setD1 : setD1L
+  const d2 = periodo ? periodo.d2 : d2L, setD2 = periodo ? periodo.setD2 : setD2L
+  const desde = periodo ? periodo.desde : (modo === 'semana' ? lunesDe(fecha) : (d1 <= d2 ? d1 : d2))
+  const hasta = periodo ? periodo.hasta : (modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1))
   const weeks = useMemo(() => {
+    if (periodo) return periodo.weeks
     const out = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let g = 0
     while (w <= fin && g < 200) { out.push(w); const dd = new Date(w + 'T00:00:00'); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ }
     return out
-  }, [desde, hasta])
+  }, [desde, hasta, periodo])
   const nombreDe = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
   const movs = useMemo(() => (pagos || [])
     .filter((p) => p.tipo === 'pago' || (p.tipo === 'fastpay' && estadoFP(p) === 'confirmado'))
@@ -3216,22 +3315,26 @@ function TabTodoPagado({ rutas, pagos, personas }) {
     <div>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
-          {modo === 'semana'
-            ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          {!periodo && <>
+            <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
+            {modo === 'semana'
+              ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+              : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          </>}
           <F label="Tipo"><Select value={tipo} onChange={(e) => setTipo(e.target.value)}><option value="todos">Todos</option><option value="fastpay">Solo Fast Pay</option><option value="pago">Solo liquidaciones</option></Select></F>
           <div className="relative min-w-[160px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <span className="pb-1.5 text-xs font-semibold text-slate-400">{desde} → {hasta}</span>
+          {!periodo && <span className="pb-1.5 text-xs font-semibold text-slate-400">{desde} → {hasta}</span>}
         </div>
       </Card>
 
-      <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <KPI animado label="Total pagado" value={dinero(totPagado)} icon={Wallet} accent="navy" sub={`${nFP + nPago} movimientos`} />
-        <KPI animado label="Por Fast Pay" value={dinero(totFP)} icon={Zap} accent="gold" sub={`${nFP} adelantos (efectivo)`} />
-        <KPI animado label="Por liquidación" value={dinero(totPago)} icon={DollarSign} accent="green" sub={`${nPago} pagos`} />
-        <KPI animado label="Comisiones (utilidad)" value={dinero(totComis)} icon={TrendingUp} accent="green" sub="ingreso por Fast Pay" />
-      </div>
+      {!periodo && (
+        <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <KPI animado label="Total pagado" value={dinero(totPagado)} icon={Wallet} accent="navy" sub={`${nFP + nPago} movimientos`} />
+          <KPI animado label="Por Fast Pay" value={dinero(totFP)} icon={Zap} accent="gold" sub={`${nFP} adelantos (efectivo)`} />
+          <KPI animado label="Por liquidación" value={dinero(totPago)} icon={DollarSign} accent="green" sub={`${nPago} pagos`} />
+          <KPI animado label="Comisiones (utilidad)" value={dinero(totComis)} icon={TrendingUp} accent="green" sub="ingreso por Fast Pay" />
+        </div>
+      )}
 
       <Card className="p-0">
         <div className="scroll-thin overflow-x-auto">
@@ -3273,17 +3376,22 @@ function TabTodoPagado({ rutas, pagos, personas }) {
   )
 }
 
-function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
+function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
   // Permisos de acción (separar ver de ejecutar/confirmar/anular). Dueño = todo.
   const pPreparaFP = !perm || perm.owner || perm.permisos?.fp_preparar
   const pEjecutaFP = !perm || perm.owner || perm.permisos?.fp_ejecutar
   const pPagaSemanal = !perm || perm.owner || perm.permisos?.pagos_ejecutar
   const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
   const [driverId, setDriverId] = useState('')
-  const [modo, setModo] = useState('semana') // semana | rango
-  const [fecha, setFecha] = useState(hoyISO())
-  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
-  const [d2, setD2] = useState(hoyISO())
+  const [modoL, setModoL] = useState('semana')
+  const [fechaL, setFechaL] = useState(hoyISO())
+  const [d1L, setD1L] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2L, setD2L] = useState(hoyISO())
+  // Período controlado por el hub si viene `periodo`, si no, local.
+  const modo = periodo ? periodo.modo : modoL, setModo = periodo ? periodo.setModo : setModoL
+  const fecha = periodo ? periodo.fecha : fechaL, setFecha = periodo ? periodo.setFecha : setFechaL
+  const d1 = periodo ? periodo.d1 : d1L, setD1 = periodo ? periodo.setD1 : setD1L
+  const d2 = periodo ? periodo.d2 : d2L, setD2 = periodo ? periodo.setD2 : setD2L
   const [fEstado, setFEstado] = useState('todos') // todos | pendiente | parcial | pagado
   const [q, setQ] = useState('')
   const [fpRuta, setFpRuta] = useState(null)
@@ -3295,10 +3403,10 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
 
   // Semanas incluidas en el período (para el modo rango).
   const semanasRango = () => { const out = []; let w = lunesDe(d1 <= d2 ? d1 : d2); const fin = lunesDe(d1 <= d2 ? d2 : d1); let g = 0; while (w <= fin && g < 120) { out.push(w); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ } return out }
-  const weeks = modo === 'semana' ? [semana] : semanasRango()
+  const weeks = periodo ? periodo.weeks : (modo === 'semana' ? [semana] : semanasRango())
   // Período efectivo del detalle (mismo que el filtro de arriba).
-  const detDesde = modo === 'semana' ? semana : (d1 <= d2 ? d1 : d2)
-  const detHasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  const detDesde = periodo ? periodo.desde : (modo === 'semana' ? semana : (d1 <= d2 ? d1 : d2))
+  const detHasta = periodo ? periodo.hasta : (modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1))
   // Resumen del DETALLE sobre TODO el período (no una sola semana): agrega las
   // semanas del rango y junta todas las rutas y movimientos.
   const res = useMemo(() => {
@@ -3380,16 +3488,18 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm }) {
 
   return (
     <div>
-      <PageTitle>Pagos y Fast Pay</PageTitle>
+      {!periodo && <PageTitle>Pagos y Fast Pay</PageTitle>}
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="rango">Rango de fechas</option></Select></F>
-          {modo === 'semana'
-            ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
-            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          {!periodo && <>
+            <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="rango">Rango de fechas</option></Select></F>
+            {modo === 'semana'
+              ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+              : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          </>}
           <F label="Estado"><Select value={fEstado} onChange={(e) => setFEstado(e.target.value)}><option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="parcial">Parciales</option><option value="pagado">Pagados</option></Select></F>
           <div className="relative min-w-[160px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <span className="pb-1.5 text-xs font-semibold text-slate-400">{modo === 'semana' ? `${semana} → ${domingoDe(fecha)}` : `${d1 <= d2 ? d1 : d2} → ${d1 <= d2 ? d2 : d1}`} · Por pagar <b className="text-brand-navy dark:text-slate-100">{dinero(totPorPagar)}</b> · {nPend} pendientes</span>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">Por pagar <b className="text-brand-navy dark:text-slate-100">{dinero(totPorPagar)}</b> · {nPend} pendientes</span>
         </div>
       </Card>
 
