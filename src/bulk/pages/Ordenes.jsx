@@ -50,7 +50,7 @@ function StatCard({ label, val, color, icon: Icon, onClick, activo, pulse }) {
     <button
       type="button"
       onClick={onClick}
-      className={`group relative flex min-w-[7.5rem] flex-1 items-center gap-3 overflow-hidden rounded-2xl border bg-white px-3.5 py-3 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 dark:bg-slate-900 ${activo ? 'border-current ' + c.txt : 'border-slate-200 dark:border-slate-700/60'} ${c.ring}`}
+      className={`group mp-in relative flex min-w-[7.5rem] flex-1 items-center gap-3 overflow-hidden rounded-2xl border bg-white px-3.5 py-3 text-left shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 dark:bg-slate-900 ${activo ? 'border-current ' + c.txt : 'border-slate-200 dark:border-slate-700/60'} ${c.ring}`}
     >
       <span className={`absolute inset-y-0 left-0 w-1 ${c.bar} ${activo ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100'}`} />
       <span className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl ${c.soft} ${c.txt} ${pulse && val > 0 ? 'animate-pulse' : ''}`}><Icon size={19} strokeWidth={2} /></span>
