@@ -7,10 +7,10 @@ import Ilustracion from './Ilustracion'
 // --- Card -------------------------------------------------------------------
 // `mp-card` es un gancho estable para estilos por pantalla (p. ej. el vestido
 // "Cloud Motion" del Dashboard en cloudmotion.css); no aplica estilos por sí solo.
-export function Card({ children, className = '', ...rest }) {
+export function Card({ children, className = '', hover = false, ...rest }) {
   return (
     <div
-      className={`mp-card rounded-2xl border border-slate-200/80 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${className}`}
+      className={`mp-card mp-in rounded-2xl border border-slate-200/80 bg-surface-card shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${hover ? 'mp-lift hover:border-brand-gold/50 hover:shadow-cardhover' : ''} ${className}`}
       {...rest}
     >
       {children}
@@ -66,7 +66,7 @@ const ACCENTS = {
   slate: { bar: 'bg-slate-400', text: 'text-slate-700 dark:text-slate-200', chip: 'bg-slate-400/10 text-slate-600 dark:text-slate-300' },
 }
 
-export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick, animado = false }) {
+export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick, animado = true }) {
   const a = ACCENTS[accent] || ACCENTS.navy
   // `animado` (Dashboard): el número cuenta hacia arriba al cargar/cambiar.
   const valorMostrado = useValorAnimado(value, animado && (typeof value === 'string' || typeof value === 'number'))
@@ -84,10 +84,11 @@ export function KPI({ label, value, icon, accent = 'navy', trend, sub, onClick, 
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
-      className={`mp-card flex-1 min-w-[150px] rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card ${
-        clickable ? 'cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold' : ''
+      className={`mp-card mp-in mp-lift relative flex-1 min-w-[150px] overflow-hidden rounded-2xl border border-slate-200/80 bg-surface-card p-5 shadow-card hover:shadow-cardhover dark:border-slate-700/60 dark:bg-surface-dark-card ${
+        clickable ? 'cursor-pointer hover:border-brand-gold/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold' : ''
       }`}
     >
+      <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${a.bar} opacity-80`} />
       <div className="flex items-start justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
         {(Icon || (icon && typeof icon === 'string')) && (
@@ -134,7 +135,7 @@ export function Boton({ children, onClick, variant = 'primary', disabled, classN
       type={type}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${BTN[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 hover:-translate-y-px active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:translate-y-0 disabled:active:scale-100 ${BTN[variant]} ${className}`}
     >
       {children}
     </button>

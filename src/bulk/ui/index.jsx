@@ -52,7 +52,7 @@ export function Card({ children, onClick, className = '' }) {
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag {...(onClick ? { type: 'button', onClick } : {})}
-      className={`block w-full rounded-card bg-white p-4 text-left shadow-card ${className}`}>
+      className={`block w-full rounded-card bg-white p-4 text-left shadow-card mp-in ${onClick ? 'mp-lift' : ''} ${className}`}>
       {children}
     </Tag>
   )
@@ -60,13 +60,13 @@ export function Card({ children, onClick, className = '' }) {
 
 // Tarjeta destacada NAVY (el bloque protagonista de cada home).
 export function FeatureCard({ children, className = '' }) {
-  return <div className={`rounded-card bg-mp-navy p-5 text-mp-cream shadow-card ${className}`}>{children}</div>
+  return <div className={`rounded-card bg-mp-navy p-5 text-mp-cream shadow-card mp-in mp-sheen ${className}`}>{children}</div>
 }
 
 // Tarjeta de estadística: etiqueta 12 + número 28/500. `oscura` = navy con número dorado.
 export function StatCard({ etiqueta, valor, sufijo, oscura = false, className = '' }) {
   return (
-    <div className={`rounded-[22px] p-4 shadow-card ${oscura ? 'bg-mp-navy' : 'bg-white'} ${className}`}>
+    <div className={`rounded-[22px] p-4 shadow-card mp-in ${oscura ? 'bg-mp-navy' : 'bg-white'} ${className}`}>
       <div className={`text-[12px] ${oscura ? 'text-mp-cream/70' : 'text-mp-ink-2'}`}>{etiqueta}</div>
       {/* iPhone SE (≤375): el número baja de 28 a 24 para no cortarse. */}
       <div className={`mt-1 text-[28px] font-medium leading-none max-[375px]:text-[24px] ${oscura ? 'text-mp-gold' : 'text-mp-ink'}`}>
@@ -81,7 +81,7 @@ export function ListRow({ icon: Icon, iconClass = 'bg-mp-cream text-mp-navy', ti
   const Tag = onClick ? 'button' : 'div'
   return (
     <Tag {...(onClick ? { type: 'button', onClick } : {})}
-      className={`flex w-full items-center gap-3 rounded-row bg-white p-3 text-left shadow-card ${className}`}>
+      className={`flex w-full items-center gap-3 rounded-row bg-white p-3 text-left shadow-card mp-in ${onClick ? 'mp-lift' : ''} ${className}`}>
       {Icon && (
         <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-[10px] ${iconClass}`}>
           <Icon size={18} strokeWidth={S} />
