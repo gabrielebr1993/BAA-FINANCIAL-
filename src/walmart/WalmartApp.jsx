@@ -1570,16 +1570,25 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     else walToast('No se pudieron activar: ' + r.motivo, 'red')
   }
 
+  // Fast Pay HUÉRFANOS (cuya ruta ya no existe) no deben inflar lo que ve el
+  // chofer: se ignoran los fastpay cuyo rutaId no corresponde a una ruta suya.
+  // Así la app siempre muestra números que cuadran (adelantado ≤ ganado).
+  const idsRutas = useMemo(() => new Set((rutas || []).map((r) => r.id)), [rutas])
+  const pagosValidos = useMemo(
+    () => (pagos || []).filter((p) => p.tipo !== 'fastpay' || !p.rutaId || idsRutas.has(p.rutaId)),
+    [pagos, idsRutas],
+  )
+
   // ACUMULADO HASTA HOY (todas sus rutas, no solo el período).
   const hist = useMemo(() => {
     const rc = (rutas || []).filter((r) => r.estado === 'completada')
     const totalGanado = money2(rc.reduce((a, r) => a + gananciaDriver(r), 0))
-    const liquidadoFP = money2((pagos || []).filter(fpLiquida).reduce((a, p) => a + (Number(p.bruto) || 0), 0))
-    const efectivoFP = money2((pagos || []).filter(fpLiquida).reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
-    const pagadoNormal = money2((pagos || []).filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
+    const liquidadoFP = money2(pagosValidos.filter(fpLiquida).reduce((a, p) => a + (Number(p.bruto) || 0), 0))
+    const efectivoFP = money2(pagosValidos.filter(fpLiquida).reduce((a, p) => a + (Number(p.efectivo) || 0), 0))
+    const pagadoNormal = money2(pagosValidos.filter((p) => p.tipo === 'pago').reduce((a, p) => a + (Number(p.monto) || 0), 0))
     const saldo = money2(totalGanado - liquidadoFP - pagadoNormal)
     return { totalGanado, liquidadoFP, efectivoFP, pagadoNormal, saldo, nRutas: rc.length }
-  }, [rutas, pagos])
+  }, [rutas, pagosValidos])
 
   // Rutas que el chofer puede pedir por Fast Pay (todas, sin adelanto ni solicitud).
   const disponible = useMemo(() => {
@@ -1617,13 +1626,13 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     const acc = { totalGanado: 0, liquidadoFP: 0, efectivoFP: 0, comisiones: 0, enProcesoFP: 0, pagadoNormal: 0, saldo: 0 }
     let rutasSemana = [], pagosAll = []
     for (const w of weeks) {
-      const r = resumenSemana(rutas, pagos, driverId, w)
+      const r = resumenSemana(rutas, pagosValidos, driverId, w)
       for (const k in acc) acc[k] = money2(acc[k] + (r[k] || 0))
       rutasSemana = rutasSemana.concat(r.rutasSemana); pagosAll = pagosAll.concat(r.pagos)
     }
     rutasSemana.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
     return { ...acc, rutasSemana, pagos: pagosAll }
-  }, [driverId, rutas, pagos, weeks]) // eslint-disable-line
+  }, [driverId, rutas, pagosValidos, weeks]) // eslint-disable-line
   const nombre = ficha ? nombreCompleto(ficha) : (email || 'Chofer')
   const rutasSem = res ? res.rutasSemana : []
   const pagosPeriodo = res ? res.pagos : []
