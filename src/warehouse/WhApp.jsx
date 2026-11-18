@@ -13,7 +13,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebas
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
-import { Card, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
+import { Card, KPI, PageTitle, Boton, Aviso, Badge, Input, Select, Spinner, Cargando, EstadoVacio } from '../components/ui'
 import { Warehouse, ArrowLeft, Lock, LogOut, LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Users, Boxes, Plus, Trash2, Gauge, FileSpreadsheet, UserRound, DollarSign, BarChart3, Banknote, Printer, Clock } from 'lucide-react'
 import WhPanelStaff from './staffing/WhPanelStaff'
 import WhStaffing from './staffing/WhStaffing'
@@ -274,12 +274,12 @@ function WhResumen({ irA }) {
       <PageTitle>Resumen del almacén</PageTitle>
       <p className="-mt-2 mb-4 text-sm text-slate-500 dark:text-slate-400">Staffing con Gofo (reportes, tarifas, finanzas y cheques) + servicios de almacén: clasificación, inbound, outbound, almacenaje y cross-dock.</p>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Semanas importadas</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.semanas)}</div>{n?.ult && <div className="text-[11px] text-slate-400">última: {n.ult.inicio}</div>}</Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Trabajadores</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.trabajadores)}</div><div className="text-[11px] text-slate-400">perfiles únicos</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Ingreso última semana</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{n ? (n.ult ? dinero(n.ult.totales?.ingresoGofo) : '—') : '…'}</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Cheques por cobrar</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.chequesPend)}</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Recepciones (inbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.inb)}</div></Card>
-        <Card className="p-4"><div className="text-[11px] font-bold uppercase text-slate-400">Despachos (outbound)</div><div className="text-2xl font-black text-brand-navy dark:text-slate-100">{v(n?.out)}</div></Card>
+        <KPI label="Semanas importadas" value={v(n?.semanas)} icon={BarChart3} accent="navy" sub={n?.ult ? `última: ${n.ult.inicio}` : undefined} />
+        <KPI label="Trabajadores" value={v(n?.trabajadores)} icon={UserRound} accent="blue" sub="perfiles únicos" />
+        <KPI label="Ingreso última semana" value={n ? (n.ult ? dinero(n.ult.totales?.ingresoGofo) : '—') : '…'} icon={DollarSign} accent="green" />
+        <KPI label="Cheques por cobrar" value={v(n?.chequesPend)} icon={Banknote} accent="gold" />
+        <KPI label="Recepciones (inbound)" value={v(n?.inb)} icon={ArrowDownToLine} accent="navy" />
+        <KPI label="Despachos (outbound)" value={v(n?.out)} icon={ArrowUpFromLine} accent="slate" />
       </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
