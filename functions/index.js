@@ -2292,6 +2292,10 @@ const plaid = require('./plaid')
 exports.plaidOp = plaid.plaidOp
 exports.plaidSync = plaid.plaidSync
 
+// ── FLOTA · GPS en vivo de las cargo vans (lee de tu Traccar, claves seguras) ─
+const flota = require('./flota')
+exports.flotaUbicaciones = flota.flotaUbicaciones
+
 // ============================================================================
 // WALMART · Datos bancarios CIFRADOS (AES-256-GCM).
 // La llave vive SOLO en el servidor (secret WAL_BANK_KEY = 32 bytes en base64);

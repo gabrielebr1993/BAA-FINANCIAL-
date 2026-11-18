@@ -1,10 +1,12 @@
 // ============================================================================
 // FLOTA · MAPA EN VIVO — ubicación de las cargo vans sobre un mapa real
-// (Leaflet + OpenStreetMap, sin API key). Hoy muestra DATOS DE EJEMPLO; está
-// preparado para conectar la API de Bouncie (o Samsara/Motive) cambiando solo
-// la función `obtenerUbicaciones()` de abajo — el resto de la pantalla no cambia.
+// (Leaflet + OpenStreetMap, sin API key). Lee las posiciones de TU servidor
+// Traccar a través de la Cloud Function `flotaUbicaciones` (las claves del
+// servidor viven en el backend, nunca aquí). Mientras no haya Traccar conectado
+// muestra DATOS DE EJEMPLO para que la pantalla se vea igual durante el montaje.
 // ============================================================================
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import MapaLeaflet from '../bulk/components/MapaLeaflet'
 import { Card, KPI, PageTitle, Aviso, Badge } from '../components/ui'
 import { Truck, Gauge, Square, WifiOff, RefreshCw } from 'lucide-react'
@@ -48,14 +50,14 @@ function simular(vans) {
   })
 }
 
-// ►►► AQUÍ se conecta Bouncie. Debe devolver un array:
-// [{ id, nombre, chofer, lat, lng, velocidad, ultima(ms) }]. Ejemplo real:
-//   const r = await fetch('https://api.bouncie.dev/v1/vehicles', { headers:{ Authorization: TOKEN }})
-//   return (await r.json()).map(mapearVanBouncie)
-// Mientras no haya API, devuelve los datos de ejemplo.
-async function obtenerUbicaciones(prev) {
-  // TODO(Bouncie): reemplazar por la llamada real a la API con la API key.
-  return prev ? simular(prev) : semillaFlota()
+// Pide las ubicaciones reales a la Cloud Function (que lee de tu Traccar).
+// Devuelve { configurado, vans }. configurado=false → aún no hay Traccar
+// conectado y la pantalla sigue con el demo.
+async function obtenerUbicacionesReales() {
+  const fn = httpsCallable(getFunctions(), 'flotaUbicaciones', { timeout: 25000 })
+  const r = await fn({})
+  const d = r?.data || {}
+  return { configurado: d.configurado !== false, vans: Array.isArray(d.vans) ? d.vans : [] }
 }
 
 function haceCuanto(ms) {
@@ -69,15 +71,35 @@ function haceCuanto(ms) {
 export default function Flota() {
   const [vans, setVans] = useState(semillaFlota())
   const [sel, setSel] = useState(null)
-  const vansRef = useRef(vans)
-  vansRef.current = vans
+  const [modo, setModo] = useState('demo') // 'demo' = datos de ejemplo · 'vivo' = tu Traccar
+  const modoRef = useRef(modo); modoRef.current = modo
+  const ultimoIntento = useRef(0)
 
-  // "Tiempo real": refresca cada 3 s (demo). Con la API real, mismo patrón.
+  // Pide al servidor real; si aún no hay Traccar conectado, sigue en DEMO y
+  // reintenta la conexión cada 30 s (así se pone en vivo solo al conectarlo).
+  // En vivo refresca cada 15 s (ahorra llamadas); el demo "avanza" cada 3 s.
   useEffect(() => {
     let vivo = true
-    const tick = async () => { const nv = await obtenerUbicaciones(vansRef.current); if (vivo) setVans(nv) }
-    const t = setInterval(tick, 3000)
-    return () => { vivo = false; clearInterval(t) }
+    let timer
+    const programar = (ms) => { if (vivo) timer = setTimeout(tick, ms) }
+    const tick = async () => {
+      const ahora = Date.now()
+      const intentarApi = modoRef.current === 'vivo' || ahora - ultimoIntento.current > 30000
+      if (intentarApi) {
+        ultimoIntento.current = ahora
+        try {
+          const { configurado, vans: reales } = await obtenerUbicacionesReales()
+          if (!vivo) return
+          if (configurado) { setVans(reales); setModo('vivo'); return programar(15000) }
+        } catch { if (!vivo) return /* servidor caído o sin montar → demo */ }
+      }
+      if (!vivo) return
+      setModo('demo')
+      setVans((p) => simular(p.length ? p : semillaFlota()))
+      programar(3000)
+    }
+    tick()
+    return () => { vivo = false; clearTimeout(timer) }
   }, [])
 
   const conEstado = useMemo(() => vans.map((v) => ({ ...v, estado: estadoDe(v) })), [vans])
@@ -92,13 +114,22 @@ export default function Flota() {
 
   return (
     <div>
-      <PageTitle right={<span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span> EN VIVO</span>}>
+      <PageTitle right={modo === 'vivo'
+        ? <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span> EN VIVO</span>
+        : <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">DEMO</span>}>
         Flota · Mapa en vivo
       </PageTitle>
 
-      <Aviso tipo="warn" className="mb-4">
-        <b>Datos de ejemplo.</b> Conecta tu cuenta de <b>Bouncie</b> (API) y verás la ubicación real de tus vans aquí. La pantalla ya está lista — solo falta enchufar la API key.
-      </Aviso>
+      {modo === 'demo' && (
+        <Aviso tipo="warn" className="mb-4">
+          <b>Datos de ejemplo.</b> Conecta tu servidor <b>Traccar</b> y verás la ubicación real de tus vans aquí. La pantalla ya está lista — se pone en vivo sola en cuanto el servidor esté conectado.
+        </Aviso>
+      )}
+      {modo === 'vivo' && vans.length === 0 && (
+        <Aviso tipo="info" className="mb-4">
+          <b>Conectado a tu Traccar.</b> Todavía no hay vans reportando ubicación. Enciende un rastreador en una van y aparecerá aquí automáticamente.
+        </Aviso>
+      )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KPI label="En movimiento" value={String(tot.movimiento)} icon={Gauge} accent="green" />
@@ -115,7 +146,7 @@ export default function Flota() {
         <Card className="!p-0 overflow-hidden">
           <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-bold text-brand-navy dark:border-slate-800 dark:text-slate-100">
             <Truck size={16} className="text-brand-gold" /> Vans
-            <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600"><RefreshCw size={12} /> actualiza cada 3 s</span>
+            <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600"><RefreshCw size={12} /> actualiza cada {modo === 'vivo' ? '15' : '3'} s</span>
           </div>
           <div className="max-h-[430px] overflow-y-auto">
             {conEstado.map((v) => (
