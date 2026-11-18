@@ -3153,6 +3153,7 @@ function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicit
   const subs = []
   if (verLiq) subs.push({ id: 'liq', l: 'Liquidaciones' })
   if (verFP) subs.push({ id: 'fp', l: 'Fast Pay' })
+  if (verLiq || verFP) subs.push({ id: 'pagado', l: 'Todo lo pagado' })
   const [sub, setSub] = useState(() => { try { const s = localStorage.getItem('wal_pagos_sub'); if (subs.some((x) => x.id === s)) return s } catch { /* noop */ } return subs[0]?.id || 'liq' })
   const cambiar = (id) => { setSub(id); try { localStorage.setItem('wal_pagos_sub', id) } catch { /* noop */ } }
   const solPend = (solicitudes || []).filter((s) => s.estado === 'solicitada' && !rutaBloqueadaFP(pagos, s.rutaId))
@@ -3169,6 +3170,105 @@ function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicit
       )}
       {sub === 'liq' && verLiq && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} perm={perm} />}
       {sub === 'fp' && verFP && <TabFastPay rutas={rutas} pagos={pagos} personas={personas} almacenes={almacenes} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
+      {sub === 'pagado' && <TabTodoPagado rutas={rutas} pagos={pagos} personas={personas} />}
+    </div>
+  )
+}
+
+// ── TODO LO PAGADO: Fast Pay (efectivo) + liquidaciones (pagos) en una lista ──
+function TabTodoPagado({ rutas, pagos, personas }) {
+  const [modo, setModo] = useState('semana')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
+  const [q, setQ] = useState('')
+  const [tipo, setTipo] = useState('todos') // todos | fastpay | pago
+  const desde = modo === 'semana' ? lunesDe(fecha) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1)
+  const weeks = useMemo(() => {
+    const out = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let g = 0
+    while (w <= fin && g < 200) { out.push(w); const dd = new Date(w + 'T00:00:00'); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ }
+    return out
+  }, [desde, hasta])
+  const nombreDe = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
+  const movs = useMemo(() => (pagos || [])
+    .filter((p) => p.tipo === 'pago' || (p.tipo === 'fastpay' && estadoFP(p) === 'confirmado'))
+    .filter((p) => weeks.includes(p.semana) || (p.fecha >= desde && p.fecha <= hasta))
+    .filter((p) => tipo === 'todos' || p.tipo === tipo)
+    .map((p) => ({
+      id: p.id, driverId: p.driverId, nombre: p.driverNombre || nombreDe(p.driverId),
+      fecha: p.fecha || '', semana: p.semana || '', tipo: p.tipo,
+      monto: p.tipo === 'fastpay' ? (Number(p.efectivo) || 0) : (Number(p.monto) || 0),
+      comision: p.tipo === 'fastpay' ? (Number(p.comision) || 0) : 0,
+      metodo: p.tipo === 'fastpay' ? 'Fast Pay' : (p.metodo || 'Pago'),
+    }))
+    .filter((x) => !q.trim() || x.nombre.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || a.nombre.localeCompare(b.nombre)),
+    [pagos, weeks, desde, hasta, tipo, q, personas]) // eslint-disable-line
+  const totFP = money2(movs.filter((m) => m.tipo === 'fastpay').reduce((a, m) => a + m.monto, 0))
+  const totPago = money2(movs.filter((m) => m.tipo === 'pago').reduce((a, m) => a + m.monto, 0))
+  const totComis = money2(movs.reduce((a, m) => a + m.comision, 0))
+  const totPagado = money2(totFP + totPago)
+  const nFP = movs.filter((m) => m.tipo === 'fastpay').length
+  const nPago = movs.filter((m) => m.tipo === 'pago').length
+
+  return (
+    <div>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <F label="Ver por"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana (sáb→vie)</option><option value="rango">Rango de fechas</option></Select></F>
+          {modo === 'semana'
+            ? <F label="Semana (cualquier día)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+            : <><F label="Desde"><DateField value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><DateField value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <F label="Tipo"><Select value={tipo} onChange={(e) => setTipo(e.target.value)}><option value="todos">Todos</option><option value="fastpay">Solo Fast Pay</option><option value="pago">Solo liquidaciones</option></Select></F>
+          <div className="relative min-w-[160px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar driver…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <span className="pb-1.5 text-xs font-semibold text-slate-400">{desde} → {hasta}</span>
+        </div>
+      </Card>
+
+      <div className="mb-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <KPI animado label="Total pagado" value={dinero(totPagado)} icon={Wallet} accent="navy" sub={`${nFP + nPago} movimientos`} />
+        <KPI animado label="Por Fast Pay" value={dinero(totFP)} icon={Zap} accent="gold" sub={`${nFP} adelantos (efectivo)`} />
+        <KPI animado label="Por liquidación" value={dinero(totPago)} icon={DollarSign} accent="green" sub={`${nPago} pagos`} />
+        <KPI animado label="Comisiones (utilidad)" value={dinero(totComis)} icon={TrendingUp} accent="green" sub="ingreso por Fast Pay" />
+      </div>
+
+      <Card className="p-0">
+        <div className="scroll-thin overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead><tr className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              <th className="px-3 py-2.5 text-left font-bold">Fecha</th>
+              <th className="px-3 py-2.5 text-left font-bold">Chofer</th>
+              <th className="px-3 py-2.5 text-left font-bold">Tipo</th>
+              <th className="px-3 py-2.5 text-left font-bold">Semana</th>
+              <th className="px-3 py-2.5 text-right font-bold">Recibió</th>
+              <th className="px-3 py-2.5 text-right font-bold">Comisión</th>
+            </tr></thead>
+            <tbody>
+              {movs.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Sin pagos en este período.</td></tr>
+              ) : movs.map((m) => (
+                <tr key={m.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-500">{m.fecha || '—'}</td>
+                  <td className="px-3 py-2.5 font-semibold text-brand-navy dark:text-slate-100">{m.nombre}</td>
+                  <td className="px-3 py-2.5">{m.tipo === 'fastpay' ? <Badge color="gold">⚡ Fast Pay</Badge> : <Badge color="green">{m.metodo}</Badge>}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-400">{m.semana || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-semibold">{dinero(m.monto)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-400">{m.comision > 0 ? dinero(m.comision) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            {movs.length > 0 && (
+              <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold dark:border-slate-700 dark:bg-slate-800/60">
+                <td className="px-3 py-2.5" colSpan={4}>TOTAL</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">{dinero(totPagado)}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-500">{dinero(totComis)}</td>
+              </tr></tfoot>
+            )}
+          </table>
+        </div>
+      </Card>
+      <p className="mt-3 text-[11px] text-slate-400">"Recibió" = lo que el chofer recibió (efectivo en Fast Pay, o el pago en liquidación). La comisión del Fast Pay es tu utilidad, no sale del bolsillo del chofer.</p>
     </div>
   )
 }
