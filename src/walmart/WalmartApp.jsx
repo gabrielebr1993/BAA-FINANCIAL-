@@ -28,7 +28,7 @@ import {
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
   CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
-  Smartphone, Share, History, ChevronLeft, ChevronRight,
+  Smartphone, Share, History, ChevronLeft, ChevronRight, Ban,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
@@ -1556,7 +1556,9 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     document.addEventListener('visibilitychange', alDia)
     return () => document.removeEventListener('visibilitychange', alDia)
   }, [])
+  const fpSuspendido = !!tarifas?.fastPaySuspendido
   const pedirFP = async (r) => {
+    if (fpSuspendido) { walToast('Fast Pay está suspendido temporalmente.', 'navy'); return }
     try { await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha); walToast('Solicitud de Fast Pay enviada ✓', 'gold') }
     catch (e) { walToast('No se pudo enviar la solicitud: ' + (e?.message || e), 'red') }
   }
@@ -1603,6 +1605,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
     return { pedibles, total }
   }, [rutas, pagos, misSol])
   const pedirTodo = async () => {
+    if (fpSuspendido) { walToast('Fast Pay está suspendido temporalmente.', 'navy'); return }
     if (!disponible.pedibles.length) return
     try {
       for (const r of disponible.pedibles) await solicitarFastPay({ ...r, bruto: gananciaDriver(r) }, ficha)
@@ -1748,8 +1751,14 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
                 <Boton variant="gold" className="ml-auto" onClick={() => setFirmar(contratosPend[0])}>Revisar y firmar</Boton>
               </Card>
             )}
+            {fpSuspendido && (
+              <Card className="mb-3 flex items-center gap-2 border-l-4 border-l-slate-300 p-3">
+                <Ban size={15} className="text-slate-400" />
+                <span className="text-sm text-slate-500">El <b>Fast Pay</b> está <b>suspendido</b> por ahora. Tus pagos siguen normales; cuando se reactive podrás pedir adelantos.</span>
+              </Card>
+            )}
             {/* Pedir Fast Pay de TODO lo disponible (todas las rutas acumuladas) */}
-            {disponible.total > 0.005 && (
+            {!fpSuspendido && disponible.total > 0.005 && (
               <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl p-4 text-white shadow-lg" style={{ background: 'linear-gradient(120deg,#0071dc,#004f9a)' }}>
                 <Zap size={20} className="shrink-0" />
                 <div className="min-w-0">
@@ -1773,7 +1782,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               const liq = liquidadoFPruta(pagos, r.id)
               const bloqueado = rutaBloqueadaFP(pagos, r.id) || liq > 0.005
               const sol = misSol.find((s) => s.rutaId === r.id)
-              const puedePedir = r.estado === 'completada' && !bloqueado && money2(gananciaDriver(r) - liq) > 0.005
+              const puedePedir = !fpSuspendido && r.estado === 'completada' && !bloqueado && money2(gananciaDriver(r) - liq) > 0.005
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
                   <span className="font-mono text-xs text-slate-400">{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label || ''}</span>
@@ -3453,6 +3462,30 @@ function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm, solicitu
   const driverNombre = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
   const fpBadge = { pendiente: 'gold', confirmado: 'green', fallido: 'red', anulado: 'slate' }
 
+  // Botón GENERAL: suspender / activar Fast Pay para todos los choferes.
+  const fpSuspendido = !!tarifas?.fastPaySuspendido
+  const [cambiandoFP, setCambiandoFP] = useState(false)
+  const toggleFastPay = async () => {
+    const activar = fpSuspendido
+    if (!window.confirm(activar
+      ? '¿Activar Fast Pay para todos los choferes?'
+      : '¿SUSPENDER Fast Pay para todos los choferes?\n\nNo podrán pedir adelantos hasta que lo reactives.')) return
+    setCambiandoFP(true)
+    try {
+      await guardar(COL.config, 'tarifas', { fastPaySuspendido: !fpSuspendido })
+      await auditar('fastpay-suspension', activar ? 'Fast Pay ACTIVADO' : 'Fast Pay SUSPENDIDO')
+      walToast(activar ? 'Fast Pay activado ✓' : 'Fast Pay suspendido para todos', activar ? 'gold' : 'navy')
+    } catch (e) { walToast('No se pudo: ' + (e?.message || e), 'red') } finally { setCambiandoFP(false) }
+  }
+
+  // Fast Pay "sin ruta" (huérfanos): confirmados/pendientes cuya ruta ya no
+  // existe o no está completada. No salen en la lista por-ruta de abajo, así que
+  // aquí se listan para poder anularlos y que todo cuadre.
+  const idsCompletadas = useMemo(() => new Set((rutas || []).filter((r) => r.estado === 'completada').map((r) => r.id)), [rutas])
+  const huerfanos = useMemo(() => ((rutas || []).length === 0 ? []
+    : (pagos || []).filter((p) => p.tipo === 'fastpay' && (estadoFP(p) === 'confirmado' || estadoFP(p) === 'pendiente') && p.rutaId && !idsCompletadas.has(p.rutaId))
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))), [pagos, idsCompletadas, rutas])
+
   const cambiarEstadoFP = async (p, nuevo, extra = {}) => {
     try { await guardar(COL.pagos, p.id, { estado: nuevo, ...extra }); await auditar('fastpay-estado', `${p.driverNombre || ''} · ruta ${p.rutaId} · ${estadoFP(p)} → ${nuevo}`); walToast(`Fast Pay: ${ESTADO_FP_LABEL[nuevo]} ✓`, nuevo === 'confirmado' ? 'gold' : 'navy') } catch (e) { walToast('No se pudo: ' + (e.message || e), 'red') }
   }
@@ -3483,7 +3516,41 @@ function TabFastPay({ rutas, pagos, personas, almacenes, tarifas, perm, solicitu
 
   return (
     <div>
-      <PageTitle>Fast Pay · adelantos por ruta</PageTitle>
+      <PageTitle right={(perm?.owner || pEjecutaFP) && (
+        <Boton variant={fpSuspendido ? 'success' : 'ghost'} onClick={toggleFastPay} disabled={cambiandoFP}>
+          {cambiandoFP ? <Spinner /> : fpSuspendido ? <><Zap size={14} /> Activar Fast Pay</> : <><Ban size={14} /> Suspender Fast Pay</>}
+        </Boton>
+      )}>Fast Pay · adelantos por ruta</PageTitle>
+
+      {fpSuspendido && (
+        <Card className="mb-3 flex flex-wrap items-center gap-2 border-l-4 border-l-rose-400 bg-rose-50 p-3 dark:bg-rose-500/10">
+          <Ban size={16} className="text-rose-500" />
+          <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">Fast Pay está <b>SUSPENDIDO</b>: los choferes no pueden pedir adelantos. Actívalo con el botón de arriba cuando quieras.</span>
+        </Card>
+      )}
+
+      {/* Fast Pay SIN RUTA (huérfanos): para que cuadre con la lista por-ruta */}
+      {huerfanos.length > 0 && (
+        <Card className="mb-3 border-l-4 border-l-amber-400 p-0">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+            <AlertTriangle size={15} className="text-amber-500" />
+            <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Fast Pay sin ruta (revisar)</span>
+            <Badge color="gold">{huerfanos.length}</Badge>
+            <span className="text-[11px] text-slate-400">no aparecen abajo porque su ruta ya no existe o no está completada</span>
+          </div>
+          {huerfanos.map((p) => (
+            <div key={p.id} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2.5 text-sm last:border-0 dark:border-slate-800/60">
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-brand-navy dark:text-slate-100">{p.driverNombre || driverNombre(p.driverId)}</div>
+                <div className="font-mono text-[11px] text-slate-400">{p.fecha || '—'} · ruta {String(p.rutaId || '').slice(0, 8)}… · <Badge color={fpBadge[estadoFP(p)]}>{ESTADO_FP_LABEL[estadoFP(p)]}</Badge></div>
+              </div>
+              <span className="ml-auto font-mono font-semibold">{dinero(Number(p.bruto) || 0)}</span>
+              {pAnula && <button className="text-xs font-semibold text-amber-600 hover:underline" onClick={() => anularFP(p)}>anular</button>}
+              {pAnula && <button className="text-xs font-semibold text-rose-400 hover:text-rose-600 hover:underline" onClick={async () => { if (window.confirm('¿ELIMINAR este Fast Pay sin ruta? Se borra el registro.\n\nÚsalo solo si fue un duplicado/error.')) { await borrar(COL.pagos, p.id); await auditar('fastpay-huerfano-eliminado', `${p.driverNombre || ''} · ${dinero(Number(p.bruto) || 0)}`); walToast('Fast Pay eliminado ✓') } }}>eliminar</button>}
+            </div>
+          ))}
+        </Card>
+      )}
 
       {/* Solicitudes de los choferes (notificación + atención) */}
       {solPend.length > 0 && (
