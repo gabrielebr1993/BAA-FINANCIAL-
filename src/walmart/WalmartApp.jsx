@@ -28,7 +28,7 @@ import {
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
   CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
-  Smartphone, Share, History, ChevronLeft, ChevronRight, Ban,
+  Smartphone, Share, History, ChevronLeft, ChevronRight, Ban, MapPin,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
 import { generarW9Base64, W9_OFICIAL_URL } from '../utils/w9'
@@ -102,10 +102,13 @@ function InstalarApp({ compacto = false }) {
 }
 
 // Pestañas en ORDEN y agrupadas por sección (grupo). Menos ruido, más jerarquía.
+const FlotaWal = lazy(() => import('../pages/Flota'))
+
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icono: LayoutDashboard, grupo: 'Inicio' },
   { id: 'agenda', label: 'Agenda semanal', icono: CalendarDays, grupo: 'Operación' },
   { id: 'rutas', label: 'Rutas', icono: RouteIcon, grupo: 'Operación' },
+  { id: 'flota', label: 'Flota (GPS)', icono: MapPin, grupo: 'Operación' },
   { id: 'cierre', label: 'Cierre diario', icono: ClipboardCheck, grupo: 'Operación' },
   { id: 'personas', label: 'Drivers', icono: Users, grupo: 'Equipo' },
   { id: 'contratos', label: 'Contratos', icono: FileSignature, grupo: 'Equipo' },
@@ -128,6 +131,7 @@ const PERM_TAB = {
   personas: 'drivers_ver',
   almacenes: 'rutas_ver',
   rutas: 'rutas_ver',
+  flota: 'rutas_ver',
   cierre: 'liq_preparar',
   pagos: 'pagos_ver', // el hub muestra Fast Pay si además tiene fp_ver
   gastos: 'fin_costos_ver',
@@ -254,6 +258,7 @@ export default function WalmartApp() {
       {tab === 'personas' && puede('drivers_ver') && <TabPersonas personas={personasV} almacenes={almacenesV} rutas={rutasV} pagos={pagos} contratos={contratos} gastos={gastosV} tarifas={tarifas} user={user} perm={perm} />}
       {tab === 'almacenes' && puede('rutas_ver') && <TabAlmacenes almacenes={almacenesV} user={user} />}
       {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
+      {tab === 'flota' && puede('rutas_ver') && <Suspense fallback={<div className="py-16 text-center text-slate-400"><Spinner /></div>}><FlotaWal /></Suspense>}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
       {tab === 'pagos' && (puede('pagos_ver') || puede('fp_ver')) && <TabPagosHub rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}

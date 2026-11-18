@@ -57,6 +57,7 @@ const PerfilChofer = lazy(() => import('./pages/PerfilChofer'))
 const TrackingFicha = lazy(() => import('./pages/TrackingFicha'))
 const Pagos = lazy(() => import('./pages/Pagos'))
 const Rutas = lazy(() => import('./pages/Rutas'))
+const Flota = lazy(() => import('./pages/Flota'))
 const RutaFicha = lazy(() => import('./pages/RutaFicha'))
 const Performance = lazy(() => import('./pages/Performance'))
 const GananciaSemanal = lazy(() => import('./pages/GananciaSemanal'))
@@ -143,6 +144,7 @@ function PackageApp() {
               <Route path="/tracking/:waybill" element={<Page filtro="verDashboard"><TrackingFicha /></Page>} />
               <Route path="/pagos" element={<Page filtro="verPagos"><Pagos /></Page>} />
               <Route path="/rutas" element={<Page filtro="verDashboard"><Rutas /></Page>} />
+              <Route path="/flota" element={<Page filtro="verDashboard"><Flota /></Page>} />
               <Route path="/rutas/:ruta" element={<Page filtro="verDashboard"><RutaFicha /></Page>} />
               <Route path="/performance" element={<Page filtro="verDashboard"><Performance /></Page>} />
               <Route path="/alertas" element={<Page filtro="verDashboard"><Alertas /></Page>} />
