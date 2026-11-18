@@ -1573,10 +1573,10 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   // Fast Pay HUÉRFANOS (cuya ruta ya no existe) no deben inflar lo que ve el
   // chofer: se ignoran los fastpay cuyo rutaId no corresponde a una ruta suya.
   // Así la app siempre muestra números que cuadran (adelantado ≤ ganado).
-  const idsRutas = useMemo(() => new Set((rutas || []).map((r) => r.id)), [rutas])
+  const idsRutasOk = useMemo(() => new Set((rutas || []).filter((r) => r.estado === 'completada').map((r) => r.id)), [rutas])
   const pagosValidos = useMemo(
-    () => (pagos || []).filter((p) => p.tipo !== 'fastpay' || !p.rutaId || idsRutas.has(p.rutaId)),
-    [pagos, idsRutas],
+    () => (pagos || []).filter((p) => p.tipo !== 'fastpay' || !p.rutaId || idsRutasOk.has(p.rutaId)),
+    [pagos, idsRutasOk],
   )
 
   // ACUMULADO HASTA HOY (todas sus rutas, no solo el período).
