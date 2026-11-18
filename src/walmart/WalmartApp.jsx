@@ -467,19 +467,29 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contr
       </div>
 
       {alertas.length > 0 ? (
-        <Card className="mb-4 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><AlertTriangle size={16} className="text-amber-500" /> Centro de pendientes <span className="ml-auto text-xs font-normal text-slate-400">{alertas.length} por atender</span></div>
-          <div className="space-y-1.5">
-            {alertas.map((a, i) => (
-              <button key={i} onClick={() => irA(a.tab)} className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${a.urgente ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200' : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'}`}>
-                {a.urgente && <Zap size={14} className="shrink-0" />}
-                <span className="flex-1">{a.t}</span><ArrowLeft size={13} className="rotate-180" />
-              </button>
-            ))}
+        <Card className="mb-4 overflow-hidden !p-0">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+            </span>
+            <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Necesita tu atención</span>
+            <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">{alertas.length}</span>
           </div>
+          {[...alertas].sort((a, b) => (b.urgente ? 1 : 0) - (a.urgente ? 1 : 0)).map((a, i) => (
+            <button key={i} onClick={() => irA(a.tab)} className="flex w-full items-center gap-3 border-b border-slate-50 px-4 py-2.5 text-left text-sm transition last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${a.urgente ? 'bg-rose-500' : 'bg-amber-500'}`} />
+              <span className="flex-1 text-slate-700 dark:text-slate-200">{a.t}</span>
+              <ChevronRight size={15} className="shrink-0 text-slate-400" />
+            </button>
+          ))}
         </Card>
       ) : (
-        <Card className="mb-4 flex items-center gap-2 p-4 text-sm text-slate-500"><span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/15 text-emerald-600">✓</span> Todo al día — no hay pendientes por atender.</Card>
+        <Card className="mb-4 flex items-center gap-3 p-4 text-sm">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/15 text-lg text-emerald-600">✓</span>
+          <span className="font-semibold text-brand-navy dark:text-slate-100">Todo al día</span>
+          <span className="text-slate-400">— no hay pendientes por atender.</span>
+        </Card>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
