@@ -115,7 +115,10 @@ export function Stat({ label, value, accent = 'navy', sub, icon, trend }) {
 export function PageTitle({ children, right }) {
   return (
     <div className="mb-5 flex flex-wrap items-center gap-3">
-      <h1 className="m-0 text-2xl font-bold text-brand-navy dark:text-slate-100">{children}</h1>
+      <h1 className="m-0 flex items-center gap-2.5 text-2xl font-bold text-brand-navy dark:text-slate-100">
+        <span aria-hidden="true" className="inline-block h-6 w-1.5 shrink-0 rounded-full bg-brand-gold" />
+        {children}
+      </h1>
       <div className="ml-auto flex flex-wrap items-center gap-2">{right}</div>
     </div>
   )
