@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { AuthProvider, useAuth } from './AuthContext'
@@ -7,8 +7,9 @@ import { useInactividad } from './hooks/useInactividad'
 import { logoutAplicable } from './data/sesiones'
 import { ThemeProvider } from './ThemeContext'
 import { LangProvider } from './i18n'
-import { DataProvider } from './DataContext'
+import { DataProvider, useData } from './DataContext'
 import ProtectedRoute from './ProtectedRoute'
+import CompanyPicker from './components/CompanyPicker'
 import Layout from './components/Layout'
 import { Cargando } from './components/ui'
 import ModuleSelector from './ModuleSelector'
@@ -78,13 +79,38 @@ const DriverPortal = lazy(() => import('./pages/DriverPortal'))
 const RegistroPublico = lazy(() => import('./pages/RegistroPublico'))
 const MeetPublico = lazy(() => import('./pages/MeetPublico'))
 
-// Envuelve una página con verificación de permiso + layout de sidebar.
+// Gate de COMPAÑÍA: si el usuario tiene MÁS DE UNA empresa y aún no eligió una
+// en esta sesión, muestra el selector antes de la app. Con una sola empresa
+// (o ya elegida) entra directo. No toca auth ni rutas; solo elige la activa.
+let companyPickedMem = false
+function CompanyGate({ children }) {
+  const { companies, setActiveCompanyId } = useData()
+  const { cerrarSesion } = useAuth()
+  const [picked, setPicked] = useState(() => {
+    if (companyPickedMem) return true
+    try { return sessionStorage.getItem('mp_company_picked') === '1' } catch { return false }
+  })
+  if (!picked && (companies?.length || 0) > 1) {
+    const elegir = (id) => {
+      setActiveCompanyId(id)
+      companyPickedMem = true
+      try { sessionStorage.setItem('mp_company_picked', '1') } catch { /* noop */ }
+      setPicked(true)
+    }
+    return <CompanyPicker companies={companies} onPick={elegir} onSignOut={cerrarSesion} />
+  }
+  return children
+}
+
+// Envuelve una página con verificación de permiso + gate de compañía + layout.
 function Page({ filtro, soloSuperAdmin, roles, children }) {
   return (
     <ProtectedRoute filtro={filtro} soloSuperAdmin={soloSuperAdmin} roles={roles}>
-      <Layout>
-        <Suspense fallback={<Cargando texto="Cargando…" />}>{children}</Suspense>
-      </Layout>
+      <CompanyGate>
+        <Layout>
+          <Suspense fallback={<Cargando texto="Cargando…" />}>{children}</Suspense>
+        </Layout>
+      </CompanyGate>
     </ProtectedRoute>
   )
 }
