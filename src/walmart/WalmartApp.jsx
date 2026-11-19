@@ -43,7 +43,7 @@ import {
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia, borrarRutaActualizandoCierre,
   METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay, conciliacionSemana, utilidadFinanciamiento,
   ESTADOS_FP, ESTADO_FP_LABEL, ESTADO_FP_COLOR, estadoFP, fpLiquida, fpBloquea, rutaBloqueadaFP, fpDeRuta,
-  CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana,
+  CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana, pendientesGastosFijos,
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
   tokenAleatorio, datosDeDriver,
   ultimasSemanas, receivableNet30, acumuladoDriver,
@@ -203,6 +203,7 @@ export default function WalmartApp() {
   const [agenda, setAgenda] = useState([])
   const [facturas, setFacturas] = useState([])
   const [solicitudes, setSolicitudes] = useState([])
+  const [gastosFijos, setGastosFijos] = useState([])
   const [tarifas, setTarifas] = useState(TARIFAS_DEFAULT)
   useEffect(() => suscribir(COL.candidatos, setPersonas), [])
   useEffect(() => suscribir(COL.almacenes, setAlmacenes), [])
@@ -210,6 +211,15 @@ export default function WalmartApp() {
   useEffect(() => suscribir(COL.cierres, setCierres), [])
   useEffect(() => suscribir(COL.pagos, setPagos), [])
   useEffect(() => suscribir(COL.gastos, setGastos), [])
+  useEffect(() => suscribir(COL.gastosFijos, setGastosFijos), [])
+  // Gastos FIJOS recurrentes: crea las instancias que faltan (idempotente por
+  // id determinista; no duplica ni sobreescribe las editadas a mano).
+  useEffect(() => {
+    if (!gastosFijos.length) return
+    const pend = pendientesGastosFijos(gastosFijos, gastos)
+    if (!pend.length) return
+    ;(async () => { for (const p of pend) { try { await guardar(COL.gastos, p.id, p.data) } catch { /* no bloquea */ } } })()
+  }, [gastosFijos, gastos])
   useEffect(() => suscribir(COL.cobros, setCobros), [])
   useEffect(() => suscribir(COL.contratos, setContratos), [])
   useEffect(() => suscribir(COL.plantillas, setPlantillas), [])
@@ -266,7 +276,7 @@ export default function WalmartApp() {
       {tab === 'flota' && puede('rutas_ver') && <Suspense fallback={<div className="py-16 text-center text-slate-400"><Spinner /></div>}><FlotaWal /></Suspense>}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
       {tab === 'pagos' && (puede('pagos_ver') || puede('fp_ver')) && <TabPagosHub rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
-      {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} almacenes={almacenesV} personas={personasV} rutas={rutasV} />}
+      {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} gastosFijos={gastosFijos} almacenes={almacenesV} personas={personasV} rutas={rutasV} esDueno={esDueno} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
       {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
       {tab === 'reportes' && puede('reportes_exportar') && <TabReportes rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} solicitudes={solicitudes} tarifas={tarifas} />}
@@ -3999,8 +4009,10 @@ function Modal({ titulo, children, onCerrar, ancho = 'max-w-lg' }) {
 }
 
 // ── GASTOS ──────────────────────────────────────────────────────────────────
-function TabGastos({ gastos, almacenes, personas, rutas }) {
+function TabGastos({ gastos, gastosFijos = [], almacenes, personas, rutas, esDueno }) {
   const [editar, setEditar] = useState(null)
+  const [editarFijo, setEditarFijo] = useState(null)
+  const [vista, setVista] = useState('sueltos')
   const [fCat, setFCat] = useState('')
   const [fAlm, setFAlm] = useState('')
   const [fDrv, setFDrv] = useState('')
@@ -4010,10 +4022,20 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
   const conGasto = personas.filter((p) => gastos.some((g) => g.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   const lista = useMemo(() => gastos.filter((g) => (!fCat || g.categoria === fCat) && (!fAlm || g.almacenId === fAlm) && (!fDrv || g.driverId === fDrv)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, fCat, fAlm, fDrv])
   if (editar) return <GastoEditor gasto={editar} almacenes={almacenes} personas={personas} rutas={rutas} onCerrar={() => setEditar(null)} />
+  if (editarFijo) return <GastoFijoEditor fijo={editarFijo} almacenes={almacenes} onCerrar={() => setEditarFijo(null)} />
   const total = lista.reduce((a, g) => a + (Number(g.monto) || 0), 0)
   return (
     <div>
-      <PageTitle right={<Boton variant="gold" onClick={() => setEditar({})}><Plus size={15} /> Nuevo gasto</Boton>}>Gastos</PageTitle>
+      <PageTitle right={vista === 'fijos'
+        ? <Boton variant="gold" onClick={() => setEditarFijo({})}><Plus size={15} /> Nuevo gasto fijo</Boton>
+        : <Boton variant="gold" onClick={() => setEditar({})}><Plus size={15} /> Nuevo gasto</Boton>}>Gastos</PageTitle>
+      <div className="mb-3 inline-flex rounded-xl border border-slate-200 p-0.5 dark:border-slate-700">
+        {[['sueltos', 'Gastos'], ['fijos', 'Fijos recurrentes']].map(([id, l]) => (
+          <button key={id} onClick={() => setVista(id)} className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${vista === id ? 'bg-brand-navy text-white' : 'text-slate-500 hover:text-brand-navy'}`}>{l}</button>
+        ))}
+      </div>
+      {vista === 'fijos' && <GastosFijosLista fijos={gastosFijos} almacenes={almacenes} onEditar={setEditarFijo} />}
+      {vista === 'sueltos' && (<>
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <F label="Categoría"><Select value={fCat} onChange={(e) => setFCat(e.target.value)}><option value="">Todas</option>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
@@ -4066,6 +4088,79 @@ function TabGastos({ gastos, almacenes, personas, rutas }) {
           </Card>
         ))}
       </div>
+      </>)}
+    </div>
+  )
+}
+
+// Lista de GASTOS FIJOS recurrentes (plantillas). Cada uno se materializa solo.
+function GastosFijosLista({ fijos, almacenes, onEditar }) {
+  const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || 'General'
+  const lista = [...(fijos || [])].sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || '')))
+  return (
+    <div>
+      <Aviso tipo="info" className="mb-3">Un <b>gasto fijo</b> se registra solo cada período (semana o mes). Lo defines una vez y el sistema lo crea automáticamente — ideal para la renta, seguros o el <b>pago de las cargo vans a la financiera</b>.</Aviso>
+      {lista.length === 0 && <Vacio icono={Receipt}>Sin gastos fijos. Crea el primero con “Nuevo gasto fijo”.</Vacio>}
+      <div className="space-y-1.5">
+        {lista.map((f) => (
+          <Card key={f.id} className="p-3 transition hover:border-brand-gold/40 hover:shadow-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="navy">{f.categoria}</Badge>
+              <span className="font-semibold text-brand-navy dark:text-slate-100">{f.concepto || '—'}</span>
+              <span className="font-mono text-sm font-bold">{dinero(f.monto)}</span>
+              <Badge color="gold">{f.frecuencia === 'semanal' ? 'cada semana' : `cada mes · día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)}`}</Badge>
+              <Badge color="slate">{almNombre(f.almacenId)}</Badge>
+              {f.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
+              <Badge color={f.activo === false ? 'red' : 'green'}>{f.activo === false ? 'pausado' : 'activo'}</Badge>
+              <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => onEditar(f)}>editar</button>
+            </div>
+            <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Desde {f.desde || '—'}{f.hasta ? ` · hasta ${f.hasta}` : ' · sin fecha de fin'}</div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Editor de un gasto fijo (plantilla). Guarda en COL.gastosFijos; la generación
+// de instancias la hace el efecto de materialización en el componente principal.
+function GastoFijoEditor({ fijo, almacenes, onCerrar }) {
+  const [f, setF] = useState({ concepto: '', categoria: CATEGORIAS_GASTO[0], monto: '', frecuencia: 'mensual', diaMes: 1, desde: hoyISO(), hasta: '', esFinanciamiento: true, almacenId: '', activo: true, ...fijo })
+  const [guardando, setGuardando] = useState(false)
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
+  const salvar = async () => {
+    if (!(Number(f.monto) > 0)) { window.alert('Pon un monto mayor a 0.'); return }
+    if (!f.desde) { window.alert('Pon la fecha de inicio (Desde).'); return }
+    setGuardando(true)
+    try {
+      const data = { ...f, monto: money2(f.monto), diaMes: Math.min(Math.max(1, Number(f.diaMes) || 1), 28) }
+      await guardar(COL.gastosFijos, fijo.id, data)
+      walToast('Gasto fijo guardado ✓', 'gold'); onCerrar()
+    } finally { setGuardando(false) }
+  }
+  return (
+    <div>
+      <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>{fijo.id ? 'Editar gasto fijo' : 'Nuevo gasto fijo'}</PageTitle>
+      <Card className="p-4">
+        <Grid>
+          <F label="Categoría"><Select value={f.categoria} onChange={(e) => set('categoria', e.target.value)}>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+          <F label="Concepto"><Input value={f.concepto} onChange={(e) => set('concepto', e.target.value)} placeholder="Pago financiera cargo vans" /></F>
+          <F label="Monto (USD)"><Input type="number" value={f.monto} onChange={(e) => set('monto', e.target.value)} /></F>
+          <F label="Frecuencia"><Select value={f.frecuencia} onChange={(e) => set('frecuencia', e.target.value)}><option value="mensual">Cada mes</option><option value="semanal">Cada semana (sáb→vie)</option></Select></F>
+          {f.frecuencia === 'mensual' && <F label="Día del mes (1–28)"><Input type="number" min="1" max="28" value={f.diaMes} onChange={(e) => set('diaMes', e.target.value)} /></F>}
+          <F label="Empieza (Desde)"><DateField value={f.desde} onChange={(e) => set('desde', e.target.value)} /></F>
+          <F label="Termina (opcional)"><DateField value={f.hasta} onChange={(e) => set('hasta', e.target.value)} /></F>
+          <F label="Almacén (opcional)"><Select value={f.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General / compañía</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+        </Grid>
+        <label className="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!f.esFinanciamiento} onChange={(e) => set('esFinanciamiento', e.target.checked)} className="accent-brand-gold" /> Es financiamiento (salida de caja, no gasto operativo) — p. ej. cargo vans</label>
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={f.activo !== false} onChange={(e) => set('activo', e.target.checked)} className="accent-brand-gold" /> Activo (si lo pausas, deja de generarse)</label>
+        <p className="mt-2 text-[11px] text-slate-400">Se registrará automáticamente {f.frecuencia === 'semanal' ? 'cada semana (sáb→vie)' : `cada mes (día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)})`} desde la fecha de inicio hasta hoy (o hasta la fecha de fin). Las instancias que edites a mano no se sobreescriben.</p>
+        <div className="mt-3 flex gap-2">
+          <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar gasto fijo'}</Boton>
+          <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+          {fijo.id && <button className="ml-auto text-sm font-semibold text-rose-400 hover:text-rose-600" onClick={async () => { if (window.confirm('¿Borrar este gasto fijo? Las instancias ya creadas se quedan.')) { await borrar(COL.gastosFijos, fijo.id); onCerrar() } }}>Borrar</button>}
+        </div>
+      </Card>
     </div>
   )
 }

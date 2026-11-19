@@ -66,6 +66,7 @@ export const COL = {
   cierres: 'wal_cierres',
   pagos: 'wal_pagos',
   gastos: 'wal_gastos',
+  gastosFijos: 'wal_gastos_fijos', // plantillas de gastos recurrentes (semanal/mensual)
   cobros: 'wal_cobros', // dinero que Walmart paga a la compañía
   contratos: 'wal_contratos',
   plantillas: 'wal_plantillas',
@@ -375,6 +376,41 @@ export function datosDeDriver(driver, almacenNombre, empresa, tarifa) {
 
 // ── Gastos ──────────────────────────────────────────────────────────────────
 export const CATEGORIAS_GASTO = ['Cargo Van (financiamiento)', 'Seguro', 'Gasolina', 'Reparación', 'Mantenimiento', 'Renta', 'Nómina', 'Suministros', 'Otro']
+
+// Gastos FIJOS recurrentes: a partir de cada plantilla (semanal/mensual) calcula
+// qué INSTANCIAS de gasto faltan por crear, desde su `desde` hasta HOY (o `hasta`).
+// Id determinista `gf_<plantilla>_<período>` → idempotente (no duplica, y si
+// editas una instancia generada no se sobreescribe porque solo se crea si falta).
+export function pendientesGastosFijos(fijos, gastos, hoy = hoyISO()) {
+  const existentes = new Set((gastos || []).map((g) => g.id))
+  const out = []
+  for (const f of (fijos || [])) {
+    if (f.activo === false) continue
+    const monto = money2(f.monto)
+    if (monto <= 0 || !f.desde) continue
+    const fin = f.hasta && f.hasta < hoy ? f.hasta : hoy
+    if (fin < f.desde) continue
+    const comun = { categoria: f.categoria || 'Otro', concepto: f.concepto || '', monto, tipo: 'fijo', esFinanciamiento: !!f.esFinanciamiento, almacenId: f.almacenId || '', driverId: f.driverId || '', fijoId: f.id, auto: true }
+    if (f.frecuencia === 'semanal') {
+      let w = lunesDe(f.desde); const wFin = lunesDe(fin); let guard = 0
+      while (w <= wFin && guard++ < 520) {
+        const id = `gf_${f.id}_${w}`
+        if (!existentes.has(id)) out.push({ id, data: { ...comun, fecha: w, semana: w } })
+        w = lunesDe(sumarDias(w, 7))
+      }
+    } else {
+      const dia = Math.min(Math.max(1, Number(f.diaMes) || 1), 28)
+      let ym = mesDe(f.desde); const ymFin = mesDe(fin); let guard = 0
+      while (ym <= ymFin && guard++ < 240) {
+        const id = `gf_${f.id}_${ym}`
+        if (!existentes.has(id)) out.push({ id, data: { ...comun, fecha: `${ym}-${String(dia).padStart(2, '0')}` } })
+        const [y, m] = ym.split('-').map(Number); const nd = new Date(y, m, 1)
+        ym = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`
+      }
+    }
+  }
+  return out
+}
 
 // Distribuye un gasto MENSUAL (desde..hasta) entre semanas por días.
 export function distribuirMensual(monto, desde, hasta) {
