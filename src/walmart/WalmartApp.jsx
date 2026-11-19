@@ -2639,13 +2639,19 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
     } catch (e) { setErr(`No se pudo crear el chofer "${n}": ${e.message || e}. ¿Tienes permiso para crear drivers?`) }
   }
 
-  const onFile = (e) => {
-    const f = e.target.files && e.target.files[0]; if (!f) return
+  const [arrastrando, setArrastrando] = useState(false)
+  const leerArchivo = (f) => {
+    if (!f) return
+    const nombre = (f.name || '').toLowerCase()
+    if (!(nombre.endsWith('.csv') || (f.type || '').includes('csv') || (f.type || '').startsWith('text/'))) { setErr('Solo se acepta un archivo CSV (el reporte de rutas de Walmart).'); return }
+    setErr('')
     const rd = new FileReader()
     rd.onload = () => { try { procesar(String(rd.result || '')) } catch (ex) { setErr('No se pudo leer el archivo: ' + (ex.message || ex)) } }
     rd.onerror = () => setErr('No se pudo leer el archivo.')
     rd.readAsText(f)
   }
+  const onFile = (e) => { leerArchivo(e.target.files && e.target.files[0]); if (e.target) e.target.value = '' }
+  const onDrop = (e) => { e.preventDefault(); setArrastrando(false); leerArchivo(e.dataTransfer?.files && e.dataTransfer.files[0]) }
   function procesar(text) {
     text = text.replace(/^﻿/, '')
     const rows = parseCSVWal(text)
@@ -2777,8 +2783,15 @@ function ImportarWalmart({ rutas, almacenes, personas, tarifas, onCerrar }) {
           <Card className="mb-3 p-4">
             <h3 className="mb-1 font-bold text-brand-navy dark:text-slate-100">Sube el reporte de Walmart (CSV)</h3>
             <p className="mb-3 text-xs text-slate-500">El archivo que descargas de Walmart. Creamos <b>una ruta por chofer, día y turno</b> (mañana/tarde). No contamos paradas. Las filas sin chofer se ignoran.</p>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm font-semibold text-slate-500 hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800/40">
-              <Upload size={18} /> Elegir archivo CSV…
+            <label
+              onDragOver={(e) => { e.preventDefault(); setArrastrando(true) }}
+              onDragEnter={(e) => { e.preventDefault(); setArrastrando(true) }}
+              onDragLeave={(e) => { e.preventDefault(); setArrastrando(false) }}
+              onDrop={onDrop}
+              className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-10 text-center text-sm font-semibold transition ${arrastrando ? 'border-brand-gold bg-amber-50 text-brand-navy dark:bg-amber-500/10 dark:text-slate-100' : 'border-slate-300 bg-slate-50 text-slate-500 hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800/40'}`}>
+              <Upload size={22} className={arrastrando ? 'text-brand-gold' : ''} />
+              <span>{arrastrando ? 'Suelta el archivo aquí' : 'Arrastra y suelta el CSV aquí'}</span>
+              <span className="text-xs font-normal text-slate-400">o haz clic para elegir el archivo</span>
               <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
             </label>
             <div className="mt-3">
