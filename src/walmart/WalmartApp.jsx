@@ -431,7 +431,7 @@ function TabDashboard({ rutas, pagos, gastos, cobros, personas, almacenes, contr
     const comisionesFP = money2((pagos || []).filter((p) => p.fecha === f && fpLiquida(p) && (!almId || !p.almacenId || p.almacenId === almId)).reduce((a, p) => a + (Number(p.comision) || 0), 0))
     const gastosOper = money2((gastos || []).filter((g) => g.fecha === f && (!almId || !g.almacenId || g.almacenId === almId) && !g.esFinanciamiento).reduce((a, g) => a + (Number(g.monto) || 0), 0))
     const bonosTotal = money2(rs.reduce((a, r) => a + (Array.isArray(r.bonos) ? r.bonos.reduce((x, b) => x + (Number(b.monto) || 0), 0) : 0), 0))
-    return { ingresoRutas, costoDrivers, margen: money2(ingresoRutas - costoDrivers), gastosOper, gastoFinanc: 0, comisionesFP, efectivoFP: 0, pagosNormales: 0, resultadoOperativo: money2(ingresoRutas - costoDrivers - gastosOper + comisionesFP), cobrado: 0, porCobrar: 0, efectivoADrivers: 0, gastosPagados: 0, bonosTotal, flujoCaja: money2(gastosOper + bonosTotal), nRutas: rs.length }
+    return { ingresoRutas, costoDrivers, margen: money2(ingresoRutas - costoDrivers), gastosOper, gastoFinanc: 0, comisionesFP, efectivoFP: 0, pagosNormales: 0, resultadoOperativo: money2(ingresoRutas - costoDrivers - gastosOper + comisionesFP), utilidadNeta: money2(ingresoRutas - costoDrivers - gastosOper + comisionesFP - bonosTotal), cobrado: 0, porCobrar: 0, efectivoADrivers: 0, gastosPagados: 0, bonosTotal, flujoCaja: money2(gastosOper + bonosTotal), nRutas: rs.length }
   }
   const fin = useMemo(() => (modo === 'dia' ? finDia(fecha) : esSemana ? financieroSemana(rutas, pagos, gastos, cobros, semana, almId) : financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almId)), [rutas, pagos, gastos, cobros, semana, desde, hasta, almId, esSemana, modo, fecha]) // eslint-disable-line
   const net30 = useMemo(() => receivableNet30(rutas, cobros, almId), [rutas, cobros, almId])
@@ -4451,6 +4451,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
     { label: 'Costo drivers', actual: fin.costoDrivers, anterior: finPrev.costoDrivers },
     { label: 'Margen', actual: fin.margen, anterior: finPrev.margen },
     { label: 'Resultado', actual: fin.resultadoOperativo, anterior: finPrev.resultadoOperativo },
+    { label: 'Utilidad neta', actual: fin.utilidadNeta, anterior: finPrev.utilidadNeta },
     { label: 'Flujo', actual: fin.flujoCaja, anterior: finPrev.flujoCaja },
   ]
 
@@ -4497,6 +4498,7 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         {vIng && <KPI animado label="Ingreso Walmart" value={dinero(fin.ingresoRutas)} icon={DollarSign} accent="navy" trend={tr(fin.ingresoRutas, finPrev.ingresoRutas)} sub={`ant. ${dinero(finPrev.ingresoRutas)}`} />}
         {vCos && <KPI animado label="Costo drivers" value={dinero(fin.costoDrivers)} icon={Wallet} accent="blue" sub="antes de Fast Pay" />}
         {vOper && <KPI animado label="Resultado operativo" value={dinero(fin.resultadoOperativo)} icon={TrendingUp} accent={fin.resultadoOperativo >= 0 ? 'green' : 'red'} trend={tr(fin.resultadoOperativo, finPrev.resultadoOperativo)} sub={`ant. ${dinero(finPrev.resultadoOperativo)}`} />}
+        {vOper && (fin.gastoFinanc > 0 || fin.bonosTotal > 0) && <KPI animado label="Utilidad neta" value={dinero(fin.utilidadNeta)} icon={TrendingUp} accent={fin.utilidadNeta >= 0 ? 'green' : 'red'} trend={tr(fin.utilidadNeta, finPrev.utilidadNeta)} sub="después de vans y bonos" />}
         {vFin && <KPI animado label="Comisiones Fast Pay" value={dinero(fin.comisionesFP)} icon={Zap} accent="gold" trend={tr(fin.comisionesFP, finPrev.comisionesFP)} sub="ingreso compañía" />}
         {vIng && <KPI animado label="Por cobrar" value={dinero(fin.porCobrar)} icon={Clock} accent={fin.porCobrar > 0 ? 'gold' : 'green'} sub="devengado − cobrado" />}
         {vOper && <KPI animado label="Flujo de caja" value={dinero(fin.flujoCaja)} icon={BarChart3} accent="navy" trend={tr(fin.flujoCaja, finPrev.flujoCaja)} sub="gastos + bonos" />}
@@ -4532,7 +4534,12 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
         <FilaFin l="Gastos operativos asignados" v={-fin.gastosOper} />
         <FilaFin l="Comisiones de Fast Pay (ingreso aparte)" v={fin.comisionesFP} verde />
         <FilaFin l="Resultado operativo" v={fin.resultadoOperativo} fuerte borde />
-        {fin.gastoFinanc > 0 && <p className="mt-2 text-[11px] text-slate-400">+ {dinero(fin.gastoFinanc)} de financiamiento (Cargo Vans): es salida de caja, no entra al resultado operativo.</p>}
+        {(fin.gastoFinanc > 0 || fin.bonosTotal > 0) && (<>
+          {fin.gastoFinanc > 0 && <FilaFin l="Financiamiento (Cargo Vans)" v={-fin.gastoFinanc} />}
+          {fin.bonosTotal > 0 && <FilaFin l="Bonos a choferes" v={-fin.bonosTotal} />}
+          <FilaFin l="Utilidad neta (lo que te queda)" v={fin.utilidadNeta} fuerte borde />
+        </>)}
+        <p className="mt-2 text-[11px] text-slate-400">El <b>resultado operativo</b> es tu operación pura (ingresos − costo de choferes − gastos operativos). La <b>utilidad neta</b> resta además el financiamiento de las Cargo Vans y los bonos — es <b>lo que realmente te queda</b>.</p>
       </Card>
       )}
 

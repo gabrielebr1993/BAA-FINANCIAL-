@@ -460,12 +460,15 @@ export function financieroSemana(rutas, pagos, gastos, cobros, semana, almacenId
   // Flujo de caja = SOLO los gastos del período + los bonos. No incluye Fast Pay
   // ni los pagos regulares a choferes.
   const flujoCaja = money2(gastosOper + gastoFinanc + bonosTotal)
-  return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, cobrado, porCobrar, efectivoADrivers, gastosPagados, bonosTotal, flujoCaja, nRutas: rs.length }
+  // Utilidad neta = resultado operativo MENOS lo que también sale (financiamiento
+  // de las Cargo Vans + bonos a choferes). Es "lo que realmente te queda".
+  const utilidadNeta = money2(resultadoOperativo - gastoFinanc - bonosTotal)
+  return { ingresoRutas, costoDrivers, margen, gastosOper, gastoFinanc, comisionesFP, efectivoFP, pagosNormales, resultadoOperativo, utilidadNeta, cobrado, porCobrar, efectivoADrivers, gastosPagados, bonosTotal, flujoCaja, nRutas: rs.length }
 }
 
 // Financiero de un RANGO de fechas: suma las semanas (lunes) que lo cruzan.
 export function financieroRango(rutas, pagos, gastos, cobros, desde, hasta, almacenId) {
-  const campos = ['ingresoRutas', 'costoDrivers', 'margen', 'gastosOper', 'gastoFinanc', 'comisionesFP', 'efectivoFP', 'pagosNormales', 'resultadoOperativo', 'cobrado', 'porCobrar', 'efectivoADrivers', 'gastosPagados', 'bonosTotal', 'flujoCaja', 'nRutas']
+  const campos = ['ingresoRutas', 'costoDrivers', 'margen', 'gastosOper', 'gastoFinanc', 'comisionesFP', 'efectivoFP', 'pagosNormales', 'resultadoOperativo', 'utilidadNeta', 'cobrado', 'porCobrar', 'efectivoADrivers', 'gastosPagados', 'bonosTotal', 'flujoCaja', 'nRutas']
   const acc = Object.fromEntries(campos.map((k) => [k, 0]))
   let w = lunesDe(desde); const fin = lunesDe(hasta); let guard = 0
   while (w <= fin && guard < 400) {
