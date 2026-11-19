@@ -4181,6 +4181,7 @@ function GastoFijoEditor({ fijo, almacenes, onCerrar }) {
 function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
   const [g, setG] = useState({ categoria: CATEGORIAS_GASTO[1], concepto: '', monto: '', fecha: hoyISO(), tipo: 'variable', almacenId: '', driverId: '', vehiculo: '', rutaId: '', responsable: '', estadoPago: 'pendiente', fechaPago: '', esFinanciamiento: false, periodoDesde: '', periodoHasta: '', ...gasto, mensual: !!gasto.periodoDesde })
   const [guardando, setGuardando] = useState(false)
+  const [masOpciones, setMasOpciones] = useState(() => !!(gasto.driverId || gasto.rutaId || gasto.vehiculo || gasto.responsable || gasto.estadoPago === 'pagado' || gasto.tipo === 'fijo'))
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }))
   const rutasDrv = (rutas || []).filter((r) => !g.driverId || r.driverId === g.driverId).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 30)
   const dist = g.mensual && g.periodoDesde && g.periodoHasta ? distribuirMensual(g.monto, g.periodoDesde, g.periodoHasta) : []
@@ -4200,29 +4201,41 @@ function GastoEditor({ gasto, almacenes, personas, rutas, onCerrar }) {
   return (
     <div>
       <PageTitle right={<Boton variant="ghost" onClick={onCerrar}><ArrowLeft size={14} /> Volver</Boton>}>{gasto.id ? 'Editar gasto' : 'Nuevo gasto'}</PageTitle>
+      <Aviso tipo="info" className="mb-3">¿Es un gasto que se <b>repite</b> (renta, seguro, pago de cargo vans)? Mejor créalo en la pestaña <b>“Fijos recurrentes”</b> — se registra solo cada mes/semana.</Aviso>
       <Card className="mb-3 p-4">
+        {/* Esencial (siempre visible) */}
         <Grid>
           <F label="Categoría"><Select value={g.categoria} onChange={(e) => set('categoria', e.target.value)}>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
-          <F label="Concepto"><Input value={g.concepto} onChange={(e) => set('concepto', e.target.value)} /></F>
+          <F label="Concepto"><Input value={g.concepto} onChange={(e) => set('concepto', e.target.value)} placeholder="Ej. Gasolina, RAM Pro Master…" /></F>
           <F label="Monto (USD)"><Input type="number" value={g.monto} onChange={(e) => set('monto', e.target.value)} /></F>
           <F label="Fecha"><DateField value={g.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
-          <F label="Tipo"><Select value={g.tipo} onChange={(e) => set('tipo', e.target.value)}><option value="variable">Variable</option><option value="fijo">Fijo / recurrente</option></Select></F>
           <F label="Almacén (o General)"><Select value={g.almacenId} onChange={(e) => set('almacenId', e.target.value)}><option value="">General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <F label="Atribuir a driver (opcional)"><Select value={g.driverId} onChange={(e) => set('driverId', e.target.value)}><option value="">—</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
-          <F label="Ruta (opcional)"><Select value={g.rutaId} onChange={(e) => set('rutaId', e.target.value)}><option value="">—</option>{rutasDrv.map((r) => <option key={r.id} value={r.id}>{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label} · {r.driverNombre}</option>)}</Select></F>
-          <F label="Vehículo (opcional)"><Input value={g.vehiculo} onChange={(e) => set('vehiculo', e.target.value)} /></F>
-          <F label="Responsable"><Input value={g.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
-          <F label="Estado de pago"><Select value={g.estadoPago} onChange={(e) => set('estadoPago', e.target.value)}><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></Select></F>
-          {g.estadoPago === 'pagado' && <F label="Fecha de pago"><DateField value={g.fechaPago} onChange={(e) => set('fechaPago', e.target.value)} /></F>}
         </Grid>
         <div className="mt-3 flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.mensual} onChange={(e) => set('mensual', e.target.checked)} className="accent-brand-gold" /> Es mensual (repartir entre semanas)</label>
           <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.esFinanciamiento} onChange={(e) => set('esFinanciamiento', e.target.checked)} className="accent-brand-gold" /> Es financiamiento (salida de caja, no gasto operativo)</label>
         </div>
-        {g.mensual && (
-          <div className="mt-2">
-            <Grid><F label="Período desde"><DateField value={g.periodoDesde} onChange={(e) => set('periodoDesde', e.target.value)} /></F><F label="Período hasta"><DateField value={g.periodoHasta} onChange={(e) => set('periodoHasta', e.target.value)} /></F></Grid>
-            {dist.length > 0 && <div className="mt-2 text-xs text-slate-500">Se reparte: {dist.map((d) => `${d.semana}: ${dinero(d.monto)}`).join(' · ')}</div>}
+
+        {/* Más opciones (colapsado por defecto) */}
+        <button type="button" onClick={() => setMasOpciones((v) => !v)} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-brand-navy dark:text-slate-400">
+          <ChevronDown size={15} className={`transition-transform ${masOpciones ? 'rotate-180' : ''}`} /> {masOpciones ? 'Menos opciones' : 'Más opciones'} <span className="text-xs font-normal text-slate-400">(driver, ruta, vehículo, estado de pago, repartir mensual…)</span>
+        </button>
+        {masOpciones && (
+          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <Grid>
+              <F label="Atribuir a driver (opcional)"><Select value={g.driverId} onChange={(e) => set('driverId', e.target.value)}><option value="">—</option>{personas.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+              <F label="Ruta (opcional)"><Select value={g.rutaId} onChange={(e) => set('rutaId', e.target.value)}><option value="">—</option>{rutasDrv.map((r) => <option key={r.id} value={r.id}>{r.fecha} · {BLOQUES.find((b) => b.id === r.bloque)?.label} · {r.driverNombre}</option>)}</Select></F>
+              <F label="Vehículo (opcional)"><Input value={g.vehiculo} onChange={(e) => set('vehiculo', e.target.value)} /></F>
+              <F label="Responsable"><Input value={g.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
+              <F label="Estado de pago"><Select value={g.estadoPago} onChange={(e) => set('estadoPago', e.target.value)}><option value="pendiente">Pendiente</option><option value="pagado">Pagado</option></Select></F>
+              {g.estadoPago === 'pagado' && <F label="Fecha de pago"><DateField value={g.fechaPago} onChange={(e) => set('fechaPago', e.target.value)} /></F>}
+            </Grid>
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={g.mensual} onChange={(e) => set('mensual', e.target.checked)} className="accent-brand-gold" /> Es mensual (repartir el monto entre las semanas de un período)</label>
+            {g.mensual && (
+              <div className="mt-2">
+                <Grid><F label="Período desde"><DateField value={g.periodoDesde} onChange={(e) => set('periodoDesde', e.target.value)} /></F><F label="Período hasta"><DateField value={g.periodoHasta} onChange={(e) => set('periodoHasta', e.target.value)} /></F></Grid>
+                {dist.length > 0 && <div className="mt-2 text-xs text-slate-500">Se reparte: {dist.map((d) => `${d.semana}: ${dinero(d.monto)}`).join(' · ')}</div>}
+              </div>
+            )}
           </div>
         )}
       </Card>
