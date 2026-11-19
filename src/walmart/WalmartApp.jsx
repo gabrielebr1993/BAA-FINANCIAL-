@@ -49,7 +49,7 @@ import {
   ultimasSemanas, receivableNet30, acumuladoDriver,
   AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
-  financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes, idFactura,
+  financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes,
   suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
   suscribirPorDriver, suscribirMiFicha,
   solicitarFastPay, suscribirSolicitudes, suscribirMisSolicitudes, atenderSolicitud,
@@ -4550,7 +4550,9 @@ function TabFacturas({ rutas, almacenes, facturas }) {
     if (prev.total <= 0) { window.alert('No hay rutas completadas en ese período para facturar.'); return }
     setGenerando(true)
     try {
-      const numero = idFactura(modo === 'mes' ? mes : mesDe(desde))
+      // Número de factura: solo un número correlativo (1001, 1002, …).
+      const soloNum = (facturas || []).map((x) => (/^\d+$/.test(String(x.numero || '')) ? parseInt(x.numero, 10) : NaN)).filter((n) => !Number.isNaN(n))
+      const numero = String((soloNum.length ? Math.max(...soloNum) : 1000) + 1)
       const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, porDriver: prev.porDriver, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'Blue Box Logistic LLC' }
       const id = await guardar(COL.facturas, null, data)
       await auditar('factura_generada', `${numero} · ${dinero(prev.total)} · ${periodo}`)
