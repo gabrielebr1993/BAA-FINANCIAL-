@@ -9,6 +9,7 @@ import { useLang } from '../i18n'
 import { MODULES, getModule, tx } from '../config/modules'
 import MilePayLogo from '../components/MilePayLogo'
 import ModulePreview from '../components/ModulePreview'
+import Warehouse3DSection from '../components/Warehouse3DSection'
 
 const UI = {
   nav: {
@@ -116,6 +117,9 @@ export default function HomeRedesign() {
           </div>
         </div>
       </section>
+
+      {/* ── ALMACÉN 3D (sección opcional) ── */}
+      <Warehouse3DSection />
 
       {/* ── WHAT MOVES (claro, 4 tarjetas) ── */}
       <section id="how" className="mx-auto max-w-6xl px-5 py-16">
