@@ -183,8 +183,9 @@ export default function WalmartApp() {
   const setTab = (t) => { setTabRaw(t); try { localStorage.setItem('wal_tab', t) } catch { /* sin storage */ } }
   // Menú lateral en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
   const grupoActivoWal = TABS.find((x) => x.id === tab)?.grupo
-  const [grpWal, setGrpWal] = useState(grupoActivoWal || 'Operación')
-  useEffect(() => { if (grupoActivoWal) setGrpWal(grupoActivoWal) }, [grupoActivoWal])
+  // Plegable MÚLTIPLE: varios grupos pueden quedar abiertos a la vez.
+  const [grpWal, setGrpWal] = useState(() => new Set([grupoActivoWal || 'Operación']))
+  useEffect(() => { if (grupoActivoWal) setGrpWal((s) => s.has(grupoActivoWal) ? s : new Set(s).add(grupoActivoWal)) }, [grupoActivoWal])
   // Si la pestaña activa no está permitida, cae a la primera visible.
   useEffect(() => {
     if (miWal === undefined && !esDueno) return
@@ -333,11 +334,11 @@ export default function WalmartApp() {
             }
             // "Inicio" siempre visible; los demás grupos, plegables (solo el activo abierto).
             if (g === 'Inicio') return <div key={g} className="mb-0.5">{items.map(Fila)}</div>
-            const abierto = grpWal === g
+            const abierto = grpWal.has(g)
             const badgeG = !abierto && items.some((t) => t.id === 'pagos') && solPendientes.length > 0
             return (
               <div key={g} className="mb-0.5">
-                <button onClick={() => setGrpWal(abierto ? '' : g)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                <button onClick={() => setGrpWal((s) => { const n = new Set(s); n.has(g) ? n.delete(g) : n.add(g); return n })} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
                   <span className="flex-1 text-left">{g}</span>
                   {badgeG && <span className="h-2 w-2 rounded-full bg-rose-500" />}
                   <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />

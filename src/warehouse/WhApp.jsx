@@ -129,8 +129,9 @@ function WhShell({ user }) {
   }
   // Menú en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
   const grupoActivoWh = TABS.find((x) => x.id === tab)?.grupo
-  const [grpWh, setGrpWh] = useState(grupoActivoWh || 'Operación')
-  useEffect(() => { if (grupoActivoWh) setGrpWh(grupoActivoWh) }, [grupoActivoWh])
+  // Plegable MÚLTIPLE: varios grupos pueden quedar abiertos a la vez.
+  const [grpWh, setGrpWh] = useState(() => new Set([grupoActivoWh || 'Operación']))
+  useEffect(() => { if (grupoActivoWh) setGrpWh((s) => s.has(grupoActivoWh) ? s : new Set(s).add(grupoActivoWh)) }, [grupoActivoWh])
   // "abrir el perfil de este trabajador" desde cualquier pestaña (p. ej. al
   // tocar un nombre en Print Check): evento global → pestaña Trabajadores.
   const [perfilPedido, setPerfilPedido] = useState(null)
@@ -172,10 +173,10 @@ function WhShell({ user }) {
               )
             }
             if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{items.map(Fila)}</div>
-            const abierto = grpWh === grupo
+            const abierto = grpWh.has(grupo)
             return (
               <div key={grupo} className="mb-1">
-                <button onClick={() => setGrpWh(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                <button onClick={() => setGrpWh((s) => { const n = new Set(s); n.has(grupo) ? n.delete(grupo) : n.add(grupo); return n })} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
                   <span className="flex-1 text-left">{grupo}</span>
                   <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
                 </button>

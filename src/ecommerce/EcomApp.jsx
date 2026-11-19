@@ -122,8 +122,9 @@ function EcomShell({ user }) {
   }
   // Menú en ACORDEÓN: solo el grupo de la pestaña activa queda abierto.
   const grupoActivoEc = TABS.find((x) => x.id === tab)?.grupo
-  const [grpEc, setGrpEc] = useState(grupoActivoEc || 'Ventas')
-  useEffect(() => { if (grupoActivoEc) setGrpEc(grupoActivoEc) }, [grupoActivoEc])
+  // Plegable MÚLTIPLE: varios grupos pueden quedar abiertos a la vez.
+  const [grpEc, setGrpEc] = useState(() => new Set([grupoActivoEc || 'Ventas']))
+  useEffect(() => { if (grupoActivoEc) setGrpEc((s) => s.has(grupoActivoEc) ? s : new Set(s).add(grupoActivoEc)) }, [grupoActivoEc])
   const [config, setConfig] = useState(null)
   const [guardandoCfg, setGuardandoCfg] = useState(false)
   const recargarConfig = async () => {
@@ -177,10 +178,10 @@ function EcomShell({ user }) {
               )
             }
             if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{items.map(Fila)}</div>
-            const abierto = grpEc === grupo
+            const abierto = grpEc.has(grupo)
             return (
               <div key={grupo} className="mb-1">
-                <button onClick={() => setGrpEc(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
+                <button onClick={() => setGrpEc((s) => { const n = new Set(s); n.has(grupo) ? n.delete(grupo) : n.add(grupo); return n })} className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-700/40 dark:hover:text-white">
                   <span className="flex-1 text-left">{grupo}</span>
                   <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
                 </button>

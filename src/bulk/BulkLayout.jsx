@@ -27,12 +27,13 @@ export default function BulkLayout({ children }) {
   const { t } = useLang()
   const navigate = useNavigate()
   const items = useMemo(() => navVisible(puede), [puede])
-  // Menú en ACORDEÓN: solo el grupo de la ruta activa queda abierto.
+  // Menú plegable MÚLTIPLE: se pueden tener varios grupos abiertos a la vez;
+  // abrir uno NO cierra los demás. Arranca con el grupo de la ruta activa abierto.
   const ubic = useLocation()
   const subRuta = ubic.pathname.replace(/^\/bulk\/?/, '')
   const grupoActivoBulk = (items.find((i) => i.path === subRuta) || items.find((i) => i.path === ''))?.grupo
-  const [grpBulk, setGrpBulk] = useState(grupoActivoBulk || GRUPOS_ORDEN[1])
-  useEffect(() => { if (grupoActivoBulk) setGrpBulk(grupoActivoBulk) }, [grupoActivoBulk])
+  const [grpBulk, setGrpBulk] = useState(() => new Set([grupoActivoBulk || GRUPOS_ORDEN[1]]))
+  useEffect(() => { if (grupoActivoBulk) setGrpBulk((s) => s.has(grupoActivoBulk) ? s : new Set(s).add(grupoActivoBulk)) }, [grupoActivoBulk])
   const [verClave, setVerClave] = useState(false)
   // Foto de perfil propia (cada usuario puede ponerla/cambiarla/quitarla). Preview local
   // instantáneo (undefined = usar la guardada; null = quitada; dataUrl = nueva).
@@ -118,11 +119,11 @@ export default function BulkLayout({ children }) {
               </NavLink>
             )
             if (grupo === 'Inicio') return <div key={grupo} className="mb-1">{g.map(Fila)}</div>
-            const abierto = grpBulk === grupo
+            const abierto = grpBulk.has(grupo)
             const badgeG = !abierto && g.some((i) => i.path === 'mensajes') && noLeidos > 0
             return (
               <div key={grupo} className="mb-1">
-                <button onClick={() => setGrpBulk(abierto ? '' : grupo)} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800">
+                <button onClick={() => setGrpBulk((s) => { const n = new Set(s); n.has(grupo) ? n.delete(grupo) : n.add(grupo); return n })} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:bg-slate-100 hover:text-brand-navy dark:hover:bg-slate-800">
                   <span className="flex-1 text-left">{t(grupo)}</span>
                   {badgeG && <span className="h-2 w-2 rounded-full bg-rose-500" />}
                   <ChevronDown size={14} strokeWidth={2.2} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
