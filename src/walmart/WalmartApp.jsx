@@ -4346,6 +4346,28 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
     { label: 'Flujo', actual: fin.flujoCaja, anterior: finPrev.flujoCaja },
   ]
 
+  // ── Detalle del flujo de caja: cada movimiento (entra/sale) + saldo corrido ──
+  const movimientos = useMemo(() => {
+    const movs = []
+    for (const c of cobrosPer) movs.push({ fecha: c.fecha, concepto: `Cobro Walmart${c.referencia ? ' · ' + c.referencia : ''}`, entra: Number(c.monto) || 0, sale: 0 })
+    const gastosPer = (gastos || []).filter((g) => g.fecha >= desde && g.fecha <= hasta && (!almId || !g.almacenId || g.almacenId === almId))
+    for (const g of gastosPer) movs.push({ fecha: g.fecha, concepto: `Gasto · ${g.categoria || 'otros'}${g.nota ? ' · ' + g.nota : ''}${g.esFinanciamiento ? ' (financiamiento)' : ''}`, entra: 0, sale: Number(g.monto) || 0 })
+    const rsBonos = (rutas || []).filter((r) => enPeriodo(r) && r.estado === 'completada' && (!almId || r.almacenId === almId) && Array.isArray(r.bonos) && r.bonos.length)
+    for (const r of rsBonos) for (const b of r.bonos) movs.push({ fecha: r.fecha, concepto: `Bono · ${r.driverNombre || 'driver'}${b.motivo ? ' · ' + b.motivo : ''}`, entra: 0, sale: Number(b.monto) || 0 })
+    movs.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
+    let saldo = 0
+    for (const m of movs) { saldo += m.entra - m.sale; m.saldo = money2(saldo) }
+    return movs
+  }, [cobrosPer, gastos, rutas, desde, hasta, almId, esSemana, semana]) // eslint-disable-line react-hooks/exhaustive-deps
+  const totEntra = money2(movimientos.reduce((a, m) => a + m.entra, 0))
+  const totSale = money2(movimientos.reduce((a, m) => a + m.sale, 0))
+  const descargarFlujoCSV = () => {
+    const filas = [['Fecha', 'Concepto', 'Entra', 'Sale', 'Saldo'], ...movimientos.map((m) => [m.fecha, m.concepto, m.entra || '', m.sale || '', m.saldo])]
+    const csv = filas.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `flujo_caja_${desde}_${hasta}.csv`; a.click(); URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <PageTitle>Financiero</PageTitle>
@@ -4436,6 +4458,36 @@ function TabFinanciero({ rutas, pagos, gastos, cobros, personas, almacenes, fact
             {cobrosPer.map((c) => <div key={c.id} className="flex flex-wrap gap-2 text-xs text-slate-500"><span className="font-mono font-semibold text-brand-navy dark:text-slate-100">{dinero(c.monto)}</span><span>{c.fecha}</span>{c.referencia && <span>· {c.referencia}</span>}{c.responsable && <span>· {c.responsable}</span>}</div>)}
           </div>
         )}
+      </Card>
+      )}
+      {vIng && (
+      <Card className="mb-3 p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Detalle del flujo de caja · {etiqueta}</span>
+          {movimientos.length > 0 && <Boton variant="ghost" className="ml-auto" onClick={descargarFlujoCSV}><FileSpreadsheet size={13} /> Descargar</Boton>}
+        </div>
+        {movimientos.length === 0
+          ? <Vacio icono={BarChart3}>No hay movimientos (cobros, gastos ni bonos) en este período.</Vacio>
+          : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-[11px] uppercase tracking-wide text-slate-400"><th className="py-1 text-left font-bold">Fecha</th><th className="text-left font-bold">Concepto</th><th className="text-right font-bold">Entra</th><th className="text-right font-bold">Sale</th><th className="text-right font-bold">Saldo</th></tr></thead>
+                <tbody>
+                  {movimientos.map((m, i) => (
+                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="whitespace-nowrap py-1.5 font-mono text-slate-500">{m.fecha}</td>
+                      <td className="text-brand-navy dark:text-slate-100">{m.concepto}</td>
+                      <td className="text-right font-mono font-semibold text-emerald-600">{m.entra ? dinero(m.entra) : ''}</td>
+                      <td className="text-right font-mono font-semibold text-rose-500">{m.sale ? '− ' + dinero(m.sale) : ''}</td>
+                      <td className="text-right font-mono font-bold text-brand-navy dark:text-slate-100">{dinero(m.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot><tr className="border-t-2 border-slate-200 dark:border-slate-700"><td className="py-2 font-bold text-brand-navy dark:text-slate-100" colSpan={2}>Totales</td><td className="text-right font-mono font-bold text-emerald-600">{dinero(totEntra)}</td><td className="text-right font-mono font-bold text-rose-500">− {dinero(totSale)}</td><td className="text-right font-mono font-extrabold text-brand-navy dark:text-slate-100">{dinero(money2(totEntra - totSale))}</td></tr></tfoot>
+              </table>
+            </div>
+          )}
+        <p className="mt-2 text-[11px] text-slate-400">Entradas = cobros de Walmart. Salidas = gastos del período + bonos a choferes. El <b>saldo</b> es corrido (acumulado) por fecha.</p>
       </Card>
       )}
       <p className="text-xs text-slate-400">Para <b>facturar a Walmart</b> por mes, usa la pestaña <b>Facturas</b>. Fast Pay: la ganancia del driver va completa como costo y la comisión como ingreso aparte — nunca se descuenta dos veces.</p>
