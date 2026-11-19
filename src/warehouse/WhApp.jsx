@@ -9,7 +9,8 @@
 // ============================================================================
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth'
+import ModuleLogin from '../components/ModuleLogin'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { esDuenoEcom } from '../ecommerce/datos'
@@ -73,7 +74,7 @@ export default function WhApp() {
   const [cargando, setCargando] = useState(true)
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setCargando(false) }), [])
   if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Warehouse…" /></div>
-  if (!user) return <WhLogin onVolver={() => navigate('/elegir')} />
+  if (!user) return <ModuleLogin moduleId="warehouse" onSignIn={(email, pass) => signInWithEmailAndPassword(auth, email, pass)} onReset={(email) => sendPasswordResetEmail(auth, email)} />
   if (!esDuenoEcom(user.email)) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-950 p-4">

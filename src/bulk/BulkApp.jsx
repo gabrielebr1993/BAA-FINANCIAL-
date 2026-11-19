@@ -6,6 +6,8 @@ import { logoutAplicable } from './data/sesiones'
 import { useInactividad } from '../hooks/useInactividad'
 import { activarPush, registrarTokensNativos } from './integraciones/fcm'
 import { authBulk } from './firebaseBulk'
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth'
+import ModuleLogin from '../components/ModuleLogin'
 import BulkLogin from './BulkLogin'
 import BulkLayout from './BulkLayout'
 import RepararAcceso from './components/RepararAcceso'
@@ -205,7 +207,7 @@ function Interno() {
   })
   const irEscritorio = () => { try { sessionStorage.setItem('mp_disp_vista', 'escritorio') } catch { /* noop */ } setVistaDisp('escritorio') }
   if (cargando) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto={t('Cargando Freight…')} /></div>
-  if (!usuario) return <BulkLogin />
+  if (!usuario) return <ModuleLogin moduleId="freight" onSignIn={(email, pass) => signInWithEmailAndPassword(authBulk, email, pass)} onReset={(email) => sendPasswordResetEmail(authBulk, email)} />
   // Roles operativos → su portal dedicado (móvil / cliente / transportista / supervisor).
   const Portal = PORTALES[rol]
   if (Portal) return <><PushSetup /><ForceLogoutWatcher /><Suspense fallback={<Cargando texto={t('Cargando…')} />}><Portal /></Suspense></>

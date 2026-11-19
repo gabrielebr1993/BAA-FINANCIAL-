@@ -21,6 +21,8 @@ const BulkApp = lazy(() => import('./bulk/BulkApp'))
 const LandingFreight = lazy(() => import('./pages/LandingFreight'))
 // Portada del sitio: hero con la escena 3D de la operación (aprobada por el dueño).
 const Home3D = lazy(() => import('./pages/Home3D'))
+// Portada rediseñada (reemplaza al home 3D en la raíz).
+const HomeRedesign = lazy(() => import('./pages/HomeRedesign'))
 // Módulo ECOMMERCE (en construcción): compras internacionales. PRIVADO —
 // solo el dueño (correo verificado) puede entrar; ver src/ecommerce/EcomApp.jsx.
 const EcomApp = lazy(() => import('./ecommerce/EcomApp'))
@@ -196,7 +198,7 @@ function TopBranch() {
   // queda como alias compartible. La landing de marketing de Freight sigue viva
   // en /freight. La app de Package vive bajo /dashboard; Freight bajo /bulk.
   if (pathname === '/' || pathname === '/inicio') {
-    return <Suspense fallback={<Cargando texto="Cargando…" />}><Home3D /></Suspense>
+    return <Suspense fallback={<Cargando texto="Cargando…" />}><HomeRedesign /></Suspense>
   }
   if (pathname === '/freight') {
     return <Suspense fallback={<Cargando texto="Cargando Freight…" />}><LandingFreight /></Suspense>

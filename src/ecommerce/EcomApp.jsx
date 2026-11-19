@@ -16,7 +16,8 @@
 // ============================================================================
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth'
+import ModuleLogin from '../components/ModuleLogin'
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 import { esDuenoEcom, CONFIG_DEFAULT } from './datos'
@@ -59,7 +60,7 @@ export default function EcomApp() {
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setCargandoAuth(false) }), [])
 
   if (cargandoAuth) return <div className="grid min-h-screen place-items-center bg-slate-950"><Cargando texto="Cargando Ecommerce…" /></div>
-  if (!user) return <EcomLogin />
+  if (!user) return <ModuleLogin moduleId="ecommerce" onSignIn={(email, pass) => signInWithEmailAndPassword(auth, email, pass)} onReset={(email) => sendPasswordResetEmail(auth, email)} />
   if (!esDuenoEcom(user.email)) return <EcomPrivado onSalir={() => navigate('/elegir')} />
   return <EcomShell user={user} />
 }
