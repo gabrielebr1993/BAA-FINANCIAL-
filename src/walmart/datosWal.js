@@ -453,12 +453,22 @@ export const idFactura = (periodo) => `WM-${String(periodo || '').replace(/-/g, 
 // Factura del período: líneas por almacén (rutas completadas × tarifa Walmart).
 export function facturaDelPeriodo(rutas, desde, hasta, almacenId, almacenes) {
   const rs = (rutas || []).filter((r) => r.estado === 'completada' && r.fecha >= desde && r.fecha <= hasta && (!almacenId || r.almacenId === almacenId))
+  const alm = (id) => (almacenes || []).find((a) => a.id === id)
+  const nombre = (id) => alm(id)?.nombre || 'General'
+  // Desglose por ALMACÉN (con su número de DC si está configurado).
   const porAlm = {}
   for (const r of rs) { const k = r.almacenId || '—'; if (!porAlm[k]) porAlm[k] = { rutas: 0, importe: 0 }; porAlm[k].rutas += 1; porAlm[k].importe += ingresoRuta(r) }
-  const nombre = (id) => (almacenes || []).find((a) => a.id === id)?.nombre || 'General'
-  const lineas = Object.entries(porAlm).map(([id, v]) => ({ almacenId: id, nombre: nombre(id), rutas: v.rutas, importe: money2(v.importe), tarifaProm: v.rutas ? money2(v.importe / v.rutas) : 0 })).sort((a, b) => b.importe - a.importe)
+  const lineas = Object.entries(porAlm).map(([id, v]) => ({ almacenId: id, nombre: nombre(id), numeroDC: String(alm(id)?.numeroDC || '').trim(), rutas: v.rutas, importe: money2(v.importe), tarifaProm: v.rutas ? money2(v.importe / v.rutas) : 0 })).sort((a, b) => b.importe - a.importe)
+  // Resumen por CHOFER (nombre, almacén, rutas, importe).
+  const porDrv = {}
+  for (const r of rs) {
+    const k = r.driverId || r.driverNombre || '—'
+    if (!porDrv[k]) porDrv[k] = { nombre: r.driverNombre || '—', almacenId: r.almacenId || '', rutas: 0, importe: 0 }
+    porDrv[k].rutas += 1; porDrv[k].importe += ingresoRuta(r)
+  }
+  const porDriver = Object.values(porDrv).map((d) => ({ nombre: d.nombre, almacen: nombre(d.almacenId), rutas: d.rutas, importe: money2(d.importe) })).sort((a, b) => b.importe - a.importe)
   const total = money2(lineas.reduce((a, l) => a + l.importe, 0))
-  return { lineas, total, totalRutas: rs.length }
+  return { lineas, porDriver, total, totalRutas: rs.length }
 }
 
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.

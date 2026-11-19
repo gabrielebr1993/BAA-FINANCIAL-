@@ -1442,7 +1442,7 @@ function TabAlmacenes({ almacenes, user }) {
 }
 
 function EditorAlmacen({ almacen, user, onCerrar }) {
-  const [a, setA] = useState({ nombre: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', tarifaWalmart: '', activo: true, ...almacen })
+  const [a, setA] = useState({ nombre: '', numeroDC: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', tarifaWalmart: '', activo: true, ...almacen })
   const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setA((x) => ({ ...x, [k]: v }))
   const salvar = async () => {
@@ -1454,6 +1454,7 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
     <Card className="mb-4 p-4">
       <Grid>
         <F label="Nombre"><Input value={a.nombre} onChange={(e) => set('nombre', e.target.value)} /></F>
+        <F label="Número de almacén (DC #)"><Input value={a.numeroDC} onChange={(e) => set('numeroDC', e.target.value)} placeholder="ej. 7013 · aparece en la factura" /></F>
         <F label="Dirección"><Input value={a.direccion} onChange={(e) => set('direccion', e.target.value)} /></F>
         <F label="Ciudad"><Input value={a.ciudad} onChange={(e) => set('ciudad', e.target.value)} /></F>
         <F label="Estado"><Input value={a.estado} onChange={(e) => set('estado', e.target.value)} placeholder="UT, TX…" /></F>
@@ -4550,7 +4551,7 @@ function TabFacturas({ rutas, almacenes, facturas }) {
     setGenerando(true)
     try {
       const numero = idFactura(modo === 'mes' ? mes : mesDe(desde))
-      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'Blue Box Logistic LLC' }
+      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, porDriver: prev.porDriver, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'Blue Box Logistic LLC' }
       const id = await guardar(COL.facturas, null, data)
       await auditar('factura_generada', `${numero} · ${dinero(prev.total)} · ${periodo}`)
       walToast('Factura generada ✓', 'gold'); confeti()
@@ -4623,35 +4624,98 @@ function TabFacturas({ rutas, almacenes, facturas }) {
   )
 }
 
+// Dibuja el logo BlueBox Logistics como VECTOR (nítido a cualquier tamaño, sin
+// depender de archivos). `w` = ancho en puntos; la altura sale proporcional.
+function dibujarLogoBlueBox(doc, x, y, w) {
+  const s = w / 820
+  const P = (px, py) => [x + px * s, y + py * s]
+  const tri = (p1, p2, p3, c) => { doc.setFillColor(c[0], c[1], c[2]); const a = P(p1[0], p1[1]), b = P(p2[0], p2[1]), d = P(p3[0], p3[1]); doc.triangle(a[0], a[1], b[0], b[1], d[0], d[1], 'F') }
+  const linea = (lx, ly, lw, c) => { doc.setFillColor(c[0], c[1], c[2]); const p = P(lx, ly); doc.roundedRect(p[0], p[1], lw * s, 9 * s, 4 * s, 4 * s, 'F') }
+  // líneas de velocidad
+  linea(8, 118, 34, [37, 99, 235]); linea(2, 140, 46, [127, 168, 245]); linea(12, 162, 30, [188, 212, 250])
+  // caja isométrica: cara superior (clara), cara izquierda, cara derecha (oscura)
+  tri([130, 54], [202, 96], [130, 138], [167, 201, 245]); tri([130, 54], [130, 138], [58, 96], [167, 201, 245])
+  tri([58, 96], [58, 182], [130, 224], [37, 99, 235]); tri([58, 96], [130, 224], [130, 138], [37, 99, 235])
+  tri([202, 96], [202, 182], [130, 224], [27, 72, 196]); tri([202, 96], [130, 224], [130, 138], [27, 72, 196])
+  // texto BLUE (navy) + BOX (azul) y LOGISTICS debajo
+  const [tx, ty] = P(258, 150)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(96 * s)
+  doc.setTextColor(19, 35, 63); doc.text('BLUE', tx, ty)
+  const wBlue = doc.getTextWidth('BLUE')
+  doc.setTextColor(79, 147, 247); doc.text('BOX', tx + wBlue, ty)
+  const [lx, ly] = P(262, 205)
+  doc.setFontSize(37 * s); doc.setTextColor(19, 35, 63)
+  doc.text('LOGISTICS', lx, ly, { charSpace: 16 * s })
+}
+
 async function pdfFactura(f) {
   const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth()
-  let y = 64
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('BLUE BOX LOGISTIC LLC', M, y)
-  doc.setTextColor(19, 35, 63); doc.setFontSize(22); doc.text('FACTURA', W - M, y, { align: 'right' }); y += 18
+  const mmdd = (iso) => String(iso || '').slice(5, 7) + String(iso || '').slice(8, 10)
+  const periodo = (f.desde && f.hasta) ? `${mmdd(f.desde)} TO ${mmdd(f.hasta)}` : (f.mes || '')
+
+  // ── Encabezado: logo a la izquierda, datos a la derecha (sin solaparse) ──
+  let y = 44
+  dibujarLogoBlueBox(doc, M, y, 150)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(19, 35, 63)
+  doc.text('INVOICE', W - M, y + 16, { align: 'right' })
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120, 130, 150)
-  doc.text('Operación Walmart · last-mile', M, y); doc.text(String(f.numero), W - M, y, { align: 'right' }); y += 30
-  doc.setTextColor(40, 54, 80); doc.setFontSize(11)
-  doc.text('Facturar a:  Walmart', M, y)
-  doc.text(`Emitida: ${f.emitidaEn}`, W - M, y, { align: 'right' }); y += 16
-  doc.text(`Período: ${f.mes ? nombreMes(f.mes) : `${f.desde} a ${f.hasta}`}`, M, y)
-  doc.text(`Vence (net 30): ${f.venceEl}`, W - M, y, { align: 'right' }); y += 16
-  doc.text(`Almacén: ${f.almacenNombre || 'Todos'}`, M, y); y += 24
+  doc.text(String(f.numero || ''), W - M, y + 32, { align: 'right' })
+  doc.text('Walmart operation · last-mile', W - M, y + 45, { align: 'right' })
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 54, 80)
+  doc.text('Blue Box Logistic LLC', W - M, y + 59, { align: 'right' })
+  y += 86; doc.setDrawColor(238, 240, 244); doc.line(M, y, W - M, y); y += 22
+
+  // ── Facturar a / período ──
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
+  doc.text('Bill to:  Flash Mile', M, y); doc.text(`Issued: ${f.emitidaEn || ''}`, W - M, y, { align: 'right' }); y += 16
+  doc.text(`Period: ${periodo}`, M, y); doc.text(`Due (net 30): ${f.venceEl || ''}`, W - M, y, { align: 'right' }); y += 30
+
+  // ── Desglose por almacén (con número de DC) ──
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(19, 35, 63)
+  doc.text('BREAKDOWN BY WAREHOUSE', M, y); y += 18
   doc.setFillColor(19, 35, 63); doc.rect(M, y - 13, W - 2 * M, 22, 'F')
-  doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
-  doc.text('Almacén', M + 10, y + 2); doc.text('Rutas', W - M - 210, y + 2, { align: 'right' }); doc.text('Tarifa prom.', W - M - 110, y + 2, { align: 'right' }); doc.text('Importe', W - M - 10, y + 2, { align: 'right' }); y += 26
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 54, 80); doc.setFontSize(11)
+  doc.setTextColor(255, 255, 255); doc.setFontSize(10)
+  doc.text('Warehouse', M + 10, y + 2); doc.text('Routes', W - M - 210, y + 2, { align: 'right' }); doc.text('Avg. rate', W - M - 110, y + 2, { align: 'right' }); doc.text('Amount', W - M - 10, y + 2, { align: 'right' }); y += 26
+  doc.setFontSize(11)
   for (const l of (f.lineas || [])) {
-    if (y > 700) { doc.addPage(); y = 64 }
-    doc.text(String(l.nombre), M + 10, y); doc.text(String(l.rutas), W - M - 210, y, { align: 'right' }); doc.text(dinero(l.tarifaProm), W - M - 110, y, { align: 'right' }); doc.text(dinero(l.importe), W - M - 10, y, { align: 'right' }); y += 19
+    if (y > 690) { doc.addPage(); y = 64 }
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(19, 35, 63); doc.text(String(l.nombre), M + 10, y)
+    if (l.numeroDC) { const wn = doc.getTextWidth(String(l.nombre)); doc.setFontSize(9); doc.setTextColor(201, 162, 75); doc.text(`DC #${l.numeroDC}`, M + 10 + wn + 8, y); doc.setFontSize(11) }
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 54, 80)
+    doc.text(String(l.rutas), W - M - 210, y, { align: 'right' }); doc.text(dinero(l.tarifaProm), W - M - 110, y, { align: 'right' }); doc.text(dinero(l.importe), W - M - 10, y, { align: 'right' }); y += 19
   }
-  y += 6; doc.setDrawColor(200, 200, 200); doc.line(M, y, W - M, y); y += 22
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(19, 35, 63)
-  doc.text('TOTAL A COBRAR', M + 10, y); doc.text(dinero(f.total), W - M - 10, y, { align: 'right' }); y += 26
+  y += 3; doc.setDrawColor(207, 212, 221); doc.line(M, y - 11, W - M, y - 11)
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(19, 35, 63)
+  doc.text('Both warehouses', M + 10, y); doc.text(String(f.totalRutas), W - M - 210, y, { align: 'right' }); doc.text(dinero(f.total), W - M - 10, y, { align: 'right' }); y += 30
+
+  // ── Resumen por chofer ──
+  if (y > 660) { doc.addPage(); y = 64 }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(19, 35, 63)
+  doc.text('SUMMARY BY DRIVER', M, y); y += 18
+  doc.setFillColor(19, 35, 63); doc.rect(M, y - 13, W - 2 * M, 22, 'F')
+  doc.setTextColor(255, 255, 255); doc.setFontSize(10)
+  doc.text('Driver', M + 10, y + 2); doc.text('Warehouse', M + 250, y + 2); doc.text('Routes', W - M - 120, y + 2, { align: 'right' }); doc.text('Amount', W - M - 10, y + 2, { align: 'right' }); y += 26
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
+  for (const d of (f.porDriver || [])) {
+    if (y > 700) { doc.addPage(); y = 64 }
+    doc.setTextColor(40, 54, 80)
+    doc.text(String(d.nombre || '').slice(0, 28), M + 10, y); doc.text(String(d.almacen || ''), M + 250, y)
+    doc.text(String(d.rutas), W - M - 120, y, { align: 'right' }); doc.text(dinero(d.importe), W - M - 10, y, { align: 'right' }); y += 18
+  }
+  y += 3; doc.setDrawColor(207, 212, 221); doc.line(M, y - 11, W - M, y - 11)
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(19, 35, 63)
+  doc.text('All drivers', M + 10, y); doc.text(String(f.totalRutas), W - M - 120, y, { align: 'right' }); doc.text(dinero(f.total), W - M - 10, y, { align: 'right' }); y += 24
+
+  // ── Total ──
+  if (y > 700) { doc.addPage(); y = 64 }
+  doc.setFillColor(19, 35, 63); doc.roundedRect(M, y, W - 2 * M, 34, 6, 6, 'F')
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('TOTAL DUE', M + 16, y + 22)
+  doc.setTextColor(201, 162, 75); doc.setFontSize(18); doc.text(dinero(f.total), W - M - 16, y + 23, { align: 'right' }); y += 50
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120, 130, 150)
-  doc.text(`${f.totalRutas} rutas completadas · condiciones de pago: net 30 (vence ${f.venceEl}).`, M, y)
-  doc.save(`${String(f.numero || 'factura')}.pdf`)
+  doc.text(`${f.totalRutas} completed routes · payment terms: net 30 (due ${f.venceEl || ''}).`, M, y)
+  doc.save(`${String(f.numero || 'invoice')}.pdf`)
 }
 
 // ── CONTRATOS ───────────────────────────────────────────────────────────────
