@@ -15,6 +15,7 @@ import { Zap, ArrowLeftRight, LogOut, ArrowRight } from 'lucide-react'
 import { useAuth } from '../AuthContext'
 import { CARRIERS, listaCarriers } from './index'
 import { useLang, LangToggle } from '../i18n'
+import MilePayLogo from '../components/MilePayLogo'
 
 // Compañías PERMITIDAS para el usuario actual (igual que las ciudades por
 // usuario): en su ficha (users/{uid}) el campo `carriers` = ['gofo','speedx'].
@@ -138,77 +139,77 @@ function FondoAlmacen() {
 const ACENTO_MARCA = { gofo: '#E8391D', speedx: '#2F80ED' }
 
 function SelectorCompania() {
-  const { t } = useLang()
+  const { lang, setLang } = useLang()
   const { user, perfil, cerrarSesion } = useAuth()
   const { setCarrier } = useCarrier()
   const nombre = perfil?.nombre || user?.email || ''
+  const primero = nombre ? String(nombre).split(/[ @]/)[0] : ''
   // Solo se ofrecen las compañías a las que ESTE usuario tiene acceso.
   const permitidos = useCarriersPermitidos()
   const carriers = listaCarriers().filter((c) => permitidos.includes(c.id))
+  const en = lang === 'en'
+  const T = {
+    sub: en ? 'Last-mile management platform' : 'Plataforma de gestión last-mile',
+    hi: en ? 'Hi' : 'Hola',
+    title: en ? 'Which company do you want to open?' : '¿Con qué compañía vas a trabajar?',
+    enter: en ? 'Open' : 'Entrar',
+    prep: en ? 'Coming soon' : 'En preparación',
+    signout: en ? 'Sign out' : 'Salir',
+    foot: en
+      ? 'Each company has its own invoices, drivers, rates and cities — nothing mixes. You can switch companies anytime from the menu.'
+      : 'Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla. Podrás cambiar de compañía en cualquier momento desde el menú.',
+  }
   return (
-    <div className="relative flex min-h-screen w-full flex-col text-white">
-      {/* Animaciones: deriva de cámara, entrada de la tarjeta y barrido de luz */}
-      <style>{`
-        @keyframes mppan{0%{transform:translate3d(0,0,0) scale(1.04)}100%{transform:translate3d(-2.2%,-1.2%,0) scale(1.09)}}
-        @keyframes mpin{0%{opacity:0;transform:translateY(26px) scale(0.985)}100%{opacity:1;transform:translateY(0) scale(1)}}
-        @keyframes mpsweep{0%,55%{transform:translateX(-160%) skewX(-18deg)}85%,100%{transform:translateX(320%) skewX(-18deg)}}
-        @media (prefers-reduced-motion: reduce){.mp-anim{animation:none!important}}
-      `}</style>
-      <FondoAlmacen />
-
-      {/* Barra superior sobre la foto */}
-      <header className="relative z-10 flex items-center justify-end gap-3 px-5 py-4 md:px-8">
-        <LangToggle />
-        <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm transition hover:bg-black/40 hover:text-white">
-          <LogOut size={15} strokeWidth={1.9} /> {t('Salir')}
-        </button>
-      </header>
-
-      {/* Tarjeta de VIDRIO centrada (entra con animación) */}
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12 md:px-6">
-        <div className="mp-anim relative w-full max-w-2xl overflow-hidden rounded-[30px] border border-white/25 bg-white/10 p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] backdrop-blur-2xl md:p-10" style={{ animation: 'mpin 0.8s cubic-bezier(0.22,1,0.36,1) both' }}>
-          {/* barrido de luz sobre el vidrio, cada pocos segundos */}
-          <div className="mp-anim pointer-events-none absolute inset-y-0 w-1/3" style={{ background: 'linear-gradient(105deg, transparent, rgba(255,255,255,0.14), transparent)', animation: 'mpsweep 7.5s ease-in-out 1.2s infinite' }} />
-          <div className="text-center">
-            <div className="text-3xl font-black tracking-tight md:text-4xl">MilePay<span className="text-brand-gold">.</span></div>
-            <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/55">{t('Plataforma de gestión last-mile')}</div>
-            <div className="mt-6 text-sm font-semibold text-white/85 md:text-base">{t('Hola')}{nombre ? `, ${String(nombre).split(' ')[0]}` : ''} 👋 · {t('¿Con qué compañía vas a trabajar?')}</div>
+    <div className="min-h-[100dvh] bg-rd-navy font-sans text-white">
+      <div className="mx-auto max-w-4xl px-5 py-6">
+        {/* barra superior */}
+        <div className="flex items-center justify-between gap-3">
+          <MilePayLogo dark size="text-lg" />
+          <div className="flex items-center gap-2">
+            <div className="inline-flex overflow-hidden rounded-full border border-rd-navy-line text-xs font-bold">
+              {['en', 'es'].map((l) => (
+                <button key={l} onClick={() => setLang(l)} className={`px-2.5 py-1 uppercase transition ${lang === l ? 'bg-white text-rd-navy' : 'text-rd-navy-sub hover:text-white'}`}>{l}</button>
+              ))}
+            </div>
+            <button onClick={cerrarSesion} className="inline-flex items-center gap-1.5 rounded-full border border-rd-navy-line px-3.5 py-1.5 text-sm font-semibold text-rd-navy-sub transition hover:text-white">
+              <LogOut size={15} /> {T.signout}
+            </button>
           </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {carriers.map((c, i) => {
-              const acc = ACENTO_MARCA[c.id] || '#ffffff'
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCarrier(c.id)}
-                  style={{ '--acc': acc, animation: `mpin 0.7s cubic-bezier(0.22,1,0.36,1) ${0.18 + i * 0.14}s both` }}
-                  className="group mp-anim rounded-2xl border border-white/25 bg-white/10 p-4 text-left backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-[color:var(--acc)] hover:bg-white/15 hover:shadow-[0_22px_50px_-14px_var(--acc)] md:p-5"
-                >
-                  <div className="grid h-20 place-items-center rounded-xl bg-white shadow-md transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-[0_10px_30px_-8px_var(--acc)] md:h-24">
-                    <LogoMarca id={c.id} nombre={c.nombre} />
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/50">{c.nombre}</div>
-                      <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-white transition-all duration-300 group-hover:gap-2.5">
-                        {t('Entrar')} <ArrowRight size={15} strokeWidth={2.4} className="transition-colors duration-300 group-hover:text-[color:var(--acc)]" />
-                      </div>
-                      {/* subrayado con el color de la marca */}
-                      <div className="mt-1 h-0.5 w-0 rounded-full transition-all duration-300 group-hover:w-14" style={{ background: acc }} />
-                    </div>
-                    {!c.listo && <span className="rounded-full bg-amber-400/25 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">{t('En preparación')}</span>}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          <p className="mt-5 text-center text-[11px] leading-relaxed text-white/45">
-            {t('Cada compañía tiene sus propias facturas, choferes, tarifas y ciudades — nada se mezcla.')} {t('Podrás cambiar de compañía en cualquier momento desde el menú.')}
-          </p>
         </div>
+
+        {/* título */}
+        <div className="mx-auto mt-12 max-w-2xl text-center">
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-rd-navy-sub">{T.sub}</div>
+          <h1 className="mt-3 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+            {primero ? `${T.hi}, ${primero} · ` : ''}{T.title}
+          </h1>
+        </div>
+
+        {/* tarjetas de compañía (logos de marca reales) */}
+        <div className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {carriers.map((c) => {
+            const acc = ACENTO_MARCA[c.id] || '#3D8BFF'
+            return (
+              <button key={c.id} type="button" onClick={() => setCarrier(c.id)} style={{ '--acc': acc }}
+                className="group flex flex-col rounded-2xl border border-rd-navy-line bg-rd-navy-card p-5 text-left transition hover:-translate-y-1 hover:border-[color:var(--acc)]">
+                <div className="grid h-20 place-items-center rounded-xl bg-white md:h-24">
+                  <LogoMarca id={c.id} nombre={c.nombre} />
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    <div className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-rd-navy-sub">{c.nombre}</div>
+                    <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold text-white transition-all group-hover:gap-2.5">
+                      {T.enter} <ArrowRight size={15} strokeWidth={2.4} className="transition-colors group-hover:text-[color:var(--acc)]" />
+                    </div>
+                  </div>
+                  {!c.listo && <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-300">{T.prep}</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <p className="mx-auto mt-8 max-w-xl pb-10 text-center text-[12px] leading-relaxed text-rd-navy-sub">{T.foot}</p>
       </div>
     </div>
   )
