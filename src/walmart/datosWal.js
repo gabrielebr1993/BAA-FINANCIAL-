@@ -402,8 +402,17 @@ export function pendientesGastosFijos(fijos, gastos, hoy = hoyISO()) {
       const dia = Math.min(Math.max(1, Number(f.diaMes) || 1), 28)
       let ym = mesDe(f.desde); const ymFin = mesDe(fin); let guard = 0
       while (ym <= ymFin && guard++ < 240) {
-        const id = `gf_${f.id}_${ym}`
-        if (!existentes.has(id)) out.push({ id, data: { ...comun, fecha: `${ym}-${String(dia).padStart(2, '0')}` } })
+        if (f.repartirSemanas) {
+          // Reparte el monto del mes entre sus semanas (suma exacta = monto/mes).
+          for (const parte of distribuirMensual(monto, primerDiaMes(ym), ultimoDiaMes(ym))) {
+            if (!(parte.monto > 0)) continue
+            const id = `gf_${f.id}_${ym}_${parte.semana}`
+            if (!existentes.has(id)) out.push({ id, data: { ...comun, fecha: parte.semana, semana: parte.semana, monto: parte.monto } })
+          }
+        } else {
+          const id = `gf_${f.id}_${ym}`
+          if (!existentes.has(id)) out.push({ id, data: { ...comun, fecha: `${ym}-${String(dia).padStart(2, '0')}` } })
+        }
         const [y, m] = ym.split('-').map(Number); const nd = new Date(y, m, 1)
         ym = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}`
       }

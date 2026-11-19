@@ -4121,7 +4121,7 @@ function GastosFijosLista({ fijos, almacenes, onEditar }) {
               <Badge color="navy">{f.categoria}</Badge>
               <span className="font-semibold text-brand-navy dark:text-slate-100">{f.concepto || '—'}</span>
               <span className="font-mono text-sm font-bold">{dinero(f.monto)}</span>
-              <Badge color="gold">{f.frecuencia === 'semanal' ? 'cada semana' : `cada mes · día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)}`}</Badge>
+              <Badge color="gold">{f.frecuencia === 'semanal' ? 'cada semana' : (f.repartirSemanas ? 'cada mes · por semanas' : `cada mes · día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)}`)}</Badge>
               <Badge color="slate">{almNombre(f.almacenId)}</Badge>
               {f.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
               <Badge color={f.activo === false ? 'red' : 'green'}>{f.activo === false ? 'pausado' : 'activo'}</Badge>
@@ -4138,7 +4138,7 @@ function GastosFijosLista({ fijos, almacenes, onEditar }) {
 // Editor de un gasto fijo (plantilla). Guarda en COL.gastosFijos; la generación
 // de instancias la hace el efecto de materialización en el componente principal.
 function GastoFijoEditor({ fijo, almacenes, onCerrar }) {
-  const [f, setF] = useState({ concepto: '', categoria: CATEGORIAS_GASTO[0], monto: '', frecuencia: 'mensual', diaMes: 1, desde: hoyISO(), hasta: '', esFinanciamiento: true, almacenId: '', activo: true, ...fijo })
+  const [f, setF] = useState({ concepto: '', categoria: CATEGORIAS_GASTO[0], monto: '', frecuencia: 'mensual', diaMes: 1, desde: hoyISO(), hasta: '', esFinanciamiento: true, almacenId: '', activo: true, repartirSemanas: false, ...fijo })
   const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
   const salvar = async () => {
@@ -4167,7 +4167,8 @@ function GastoFijoEditor({ fijo, almacenes, onCerrar }) {
         </Grid>
         <label className="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!f.esFinanciamiento} onChange={(e) => set('esFinanciamiento', e.target.checked)} className="accent-brand-gold" /> Es financiamiento (salida de caja, no gasto operativo) — p. ej. cargo vans</label>
         <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={f.activo !== false} onChange={(e) => set('activo', e.target.checked)} className="accent-brand-gold" /> Activo (si lo pausas, deja de generarse)</label>
-        <p className="mt-2 text-[11px] text-slate-400">Se registrará automáticamente {f.frecuencia === 'semanal' ? 'cada semana (sáb→vie)' : `cada mes (día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)})`} desde la fecha de inicio hasta hoy (o hasta la fecha de fin). Las instancias que edites a mano no se sobreescriben.</p>
+        {f.frecuencia === 'mensual' && <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!f.repartirSemanas} onChange={(e) => set('repartirSemanas', e.target.checked)} className="accent-brand-gold" /> Repartir el monto entre las semanas de cada mes (ej. $750 → ≈$187.50/semana · la suma del mes queda exacta)</label>}
+        <p className="mt-2 text-[11px] text-slate-400">Se registrará automáticamente {f.frecuencia === 'semanal' ? 'cada semana (sáb→vie)' : (f.repartirSemanas ? 'cada mes, repartido entre las semanas del mes (la suma del mes es exacta)' : `cada mes (día ${Math.min(Math.max(1, Number(f.diaMes) || 1), 28)})`)} desde la fecha de inicio hasta hoy (o hasta la fecha de fin). Las instancias que edites a mano no se sobreescriben.</p>
         <div className="mt-3 flex gap-2">
           <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar gasto fijo'}</Boton>
           <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
