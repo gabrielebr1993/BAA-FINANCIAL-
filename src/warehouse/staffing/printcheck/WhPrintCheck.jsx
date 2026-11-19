@@ -1,5 +1,5 @@
 // ============================================================================
-// PRINT CHECK · B&A AMERICAN GROUP LLC / NEXSEND — Fase 1 (núcleo).
+// PRINT CHECK · BLUE BOX LOGISTIC LLC / NEXSEND — Fase 1 (núcleo).
 //
 // · Cuentas bancarias con secuencia de cheques propia (número enmascarado).
 // · Crear cheques desde una semana importada de Gofo: neto por trabajador,
@@ -49,7 +49,7 @@ export default function WhPrintCheck({ user }) {
       periodos: periodos.sort((a, b) => String(b.inicio).localeCompare(a.inicio)),
       // valores iniciales tomados del membrete real del software anterior
       plaid: cfgs.find((c) => c.id === 'plaid') || { conectado: false },
-      empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', marca: 'NEXSEND', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
+      empresa: cfgs.find((c) => c.id === 'empresa') || { nombre: 'Blue Box Logistic', marca: 'NEXSEND', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
       impresion: cfgs.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true, papel: 'blanco' },
     })
   }
@@ -1194,7 +1194,7 @@ function PcCuentas({ bd, user, recargar }) {
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Input placeholder="Banco (elige o escribe)" list="pc-bancos-us" value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value })} />
           <datalist id="pc-bancos-us">{BANCOS_US.map((b) => <option key={b} value={b} />)}</datalist>
-          <Input placeholder="Titular (B&A American Group LLC)" value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} />
+          <Input placeholder="Titular (Blue Box Logistic LLC)" value={form.titular} onChange={(e) => setForm({ ...form, titular: e.target.value })} />
           <Input placeholder="Routing number" value={form.routing} onChange={(e) => setForm({ ...form, routing: e.target.value })} />
           <Input placeholder="Número de cuenta" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} />
           <Input placeholder="Dirección del banco (opcional)" value={form.direccionBanco} onChange={(e) => setForm({ ...form, direccionBanco: e.target.value })} />
@@ -1690,7 +1690,7 @@ function PcAjustes({ bd, user, recargar }) {
       <Card className="p-4">
         <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Compañía emisora (lo que se imprime en el cheque)</div>
         <div className="grid gap-2">
-          <Input placeholder="Razón social (B&A AMERICAN GROUP LLC)" value={emp.nombre || ''} onChange={(e) => setEmp({ ...emp, nombre: e.target.value })} />
+          <Input placeholder="Razón social (BLUE BOX LOGISTIC LLC)" value={emp.nombre || ''} onChange={(e) => setEmp({ ...emp, nombre: e.target.value })} />
           <Input placeholder="Marca (NEXSEND)" value={emp.marca || ''} onChange={(e) => setEmp({ ...emp, marca: e.target.value })} />
           <Input placeholder="Dirección línea 1" value={emp.direccion1 || ''} onChange={(e) => setEmp({ ...emp, direccion1: e.target.value })} />
           <Input placeholder="Dirección línea 2 (ciudad, estado, ZIP)" value={emp.direccion2 || ''} onChange={(e) => setEmp({ ...emp, direccion2: e.target.value })} />

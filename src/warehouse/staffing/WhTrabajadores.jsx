@@ -36,7 +36,7 @@ export default function WhTrabajadores({ user, perfilInicial }) {
       workers, registros, ajustes, cheques, grupos,
       pc: {
         cuentas: pcCuentas, firmas: pcFirmas,
-        empresa: pcConfig.find((c) => c.id === 'empresa') || { nombre: 'B&A American Group', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
+        empresa: pcConfig.find((c) => c.id === 'empresa') || { nombre: 'Blue Box Logistic', direccion1: '5605 FM 423 STE 500-313', direccion2: 'FRISCO TEXAS 75036' },
         impresion: pcConfig.find((c) => c.id === 'impresion') || { offX: 0, offY: 0, mostrarMICR: true, papel: 'blanco' },
       },
     })

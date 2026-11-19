@@ -19,7 +19,7 @@ const EMAIL = (process.argv[2] || 'gabriele.brandonisio.o@gmail.com').toLowerCas
     p = {
       nombre: u.displayName || 'Super Admin',
       email: EMAIL, rol: 'super_admin', tenantId,
-      empresa: process.argv[3] || 'B&A American group', activo: true,
+      empresa: process.argv[3] || 'Blue Box Logistic', activo: true,
       creadoEn: admin.firestore.FieldValue.serverTimestamp(),
     }
     await ref.set(p, { merge: true })

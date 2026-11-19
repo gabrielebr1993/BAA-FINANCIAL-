@@ -154,7 +154,7 @@ exports.repararMisClaims = onCall(async (req) => {
   if (!perfil) {
     const yaSuper = await usersCol.where('rol', '==', 'super_admin').limit(1).get()
     if (!yaSuper.empty) throw new HttpsError('failed-precondition', 'Tu usuario no tiene perfil. Pide a un administrador que te cree.')
-    perfil = { nombre: auth.token.name || 'Super Admin', email, rol: 'super_admin', tenantId: 't_' + uid.slice(0, 10).toLowerCase(), activo: true, empresa: 'B&A American group', creadoEn: admin.firestore.FieldValue.serverTimestamp() }
+    perfil = { nombre: auth.token.name || 'Super Admin', email, rol: 'super_admin', tenantId: 't_' + uid.slice(0, 10).toLowerCase(), activo: true, empresa: 'Blue Box Logistic', creadoEn: admin.firestore.FieldValue.serverTimestamp() }
   }
   // CHOFER: el carrier AUTORITATIVO es el del ROSTER que lo contiene (por uid). Así,
   // si el claim/perfil quedó con un carrierId desalineado, se corrige al carrier real

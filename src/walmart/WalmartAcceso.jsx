@@ -125,7 +125,7 @@ function WalmartLogin() {
               </>
             )}
 
-            <p className="mt-10 text-center text-xs text-slate-400">© 2026 MilePay · B&A American Group LLC</p>
+            <p className="mt-10 text-center text-xs text-slate-400">© 2026 MilePay · Blue Box Logistic LLC</p>
           </div>
         </div>
       </div>

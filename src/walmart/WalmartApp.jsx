@@ -4486,7 +4486,7 @@ async function pdfPayStub(driver, semana, hasta, res) {
   const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56; let y = 70
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC · WALMART', M, y); y += 20
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('BLUE BOX LOGISTIC LLC · WALMART', M, y); y += 20
   doc.setTextColor(19, 35, 63); doc.setFontSize(15); doc.text('Comprobante de liquidación (pay stub)', M, y); y += 24
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
   doc.text(`Driver: ${nombreCompleto(driver)}`, M, y); y += 16
@@ -4510,7 +4510,7 @@ async function pdfReciboFP(pago, driver) {
   const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56; let y = 70
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC · WALMART', M, y); y += 20
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('BLUE BOX LOGISTIC LLC · WALMART', M, y); y += 20
   doc.setTextColor(19, 35, 63); doc.setFontSize(15); doc.text('Recibo de Fast Pay (adelanto)', M, y); y += 24
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(40, 54, 80)
   if (driver) { doc.text(`Driver: ${nombreCompleto(driver)}`, M, y); y += 16 }
@@ -4550,7 +4550,7 @@ function TabFacturas({ rutas, almacenes, facturas }) {
     setGenerando(true)
     try {
       const numero = idFactura(modo === 'mes' ? mes : mesDe(desde))
-      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'B&A American Group LLC' }
+      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'Blue Box Logistic LLC' }
       const id = await guardar(COL.facturas, null, data)
       await auditar('factura_generada', `${numero} · ${dinero(prev.total)} · ${periodo}`)
       walToast('Factura generada ✓', 'gold'); confeti()
@@ -4628,7 +4628,7 @@ async function pdfFactura(f) {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth()
   let y = 64
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('B&A AMERICAN GROUP LLC', M, y)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(201, 162, 75); doc.text('BLUE BOX LOGISTIC LLC', M, y)
   doc.setTextColor(19, 35, 63); doc.setFontSize(22); doc.text('FACTURA', W - M, y, { align: 'right' }); y += 18
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(120, 130, 150)
   doc.text('Operación Walmart · last-mile', M, y); doc.text(String(f.numero), W - M, y, { align: 'right' }); y += 30
@@ -4744,7 +4744,7 @@ function VistaGenerar({ plantillas, personas, almacenes, tarifas, onIrLista, onI
   const [datos, setDatos] = useState({}); const [link, setLink] = useState(''); const [guardando, setGuardando] = useState(false)
   const pl = plantillas.find((p) => p.id === plId); const driver = personas.find((p) => p.id === driverId)
   const almNombre = almacenes.find((a) => a.id === driver?.almacenId)?.nombre || ''
-  useEffect(() => { if (driver) setDatos(datosDeDriver(driver, almNombre, 'B&A American Group LLC', tarifaDeDriver(driver, tarifas))); else setDatos({}); setLink('') }, [driverId]) // eslint-disable-line
+  useEffect(() => { if (driver) setDatos(datosDeDriver(driver, almNombre, 'Blue Box Logistic LLC', tarifaDeDriver(driver, tarifas))); else setDatos({}); setLink('') }, [driverId]) // eslint-disable-line
   const texto = pl ? renderPlantilla(pl.texto, datos) : ''
   const faltan = pl ? faltantesPlantilla(pl.texto, datos) : []
   const set = (k, v) => setDatos((x) => ({ ...x, [k]: v }))

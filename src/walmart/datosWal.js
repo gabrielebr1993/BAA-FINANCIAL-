@@ -363,7 +363,7 @@ export function datosDeDriver(driver, almacenNombre, empresa, tarifa) {
   return {
     nombre: nombreCompleto(driver), direccion: driver?.direccion || '', telefono: driver?.telefono || '',
     correo: driver?.correo || '', almacen: almacenNombre || '', vehiculo: [driver?.marca, driver?.modelo, driver?.anio].filter(Boolean).join(' ') || driver?.tipoVehiculo || '',
-    tarifa: tarifa != null ? `$${money2(tarifa)}` : '', fecha: hoyISO(), fechaInicio: hoyISO(), empresa: empresa || 'B&A American Group LLC',
+    tarifa: tarifa != null ? `$${money2(tarifa)}` : '', fecha: hoyISO(), fechaInicio: hoyISO(), empresa: empresa || 'Blue Box Logistic LLC',
   }
 }
 
