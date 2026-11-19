@@ -38,9 +38,28 @@ export default {
           indigo: '#3d5a80',
           soft: '#7f9cc0',
         },
+        // Rediseño home/login 2026 (tokens `rd-*`). Navy + colores por módulo.
+        rd: {
+          navy: '#0D2340',          // fondo hero
+          'navy-card': '#12305A',   // tarjetas sobre navy
+          'navy-line': '#2A4670',   // líneas sobre navy
+          'navy-sub': '#A9B8CC',    // texto secundario sobre navy
+          bg: '#F5F8FB',            // fondo claro
+          ink: '#0E1B2C',           // texto
+          'ink-sub': '#5A6778',     // texto secundario claro
+          line: '#DCE3EB',          // líneas claras
+          card: '#FFFFFF',          // tarjetas claras
+          parcel: '#3D8BFF', 'parcel-soft': '#EAF2FF',   // Última milla
+          freight: '#F2A900', 'freight-soft': '#FFF5DB', // Freight
+          wh: '#2BC48A', 'wh-soft': '#E4F8EF',           // Warehouse
+          ecom: '#9B6BFF', 'ecom-soft': '#F1EAFF',       // Ecommerce
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Rediseño home/login: Sora para títulos, JetBrains Mono para etiquetas/números.
+        display: ['Sora', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {
         '2xl': '1rem',
