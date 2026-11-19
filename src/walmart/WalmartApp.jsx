@@ -4652,8 +4652,8 @@ async function pdfFactura(f) {
   const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth()
-  const mmdd = (iso) => String(iso || '').slice(5, 7) + String(iso || '').slice(8, 10)
-  const periodo = (f.desde && f.hasta) ? `${mmdd(f.desde)} TO ${mmdd(f.hasta)}` : (f.mes || '')
+  const fmtDia = (iso) => { const d = new Date(String(iso) + 'T00:00:00'); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+  const periodo = (f.desde && f.hasta) ? `${fmtDia(f.desde)} – ${fmtDia(f.hasta)}, ${String(f.hasta).slice(0, 4)}` : (f.mes || '')
 
   // ── Encabezado: logo a la izquierda, datos a la derecha (sin solaparse) ──
   let y = 44
@@ -4682,7 +4682,7 @@ async function pdfFactura(f) {
   for (const l of (f.lineas || [])) {
     if (y > 690) { doc.addPage(); y = 64 }
     doc.setFont('helvetica', 'bold'); doc.setTextColor(19, 35, 63); doc.text(String(l.nombre), M + 10, y)
-    if (l.numeroDC) { const wn = doc.getTextWidth(String(l.nombre)); doc.setFontSize(9); doc.setTextColor(201, 162, 75); doc.text(`DC #${l.numeroDC}`, M + 10 + wn + 8, y); doc.setFontSize(11) }
+    if (l.numeroDC) { const wn = doc.getTextWidth(String(l.nombre)); doc.setFontSize(9); doc.setTextColor(201, 162, 75); doc.text(`#${l.numeroDC}`, M + 10 + wn + 8, y); doc.setFontSize(11) }
     doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 54, 80)
     doc.text(String(l.rutas), W - M - 210, y, { align: 'right' }); doc.text(dinero(l.tarifaProm), W - M - 110, y, { align: 'right' }); doc.text(dinero(l.importe), W - M - 10, y, { align: 'right' }); y += 19
   }
