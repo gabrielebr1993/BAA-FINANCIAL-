@@ -182,7 +182,7 @@ function SidebarContent({ onNavigate }) {
   useEffect(() => { if (grupoActivo) setGrpAbierto((s) => s.has(grupoActivo) ? s : new Set(s).add(grupoActivo)) }, [grupoActivo])
 
   return (
-    <aside className="pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
+    <aside className="lg-glass-panel pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden p-4">
       <div className="flex items-center gap-3 px-1 pb-4 pt-1">
         <MilePayMark size={40} className="shrink-0 rounded-[10px] shadow-card ring-1 ring-black/5 dark:ring-white/10" />
         <div>
@@ -257,14 +257,28 @@ function SidebarContent({ onNavigate }) {
   )
 }
 
-// Barra de pestañas inferior (solo móvil, < sm): acceso con el pulgar a lo más
-// usado, como una app nativa. Respeta la barra de inicio del iPhone (safe area)
-// y en el iPhone Duo abierto (pantalla interna) se centra con ancho máximo.
+// Barra de pestañas inferior (solo móvil, < sm) en LIQUID GLASS: vidrio flotante
+// que deja ver el contenido por detrás. Al bajar se ENCOGE (solo íconos) y al
+// subir vuelve a mostrar los nombres, como en las apps de Apple. Respeta la
+// barra de inicio del iPhone (safe area) y en el iPhone Duo abierto se centra.
 function TabBarMovil({ onMas }) {
   const { puede } = useAuth()
   const { numAlertas } = useData()
   const { t } = useLang()
   const location = useLocation()
+  const [compacta, setCompacta] = useState(false)
+  useEffect(() => {
+    let ultimo = window.scrollY
+    const alMover = () => {
+      const y = window.scrollY
+      if (Math.abs(y - ultimo) < 8) return
+      setCompacta(y > ultimo && y > 120)
+      ultimo = y
+    }
+    window.addEventListener('scroll', alMover, { passive: true })
+    return () => window.removeEventListener('scroll', alMover)
+  }, [])
+  useEffect(() => { setCompacta(false) }, [location.pathname])
   const tabs = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permiso: 'verDashboard' },
     { path: '/rutas', label: 'Rutas', icon: Route, permiso: 'verDashboard' },
@@ -272,23 +286,23 @@ function TabBarMovil({ onMas }) {
     { path: '/claims', label: 'Claims', icon: AlertTriangle, permiso: 'verClaims' },
   ].filter((x) => puede(x.permiso))
   return (
-    <nav aria-label={t('Navegación principal')} className="fixed inset-x-3 bottom-[max(env(safe-area-inset-bottom),10px)] z-20 mx-auto max-w-md rounded-pill border border-slate-200/70 bg-white/85 shadow-float backdrop-blur-md dark:border-slate-700/60 dark:bg-surface-dark-card/85 sm:hidden">
+    <nav aria-label={t('Navegación principal')} className={`lg-glass lg-tabbar fixed inset-x-3 bottom-[max(env(safe-area-inset-bottom),10px)] z-20 mx-auto max-w-md rounded-pill sm:hidden ${compacta ? 'is-compact' : ''}`}>
       <div className="flex items-stretch justify-around px-1.5 py-1.5">
         {tabs.map((x) => {
           const on = location.pathname === x.path || location.pathname.startsWith(x.path + '/')
           const Icon = x.icon
           return (
-            <Link key={x.path} to={x.path} className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-pill no-underline">
-              <span className={`grid h-8 w-12 place-items-center rounded-pill transition ${on ? 'bg-brand-navy text-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 dark:text-slate-400'}`}>
+            <Link key={x.path} to={x.path} aria-label={t(x.label)} className="lg-tab flex min-h-[48px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-pill no-underline">
+              <span className={`grid h-8 w-12 place-items-center rounded-pill transition ${on ? 'lg-pill-on text-brand-gold dark:text-brand-navy' : 'text-slate-600 dark:text-slate-300'}`}>
                 <Icon size={20} strokeWidth={on ? 2.1 : 1.8} />
               </span>
-              <span className={`text-[10.5px] leading-none ${on ? 'font-bold text-brand-navy dark:text-white' : 'font-medium text-slate-500 dark:text-slate-400'}`}>{t(x.label)}</span>
+              <span className={`lg-tab-label overflow-hidden text-[10.5px] leading-none ${on ? 'font-bold text-brand-navy dark:text-white' : 'font-medium text-slate-600 dark:text-slate-300'}`}>{t(x.label)}</span>
             </Link>
           )
         })}
-        <button type="button" onClick={onMas} className="relative flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-pill">
-          <span className="grid h-8 w-12 place-items-center rounded-pill text-slate-500 dark:text-slate-400"><MoreHorizontal size={20} strokeWidth={1.8} /></span>
-          <span className="text-[10.5px] font-medium leading-none text-slate-500 dark:text-slate-400">{t('Más')}</span>
+        <button type="button" onClick={onMas} aria-label={t('Más')} className="lg-tab relative flex min-h-[48px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-pill">
+          <span className="grid h-8 w-12 place-items-center rounded-pill text-slate-600 dark:text-slate-300"><MoreHorizontal size={20} strokeWidth={1.8} /></span>
+          <span className="lg-tab-label overflow-hidden text-[10.5px] font-medium leading-none text-slate-600 dark:text-slate-300">{t('Más')}</span>
           {numAlertas > 0 && <span className="absolute right-2.5 top-1 h-2 w-2 rounded-full bg-rose-500" />}
         </button>
       </div>
@@ -307,7 +321,7 @@ export default function Layout({ children }) {
         </div>
 
         {abierto && (
-          <div className="fixed inset-0 z-30 bg-black/40 sm:hidden" onClick={() => setAbierto(false)}>
+          <div className="fixed inset-0 z-30 bg-slate-900/25 sm:hidden" onClick={() => setAbierto(false)}>
             <div onClick={(e) => e.stopPropagation()}>
               <SidebarContent onNavigate={() => setAbierto(false)} />
             </div>
@@ -320,7 +334,7 @@ export default function Layout({ children }) {
           <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
           {/* Header global: fila superior (menú/campana) + barra de filtros fija
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
-          <header className="pt-safe sticky top-0 z-20 bg-white/90 shadow-[0_1px_0_rgba(15,23,42,.06)] backdrop-blur dark:bg-surface-dark-card/90 dark:shadow-[0_1px_0_rgba(255,255,255,.05)]">
+          <header className="lg-glass-bar pt-safe sticky top-0 z-20">
             <div className="flex items-center gap-3 px-4 py-2.5">
               <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label={t('Abrir menú')}>
                 <Menu size={24} strokeWidth={1.8} />

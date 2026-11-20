@@ -2341,6 +2341,7 @@ const EN = {
   'Inicio': 'Home',
   'Operación': 'Operations',
   'Más': 'More',
+  'Listo': 'Done',
   'Calidad': 'Quality',
   'Navegación principal': 'Main navigation',
   'vs semana anterior': 'vs previous week',

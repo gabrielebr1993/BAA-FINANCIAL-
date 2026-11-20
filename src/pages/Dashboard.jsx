@@ -165,7 +165,7 @@ export default function Dashboard() {
               En iPhone ocupa una sola pantalla; en web queda a la izquierda. */}
           <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
             <ClickWrap className="h-full" onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
-              <div className="mp-in relative flex h-full flex-col justify-center overflow-hidden rounded-card bg-brand-navy p-5 text-white shadow-card sm:p-6">
+              <div className="lg-sheen mp-in relative flex h-full flex-col justify-center overflow-hidden rounded-card bg-brand-navy p-5 text-white shadow-card sm:p-6">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300"><TrendingUp size={14} strokeWidth={2} /> {t('Ganancia')}</div>
                 <div className="mt-1 font-display text-[40px] font-extrabold leading-none tracking-tight tabular-nums text-brand-gold sm:text-5xl">{fD(gananciaTotal)}</div>
                 <Tendencia v={estPrev && variacion(est.ganancia, estPrev.ganancia)} claro texto={t('vs semana anterior')} />
@@ -435,7 +435,7 @@ function MiniDato({ label, valor, trend, invertido, sub }) {
 // Chip de volumen/calidad (Paquetes, % Dobles, Claims). Área táctil ≥ 44px.
 function Chip({ icon: Icon, label, valor, sub, trend, invertido, onClick, alerta }) {
   return (
-    <button type="button" onClick={onClick} className="mp-in flex min-h-[88px] min-w-0 flex-col rounded-2xl border border-slate-200/80 bg-surface-card p-3 text-left shadow-card transition hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold dark:border-slate-700/60 dark:bg-surface-dark-card lg:flex-row lg:items-center lg:gap-3 lg:p-4">
+    <button type="button" onClick={onClick} className="mp-in flex min-h-[88px] min-w-0 flex-col rounded-card border border-slate-200/80 bg-surface-card p-3 text-left shadow-card transition hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold dark:border-slate-700/60 dark:bg-surface-dark-card lg:flex-row lg:items-center lg:gap-3 lg:p-4">
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${alerta ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-brand-navy/10 text-brand-navy dark:bg-white/10 dark:text-slate-100'}`}><Icon size={16} strokeWidth={1.9} /></span>
       <span className="mt-2 min-w-0 lg:mt-0">
         <span className="block truncate text-[10.5px] font-medium uppercase tracking-wide text-slate-400">{label}</span>

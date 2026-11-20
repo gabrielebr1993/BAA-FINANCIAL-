@@ -1,0 +1,84 @@
+/* ============================================================================
+   LIQUID GLASS (lenguaje de diseño de Apple, iOS 26/27) aplicado a MilePay.
+   Regla de oro: el VIDRIO solo va en la "cromería" (barras, menú, botones
+   flotantes). Los números y textos de dinero quedan en tarjetas SÓLIDAS para que
+   siempre se lean bien.
+   - .lg-glass         barra/flotante: vidrio claro con brillo en el borde.
+   - .lg-glass-bar     barra superior: vidrio más denso (hay texto encima).
+   - .lg-glass-panel   paneles grandes (menú lateral / cajón del móvil).
+   - .lg-sheen         brillo especular para tarjetas sólidas (no traslúcido).
+   Accesibilidad: con «Reducir transparencia» del iPhone (o del Mac) todo pasa a
+   fondo sólido; con «Reducir movimiento» no hay animaciones.
+   ============================================================================ */
+.lg-glass, .lg-glass-bar, .lg-glass-panel {
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+}
+.lg-glass {
+  background: linear-gradient(180deg, rgba(255,255,255,.84), rgba(255,255,255,.68));
+  border: 1px solid rgba(255,255,255,.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 0 rgba(255,255,255,.25),
+    0 10px 30px rgba(11,22,40,.14),
+    0 1px 3px rgba(11,22,40,.08);
+}
+.lg-glass-bar {
+  background: rgba(255,255,255,.72);
+  box-shadow: inset 0 -1px 0 rgba(19,35,63,.06), 0 1px 0 rgba(255,255,255,.7);
+}
+.lg-glass-panel {
+  background: rgba(255,255,255,.78);
+  box-shadow: inset -1px 0 0 rgba(19,35,63,.06), inset 1px 1px 0 rgba(255,255,255,.9);
+}
+.dark .lg-glass {
+  background: linear-gradient(180deg, rgba(36,54,84,.72), rgba(20,32,54,.58));
+  border-color: rgba(255,255,255,.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    inset 0 -1px 0 rgba(255,255,255,.04),
+    0 10px 30px rgba(0,0,0,.45);
+}
+.dark .lg-glass-bar { background: rgba(15,23,41,.72); box-shadow: inset 0 -1px 0 rgba(255,255,255,.06); }
+.dark .lg-glass-panel { background: rgba(19,31,52,.8); box-shadow: inset -1px 0 0 rgba(255,255,255,.06); }
+
+/* Brillo especular sobre una tarjeta SÓLIDA (p. ej. la tarjeta navy de ganancia):
+   un reflejo suave arriba y un filo de luz en el borde, sin transparencia. */
+.lg-sheen { position: relative; isolation: isolate; }
+.lg-sheen::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgba(255,255,255,.14), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.06), transparent 40%);
+}
+.lg-sheen::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* Barra de pestañas que se ENCOGE al bajar (como las apps de Apple) y vuelve al subir. */
+.lg-tabbar { transition: max-width .35s cubic-bezier(.2,.8,.2,1), transform .35s cubic-bezier(.2,.8,.2,1); }
+.lg-tabbar .lg-tab-label { transition: opacity .2s ease, max-height .3s ease; max-height: 14px; }
+.lg-tabbar.is-compact { max-width: 17rem; }
+.lg-tabbar.is-compact .lg-tab-label { opacity: 0; max-height: 0; }
+.lg-tabbar.is-compact .lg-tab { min-height: 40px; }
+
+/* Pastilla del tab activo: vidrio tintado navy con brillo. */
+.lg-pill-on {
+  background: linear-gradient(180deg, #1c3a63, #13233f);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 6px rgba(19,35,63,.25);
+}
+.dark .lg-pill-on { background: linear-gradient(180deg, #d8b45f, #c9a24b); box-shadow: inset 0 1px 0 rgba(255,255,255,.45); }
+
+/* Hoja de filtros (bottom sheet) que sube desde abajo, como en iOS. */
+@keyframes lg-sube { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.lg-hoja { animation: lg-sube .38s cubic-bezier(.2,.8,.2,1); }
+
+@media (prefers-reduced-transparency: reduce) {
+  .lg-glass, .lg-glass-bar, .lg-glass-panel { -webkit-backdrop-filter: none; backdrop-filter: none; background: #ffffff; }
+  .dark .lg-glass, .dark .lg-glass-bar, .dark .lg-glass-panel { background: #1b2b45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg-tabbar, .lg-tabbar .lg-tab-label { transition: none; }
+  .lg-hoja { animation: none; }
+}
