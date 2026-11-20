@@ -17,6 +17,7 @@
     "@capacitor/cli": "^6.2.3",
     "@capacitor/core": "^6.2.3",
     "@capacitor/ios": "^6.2.3",
+    "@capgo/capacitor-native-biometric": "^6.0.4",
     "@stripe/connect-js": "^3.4.6",
     "@stripe/react-connect-js": "^3.4.4",
     "firebase": "^11.0.2",

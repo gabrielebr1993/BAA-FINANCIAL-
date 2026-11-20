@@ -52,3 +52,20 @@ npm run ios:sync    # vuelve a compilar la web y la mete en iOS
 - **"pod install" falla** → corre `sudo gem install cocoapods` y luego `npm run ios:sync`.
 - **No aparece tu iPhone** → desbloquéalo y toca "Confiar" cuando lo conectes.
 - **Error de firma (Signing)** → en Signing & Capabilities elige tu Team/Apple ID.
+
+## Face ID y Touch ID
+La app entra con **Face ID** (iPhone normales) o **Touch ID** (iPhone Duo y modelos
+con botón). Es el mismo botón: iOS dice qué tiene cada teléfono.
+
+- Se activa solo: la primera vez entras con correo y contraseña, con la casilla
+  «Usar Face ID / Touch ID la próxima vez» marcada.
+- Desde ahí, al abrir la app pide la cara o la huella sola. Si se cancela, sigue
+  el formulario normal.
+- Las credenciales se guardan en el **Llavero de iOS** (cifrado por Apple), nunca
+  en el navegador ni en Firebase. Si cambias la contraseña, te pide entrar una vez
+  con la nueva y se vuelve a activar.
+- Para desactivarlo: entra con contraseña con la casilla desmarcada.
+- Plugin: `@capgo/capacitor-native-biometric`. Después de `npm install`, corre
+  `npm run ios:run` para que Xcode instale el plugin (CocoaPods).
+- En el **simulador** de Xcode: menú Features → Face ID / Touch ID → Enrolled, y
+  luego «Matching Face» o «Matching Touch» para simular el desbloqueo.

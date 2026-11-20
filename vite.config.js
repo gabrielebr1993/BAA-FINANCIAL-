@@ -11,7 +11,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Ayudantes internos de Vite/Rollup: a su propio chunk chico. Si no, caen
+          // dentro de «pdf» o «charts» y el arranque baja esas librerías enteras.
+          if (id.includes('vite/preload-helper') || id.includes('commonjsHelpers')) return 'vendor'
           if (!id.includes('node_modules')) return
+          // React y el router van aparte: antes quedaban DENTRO del chunk de
+          // gráficas, y por eso el login y el portal del chofer descargaban
+          // recharts + jsPDF (~1.3 MB) sin usarlos.
+          if (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|@remix-run\/router)\//.test(id)) return 'vendor'
           if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase'
           if (id.includes('recharts') || id.includes('/d3-') || id.includes('victory')) return 'charts'
           if (id.includes('xlsx')) return 'xlsx'

@@ -4,9 +4,10 @@
 // autenticación se recibe por props (onSignIn/onReset) para conservar EXACTO
 // el login de cada módulo (misma función Firebase, misma redirección por auth).
 // ============================================================================
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, ArrowLeft, Lock, ShieldCheck, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, ArrowLeft, Lock, ShieldCheck, Loader2, ScanFace, Fingerprint } from 'lucide-react'
+import * as bio from '../utils/biometria'
 import { useLang } from '../i18n'
 import { MODULES, getModule, tx } from '../config/modules'
 import MilePayLogo from './MilePayLogo'
@@ -31,6 +32,11 @@ const UI = {
   errEmail: { en: 'Enter a valid email.', es: 'Escribe un correo válido.' },
   errPass: { en: 'Enter your password.', es: 'Escribe tu contraseña.' },
   resetPrompt: { en: 'Enter your email above to get a reset link.', es: 'Escribe tu correo arriba para enviarte el enlace.' },
+  bioWith: { en: 'Sign in with', es: 'Entrar con' },
+  bioUse: { en: 'Use {b} next time', es: 'Usar {b} la próxima vez' },
+  bioOr: { en: 'or with your password', es: 'o con tu contraseña' },
+  bioReason: { en: 'Sign in to MilePay', es: 'Entrar a MilePay' },
+  bioStale: { en: 'Your password changed. Sign in once with it to turn {b} back on.', es: 'Tu contraseña cambió. Entra una vez con ella para volver a activar {b}.' },
   resetSent: { en: 'We sent you a reset link. Check your inbox (and spam).', es: 'Te enviamos un enlace. Revisa tu bandeja (y spam).' },
 }
 
@@ -59,7 +65,45 @@ export default function ModuleLogin({ moduleId, onSignIn, onReset }) {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [cargando, setCargando] = useState(false)
+  // Face ID / Touch ID (solo app de iPhone): estado del teléfono y casilla.
+  const [bioEst, setBioEst] = useState({ disponible: false, activa: false, nombre: '' })
+  const [usarBio, setUsarBio] = useState(true)
+  const autoPedido = useRef(false)
   const Icono = m.icon
+  const B = (k) => L(k).replace('{b}', bioEst.nombre)
+
+  // Entra con la cara o la huella: el Llavero de iOS devuelve correo y contraseña.
+  const entrarBio = async () => {
+    if (cargando) return
+    setError(''); setInfo('')
+    let cred
+    try { cred = await bio.pedir(moduleId, { razon: L('bioReason') }) } catch { return } // canceló: no es error
+    setCargando(true)
+    try { await onSignIn(cred.email, cred.pass) } catch (err) {
+      const code = err?.code
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        await bio.desactivar(moduleId)
+        setBioEst((e) => ({ ...e, activa: false }))
+        setEmail(cred.email)
+        setError(L('bioStale').replace('{b}', bioEst.nombre))
+      } else setError(errMsg(code, lang))
+    } finally { setCargando(false) }
+  }
+
+  useEffect(() => {
+    let vivo = true
+    bio.estado(moduleId).then((e) => {
+      if (!vivo) return
+      setBioEst(e)
+      if (e.email) setEmail(e.email)
+    })
+    return () => { vivo = false }
+  }, [moduleId])
+
+  // Al abrir la app con la biometría activa, la pide sola UNA vez.
+  useEffect(() => {
+    if (bioEst.activa && !autoPedido.current) { autoPedido.current = true; entrarBio() }
+  }, [bioEst.activa]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
 
@@ -71,7 +115,14 @@ export default function ModuleLogin({ moduleId, onSignIn, onReset }) {
     if (!emailOk) return setError(L('errEmail'))
     if (!pass) return setError(L('errPass'))
     setCargando(true)
-    try { await onSignIn(email.trim(), pass) } catch (err) { setError(errMsg(err?.code, lang)) } finally { setCargando(false) }
+    try {
+      await onSignIn(email.trim(), pass)
+      // Login correcto: guarda (o quita) las credenciales en el Llavero de iOS.
+      if (bioEst.disponible) {
+        if (usarBio) bio.activar(moduleId, email.trim(), pass).catch(() => {})
+        else if (bioEst.activa) bio.desactivar(moduleId)
+      }
+    } catch (err) { setError(errMsg(err?.code, lang)) } finally { setCargando(false) }
   }
 
   const olvido = async () => {
@@ -138,6 +189,15 @@ export default function ModuleLogin({ moduleId, onSignIn, onReset }) {
               })}
             </div>
 
+            {bioEst.activa && (
+              <div className="mt-5">
+                <button type="button" onClick={entrarBio} disabled={cargando} className="flex min-h-[52px] w-full items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-[15px] font-bold text-white shadow-sm transition hover:brightness-105 disabled:opacity-70" style={{ background: m.strong }}>
+                  {bioEst.nombre === 'Touch ID' ? <Fingerprint size={20} /> : <ScanFace size={20} />} {L('bioWith')} {bioEst.nombre}
+                </button>
+                <p className="mt-3 text-center text-xs text-rd-ink-sub">{L('bioOr')}</p>
+              </div>
+            )}
+
             <form onSubmit={entrar} className="mt-5 space-y-3">
               <div>
                 <label htmlFor="ml-email" className="mb-1 block text-xs font-semibold text-rd-ink-sub">{L('email')}</label>
@@ -158,6 +218,12 @@ export default function ModuleLogin({ moduleId, onSignIn, onReset }) {
                   <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="h-4 w-4 rounded border-rd-line" style={{ accentColor: m.strong }} /> {L('keep')}
                 </label>
               </div>
+              {bioEst.disponible && (
+                <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-xs text-rd-ink-sub">
+                  <input type="checkbox" checked={usarBio} onChange={(e) => setUsarBio(e.target.checked)} className="h-4 w-4 rounded border-rd-line" style={{ accentColor: m.strong }} />
+                  {bioEst.nombre === 'Touch ID' ? <Fingerprint size={14} /> : <ScanFace size={14} />} {B('bioUse')}
+                </label>
+              )}
 
               <button type="submit" disabled={cargando} className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[15px] font-bold text-white shadow-sm transition hover:brightness-105 disabled:opacity-70" style={{ background: m.strong }}>
                 {cargando ? <Loader2 size={17} className="animate-spin" /> : <Lock size={16} />} {L('signIn')} {tx(m.name, lang)}

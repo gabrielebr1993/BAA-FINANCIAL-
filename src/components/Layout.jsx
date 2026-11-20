@@ -2,7 +2,7 @@
 // buscador global, badge de alertas, selector de empresa y toggle de tema.
 import { useState, useMemo, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal, LayoutGrid, ArrowLeftRight } from 'lucide-react'
+import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, LayoutGrid, LayoutDashboard, Route, Wallet, AlertTriangle, MoreHorizontal, ArrowLeftRight } from 'lucide-react'
 import { useCarrier, useCarriersPermitidos } from '../carriers/CarrierContext'
 import { CARRIERS } from '../carriers'
 import { useAuth } from '../AuthContext'
@@ -12,6 +12,7 @@ import { useLang, LangToggle } from '../i18n'
 import { SECCIONES, GRUPOS_SECCIONES } from '../constants'
 import CampanaAlertas from './CampanaAlertas'
 import GlobalFilterBar from './GlobalFilterBar'
+import MilePayMark from './MilePayMark'
 
 function ThemeToggle() {
   const { oscuro, alternar } = useTheme()
@@ -170,9 +171,8 @@ function SidebarContent({ onNavigate }) {
   // Filtro por permiso + por compañía activa (secciones con `soloCarrier` solo
   // aparecen en su compañía: p. ej. «Cobros y fondo» en SpeedX, «Reclamos a
   // Gofo» en Gofo).
-  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner'))
+  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner') && (!s.soloSuperAdmin || esSuperAdmin))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
-  const esDueno = esSuperAdmin || perfil?.role === 'owner'
   // Menú en ACORDEÓN: agrupa por `grupo` y abre solo el grupo activo.
   const porGrupo = useMemo(() => { const m = {}; for (const s of secciones) (m[s.grupo || 'Operación'] ||= []).push(s); return m }, [secciones])
   const grupoActivo = secciones.find((s) => s.path === location.pathname)?.grupo
@@ -182,11 +182,11 @@ function SidebarContent({ onNavigate }) {
   useEffect(() => { if (grupoActivo) setGrpAbierto((s) => s.has(grupoActivo) ? s : new Set(s).add(grupoActivo)) }, [grupoActivo])
 
   return (
-    <aside className="pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden border-r border-slate-200 bg-white p-4 dark:border-slate-700/60 dark:bg-surface-dark-card">
+    <aside className="lg-glass-panel pt-safe relative z-10 flex h-screen w-64 flex-col gap-1 overflow-hidden p-4">
       <div className="flex items-center gap-3 px-1 pb-4 pt-1">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy text-lg font-extrabold text-brand-gold">M</div>
+        <MilePayMark size={40} className="shrink-0 rounded-[10px] shadow-card ring-1 ring-black/5 dark:ring-white/10" />
         <div>
-          <div className="text-lg font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
+          <div className="font-display text-lg font-extrabold leading-none tracking-tight text-brand-navy dark:text-white">Mile<span className="text-brand-gold">Pay</span></div>
           <div className="text-[11px] text-slate-400">{t('Gestión de facturas')}</div>
         </div>
       </div>
@@ -199,6 +199,8 @@ function SidebarContent({ onNavigate }) {
         {(porGrupo['Inicio'] || []).map((s) => (
           <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={0} />
         ))}
+        {/* IA (JARVIS) justo debajo de Inicio: es parte de la vista principal. */}
+        {puedeIA && <MenuIA onNavigate={onNavigate} esSuperAdmin={esSuperAdmin} />}
         {/* Grupos plegables: solo el activo abierto */}
         {GRUPOS_SECCIONES.filter((g) => g !== 'Inicio' && (porGrupo[g] || []).length).map((g) => {
           const items = porGrupo[g]
@@ -224,14 +226,6 @@ function SidebarContent({ onNavigate }) {
             </div>
           )
         })}
-        {/* Avanzado (dueño/súper-admin) */}
-        {esDueno && (
-          <ItemMenu s={{ path: '/proyeccion', label: 'Proyección', icon: SlidersHorizontal }} activo={location.pathname === '/proyeccion'} onNavigate={onNavigate} badge={0} />
-        )}
-        {puedeIA && <MenuIA onNavigate={onNavigate} esSuperAdmin={esSuperAdmin} />}
-        {esSuperAdmin && (
-          <ItemMenu s={{ path: '/empresas', label: 'Empresas', icon: Building2 }} activo={location.pathname === '/empresas'} onNavigate={onNavigate} badge={0} />
-        )}
       </nav>
 
       <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700/60">
@@ -263,6 +257,59 @@ function SidebarContent({ onNavigate }) {
   )
 }
 
+// Barra de pestañas inferior (solo móvil, < sm) en LIQUID GLASS: vidrio flotante
+// que deja ver el contenido por detrás. Al bajar se ENCOGE (solo íconos) y al
+// subir vuelve a mostrar los nombres, como en las apps de Apple. Respeta la
+// barra de inicio del iPhone (safe area) y en el iPhone Duo abierto se centra.
+function TabBarMovil({ onMas }) {
+  const { puede } = useAuth()
+  const { numAlertas } = useData()
+  const { t } = useLang()
+  const location = useLocation()
+  const [compacta, setCompacta] = useState(false)
+  useEffect(() => {
+    let ultimo = window.scrollY
+    const alMover = () => {
+      const y = window.scrollY
+      if (Math.abs(y - ultimo) < 8) return
+      setCompacta(y > ultimo && y > 120)
+      ultimo = y
+    }
+    window.addEventListener('scroll', alMover, { passive: true })
+    return () => window.removeEventListener('scroll', alMover)
+  }, [])
+  useEffect(() => { setCompacta(false) }, [location.pathname])
+  const tabs = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permiso: 'verDashboard' },
+    { path: '/rutas', label: 'Rutas', icon: Route, permiso: 'verDashboard' },
+    { path: '/pagos', label: 'Pagos', icon: Wallet, permiso: 'verPagos' },
+    { path: '/claims', label: 'Claims', icon: AlertTriangle, permiso: 'verClaims' },
+  ].filter((x) => puede(x.permiso))
+  return (
+    <nav aria-label={t('Navegación principal')} className={`lg-glass lg-tabbar fixed inset-x-3 bottom-[max(env(safe-area-inset-bottom),10px)] z-20 mx-auto max-w-md rounded-pill sm:hidden ${compacta ? 'is-compact' : ''}`}>
+      <div className="flex items-stretch justify-around px-1.5 py-1.5">
+        {tabs.map((x) => {
+          const on = location.pathname === x.path || location.pathname.startsWith(x.path + '/')
+          const Icon = x.icon
+          return (
+            <Link key={x.path} to={x.path} aria-label={t(x.label)} className="lg-tab flex min-h-[48px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-pill no-underline">
+              <span className={`grid h-8 w-12 place-items-center rounded-pill transition ${on ? 'lg-pill-on text-brand-gold dark:text-brand-navy' : 'text-slate-600 dark:text-slate-300'}`}>
+                <Icon size={20} strokeWidth={on ? 2.1 : 1.8} />
+              </span>
+              <span className={`lg-tab-label overflow-hidden text-[10.5px] leading-none ${on ? 'font-bold text-brand-navy dark:text-white' : 'font-medium text-slate-600 dark:text-slate-300'}`}>{t(x.label)}</span>
+            </Link>
+          )
+        })}
+        <button type="button" onClick={onMas} aria-label={t('Más')} className="lg-tab relative flex min-h-[48px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-pill">
+          <span className="grid h-8 w-12 place-items-center rounded-pill text-slate-600 dark:text-slate-300"><MoreHorizontal size={20} strokeWidth={1.8} /></span>
+          <span className="lg-tab-label overflow-hidden text-[10.5px] font-medium leading-none text-slate-600 dark:text-slate-300">{t('Más')}</span>
+          {numAlertas > 0 && <span className="absolute right-2.5 top-1 h-2 w-2 rounded-full bg-rose-500" />}
+        </button>
+      </div>
+    </nav>
+  )
+}
+
 export default function Layout({ children }) {
   const { t } = useLang()
   const [abierto, setAbierto] = useState(false)
@@ -274,7 +321,7 @@ export default function Layout({ children }) {
         </div>
 
         {abierto && (
-          <div className="fixed inset-0 z-30 bg-black/40 sm:hidden" onClick={() => setAbierto(false)}>
+          <div className="fixed inset-0 z-30 bg-slate-900/25 sm:hidden" onClick={() => setAbierto(false)}>
             <div onClick={(e) => e.stopPropagation()}>
               <SidebarContent onNavigate={() => setAbierto(false)} />
             </div>
@@ -287,12 +334,15 @@ export default function Layout({ children }) {
           <div className="cm-nubes" aria-hidden="true"><span className="cm-n1" /><span className="cm-n2" /><span className="cm-n3" /></div>
           {/* Header global: fila superior (menú/campana) + barra de filtros fija
               (rango + ciudad) visible y editable desde cualquier página de datos. */}
-          <header className="pt-safe sticky top-0 z-20 bg-white/90 shadow-[0_1px_0_rgba(15,23,42,.06)] backdrop-blur dark:bg-surface-dark-card/90 dark:shadow-[0_1px_0_rgba(255,255,255,.05)]">
+          <header className="lg-glass-bar pt-safe sticky top-0 z-20">
             <div className="flex items-center gap-3 px-4 py-2.5">
               <button onClick={() => setAbierto(true)} className="text-brand-navy dark:text-white sm:hidden" aria-label={t('Abrir menú')}>
                 <Menu size={24} strokeWidth={1.8} />
               </button>
-              <span className="font-extrabold text-brand-navy dark:text-white sm:hidden">MilePay</span>
+              <span className="inline-flex items-center gap-2 sm:hidden">
+                <MilePayMark size={30} className="rounded-[8px] ring-1 ring-black/5 dark:ring-white/10" />
+                <span className="font-display text-[17px] font-extrabold tracking-tight text-brand-navy dark:text-white">Mile<span className="text-brand-gold">Pay</span></span>
+              </span>
               <div className="ml-auto">
                 <CampanaAlertas />
               </div>
@@ -300,9 +350,11 @@ export default function Layout({ children }) {
             <GlobalFilterBar />
           </header>
 
-          <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+          <main className="max-w-full flex-1 overflow-x-hidden p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">{children}</main>
         </div>
       </div>
+      {/* Fuera de .cm-scope: ahí los hijos directos llevan position:relative. */}
+      <TabBarMovil onMas={() => setAbierto(true)} />
     </div>
   )
 }

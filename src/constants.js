@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 import {
   LayoutDashboard, Upload, FileText, DollarSign, AlertTriangle, Truck,
-  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank, FileClock, Camera, Bot, Gauge, MapPin,
+  Wallet, TrendingUp, BarChart3, Bell, Users, Settings, Scale, Route, DatabaseBackup, CreditCard, ShieldCheck, PiggyBank, FileClock, Camera, Bot, Gauge, MapPin, SlidersHorizontal, Building2,
 } from 'lucide-react'
 
 // Marca de color
@@ -124,6 +124,7 @@ export const GRUPOS_SECCIONES = ['Inicio', 'Operación', 'Equipo', 'Facturación
 
 // Secciones del menú lateral. Cada una gated por su permiso. Iconos = Lucide.
 // `grupo` = acordeón del menú. `soloCarrier` = solo con esa compañía activa.
+// `soloDueno` = owner o súper-admin. `soloSuperAdmin` = solo súper-admin.
 export const SECCIONES = [
   { path: '/dashboard', label: 'Dashboard', permiso: 'verDashboard', icon: LayoutDashboard, grupo: 'Inicio' },
 
@@ -148,11 +149,13 @@ export const SECCIONES = [
   { path: '/reclamos', label: 'Reclamos a Gofo', permiso: 'verFinanzas', icon: Scale, soloCarrier: 'gofo', grupo: 'Finanzas' },
   { path: '/agentes', label: 'Agentes', permiso: 'verFinanzas', icon: Bot, soloCarrier: 'gofo', grupo: 'Finanzas' },
   { path: '/auditorias', label: 'Auditorías', permiso: 'verFinanzas', icon: ShieldCheck, grupo: 'Finanzas' },
+  { path: '/proyeccion', label: 'Proyección', permiso: 'verDashboard', icon: SlidersHorizontal, soloDueno: true, grupo: 'Finanzas' },
 
   { path: '/stripe', label: 'Stripe', permiso: 'gestionarConfiguracion', icon: CreditCard, grupo: 'Ajustes' },
   { path: '/usuarios', label: 'Usuarios', permiso: 'gestionarUsuarios', icon: Users, grupo: 'Ajustes' },
   { path: '/configuracion', label: 'Configuración', permiso: 'gestionarConfiguracion', icon: Settings, grupo: 'Ajustes' },
   { path: '/backups', label: 'Backups', permiso: 'gestionarConfiguracion', icon: DatabaseBackup, grupo: 'Ajustes' },
+  { path: '/empresas', label: 'Empresas', permiso: 'gestionarConfiguracion', icon: Building2, soloSuperAdmin: true, grupo: 'Ajustes' },
 ]
 
 // Umbral (±%) para alertar de cambios de precio de Gofo entre facturas.

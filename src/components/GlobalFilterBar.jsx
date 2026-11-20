@@ -6,7 +6,7 @@
 //      "Limpiar".
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Calendar, Search, FileText, CalendarRange, Eraser, ChevronDown, Check } from 'lucide-react'
+import { Calendar, Search, FileText, CalendarRange, Eraser, ChevronDown, Check, MapPin, SlidersHorizontal } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { PRESETS } from '../utils/rango'
@@ -75,6 +75,8 @@ export default function GlobalFilterBar() {
   const [hasta, setHasta] = useState(rango.hasta || '')
   useEffect(() => { setDesde(rango.desde || ''); setHasta(rango.hasta || '') }, [rango.desde, rango.hasta])
   const [abrirPers, setAbrirPers] = useState(rango.preset === 'personalizado')
+  // Hoja de filtros del iPhone (bottom sheet de vidrio).
+  const [hoja, setHoja] = useState(false)
   useEffect(() => { if (rango.preset === 'personalizado') setAbrirPers(true) }, [rango.preset])
 
   const irPeriodo = () => { if (modo !== 'periodo') setRango({ preset: ultimoPreset.current || 'ultima', desde: '', hasta: '' }) }
@@ -143,22 +145,15 @@ export default function GlobalFilterBar() {
   const hayChofer = selectedDriver && selectedDriver !== TODOS
   const varias = numSemanas > 1
 
-  const seg = (activo) => `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${activo ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-600 hover:text-brand-navy dark:text-slate-300 dark:hover:text-white'}`
-  const chip = (activo) => `rounded-full px-3 py-1.5 text-xs font-medium transition ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:hover:bg-slate-700'}`
+  const seg = (activo) => `rounded-pill px-3 py-1.5 text-sm font-semibold transition ${activo ? 'lg-pill-on text-white dark:text-brand-navy' : 'text-slate-600 hover:text-brand-navy dark:text-slate-300 dark:hover:text-white'}`
+  const chip = (activo) => `rounded-full px-3 py-1.5 text-xs font-medium transition ${activo ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white/70 text-slate-600 ring-1 ring-slate-200/70 hover:bg-white dark:bg-slate-700/50 dark:text-slate-300 dark:ring-white/10 dark:hover:bg-slate-700'}`
   const inputCls = 'rounded-lg bg-transparent px-1 py-1.5 text-sm text-slate-700 outline-none dark:text-slate-100'
 
-  return (
-    <div className="scroll-thin overflow-x-auto border-t border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-700/60 dark:bg-surface-dark-card/90">
-      <div className="flex min-w-max flex-col gap-2">
-        {/* 1) Mostrando */}
-        <div className="flex items-center gap-1.5 text-[13px]">
-          <span className="text-slate-400 dark:text-slate-500">{t('Mostrando:')}</span>
-          <span className="font-semibold text-brand-navy dark:text-white">{periodoLabel}</span>
-          <span className="text-slate-300 dark:text-slate-600">·</span>
-          <span className="text-slate-600 dark:text-slate-300">{ciudadLabel}</span>
-          {hayChofer && (<><span className="text-slate-300 dark:text-slate-600">·</span><span className="text-slate-600 dark:text-slate-300">{selectedDriver}</span></>)}
-        </div>
+  // Filtros activos (para la burbuja del botón en el móvil).
+  const numActivos = (rango.preset !== 'ultima' ? 1 : 0) + (selectedCity !== TODAS || (selectedCities && selectedCities.length) ? 1 : 0) + (hayChofer ? 1 : 0)
 
+  const controles = (
+    <>
         {/* 2) Selector principal (período ↔ factura, excluyentes). El manager solo ve
             "Una factura". */}
         <div className="flex flex-wrap items-center gap-2">
@@ -167,7 +162,7 @@ export default function GlobalFilterBar() {
           ) : (
             <>
               <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{t('¿Qué quieres ver?')}</span>
-              <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800">
+              <div className="lg-glass inline-flex items-center gap-0.5 rounded-pill p-0.5">
                 <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 {t('Por período')}</button>
                 <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 {t('Una factura')}</button>
               </div>
@@ -218,8 +213,183 @@ export default function GlobalFilterBar() {
             <Eraser size={13} strokeWidth={2} /> {t('Limpiar')}
           </button>
         </div>
+    </>
+  )
+
+  return (
+    <>
+      {/* WEB / TABLET (≥ sm): la barra completa de siempre, con acabado de vidrio. */}
+      <div className="scroll-thin hidden overflow-x-auto border-t border-white/40 px-4 py-2.5 dark:border-white/5 sm:block">
+        <div className="flex min-w-max flex-col gap-2">
+          {/* 1) Mostrando */}
+        <div className="flex items-center gap-1.5 text-[13px]">
+          <span className="text-slate-400 dark:text-slate-500">{t('Mostrando:')}</span>
+          <span className="font-semibold text-brand-navy dark:text-white">{periodoLabel}</span>
+          <span className="text-slate-300 dark:text-slate-600">·</span>
+          <span className="text-slate-600 dark:text-slate-300">{ciudadLabel}</span>
+          {hayChofer && (<><span className="text-slate-300 dark:text-slate-600">·</span><span className="text-slate-600 dark:text-slate-300">{selectedDriver}</span></>)}
+        </div>
+
+        {/* 2) Selector principal (período ↔ factura, excluyentes). El manager solo ve
+              "Una factura". */}
+          <div className="flex flex-wrap items-center gap-2">
+            {soloFactura ? (
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-white"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> {t('Una factura')}</span>
+            ) : (
+              <>
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{t('¿Qué quieres ver?')}</span>
+                <div className="lg-glass inline-flex items-center gap-0.5 rounded-pill p-0.5">
+                  <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 {t('Por período')}</button>
+                  <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 {t('Una factura')}</button>
+                </div>
+              </>
+            )}
+
+            {(modo === 'periodo' && !soloFactura) ? (
+              <div className="flex flex-wrap items-center gap-1">
+                {ATAJOS.map((p) => (
+                  <button key={p.key} onClick={() => setPreset(p.key)} className={chip(rango.preset === p.key)}>{t(p.label)}</button>
+                ))}
+                <button onClick={() => setAbrirPers((o) => !o)} className={chip(abrirPers || rango.preset === 'personalizado')}>
+                  <span className="inline-flex items-center gap-1"><CalendarRange size={13} strokeWidth={2} /> {t('Personalizado')}</span>
+                </button>
+                {varias && (
+                  <div className="ml-1 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                    {[{ k: 'combinado', l: t('Combinado') }, { k: 'porSemana', l: t('Por semana') }].map((v) => (
+                      <button key={v.k} onClick={() => setVista(v.k)} className={`px-3 py-1.5 text-xs font-medium transition ${vista === v.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>{v.l}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <FacturaMultiSelect invoices={invoicesSelector} facturaIds={facturaIds} verMonto={verMonto} onChange={(ids) => setRango({ preset: 'factura', invoiceIds: ids, invoiceId: ids[0] || '', desde: '', hasta: '' })} />
+            )}
+          </div>
+
+          {/* Fila propia para el rango PERSONALIZADO (así se ve completo, sin scroll). */}
+          {modo === 'periodo' && !soloFactura && abrirPers && (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+              <Calendar size={16} strokeWidth={1.8} className="text-slate-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">{t('Desde')}</span>
+              <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label={t('Desde')} />
+              <span className="text-xs text-slate-500 dark:text-slate-400">{t('Hasta')}</span>
+              <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label={t('Hasta')} />
+              <button onClick={buscar} disabled={!desde && !hasta} className="ml-1 inline-flex items-center gap-1 rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40 dark:bg-brand-gold dark:text-brand-navy">
+                <Search size={13} strokeWidth={2.2} /> {t('Buscar')}
+              </button>
+            </div>
+          )}
+
+          {/* 3) Refinar: ciudad + chofer + limpiar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{t('Refinar:')}</span>
+            <CitySelector />
+            <DriverSelector />
+            <button onClick={limpiar} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-brand-navy dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-white" title={t('Volver a la última semana, todas las ciudades y todos los choferes')}>
+              <Eraser size={13} strokeWidth={2} /> {t('Limpiar')}
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* iPHONE (< sm): una sola fila de pastillas de vidrio con lo que estás viendo.
+          Al tocarla se abre la HOJA de filtros desde abajo (estilo iOS). */}
+      <div className="flex items-center gap-2 overflow-x-auto px-3 pb-2.5 pt-1 sm:hidden">
+        <button type="button" onClick={() => setHoja(true)} className="lg-glass inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-[13px] font-semibold text-brand-navy dark:text-white">
+          <CalendarRange size={15} strokeWidth={2} className="text-brand-gold" /> {periodoLabel}
+        </button>
+        <button type="button" onClick={() => setHoja(true)} className="lg-glass inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-[13px] font-medium text-slate-700 dark:text-slate-200">
+          <MapPin size={15} strokeWidth={2} className="text-brand-gold" /> <span className="max-w-[9.5rem] truncate">{ciudadLabel}</span>
+        </button>
+        {hayChofer && (
+          <button type="button" onClick={() => setHoja(true)} className="lg-glass inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-[13px] font-medium text-slate-700 dark:text-slate-200">
+            <span className="max-w-[8rem] truncate">{selectedDriver}</span>
+          </button>
+        )}
+        <button type="button" onClick={() => setHoja(true)} aria-label={t('Refinar:')} className="lg-glass relative ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-pill text-brand-navy dark:text-white">
+          <SlidersHorizontal size={17} strokeWidth={2} />
+          {numActivos > 0 && <span className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-brand-gold px-1 text-[10px] font-bold text-brand-navy">{numActivos}</span>}
+        </button>
+      </div>
+
+      {hoja && createPortal(
+        <div className="fixed inset-0 z-[60] sm:hidden" role="dialog" aria-modal="true" aria-label={t('Mostrando:')}>
+          <div className="absolute inset-0 bg-slate-900/25" onClick={() => setHoja(false)} />
+          <div className="lg-glass lg-hoja absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-[28px] px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-2">
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-400/50" aria-hidden="true" />
+            <div className="mb-3 flex items-center gap-2">
+              <div className="min-w-0 flex-1 text-[13px]">
+                <div className="text-slate-500 dark:text-slate-400">{t('Mostrando:')}</div>
+                <div className="truncate font-semibold text-brand-navy dark:text-white">{periodoLabel} · {ciudadLabel}{hayChofer ? ` · ${selectedDriver}` : ''}</div>
+              </div>
+              <button type="button" onClick={() => setHoja(false)} className="lg-pill-on min-h-[40px] rounded-pill px-4 text-sm font-bold text-brand-gold dark:text-brand-navy">{t('Listo')}</button>
+            </div>
+            <div className="lg-hoja-cuerpo flex flex-col gap-3 rounded-[22px] bg-white/80 p-3 dark:bg-slate-900/50">
+        {/* 2) Selector principal (período ↔ factura, excluyentes). El manager solo ve
+                  "Una factura". */}
+              <div className="flex flex-wrap items-center gap-2">
+                {soloFactura ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-brand-navy dark:border-slate-700 dark:bg-slate-800 dark:text-white"><FileText size={14} strokeWidth={1.9} className="text-brand-gold" /> {t('Una factura')}</span>
+                ) : (
+                  <>
+                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{t('¿Qué quieres ver?')}</span>
+                    <div className="lg-glass inline-flex items-center gap-0.5 rounded-pill p-0.5">
+                      <button onClick={irPeriodo} className={seg(modo === 'periodo')} aria-pressed={modo === 'periodo'}>📅 {t('Por período')}</button>
+                      <button onClick={irFactura} className={seg(modo === 'factura')} aria-pressed={modo === 'factura'} disabled={invoices.length === 0}>📄 {t('Una factura')}</button>
+                    </div>
+                  </>
+                )}
+
+                {(modo === 'periodo' && !soloFactura) ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {ATAJOS.map((p) => (
+                      <button key={p.key} onClick={() => setPreset(p.key)} className={chip(rango.preset === p.key)}>{t(p.label)}</button>
+                    ))}
+                    <button onClick={() => setAbrirPers((o) => !o)} className={chip(abrirPers || rango.preset === 'personalizado')}>
+                      <span className="inline-flex items-center gap-1"><CalendarRange size={13} strokeWidth={2} /> {t('Personalizado')}</span>
+                    </button>
+                    {varias && (
+                      <div className="ml-1 inline-flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                        {[{ k: 'combinado', l: t('Combinado') }, { k: 'porSemana', l: t('Por semana') }].map((v) => (
+                          <button key={v.k} onClick={() => setVista(v.k)} className={`px-3 py-1.5 text-xs font-medium transition ${vista === v.k ? 'bg-brand-navy text-white dark:bg-brand-gold dark:text-brand-navy' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300'}`}>{v.l}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <FacturaMultiSelect invoices={invoicesSelector} facturaIds={facturaIds} verMonto={verMonto} onChange={(ids) => setRango({ preset: 'factura', invoiceIds: ids, invoiceId: ids[0] || '', desde: '', hasta: '' })} />
+                )}
+              </div>
+
+              {/* Fila propia para el rango PERSONALIZADO (así se ve completo, sin scroll). */}
+              {modo === 'periodo' && !soloFactura && abrirPers && (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+                  <Calendar size={16} strokeWidth={1.8} className="text-slate-400" />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{t('Desde')}</span>
+                  <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label={t('Desde')} />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{t('Hasta')}</span>
+                  <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && buscar()} className={inputCls} aria-label={t('Hasta')} />
+                  <button onClick={buscar} disabled={!desde && !hasta} className="ml-1 inline-flex items-center gap-1 rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40 dark:bg-brand-gold dark:text-brand-navy">
+                    <Search size={13} strokeWidth={2.2} /> {t('Buscar')}
+                  </button>
+                </div>
+              )}
+
+              {/* 3) Refinar: ciudad + chofer + limpiar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{t('Refinar:')}</span>
+                <CitySelector />
+                <DriverSelector />
+                <button onClick={limpiar} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-brand-navy dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-white" title={t('Volver a la última semana, todas las ciudades y todos los choferes')}>
+                  <Eraser size={13} strokeWidth={2} /> {t('Limpiar')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 

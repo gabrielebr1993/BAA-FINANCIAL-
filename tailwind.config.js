@@ -3,6 +3,10 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
+    // `fold` = iPhone Duo abierto (pantalla interna ~626pt) y tablets chicas: 2
+    // columnas sin pasar todavía al layout de escritorio. Se declara ANTES de sm
+    // para que el orden del CSS sea de menor a mayor.
+    screens: { fold: '600px', sm: '640px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px' },
     extend: {
       colors: {
         // Rediseño móvil 2026 (Bloque 1): tokens mp-* (ver src/styles/tokens.css).

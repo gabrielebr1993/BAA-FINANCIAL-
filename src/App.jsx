@@ -16,11 +16,8 @@ import { CarrierProvider, CarrierGate } from './carriers/CarrierContext'
 
 // Módulo Bulk: producto independiente (auth, datos y rutas propios). Vive bajo /bulk.
 const BulkApp = lazy(() => import('./bulk/BulkApp'))
-// Landing PÚBLICA de Freight (marketing, sin autenticación). Vive en /freight;
-// la PORTADA del sitio es el home 3D (Home3D) en la raíz.
+// Landing PÚBLICA de Freight (marketing, sin autenticación). Vive en /freight.
 const LandingFreight = lazy(() => import('./pages/LandingFreight'))
-// Portada del sitio: hero con la escena 3D de la operación (aprobada por el dueño).
-const Home3D = lazy(() => import('./pages/Home3D'))
 // Portada rediseñada (reemplaza al home 3D en la raíz).
 const HomeRedesign = lazy(() => import('./pages/HomeRedesign'))
 // Módulo ECOMMERCE (en construcción): compras internacionales. PRIVADO —
