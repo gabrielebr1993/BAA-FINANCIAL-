@@ -18,7 +18,7 @@ const vacio = { nombre: '', ciudad: '', sueldoSemanal: '' }
 export default function ManagersPanel() {
   const navigate = useNavigate()
   const { t } = useLang()
-  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, ciudadesDisponibles, numSemanas, selectedCity, selectedCities } = useData()
+  const { managers: managersAll, reloadManagers, activeCompanyId, ciudadesEmpresa, ciudadesDisponibles, numSemanas, selectedCity, selectedCities, setSelectedCity } = useData()
   const { ciudadBloqueada, ciudadesUsuario } = useAuth()
   // Multi-Company: el gasto fijo nace en la compañía activa (sin campo = Gofo),
   // así los gastos de SpeedX no se mezclan con los de Gofo y viceversa.
@@ -36,6 +36,15 @@ export default function ManagersPanel() {
     if (misCiudades) return misCiudades.has(c)
     return true
   })
+  // ¿El filtro de ciudad activo DEJARÍA VER un gasto fijo de esta ciudad? (misma
+  // lógica que el filtro de `managers` de arriba). Se usa al guardar para evitar
+  // que un gasto recién creado "se guarde y desaparezca" por culpa del filtro.
+  const visibleBajoFiltro = (c) => {
+    if (subset) return subset.has(c)
+    if (selectedCity && selectedCity !== TODAS) return c === selectedCity
+    if (misCiudades) return misCiudades.has(c)
+    return true
+  }
   // Ciudades para el formulario/menú de gastos fijos = catálogo de la empresa +
   // las DETECTADAS en las facturas (ciudadesDisponibles). Así aparecen aunque el
   // catálogo esté vacío (p. ej. CHS/MYR de SpeedX que vienen en las facturas).
@@ -50,10 +59,11 @@ export default function ManagersPanel() {
   const [editId, setEditId] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [ok, setOk] = useState('')
 
   const semanas = numSemanas
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
-  const cancelar = () => { setEditId(null); setForm(vacio); setError('') }
+  const cancelar = () => { setEditId(null); setForm(vacio); setError(''); setOk('') }
 
   // Nombre legible de una ciudad (por su código): ciudades de la empresa → tabla estándar.
   const nombreDe = (code) => {
@@ -93,6 +103,7 @@ export default function ManagersPanel() {
   }
 
   const guardar = async () => {
+    setOk('')
     if (!form.nombre.trim()) return setError(t('El nombre es obligatorio.'))
     // Ciudad del gasto fijo: usuario bloqueado a UNA ciudad → esa; si tiene varias
     // (o no está bloqueado) → la que eligió en el formulario (limitada a las suyas).
@@ -106,6 +117,13 @@ export default function ManagersPanel() {
       else await addDoc(collection(db, 'managers'), { ...payload, activo: true, companyId: activeCompanyId, ...(carrier && carrier !== 'gofo' ? { carrier } : {}) })
       await reloadManagers()
       cancelar()
+      // Evita el "se guarda y desaparece": si el filtro de ciudad activo ocultaría
+      // este gasto (p. ej. estás viendo otra ciudad), cambia el filtro a su ciudad
+      // para que SIEMPRE quede a la vista. Si ya se vería (p. ej. "Todas"), no toca nada.
+      const oculto = !visibleBajoFiltro(ciudadFinal)
+      if (oculto) setSelectedCity?.(ciudadFinal)
+      setOk(t('Gasto fijo guardado en') + ' ' + nombreDe(ciudadFinal) + '.' +
+        (oculto ? ' ' + t('Cambié el filtro de ciudad para que puedas verlo.') : ''))
     } catch (e) {
       setError(t('Error al guardar:') + ' ' + e.message)
     } finally {
@@ -137,6 +155,7 @@ export default function ManagersPanel() {
       <Card className="mb-4 p-4">
         <h3 className="m-0 mb-3 text-base font-bold text-brand-navy dark:text-slate-100">{editId ? t('Editar gasto fijo') : t('Agregar gasto fijo')}</h3>
         {error && <Aviso tipo="error">{error}</Aviso>}
+        {ok && <Aviso tipo="ok">{ok}</Aviso>}
         {ciudadesTodas.length === 0 && (
           <Aviso tipo="warn">{t('Primero agrega ciudades en')} <b>{t('Configuración → Mis ciudades')}</b>{t(': cada gasto fijo pertenece a una ciudad.')}</Aviso>
         )}
