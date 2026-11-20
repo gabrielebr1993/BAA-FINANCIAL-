@@ -523,13 +523,13 @@ function PerfilWorker({ w, datos, user, volver, recargar }) {
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <Input placeholder="Posición (vacío = todas)" className="w-44" value={nuevaExc.posicion} onChange={(e) => setNuevaExc({ ...nuevaExc, posicion: e.target.value })} />
+          <Input list={`pos-${w.id}`} placeholder="Posición (vacío = todas)" className="w-44" value={nuevaExc.posicion} onChange={(e) => setNuevaExc({ ...nuevaExc, posicion: e.target.value })} />
           <Input type="number" step="0.25" placeholder="$ reg/h" className="w-24" value={nuevaExc.reg} onChange={(e) => setNuevaExc({ ...nuevaExc, reg: e.target.value })} />
           <Input type="number" step="0.25" placeholder="$ OT/h" className="w-24" value={nuevaExc.ot} onChange={(e) => setNuevaExc({ ...nuevaExc, ot: e.target.value })} />
           <Input type="date" className="w-40" value={nuevaExc.desde} onChange={(e) => setNuevaExc({ ...nuevaExc, desde: e.target.value })} />
           <Boton variant="gold" disabled={guardando} onClick={guardarExc}>{guardando ? <Spinner /> : 'Agregar'}</Boton>
         </div>
-        <div className="mt-1 text-[11px] text-slate-400">Cambiar una tarifa NO modifica períodos ya importados o pagados.</div>
+        <div className="mt-1 text-[11px] text-slate-400">Elige la posición de la lista (o déjala <b>vacía</b> para aplicar a TODAS sus posiciones — recomendado si solo tiene un puesto). Cambiar una tarifa NO modifica períodos ya importados o pagados: aplica a las próximas subidas.</div>
       </Card>
 
       {porPeriodo.map(([pid, p]) => {

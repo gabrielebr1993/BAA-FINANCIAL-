@@ -82,11 +82,19 @@ export function etiquetaPosicion(posicion, posMap) {
 // Excepción individual vigente (worker.tarifas = [{posicion|'' , reg, ot, desde}]).
 export function excepcionVigente(worker, posicion, fechaISO) {
   const lista = (worker && worker.tarifas) || []
-  const aplicables = lista.filter((t) => (!t.posicion || t.posicion === posicion) && (t.desde || '0000-00-00') <= (fechaISO || '9999-12-31'))
+  // Normaliza la posición (sin mayúsculas ni espacios) para comparar: así una
+  // excepción guardada como "forklift" aplica a las filas que el archivo trae
+  // como "Forklift". Antes la comparación era EXACTA y se ignoraba por el caso.
+  const norm = (p) => String(p || '').trim().toLowerCase()
+  const posNorm = norm(posicion)
+  const aplicables = lista.filter((t) => {
+    const tp = norm(t.posicion)
+    return (!tp || tp === posNorm) && (t.desde || '0000-00-00') <= (fechaISO || '9999-12-31')
+  })
   if (!aplicables.length) return null
   aplicables.sort((a, b) => {
     // primero la más específica (con posición), luego la más reciente
-    if (!!a.posicion !== !!b.posicion) return a.posicion ? -1 : 1
+    if (!!norm(a.posicion) !== !!norm(b.posicion)) return norm(a.posicion) ? -1 : 1
     return String(b.desde).localeCompare(String(a.desde))
   })
   return { reg: Number(aplicables[0].reg), ot: Number(aplicables[0].ot) }
