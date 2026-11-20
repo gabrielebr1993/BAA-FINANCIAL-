@@ -166,13 +166,14 @@ export default function Dashboard() {
           <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
             <ClickWrap className="h-full" onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
               <div className="lg-sheen mp-in relative flex h-full flex-col justify-center overflow-hidden rounded-card bg-brand-navy p-5 text-white shadow-card sm:p-6">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300"><TrendingUp size={14} strokeWidth={2} /> {t('Ganancia')}</div>
-                <div className="mt-1 font-display text-[40px] font-extrabold leading-none tracking-tight tabular-nums text-brand-gold sm:text-5xl">{fD(gananciaTotal)}</div>
-                <Tendencia v={estPrev && variacion(est.ganancia, estPrev.ganancia)} claro texto={t('vs semana anterior')} />
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300"><TrendingUp size={14} strokeWidth={2} /> {t('Ganancia real')}</div>
+                <div className="mt-1 font-display text-[40px] font-extrabold leading-none tracking-tight tabular-nums text-brand-gold sm:text-5xl">{fD(gReal.gananciaReal)}</div>
+                {/* Ganancia REAL: ingreso neto − choferes − managers − gastos fijos (misma
+                    cifra que la sección «Ganancia real» y que Financiero). */}
                 <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
                   <MiniDato label={t('Ingreso total')} valor={fD(tot.ingreso)} trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
                   <MiniDato label={t('Costo total')} valor={fD(costoTotal)} trend={estPrev && variacion(est.costo, estPrev.costo)} invertido sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
-                  <MiniDato label={t('Margen')} valor={fP(margen)} />
+                  <MiniDato label={t('Margen')} valor={fP(gReal.margen)} />
                 </div>
               </div>
             </ClickWrap>
