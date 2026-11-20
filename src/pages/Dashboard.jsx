@@ -170,8 +170,8 @@ export default function Dashboard() {
                 <div className="mt-1 font-display text-[40px] font-extrabold leading-none tracking-tight tabular-nums text-brand-gold sm:text-5xl">{fD(gananciaTotal)}</div>
                 <Tendencia v={estPrev && variacion(est.ganancia, estPrev.ganancia)} claro texto={t('vs semana anterior')} />
                 <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
-                  <MiniDato label={t('Ingreso')} valor={fD(tot.ingreso)} trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
-                  <MiniDato label={t('Costo')} valor={fD(costoTotal)} trend={estPrev && variacion(est.costo, estPrev.costo)} invertido sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
+                  <MiniDato label={t('Ingreso total')} valor={fD(tot.ingreso)} trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
+                  <MiniDato label={t('Costo total')} valor={fD(costoTotal)} trend={estPrev && variacion(est.costo, estPrev.costo)} invertido sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
                   <MiniDato label={t('Margen')} valor={fP(margen)} />
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
               <Chip icon={Package} label={t('Paquetes')} valor={num(tot.paquetes)} trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
               <Chip icon={Repeat} label={t('% Dobles')} valor={pct(tot.pctDobles)} sub={`${num(tot.dobles)} ${t('dobles')}`} onClick={() => irA('/performance')} />
-              <Chip icon={AlertTriangle} label={t('Claims')} valor={num(numClaims)} sub={`${pct(calidad)} ${t('entregas sin claim')}`} trend={estPrev && variacion(est.claims, estPrev.claims)} invertido onClick={() => irA('/claims')} alerta />
+              <Chip icon={AlertTriangle} label={t('Claims')} valor={num(numClaims)} sub={`${t('Calidad')} ${pct(calidad)}`} trend={estPrev && variacion(est.claims, estPrev.claims)} invertido onClick={() => irA('/claims')} alerta />
             </div>
           </div>
 
@@ -234,7 +234,7 @@ export default function Dashboard() {
             /* -------- VISTA COMBINADA -------- */
             <>
               {/* Ganancia: desglose de Gofo + ganancia real (lado a lado en web). */}
-              <Seccion titulo={t('Detalle de ganancia')} abierta>
+              <Seccion titulo={t('Ganancia real')} abierta>
                 <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
                   {verificacionCiudad ? (
                     <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
@@ -257,8 +257,8 @@ export default function Dashboard() {
                 )}
               </Seccion>
 
-              {/* Ciudades y rutas: UNA vista por dato (antes había gráficas repetidas). */}
-              <Seccion titulo={t('Ciudades y rutas')} abierta>
+              {/* Comparativo entre ciudades: UNA vista por dato (antes había gráficas repetidas). */}
+              <Seccion titulo={t('Comparativo entre ciudades')} abierta>
                 <div className="mb-4"><RankingCiudades compacto /></div>
                 <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
                   <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
@@ -269,7 +269,7 @@ export default function Dashboard() {
 
               {/* Claims: todo lo de calidad junto, plegado por defecto en el móvil. */}
               {verGofo && (
-                <Seccion titulo={t('Claims')} resumen={`${num(numClaims)} · ${pct(calidad)} ${t('entregas sin claim')}`}>
+                <Seccion titulo={t('Claims')} resumen={`${num(numClaims)} · ${t('Calidad (entregas sin claim)')} ${pct(calidad)}`}>
                   <PanelClaims claims={claimsCiudad} inv={inv} compacto />
                   <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
                     <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="#c47f5a" fmt={num} />
@@ -282,14 +282,17 @@ export default function Dashboard() {
                 </Seccion>
               )}
 
-              {/* Rankings de choferes y rutas. */}
-              <Seccion titulo={t('Rankings')} resumen={t('Choferes y rutas')}>
+              {/* Rankings de choferes y de rutas (cada uno en su sección). */}
+              <Seccion titulo={t('Rankings de choferes')}>
                 <div className="mb-4"><RankingCalificacion compacto limite={5} /></div>
                 <div className="mb-4 grid grid-cols-1 gap-4 fold:grid-cols-2 xl:grid-cols-3">
                   <RankWidget title={t('Por productividad (ingreso)')} data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
                   <RankWidget title={t('Por ganancia')} data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
                   <RankWidget title={t('Por calidad (menos claims)')} data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
                 </div>
+              </Seccion>
+
+              <Seccion titulo={t('Rankings de rutas')}>
                 <div className="grid grid-cols-1 gap-4 fold:grid-cols-2 lg:grid-cols-4">
                   <MiniLista titulo={t('Más reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio={t('Ninguna ruta con claims.')} onPick={() => irA('/performance')} />
                   <MiniLista titulo={t('Cero reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio={t('Todas tienen algún claim.')} onPick={() => irA('/performance')} />
@@ -300,7 +303,7 @@ export default function Dashboard() {
 
               {/* Recomendaciones de JARVIS: al final y plegadas (antes tapaban los números). */}
               {(selectedCity === TODAS || est.paquetes > 0) && (
-                <Seccion titulo={t('Recomendaciones y alertas')} resumen="JARVIS">
+                <Seccion titulo={t('Recomendaciones de JARVIS')}>
                   <RecomendacionesJarvis />
                 </Seccion>
               )}
