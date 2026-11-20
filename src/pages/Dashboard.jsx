@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
-import { DollarSign, Receipt, TrendingUp, Target, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff } from 'lucide-react'
+import { TrendingUp, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff, ChevronDown } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
 import { useLang } from '../i18n'
@@ -12,10 +12,10 @@ import {
 import { UMBRAL_CAMBIO_PRECIO } from '../constants'
 import { money, num, pct } from '../utils/format'
 import { exportarExcel, exportarPDF } from '../utils/exportar'
-import { KPI, PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
+import { PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
 import '../styles/cloudmotion.css'
 import RecomendacionesJarvis from '../components/RecomendacionesJarvis'
-import { BarCard, StackedBarCard, DonutCard, TrendCard, GaugeCard, Widget, useChartTheme, PALETTE } from '../components/charts'
+import { BarCard, StackedBarCard, TrendCard, Widget, useChartTheme, PALETTE } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
@@ -85,16 +85,12 @@ export default function Dashboard() {
   const claimsCiudad = useMemo(() => claimsDeCiudad(claims, selectedCity, inv), [claims, selectedCity, inv])
   const numClaims = useMemo(() => contarClaimsValidos(claimsCiudad), [claimsCiudad])
   const calidad = tot.paquetes > 0 ? 1 - numClaims / tot.paquetes : 1
-  // eslint-disable-next-line no-console
-  console.log('[MilePay] Claims usados en dashboard:', numClaims)
 
   const ciudades = porCiudad(inv?.resumenCiudades || [], selectedCity)
-  const ingresoPorCiudad = ciudades.map((c) => ({ name: nombreCiudadDe(inv, c.ubicacion), valor: Math.round(c.ingreso) }))
   const stackedCiudad = ciudades.map((c) => ({ name: nombreCiudadDe(inv, c.ubicacion), Individuales: c.individuales, Dobles: c.dobles }))
   const rutasTop = [...porCiudad(inv?.resumenRutas || [], selectedCity)].sort((a, b) => b.ingreso - a.ingreso).slice(0, 10)
   const ingresoPorRuta = rutasTop.map((r) => ({ name: r.ruta, valor: Math.round(r.ingreso) }))
   const claimsPorRuta = [...rr.porClaims].filter((r) => (r.numClaims || 0) > 0).slice(0, 12).map((r) => ({ name: r.ruta, valor: r.numClaims }))
-  const donutTipo = [{ name: 'Individuales', valor: tot.individuales }, { name: 'Dobles', valor: tot.dobles }]
 
   const rankProd = rc.productividad.slice(0, 6).map((p) => ({ name: p.nombre, valor: Math.round(p.ingreso) }))
   const rankGan = rc.ganancia.slice(0, 6).map((p) => ({ name: p.nombre, valor: Math.round(p.ganancia) }))
@@ -164,7 +160,29 @@ export default function Dashboard() {
           {onbAbierto && <Onboarding />}
           {/* Recomendaciones: solo si la ciudad seleccionada tiene datos (evita mostrar
               choferes de otra ciudad cuando estás en una ciudad vacía). */}
-          {(selectedCity === TODAS || est.paquetes > 0) && <RecomendacionesJarvis />}
+          {/* Resumen principal: la GANANCIA manda (tarjeta navy grande), con
+              ingreso/costo/margen dentro y una fila de chips para volumen y calidad.
+              En iPhone ocupa una sola pantalla; en web queda a la izquierda. */}
+          <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
+            <ClickWrap className="h-full" onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
+              <div className="mp-in relative flex h-full flex-col justify-center overflow-hidden rounded-card bg-brand-navy p-5 text-white shadow-card sm:p-6">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300"><TrendingUp size={14} strokeWidth={2} /> {t('Ganancia')}</div>
+                <div className="mt-1 font-display text-[40px] font-extrabold leading-none tracking-tight tabular-nums text-brand-gold sm:text-5xl">{fD(gananciaTotal)}</div>
+                <Tendencia v={estPrev && variacion(est.ganancia, estPrev.ganancia)} claro texto={t('vs semana anterior')} />
+                <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
+                  <MiniDato label={t('Ingreso')} valor={fD(tot.ingreso)} trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} />
+                  <MiniDato label={t('Costo')} valor={fD(costoTotal)} trend={estPrev && variacion(est.costo, estPrev.costo)} invertido sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
+                  <MiniDato label={t('Margen')} valor={fP(margen)} />
+                </div>
+              </div>
+            </ClickWrap>
+            <div className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
+              <Chip icon={Package} label={t('Paquetes')} valor={num(tot.paquetes)} trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
+              <Chip icon={Repeat} label={t('% Dobles')} valor={pct(tot.pctDobles)} sub={`${num(tot.dobles)} ${t('dobles')}`} onClick={() => irA('/performance')} />
+              <Chip icon={AlertTriangle} label={t('Claims')} valor={num(numClaims)} sub={`${pct(calidad)} ${t('entregas sin claim')}`} trend={estPrev && variacion(est.claims, estPrev.claims)} invertido onClick={() => irA('/claims')} alerta />
+            </div>
+          </div>
+
           {alertas.length > 0 && (
             <Aviso tipo="warn">
               <span className="inline-flex items-center gap-1.5"><AlertTriangle size={15} strokeWidth={1.8} /> {conCarrier('Gofo cambió el precio')} (±{pct(UMBRAL_CAMBIO_PRECIO, 0)}) en {alertas.length} ruta(s) vs la semana anterior:</span>
@@ -176,16 +194,6 @@ export default function Dashboard() {
               </ul>
             </Aviso>
           )}
-
-          <div className="cm-stagger mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            <KPI animado label={t('Ingreso total')} value={fD(tot.ingreso)} icon={DollarSign} accent="green" trend={estPrev && variacion(est.ingreso, estPrev.ingreso)} onClick={() => irA('/financiero')} />
-            <KPI animado label={t('Costo total')} value={fD(costoTotal)} icon={Receipt} accent="navy" trend={estPrev && variacion(est.costo, estPrev.costo)} onClick={() => irA('/pagos')} sub={(gReal.totalPrestamo > 0 || gReal.totalBono > 0) ? `ajustes: ${gReal.totalPrestamo > 0 ? `−${money(gReal.totalPrestamo)}` : ''}${gReal.totalPrestamo > 0 && gReal.totalBono > 0 ? ' · ' : ''}${gReal.totalBono > 0 ? `+${money(gReal.totalBono)}` : ''}` : undefined} />
-            <KPI animado label={t('Ganancia')} value={fD(gananciaTotal)} icon={TrendingUp} accent="gold" trend={estPrev && variacion(est.ganancia, estPrev.ganancia)} onClick={() => irA('/financiero')} />
-            <KPI animado label={t('Margen')} value={fP(margen)} icon={Target} accent="blue" onClick={() => irA('/financiero')} />
-            <KPI animado label={t('Paquetes')} value={num(tot.paquetes)} icon={Package} accent="slate" trend={estPrev && variacion(est.paquetes, estPrev.paquetes)} onClick={() => irA('/performance')} />
-            <KPI animado label={t('% Dobles')} value={pct(tot.pctDobles)} icon={Repeat} accent="gold" onClick={() => irA('/performance')} sub={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
-            <KPI animado label={t('Claims')} value={num(numClaims)} icon={AlertTriangle} accent="red" trend={estPrev && variacion(est.claims, estPrev.claims)} onClick={() => irA('/claims')} />
-          </div>
 
           {!inv ? (
             <EstadoVacio titulo={t('Sin datos en este rango')} texto={t('No hay facturas en el rango de fechas seleccionado. Cambia el rango o carga una factura.')} />
@@ -225,103 +233,76 @@ export default function Dashboard() {
           ) : (
             /* -------- VISTA COMBINADA -------- */
             <>
-              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {/* Desglose de Gofo de la CIUDAD seleccionada (Gofo paga por ciudad;
-                    cada factura es de una sola ciudad). Con "Todas" es el del rango. */}
-                {verificacionCiudad ? (
+              {/* Ganancia: desglose de Gofo + ganancia real (lado a lado en web). */}
+              <Seccion titulo={t('Detalle de ganancia')} abierta>
+                <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
+                  {verificacionCiudad ? (
+                    <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
+                      <Verificacion v={verificacionCiudad} compacto />
+                    </ClickWrap>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                      {conCarrier(t('No hay desglose de pago de Gofo para esta ciudad en este período.'))}
+                    </div>
+                  )}
                   <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
-                    <Verificacion v={verificacionCiudad} compacto />
+                    <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} verGofo={verGofo} />
                   </ClickWrap>
-                ) : (
-                  <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                    {conCarrier(t('No hay desglose de pago de Gofo para esta ciudad en este período.'))}
+                </div>
+                {variasSemanas && (
+                  <div className="mt-4">
+                    <TrendCard title={t('Tendencia semana a semana')} subtitle={t('Ingreso, costo y ganancia por semana')} area data={trendData} fmt={money}
+                      series={[{ key: 'ingreso', label: 'Ingreso', color: '#13233f' }, { key: 'costo', label: 'Costo', color: '#c47f5a' }, { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' }]} />
                   </div>
                 )}
-                <ClickWrap onClick={() => irA('/financiero')} titulo={t('Ver detalle financiero')}>
-                  <GananciaReal g={gReal} ciudadLabel={selectedCity === TODAS ? '' : nombreCiudadDe(inv, selectedCity)} claims={claimEco} oculto={!verDinero} verGofo={verGofo} />
-                </ClickWrap>
-              </div>
+              </Seccion>
 
-              {verGofo && (
-                <ClickWrap onClick={() => irA('/claims')} titulo={t('Ver claims')}>
-                  <PanelClaims claims={claimsDeCiudad(claims, selectedCity, inv)} inv={inv} compacto />
-                </ClickWrap>
-              )}
-
-              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <GaugeCard title={t('Margen de ganancia')} value={margen} color="#c9a24b" />
-                <GaugeCard title={t('% de dobles')} value={tot.pctDobles} color="#3d5a80" subtitle={`${num(tot.dobles)} ${t('dobles')} · ${num(tot.individuales)} ${t('individuales')}`} />
-                <GaugeCard title={t('Calidad (entregas sin claim)')} value={calidad} color="#4a9c8c" nota={`${num(numClaims)} claims de ${num(tot.paquetes)} paquetes`} />
-              </div>
-
-              {variasSemanas && (
-                <div className="mb-4">
-                  <TrendCard title={t('Tendencia semana a semana')} subtitle={t('Ingreso, costo y ganancia por semana')} area data={trendData} fmt={money}
-                    series={[{ key: 'ingreso', label: 'Ingreso', color: '#13233f' }, { key: 'costo', label: 'Costo', color: '#c47f5a' }, { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' }]} />
+              {/* Ciudades y rutas: UNA vista por dato (antes había gráficas repetidas). */}
+              <Seccion titulo={t('Ciudades y rutas')} abierta>
+                <div className="mb-4"><RankingCiudades compacto /></div>
+                <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
+                  <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
+                  <StackedBarCard title={t('Individuales vs dobles por ciudad')} data={stackedCiudad} fmt={num}
+                    series={[{ key: 'Individuales', label: 'Individuales', color: '#3d5a80' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
                 </div>
+              </Seccion>
+
+              {/* Claims: todo lo de calidad junto, plegado por defecto en el móvil. */}
+              {verGofo && (
+                <Seccion titulo={t('Claims')} resumen={`${num(numClaims)} · ${pct(calidad)} ${t('entregas sin claim')}`}>
+                  <PanelClaims claims={claimsCiudad} inv={inv} compacto />
+                  <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
+                    <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="#c47f5a" fmt={num} />
+                    {claimsCiudad.length > 0 && (
+                      <Widget title={t('Claims por tipo')} subtitle={t('Choferes con más claims por tipo. Haz clic para ver su detalle.')}>
+                        <RankingClaimsTipo claims={claimsCiudad} compacto />
+                      </Widget>
+                    )}
+                  </div>
+                </Seccion>
               )}
 
-              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <BarCard title={t('Ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} horizontal />
-                <DonutCard title={t('Distribución individual vs doble')} data={donutTipo} fmt={num} />
-                <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
-                <StackedBarCard title={t('Individuales vs dobles por ciudad')} data={stackedCiudad} fmt={num}
-                  series={[{ key: 'Individuales', label: 'Individuales', color: '#3d5a80' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
-                {ingresoPorCiudad.length > 1 && <DonutCard title={t('Ingreso por ciudad')} data={ingresoPorCiudad} fmt={money} />}
-                <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="#c47f5a" fmt={num} />
-              </div>
+              {/* Rankings de choferes y rutas. */}
+              <Seccion titulo={t('Rankings')} resumen={t('Choferes y rutas')}>
+                <div className="mb-4"><RankingCalificacion compacto limite={5} /></div>
+                <div className="mb-4 grid grid-cols-1 gap-4 fold:grid-cols-2 xl:grid-cols-3">
+                  <RankWidget title={t('Por productividad (ingreso)')} data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
+                  <RankWidget title={t('Por ganancia')} data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
+                  <RankWidget title={t('Por calidad (menos claims)')} data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
+                </div>
+                <div className="grid grid-cols-1 gap-4 fold:grid-cols-2 lg:grid-cols-4">
+                  <MiniLista titulo={t('Más reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio={t('Ninguna ruta con claims.')} onPick={() => irA('/performance')} />
+                  <MiniLista titulo={t('Cero reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio={t('Todas tienen algún claim.')} onPick={() => irA('/performance')} />
+                  <MiniLista titulo={t('Más ingreso')} rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
+                  <MiniLista titulo={t('Mejor $/lb')} rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
+                </div>
+              </Seccion>
 
-              {/* Ranking de ciudades: SIEMPRE visible (compara todas), resalta la
-                  ciudad filtrada y marca la primera (mejor) y la última (peor). */}
-              <div className="mb-4">
-                <RankingCiudades compacto />
-              </div>
-
-              {selectedCity === TODAS && comparativoCiudades.length > 1 && (
-                <Card className="mb-4 p-4">
-                  <h3 className="m-0 mb-1 text-base font-bold text-brand-navy dark:text-slate-100">{t('Comparativo entre ciudades')}</h3>
-                  <p className="mb-3 text-xs text-slate-400">{t('Haz clic en una ciudad para filtrar el financiero por ella.')}</p>
-                  <Tabla
-                    columns={[
-                      { key: 'ciudad', label: t('Ciudad') },
-                      { key: 'paquetes', label: t('Paquetes'), align: 'right' },
-                      { key: 'ingreso', label: t('Ingreso'), align: 'right' },
-                      { key: 'ganancia', label: t('Ganancia'), align: 'right' },
-                      { key: 'claims', label: t('Claims'), align: 'right' },
-                    ]}
-                    rows={[...comparativoCiudades].sort((a, b) => b.ingreso - a.ingreso).map((c) => ({ ...c, _key: c.ciudad }))}
-                    onRowClick={(row) => irA('/financiero', row.code)}
-                    renderCell={(row, key) => (['ingreso', 'ganancia'].includes(key) ? money(row[key]) : typeof row[key] === 'number' ? num(row[key]) : row[key])}
-                  />
-                </Card>
-              )}
-
-              <div className="mb-4">
-                <RankingCalificacion compacto limite={5} />
-              </div>
-
-              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Rankings de choferes')}</h2>
-              <p className="-mt-2 mb-3 text-xs text-slate-400">{t('Haz clic en un chofer para ver su detalle en Performance.')}</p>
-              <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <RankWidget title={t('Por productividad (ingreso)')} data={rankProd} lista={rc.productividad} fmt={money} valor={(p) => p.ingreso} onPick={irAChofer} />
-                <RankWidget title={t('Por ganancia')} data={rankGan} lista={rc.ganancia} fmt={money} valor={(p) => p.ganancia} marcaSinTarifa onPick={irAChofer} />
-                <RankWidget title={t('Por calidad (menos claims)')} data={rankCal} lista={rc.calidad} fmt={num} valor={(p) => p.claimsTotales} onPick={irAChofer} />
-              </div>
-
-              <h2 className="mb-3 mt-2 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Rankings de rutas')}</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <MiniLista titulo={t('Más reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) > 0).slice(0, 5)} render={(r) => `${r.ruta} — ${r.numClaims} claims`} vacio={t('Ninguna ruta con claims.')} onPick={() => irA('/performance')} />
-                <MiniLista titulo={t('Cero reclamos')} rows={rr.porClaims.filter((r) => (r.numClaims || 0) === 0).slice(0, 8)} render={(r) => r.ruta} vacio={t('Todas tienen algún claim.')} onPick={() => irA('/performance')} />
-                <MiniLista titulo={t('Más ingreso')} rows={rr.porIngreso.slice(0, 5)} render={(r) => `${r.ruta} — ${money(r.ingreso)}`} onPick={() => irA('/performance')} />
-                <MiniLista titulo={t('Mejor $/lb')} rows={rr.porPrecioLb.slice(0, 5)} render={(r) => `${r.ruta} — $${(r.precioPorLb || 0).toFixed(3)}/lb`} onPick={() => irA('/performance')} />
-              </div>
-
-              {claimsDeCiudad(claims, selectedCity, inv).length > 0 && (
-                <>
-                  <h2 className="mb-1 mt-6 text-xl font-bold text-brand-navy dark:text-slate-100">{t('Claims por tipo')}</h2>
-                  <p className="mb-3 text-xs text-slate-400">{t('Choferes con más claims por tipo. Haz clic para ver su detalle.')}</p>
-                  <RankingClaimsTipo claims={claimsDeCiudad(claims, selectedCity, inv)} compacto />
-                </>
+              {/* Recomendaciones de JARVIS: al final y plegadas (antes tapaban los números). */}
+              {(selectedCity === TODAS || est.paquetes > 0) && (
+                <Seccion titulo={t('Recomendaciones y alertas')} resumen="JARVIS">
+                  <RecomendacionesJarvis />
+                </Seccion>
               )}
             </>
           )}
@@ -332,7 +313,7 @@ export default function Dashboard() {
 }
 
 // Envoltura clicable con elevación al hacer hover (estilo Mercury).
-function ClickWrap({ onClick, titulo, children }) {
+function ClickWrap({ onClick, titulo, children, className = '' }) {
   return (
     <div
       onClick={onClick}
@@ -340,7 +321,7 @@ function ClickWrap({ onClick, titulo, children }) {
       tabIndex={0}
       title={titulo}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
-      className="cursor-pointer rounded-2xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold"
+      className={`cursor-pointer rounded-2xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold ${className}`}
     >
       {children}
     </div>
@@ -405,5 +386,60 @@ function MiniLista({ titulo, rows, render, vacio, onPick }) {
         </ol>
       )}
     </Widget>
+  )
+}
+
+// Sección plegable (acordeón nativo <details>): en el iPhone deja el dashboard en
+// pocas pantallas; en web (lg+) se ve con el mismo título. `abierta` = abierta al cargar.
+function Seccion({ titulo, resumen, abierta = false, children }) {
+  return (
+    <details open={abierta} className="group mb-4 rounded-card border border-slate-200/80 bg-white/70 shadow-card dark:border-slate-700/60 dark:bg-surface-dark-card/60">
+      <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-3 px-4 py-3 sm:px-5 [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="inline-block h-5 w-1 shrink-0 rounded-full bg-brand-gold" />
+        <span className="text-base font-bold text-brand-navy dark:text-slate-100">{titulo}</span>
+        {resumen && <span className="truncate text-xs text-slate-400">{resumen}</span>}
+        <ChevronDown size={18} strokeWidth={2} className="ml-auto shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="px-3 pb-4 sm:px-5 sm:pb-5">{children}</div>
+    </details>
+  )
+}
+
+// Tendencia ▲▼ vs la semana anterior. `invertido`: subir es malo (costo, claims).
+function Tendencia({ v, claro, texto, invertido }) {
+  if (v == null || !isFinite(v)) return null
+  const bueno = invertido ? v <= 0 : v >= 0
+  const color = claro ? (bueno ? 'text-emerald-300' : 'text-rose-300') : (bueno ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')
+  return (
+    <div className={`mt-2 text-xs font-semibold ${color}`}>
+      {v >= 0 ? '▲' : '▼'} {Math.abs(v * 100).toFixed(1)}%{texto ? <span className={`ml-1 font-medium ${claro ? 'text-slate-300' : 'text-slate-400'}`}>{texto}</span> : null}
+    </div>
+  )
+}
+
+// Dato pequeño dentro de la tarjeta navy de ganancia.
+function MiniDato({ label, valor, trend, invertido, sub }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="truncate text-[17px] font-bold tabular-nums text-white sm:text-lg">{valor}</div>
+      <Tendencia v={trend} claro invertido={invertido} />
+      {sub && <div className="mt-0.5 truncate text-[10.5px] text-slate-400">{sub}</div>}
+    </div>
+  )
+}
+
+// Chip de volumen/calidad (Paquetes, % Dobles, Claims). Área táctil ≥ 44px.
+function Chip({ icon: Icon, label, valor, sub, trend, invertido, onClick, alerta }) {
+  return (
+    <button type="button" onClick={onClick} className="mp-in flex min-h-[88px] min-w-0 flex-col rounded-2xl border border-slate-200/80 bg-surface-card p-3 text-left shadow-card transition hover:border-brand-gold/60 hover:shadow-cardhover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold dark:border-slate-700/60 dark:bg-surface-dark-card lg:flex-row lg:items-center lg:gap-3 lg:p-4">
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${alerta ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-brand-navy/10 text-brand-navy dark:bg-white/10 dark:text-slate-100'}`}><Icon size={16} strokeWidth={1.9} /></span>
+      <span className="mt-2 min-w-0 lg:mt-0">
+        <span className="block truncate text-[10.5px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="block truncate text-lg font-bold tabular-nums text-brand-navy dark:text-slate-100">{valor}</span>
+        {sub && <span className="block truncate text-[10.5px] text-slate-400">{sub}</span>}
+        <Tendencia v={trend} invertido={invertido} />
+      </span>
+    </button>
   )
 }

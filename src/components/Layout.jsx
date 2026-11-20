@@ -2,7 +2,7 @@
 // buscador global, badge de alertas, selector de empresa y toggle de tema.
 import { useState, useMemo, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, SlidersHorizontal, LayoutGrid, ArrowLeftRight } from 'lucide-react'
+import { Search, Building2, Sun, Moon, LogOut, Menu, Sparkles, Activity, ChevronDown, LayoutGrid, LayoutDashboard, Route, Wallet, AlertTriangle, MoreHorizontal, ArrowLeftRight } from 'lucide-react'
 import { useCarrier, useCarriersPermitidos } from '../carriers/CarrierContext'
 import { CARRIERS } from '../carriers'
 import { useAuth } from '../AuthContext'
@@ -170,9 +170,8 @@ function SidebarContent({ onNavigate }) {
   // Filtro por permiso + por compañía activa (secciones con `soloCarrier` solo
   // aparecen en su compañía: p. ej. «Cobros y fondo» en SpeedX, «Reclamos a
   // Gofo» en Gofo).
-  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner'))
+  const secciones = SECCIONES.filter((s) => puede(s.permiso) && (!s.soloCarrier || s.soloCarrier === (carrier || 'gofo')) && (!s.soloDueno || esSuperAdmin || perfil?.role === 'owner') && (!s.soloSuperAdmin || esSuperAdmin))
   const puedeIA = esSuperAdmin || perfil?.role === 'owner' || perfil?.role === 'admin'
-  const esDueno = esSuperAdmin || perfil?.role === 'owner'
   // Menú en ACORDEÓN: agrupa por `grupo` y abre solo el grupo activo.
   const porGrupo = useMemo(() => { const m = {}; for (const s of secciones) (m[s.grupo || 'Operación'] ||= []).push(s); return m }, [secciones])
   const grupoActivo = secciones.find((s) => s.path === location.pathname)?.grupo
@@ -199,6 +198,8 @@ function SidebarContent({ onNavigate }) {
         {(porGrupo['Inicio'] || []).map((s) => (
           <ItemMenu key={s.path} s={s} activo={location.pathname === s.path} onNavigate={onNavigate} badge={0} />
         ))}
+        {/* IA (JARVIS) justo debajo de Inicio: es parte de la vista principal. */}
+        {puedeIA && <MenuIA onNavigate={onNavigate} esSuperAdmin={esSuperAdmin} />}
         {/* Grupos plegables: solo el activo abierto */}
         {GRUPOS_SECCIONES.filter((g) => g !== 'Inicio' && (porGrupo[g] || []).length).map((g) => {
           const items = porGrupo[g]
@@ -224,14 +225,6 @@ function SidebarContent({ onNavigate }) {
             </div>
           )
         })}
-        {/* Avanzado (dueño/súper-admin) */}
-        {esDueno && (
-          <ItemMenu s={{ path: '/proyeccion', label: 'Proyección', icon: SlidersHorizontal }} activo={location.pathname === '/proyeccion'} onNavigate={onNavigate} badge={0} />
-        )}
-        {puedeIA && <MenuIA onNavigate={onNavigate} esSuperAdmin={esSuperAdmin} />}
-        {esSuperAdmin && (
-          <ItemMenu s={{ path: '/empresas', label: 'Empresas', icon: Building2 }} activo={location.pathname === '/empresas'} onNavigate={onNavigate} badge={0} />
-        )}
       </nav>
 
       <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700/60">
@@ -260,6 +253,45 @@ function SidebarContent({ onNavigate }) {
         </button>
       </div>
     </aside>
+  )
+}
+
+// Barra de pestañas inferior (solo móvil, < sm): acceso con el pulgar a lo más
+// usado, como una app nativa. Respeta la barra de inicio del iPhone (safe area)
+// y en el iPhone Duo abierto (pantalla interna) se centra con ancho máximo.
+function TabBarMovil({ onMas }) {
+  const { puede } = useAuth()
+  const { numAlertas } = useData()
+  const { t } = useLang()
+  const location = useLocation()
+  const tabs = [
+    { path: '/dashboard', label: 'Inicio', icon: LayoutDashboard, permiso: 'verDashboard' },
+    { path: '/rutas', label: 'Rutas', icon: Route, permiso: 'verDashboard' },
+    { path: '/pagos', label: 'Pagos', icon: Wallet, permiso: 'verPagos' },
+    { path: '/claims', label: 'Claims', icon: AlertTriangle, permiso: 'verClaims' },
+  ].filter((x) => puede(x.permiso))
+  return (
+    <nav aria-label={t('Navegación principal')} className="fixed inset-x-3 bottom-[max(env(safe-area-inset-bottom),10px)] z-20 mx-auto max-w-md rounded-pill border border-slate-200/70 bg-white/85 shadow-float backdrop-blur-md dark:border-slate-700/60 dark:bg-surface-dark-card/85 sm:hidden">
+      <div className="flex items-stretch justify-around px-1.5 py-1.5">
+        {tabs.map((x) => {
+          const on = location.pathname === x.path || location.pathname.startsWith(x.path + '/')
+          const Icon = x.icon
+          return (
+            <Link key={x.path} to={x.path} className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-pill no-underline">
+              <span className={`grid h-8 w-12 place-items-center rounded-pill transition ${on ? 'bg-brand-navy text-brand-gold dark:bg-brand-gold dark:text-brand-navy' : 'text-slate-500 dark:text-slate-400'}`}>
+                <Icon size={20} strokeWidth={on ? 2.1 : 1.8} />
+              </span>
+              <span className={`text-[10.5px] leading-none ${on ? 'font-bold text-brand-navy dark:text-white' : 'font-medium text-slate-500 dark:text-slate-400'}`}>{t(x.label)}</span>
+            </Link>
+          )
+        })}
+        <button type="button" onClick={onMas} className="relative flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-pill">
+          <span className="grid h-8 w-12 place-items-center rounded-pill text-slate-500 dark:text-slate-400"><MoreHorizontal size={20} strokeWidth={1.8} /></span>
+          <span className="text-[10.5px] font-medium leading-none text-slate-500 dark:text-slate-400">{t('Más')}</span>
+          {numAlertas > 0 && <span className="absolute right-2.5 top-1 h-2 w-2 rounded-full bg-rose-500" />}
+        </button>
+      </div>
+    </nav>
   )
 }
 
@@ -300,9 +332,11 @@ export default function Layout({ children }) {
             <GlobalFilterBar />
           </header>
 
-          <main className="max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+          <main className="max-w-full flex-1 overflow-x-hidden p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 lg:p-8">{children}</main>
         </div>
       </div>
+      {/* Fuera de .cm-scope: ahí los hijos directos llevan position:relative. */}
+      <TabBarMovil onMas={() => setAbierto(true)} />
     </div>
   )
 }
