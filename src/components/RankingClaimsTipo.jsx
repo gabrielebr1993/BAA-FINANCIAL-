@@ -4,12 +4,12 @@
 // se traducen al español. Clic en un chofer -> detalle en Performance.
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { AlertTriangle } from 'lucide-react'
 import { rankingClaimsPorTipo } from '../utils/calc'
 import { num } from '../utils/format'
 import { Card, EstadoVacio } from '../components/ui'
-import { useChartTheme, PALETTE } from '../components/charts'
+import { useChartTheme } from '../components/charts'
 import { useLang } from '../i18n'
 
 // Celda de conteo: en rojo/negrita cuando supera el umbral (2).
@@ -38,9 +38,7 @@ function RankTipo({ label, rows, onPick }) {
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: t.axis }} />
             <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: t.axis }} width={96} />
             <Tooltip formatter={(v) => num(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
-            <Bar dataKey="valor" radius={[0, 4, 4, 0]} className="cursor-pointer" onClick={(d) => onPick?.(d?.name)}>
-              {data.map((_, i) => (<Cell key={i} fill={PALETTE[i % PALETTE.length]} />))}
-            </Bar>
+            <Bar dataKey="valor" fill={t.color('coral')} radius={[0, 4, 4, 0]} className="cursor-pointer" onClick={(d) => onPick?.(d?.name)} />
           </BarChart>
         </ResponsiveContainer>
       )}

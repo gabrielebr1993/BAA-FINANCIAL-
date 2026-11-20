@@ -15,6 +15,9 @@ import { useTheme } from '../ThemeContext'
 import { etiquetaTipoClaim } from '../utils/calc'
 import { subirW9Chofer, guardarDatosBancariosChofer, subirFotoChofer, subirLicenciaChofer, estadoChoferPortal, firmarW9Chofer } from '../utils/verificacion'
 import { consejoChofer } from '../utils/consejoChofer'
+import { logrosChofer } from '../utils/logrosChofer'
+import LogrosChofer from '../components/LogrosChofer'
+import MilePayMark from '../components/MilePayMark'
 import { BANCOS_EEUU } from '../utils/bancos'
 import { W9_OFICIAL_URL } from '../utils/w9'
 import FirmaCanvas from '../components/FirmaCanvas'
@@ -156,6 +159,8 @@ export default function DriverPortal() {
   const ultima = semanas[0] || null
   const calif = ultima?.calificacion || null
   const consejo = useMemo(() => consejoChofer(semanas, calif), [semanas, calif])
+  // Gamificación: rachas, récords, insignias y reto (solo con SUS datos).
+  const logros = useMemo(() => logrosChofer(semanas, calif), [semanas, calif])
 
   // El chofer SOLO ve las semanas/recibos que el dueño ya marcó como PAGADAS. Si el
   // dueño las regresa a "pendiente", desaparecen de su vista.
@@ -214,7 +219,7 @@ export default function DriverPortal() {
     <div className="min-h-screen bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-100">
       {/* Header propio del portal */}
       <header className="pt-safe sticky top-0 z-20 flex items-center gap-3 bg-white/90 px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,.06)] backdrop-blur dark:bg-surface-dark-card/90 dark:shadow-[0_1px_0_rgba(255,255,255,.05)]">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-navy"><FileText size={18} strokeWidth={1.9} className="text-brand-gold" /></div>
+        <MilePayMark size={36} className="shrink-0 rounded-[9px] ring-1 ring-black/5 dark:ring-white/10" />
         <div>
           <div className="text-base font-extrabold leading-none text-brand-navy dark:text-white">MilePay</div>
           <div className="text-[11px] text-slate-400">{t('Portal del chofer')}</div>
@@ -272,6 +277,8 @@ export default function DriverPortal() {
                     )}
                   </div>
                 </Card>
+
+                {semanas.length > 0 && <LogrosChofer logros={logros} />}
 
                 {semanasPagadas.length === 0 ? (
                   <EstadoVacio titulo={t('Aún no tienes pagos')} texto={t('Cuando tu empresa apruebe y marque como pagada una de tus semanas, verás aquí tu recibo y el detalle. Mientras tanto, no aparece nada.')} mostrarBoton={false} />
@@ -433,6 +440,7 @@ export default function DriverPortal() {
               semanas.length === 0 ? (
                 <EstadoVacio titulo={t('Aún no hay datos')} texto={t('Cuando tu empresa cargue tu primera semana, aquí verás tu desempeño.')} mostrarBoton={false} />
               ) : (
+                <>
                 <Card className="overflow-hidden">
                   <div className={`p-5 ${consejo.tono === 'ojo' ? 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-500/10 dark:to-transparent' : 'bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-500/10 dark:to-transparent'}`}>
                     <div className="flex items-start gap-3">
@@ -459,6 +467,8 @@ export default function DriverPortal() {
                     )}
                   </div>
                 </Card>
+                <div className="mt-4"><LogrosChofer logros={logros} completo /></div>
+                </>
               )
             )}
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { TrendingUp, Package, Repeat, AlertTriangle, FileSpreadsheet, FileText, Eye, EyeOff, ChevronDown } from 'lucide-react'
 import { useData } from '../DataContext'
 import { useAuth } from '../AuthContext'
@@ -15,7 +15,7 @@ import { exportarExcel, exportarPDF } from '../utils/exportar'
 import { PageTitle, Tabla, Aviso, Badge, Cargando, EstadoVacio, Card, Boton } from '../components/ui'
 import '../styles/cloudmotion.css'
 import RecomendacionesJarvis from '../components/RecomendacionesJarvis'
-import { BarCard, StackedBarCard, TrendCard, Widget, useChartTheme, PALETTE } from '../components/charts'
+import { BarCard, StackedBarCard, TrendCard, Widget, useChartTheme } from '../components/charts'
 import Verificacion from '../components/Verificacion'
 import GananciaReal from '../components/GananciaReal'
 import PanelClaims from '../components/PanelClaims'
@@ -208,9 +208,9 @@ export default function Dashboard() {
                   data={trendData}
                   fmt={money}
                   series={[
-                    { key: 'ingreso', label: 'Ingreso', color: '#13233f' },
-                    { key: 'costo', label: 'Costo', color: '#c47f5a' },
-                    { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' },
+                    { key: 'ingreso', label: 'Ingreso', color: 'azul' },
+                    { key: 'costo', label: 'Costo', color: 'coral' },
+                    { key: 'ganancia', label: 'Ganancia', color: 'dorado' },
                   ]}
                 />
               </div>
@@ -252,7 +252,7 @@ export default function Dashboard() {
                 {variasSemanas && (
                   <div className="mt-4">
                     <TrendCard title={t('Tendencia semana a semana')} subtitle={t('Ingreso, costo y ganancia por semana')} area data={trendData} fmt={money}
-                      series={[{ key: 'ingreso', label: 'Ingreso', color: '#13233f' }, { key: 'costo', label: 'Costo', color: '#c47f5a' }, { key: 'ganancia', label: 'Ganancia', color: '#c9a24b' }]} />
+                      series={[{ key: 'ingreso', label: 'Ingreso', color: 'azul' }, { key: 'costo', label: 'Costo', color: 'coral' }, { key: 'ganancia', label: 'Ganancia', color: 'dorado' }]} />
                   </div>
                 )}
               </Seccion>
@@ -261,9 +261,9 @@ export default function Dashboard() {
               <Seccion titulo={t('Comparativo entre ciudades')} abierta>
                 <div className="mb-4"><RankingCiudades compacto /></div>
                 <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
-                  <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="#13233f" fmt={money} />
+                  <BarCard title={t('Ingreso por ruta (top 10)')} data={ingresoPorRuta} color="azul" fmt={money} />
                   <StackedBarCard title={t('Individuales vs dobles por ciudad')} data={stackedCiudad} fmt={num}
-                    series={[{ key: 'Individuales', label: 'Individuales', color: '#3d5a80' }, { key: 'Dobles', label: 'Dobles', color: '#c9a24b' }]} />
+                    series={[{ key: 'Individuales', label: 'Individuales', color: 'azul' }, { key: 'Dobles', label: 'Dobles', color: 'dorado' }]} />
                 </div>
               </Seccion>
 
@@ -272,7 +272,7 @@ export default function Dashboard() {
                 <Seccion titulo={t('Claims')} resumen={`${num(numClaims)} · ${t('Calidad (entregas sin claim)')} ${pct(calidad)}`}>
                   <PanelClaims claims={claimsCiudad} inv={inv} compacto />
                   <div className="grid grid-cols-1 gap-4 fold:grid-cols-2">
-                    <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="#c47f5a" fmt={num} />
+                    <BarCard title={t('Claims por ruta')} data={claimsPorRuta} color="coral" fmt={num} />
                     {claimsCiudad.length > 0 && (
                       <Widget title={t('Claims por tipo')} subtitle={t('Choferes con más claims por tipo. Haz clic para ver su detalle.')}>
                         <RankingClaimsTipo claims={claimsCiudad} compacto />
@@ -361,11 +361,7 @@ function BarCardInline({ data, fmt, onPick }) {
         <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickFormatter={fmt} />
         <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: t.axis }} width={92} />
         <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
-        <Bar dataKey="valor" radius={[0, 4, 4, 0]} className={onPick ? 'cursor-pointer' : ''} onClick={(d) => onPick?.(d?.name)}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-          ))}
-        </Bar>
+        <Bar dataKey="valor" fill={t.color('azul')} radius={[0, 4, 4, 0]} className={onPick ? 'cursor-pointer' : ''} onClick={(d) => onPick?.(d?.name)} />
       </BarChart>
     </ResponsiveContainer>
   )

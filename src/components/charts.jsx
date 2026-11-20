@@ -24,8 +24,14 @@ import { Card } from './ui'
 
 export const NAVY = '#13233f'
 export const GOLD = '#c9a24b'
-// Navy, dorado + azul acero de marca y grises (paleta sobria estilo Mercury).
-export const PALETTE = [NAVY, GOLD, '#3d5a80', '#7f9cc0', '#94a3b8', '#64748b', '#b08968']
+// Paleta VIBRANTE de la marca (2026): azul y dorado de MilePay primero, luego
+// turquesa, coral, violeta y rosa. Validada para daltonismo y contraste con
+// el validador de dataviz (modo claro sobre #fcfcfb y modo oscuro sobre #1b2b45).
+// El orden es FIJO: un color sigue a su categoría, nunca al lugar del ranking.
+export const SERIE_CLARO = { azul: '#3461b0', dorado: '#c99512', turquesa: '#11a39b', coral: '#e0533d', violeta: '#9056e0', rosa: '#e6739f' }
+export const SERIE_OSCURO = { azul: '#5585d0', dorado: '#b88a1c', turquesa: '#1fa89e', coral: '#e35f48', violeta: '#9a70dc', rosa: '#d4628f' }
+export const PALETTE = Object.values(SERIE_CLARO)
+export const PALETTE_OSCURO = Object.values(SERIE_OSCURO)
 
 // Colores de ejes/grid/tooltip según el tema.
 export function useChartTheme() {
@@ -46,7 +52,9 @@ export function useChartTheme() {
       labelStyle: { color: oscuro ? '#e2e8f0' : '#1c2536', fontWeight: 600 },
       itemStyle: { color: oscuro ? '#cbd5e1' : '#334155' },
     },
-    palette: PALETTE,
+    palette: oscuro ? PALETTE_OSCURO : PALETTE,
+    // Color por NOMBRE ('azul', 'coral'…) según el tema; un hex pasa tal cual.
+    color: (c, i = 0) => (oscuro ? SERIE_OSCURO : SERIE_CLARO)[c] || c || (oscuro ? PALETTE_OSCURO : PALETTE)[i % PALETTE.length],
     navy: NAVY,
     gold: GOLD,
   }
@@ -71,7 +79,9 @@ export function Widget({ title, subtitle, right, children, className = '' }) {
 // Barras (vertical u horizontal).
 export function BarCard({ title, subtitle, data, dataKey = 'valor', color, horizontal, fmt = (v) => v, height = 260 }) {
   const t = useChartTheme()
-  const fill = color || t.navy
+  // Una sola serie = un solo color (antes cada barra tenía otro color según su
+  // posición, y eso hacía parecer que eran categorías distintas).
+  const fill = t.color(color || 'azul')
   return (
     <Widget title={title} subtitle={subtitle}>
       <ResponsiveContainer width="100%" height={height}>
@@ -81,11 +91,7 @@ export function BarCard({ title, subtitle, data, dataKey = 'valor', color, horiz
             <XAxis type="number" tick={{ fontSize: 10, fill: t.axis }} tickFormatter={fmt} />
             <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: t.axis }} width={96} />
             <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
-            <Bar dataKey={dataKey} radius={[0, 4, 4, 0]}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-              ))}
-            </Bar>
+            <Bar dataKey={dataKey} fill={fill} radius={[0, 4, 4, 0]} />
           </BarChart>
         ) : (
           <BarChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
@@ -113,8 +119,8 @@ export function ComparativoCard({ title, subtitle, data, fmt = (v) => v, height 
           <YAxis tick={{ fontSize: 11, fill: t.axis }} width={52} tickFormatter={fmt} />
           <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
           <Legend wrapperStyle={{ fontSize: 12, color: t.axis }} />
-          <Bar dataKey="Actual" fill={t.navy} radius={[4, 4, 0, 0]} />
-          <Bar dataKey="Proyectado" fill={t.gold} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="Actual" fill={t.color('azul')} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="Proyectado" fill={t.color('dorado')} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </Widget>
@@ -154,7 +160,7 @@ export function StackedBarCard({ title, subtitle, data, series, fmt = (v) => v, 
           <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} cursor={{ fill: t.grid, opacity: 0.4 }} />
           <Legend wrapperStyle={{ fontSize: 12, color: t.axis }} />
           {series.map((s, i) => (
-            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={s.color || PALETTE[i % PALETTE.length]} radius={i === series.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+            <Bar key={s.key} dataKey={s.key} name={s.label} stackId="a" fill={t.color(s.color, i)} stroke={t.oscuro ? '#1b2b45' : '#ffffff'} strokeWidth={1} radius={i === series.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
           ))}
         </BarChart>
       </ResponsiveContainer>
@@ -171,7 +177,7 @@ export function DonutCard({ title, subtitle, data, fmt = (v) => v, height = 260,
         <PieChart>
           <Pie data={data} dataKey={dataKey} nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={82} paddingAngle={2} stroke="none">
             {data.map((_, i) => (
-              <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+              <Cell key={i} fill={t.palette[i % t.palette.length]} />
             ))}
           </Pie>
           <Tooltip formatter={(v) => fmt(v)} {...t.tooltip} />
@@ -197,9 +203,9 @@ export function TrendCard({ title, subtitle, data, series, fmt = (v) => v, heigh
           <Legend wrapperStyle={{ fontSize: 12, color: t.axis }} />
           {series.map((s, i) =>
             area ? (
-              <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color || PALETTE[i % PALETTE.length]} fill={s.color || PALETTE[i % PALETTE.length]} fillOpacity={0.15} strokeWidth={2} />
+              <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={t.color(s.color, i)} fill={t.color(s.color, i)} fillOpacity={0.12} strokeWidth={2} />
             ) : (
-              <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color || PALETTE[i % PALETTE.length]} strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={t.color(s.color, i)} strokeWidth={2} dot={{ r: 3 }} />
             )
           )}
         </Chart>
