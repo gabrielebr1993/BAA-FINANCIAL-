@@ -51,7 +51,7 @@ import {
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
   financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes,
   suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
-  suscribirPorDriver, suscribirMiFicha,
+  suscribirPorDriver, suscribirMiFicha, suscribirAgendaSemanas,
   solicitarFastPay, suscribirSolicitudes, suscribirMisSolicitudes, atenderSolicitud,
 } from './datosWal'
 import {
@@ -637,6 +637,24 @@ function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA
   const asignados = planAsignados()
   const yaExiste = (f, turno, did) => rutas.some((r) => r.id === idRuta(almId, f, turno, did) || (r.almacenId === almId && r.fecha === f && r.bloque === turno && r.driverId === did))
   const porCrear = asignados.filter((a) => !yaExiste(a.fecha, a.turno, a.did))
+  // ── Resumen de staffing de la semana (TURNOS, no rutas) ──────────────────────
+  // La agenda son turnos. Esto solo ESTIMA el pago a drivers por los turnos
+  // asignados (con su tarifa) para que veas el costo mientras armas el horario;
+  // no crea ni toca rutas.
+  const driversUnicos = new Set(asignados.map((a) => a.did))
+  const pagoEstimado = money2(asignados.reduce((s, a) => { const d = personaDe(a.did); return s + (d ? tarifaDeDriver(d, tarifas) : 0) }, 0))
+  const avisoSinTarifa = [...driversUnicos].map(personaDe).filter((d) => d && !(tarifaDeDriver(d, tarifas) > 0))
+  const avisoInactivo = [...driversUnicos].map(personaDe).filter((d) => d && d.estadoOperativo && d.estadoOperativo !== 'activo')
+  // Copiar los turnos de la semana pasada a esta semana (1 clic). Son turnos, no rutas.
+  const planSemanaPasada = agenda.find((a) => a.id === idAgenda(almId, sumarDias(semana, -7)))?.plan
+  const copiarSemanaPasada = async () => {
+    if (!almId) return
+    const prev = planNormalizado(planSemanaPasada)
+    if (!DIAS.some((d) => prev[d].manana.length || prev[d].tarde.length)) { walToast('La semana pasada no tiene turnos en este almacén.', 'navy'); return }
+    if (!window.confirm('¿Copiar los turnos de la semana pasada a esta semana? Reemplaza lo que haya ahora en este almacén.')) return
+    await guardarPlan(prev)
+    walToast('Turnos copiados de la semana pasada ✓', 'gold')
+  }
   const generarRutasSemana = async () => {
     if (!almId || !porCrear.length) return
     if (!window.confirm(`¿Crear ${porCrear.length} ruta(s) de esta semana (${semana} → ${domingoDe(fecha)}) para ${almSel?.nombre || 'este almacén'}?\n\nLas que ya existan no se tocan. Podrás editarlas en Rutas.`)) return
@@ -682,7 +700,8 @@ function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA
   return (
     <div>
       <PageTitle right={<>
-        {pCrearRutas && <Boton variant="gold" disabled={generando || porCrear.length === 0} onClick={generarRutasSemana}>{generando ? <Spinner /> : <><RouteIcon size={14} /> Generar rutas{porCrear.length ? ` (${porCrear.length})` : ''}</>}</Boton>}
+        <Boton variant="gold" onClick={copiarSemanaPasada}><Copy size={14} /> Copiar semana pasada</Boton>
+        {pCrearRutas && <Boton variant="ghost" disabled={generando || porCrear.length === 0} onClick={generarRutasSemana}>{generando ? <Spinner /> : <><RouteIcon size={14} /> Generar rutas{porCrear.length ? ` (${porCrear.length})` : ''}</>}</Boton>}
         <Boton variant="ghost" onClick={() => setRepetir(true)}><Copy size={14} /> Repetir / copiar</Boton>
       </>}>Agenda semanal</PageTitle>
       <p className="-mt-1 mb-3 text-xs text-slate-400">Arrastra (o toca) un driver y suéltalo en el día — <b className="text-emerald-600">mañana</b> o <b className="text-blue-600">tarde</b>. El sistema avisa si falta gente. Se guarda al instante. Con <b className="text-brand-gold">Generar rutas</b> creas de una vez todas las rutas de la semana asignadas aquí{asignados.length ? ` (${asignados.length} asignadas, ${porCrear.length} por crear)` : ''}.</p>
@@ -710,6 +729,25 @@ function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA
           </div>
         </div>
       </Card>
+
+      {/* Resumen de staffing de la semana (turnos · drivers · pago estimado) + avisos */}
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <Card className="p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Turnos asignados</div><div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{asignados.length}</div></Card>
+        <Card className="p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Drivers</div><div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{driversUnicos.size}</div></Card>
+        <Card className="p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pago estimado</div><div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{dinero(pagoEstimado)}</div></Card>
+      </div>
+      {(avisoSinTarifa.length > 0 || avisoInactivo.length > 0) && (
+        <Aviso tipo="warn">
+          <div className="flex items-start gap-2 text-xs">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+            <div>
+              <b className="text-brand-navy dark:text-slate-100">Revisa antes de generar rutas:</b>
+              {avisoSinTarifa.length > 0 && <div>• Sin tarifa (su ruta saldría en $0): <b>{avisoSinTarifa.map(nombreCompleto).join(', ')}</b>.</div>}
+              {avisoInactivo.length > 0 && <div>• No están activos pero están asignados: <b>{avisoInactivo.map(nombreCompleto).join(', ')}</b>.</div>}
+            </div>
+          </div>
+        </Aviso>
+      )}
 
       {/* Cobertura por día (por turno) */}
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -789,7 +827,7 @@ function TabAgenda({ personas, almacenes, agenda, rutas = [], tarifas, perm, irA
                   className={`flex cursor-grab items-center gap-2 rounded-xl border px-2 py-1.5 transition active:cursor-grabbing ${act ? 'border-brand-gold bg-amber-50 shadow-sm dark:bg-amber-500/10' : 'border-slate-200 bg-white hover:border-brand-gold/50 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800'}`}>
                   <GripVertical size={13} className="shrink-0 text-slate-300" />
                   <Avatar p={p} size={28} />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span><span className="block truncate text-[10px] text-slate-400">{p.tipoVehiculo || 'Driver'}{nd ? ` · ${nd}d` : ''}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold text-brand-navy dark:text-slate-100">{nombreCompleto(p)}</span><span className="block truncate text-[10px] text-slate-400">{p.tipoVehiculo || 'Driver'}{nd ? ` · ${nd}d` : ''}{tarifaDeDriver(p, tarifas) > 0 ? ` · ${dinero(tarifaDeDriver(p, tarifas))}` : ' · sin tarifa'}</span></span>
                 </div>
               )
             })}
@@ -1590,6 +1628,25 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   useEffect(() => suscribirPorDriver(COL.contratos, driverId, setContratos), [driverId])
   const [misSol, setMisSol] = useState([])
   useEffect(() => suscribirMisSolicitudes(driverId, setMisSol), [driverId])
+  // ── Mi horario: turnos asignados en la Agenda (son TURNOS, no rutas) ──────────
+  const [almacenesDrv, setAlmacenesDrv] = useState([])
+  const [agendaDrv, setAgendaDrv] = useState([])
+  useEffect(() => suscribir(COL.almacenes, setAlmacenesDrv), [])
+  const semHoy = lunesDe(hoyISO()); const semProx = sumarDias(semHoy, 7)
+  useEffect(() => suscribirAgendaSemanas([semHoy, semProx], setAgendaDrv), [semHoy, semProx])
+  const almNombreDrv = (id) => almacenesDrv.find((a) => a.id === id)?.nombre || ''
+  const misTurnos = useMemo(() => {
+    const out = []
+    for (const docAg of (agendaDrv || [])) {
+      const plan = planNormalizado(docAg.plan)
+      for (const d of DIAS) for (const t of ['manana', 'tarde']) {
+        if ((plan[d]?.[t] || []).includes(driverId)) out.push({ fecha: fechaDeDiaSemana(docAg.semana, d), dia: d, turno: t, almacenId: docAg.almacenId, semana: docAg.semana })
+      }
+    }
+    return out.filter((x) => x.fecha >= hoyISO()).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.turno.localeCompare(b.turno))
+  }, [agendaDrv, driverId])
+  const fmtHorCorto = (iso) => { try { return new Date(iso + 'T12:00').toLocaleDateString('es-US', { day: 'numeric', month: 'short' }) } catch { return iso } }
+  const fmtHorLargo = (iso) => { try { return new Date(iso + 'T12:00').toLocaleDateString('es-US', { weekday: 'long', day: 'numeric', month: 'long' }) } catch { return iso } }
   // La app del chofer SIEMPRE arranca y regresa al día actual (semana de hoy).
   useEffect(() => {
     const alDia = () => { if (document.visibilityState === 'visible') { setModo('semana'); setFecha(hoyISO()) } }
@@ -1733,6 +1790,7 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
   }
   const SECCIONES = [
     { id: 'resumen', label: 'Resumen', icono: LayoutDashboard },
+    { id: 'horario', label: 'Mi horario', icono: CalendarDays },
     { id: 'rutas', label: 'Mis rutas', icono: RouteIcon },
     { id: 'pagos', label: 'Mis pagos', icono: Wallet },
     { id: 'docs', label: 'Documentos', icono: FileText },
@@ -1809,6 +1867,39 @@ function WalmartDriverPortal({ driverId, email, tarifas, onSalir, onCambiar }) {
               </div>
             )}
             <p className="px-1 text-[11px] text-slate-400">Pide Fast Pay de una ruta en <b>Mis rutas</b>. En <b>Mis pagos</b> ves el detalle por semana.</p>
+          </>
+        )}
+
+        {sec === 'horario' && (
+          <>
+            <div className="mb-3 text-base font-extrabold text-brand-navy dark:text-slate-100">Mi horario</div>
+            {[{ w: semHoy, label: 'Esta semana' }, { w: semProx, label: 'Próxima semana' }].map((g) => {
+              const items = misTurnos.filter((x) => x.semana === g.w)
+              return (
+                <div key={g.w} className="mb-4">
+                  <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">{g.label} · {fmtHorCorto(g.w)} → {fmtHorCorto(domingoDe(g.w))}</div>
+                  {items.length === 0
+                    ? <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-slate-700">Aún sin turnos publicados para esta semana.</div>
+                    : <div className="space-y-2">{items.map((x, i) => {
+                        const ti = agendaTurnoInfo(x.turno)
+                        return (
+                          <Card key={i} className="flex items-center gap-3 p-3">
+                            <div className="grid w-12 shrink-0 place-items-center rounded-xl py-1.5 text-white" style={{ background: WALMART_AZUL }}>
+                              <div className="font-mono text-lg font-extrabold leading-none">{x.fecha.slice(8)}</div>
+                              <div className="text-[9px] uppercase opacity-85">{x.dia}</div>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-bold text-brand-navy dark:text-slate-100">{almNombreDrv(x.almacenId) || 'Almacén'}</div>
+                              <div className="text-[11px] capitalize text-slate-400">{fmtHorLargo(x.fecha)}</div>
+                            </div>
+                            <span className="shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-extrabold" style={{ background: ti.bg, color: ti.tx, border: `1px solid ${ti.br}` }}>{ti.label}</span>
+                          </Card>
+                        )
+                      })}</div>}
+                </div>
+              )
+            })}
+            <p className="mt-1 text-center text-[11px] text-slate-400">Tu horario lo publica tu coordinador. Si algo no cuadra, avísale.</p>
           </>
         )}
 

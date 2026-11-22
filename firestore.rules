@@ -845,9 +845,11 @@ service cloud.firestore {
       allow update: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId) && walEnAlm(request.resource.data.almacenId));
       allow delete: if esDuenoEcom() || (walPerm('rutas_editar') && walEnAlm(resource.data.almacenId));
     }
-    // Agenda semanal (alcance de almacén).
+    // Agenda semanal (alcance de almacén). Un chofer activo puede LEERLA para ver
+    // su propio horario en el portal ("Mi horario"); el plan solo contiene ids de
+    // driver (no nombres ni datos sensibles), y el chofer no puede escribirla.
     match /wal_agenda/{id} {
-      allow read:  if esDuenoEcom() || (walPerm('rutas_ver') && walEnAlm(resource.data.almacenId));
+      allow read:  if esDuenoEcom() || (walPerm('rutas_ver') && walEnAlm(resource.data.almacenId)) || (walActivo() && walDoc().rol == 'driver');
       allow write: if esDuenoEcom() || ((walPerm('rutas_editar') || walPerm('rutas_asignar_driver')) && walEnAlm(request.resource.data.almacenId));
     }
     // Cierres diarios (preparar liquidación).

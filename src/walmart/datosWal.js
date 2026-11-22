@@ -136,6 +136,16 @@ export function suscribirMiFicha(driverId, cb) {
   if (!driverId) { cb(null); return () => {} }
   return onSnapshot(refDoc(COL.candidatos, driverId), (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null), () => cb(null))
 }
+// Suscribe a los documentos de agenda de una o varias semanas (sáb→vie). El
+// portal del chofer lo usa para armar "Mi horario" leyendo el plan por semana.
+// Si no hay permiso (reglas aún sin desplegar) el onSnapshot falla y devuelve []
+// sin romper el portal: el chofer simplemente verá "aún sin turnos".
+export function suscribirAgendaSemanas(semanas, cb) {
+  const ws = [...new Set((semanas || []).filter(Boolean))].slice(0, 10)
+  if (!ws.length) { cb([]); return () => {} }
+  const q = query(collection(db, COL.agenda), where('semana', 'in', ws))
+  return onSnapshot(q, (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => cb([]))
+}
 
 // Estados operativos del candidato/driver (independientes de otros módulos).
 export const ESTADOS = [
