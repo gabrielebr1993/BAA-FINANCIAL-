@@ -49,7 +49,7 @@ import {
   ultimasSemanas, receivableNet30, acumuladoDriver,
   AGENDA_TURNOS, agendaTurnoInfo, idAgenda, planAgendaVacio, planNormalizado, coberturaDia, huecosAgenda, necesitaDeAlmacen,
   leerImagenRedimensionada, leerArchivoComoDataURL, suscribirDocs,
-  financieroRango, facturaDelPeriodo, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes,
+  financieroRango, facturaDelPeriodo, facturaFlashMile, mesDe, primerDiaMes, ultimoDiaMes, sumarDias, nombreMes,
   suscribirMiUsuarioWal, suscribirUsuariosWal, guardarUsuarioWal, borrarUsuarioWal, idUsuarioWal,
   suscribirPorDriver, suscribirMiFicha, suscribirAgendaSemanas,
   solicitarFastPay, suscribirSolicitudes, suscribirMisSolicitudes, atenderSolicitud,
@@ -278,7 +278,7 @@ export default function WalmartApp() {
       {tab === 'pagos' && (puede('pagos_ver') || puede('fp_ver')) && <TabPagosHub rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
       {tab === 'gastos' && puede('fin_costos_ver') && <TabGastos gastos={gastosV} gastosFijos={gastosFijos} almacenes={almacenesV} personas={personasV} rutas={rutasV} esDueno={esDueno} />}
       {tab === 'financiero' && puede('fin_dashboard_ver') && <TabFinanciero rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} perm={perm} />}
-      {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} />}
+      {tab === 'facturas' && puede('fin_ingresos_ver') && <TabFacturas rutas={rutasV} almacenes={almacenesV} facturas={facturasV} cobros={cobrosV} tarifas={tarifas} />}
       {tab === 'reportes' && puede('reportes_exportar') && <TabReportes rutas={rutasV} pagos={pagos} gastos={gastosV} cobros={cobrosV} personas={personasV} almacenes={almacenesV} facturas={facturasV} solicitudes={solicitudes} tarifas={tarifas} />}
       {tab === 'contratos' && puede('contratos_ver') && <TabContratos contratos={contratos} plantillas={plantillas} personas={personasV} almacenes={almacenesV} tarifas={tarifas} />}
       {tab === 'usuarios' && (esDueno || puede('usuarios_crear')) && <TabUsuariosWal almacenes={almacenes} personas={personas} perm={perm} />}
@@ -1491,7 +1491,7 @@ function TabAlmacenes({ almacenes, user }) {
 }
 
 function EditorAlmacen({ almacen, user, onCerrar }) {
-  const [a, setA] = useState({ nombre: '', numeroDC: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', tarifaWalmart: '', activo: true, ...almacen })
+  const [a, setA] = useState({ nombre: '', numeroDC: '', direccion: '', ciudad: '', estado: '', zonaHoraria: '', responsable: '', tarifaWalmart: '', vanHoras: '', ruralSurcharge: '', activo: true, ...almacen })
   const [guardando, setGuardando] = useState(false)
   const set = (k, v) => setA((x) => ({ ...x, [k]: v }))
   const salvar = async () => {
@@ -1510,8 +1510,10 @@ function EditorAlmacen({ almacen, user, onCerrar }) {
         <F label="Zona horaria"><Input value={a.zonaHoraria} onChange={(e) => set('zonaHoraria', e.target.value)} placeholder="America/Denver" /></F>
         <F label="Responsable"><Input value={a.responsable} onChange={(e) => set('responsable', e.target.value)} /></F>
         <F label="Ingreso de Walmart por ruta (USD)"><Input type="number" value={a.tarifaWalmart} onChange={(e) => set('tarifaWalmart', e.target.value)} placeholder={`por defecto ${TARIFAS_DEFAULT.ingresoWalmart}`} /></F>
+        <F label="Horas de Van (factura Flash Mile)"><Input type="number" value={a.vanHoras} onChange={(e) => set('vanHoras', e.target.value)} placeholder="ej. 8 o 10" /></F>
+        <F label="Recargo rural por ruta (USD)"><Input type="number" step="0.01" value={a.ruralSurcharge} onChange={(e) => set('ruralSurcharge', e.target.value)} placeholder="0 = sin recargo" /></F>
       </Grid>
-      <p className="mt-1 text-[11px] text-slate-400">Este es el precio que paga Walmart por cada ruta de este almacén. Se usa automáticamente al crear rutas aquí.</p>
+      <p className="mt-1 text-[11px] text-slate-400">Ingreso por ruta = precio base que paga Walmart (Base Route Pay). <b>Horas de Van</b> y <b>Recargo rural</b> salen en la factura de Flash Mile por tienda. Se usan automáticamente al facturar.</p>
       <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={a.activo !== false} onChange={(e) => set('activo', e.target.checked)} className="accent-brand-gold" /> Activo</label>
       <div className="mt-3 flex gap-2">
         <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar'}</Boton>
@@ -1580,7 +1582,7 @@ function TabConfig() {
   const salvar = async () => {
     setGuardando(true)
     try {
-      await guardar(COL.config, 'tarifas', { ingresoWalmart: num(t.ingresoWalmart), pagoDriverPropio: num(t.pagoDriverPropio), pagoDriverCompania: num(t.pagoDriverCompania), comisionFastPay: num(t.comisionFastPay), otIngreso: num(t.otIngreso), otPago: num(t.otPago) })
+      await guardar(COL.config, 'tarifas', { ingresoWalmart: num(t.ingresoWalmart), pagoDriverPropio: num(t.pagoDriverPropio), pagoDriverCompania: num(t.pagoDriverCompania), comisionFastPay: num(t.comisionFastPay), otIngreso: num(t.otIngreso), otPago: num(t.otPago), fromNombre: String(t.fromNombre || '').trim() || 'Blue Box Logistic LLC', fromDireccion: String(t.fromDireccion || '').trim(), fromEmail: String(t.fromEmail || '').trim(), fromTelefono: String(t.fromTelefono || '').trim() })
       await auditar('tarifas_guardadas', `WM ${t.ingresoWalmart} / propio ${t.pagoDriverPropio} / compañía ${t.pagoDriverCompania} / FP ${t.comisionFastPay}% / OT ${t.otIngreso}·${t.otPago}`)
       walToast('Tarifas guardadas ✓')
     } finally { setGuardando(false) }
@@ -1600,6 +1602,18 @@ function TabConfig() {
         </Grid>
         <p className="mt-2 text-[11px] text-slate-400">OT (overtime): por cada OT, Walmart te paga el primer valor y tú le pagas al driver el segundo. Se aplica al poner OT en una ruta y entra al Financiero y al invoice.</p>
         <Boton variant="gold" className="mt-4" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar tarifas'}</Boton>
+      </Card>
+
+      <Card className="mt-4 p-4">
+        <div className="mb-1 text-sm font-bold text-brand-navy dark:text-slate-100">Datos de facturación (From)</div>
+        <p className="mb-3 text-xs text-slate-500">Estos datos aparecen como <b>“From”</b> en la factura a Flash Mile. Llénalos una vez.</p>
+        <Grid>
+          <F label="Empresa"><Input value={t.fromNombre ?? 'Blue Box Logistic LLC'} onChange={(e) => set('fromNombre', e.target.value)} placeholder="Blue Box Logistic LLC" /></F>
+          <F label="Correo de facturación"><Input value={t.fromEmail || ''} onChange={(e) => set('fromEmail', e.target.value)} placeholder="billing@blueboxlogistic.com" /></F>
+          <F label="Teléfono"><Input value={t.fromTelefono || ''} onChange={(e) => set('fromTelefono', e.target.value)} placeholder="555-555-0100" /></F>
+          <F label="Dirección completa"><Input value={t.fromDireccion || ''} onChange={(e) => set('fromDireccion', e.target.value)} placeholder="123 Main St, Dallas, TX 75201" /></F>
+        </Grid>
+        <Boton variant="gold" className="mt-4" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar datos'}</Boton>
       </Card>
     </div>
   )
@@ -3089,7 +3103,7 @@ function RutaEditor({ ruta, rutas, almacenes, personas, tarifas, onCerrar, soloL
             <F label="Propietario vehículo"><Select value={r.propietarioVehiculo} onChange={(e) => setProp(e.target.value)}>{PROPIETARIO.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
             <F label="Estado"><Select value={r.estado} onChange={(e) => set('estado', e.target.value)}>{ESTADOS_RUTA.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select></F>
           </Grid>
-          {r.estado === 'cancelada' && <div className="mt-2"><F label="Motivo de cancelación"><Input value={r.motivoCancel} onChange={(e) => set('motivoCancel', e.target.value)} /></F></div>}
+          {r.estado === 'cancelada' && <div className="mt-2 space-y-2"><F label="Motivo de cancelación"><Input value={r.motivoCancel} onChange={(e) => set('motivoCancel', e.target.value)} /></F><label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" checked={!!r.wmtReleased} onChange={(e) => set('wmtReleased', e.target.checked)} className="accent-brand-gold" /> WMT-Released (facturable a Flash Mile — se cobra aunque se canceló)</label></div>}
         </Card>
         <Card className="mb-3 p-4">
           {/* GO Home: Walmart paga el ingreso del almacén y tú defines el pago manualmente */}
@@ -4886,7 +4900,7 @@ async function pdfReciboFP(pago, driver) {
 }
 
 // ── FACTURAS (cobro a Walmart) ───────────────────────────────────────────────
-function TabFacturas({ rutas, almacenes, facturas }) {
+function TabFacturas({ rutas, almacenes, facturas, tarifas }) {
   const [modo, setModo] = useState('semana') // semana | mes | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [mes, setMes] = useState(mesDe(hoyISO()))
@@ -4894,22 +4908,34 @@ function TabFacturas({ rutas, almacenes, facturas }) {
   const [d2, setD2] = useState(ultimoDiaMes(mesDe(hoyISO())))
   const [almId, setAlmId] = useState('')
   const [generando, setGenerando] = useState(false)
+  const [bonoKPI, setBonoKPI] = useState(false)
+  const [notas, setNotas] = useState('')
 
   const desde = modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
   const hasta = modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
   const periodo = modo === 'semana' ? desde : modo === 'mes' ? mes : `${desde}_${hasta}`
-  const prev = useMemo(() => facturaDelPeriodo(rutas, desde, hasta, almId, almacenes), [rutas, desde, hasta, almId, almacenes])
+  const prev = useMemo(() => facturaFlashMile(rutas, desde, hasta, almId, almacenes, { bonoKPI }), [rutas, desde, hasta, almId, almacenes, bonoKPI])
   const venceEl = sumarDias(hasta, 30)
   const almNombre = almId ? (almacenes.find((a) => a.id === almId)?.nombre || '') : 'Todos los almacenes'
+  // From (datos de facturación) desde la configuración.
+  const from = { nombre: tarifas?.fromNombre || 'Blue Box Logistic LLC', direccion: tarifas?.fromDireccion || '', email: tarifas?.fromEmail || '', telefono: tarifas?.fromTelefono || '' }
+  const billTo = 'Flash Mile Logistics LLC, 2626 Cole Ave, Suite 300, Dallas, TX 75204, Accounting@Flash-Mile.com'
+  const fmtUS = (iso) => { try { const [y, m, d] = String(iso).split('-'); return `${m}/${d}/${y}` } catch { return iso } }
 
   const generar = async () => {
-    if (prev.total <= 0) { window.alert('No hay rutas completadas en ese período para facturar.'); return }
+    if (prev.total <= 0) { window.alert('No hay nada que facturar en ese período (rutas completadas, cancelaciones WMT-released u OT).'); return }
     setGenerando(true)
     try {
-      // Número de factura: solo un número correlativo (1001, 1002, …).
-      const soloNum = (facturas || []).map((x) => (/^\d+$/.test(String(x.numero || '')) ? parseInt(x.numero, 10) : NaN)).filter((n) => !Number.isNaN(n))
-      const numero = String((soloNum.length ? Math.max(...soloNum) : 1000) + 1)
-      const data = { numero, periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta, almacenId: almId, almacenNombre: almNombre, lineas: prev.lineas, porDriver: prev.porDriver, totalRutas: prev.totalRutas, total: prev.total, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: 'Blue Box Logistic LLC' }
+      // Número de factura formato Flash Mile: BB-AAAAMMDD (fecha fin del período).
+      const numero = `BB-${String(hasta).replace(/-/g, '')}`
+      const notasArr = String(notas || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const data = {
+        numero, formato: 'flashmile', periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta,
+        almacenId: almId, almacenNombre: almNombre,
+        lineas: prev.lineas, total: prev.total, baseTotal: prev.baseTotal, totalRutas: prev.totalRutas,
+        from, billTo, invoiceDate: fmtUS(hoyISO()), terms: 'Net 30 + 2 processing days', currency: 'USD',
+        bonoKPI, notas: notasArr, emitidaEn: hoyISO(), venceEl, estado: 'emitida', empresa: from.nombre,
+      }
       const id = await guardar(COL.facturas, null, data)
       await auditar('factura_generada', `${numero} · ${dinero(prev.total)} · ${periodo}`)
       walToast('Factura generada ✓', 'gold'); confeti()
@@ -4934,22 +4960,37 @@ function TabFacturas({ rutas, almacenes, facturas }) {
         </div>
       </Card>
 
-      {/* Vista previa de la factura */}
+      {/* Vista previa de la factura (formato Flash Mile) */}
       <Card className="mb-4 p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa</span>
-          <span className="text-xs text-slate-400">{desde} → {hasta} · vence {venceEl} (net 30)</span>
-          <Boton variant="gold" className="ml-auto" disabled={generando || prev.total <= 0} onClick={generar}>{generando ? <Spinner /> : <><FileSpreadsheet size={15} /> Generar factura</>}</Boton>
+          <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa · formato Flash Mile</span>
+          <span className="text-xs text-slate-400">BB-{String(hasta).replace(/-/g, '')} · vence {venceEl} (Net 30 + 2)</span>
+          <Boton variant="gold" className="ml-auto" disabled={generando || prev.total <= 0} onClick={generar}>{generando ? <Spinner /> : <><FileSpreadsheet size={15} /> Generar factura (PDF)</>}</Boton>
         </div>
+
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-sm dark:border-slate-700">
+            <input type="checkbox" checked={bonoKPI} onChange={(e) => setBonoKPI(e.target.checked)} className="mt-0.5 accent-brand-gold" />
+            <span><b>Weekly Performance Bonus (1%)</b><span className="block text-[11px] text-slate-400">Marca solo si se cumplieron los 4 KPIs de la semana. Agrega 1% del Base Route Pay total.</span></span>
+          </label>
+          <div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Notes (una por línea)</div>
+            <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} placeholder="10/08: Store 5820, 3 routes released by WMT after 2.5-hr standby" className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800" />
+          </div>
+        </div>
+
         {prev.lineas.length === 0
-          ? <Vacio icono={FileSpreadsheet}>No hay rutas completadas en este período. Cierra días con rutas completadas para poder facturar.</Vacio>
+          ? <Vacio icono={FileSpreadsheet}>Nada que facturar en este período. Necesitas rutas completadas (o cancelaciones marcadas <b>WMT-Released</b>) con su tienda y tarifa.</Vacio>
           : (
-            <table className="w-full text-sm">
-              <thead><tr className="text-[11px] uppercase tracking-wide text-slate-400"><th className="py-1 text-left font-bold">Almacén</th><th className="text-right font-bold">Rutas</th><th className="text-right font-bold">Tarifa prom.</th><th className="text-right font-bold">Importe</th></tr></thead>
-              <tbody>{prev.lineas.map((l) => <tr key={l.almacenId} className="border-t border-slate-100 dark:border-slate-800"><td className="py-1.5 text-brand-navy dark:text-slate-100">{l.nombre}</td><td className="text-right font-mono">{l.rutas}</td><td className="text-right font-mono text-slate-500">{dinero(l.tarifaProm)}</td><td className="text-right font-mono font-semibold">{dinero(l.importe)}</td></tr>)}</tbody>
-              <tfoot><tr className="border-t-2 border-slate-200 dark:border-slate-700"><td className="py-2 font-bold text-brand-navy dark:text-slate-100">Total a cobrar</td><td className="text-right font-mono font-bold">{prev.totalRutas}</td><td /><td className="text-right font-mono text-base font-extrabold text-brand-navy dark:text-slate-100">{dinero(prev.total)}</td></tr></tfoot>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead><tr className="bg-brand-navy text-[11px] uppercase tracking-wide text-white"><th className="px-2 py-1.5 text-left font-bold">#</th><th className="px-2 text-left font-bold">Description</th><th className="px-2 text-right font-bold">Qty</th><th className="px-2 text-right font-bold">Rate</th><th className="px-2 text-right font-bold">Amount</th></tr></thead>
+                <tbody>{prev.lineas.map((l) => <tr key={l.n} className="border-b border-slate-100 dark:border-slate-800"><td className="px-2 py-1.5 text-slate-400">{l.n}</td><td className="px-2 text-brand-navy dark:text-slate-100">{l.desc}</td><td className="px-2 text-right font-mono">{l.qty}</td><td className="px-2 text-right font-mono text-slate-500">{typeof l.rate === 'number' ? dinero(l.rate) : l.rate}</td><td className="px-2 text-right font-mono font-semibold">{dinero(l.amount)}</td></tr>)}</tbody>
+                <tfoot><tr className="border-t-2 border-brand-navy"><td className="px-2 py-2 font-extrabold text-brand-navy dark:text-slate-100" colSpan={4}>TOTAL OWED</td><td className="px-2 text-right font-mono text-base font-extrabold text-brand-navy dark:text-slate-100">{dinero(prev.total)}</td></tr></tfoot>
+              </table>
+            </div>
           )}
+        <p className="mt-2 text-[11px] text-slate-400">Bill to: Flash Mile Logistics LLC · From: {from.nombre}{from.direccion ? '' : ' — ⚠ completa tu dirección en Configuración → Datos de facturación'}</p>
       </Card>
 
       <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Facturas emitidas</div>
@@ -5006,7 +5047,102 @@ function dibujarLogoBlueBox(doc, x, y, w) {
   doc.text('LOGISTICS', lx, ly, { charSpace: 16 * s })
 }
 
+// Factura en el FORMATO FLASH MILE (requisito del cliente). Las facturas
+// antiguas (sin formato) caen al PDF anterior, pdfFacturaLegacy.
 async function pdfFactura(f) {
+  if (f.formato !== 'flashmile') return pdfFacturaLegacy(f)
+  const jsPDF = await cargarJsPDF()
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48
+  const NAVY = [23, 48, 77], GOLD = [232, 162, 30], INK = [28, 39, 51], SUB = [91, 103, 117], LN = [226, 231, 238]
+  const fmtUS = (iso) => { try { const [yy, mm, dd] = String(iso).split('-'); return `${mm}/${dd}/${yy}` } catch { return iso } }
+  const period = (f.desde && f.hasta) ? `${fmtUS(f.desde)} – ${fmtUS(f.hasta)}` : (f.mes || '')
+  let y = 58
+
+  // Encabezado: empresa + línea dorada
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...NAVY)
+  doc.text(String(f.from?.nombre || f.empresa || 'Blue Box Logistic LLC'), M, y)
+  y += 9; doc.setDrawColor(...GOLD); doc.setLineWidth(2.4); doc.line(M, y, W - M, y); doc.setLineWidth(1); y += 34
+
+  // INVOICE grande + número a la derecha
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(34); doc.setTextColor(...NAVY)
+  doc.text('INVOICE', M, y)
+  const num = String(f.numero || '')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text(num, W - M, y, { align: 'right' })
+  const numW = doc.getTextWidth(num)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(...INK)
+  doc.text('Invoice no.', W - M - numW - 5, y, { align: 'right' })
+  y += 26
+
+  // Tabla de datos (Field / Value)
+  doc.setFillColor(...NAVY); doc.rect(M, y, W - 2 * M, 20, 'F')
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10)
+  doc.text('Field', M + 8, y + 14); doc.text('Value', M + 158, y + 14); y += 20
+  const vX = M + 158, vW = W - M - vX - 8
+  const meta = [
+    ['From', [f.from?.nombre, f.from?.direccion, f.from?.email, f.from?.telefono].filter(Boolean).join(', ')],
+    ['Bill to', f.billTo || ''],
+    ['Invoice date', f.invoiceDate || fmtUS(f.emitidaEn)],
+    ['Service period', period],
+    ['Payment terms', f.terms || 'Net 30 + 2 processing days'],
+    ['Currency', f.currency || 'USD'],
+  ]
+  doc.setFontSize(10.5)
+  for (const [k, v] of meta) {
+    const lines = doc.splitTextToSize(String(v || ''), vW)
+    const rowH = Math.max(22, lines.length * 13 + 9)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK); doc.text(k, M + 8, y + 15)
+    doc.setTextColor(...SUB); doc.text(lines, vX, y + 15)
+    doc.setDrawColor(...LN); doc.line(M, y + rowH, W - M, y + rowH)
+    y += rowH
+  }
+  y += 20
+
+  // Line items
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text('Line items', M, y); y += 8
+  const xAmt = W - M - 6, xRate = W - M - 82, xQty = W - M - 156, xDesc = M + 26, descW = xQty - xDesc - 46
+  const headLine = () => {
+    doc.setFillColor(...NAVY); doc.rect(M, y, W - 2 * M, 20, 'F')
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5)
+    doc.text('#', M + 8, y + 14); doc.text('Description', xDesc, y + 14)
+    doc.text('Qty', xQty, y + 14, { align: 'right' }); doc.text('Rate', xRate, y + 14, { align: 'right' }); doc.text('Amount', xAmt, y + 14, { align: 'right' })
+    y += 20
+  }
+  headLine()
+  for (const l of (f.lineas || [])) {
+    const lines = doc.splitTextToSize(String(l.desc || ''), descW)
+    const rowH = Math.max(20, lines.length * 12 + 9)
+    if (y + rowH > H - 90) { doc.addPage(); y = 56; headLine() }
+    doc.setTextColor(...SUB); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.text(String(l.n), M + 8, y + 14)
+    doc.setTextColor(...INK); doc.setFontSize(10); doc.text(lines, xDesc, y + 14)
+    doc.text(String(l.qty), xQty, y + 14, { align: 'right' })
+    doc.text(typeof l.rate === 'number' ? dinero(l.rate) : String(l.rate || ''), xRate, y + 14, { align: 'right' })
+    doc.setFont('helvetica', l.bono ? 'bold' : 'normal'); doc.text(dinero(l.amount), xAmt, y + 14, { align: 'right' })
+    doc.setDrawColor(...LN); doc.line(M, y + rowH, W - M, y + rowH)
+    y += rowH
+  }
+  // TOTAL OWED
+  doc.setDrawColor(...NAVY); doc.setLineWidth(2); doc.line(M, y, W - M, y); doc.setLineWidth(1); y += 22
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...NAVY)
+  doc.text('TOTAL OWED', M + 8, y); doc.text(dinero(f.total), xAmt, y, { align: 'right' }); y += 30
+
+  // Notes
+  const notas = (f.notas || []).filter(Boolean)
+  if (notas.length) {
+    if (y > H - 110) { doc.addPage(); y = 56 }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK); doc.text('Notes', M, y)
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...SUB); doc.text('(one line per change or approval)', M + 42, y); y += 16
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...INK)
+    for (const nt of notas) {
+      const lines = doc.splitTextToSize('•  ' + nt, W - 2 * M - 10)
+      if (y + lines.length * 13 > H - 50) { doc.addPage(); y = 56 }
+      doc.text(lines, M + 4, y); y += lines.length * 13 + 3
+    }
+  }
+  doc.save(`${num || 'invoice'}.pdf`)
+}
+
+async function pdfFacturaLegacy(f) {
   const jsPDF = await cargarJsPDF()
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const M = 56, W = doc.internal.pageSize.getWidth()

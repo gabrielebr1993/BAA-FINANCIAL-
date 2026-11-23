@@ -529,6 +529,77 @@ export function facturaDelPeriodo(rutas, desde, hasta, almacenId, almacenes) {
   return { lineas, porDriver, total, totalRutas: rs.length }
 }
 
+// ── Factura en el FORMATO FLASH MILE ─────────────────────────────────────────
+// Líneas tipadas (#, descripción, qty, rate, amount) tal como exige Flash Mile:
+//  · Base Route Pay por tienda (rutas × tarifa base de la tienda)
+//  · Rural Surcharge por tienda (si la tienda tiene recargo rural configurado)
+//  · WMT-Released Cancellation (rutas canceladas marcadas como facturables)
+//  · Overtime por tienda (unidades de OT aprobadas × tarifa de ingreso OT)
+//  · Weekly Performance Bonus 1% (si opts.bonoKPI: 1% del Base Route Pay total)
+// `baseTotal` = base de rutas + cancelaciones liberadas (base del bono 1%).
+export function facturaFlashMile(rutas, desde, hasta, almacenId, almacenes, opts = {}) {
+  const alm = (id) => (almacenes || []).find((a) => a.id === id)
+  const nombre = (id) => alm(id)?.nombre || 'General'
+  const enRango = (r) => r.fecha >= desde && r.fecha <= hasta && (!almacenId || r.almacenId === almacenId)
+  const completadas = (rutas || []).filter((r) => r.estado === 'completada' && enRango(r))
+  const vanTxt = (a) => (a?.vanHoras ? ` Van: ${a.vanHoras} hrs` : '')
+  const storeNo = (a) => String(a?.numeroDC || '').trim()
+
+  const stores = {}
+  for (const r of completadas) {
+    const k = r.almacenId || '—'
+    if (!stores[k]) stores[k] = { n: 0, base: 0, otIng: 0, otU: 0 }
+    stores[k].n += 1
+    stores[k].base = money2(stores[k].base + (Number(r.tarifaWalmart) || 0))
+    stores[k].otIng = money2(stores[k].otIng + (Number(r.otIngreso) || 0))
+    stores[k].otU += Number(r.otUnidades) || 0
+  }
+  // Cancelaciones liberadas por WMT (facturables): canceladas marcadas wmtReleased.
+  const cancel = {}
+  for (const r of (rutas || []).filter((r) => r.estado === 'cancelada' && r.wmtReleased && enRango(r))) {
+    const k = r.almacenId || '—'
+    if (!cancel[k]) cancel[k] = { n: 0, monto: 0, fechas: [] }
+    cancel[k].n += 1
+    cancel[k].monto = money2(cancel[k].monto + (Number(r.tarifaWalmart) || 0))
+    cancel[k].fechas.push(r.fecha)
+  }
+
+  const lineas = []
+  let baseTotal = 0
+  const ids = Object.keys(stores).sort((a, b) => stores[b].base - stores[a].base)
+  // 1) Base Route Pay + 2) Rural Surcharge, por tienda
+  for (const id of ids) {
+    const s = stores[id]; const a = alm(id)
+    const rate = s.n ? money2(s.base / s.n) : 0
+    lineas.push({ desc: `Base Route Pay Store# ${storeNo(a)} (${nombre(id)}${vanTxt(a)})`, qty: s.n, rate, amount: money2(s.base) })
+    baseTotal = money2(baseTotal + s.base)
+    const rural = Number(a?.ruralSurcharge) || 0
+    if (rural > 0) lineas.push({ desc: `Rural Surcharge Store# ${storeNo(a)} (${nombre(id)}${vanTxt(a)})`, qty: s.n, rate: money2(rural), amount: money2(rural * s.n) })
+  }
+  // 3) WMT-Released Cancellation, por tienda
+  for (const id of Object.keys(cancel)) {
+    const c = cancel[id]; const a = alm(id)
+    const rate = c.n ? money2(c.monto / c.n) : 0
+    lineas.push({ desc: `Base Route Pay Store# ${storeNo(a)} – WMT-Released Cancellation (${nombre(id)})`, qty: c.n, rate, amount: money2(c.monto) })
+    baseTotal = money2(baseTotal + c.monto)
+  }
+  // 4) Overtime, por tienda (solo si hay OT)
+  for (const id of ids) {
+    const s = stores[id]; const a = alm(id)
+    if (s.otIng > 0) {
+      const rate = s.otU ? money2(s.otIng / s.otU) : 0
+      lineas.push({ desc: `Overtime Store# ${storeNo(a)} (${desde}–${hasta}, approved hrs only)`, qty: s.otU, rate, amount: money2(s.otIng) })
+    }
+  }
+  // 5) Weekly Performance Bonus 1% (opcional)
+  const bono = opts.bonoKPI ? money2(baseTotal * 0.01) : 0
+  if (bono > 0) lineas.push({ desc: 'Weekly Performance Bonus (all 4 KPIs met): 1% of Base Route Pay total', qty: '1%', rate: money2(baseTotal), amount: bono, bono: true })
+
+  const conN = lineas.map((l, i) => ({ n: i + 1, ...l }))
+  const total = money2(conN.reduce((a, l) => a + (Number(l.amount) || 0), 0))
+  return { lineas: conN, total, baseTotal, totalRutas: completadas.length }
+}
+
 // Siembra inicial de almacenes (Salt Lake y Frisco) — solo si no existen.
 export async function sembrarAlmacenes() {
   const existentes = await cargar(COL.almacenes)
