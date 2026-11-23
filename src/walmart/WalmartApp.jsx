@@ -27,7 +27,7 @@ import {
   Users, Warehouse as WhIcon, Settings, ArrowLeftRight, Plus, Trash2, ArrowLeft, Search,
   Route as RouteIcon, ClipboardCheck, Wallet, Receipt, BarChart3, FileSignature,
   CreditCard, Eye, EyeOff, ShieldCheck, Zap, LogOut, LayoutDashboard, Clock, TrendingUp, AlertTriangle, DollarSign,
-  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown,
+  CalendarDays, X, Sun, Sunset, GripVertical, Camera, Upload, FileText, Download, FileSpreadsheet, Copy, ChevronDown, Pencil,
   Smartphone, Share, History, ChevronLeft, ChevronRight, Ban, MapPin,
 } from 'lucide-react'
 import { BANCOS_USA } from './bancosUSA'
@@ -1207,6 +1207,7 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, gastos, tar
   const acc = useMemo(() => acumuladoDriver(rutas || [], pagos || [], p.id), [rutas, pagos, p.id])
   const rutasDrv = useMemo(() => (rutas || []).filter((r) => r.driverId === p.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 12), [rutas, p.id])
   const pagosDrv = useMemo(() => (pagos || []).filter((x) => x.driverId === p.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 12), [pagos, p.id])
+  const nombresRespPerfil = [...new Set((pagos || []).map((x) => String(x.responsable || '').trim()).filter(Boolean))].slice(0, 6)
   const contratosDrv = (contratos || []).filter((c) => c.driverId === p.id)
   const dato = (l, v) => <div><div className="text-[10px] font-bold uppercase text-slate-400">{l}</div><div className="text-sm text-brand-navy dark:text-slate-100">{v || '—'}</div></div>
   return (
@@ -1283,7 +1284,7 @@ function PerfilDriver({ persona, almacenes, rutas, pagos, contratos, gastos, tar
         <Card className="p-4">
           <div className="mb-2 text-sm font-bold text-brand-navy dark:text-slate-100">Pagos y Fast Pay</div>
           {pagosDrv.length === 0 && <div className="text-sm text-slate-400">Sin pagos aún.</div>}
-          {pagosDrv.map((x, i) => <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-1.5 text-xs last:border-0 dark:border-slate-800/60"><Badge color={x.tipo === 'fastpay' ? 'gold' : 'navy'}>{x.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge><span className="font-mono text-slate-400">{x.fecha}</span><span className="ml-auto font-mono font-semibold">{dinero(x.tipo === 'fastpay' ? x.efectivo : x.monto)}</span></div>)}
+          {pagosDrv.map((x, i) => <div key={i} className="flex items-center gap-2 border-b border-slate-50 py-1.5 text-xs last:border-0 dark:border-slate-800/60"><Badge color={x.tipo === 'fastpay' ? 'gold' : 'navy'}>{x.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge><span className="font-mono text-slate-400">{x.fecha}</span><span className="ml-auto font-mono font-semibold">{dinero(x.tipo === 'fastpay' ? x.efectivo : x.monto)}</span><EditorResponsablePago pago={x} nombres={nombresRespPerfil} /></div>)}
         </Card>
       </div>
 
@@ -3290,6 +3291,50 @@ function Tile({ n, txt, l, verde, ambar }) {
 }
 
 // ── PAGOS / FAST PAY ────────────────────────────────────────────────────────
+// Chip del RESPONSABLE de un pago (nombre escrito a mano, o el usuario que lo
+// creó) con edición rápida desde cualquier lista de pagos. Guarda al instante.
+function EditorResponsablePago({ pago, editable = true, nombres = [] }) {
+  const [abierto, setAbierto] = useState(false)
+  const [val, setVal] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const actual = String(pago?.responsable || '').trim() || String(pago?.creadoPor || '').trim()
+  const etiqueta = actual ? (actual.includes('@') ? actual.split('@')[0] : actual) : ''
+  const ini = (etiqueta.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase()) || '?'
+  const salvar = async (nombre) => {
+    setGuardando(true)
+    try {
+      await guardar(COL.pagos, pago.id, { responsable: nombre })
+      await auditar('pago_responsable', `${pago.driverNombre || ''} · ${dinero(pago.tipo === 'fastpay' ? pago.efectivo : pago.monto)} → ${nombre || '(sin responsable)'}`)
+      walToast('Responsable actualizado ✓')
+    } catch (e) { walToast('No se pudo actualizar: ' + (e?.message || e), 'red') }
+    finally { setGuardando(false); setAbierto(false) }
+  }
+  return (
+    <span className="relative inline-flex items-center gap-1">
+      {actual
+        ? <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title={actual}><span className="grid h-4 w-4 place-items-center rounded-full bg-brand-navy text-[8px] text-white">{ini}</span>{etiqueta}</span>
+        : <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-500 dark:border-rose-500/40 dark:bg-rose-500/10">⚠ sin responsable</span>}
+      {editable && pago?.id && (
+        <button onClick={() => { setVal(pago.responsable || ''); setAbierto((v) => !v) }} className="text-slate-400 transition hover:text-brand-navy dark:hover:text-white" title="Editar responsable del pago"><Pencil size={12} /></button>
+      )}
+      {abierto && editable && (
+        <span className="absolute right-0 top-6 z-30 w-56 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-lg dark:border-slate-700 dark:bg-slate-800" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Responsable del pago</div>
+          {nombres.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1">
+              {nombres.map((n) => <button key={n} disabled={guardando} onClick={() => salvar(n)} className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold hover:border-brand-gold dark:border-slate-600">{n}</button>)}
+            </div>
+          )}
+          <div className="flex gap-1">
+            <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="Otro nombre…" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] outline-none focus:border-brand-gold dark:border-slate-600 dark:bg-slate-900" />
+            <button disabled={guardando} onClick={() => salvar(val.trim())} className="shrink-0 rounded-lg bg-brand-gold px-2.5 py-1 text-[11px] font-bold text-brand-navy disabled:opacity-50">OK</button>
+          </div>
+        </span>
+      )}
+    </span>
+  )
+}
+
 // Hub de Pagos: UN filtro de fecha (sáb→vie), dos números grandes (Por pagar /
 // Ya pagado) y 2 pestañas claras. El Fast Pay (consola de adelantos) queda como
 // pestaña aparte para no perder suspensión/huérfanos/confirmaciones.
@@ -3526,6 +3571,9 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
   const pEjecutaFP = !perm || perm.owner || perm.permisos?.fp_ejecutar
   const pPagaSemanal = !perm || perm.owner || perm.permisos?.pagos_ejecutar
   const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
+  const pEditaResp = !perm || perm.owner || perm.permisos?.pagos_ejecutar || perm.permisos?.fp_ejecutar
+  // Nombres ya usados como responsables (para elegir rápido al editar).
+  const nombresResp = [...new Set((pagos || []).map((x) => String(x.responsable || '').trim()).filter(Boolean))].slice(0, 6)
   const [driverId, setDriverId] = useState('')
   const [modoL, setModoL] = useState('semana')
   const [fechaL, setFechaL] = useState(hoyISO())
@@ -3551,6 +3599,21 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
   // Período efectivo del detalle (mismo que el filtro de arriba).
   const detDesde = periodo ? periodo.desde : (modo === 'semana' ? semana : (d1 <= d2 ? d1 : d2))
   const detHasta = periodo ? periodo.hasta : (modo === 'semana' ? domingoDe(fecha) : (d1 <= d2 ? d2 : d1))
+  // Resumen "quién autorizó cuánto" en el período: agrupa los pagos por su
+  // responsable (nombre a mano, o el usuario que lo creó). No cuenta Fast Pay
+  // anulado/fallido. Da control de un vistazo de quién movió el dinero.
+  const resumenResp = useMemo(() => {
+    const wset = new Set(weeks); const m = {}
+    for (const p of (pagos || [])) {
+      if (!wset.has(p.semana)) continue
+      if (p.tipo === 'fastpay' && (estadoFP(p) === 'anulado' || estadoFP(p) === 'fallido')) continue
+      const who = String(p.responsable || '').trim() || String(p.creadoPor || '').trim() || '—'
+      const monto = p.tipo === 'fastpay' ? (Number(p.efectivo) || 0) : (Number(p.monto) || 0)
+      if (!m[who]) m[who] = { total: 0, n: 0 }
+      m[who].total = money2(m[who].total + monto); m[who].n++
+    }
+    return Object.entries(m).map(([who, v]) => ({ who, ...v })).sort((a, b) => b.total - a.total)
+  }, [pagos, weeks]) // eslint-disable-line react-hooks/exhaustive-deps
   // Resumen del DETALLE sobre TODO el período (no una sola semana): agrega las
   // semanas del rango y junta todas las rutas y movimientos.
   const res = useMemo(() => {
@@ -3646,6 +3709,22 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
           <span className="pb-1.5 text-xs font-semibold text-slate-400">Por pagar <b className="text-brand-navy dark:text-slate-100">{dinero(totPorPagar)}</b> · {nPend} pendientes</span>
         </div>
       </Card>
+
+      {/* Resumen: quién autorizó/registró cuánto en el período */}
+      {!driverId && resumenResp.length > 0 && (
+        <Card className="mb-3 p-3">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-brand-navy dark:text-slate-100"><Wallet size={15} className="text-brand-gold" /> Quién autorizó cuánto · {detDesde} → {detHasta}</div>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {resumenResp.map((r) => (
+              <div key={r.who} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-1.5 dark:border-slate-800">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-navy text-[9px] font-bold text-white">{(r.who.includes('@') ? r.who.split('@')[0] : r.who).replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '—'}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-brand-navy dark:text-slate-100" title={r.who}>{r.who === '—' ? 'Sin responsable' : (r.who.includes('@') ? r.who.split('@')[0] : r.who)}</span>
+                <span className="shrink-0 text-right"><b className="font-mono text-sm text-brand-navy dark:text-slate-100">{dinero(r.total)}</b><span className="block text-[10px] text-slate-400">{r.n} pago{r.n !== 1 ? 's' : ''}</span></span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* LISTA de drivers (cuando no hay uno abierto) */}
       {!driverId && (
@@ -3771,7 +3850,7 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
                     ? <span className="text-xs">bruto {dinero(p.bruto)} · comisión {dinero(p.comision)} ({p.comisionPct}%) · efectivo <b>{dinero(p.efectivo)}</b></span>
                     : <span className="text-xs">monto <b>{dinero(p.monto)}</b></span>}
                   {p.recuperacion && <span className="text-xs italic text-slate-400">recuperación: {p.recuperacion}</span>}
-                  <span className="ml-auto text-xs text-slate-400">{p.metodo}{p.referencia ? ` · ${p.referencia}` : ''}{p.responsable ? ` · ${p.responsable}` : ''}</span>
+                  <span className="ml-auto flex items-center gap-2 text-xs text-slate-400">{p.metodo}{p.referencia ? ` · ${p.referencia}` : ''}<EditorResponsablePago pago={p} editable={pEditaResp} nombres={nombresResp} /></span>
                   {est === 'pendiente' && pEjecutaFP && (
                     <span className="flex items-center gap-2">
                       <button className="text-xs font-bold text-emerald-600 hover:underline" onClick={() => cambiarEstadoFP(p, 'confirmado')}>Confirmar</button>
