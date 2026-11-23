@@ -23,6 +23,7 @@
 // ============================================================================
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const admin = require('firebase-admin')
+const { puedeVerFlota } = require('./flotaAuth')
 
 const SECRETS = ['TRACCAR_URL', 'TRACCAR_TOKEN']
 const db = () => admin.firestore()
@@ -65,8 +66,13 @@ function aVan(dev, pos, mapa) {
 // onCall: la app pide las ubicaciones. Devuelve { configurado, vans }.
 //   configurado=false → aún no hay Traccar conectado (la app muestra el demo).
 exports.flotaUbicaciones = onCall({ secrets: SECRETS, timeoutSeconds: 30 }, async (req) => {
-  // Debe estar autenticado (la pantalla ya está protegida por permiso en la app).
+  // Debe estar autenticado y tener el mismo acceso efectivo que la ruta /flota.
   if (!req.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.')
+  const perfilSnap = await db().collection('users').doc(req.auth.uid).get()
+  const perfil = perfilSnap.exists ? perfilSnap.data() : null
+  if (!puedeVerFlota(perfil, req.auth.token?.email)) {
+    throw new HttpsError('permission-denied', 'Sin permiso para ver la flota.')
+  }
 
   const base = process.env.TRACCAR_URL
   const token = process.env.TRACCAR_TOKEN
