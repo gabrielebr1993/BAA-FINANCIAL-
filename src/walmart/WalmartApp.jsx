@@ -4910,6 +4910,7 @@ function TabFacturas({ rutas, almacenes, facturas, tarifas }) {
   const [generando, setGenerando] = useState(false)
   const [bonoKPI, setBonoKPI] = useState(false)
   const [notas, setNotas] = useState('')
+  const [incluirGoHome, setIncluirGoHome] = useState(true)
 
   const desde = modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
   const hasta = modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
@@ -4921,6 +4922,17 @@ function TabFacturas({ rutas, almacenes, facturas, tarifas }) {
   const from = { nombre: tarifas?.fromNombre || 'Blue Box Logistic LLC', direccion: tarifas?.fromDireccion || '', email: tarifas?.fromEmail || '', telefono: tarifas?.fromTelefono || '' }
   const billTo = 'Flash Mile Logistics LLC, 2626 Cole Ave, Suite 300, Dallas, TX 75204, Accounting@Flash-Mile.com'
   const fmtUS = (iso) => { try { const [y, m, d] = String(iso).split('-'); return `${m}/${d}/${y}` } catch { return iso } }
+  // GO Home de la semana: rutas completadas marcadas como goHome. Se cuentan y
+  // se resumen automáticamente en las Notes de la factura.
+  const storeDe = (id) => { const a = almacenes.find((x) => x.id === id); return String(a?.numeroDC || a?.nombre || '').trim() }
+  const goHomes = useMemo(() => (rutas || []).filter((r) => r.estado === 'completada' && r.goHome && r.fecha >= desde && r.fecha <= hasta && (!almId || r.almacenId === almId)), [rutas, desde, hasta, almId])
+  const notaGoHome = useMemo(() => {
+    if (!goHomes.length) return ''
+    const porTienda = {}
+    for (const r of goHomes) { const s = storeDe(r.almacenId) || '—'; porTienda[s] = (porTienda[s] || 0) + 1 }
+    const detalle = Object.entries(porTienda).map(([s, n]) => `Store ${s} (${n})`).join(', ')
+    return `GO Home routes this week: ${goHomes.length} — ${detalle}`
+  }, [goHomes, almacenes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const generar = async () => {
     if (prev.total <= 0) { window.alert('No hay nada que facturar en ese período (rutas completadas, cancelaciones WMT-released u OT).'); return }
@@ -4928,7 +4940,8 @@ function TabFacturas({ rutas, almacenes, facturas, tarifas }) {
     try {
       // Número de factura formato Flash Mile: BB-AAAAMMDD (fecha fin del período).
       const numero = `BB-${String(hasta).replace(/-/g, '')}`
-      const notasArr = String(notas || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const manualNotas = String(notas || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      const notasArr = [...(incluirGoHome && notaGoHome ? [notaGoHome] : []), ...manualNotas]
       const data = {
         numero, formato: 'flashmile', periodo, modo, mes: modo === 'mes' ? mes : '', desde, hasta,
         almacenId: almId, almacenNombre: almNombre,
@@ -4966,6 +4979,13 @@ function TabFacturas({ rutas, almacenes, facturas, tarifas }) {
           <span className="text-sm font-bold text-brand-navy dark:text-slate-100">Vista previa · formato Flash Mile</span>
           <span className="text-xs text-slate-400">BB-{String(hasta).replace(/-/g, '')} · vence {venceEl} (Net 30 + 2)</span>
           <Boton variant="gold" className="ml-auto" disabled={generando || prev.total <= 0} onClick={generar}>{generando ? <Spinner /> : <><FileSpreadsheet size={15} /> Generar factura (PDF)</>}</Boton>
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+          <RouteIcon size={15} className="text-brand-gold" />
+          <span className="text-sm font-semibold text-brand-navy dark:text-slate-100">GO Home esta semana: {goHomes.length}</span>
+          {goHomes.length > 0 && <span className="text-xs text-slate-400">({(notaGoHome.split('— ')[1]) || ''})</span>}
+          <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><input type="checkbox" checked={incluirGoHome} onChange={(e) => setIncluirGoHome(e.target.checked)} className="accent-brand-gold" /> Incluir en Notes (auto)</label>
         </div>
 
         <div className="mb-3 grid gap-3 sm:grid-cols-2">
