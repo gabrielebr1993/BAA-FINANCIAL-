@@ -4452,6 +4452,26 @@ async function descargarXLSX(nombre, rows) {
   descargarArchivo(nombre, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
 }
 
+// Traducción de encabezados ES → EN para los reportes DESCARGADOS (la pantalla
+// queda en español; el archivo sale en inglés para compartir con Flash Mile).
+const REPORTE_EN = {
+  Fecha: 'Date', Chofer: 'Driver', Almacén: 'Store', Ruta: 'Route', Bruto: 'Gross', 'Comisión %': 'Commission %', Comisión: 'Commission',
+  'Efectivo entregado': 'Cash paid', Estado: 'Status', Método: 'Method', Referencia: 'Reference', Responsable: 'Responsible', Comprobante: 'Receipt',
+  Recuperación: 'Recovery', Monto: 'Amount', Semana: 'Week', Categoría: 'Category', Descripción: 'Description', 'Estado pago': 'Payment status',
+  'Ingreso Walmart': 'Walmart revenue', 'Costo drivers': 'Driver cost', Margen: 'Margin', 'Gastos operativos': 'Operating expenses',
+  'Comisiones FP': 'Fast Pay commissions', 'Resultado operativo': 'Operating result', Cobrado: 'Collected', 'Por cobrar': 'Receivable',
+  'Flujo de caja': 'Cash flow', Rutas: 'Routes', Nombre: 'Name', Teléfono: 'Phone', Correo: 'Email', Ciudad: 'City', Vehículo: 'Vehicle',
+  Propietario: 'Owner', 'Pago por ruta': 'Pay per route', 'Estado operativo': 'Operational status', Utilidad: 'Profit', 'Pago al driver': 'Driver pay',
+  'Gastos atribuidos': 'Attributed expenses', 'Margen %': 'Margin %', 'Pendiente por pagar': 'Pending to pay', Ganado: 'Earned',
+  'Adelantado (FP)': 'Advanced (FP)', 'Ya pagado': 'Already paid', Número: 'Number', Desde: 'From', Hasta: 'To', Total: 'Total', Emitida: 'Issued',
+  Turno: 'Shift', Identificador: 'Identifier', OT: 'OT', 'Tarifa Walmart': 'Walmart rate', 'Tarifa Driver': 'Driver rate',
+  'Ganancia Driver': 'Driver earnings', Nota: 'Note', Apellido: 'Last name', 'Nombre completo': 'Full name', Dirección: 'Address',
+  'Fecha registro': 'Registration date', 'Tiene SSN': 'Has SSN', 'Tiene licencia': 'Has license', Disponibilidad: 'Availability',
+  'Días disponibles': 'Available days', 'Tipo de vehículo': 'Vehicle type', Marca: 'Make', Modelo: 'Model', Año: 'Year',
+  'Propietario del vehículo': 'Vehicle owner', Notas: 'Notes',
+}
+const filasEN = (fs) => (fs || []).map((r) => { const o = {}; for (const k of Object.keys(r)) o[REPORTE_EN[k] || k] = r[k]; return o })
+
 function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, facturas, solicitudes, tarifas }) {
   const [tipo, setTipo] = useState('fastpay')
   const [modo, setModo] = useState('mes') // semana | mes | rango | todo
@@ -4540,7 +4560,7 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
           if (!okDrv(p.id)) continue
           let ganado = 0, adelantado = 0, pagado = 0, saldo = 0, nRutas = 0
           for (const wk of weeks) { const r = resumenSemana(rutas, pagos, p.id, wk); ganado = money2(ganado + (r.totalGanado || 0)); adelantado = money2(adelantado + (r.liquidadoFP || 0)); pagado = money2(pagado + (r.pagadoNormal || 0)); saldo = money2(saldo + (r.saldo || 0)); nRutas += (r.rutasSemana?.length || 0) }
-          if (saldo > 0.005) out.push({ Chofer: nombreCompleto(p), Rutas: nRutas, Ganado: ganado, 'Adelantado (FP)': adelantado, 'Ya pagado': pagado, 'Pendiente por pagar': saldo })
+          if (saldo > 0.005) out.push({ Chofer: nombreCompleto(p), 'Pendiente por pagar': saldo, Rutas: nRutas, Ganado: ganado, 'Adelantado (FP)': adelantado, 'Ya pagado': pagado })
         }
         return out.sort((a, b) => b['Pendiente por pagar'] - a['Pendiente por pagar'])
       },
@@ -4577,8 +4597,9 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
     if (!filas.length) { walToast('No hay datos para ese reporte/filtro.', 'red'); return }
     setGenerando(true)
     try {
-      if (fmt === 'xlsx') await descargarXLSX(`${nombreBase}.xlsx`, filas)
-      else descargarArchivo(`${nombreBase}.csv`, aCSV(filas))
+      const datos = filasEN(filas)
+      if (fmt === 'xlsx') await descargarXLSX(`${nombreBase}.xlsx`, datos)
+      else descargarArchivo(`${nombreBase}.csv`, aCSV(datos))
       await auditar('reporte_descargado', `${tipo} · ${periodoTxt} · ${filas.length} filas · ${fmt}`)
       walToast(`Reporte descargado (${filas.length} filas) ✓`, 'gold')
     } catch (e) { walToast('No se pudo generar: ' + (e?.message || e), 'red') } finally { setGenerando(false) }
