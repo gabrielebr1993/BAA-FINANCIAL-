@@ -4512,6 +4512,38 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
       label: 'Financiero por semana', periodico: true,
       filas: () => { const out = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let g = 0; while (w <= fin && g < 200) { const f = financieroSemana(rutas, pagos, gastos, cobros, w, almId); out.push({ Semana: w, 'Ingreso Walmart': f.ingresoRutas, 'Costo drivers': f.costoDrivers, Margen: f.margen, 'Gastos operativos': f.gastosOper, 'Comisiones FP': f.comisionesFP, 'Resultado operativo': f.resultadoOperativo, Cobrado: f.cobrado, 'Por cobrar': f.porCobrar, 'Flujo de caja': f.flujoCaja, Rutas: f.nRutas }); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); g++ } return out },
     },
+    utilidad_driver: {
+      label: 'Utilidad por driver', periodico: true,
+      filas: () => {
+        const by = {}
+        for (const r of rutas.filter((r) => r.estado === 'completada' && enRango(r.fecha) && okAlm(r.almacenId) && okDrv(r.driverId))) {
+          const k = r.driverId || r.driverNombre || '—'
+          if (!by[k]) by[k] = { nombre: r.driverNombre || nombreDrv(r.driverId), rutas: 0, ingreso: 0, pago: 0, gastos: 0 }
+          by[k].rutas += 1; by[k].ingreso = money2(by[k].ingreso + ingresoRuta(r)); by[k].pago = money2(by[k].pago + gananciaDriver(r))
+        }
+        for (const g of gastos.filter((g) => g.driverId && enRango(g.fecha) && okAlm(g.almacenId || '') && okDrv(g.driverId))) {
+          const k = g.driverId
+          if (!by[k]) by[k] = { nombre: nombreDrv(k), rutas: 0, ingreso: 0, pago: 0, gastos: 0 }
+          by[k].gastos = money2(by[k].gastos + (Number(g.monto) || 0))
+        }
+        return Object.values(by).map((d) => { const util = money2(d.ingreso - d.pago - d.gastos); return { Chofer: d.nombre, Rutas: d.rutas, 'Ingreso Walmart': d.ingreso, 'Pago al driver': money2(d.pago), 'Gastos atribuidos': money2(d.gastos), Utilidad: util, 'Margen %': d.ingreso ? Math.round((util / d.ingreso) * 1000) / 10 : 0 } }).sort((a, b) => b.Utilidad - a.Utilidad)
+      },
+    },
+    pendiente: {
+      label: 'Pendiente por pagar (saldo a choferes)', periodico: true,
+      filas: () => {
+        const weeks = []; let w = lunesDe(desde); const fin = lunesDe(hasta); let gc = 0
+        while (w <= fin && gc < 200) { weeks.push(w); const dd = new Date(`${w}T00:00:00`); dd.setDate(dd.getDate() + 7); w = dd.toISOString().slice(0, 10); gc++ }
+        const out = []
+        for (const p of personas) {
+          if (!okDrv(p.id)) continue
+          let ganado = 0, adelantado = 0, pagado = 0, saldo = 0, nRutas = 0
+          for (const wk of weeks) { const r = resumenSemana(rutas, pagos, p.id, wk); ganado = money2(ganado + (r.ganado || 0)); adelantado = money2(adelantado + (r.liquidadoFP || 0)); pagado = money2(pagado + (r.pagadoNormal || 0)); saldo = money2(saldo + (r.saldo || 0)); nRutas += r.nRutas || 0 }
+          if (saldo > 0.005) out.push({ Chofer: nombreCompleto(p), Rutas: nRutas, Ganado: ganado, 'Adelantado (FP)': adelantado, 'Ya pagado': pagado, 'Pendiente por pagar': saldo })
+        }
+        return out.sort((a, b) => b['Pendiente por pagar'] - a['Pendiente por pagar'])
+      },
+    },
     drivers: {
       label: 'Lista de drivers', periodico: false,
       filas: () => personas.filter((p) => okAlm(p.almacenId) || p.almacen === 'ambos').map((p) => ({ Nombre: nombreCompleto(p), Teléfono: p.telefono || '', Correo: p.correo || '', Ciudad: p.ciudad || '', Estado: p.estado || '', Almacén: p.almacenId === 'ambos' ? 'Ambos' : nombreAlm(p.almacenId), Vehículo: [p.marca, p.modelo, p.anio].filter(Boolean).join(' ') || p.tipoVehiculo || '', Propietario: p.propietarioVehiculo || '', 'Pago por ruta': p.rateDriver || '', 'Estado operativo': p.estadoOperativo || '' })),
@@ -4536,7 +4568,7 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
 
   const def = REPORTES[tipo]
   const filas = useMemo(() => { try { return def.filas() } catch { return [] } }, [tipo, pagos, rutas, gastos, cobros, personas, solicitudes, facturas, desde, hasta, almId, drvId]) // eslint-disable-line
-  const total = filas.reduce((a, r) => a + (Number(r.Bruto || r.Monto || r.Total || r['Ingreso Walmart'] || 0) || 0), 0)
+  const total = filas.reduce((a, r) => a + (Number(r.Bruto || r.Monto || r.Total || r['Ingreso Walmart'] || r['Pendiente por pagar'] || 0) || 0), 0)
   const periodoTxt = def.periodico ? (modo === 'todo' ? 'todo el historial' : `${desde} → ${hasta}`) : 'todos'
   const nombreBase = `walmart_${tipo}_${def.periodico && modo !== 'todo' ? `${desde}_${hasta}` : 'todo'}`
 
