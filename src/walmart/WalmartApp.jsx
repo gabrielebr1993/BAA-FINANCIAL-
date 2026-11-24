@@ -4462,6 +4462,7 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
   const [almId, setAlmId] = useState('')
   const [drvId, setDrvId] = useState('')
   const [generando, setGenerando] = useState(false)
+  const [q, setQ] = useState('')
 
   const desde = modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : modo === 'rango' ? (d1 <= d2 ? d1 : d2) : '0000-00-00'
   const hasta = modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : modo === 'rango' ? (d1 <= d2 ? d2 : d1) : '9999-99-99'
@@ -4584,12 +4585,65 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
   }
 
   const cols = filas.length ? Object.keys(filas[0]) : []
+  const txtQ = q.trim().toLowerCase()
+  const filasView = txtQ ? filas.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(txtQ))) : filas
+  const KEY_COL = { pendiente: 'Pendiente por pagar', utilidad_driver: 'Utilidad', financiero: 'Resultado operativo' }
+  const keyCol = KEY_COL[tipo]
+  const fmtCelda = (c, v) => { if (v == null || v === '') return ''; if (typeof v === 'number') { if (/%/.test(c)) return `${v}%`; if (/^(rutas|ot|qty)$/i.test(c)) return String(v); return dinero(v) } return String(v) }
+  const colorKey = (v) => tipo === 'utilidad_driver' ? (Number(v) >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-brand-gold'
+  const GRUPOS = [
+    { lab: '💵 Dinero', keys: ['pendiente', 'utilidad_driver', 'financiero', 'fastpay', 'pagos', 'gastos', 'cobros'] },
+    { lab: '📦 Operación', keys: ['rutas', 'solicitudes'] },
+    { lab: '👤 Choferes', keys: ['drivers', 'drivers_full'] },
+    { lab: '🧾 Facturas', keys: ['facturas'] },
+  ]
+  const kpis = (() => {
+    if (!filas.length) return []
+    if (tipo === 'pendiente') {
+      const tot = money2(filas.reduce((a, r) => a + (r['Pendiente por pagar'] || 0), 0))
+      const rutas = filas.reduce((a, r) => a + (r.Rutas || 0), 0)
+      return [
+        { k: 'Total pendiente', v: dinero(tot), c: 'text-brand-gold', sub: 'lo que debes a choferes' },
+        { k: 'Choferes con saldo', v: String(filas.length), c: 'text-brand-navy dark:text-slate-100' },
+        { k: 'Más alto', v: dinero(filas[0]['Pendiente por pagar'] || 0), c: 'text-brand-navy dark:text-slate-100', sub: filas[0].Chofer },
+        { k: 'Rutas', v: String(rutas), c: 'text-brand-navy dark:text-slate-100', sub: 'con saldo' },
+      ]
+    }
+    if (tipo === 'utilidad_driver') {
+      const tot = money2(filas.reduce((a, r) => a + (r.Utilidad || 0), 0))
+      const ing = filas.reduce((a, r) => a + (r['Ingreso Walmart'] || 0), 0)
+      const margen = ing ? Math.round((tot / ing) * 1000) / 10 : 0
+      const best = filas[0], worst = filas[filas.length - 1]
+      return [
+        { k: 'Utilidad total', v: dinero(tot), c: tot >= 0 ? 'text-emerald-600' : 'text-rose-500', sub: 'ingreso − pago − gastos' },
+        { k: 'Margen promedio', v: `${margen}%`, c: 'text-brand-navy dark:text-slate-100' },
+        { k: 'Más rentable', v: best?.Chofer || '—', c: 'text-emerald-600', sub: best ? `${dinero(best.Utilidad)} · ${best['Margen %']}%` : '' },
+        { k: 'Menos rentable', v: worst?.Chofer || '—', c: 'text-rose-500', sub: worst ? `${dinero(worst.Utilidad)} · ${worst['Margen %']}%` : '' },
+      ]
+    }
+    return [{ k: 'Filas', v: String(filas.length), c: 'text-brand-navy dark:text-slate-100' }, ...(total > 0 ? [{ k: 'Total', v: dinero(total), c: 'text-brand-navy dark:text-slate-100' }] : [])]
+  })()
   return (
     <div>
       <PageTitle>Reportes y descargas</PageTitle>
+
+      {/* Selector de reporte por categorías */}
+      <Card className="mb-3 p-3">
+        <div className="space-y-2">
+          {GRUPOS.map((g) => (
+            <div key={g.lab} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-[76px] shrink-0 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">{g.lab}</span>
+              {g.keys.filter((k) => REPORTES[k]).map((k) => (
+                <button key={k} onClick={() => setTipo(k)} className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${tipo === k ? 'bg-brand-navy text-white shadow-sm dark:bg-brand-gold dark:text-brand-navy' : 'border border-slate-200 bg-white text-brand-navy hover:border-brand-gold dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'}`}>{REPORTES[k].label}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Filtros + descarga */}
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <F label="Reporte"><Select value={tipo} onChange={(e) => setTipo(e.target.value)}>{Object.entries(REPORTES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</Select></F>
           {def.periodico && (
             <>
               <F label="Período"><Select value={modo} onChange={(e) => setModo(e.target.value)}><option value="semana">Semana</option><option value="mes">Mes</option><option value="rango">Rango</option><option value="todo">Todo</option></Select></F>
@@ -4600,34 +4654,51 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
           )}
           <F label="Almacén"><Select value={almId} onChange={(e) => setAlmId(e.target.value)}><option value="">Todos</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
           {tipo !== 'financiero' && tipo !== 'cobros' && tipo !== 'facturas' && <F label="Chofer"><Select value={drvId} onChange={(e) => setDrvId(e.target.value)}><option value="">Todos</option>{personas.slice().sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))).map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>}
+          <div className="relative min-w-[150px] flex-1"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input className="pl-8" placeholder="Buscar en la tabla…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="flex gap-2">
+            <Boton variant="gold" disabled={generando || !filas.length} onClick={() => bajar('xlsx')}><Download size={14} /> Excel</Boton>
+            <Boton variant="ghost" disabled={generando || !filas.length} onClick={() => bajar('csv')}><Download size={14} /> CSV</Boton>
+          </div>
         </div>
       </Card>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold text-slate-500"><b className="text-brand-navy dark:text-slate-100">{filas.length}</b> filas · {periodoTxt}{total > 0 ? <> · total <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></> : ''}</span>
-        <div className="ml-auto flex gap-2">
-          <Boton variant="gold" disabled={generando || !filas.length} onClick={() => bajar('xlsx')}><Download size={14} /> Excel</Boton>
-          <Boton variant="ghost" disabled={generando || !filas.length} onClick={() => bajar('csv')}><Download size={14} /> CSV</Boton>
+      {/* KPIs del reporte */}
+      {kpis.length > 0 && (
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {kpis.map((kp) => (
+            <Card key={kp.k} className="p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{kp.k}</div>
+              <div className={`truncate text-lg font-extrabold tabular-nums ${kp.c}`}>{kp.v}</div>
+              {kp.sub ? <div className="truncate text-[10px] text-slate-400">{kp.sub}</div> : null}
+            </Card>
+          ))}
         </div>
-      </div>
+      )}
 
+      {/* Tabla */}
       <Card className="p-0">
         {!filas.length && <div className="px-4 py-8 text-center text-sm text-slate-400">No hay datos para este reporte con los filtros elegidos.</div>}
         {!!filas.length && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-slate-100 dark:border-slate-800">{cols.map((c) => <th key={c} className="whitespace-nowrap px-3 py-2 font-bold uppercase tracking-wide text-slate-400">{c}</th>)}</tr></thead>
+            <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+              <thead><tr>{cols.map((c) => <th key={c} className={`whitespace-nowrap bg-brand-navy px-3 py-2 font-bold uppercase tracking-wide text-white ${typeof filas[0][c] === 'number' ? 'text-right' : ''}`}>{c}</th>)}</tr></thead>
               <tbody>
-                {filas.slice(0, 50).map((r, i) => (
-                  <tr key={i} className="border-b border-slate-50 last:border-0 dark:border-slate-800/60">{cols.map((c) => <td key={c} className="whitespace-nowrap px-3 py-1.5 text-slate-600 dark:text-slate-300">{String(r[c] == null ? '' : r[c])}</td>)}</tr>
+                {filasView.slice(0, 100).map((r, i) => (
+                  <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/60 dark:border-slate-800/60 dark:odd:bg-transparent dark:even:bg-slate-800/40">
+                    {cols.map((c) => {
+                      const num = typeof r[c] === 'number'; const isKey = c === keyCol
+                      return <td key={c} className={`whitespace-nowrap px-3 py-1.5 ${num ? 'text-right font-mono' : 'text-slate-600 dark:text-slate-300'} ${isKey ? `font-extrabold ${colorKey(r[c])}` : ''}`}>{fmtCelda(c, r[c])}</td>
+                    })}
+                  </tr>
                 ))}
               </tbody>
             </table>
-            {filas.length > 50 && <div className="px-3 py-2 text-[11px] text-slate-400">Vista previa de 50 de {filas.length} filas. La descarga incluye todas.</div>}
+            {txtQ && <div className="px-3 py-2 text-[11px] text-slate-400">Mostrando {filasView.length} de {filas.length} filas (filtro de búsqueda).</div>}
+            {!txtQ && filas.length > 100 && <div className="px-3 py-2 text-[11px] text-slate-400">Vista previa de 100 de {filas.length} filas. La descarga incluye todas.</div>}
           </div>
         )}
       </Card>
-      <p className="mt-3 text-[11px] text-slate-400">Elige el reporte, el período y los filtros, y descarga en <b>Excel</b> o <b>CSV</b>. Incluye: Fast Pay por chofer, pagos, historial de rutas, gastos, cobros, solicitudes, financiero por semana, lista de drivers y facturas.</p>
+      <p className="mt-3 text-[11px] text-slate-400">Elige el reporte arriba, ajusta período y filtros, y descarga en <b>Excel</b> o <b>CSV</b> (siempre incluye todas las filas del período).</p>
     </div>
   )
 }
