@@ -4539,7 +4539,7 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
         for (const p of personas) {
           if (!okDrv(p.id)) continue
           let ganado = 0, adelantado = 0, pagado = 0, saldo = 0, nRutas = 0
-          for (const wk of weeks) { const r = resumenSemana(rutas, pagos, p.id, wk); ganado = money2(ganado + (r.ganado || 0)); adelantado = money2(adelantado + (r.liquidadoFP || 0)); pagado = money2(pagado + (r.pagadoNormal || 0)); saldo = money2(saldo + (r.saldo || 0)); nRutas += r.nRutas || 0 }
+          for (const wk of weeks) { const r = resumenSemana(rutas, pagos, p.id, wk); ganado = money2(ganado + (r.totalGanado || 0)); adelantado = money2(adelantado + (r.liquidadoFP || 0)); pagado = money2(pagado + (r.pagadoNormal || 0)); saldo = money2(saldo + (r.saldo || 0)); nRutas += (r.rutasSemana?.length || 0) }
           if (saldo > 0.005) out.push({ Chofer: nombreCompleto(p), Rutas: nRutas, Ganado: ganado, 'Adelantado (FP)': adelantado, 'Ya pagado': pagado, 'Pendiente por pagar': saldo })
         }
         return out.sort((a, b) => b['Pendiente por pagar'] - a['Pendiente por pagar'])
@@ -4681,13 +4681,13 @@ function TabReportes({ rutas, pagos, gastos, cobros, personas, almacenes, factur
         {!!filas.length && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] border-collapse text-left text-xs">
-              <thead><tr>{cols.map((c) => <th key={c} className={`whitespace-nowrap bg-brand-navy px-3 py-2 font-bold uppercase tracking-wide text-white ${typeof filas[0][c] === 'number' ? 'text-right' : ''}`}>{c}</th>)}</tr></thead>
+              <thead><tr>{cols.map((c) => <th key={c} className={`whitespace-nowrap bg-brand-navy px-3 py-2 font-bold uppercase tracking-wide ${c === keyCol ? 'text-brand-gold' : 'text-white'} ${typeof filas[0][c] === 'number' ? 'text-right' : ''}`}>{c}</th>)}</tr></thead>
               <tbody>
                 {filasView.slice(0, 100).map((r, i) => (
                   <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/60 dark:border-slate-800/60 dark:odd:bg-transparent dark:even:bg-slate-800/40">
                     {cols.map((c) => {
                       const num = typeof r[c] === 'number'; const isKey = c === keyCol
-                      return <td key={c} className={`whitespace-nowrap px-3 py-1.5 ${num ? 'text-right font-mono' : 'text-slate-600 dark:text-slate-300'} ${isKey ? `font-extrabold ${colorKey(r[c])}` : ''}`}>{fmtCelda(c, r[c])}</td>
+                      return <td key={c} className={`whitespace-nowrap px-3 py-1.5 ${num ? 'text-right font-mono' : 'text-slate-600 dark:text-slate-300'} ${isKey ? `font-extrabold ${colorKey(r[c])} bg-amber-50/70 dark:bg-amber-500/10` : ''}`}>{fmtCelda(c, r[c])}</td>
                     })}
                   </tr>
                 ))}
