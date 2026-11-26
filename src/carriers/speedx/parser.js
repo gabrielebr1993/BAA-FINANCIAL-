@@ -141,14 +141,24 @@ function procesarSpeedXNuevo(wb, nombreArchivo = '') {
   // Clasificar tarifas: la más baja = STOP adicional; de las demás, la que tiene
   // más volumen <1lb = tarifa de <1lb, la de más >1lb = tarifa de ≥1lb.
   const tarifas = Object.keys(rateStats).map(Number).sort((a, b) => a - b)
-  const stopRate = tarifas.length ? tarifas[0] : 0.45
-  const pesoRates = tarifas.slice(1)
-  let menorRate = pesoRates[0] ?? 1.75
-  let mayorRate = pesoRates[pesoRates.length - 1] ?? 1.90
-  if (pesoRates.length) {
+  const stopRate = tarifas.length ? tarifas[0] : 0.45 // la más baja (visual / inicial)
+  // Tarifas de PESO (por paquete) = las DOS de mayor volumen; las demás (más
+  // baratas) son STOP/doble. OJO: SpeedX agregó una 2a tarifa baja (p.ej. 0.25)
+  // ADEMÁS de 0.45. Antes se asumía que SOLO la más baja era el stop, así que los
+  // 0.45 (dobles reales) dejaban de contarse. Ahora todo lo que no es tarifa de
+  // peso cuenta como doble.
+  const volDe = (t) => (rateStats[t]?.men || 0) + (rateStats[t]?.may || 0)
+  const pesoRates = [...tarifas].sort((a, b) => volDe(b) - volDe(a)).slice(0, 2)
+  let menorRate = pesoRates.length ? Math.min(...pesoRates) : 1.75
+  let mayorRate = pesoRates.length ? Math.max(...pesoRates) : 1.90
+  if (pesoRates.length >= 2) {
     menorRate = [...pesoRates].sort((a, b) => rateStats[b].men - rateStats[a].men)[0]
     mayorRate = [...pesoRates].sort((a, b) => rateStats[b].may - rateStats[a].may)[0]
   }
+  // Conjunto de tarifas que cuentan como DOBLE (stop adicional): todo lo que NO es
+  // tarifa de peso (menor/mayor). Cubre una o varias tarifas de stop (0.25, 0.45…).
+  const ratesStop = new Set(tarifas.filter((t) => t !== menorRate && t !== mayorRate))
+  const esRateStop = (rt) => ratesStop.has(rt)
 
   // ── Delivery Data: detalle por paquete (dobles por ruta+dirección) ──
   const wsDD = hoja(wb, 'Delivery Data')
@@ -216,7 +226,7 @@ function procesarSpeedXNuevo(wb, nombreArchivo = '') {
     let idx = 0
     for (const tr of tramos) {
       for (let n = 0; n < tr.vol && idx < ord.length; n++, idx++) {
-        ord[idx].rate = tr.rate; ord[idx].monto = tr.rate; ord[idx].esStopAdicional = tr.rate === stopRate
+        ord[idx].rate = tr.rate; ord[idx].monto = tr.rate; ord[idx].esStopAdicional = esRateStop(tr.rate)
       }
     }
     for (; idx < ord.length; idx++) { ord[idx].rate = mayorRate; ord[idx].monto = mayorRate; ord[idx].esStopAdicional = false }
