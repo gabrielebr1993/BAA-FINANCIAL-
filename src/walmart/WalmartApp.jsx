@@ -3512,14 +3512,18 @@ function TabPagosHub({ rutas, pagos, personas, almacenes, tarifas, perm, solicit
         </div>
       )}
       {sub === 'porpagar' && verLiq && <TabPagos rutas={rutas} pagos={pagos} personas={personas} tarifas={tarifas} perm={perm} periodo={periodo} />}
-      {sub === 'yapagado' && <TabTodoPagado rutas={rutas} pagos={pagos} personas={personas} periodo={periodo} />}
+      {sub === 'yapagado' && <TabTodoPagado rutas={rutas} pagos={pagos} personas={personas} periodo={periodo} perm={perm} />}
       {sub === 'fp' && verFP && <TabFastPay rutas={rutas} pagos={pagos} personas={personas} almacenes={almacenes} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
     </div>
   )
 }
 
 // ── TODO LO PAGADO: Fast Pay (efectivo) + liquidaciones (pagos) en una lista ──
-function TabTodoPagado({ rutas, pagos, personas, periodo }) {
+function TabTodoPagado({ rutas, pagos, personas, periodo, perm }) {
+  const pAnula = !perm || perm.owner || perm.permisos?.pagos_anular
+  const pEdita = !perm || perm.owner || perm.permisos?.pagos_ejecutar
+  const [editarPago, setEditarPago] = useState(null)
+  const [selPagos, setSelPagos] = useState(() => new Set())
   const [modoL, setModoL] = useState('semana')
   const [fechaL, setFechaL] = useState(hoyISO())
   const [d1L, setD1L] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -3560,6 +3564,33 @@ function TabTodoPagado({ rutas, pagos, personas, periodo }) {
   const totPagado = money2(totFP + totPago)
   const nFP = movs.filter((m) => m.tipo === 'fastpay').length
   const nPago = movs.filter((m) => m.tipo === 'pago').length
+  // Editar / eliminar un pago directo desde esta tabla (#7).
+  const rawPago = (id) => (pagos || []).find((p) => p.id === id) || null
+  const saldoParaEditar = (m) => resumenSemana(rutas, pagos, m.driverId, m.semana).saldo
+  const abrirEditar = (m) => { const p = rawPago(m.id); if (p) setEditarPago({ pago: p, driver: personas.find((x) => x.id === m.driverId), semana: m.semana, saldo: saldoParaEditar(m) }) }
+  const toggleSelPago = (id) => setSelPagos((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const borrarUno = async (m) => {
+    if (!pAnula) { walToast('No tienes permiso para eliminar pagos.', 'red'); return }
+    if (!window.confirm(`¿Eliminar este pago?\n${m.nombre} · ${dinero(m.monto)} · ${m.fecha}\n\nEl saldo del chofer se recalcula automáticamente y queda registro en auditoría. No se puede deshacer.`)) return
+    try {
+      await auditar('pago_borrado', `${m.nombre} · semana ${m.semana} · ${dinero(m.monto)} · fecha ${m.fecha} · metodo ${m.metodo} · id ${m.id}`)
+      await borrar(COL.pagos, m.id)
+      setSelPagos((s) => { const n = new Set(s); n.delete(m.id); return n })
+      walToast('Pago eliminado ✓ · saldo recalculado')
+    } catch (e) { walToast('No se pudo eliminar: ' + (e?.message || e), 'red') }
+  }
+  const borrarSeleccionados = async () => {
+    const items = movs.filter((m) => m.tipo === 'pago' && selPagos.has(m.id))
+    if (!items.length) return
+    const tot = money2(items.reduce((a, m) => a + m.monto, 0))
+    if (!window.confirm(`¿Eliminar ${items.length} pago(s) por ${dinero(tot)}?\n\nEl saldo se recalcula automáticamente y queda registro en auditoría. No se puede deshacer.`)) return
+    try {
+      for (const m of items) { await auditar('pago_borrado', `${m.nombre} · semana ${m.semana} · ${dinero(m.monto)} · fecha ${m.fecha} · id ${m.id} · (multi)`); await borrar(COL.pagos, m.id) }
+      setSelPagos(new Set())
+      walToast(`${items.length} pago(s) eliminado(s) ✓`, 'gold')
+    } catch (e) { walToast('No se pudo completar: ' + (e?.message || e), 'red') }
+  }
+  const selPagoItems = movs.filter((m) => m.tipo === 'pago' && selPagos.has(m.id))
 
   return (
     <div>
@@ -3586,42 +3617,62 @@ function TabTodoPagado({ rutas, pagos, personas, periodo }) {
         </div>
       )}
 
+      {pAnula && selPagoItems.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 dark:border-rose-500/40 dark:bg-rose-500/10">
+          <span className="text-xs text-rose-700 dark:text-rose-300"><b>{selPagoItems.length}</b> pago(s) seleccionado(s) · {dinero(money2(selPagoItems.reduce((a, m) => a + m.monto, 0)))}</span>
+          <button className="ml-auto inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-xs font-bold text-white hover:bg-rose-600" onClick={borrarSeleccionados}><Trash2 size={12} /> Eliminar seleccionados</button>
+        </div>
+      )}
       <Card className="p-0">
         <div className="scroll-thin overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead><tr className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              <th className="w-8 px-2 py-2.5"></th>
               <th className="px-3 py-2.5 text-left font-bold">Fecha</th>
               <th className="px-3 py-2.5 text-left font-bold">Chofer</th>
               <th className="px-3 py-2.5 text-left font-bold">Tipo</th>
               <th className="px-3 py-2.5 text-left font-bold">Semana</th>
               <th className="px-3 py-2.5 text-right font-bold">Recibió</th>
               <th className="px-3 py-2.5 text-right font-bold">Comisión</th>
+              <th className="px-3 py-2.5 text-right font-bold">Acciones</th>
             </tr></thead>
             <tbody>
               {movs.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Sin pagos en este período.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-400">Sin pagos en este período.</td></tr>
               ) : movs.map((m) => (
-                <tr key={m.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                <tr key={m.id} className={`border-t border-slate-100 dark:border-slate-700/50 ${selPagos.has(m.id) ? 'bg-rose-50/50 dark:bg-rose-500/5' : ''}`}>
+                  <td className="px-2 py-2.5 text-center">{m.tipo === 'pago' && pAnula ? <input type="checkbox" className="h-3.5 w-3.5 accent-rose-500" checked={selPagos.has(m.id)} onChange={() => toggleSelPago(m.id)} title="Seleccionar para eliminar" /> : null}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-500">{m.fecha || '—'}</td>
                   <td className="px-3 py-2.5 font-semibold text-brand-navy dark:text-slate-100">{m.nombre}</td>
                   <td className="px-3 py-2.5">{m.tipo === 'fastpay' ? <Badge color="gold">⚡ Fast Pay</Badge> : <Badge color="green">{m.metodo}</Badge>}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-slate-400">{m.semana || '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-semibold">{dinero(m.monto)}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-400">{m.comision > 0 ? dinero(m.comision) : '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                    {m.tipo === 'pago' ? (
+                      <span className="flex items-center justify-end gap-2.5 text-xs font-bold">
+                        {pEdita && <button className="text-brand-gold hover:underline" onClick={() => abrirEditar(m)}>editar</button>}
+                        {pAnula && <button className="text-rose-400 hover:text-rose-600 hover:underline" onClick={() => borrarUno(m)}>borrar</button>}
+                        {!pEdita && !pAnula && <span className="text-slate-300">—</span>}
+                      </span>
+                    ) : <span className="text-xs text-slate-300">Fast Pay</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
             {movs.length > 0 && (
               <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold dark:border-slate-700 dark:bg-slate-800/60">
-                <td className="px-3 py-2.5" colSpan={4}>TOTAL</td>
+                <td className="px-3 py-2.5" colSpan={5}>TOTAL</td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">{dinero(totPagado)}</td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-slate-500">{dinero(totComis)}</td>
+                <td />
               </tr></tfoot>
             )}
           </table>
         </div>
       </Card>
-      <p className="mt-3 text-[11px] text-slate-400">"Recibió" = lo que el chofer recibió (efectivo en Fast Pay, o el pago en liquidación). La comisión del Fast Pay es tu utilidad, no sale del bolsillo del chofer.</p>
+      <p className="mt-3 text-[11px] text-slate-400">"Recibió" = lo que el chofer recibió (efectivo en Fast Pay, o el pago en liquidación). La comisión del Fast Pay es tu utilidad, no sale del bolsillo del chofer. Para eliminar o corregir un Fast Pay usa la pestaña <b>Fast Pay</b> o <b>Por pagar</b> (Anular).</p>
+      {editarPago && <PagoModal driver={editarPago.driver} semana={editarPago.semana} saldo={editarPago.saldo} pago={editarPago.pago} onCerrar={() => setEditarPago(null)} />}
     </div>
   )
 }
