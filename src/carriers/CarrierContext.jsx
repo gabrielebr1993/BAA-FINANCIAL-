@@ -255,6 +255,18 @@ export function CarrierGate({ children }) {
   const { carrier, setCarrier, cambiarCarrier } = useCarrier()
   const permitidos = useCarriersPermitidos()
   const activo = !cargando && !!user && !esDriver
+  // ACCESO POR USUARIO: si la compañía elegida (p. ej. quedó guardada en este
+  // navegador por otro usuario) NO está permitida para esta cuenta, se limpia;
+  // y si el usuario solo tiene UNA compañía permitida, entra directo sin selector.
+  // IMPORTANTE: este hook va ANTES de cualquier `return` condicional. Si queda
+  // después del atajo de "usuario solo-Walmart", cuando el perfil aún no cargó
+  // (conexión lenta) un render corre MENOS hooks que el anterior y React lanza el
+  // error #300 que rompía toda la app (más visible en Venezuela por la red lenta).
+  useEffect(() => {
+    if (!activo) return
+    if (carrier && !permitidos.includes(carrier)) cambiarCarrier()
+    else if (!carrier && permitidos.length === 1) setCarrier(permitidos[0])
+  }, [activo, carrier, permitidos, setCarrier, cambiarCarrier])
   // Usuario que SOLO existe en Walmart (cuenta de login sin perfil del sistema
   // general y que no es súper-admin): su experiencia es Walmart directo — sin
   // selector de módulos y sin acceso a otros módulos. WalmartApp decide portal
@@ -263,14 +275,6 @@ export function CarrierGate({ children }) {
   if (activo && !esSuperAdmin && !perfil) {
     return <Suspense fallback={null}><WalmartApp /></Suspense>
   }
-  // ACCESO POR USUARIO: si la compañía elegida (p. ej. quedó guardada en este
-  // navegador por otro usuario) NO está permitida para esta cuenta, se limpia;
-  // y si el usuario solo tiene UNA compañía permitida, entra directo sin selector.
-  useEffect(() => {
-    if (!activo) return
-    if (carrier && !permitidos.includes(carrier)) cambiarCarrier()
-    else if (!carrier && permitidos.length === 1) setCarrier(permitidos[0])
-  }, [activo, carrier, permitidos, setCarrier, cambiarCarrier])
   if (!activo) return children
   if (!carrier) return permitidos.length === 1 ? null : <SelectorCompania />
   if (!permitidos.includes(carrier)) return null
