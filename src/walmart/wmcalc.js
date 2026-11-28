@@ -102,6 +102,30 @@ export function resumenSemana(rutas, pagos, driverId, semana) {
   return { rutasSemana: rs, totalGanado, liquidadoFP, comisiones, efectivoFP, enProcesoFP, pagadoNormal, saldo, saldoDisponible, estado, pagos: ps }
 }
 
+// Monto de UNA ruta ya cubierto: Fast Pay confirmado de esa ruta + pagos
+// normales etiquetados con esa ruta (rutaId). Base para el estado de pago de la
+// ruta y para evitar pagarla dos veces (#4).
+export function pagadoDeRuta(pagos, rutaId) {
+  const fp = liquidadoFPruta(pagos, rutaId)
+  const pg = money2((pagos || []).filter((p) => p.tipo === 'pago' && p.rutaId === rutaId).reduce((a, p) => a + (Number(p.monto) || 0), 0))
+  return money2(fp + pg)
+}
+// Estado de pago de una ruta: { estado, bruto, pagado, resta }.
+//   'na'        → la ruta no genera pago (no completada o $0)
+//   'pagada'    → cubierta (por tag de ruta, o la semana entera ya está saldada)
+//   'parcial'   → parte cubierta por pagos de esta ruta
+//   'pendiente' → nada cubierto todavía
+export function estadoPagoRuta(rutas, pagos, r) {
+  const bruto = gananciaDriver(r)
+  if (bruto <= 0.005) return { estado: 'na', bruto: 0, pagado: 0, resta: 0 }
+  const taggd = pagadoDeRuta(pagos, r.id)
+  if (taggd >= bruto - 0.005) return { estado: 'pagada', bruto, pagado: taggd, resta: 0 }
+  const sem = resumenSemana(rutas, pagos, r.driverId, lunesDe(r.fecha))
+  if (sem.saldo <= 0.005) return { estado: 'pagada', bruto, pagado: bruto, resta: 0 }
+  if (taggd > 0.005) return { estado: 'parcial', bruto, pagado: taggd, resta: money2(bruto - taggd) }
+  return { estado: 'pendiente', bruto, pagado: 0, resta: bruto }
+}
+
 // Conciliación semanal (por driver): desglose exacto del cuadre de la semana.
 // Ej.: 5 rutas de $100, 1 pagada por FP → total 500, bruto FP 100, comisión 5,
 // neto desembolsado 95, saldo pendiente 400 (la comisión NO se resta del saldo).

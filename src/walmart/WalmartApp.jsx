@@ -41,7 +41,7 @@ import {
   TARIFAS_DEFAULT, suscribir, guardar, borrar, auditar, nombreCompleto, sembrarAlmacenes, tarifaDeDriver, tieneRatePropio, ingresoDeAlmacen,
   BLOQUES, ESTADOS_RUTA, estadoRutaInfo, money2, idRuta, ingresoRuta, gananciaDriver,
   hoyISO, lunesDe, domingoDe, cerrarDia, reabrirDia, borrarRutaActualizandoCierre,
-  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay, conciliacionSemana, utilidadFinanciamiento,
+  METODOS_PAGO, liquidadoFPruta, resumenSemana, calcularFastPay, conciliacionSemana, utilidadFinanciamiento, estadoPagoRuta, pagadoDeRuta,
   ESTADOS_FP, ESTADO_FP_LABEL, ESTADO_FP_COLOR, estadoFP, fpLiquida, fpBloquea, rutaBloqueadaFP, fpDeRuta,
   CATEGORIAS_GASTO, distribuirMensual, gastoEnSemana, financieroSemana, pendientesGastosFijos,
   ESTADOS_CONTRATO, estadoContratoInfo, CAMPOS_CONTRATO, renderPlantilla, faltantesPlantilla,
@@ -63,6 +63,8 @@ import {
 const WALMART_AZUL = '#0071dc'
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const dinero = (n) => `$${money2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// Formatea un timestamp de Firestore (o fecha) para mostrar la fecha de creación (auditoría).
+const fmtTS = (ts) => { try { const d = ts?.toDate ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : (typeof ts === 'string' ? new Date(ts) : null)); return d && !isNaN(d) ? d.toLocaleString('es-US', { dateStyle: 'medium', timeStyle: 'short' }) : '' } catch { return '' } }
 
 // ── Instalar la app en el teléfono (Add to Home Screen / PWA) ────────────────
 // En Android/Chrome capturamos el evento 'beforeinstallprompt' y mostramos un
@@ -272,7 +274,7 @@ export default function WalmartApp() {
       {tab === 'agenda' && puede('rutas_ver') && <TabAgenda personas={personasV} almacenes={almacenesV} agenda={agendaV} rutas={rutasV} tarifas={tarifas} perm={perm} irA={setTab} />}
       {tab === 'personas' && puede('drivers_ver') && <TabPersonas personas={personasV} almacenes={almacenesV} rutas={rutasV} pagos={pagos} contratos={contratos} gastos={gastosV} tarifas={tarifas} user={user} perm={perm} />}
       {tab === 'almacenes' && puede('rutas_ver') && <TabAlmacenes almacenes={almacenesV} user={user} />}
-      {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
+      {tab === 'rutas' && puede('rutas_ver') && <TabRutas rutas={rutasV} pagos={pagos} gastos={gastosV} almacenes={almacenesV} personas={personasV} tarifas={tarifas} cierres={cierresV} perm={perm} />}
       {tab === 'flota' && puede('rutas_ver') && <Suspense fallback={<div className="py-16 text-center text-slate-400"><Spinner /></div>}><FlotaWal /></Suspense>}
       {tab === 'cierre' && puede('liq_preparar') && <TabCierre rutas={rutasV} almacenes={almacenesV} cierres={cierresV} esDueno />}
       {tab === 'pagos' && (puede('pagos_ver') || puede('fp_ver')) && <TabPagosHub rutas={rutasV} pagos={pagos} personas={personasV} almacenes={almacenesV} tarifas={tarifas} perm={perm} solicitudes={solicitudes} />}
@@ -2451,9 +2453,10 @@ function Vacio({ icono: Ico = Search, children }) {
 const FILA = 'flex flex-wrap items-center gap-2.5 p-3 transition duration-150 hover:-translate-y-px hover:border-brand-gold/40 hover:shadow-md'
 
 // ── RUTAS ───────────────────────────────────────────────────────────────────
-function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
+function TabRutas({ rutas, pagos = [], gastos = [], almacenes, personas, tarifas, perm }) {
   const puedeCrear = !perm || perm.owner || perm.permisos?.rutas_crear
   const puedeEditar = !perm || perm.owner || perm.permisos?.rutas_editar
+  const puedePagar = !perm || perm.owner || perm.permisos?.pagos_ejecutar
   const [modo, setModo] = useState('dia') // dia | rango
   const [fecha, setFecha] = useState(hoyISO())
   const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
@@ -2465,6 +2468,11 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
   const [q, setQ] = useState('')
   const [editar, setEditar] = useState(null)
   const [importar, setImportar] = useState(false)
+  const [pagarRutas, setPagarRutas] = useState(null) // #4 array de rutas a pagar
+  const [gastoRuta, setGastoRuta] = useState(null)    // #2 ruta para agregar gasto
+  const [ajustarRuta, setAjustarRuta] = useState(null) // #5 ruta para ajustar pago
+  const [selRutas, setSelRutas] = useState(() => new Set()) // #4 multiselección
+  const responsables = useMemo(() => [...new Set([...(pagos || []).map((p) => String(p.responsable || '').trim()), ...(gastos || []).map((g) => String(g.responsable || '').trim())].filter(Boolean))].sort().slice(0, 12), [pagos, gastos])
   const almNombre = (id) => id === 'ambos' ? 'Ambos' : (almacenes.find((a) => a.id === id)?.nombre || '')
 
   const desde = modo === 'dia' ? fecha : (d1 <= d2 ? d1 : d2)
@@ -2490,6 +2498,13 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
   const driversConRutas = personas.filter((p) => rutas.some((r) => r.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
   const hayFiltro = almId || driverId || fEstado || fBloque || q
   const limpiar = () => { setAlmId(''); setDriverId(''); setFEstado(''); setFBloque(''); setQ('') }
+  // #4 Rutas pagables en la vista (pendientes/parciales, sin Fast Pay bloqueante).
+  const rutasPagables = lista.filter((r) => { const ep = estadoPagoRuta(rutas, pagos, r); return (ep.estado === 'pendiente' || ep.estado === 'parcial') && !rutaBloqueadaFP(pagos, r.id) })
+  const toggleRuta = (id) => setSelRutas((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const selItems = rutasPagables.filter((r) => selRutas.has(r.id))
+  const totalSelRutas = money2(selItems.reduce((a, r) => a + estadoPagoRuta(rutas, pagos, r).resta, 0))
+  const todasPagablesSel = rutasPagables.length > 0 && rutasPagables.every((r) => selRutas.has(r.id))
+  const selTodasPagables = () => setSelRutas(todasPagablesSel ? new Set() : new Set(rutasPagables.map((r) => r.id)))
 
   return (
     <div>
@@ -2518,26 +2533,58 @@ function TabRutas({ rutas, almacenes, personas, tarifas, perm }) {
         </div>
       </Card>
       {lista.length === 0 && <Vacio icono={RouteIcon}>No hay rutas con esos filtros. Ajusta la búsqueda{hayFiltro ? ' o ' : ''}{hayFiltro ? <button className="font-semibold text-brand-gold underline" onClick={limpiar}>limpia los filtros</button> : ''}, o crea una con “Nueva ruta”.</Vacio>}
+      {/* #4 Barra de pago múltiple de rutas */}
+      {puedePagar && rutasPagables.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-brand-gold/40 bg-brand-gold/5 px-3 py-2">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-brand-navy dark:text-slate-100">
+            <input type="checkbox" className="h-4 w-4 accent-brand-gold" checked={todasPagablesSel} onChange={selTodasPagables} />
+            Seleccionar rutas por pagar ({rutasPagables.length})
+          </label>
+          {selItems.length > 0
+            ? <span className="text-xs text-slate-500 dark:text-slate-400"><b>{selItems.length}</b> ruta(s) · {dinero(totalSelRutas)}</span>
+            : <span className="text-xs text-slate-400">Marca rutas y págalas todas a la vez</span>}
+          <Boton variant="gold" className="ml-auto" disabled={!selItems.length} onClick={() => setPagarRutas(selItems)}><Wallet size={14} /> Pagar rutas {selItems.length ? `(${selItems.length})` : ''}</Boton>
+        </div>
+      )}
       <div className="space-y-1.5">
         {lista.map((r) => {
           const e = estadoRutaInfo(r.estado)
+          const ep = estadoPagoRuta(rutas, pagos, r)
+          const fpBloq = rutaBloqueadaFP(pagos, r.id)
+          const pagable = puedePagar && (ep.estado === 'pendiente' || ep.estado === 'parcial') && !fpBloq
+          const verSolo = r.cerrada || !puedeEditar
           return (
-            <Card key={r.id} className={FILA}>
+            <Card key={r.id} className={`${FILA} ${selRutas.has(r.id) ? 'ring-2 ring-brand-gold' : ''}`}>
+              {pagable
+                ? <input type="checkbox" className="h-4 w-4 shrink-0 accent-brand-gold" checked={selRutas.has(r.id)} onChange={() => toggleRuta(r.id)} title="Seleccionar para pago múltiple" />
+                : <span className="w-4 shrink-0" />}
               <span className="font-mono text-xs text-slate-400">{r.fecha}</span>
               <Badge color="navy">{almNombre(r.almacenId)}</Badge>
               <Badge color="slate">{BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}</Badge>
               <span className="font-bold text-brand-navy dark:text-slate-100">{r.driverNombre || '(sin driver)'}</span>
               {r.identificador && <span className="text-xs text-slate-400">{r.identificador}</span>}
               <Badge color={e.color}>{e.label}</Badge>
+              {ep.estado === 'pagada' && <Badge color="green">Pagada</Badge>}
+              {ep.estado === 'parcial' && <Badge color="gold">Parcial · resta {dinero(ep.resta)}</Badge>}
+              {ep.estado === 'pendiente' && <Badge color="red">Por pagar</Badge>}
+              {fpBloq && <Badge color="blue">Fast Pay</Badge>}
               {r.goHome && <Badge color="gold">🏠 GO Home</Badge>}
               {(Number(r.otUnidades) || 0) > 0 && <Badge color="blue">OT ×{r.otUnidades}</Badge>}
               {r.cerrada && <Badge color="slate">día cerrado</Badge>}
               <span className="ml-auto font-mono text-xs text-slate-500">WM {dinero(ingresoRuta(r))} · drv {dinero(gananciaDriver(r))}</span>
-              <button className="text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(r)}>{(r.cerrada || !puedeEditar) ? 'ver' : 'editar'}</button>
+              <span className="flex items-center gap-2.5 text-sm font-semibold">
+                {pagable && <button className="text-emerald-600 hover:underline" onClick={() => setPagarRutas([r])}>pagar</button>}
+                {puedeEditar && <button className="text-brand-gold hover:underline" onClick={() => setGastoRuta(r)}>gasto</button>}
+                {puedeEditar && !r.cerrada && gananciaDriver({ ...r, estado: 'completada' }) > 0 && <button className="text-brand-steel hover:text-brand-navy hover:underline dark:hover:text-white" onClick={() => setAjustarRuta(r)}>ajustar</button>}
+                <button className="text-brand-gold hover:underline" onClick={() => setEditar(r)}>{verSolo ? 'ver' : 'editar'}</button>
+              </span>
             </Card>
           )
         })}
       </div>
+      {pagarRutas && <PagarRutaModal rutasPagar={pagarRutas} rutas={rutas} pagos={pagos} responsables={responsables} onCerrar={() => { setPagarRutas(null); setSelRutas(new Set()) }} />}
+      {gastoRuta && <GastoRutaModal ruta={gastoRuta} almacenes={almacenes} personas={personas} responsables={responsables} onCerrar={() => setGastoRuta(null)} />}
+      {ajustarRuta && <AjustarPagoRutaModal ruta={ajustarRuta} rutas={rutas} pagos={pagos} responsables={responsables} onCerrar={() => setAjustarRuta(null)} />}
     </div>
   )
 }
@@ -3602,6 +3649,8 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
   const [q, setQ] = useState('')
   const [fpRuta, setFpRuta] = useState(null)
   const [pagoAbierto, setPagoAbierto] = useState(false)
+  const [editarPago, setEditarPago] = useState(null) // #7 editar pago
+  const [selPagos, setSelPagos] = useState(() => new Set()) // #7 multi-eliminar
   const semana = lunesDe(fecha)
   const driver = personas.find((p) => p.id === driverId)
   const badgeEstado = { pendiente: 'red', parcial: 'gold', pagado: 'green' }
@@ -3705,6 +3754,31 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
     if (nota == null) return
     if (!nota.trim()) { walToast('Debes registrar la recuperación para poder anular.', 'red'); return }
     await cambiarEstadoFP(p, 'anulado', { recuperacion: nota.trim(), anuladoEn: hoyISO() })
+  }
+  // #7 Eliminar un pago (liquidación) registrado por error. El saldo se recalcula
+  // solo porque se deriva de los pagos. Se audita ANTES de borrar.
+  const toggleSelPago = (id) => setSelPagos((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const borrarPago = async (p) => {
+    if (!pAnula) { walToast('No tienes permiso para eliminar pagos.', 'red'); return }
+    const et = dinero(p.monto)
+    if (!window.confirm(`¿Eliminar este pago?\n${p.driverNombre || ''} · ${et} · ${p.fecha || ''}\n\nEl saldo del chofer se recalcula automáticamente y queda registro en auditoría. No se puede deshacer.`)) return
+    try {
+      await auditar('pago_borrado', `${p.driverNombre || ''} · semana ${p.semana || ''} · ${et} · fecha ${p.fecha || ''} · metodo ${p.metodo || ''} · id ${p.id}`)
+      await borrar(COL.pagos, p.id)
+      setSelPagos((s) => { const n = new Set(s); n.delete(p.id); return n })
+      walToast('Pago eliminado ✓ · saldo recalculado')
+    } catch (e) { walToast('No se pudo eliminar: ' + (e?.message || e), 'red') }
+  }
+  const borrarPagosSel = async (listaPagos) => {
+    const items = listaPagos.filter((p) => selPagos.has(p.id) && p.tipo === 'pago')
+    if (!items.length) return
+    const tot = money2(items.reduce((a, p) => a + (Number(p.monto) || 0), 0))
+    if (!window.confirm(`¿Eliminar ${items.length} pago(s) por ${dinero(tot)}?\n\nEl saldo se recalcula automáticamente y queda registro en auditoría. No se puede deshacer.`)) return
+    try {
+      for (const p of items) { await auditar('pago_borrado', `${p.driverNombre || ''} · semana ${p.semana || ''} · ${dinero(p.monto)} · fecha ${p.fecha || ''} · id ${p.id} · (multi)`); await borrar(COL.pagos, p.id) }
+      setSelPagos(new Set())
+      walToast(`${items.length} pago(s) eliminado(s) ✓`, 'gold')
+    } catch (e) { walToast('No se pudo completar: ' + (e?.message || e), 'red') }
   }
 
   return (
@@ -3850,16 +3924,34 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
             })}
           </Card>
 
-          {res.pagos.length > 0 && (
+          {res.pagos.length > 0 && (() => {
+            const pagosOrden = res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+            const selEnLista = pagosOrden.filter((p) => p.tipo === 'pago' && selPagos.has(p.id))
+            const totalSelDel = money2(selEnLista.reduce((a, p) => a + (Number(p.monto) || 0), 0))
+            return (
             <Card className="p-0">
-              <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:border-slate-800">Movimientos del período</div>
-              {res.pagos.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map((p, i) => {
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 dark:border-slate-800">
+                <span className="text-[11px] font-bold uppercase text-slate-400">Movimientos del período</span>
+                {pAnula && selEnLista.length > 0 && (
+                  <span className="ml-auto flex items-center gap-2 text-xs">
+                    <span className="text-slate-500 dark:text-slate-400"><b>{selEnLista.length}</b> seleccionado(s) · {dinero(totalSelDel)}</span>
+                    <button className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 font-bold text-white hover:bg-rose-600" onClick={() => borrarPagosSel(pagosOrden)}><Trash2 size={12} /> Eliminar seleccionados</button>
+                  </span>
+                )}
+              </div>
+              {pagosOrden.map((p, i) => {
                 const est = p.tipo === 'fastpay' ? estadoFP(p) : null
+                const esPago = p.tipo === 'pago'
                 return (
-                <div key={p.id || i} className="flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60">
+                <div key={p.id || i} className={`flex flex-wrap items-center gap-2 border-b border-slate-50 px-4 py-2 text-sm last:border-0 dark:border-slate-800/60 ${selPagos.has(p.id) ? 'bg-rose-50/50 dark:bg-rose-500/5' : ''}`}>
+                  {esPago && pAnula
+                    ? <input type="checkbox" className="h-3.5 w-3.5 shrink-0 accent-rose-500" checked={selPagos.has(p.id)} onChange={() => toggleSelPago(p.id)} title="Seleccionar para eliminar" />
+                    : <span className="w-3.5 shrink-0" />}
                   <Badge color={p.tipo === 'fastpay' ? 'gold' : 'navy'}>{p.tipo === 'fastpay' ? 'Fast Pay' : 'Pago'}</Badge>
                   {est && <Badge color={fpBadge[est]}>{ESTADO_FP_LABEL[est]}</Badge>}
-                  <span className="font-mono text-xs text-slate-400">{p.fecha}</span>
+                  {p.override && <Badge color="red">override +{dinero(p.excedeSaldo)}</Badge>}
+                  {p.rutaId && esPago && <Badge color="slate">ruta</Badge>}
+                  <span className="font-mono text-xs text-slate-400" title={p.creadoEn ? `registrado ${fmtTS(p.creadoEn)}` : ''}>{p.fecha}</span>
                   {p.tipo === 'fastpay'
                     ? <span className="text-xs">bruto {dinero(p.bruto)} · comisión {dinero(p.comision)} ({p.comisionPct}%) · efectivo <b>{dinero(p.efectivo)}</b></span>
                     : <span className="text-xs">monto <b>{dinero(p.monto)}</b></span>}
@@ -3872,16 +3964,20 @@ function TabPagos({ rutas, pagos, personas, tarifas, perm, periodo }) {
                     </span>
                   )}
                   {est === 'confirmado' && pAnula && <button className="text-xs font-bold text-slate-400 hover:text-rose-500 hover:underline" onClick={() => anularFP(p)}>Anular</button>}
+                  {esPago && pPagaSemanal && <button className="text-xs font-bold text-brand-gold hover:underline" onClick={() => setEditarPago(p)}>editar</button>}
+                  {esPago && pAnula && <button className="text-xs font-bold text-rose-400 hover:text-rose-600 hover:underline" onClick={() => borrarPago(p)}>borrar</button>}
                 </div>
                 )
               })}
             </Card>
-          )}
+            )
+          })()}
         </>
       )}
 
       {fpRuta && <FastPayModal ruta={fpRuta} driver={driver} semana={semana} pagos={pagos} pctDefault={tarifas.comisionFastPay} puedeEjecutar={pEjecutaFP} onCerrar={() => setFpRuta(null)} />}
       {pagoAbierto && res && <PagoModal driver={driver} semana={semana} saldo={res.saldo} onCerrar={() => setPagoAbierto(false)} />}
+      {editarPago && <PagoModal driver={driver} semana={editarPago.semana || semana} saldo={res ? res.saldo : 0} pago={editarPago} onCerrar={() => setEditarPago(null)} />}
     </div>
   )
 }
@@ -4154,37 +4250,255 @@ function FastPayModal({ ruta, driver, semana, pagos, pctDefault, puedeEjecutar =
   )
 }
 
-function PagoModal({ driver, semana, saldo, onCerrar }) {
-  const [monto, setMonto] = useState(saldo)
-  const [metodo, setMetodo] = useState('Efectivo')
-  const [referencia, setReferencia] = useState('')
-  const [responsable, setResponsable] = useState('')
+// Registrar o EDITAR un pago. Soporta:
+//  · fecha de pago EFECTIVA editable (#6) — distinta de creadoEn (auditoría)
+//  · OVERRIDE: autorizar un pago por encima del saldo pendiente (#1)
+//  · modo EDICIÓN (pago != null) para corregir monto/fecha/método (#7)
+function PagoModal({ driver, semana, saldo, pago = null, onCerrar }) {
+  const editando = !!pago?.id
+  // Al editar, el `saldo` que llega ya tiene restado este pago; para comparar
+  // contra el saldo real hay que volver a sumar el monto original del pago.
+  const saldoBase = money2(editando ? saldo + (Number(pago.monto) || 0) : saldo)
+  const [monto, setMonto] = useState(() => editando ? (Number(pago.monto) || 0) : saldo)
+  const [metodo, setMetodo] = useState(() => (editando ? pago.metodo : '') || 'Efectivo')
+  const [referencia, setReferencia] = useState(() => (editando ? pago.referencia : '') || '')
+  const [responsable, setResponsable] = useState(() => (editando ? pago.responsable : '') || '')
+  const [fecha, setFecha] = useState(() => (editando ? pago.fecha : '') || hoyISO())
+  const [override, setOverride] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [err, setErr] = useState('')
+  const m = money2(monto)
+  const excede = m > saldoBase + 0.005
+  const sobra = money2(m - saldoBase)
   const confirmar = async () => {
-    const m = money2(monto)
     if (m <= 0) { setErr('El monto debe ser mayor a 0.'); return }
-    if (m > saldo + 0.005) { setErr(`No puedes pagar más que el saldo pendiente (${dinero(saldo)}).`); return }
+    if (excede && !override) { setErr(`El monto supera el saldo pendiente (${dinero(saldoBase)}). Activa “Autorizar pago de todas formas” para continuar.`); return }
     setErr(''); setGuardando(true)
     try {
-      await guardar(COL.pagos, null, { tipo: 'pago', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, monto: m, fecha: hoyISO(), metodo, referencia, responsable })
-      await auditar('pago', `${nombreCompleto(driver)} · semana ${semana} · ${m}`)
-      walToast('Pago registrado ✓')
+      const extra = excede ? { override: true, excedeSaldo: sobra } : { override: false, excedeSaldo: 0 }
+      if (editando) {
+        await guardar(COL.pagos, pago.id, { monto: m, fecha, metodo, referencia, responsable, ...extra })
+        await auditar('pago_editado', `${pago.driverNombre || (driver && nombreCompleto(driver)) || ''} · semana ${pago.semana || semana} · ${dinero(m)} · fecha ${fecha}${excede ? ` · OVERRIDE +${dinero(sobra)}` : ''}`)
+        walToast('Pago actualizado ✓')
+      } else {
+        await guardar(COL.pagos, null, { tipo: 'pago', driverId: driver.id, driverNombre: nombreCompleto(driver), semana, monto: m, fecha, metodo, referencia, responsable, ...extra })
+        await auditar('pago', `${nombreCompleto(driver)} · semana ${semana} · ${dinero(m)} · fecha ${fecha}${excede ? ` · OVERRIDE +${dinero(sobra)}` : ''}`)
+        walToast('Pago registrado ✓')
+      }
       onCerrar()
     } catch (e) { setErr('No se pudo registrar: ' + (e.message || e)) } finally { setGuardando(false) }
   }
   return (
-    <Modal titulo="Registrar pago del saldo" onCerrar={onCerrar}>
+    <Modal titulo={editando ? 'Editar pago' : 'Registrar pago del saldo'} onCerrar={onCerrar}>
       <Grid>
-        <F label="Monto (saldo pendiente)"><Input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} /></F>
-        <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
-        <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} /></F>
-        <F label="Responsable"><Select value={responsable} onChange={(e) => setResponsable(e.target.value)}><option value="">— elegir —</option><option value="Gabriele">Gabriele</option><option value="Carlos">Carlos</option></Select></F>
+        <F label={`Monto (saldo pendiente ${dinero(saldoBase)})`}><Input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} /></F>
+        <F label="Fecha de pago (efectiva)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+        <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((x) => <option key={x} value={x}>{x}</option>)}</Select></F>
+        <F label="Referencia"><Input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="confirmación, nota…" /></F>
+        <F label="Responsable"><Select value={responsable} onChange={(e) => setResponsable(e.target.value)}><option value="">— elegir —</option>{[...new Set([responsable, 'Gabriele', 'Carlos'].filter(Boolean))].map((n) => <option key={n} value={n}>{n}</option>)}</Select></F>
       </Grid>
-      <p className="mt-2 text-xs text-slate-400">Puedes pagar parcial. La fecha del pago no cambia la semana en que se ganó el dinero.</p>
+      {excede && (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <div className="flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-300"><AlertTriangle size={15} /> Este pago supera el saldo pendiente en {dinero(sobra)}</div>
+          <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-200/80">El saldo pendiente es {dinero(saldoBase)}. Si continúas, el chofer quedará con saldo a favor de {dinero(sobra)}.</p>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm font-semibold text-brand-navy dark:text-slate-100">
+            <input type="checkbox" className="h-4 w-4 accent-brand-gold" checked={override} onChange={(e) => setOverride(e.target.checked)} />
+            Autorizar pago de todas formas
+          </label>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-slate-400">Puedes pagar parcial. La <b>fecha de pago</b> es la fecha real del desembolso (para reportes); no cambia la semana en que se ganó el dinero. La fecha de creación del registro se guarda aparte para auditoría.</p>
       {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
       <div className="mt-3 flex gap-2">
-        <Boton variant="gold" disabled={guardando} onClick={confirmar}>{guardando ? <Spinner /> : 'Registrar pago'}</Boton>
+        <Boton variant="gold" disabled={guardando || (excede && !override)} onClick={confirmar}>{guardando ? <Spinner /> : (editando ? 'Guardar cambios' : (excede && override ? 'Autorizar y registrar' : 'Registrar pago'))}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+    </Modal>
+  )
+}
+
+// ── #4 PAGAR RUTA(S) desde la página de Rutas ────────────────────────────────
+// Registra un pago (tipo 'pago') por ruta, etiquetado con rutaId para marcarla
+// como pagada, restar del saldo del chofer y evitar pagarla dos veces.
+function PagarRutaModal({ rutasPagar, rutas, pagos, responsables = [], onCerrar }) {
+  const info = useMemo(() => rutasPagar.map((r) => ({ r, ...estadoPagoRuta(rutas, pagos, r), bloqFP: rutaBloqueadaFP(pagos, r.id) })), [rutasPagar, rutas, pagos])
+  const pagables = info.filter((x) => x.estado !== 'pagada' && x.estado !== 'na' && !x.bloqFP)
+  const yaPagadas = info.filter((x) => x.estado === 'pagada')
+  const bloqueadas = info.filter((x) => x.bloqFP && x.estado !== 'pagada')
+  const [fecha, setFecha] = useState(hoyISO())
+  const [metodo, setMetodo] = useState('Efectivo')
+  const [responsable, setResponsable] = useState('')
+  const [montos, setMontos] = useState(() => Object.fromEntries(pagables.map((x) => [x.r.id, x.resta])))
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const setMonto = (id, v) => setMontos((m) => ({ ...m, [id]: v }))
+  const total = money2(pagables.reduce((a, x) => a + (money2(montos[x.r.id]) || 0), 0))
+  const confirmar = async () => {
+    const items = pagables.filter((x) => money2(montos[x.r.id]) > 0.005)
+    if (!items.length) { setErr('No hay rutas con monto para pagar.'); return }
+    setGuardando(true); setErr('')
+    try {
+      for (const x of items) {
+        const r = x.r
+        await guardar(COL.pagos, null, { tipo: 'pago', driverId: r.driverId, driverNombre: r.driverNombre || '', semana: lunesDe(r.fecha), monto: money2(montos[r.id]), fecha, metodo, referencia: `Ruta ${r.fecha} · ${BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}${r.identificador ? ` · ${r.identificador}` : ''}`, rutaId: r.id, rutaBruto: x.bruto, responsable })
+      }
+      await auditar('ruta_pagada', `${items.length} ruta(s) · ${dinero(total)} · fecha ${fecha}${responsable ? ` · ${responsable}` : ''}`)
+      walToast(`${items.length} ruta(s) pagada(s) ✓`, 'gold')
+      onCerrar()
+    } catch (e) { setErr('No se pudo: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo={rutasPagar.length > 1 ? `Pagar ${rutasPagar.length} rutas` : 'Pagar ruta'} onCerrar={onCerrar} ancho="max-w-2xl">
+      <Grid>
+        <F label="Fecha de pago (efectiva)"><DateField value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>
+        <F label="Método"><Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>{METODOS_PAGO.map((x) => <option key={x} value={x}>{x}</option>)}</Select></F>
+        <F label="Responsable"><Input list="resp-pagos" value={responsable} onChange={(e) => setResponsable(e.target.value)} placeholder="quién paga…" /><datalist id="resp-pagos">{responsables.map((n) => <option key={n} value={n} />)}</datalist></F>
+      </Grid>
+      {pagables.length > 0 ? (
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-slate-50 text-[11px] uppercase text-slate-500 dark:bg-slate-800/60"><th className="px-3 py-2 text-left">Ruta</th><th className="px-3 py-2 text-left">Chofer</th><th className="px-3 py-2 text-right">Pago ruta</th><th className="px-3 py-2 text-right">A pagar</th></tr></thead>
+            <tbody>
+              {pagables.map((x) => (
+                <tr key={x.r.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                  <td className="px-3 py-2"><span className="font-mono text-xs text-slate-500">{x.r.fecha}</span> · {BLOQUES.find((b) => b.id === x.r.bloque)?.label || x.r.bloque}{x.estado === 'parcial' && <Badge color="gold">parcial · resta {dinero(x.resta)}</Badge>}</td>
+                  <td className="px-3 py-2 font-semibold text-brand-navy dark:text-slate-100">{x.r.driverNombre || '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-500">{dinero(x.bruto)}</td>
+                  <td className="px-3 py-2 text-right"><Input type="number" value={montos[x.r.id]} onChange={(e) => setMonto(x.r.id, e.target.value)} className="w-24 text-right font-mono" /></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold dark:border-slate-700 dark:bg-slate-800/60"><td className="px-3 py-2" colSpan={3}>TOTAL</td><td className="px-3 py-2 text-right font-mono">{dinero(total)}</td></tr></tfoot>
+          </table>
+        </div>
+      ) : <Aviso tipo="info" className="mt-3">No hay rutas por pagar en la selección.</Aviso>}
+      {yaPagadas.length > 0 && <p className="mt-2 text-xs text-emerald-600">✓ {yaPagadas.length} ruta(s) ya estaban pagadas (no se vuelven a cobrar).</p>}
+      {bloqueadas.length > 0 && <p className="mt-1 text-xs text-amber-600">⚠ {bloqueadas.length} ruta(s) tienen un Fast Pay en proceso/confirmado; se gestionan desde Pagos.</p>}
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando || !pagables.length} onClick={confirmar}>{guardando ? <Spinner /> : `Marcar como pagada${rutasPagar.length > 1 ? 's' : ''} · ${dinero(total)}`}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">El pago se resta del saldo del chofer y queda ligado a la ruta para no pagarla dos veces. La fecha de pago es la real; no cambia la semana en que se ganó.</p>
+    </Modal>
+  )
+}
+
+// ── #2 AGREGAR GASTO desde la página de Rutas ────────────────────────────────
+// Crea un gasto ligado a la ruta y su driver, en la colección general de gastos.
+function GastoRutaModal({ ruta, almacenes, personas, responsables = [], onCerrar }) {
+  const driver = personas.find((p) => p.id === ruta.driverId)
+  const [g, setG] = useState({ categoria: CATEGORIAS_GASTO[0], concepto: '', monto: '', fecha: ruta.fecha || hoyISO(), metodo: 'Efectivo', responsable: '', estadoPago: 'pagado' })
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const set = (k, v) => setG((x) => ({ ...x, [k]: v }))
+  const salvar = async () => {
+    if (!g.concepto.trim() || !(money2(g.monto) > 0)) { setErr('Pon concepto y monto.'); return }
+    setGuardando(true); setErr('')
+    try {
+      await guardar(COL.gastos, null, {
+        categoria: g.categoria, concepto: g.concepto.trim(), monto: money2(g.monto), fecha: g.fecha,
+        tipo: 'variable', almacenId: ruta.almacenId || '', driverId: ruta.driverId || '', rutaId: ruta.id,
+        vehiculo: ruta.vehiculoTipo || '', responsable: g.responsable, metodo: g.metodo,
+        estadoPago: g.estadoPago, fechaPago: g.estadoPago === 'pagado' ? g.fecha : '', semana: lunesDe(g.fecha),
+        esFinanciamiento: g.categoria === 'Cargo Van (financiamiento)',
+      })
+      await auditar('gasto_ruta', `${g.categoria} · ${g.concepto} · ${dinero(g.monto)} · ruta ${ruta.fecha} · ${ruta.driverNombre || ''}`)
+      walToast('Gasto agregado ✓')
+      onCerrar()
+    } catch (e) { setErr('No se pudo: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo="Agregar gasto a la ruta" onCerrar={onCerrar}>
+      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
+        Ruta <b className="text-brand-navy dark:text-slate-100">{ruta.fecha}</b> · {BLOQUES.find((b) => b.id === ruta.bloque)?.label || ruta.bloque} · {ruta.driverNombre || (driver && nombreCompleto(driver)) || 'sin driver'} · {almacenes.find((a) => a.id === ruta.almacenId)?.nombre || 'General'}
+      </div>
+      <Grid>
+        <F label="Categoría"><Select value={g.categoria} onChange={(e) => set('categoria', e.target.value)}>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+        <F label="Monto (USD)"><Input type="number" value={g.monto} onChange={(e) => set('monto', e.target.value)} /></F>
+        <F label="Descripción / motivo"><Input value={g.concepto} onChange={(e) => set('concepto', e.target.value)} placeholder="Ej. Gasolina, peaje…" /></F>
+        <F label="Fecha"><DateField value={g.fecha} onChange={(e) => set('fecha', e.target.value)} /></F>
+        <F label="Método de pago"><Select value={g.metodo} onChange={(e) => set('metodo', e.target.value)}>{METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}</Select></F>
+        <F label="Estado"><Select value={g.estadoPago} onChange={(e) => set('estadoPago', e.target.value)}><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></Select></F>
+        <F label="Responsable (+ agregar)"><Input list="resp-gastos" value={g.responsable} onChange={(e) => set('responsable', e.target.value)} placeholder="escribe o elige un nombre…" /><datalist id="resp-gastos">{responsables.map((n) => <option key={n} value={n} />)}</datalist></F>
+      </Grid>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Agregar gasto'}</Boton>
+        <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">El gasto aparece en la página de Gastos (ligado a esta ruta y driver) y entra en los cálculos financieros. No se descuenta al chofer.</p>
+    </Modal>
+  )
+}
+
+// ── #5 AJUSTAR PAGO DEL CONDUCTOR desde la página de Rutas ────────────────────
+// Modifica el pago base (tarifaDriver) y/o agrega bonos/deducciones a la ruta,
+// conservando el monto original y mostrando los ajustes. El saldo se recalcula
+// solo; si la ruta ya estaba pagada, la diferencia queda en el saldo del chofer.
+function AjustarPagoRutaModal({ ruta, pagos, rutas, responsables = [], onCerrar }) {
+  const estadoPago = estadoPagoRuta(rutas, pagos, ruta)
+  const original = money2(Number(ruta.tarifaDriver) || 0)
+  const [base, setBase] = useState(original)
+  const [tipo, setTipo] = useState('bono') // bono | deduccion
+  const [concepto, setConcepto] = useState('')
+  const [monto, setMonto] = useState('')
+  const [responsable, setResponsable] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [err, setErr] = useState('')
+  const brutoActual = gananciaDriver({ ...ruta, estado: 'completada' })
+  const addMonto = money2(monto)
+  const brutoNuevo = money2(brutoActual - original + money2(base) + (tipo === 'bono' ? addMonto : -addMonto))
+  const salvar = async () => {
+    const cambioBase = money2(base) !== original
+    const hayAjuste = concepto.trim() && addMonto > 0.005
+    if (!cambioBase && !hayAjuste) { setErr('Modifica el pago base o agrega un bono/deducción con concepto y monto.'); return }
+    setGuardando(true); setErr('')
+    try {
+      const patch = {}
+      if (cambioBase) patch.tarifaDriver = money2(base)
+      if (hayAjuste) {
+        const campo = tipo === 'bono' ? 'bonos' : 'deducciones'
+        const arr = [...(ruta[campo] || []), { concepto: concepto.trim(), monto: addMonto, responsable, aplicaA: 'driver', fecha: hoyISO() }]
+        patch[campo] = arr
+      }
+      await guardar(COL.rutas, ruta.id, patch)
+      await auditar('ruta_ajuste_pago', `${ruta.driverNombre || ''} · ruta ${ruta.fecha} · ${cambioBase ? `base ${dinero(original)}→${dinero(base)}` : ''}${hayAjuste ? ` · ${tipo} ${dinero(addMonto)} (${concepto.trim()})` : ''}`)
+      walToast('Pago del conductor ajustado ✓')
+      onCerrar()
+    } catch (e) { setErr('No se pudo: ' + (e.message || e)) } finally { setGuardando(false) }
+  }
+  return (
+    <Modal titulo="Ajustar pago del conductor" onCerrar={onCerrar}>
+      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/40">
+        Ruta <b className="text-brand-navy dark:text-slate-100">{ruta.fecha}</b> · {BLOQUES.find((b) => b.id === ruta.bloque)?.label || ruta.bloque} · {ruta.driverNombre || 'sin driver'}
+        {estadoPago.estado === 'pagada' && <Badge color="green">ya pagada</Badge>}
+        {estadoPago.estado === 'parcial' && <Badge color="gold">parcialmente pagada</Badge>}
+      </div>
+      {ruta.cerrada && <Aviso tipo="warn" className="mb-3">El día de esta ruta está cerrado. El ajuste igual se guarda y afecta el saldo; si necesitas recalcular el cierre, reábrelo en <b>Cierre diario</b>.</Aviso>}
+      {estadoPago.estado === 'pagada' && <Aviso tipo="info" className="mb-3">Esta ruta ya está pagada. El ajuste <b>no</b> toca el pago histórico: genera una diferencia en el saldo del chofer.</Aviso>}
+      <div className="mb-3">
+        <div className="mb-1 text-[11px] font-bold uppercase text-slate-400">Pago base de la ruta (monto original {dinero(original)})</div>
+        <Input type="number" value={base} onChange={(e) => setBase(e.target.value)} className="w-40 font-mono" />
+      </div>
+      <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+        <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">Agregar ajuste (se conserva el original)</div>
+        <div className="flex flex-wrap items-end gap-2">
+          <F label="Tipo"><Select value={tipo} onChange={(e) => setTipo(e.target.value)}><option value="bono">Bono (sumar)</option><option value="deduccion">Deducción (descontar)</option></Select></F>
+          <F label="Monto"><Input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-28" /></F>
+          <F label="Motivo / concepto"><Input value={concepto} onChange={(e) => setConcepto(e.target.value)} className="min-w-[160px]" placeholder="por qué" /></F>
+          <F label="Responsable"><Input list="resp-ajuste" value={responsable} onChange={(e) => setResponsable(e.target.value)} className="w-32" /><datalist id="resp-ajuste">{responsables.map((n) => <option key={n} value={n} />)}</datalist></F>
+        </div>
+      </div>
+      {(ruta.bonos?.length > 0 || ruta.deducciones?.length > 0) && (
+        <div className="mt-3 text-xs text-slate-500">
+          <b>Ajustes actuales:</b> {[...(ruta.bonos || []).map((b) => `+${dinero(b.monto)} ${b.concepto}`), ...(ruta.deducciones || []).map((d) => `-${dinero(d.monto)} ${d.concepto}`)].join(' · ')}
+        </div>
+      )}
+      <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/40">Pago al conductor: <b className="font-mono text-slate-400 line-through">{dinero(brutoActual)}</b> → <b className="font-mono text-emerald-600">{dinero(brutoNuevo)}</b></div>
+      {err && <Aviso tipo="error" className="mt-2">{err}</Aviso>}
+      <div className="mt-3 flex gap-2">
+        <Boton variant="gold" disabled={guardando} onClick={salvar}>{guardando ? <Spinner /> : 'Guardar ajuste'}</Boton>
         <Boton variant="ghost" onClick={onCerrar}>Cancelar</Boton>
       </div>
     </Modal>
