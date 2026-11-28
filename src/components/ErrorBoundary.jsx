@@ -12,7 +12,7 @@ const esErrorDeVersion = (e) => /MIME type|dynamically imported module|ChunkLoad
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { error: null, autoFix: false }
+    this.state = { error: null, autoFix: false, stack: '' }
   }
 
   static getDerivedStateFromError(error) {
@@ -22,6 +22,9 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info)
+    // Guardamos el "component stack" para mostrar QUÉ componente falló (clave para
+    // diagnosticar errores de hooks como el #300 sin tener que adivinar).
+    try { this.setState({ stack: String(info?.componentStack || '').trim() }) } catch { /* noop */ }
     // Error de versión vieja → AUTO-REPARACIÓN (una vez por sesión): limpia el
     // service worker y las cachés y recarga, sin pedirle nada al usuario. Si aun
     // así vuelve a fallar, se muestra la pantalla con el botón manual.
@@ -73,8 +76,9 @@ export default class ErrorBoundary extends React.Component {
             {tDirecto('Actualizar ahora')}
           </button>
           {this.state.error && (
-            <pre style={{ marginTop: 20, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 11, color: '#f6a5a5', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: 12, maxHeight: 220, overflow: 'auto' }}>
+            <pre style={{ marginTop: 20, textAlign: 'left', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 11, color: '#f6a5a5', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: 12, maxHeight: 260, overflow: 'auto' }}>
               {String(this.state.error?.message || this.state.error)}
+              {this.state.stack ? '\n\n— componentes —' + this.state.stack.split('\n').slice(0, 8).join('\n') : ''}
             </pre>
           )}
         </div>

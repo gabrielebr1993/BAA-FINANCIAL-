@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Conserva los nombres de funciones/clases al minificar, para que si algo
+  // revienta, el "component stack" del error diga el NOMBRE real del componente
+  // (y no una letra), y se pueda localizar al instante.
+  esbuild: { keepNames: true },
   // Divide las librerías grandes en chunks propios (mejor caché y arranque más
   // liviano). Firebase se saca del bundle principal; charts/xlsx/pdf ya se cargan
   // por página de forma diferida.
