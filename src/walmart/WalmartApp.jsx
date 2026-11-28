@@ -4210,17 +4210,52 @@ function TabGastos({ gastos, gastosFijos = [], almacenes, personas, rutas, esDue
   const [editar, setEditar] = useState(null)
   const [editarFijo, setEditarFijo] = useState(null)
   const [vista, setVista] = useState('sueltos')
+  const [modo, setModo] = useState('mes') // dia | semana | mes | rango
+  const [fecha, setFecha] = useState(hoyISO())
+  const [mes, setMes] = useState(mesDe(hoyISO()))
+  const [d1, setD1] = useState(primerDiaMes(mesDe(hoyISO())))
+  const [d2, setD2] = useState(hoyISO())
   const [fCat, setFCat] = useState('')
   const [fAlm, setFAlm] = useState('')
   const [fDrv, setFDrv] = useState('')
+  const [fRuta, setFRuta] = useState('')
+  const [q, setQ] = useState('')
+  const [orden, setOrden] = useState('desc') // desc = recientes primero
   const almNombre = (id) => almacenes.find((a) => a.id === id)?.nombre || 'General'
   const driverNombre = (id) => { const p = personas.find((x) => x.id === id); return p ? nombreCompleto(p) : '—' }
-  const rutaInfo = (id) => { const r = (rutas || []).find((x) => x.id === id); return r ? `${r.fecha} · ${BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}${r.driverNombre ? ` · ${r.driverNombre}` : ''}${r.identificador ? ` · ${r.identificador}` : ''}` : '' }
+  const rutaCorta = (id) => { const r = (rutas || []).find((x) => x.id === id); return r ? `${r.fecha} · ${BLOQUES.find((b) => b.id === r.bloque)?.label || r.bloque}${r.driverNombre ? ` · ${r.driverNombre}` : ''}` : '' }
+  const fmtFechaLarga = (iso) => { try { return new Date(`${iso}T12:00`).toLocaleDateString('es-US', { weekday: 'long', day: 'numeric', month: 'long' }) } catch { return iso } }
   const conGasto = personas.filter((p) => gastos.some((g) => g.driverId === p.id)).sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
-  const lista = useMemo(() => gastos.filter((g) => (!fCat || g.categoria === fCat) && (!fAlm || g.almacenId === fAlm) && (!fDrv || g.driverId === fDrv)).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), [gastos, fCat, fAlm, fDrv])
+  const rutasConGasto = useMemo(() => [...new Set(gastos.map((g) => g.rutaId).filter(Boolean))].map((id) => ({ id, label: rutaCorta(id) || id })).filter((r) => r.label).sort((a, b) => b.label.localeCompare(a.label)), [gastos, rutas]) // eslint-disable-line
+  const desde = modo === 'dia' ? fecha : modo === 'semana' ? lunesDe(fecha) : modo === 'mes' ? primerDiaMes(mes) : (d1 <= d2 ? d1 : d2)
+  const hasta = modo === 'dia' ? fecha : modo === 'semana' ? domingoDe(fecha) : modo === 'mes' ? ultimoDiaMes(mes) : (d1 <= d2 ? d2 : d1)
+  const lista = useMemo(() => {
+    const txt = q.trim().toLowerCase()
+    return gastos.filter((g) => {
+      const f = g.fecha || ''
+      if (f < desde || f > hasta) return false
+      if (fCat && g.categoria !== fCat) return false
+      if (fAlm && (g.almacenId || '') !== fAlm) return false
+      if (fDrv && (g.driverId || '') !== fDrv) return false
+      if (fRuta && (g.rutaId || '') !== fRuta) return false
+      if (txt && !`${g.categoria || ''} ${g.concepto || g.descripcion || ''} ${driverNombre(g.driverId)} ${almNombre(g.almacenId)} ${g.responsable || ''}`.toLowerCase().includes(txt)) return false
+      return true
+    }).sort((a, b) => orden === 'desc' ? String(b.fecha).localeCompare(String(a.fecha)) : String(a.fecha).localeCompare(String(b.fecha)))
+  }, [gastos, desde, hasta, fCat, fAlm, fDrv, fRuta, q, orden]) // eslint-disable-line
+  const grupos = useMemo(() => {
+    const m = {}
+    for (const g of lista) { const k = g.fecha || '—'; (m[k] = m[k] || []).push(g) }
+    return Object.entries(m).map(([f, gs]) => ({ fecha: f, gastos: gs, total: money2(gs.reduce((a, g) => a + (Number(g.monto) || 0), 0)) }))
+      .sort((a, b) => orden === 'desc' ? String(b.fecha).localeCompare(String(a.fecha)) : String(a.fecha).localeCompare(String(b.fecha)))
+  }, [lista, orden])
+  const totalPeriodo = money2(lista.reduce((a, g) => a + (Number(g.monto) || 0), 0))
+  const borrarGasto = async (g) => {
+    if (!window.confirm(`¿Eliminar este gasto?\n${g.categoria || ''} · ${g.concepto || g.descripcion || ''} · ${dinero(g.monto)} · ${g.fecha}\n\nNo se puede deshacer.`)) return
+    try { await borrar(COL.gastos, g.id); await auditar('gasto_borrado', `${g.categoria || ''} · ${dinero(g.monto)} · ${g.fecha}`); walToast('Gasto eliminado ✓') }
+    catch (e) { walToast('No se pudo eliminar: ' + (e?.message || e), 'red') }
+  }
   if (editar) return <GastoEditor gasto={editar} almacenes={almacenes} personas={personas} rutas={rutas} onCerrar={() => setEditar(null)} />
   if (editarFijo) return <GastoFijoEditor fijo={editarFijo} almacenes={almacenes} onCerrar={() => setEditarFijo(null)} />
-  const total = lista.reduce((a, g) => a + (Number(g.monto) || 0), 0)
   return (
     <div>
       <PageTitle right={vista === 'fijos'
@@ -4233,54 +4268,83 @@ function TabGastos({ gastos, gastosFijos = [], almacenes, personas, rutas, esDue
       </div>
       {vista === 'fijos' && <GastosFijosLista fijos={gastosFijos} almacenes={almacenes} onEditar={setEditarFijo} />}
       {vista === 'sueltos' && (<>
+      {/* Período */}
       <Card className="mb-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <F label="Categoría"><Select value={fCat} onChange={(e) => setFCat(e.target.value)}><option value="">Todas</option>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
-          <F label="Almacén"><Select value={fAlm} onChange={(e) => setFAlm(e.target.value)}><option value="">Todos / General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
-          <F label="Driver"><Select value={fDrv} onChange={(e) => setFDrv(e.target.value)}><option value="">Todos</option>{conGasto.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
-          <div className="ml-auto text-right text-xs text-slate-400">Total mostrado <b className="text-brand-navy dark:text-slate-100">{dinero(total)}</b></div>
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Ver por</span>
+          {[['dia', 'Día'], ['semana', 'Semana (pago)'], ['mes', 'Mes'], ['rango', 'Rango']].map(([id, l]) => (
+            <button key={id} type="button" onClick={() => setModo(id)} className={`rounded-lg px-3 py-1 text-sm font-semibold transition ${modo === id ? 'bg-brand-navy text-white' : 'border border-slate-200 text-slate-500 hover:text-brand-navy dark:border-slate-700'}`}>{l}</button>
+          ))}
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <button type="button" onClick={() => { setModo('dia'); setFecha(hoyISO()) }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-brand-navy dark:border-slate-700">Hoy</button>
+            <button type="button" onClick={() => { setModo('semana'); setFecha(hoyISO()) }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-brand-navy dark:border-slate-700">Esta semana</button>
+            <button type="button" onClick={() => { setModo('mes'); setMes(mesDe(hoyISO())) }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:text-brand-navy dark:border-slate-700">Este mes</button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          {modo === 'dia' && <F label="Día"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'semana' && <F label="Semana de"><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></F>}
+          {modo === 'mes' && <F label="Mes"><Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} /></F>}
+          {modo === 'rango' && <><F label="Desde"><Input type="date" value={d1} onChange={(e) => setD1(e.target.value)} /></F><F label="Hasta"><Input type="date" value={d2} onChange={(e) => setD2(e.target.value)} /></F></>}
+          <div className="ml-auto text-right">
+            <div className="text-[11px] uppercase tracking-wide text-slate-400">Total del período</div>
+            <div className="font-mono text-xl font-extrabold text-brand-navy dark:text-slate-100">{dinero(totalPeriodo)}</div>
+            <div className="text-[11px] text-slate-400">{lista.length} gasto{lista.length === 1 ? '' : 's'} · {desde === hasta ? desde : `${desde} → ${hasta}`}</div>
+          </div>
         </div>
       </Card>
-      {(() => {
-        const porDrv = {}
-        for (const g of lista) { const k = g.driverId || '__none'; porDrv[k] = (porDrv[k] || 0) + (Number(g.monto) || 0) }
-        const filas = Object.entries(porDrv).map(([k, v]) => ({ k, v: money2(v), nombre: k === '__none' ? 'Sin driver' : driverNombre(k) })).sort((a, b) => b.v - a.v)
-        if (filas.length <= 1) return null
-        return (
-          <Card className="mb-3 p-3">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Gasto por driver (lo mostrado)</div>
-            <div className="flex flex-wrap gap-2">
-              {filas.map((f) => (
-                <button key={f.k} type="button" onClick={() => setFDrv(f.k === '__none' ? '' : (fDrv === f.k ? '' : f.k))} className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition ${fDrv === f.k ? 'border-brand-gold bg-amber-50 dark:bg-amber-500/10' : 'border-slate-200 hover:border-brand-gold/50 dark:border-slate-700'}`}>
-                  <span className="font-semibold text-brand-navy dark:text-slate-100">{f.nombre}</span>
-                  <span className="font-mono font-bold text-brand-gold">{dinero(f.v)}</span>
-                </button>
+      {/* Filtros + buscador */}
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <F label="Buscar"><div className="relative"><Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="concepto, driver, responsable…" className="pl-8" /></div></F>
+          <F label="Categoría"><Select value={fCat} onChange={(e) => setFCat(e.target.value)}><option value="">Todas</option>{CATEGORIAS_GASTO.map((c) => <option key={c} value={c}>{c}</option>)}</Select></F>
+          <F label="Almacén / ciudad"><Select value={fAlm} onChange={(e) => setFAlm(e.target.value)}><option value="">Todos / General</option>{almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</Select></F>
+          <F label="Driver"><Select value={fDrv} onChange={(e) => setFDrv(e.target.value)}><option value="">Todos</option>{conGasto.map((p) => <option key={p.id} value={p.id}>{nombreCompleto(p)}</option>)}</Select></F>
+          {rutasConGasto.length > 0 && <F label="Ruta"><Select value={fRuta} onChange={(e) => setFRuta(e.target.value)}><option value="">Todas</option>{rutasConGasto.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</Select></F>}
+          <F label="Orden"><Select value={orden} onChange={(e) => setOrden(e.target.value)}><option value="desc">Recientes primero</option><option value="asc">Antiguos primero</option></Select></F>
+          {(fCat || fAlm || fDrv || fRuta || q) && <button type="button" onClick={() => { setFCat(''); setFAlm(''); setFDrv(''); setFRuta(''); setQ('') }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-rose-500 dark:border-slate-700">Limpiar filtros</button>}
+        </div>
+      </Card>
+      {grupos.length === 0 && <Vacio icono={Receipt}>Sin gastos en este período. Cambia el rango de fechas o agrega uno con “Nuevo gasto”.</Vacio>}
+      <div className="space-y-3">
+        {grupos.map((gr) => (
+          <Card key={gr.fecha} className="overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+              <span className="text-sm font-bold capitalize text-brand-navy dark:text-slate-100">{fmtFechaLarga(gr.fecha)}</span>
+              <span className="text-right"><span className="mr-2 text-[11px] uppercase tracking-wide text-slate-400">Total del día</span><span className="font-mono text-sm font-extrabold text-brand-navy dark:text-slate-100">{dinero(gr.total)}</span></span>
+            </div>
+            <div>
+              {gr.gastos.map((g) => (
+                <div key={g.id} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-0 hover:bg-amber-50/30 dark:border-slate-800/60 dark:hover:bg-amber-500/5">
+                  {/* Izquierda: descripción */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge color="navy">{g.categoria}</Badge>
+                      <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || g.descripcion || '—'}</span>
+                      {g.periodoDesde && <Badge color="gold">mensual · reparte</Badge>}
+                      {g.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
+                      <Badge color={g.estadoPago === 'pagado' ? 'green' : 'red'}>{g.estadoPago === 'pagado' ? 'pagado' : 'pendiente'}</Badge>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+                      <span>{almNombre(g.almacenId)}</span>
+                      {g.driverId && <span>👤 {driverNombre(g.driverId)}</span>}
+                      {g.rutaId && rutaCorta(g.rutaId) && <span>🛣️ {rutaCorta(g.rutaId)}</span>}
+                      {g.rutaId && !rutaCorta(g.rutaId) && <span className="text-rose-400">🛣️ ruta eliminada</span>}
+                      {g.vehiculo && <span>🚐 {g.vehiculo}</span>}
+                      {g.metodo && <span>{g.metodo}</span>}
+                      {g.responsable && <span>· {g.responsable}</span>}
+                    </div>
+                  </div>
+                  {/* Derecha: dinero + acciones */}
+                  <div className="shrink-0 text-right">
+                    <div className="font-mono text-sm font-bold text-brand-navy dark:text-slate-100">{dinero(g.monto)}</div>
+                    <div className="mt-0.5 flex justify-end gap-2.5 text-[11px]">
+                      <button className="font-semibold text-brand-gold hover:underline" onClick={() => setEditar(g)}>editar</button>
+                      <button className="font-semibold text-rose-400 hover:text-rose-600 hover:underline" onClick={() => borrarGasto(g)}>borrar</button>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </div>
-          </Card>
-        )
-      })()}
-      {lista.length === 0 && <Vacio icono={Receipt}>Sin gastos. Agrega el primero con “Nuevo gasto”.</Vacio>}
-      <div className="space-y-1.5">
-        {lista.map((g) => (
-          <Card key={g.id} className="p-3 transition hover:border-brand-gold/40 hover:shadow-md">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge color="navy">{g.categoria}</Badge>
-              <span className="font-semibold text-brand-navy dark:text-slate-100">{g.concepto || '—'}</span>
-              <span className="font-mono text-sm font-bold">{dinero(g.monto)}</span>
-              <Badge color="slate">{almNombre(g.almacenId)}</Badge>
-              {g.periodoDesde && <Badge color="gold">mensual · reparte</Badge>}
-              {g.esFinanciamiento && <Badge color="blue">financiamiento</Badge>}
-              <Badge color={g.estadoPago === 'pagado' ? 'green' : 'red'}>{g.estadoPago === 'pagado' ? 'pagado' : 'pendiente'}</Badge>
-              <button className="ml-auto text-sm font-semibold text-brand-gold hover:underline" onClick={() => setEditar(g)}>editar</button>
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-              <span>📅 {g.fecha}</span>
-              {g.driverId && <span>👤 Driver: <b className="text-brand-navy dark:text-slate-200">{driverNombre(g.driverId)}</b></span>}
-              {g.rutaId && rutaInfo(g.rutaId) && <span>🛣️ Ruta: <b className="text-brand-navy dark:text-slate-200">{rutaInfo(g.rutaId)}</b></span>}
-              {g.rutaId && !rutaInfo(g.rutaId) && <span className="text-rose-400">🛣️ Ruta: (eliminada)</span>}
-              {g.vehiculo && <span>🚐 {g.vehiculo}</span>}
-              {g.responsable && <span>· {g.responsable}</span>}
             </div>
           </Card>
         ))}
